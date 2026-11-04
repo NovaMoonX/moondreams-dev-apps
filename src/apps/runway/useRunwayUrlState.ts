@@ -26,6 +26,10 @@ import {
 } from '@apps/runway/constants';
 import { isMonthKey } from '@apps/runway/engine/closings';
 import { revealItem } from '@apps/runway/utils/revealItem';
+import {
+  setOpenItemRequest,
+  useOpenItemRequest,
+} from '@apps/runway/utils/openItemRequest';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
@@ -133,23 +137,13 @@ export function useRunwayUrlState() {
   const openFixes = () => setRequestedFixes(true, { history: 'replace' });
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
-  const [requestedOpenItem, setRequestedOpenItem] = useQueryState(
-    'open',
-    parseAsString,
-  );
-  const [requestedOpenAt, setRequestedOpenAt] = useQueryState(
-    'openAt',
-    parseAsString,
-  );
+  const requestedOpenItem = useOpenItemRequest();
   const openItemAt = (itemId: string, step: string | null = null) => {
-    setRequestedOpenAt(step, { history: 'replace' });
-    return setRequestedOpenItem(itemId, { history: 'replace' });
+    setOpenItemRequest({ itemId, step });
+    return Promise.resolve();
   };
   const openDueBill = (billId: string) => openItemAt(billId, 'due');
-  const closeOpenItem = () => {
-    setRequestedOpenAt(null, { history: 'replace' });
-    return setRequestedOpenItem(null, { history: 'replace' });
-  };
+  const closeOpenItem = () => setOpenItemRequest(null);
 
   const [requestedUndatedBills, setRequestedUndatedBills] = useQueryState(
     'undatedBills',
@@ -391,10 +385,7 @@ export function useRunwayUrlState() {
     isFixesOpen: requestedFixes === true,
     openFixes,
     closeFixes,
-    openItem:
-      requestedOpenItem === null
-        ? null
-        : { itemId: requestedOpenItem, step: requestedOpenAt },
+    openItem: requestedOpenItem,
     openItemAt,
     openDueBill,
     closeOpenItem,

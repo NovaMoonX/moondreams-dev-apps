@@ -34,6 +34,9 @@ function ProblemRow({ group }: ProblemRowProps) {
         ? FIX_WORDS.openDueBill
         : FIX_WORDS.openUndated;
     }
+    if (group.kind === 'afterIncome') {
+      return hasEndingPay ? FIX_WORDS.openIncomeEnd : FIX_WORDS.addIncome;
+    }
     if (
       group.problem.kind === 'noIncome' &&
       group.problem.reason !== 'noIncome'
@@ -47,6 +50,10 @@ function ProblemRow({ group }: ProblemRowProps) {
     if (group.kind === 'day') {
       keepEntryFor('fixes');
       openDay(group.dayKey);
+      return;
+    }
+    if (group.kind === 'afterIncome') {
+      openIncomeFix();
       return;
     }
     if (group.kind === 'single' && group.problem.kind === 'noIncome') {

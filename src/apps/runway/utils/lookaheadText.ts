@@ -54,6 +54,7 @@ type ShortProblem = Extract<LookaheadProblem, { kind: 'short' }>;
 export type ProblemGroup =
   | { kind: 'day'; on: number; dayKey: string; shorts: ShortProblem[] }
   | { kind: 'single'; on: number; problem: LookaheadProblem }
+  | { kind: 'afterIncome'; on: number; names: readonly string[] }
   | {
       kind: 'undated';
       bills: readonly { billId: string; name: string }[];
@@ -88,7 +89,30 @@ export function groupProblems(problems: readonly LookaheadProblem[]) {
         : group,
     );
   }, []);
-  return result;
+  return foldAfterIncome(result);
+}
+
+const isAfterIncome = (group: DatedProblemGroup) =>
+  group.kind === 'single' &&
+  group.problem.kind === 'noIncome' &&
+  group.problem.reason === 'noIncome';
+
+/** Bills with no income before them share one fix (when the pay ends), so two or more are one row at the first one's place. */
+function foldAfterIncome(groups: DatedProblemGroup[]): DatedProblemGroup[] {
+  const after = groups.filter(isAfterIncome);
+  if (after.length < 2) return groups;
+  const folded: DatedProblemGroup = {
+    kind: 'afterIncome',
+    on: after[0].on,
+    names: after.flatMap((group) =>
+      group.kind === 'single' ? [getName(group.problem)] : [],
+    ),
+  };
+  const first = groups.indexOf(after[0]);
+  return groups.flatMap((group, at) => {
+    if (at === first) return [folded];
+    return isAfterIncome(group) ? [] : [group];
+  });
 }
 
 const getName = (problem: LookaheadProblem) =>
@@ -126,6 +150,14 @@ export function describeGroupRow(
     };
   }
   if (group.kind === 'single') return describeProblemRow(group.problem, today);
+  if (group.kind === 'afterIncome') {
+    return {
+      title: FIX_WORDS.noIncomeMany(group.names),
+      detail: FIX_WORDS.firstDueOn(
+        formatRelativeDayUTC(group.on, today, formatDateOrdinalUTC),
+      ),
+    };
+  }
   const result = {
     title: formatDateOrdinalUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
@@ -143,6 +175,13 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
     };
   }
   const on = formatDateOrdinalUTC(group.on).replace(/ /g, '\u00a0');
+  if (group.kind === 'afterIncome') {
+    return {
+      before: `${group.names.length} bills from ${on} have no income before them`,
+      figure: null,
+      after: '',
+    };
+  }
   if (group.kind === 'single') {
     const problem = group.problem;
     if (problem.kind === 'noIncome' && problem.reason === 'short') {

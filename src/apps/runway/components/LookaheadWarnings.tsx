@@ -54,6 +54,7 @@ const getRowKey = (row: WarningRow) => {
   const { group } = row;
   if (group.kind === 'undated') return 'undated';
   if (group.kind === 'day') return `day:${group.on}:${group.dayKey}`;
+  if (group.kind === 'afterIncome') return 'afterIncome';
   const id =
     group.problem.kind === 'noIncome'
       ? group.problem.billId

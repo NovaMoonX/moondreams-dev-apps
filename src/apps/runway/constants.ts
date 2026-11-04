@@ -2105,6 +2105,11 @@ export const HOW_OFTEN_WORDS = {
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
   noIncome: (name: string) => `${name} has no income before it is due`,
+  noIncomeMany: (names: readonly string[]) =>
+    names.length <= 3
+      ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} have no income before they are due`
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more have no income before they are due`,
+  firstDueOn: (date: string) => `The first is due\u00a0${date}`,
   noPick: (name: string) =>
     `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,

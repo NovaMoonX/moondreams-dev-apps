@@ -51,6 +51,7 @@ import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial'
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
+import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
 import { isRevealPending } from '@apps/runway/utils/revealItem';
 
 const tabScrolls = new Map<RunwayTab, number>();
@@ -198,7 +199,13 @@ function RunwayContent() {
   const startDraft = useStartDraft();
 
   useRunwayTheme();
-  useEffect(() => () => tabScrolls.clear(), []);
+  useEffect(
+    () => () => {
+      tabScrolls.clear();
+      setOpenItemRequest(null);
+    },
+    [],
+  );
   useTrackAppUsage('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
