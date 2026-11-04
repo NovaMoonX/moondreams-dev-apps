@@ -57,10 +57,6 @@ interface UseCostPaidOptions {
   cost: HorizonCost;
   /** The payment being marked or taken back; null when the cost has none to mark. */
   payment: CostPayment | null;
-  /** Runs after a mark, so a checklist can tick the line it came from. */
-  onMarked?: () => void;
-  /** Runs after an undo, so a checklist can untick the line it marked. */
-  onUndone?: () => void;
 }
 
 /** Marks one payment of a cost paid out of its item's money (or outside the plan), or takes the mark back; `isReady` is false until the ledger has loaded. */
@@ -69,8 +65,6 @@ export function useCostPaid({
   itemName,
   cost,
   payment,
-  onMarked,
-  onUndone,
 }: UseCostPaidOptions) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -129,7 +123,6 @@ export function useCostPaid({
     );
     if (done === null) return false;
     if (done.value) {
-      onUndone?.();
       addToast({ title: COST_PAID_WORDS.unmarked(cost.name), type: 'success' });
     } else
       addToast({
@@ -165,30 +158,47 @@ export function useCostPaid({
     });
   };
 
-  /** Marks the payment paid, at `amountCents` when given (a range is only ever marked with what it came to); resolves true once it is written or was already there. A part that comes out of Free to Spend is confirmed first unless the person already saw it in the amount sheet. */
-  const markPaid = async (amountCents?: Cents) => {
-    if (!payment || payment.paid) return false;
-    if (amountCents === undefined && needsAmount) return false;
-    const total = amountCents ?? payment.totalCents;
+  /** What comes out of Free to Spend for a payment of `total`: when the person is asked, the part they agreed to. The split is read again once they answer and asked again if it changed. Resolves null when they decline or another tap holds the confirm. */
+  const settleFrom = async (
+    total: Cents,
+    isAsked: boolean,
+    askedCents?: Cents,
+  ): Promise<Cents | null> => {
     const { fromItemCents, fromFreeCents } = settleCostPaid(
       total,
       getHeldNow(itemId),
       mark,
     );
-    if (fromFreeCents > 0 && amountCents === undefined) {
-      const isConfirmed = await confirm({
-        title: COST_PAID_WORDS.confirmTitle(cost.name),
-        message: mask(
-          COST_PAID_WORDS.confirmMark(
-            itemName,
-            formatCents(fromItemCents),
-            formatCents(fromFreeCents),
-          ),
-        ),
-        confirmText: CHECKLIST_WORDS.markPaid,
-      });
-      if (!isConfirmed) return false;
+    if (!isAsked || fromFreeCents === 0 || fromFreeCents === askedCents) {
+      return fromFreeCents;
     }
+    if (isBusyRef.current) return null;
+    isBusyRef.current = true;
+    const isConfirmed = await confirm({
+      title: COST_PAID_WORDS.confirmTitle(cost.name),
+      message: mask(
+        COST_PAID_WORDS.confirmMark(
+          cost.name,
+          formatCents(total),
+          itemName,
+          formatCents(fromItemCents),
+          formatCents(fromFreeCents),
+        ),
+      ),
+      confirmText: CHECKLIST_WORDS.markPaid,
+    }).finally(() => {
+      isBusyRef.current = false;
+    });
+    return isConfirmed ? settleFrom(total, true, fromFreeCents) : null;
+  };
+
+  /** Marks the payment paid, at `amountCents` when given (a range is only ever marked with what it came to); resolves true once it is written or was already there. A part that comes out of Free to Spend is confirmed first unless the person already saw it in the amount sheet; the figure written is the one confirmed. */
+  const markPaid = async (amountCents?: Cents) => {
+    if (!payment || payment.paid) return false;
+    if (amountCents === undefined && needsAmount) return false;
+    const total = amountCents ?? payment.totalCents;
+    const fromFreeCents = await settleFrom(total, amountCents === undefined);
+    if (fromFreeCents === null) return false;
     const done = await run(async (uid) => {
       const encryption = await getRunwayEncryption(uid);
       return inTurn(() =>
@@ -199,8 +209,7 @@ export function useCostPaid({
           costName: cost.name,
           dueOn: payment.dueOn,
           amountCents: total,
-          fromFreeCents: settleCostPaid(total, getHeldNow(itemId), mark)
-            .fromFreeCents,
+          fromFreeCents,
           paidOn: todayAsUtcDate(),
           mark,
           marks: countCostMarks(moves, itemId, cost.id, payment.dueOn),
@@ -215,7 +224,6 @@ export function useCostPaid({
       });
       return true;
     }
-    onMarked?.();
     announce(done.value);
     return true;
   };

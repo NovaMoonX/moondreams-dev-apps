@@ -168,7 +168,14 @@ async function getCostPaidChange(
   names: { item: string; cost: string },
   isUndo: boolean,
 ) {
-  const undoText = describeCostTakenBack(names.cost, names.item, paid.dueOn);
+  const undoText = describeCostTakenBack(
+    names.cost,
+    names.item,
+    paid.dueOn,
+    paid.amountCents,
+    paid.fromFreeCents,
+    paid.mark,
+  );
   const id = generateUuid();
   return {
     id,

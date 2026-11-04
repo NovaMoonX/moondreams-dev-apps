@@ -16,6 +16,7 @@ import {
   formatTime,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { describeCostGivesBack } from '@apps/runway/utils/changeText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_KIND_LABELS,
@@ -61,9 +62,12 @@ function ChangeRow({
               move.cost.name,
               move.cost.itemName,
               formatDateOrdinalUTC(move.cost.dueOn),
-              move.cost.fromFreeCents > 0
-                ? formatCents(move.cost.fromFreeCents)
-                : null,
+              describeCostGivesBack(
+                move.cost.itemName,
+                move.cost.amountCents,
+                move.cost.fromFreeCents,
+                move.cost.mark,
+              ),
             ),
           )
         : move.bill

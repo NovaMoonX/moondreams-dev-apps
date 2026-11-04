@@ -987,6 +987,7 @@ export function computeDraftView(
     costs: version.payload.costs,
     heldCents: heldByItem[item.id] ?? 0,
     paid: billProgress[item.id]?.costPaid ?? [],
+    repaid: billProgress[item.id]?.repaid,
     fixed: Object.fromEntries(
       version.payload.costs.flatMap((cost) => {
         const pinned = fixedByBill.get(getCostShareKey(item.id, cost.id));

@@ -23,6 +23,7 @@ import {
 import {
   CARD_WORDS,
   DUE_WORDS,
+  HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
@@ -31,6 +32,7 @@ import type { Cents } from '@apps/runway/types';
 import type { CostPayment } from '@apps/runway/engine/horizon';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
+import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import type { HorizonCost } from '@apps/runway/types';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
@@ -41,7 +43,6 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectBillPayments,
   selectBills,
-  selectCostPayments,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -252,7 +253,7 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   const stance = useAppSelector(selectStance);
   const [isOpen, setIsOpen] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
-  const name = `${due.costName} · ${due.itemName}`;
+  const name = HORIZON_WORDS.costLineName(due.costName, due.itemName);
   const paid = useCostPaid({
     itemId: due.itemId,
     itemName: due.itemName,
@@ -290,7 +291,11 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
       </Button>
       <span className='flex shrink-0 flex-col items-end gap-1 py-2 pr-3'>
         <span className='font-semibold whitespace-nowrap tabular-nums'>
-          <SensitiveValue>{formatCents(payment.totalCents)}</SensitiveValue>
+          <SensitiveValue>
+            {paid.needsAmount
+              ? DUE_WORDS.upTo(formatCents(payment.totalCents))
+              : formatCents(payment.totalCents)}
+          </SensitiveValue>
         </span>
         <Button
           type='button'
@@ -352,23 +357,8 @@ function DueBillsCard({
     useRunwayUrlState();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
-  const costPayments = useAppSelector((state) =>
-    selectCostPayments(state, today),
-  );
-  const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const emojiOf = useLiveEmojiResolver();
-  const costRows = (lookahead?.dueCosts ?? []).flatMap((entry) => {
-    const horizon = horizons.find(({ item }) => item.id === entry.itemId);
-    const cost = horizon?.version.payload.costs.find(
-      ({ id }) => id === entry.costId,
-    );
-    const payment = (costPayments[entry.itemId] ?? []).find(
-      ({ costId, dueOn }) => costId === entry.costId && dueOn === entry.dueOn,
-    );
-    return horizon && cost && payment
-      ? [{ entry, cost, payment, emoji: horizon.version.payload.emoji }]
-      : [];
-  });
+  const costRows = useDueCostRows(lookahead, today);
   const due: DueRow[] = [
     ...(lookahead?.due ?? []).map((entry) => ({
       kind: 'bill' as const,

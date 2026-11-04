@@ -26,6 +26,7 @@ export function getHorizonStatus(
   stance: Stance,
   paid: readonly CostPaidEntry[] = [],
   spentCents = 0,
+  fromFreeCents = 0,
 ) {
   const through = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const payments = listHorizonPayments(horizon.costs, through, stance, paid);
@@ -33,7 +34,11 @@ export function getHorizonStatus(
     horizon.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
   );
   const planned = payments.filter(({ costId }) => !outsideIds.has(costId));
-  const figures = getHorizonFigures(Math.max(0, assignedCents), spentCents);
+  const figures = getHorizonFigures(
+    Math.max(0, assignedCents),
+    spentCents,
+    fromFreeCents,
+  );
   const plan = planHorizon(horizon, figures.leftCents, payments);
   const next = planned.find(
     ({ dueOn, paid: mark }) => mark === null && dueOn >= today,
@@ -64,9 +69,14 @@ export function getHorizonStatus(
         amount.lowCents !== amount.highCents
       );
     }),
-    outsideCents: payments.reduce(
-      (sum, { costId, totalCents }) =>
-        outsideIds.has(costId) ? sum + totalCents : sum,
+    outsidePaidCents: payments.reduce(
+      (sum, { costId, totalCents, paid: mark }) =>
+        outsideIds.has(costId) && mark ? sum + totalCents : sum,
+      0,
+    ),
+    outsideDueCents: payments.reduce(
+      (sum, { costId, totalCents, paid: mark }) =>
+        outsideIds.has(costId) && !mark ? sum + totalCents : sum,
       0,
     ),
     next: next
@@ -137,8 +147,8 @@ const describeCostPer = (schedule: Schedule) => {
   return schedule.kind === 'monthly' ? HORIZON_WORDS.costPerMonth : '';
 };
 
-/** A cost in plain pieces: the date line ("Jan 15th", "From Feb 1st, 6 times"), the figure ("$600 to $800" for a range) and, for a repeat, its beat ("a month"). */
-export function describeCost(cost: HorizonCost) {
+/** A cost in plain pieces (`isTagged` false leaves off "Outside the plan", for a row whose paid line says it): the date line ("Jan 15th", "From Feb 1st, 6 times"), the figure ("$600 to $800" for a range) and, for a repeat, its beat ("a month"). */
+export function describeCost(cost: HorizonCost, isTagged = true) {
   const { lowCents, highCents } = cost.amount;
   const amount =
     lowCents === highCents
@@ -148,7 +158,9 @@ export function describeCost(cost: HorizonCost) {
   return {
     line: [
       describeCostTiming(cost.schedule, cost.ending),
-      cost.isOutside && HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
+      isTagged &&
+        cost.isOutside &&
+        HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
     ]
       .filter(Boolean)
       .join(' ·\u00A0'),

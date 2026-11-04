@@ -81,6 +81,7 @@ function HorizonChangeView({
       stance,
       paid,
       balances.costPaidByItem[itemId] ?? 0,
+      balances.costFromFreeByItem[itemId] ?? 0,
     );
     const { shortfall } = plan;
     const text = shortfall

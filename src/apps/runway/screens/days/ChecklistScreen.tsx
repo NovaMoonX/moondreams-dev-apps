@@ -29,6 +29,8 @@ import {
   CHECKLIST_WORDS,
   CARD_WORDS,
   COST_PAID_WORDS,
+  DUE_WORDS,
+  HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_AMOUNT_WORDS,
   TICK_HIT_CLASS,
@@ -226,14 +228,18 @@ function ChecklistCostRow({
     cost,
     payment,
   });
-  const name = `${cost.name} \u00b7 ${horizon.name}`;
-  const amount = formatCents(payment.paid?.amountCents ?? line.cents);
+  const name = HORIZON_WORDS.costLineName(cost.name, horizon.name);
+  const amount = paid.needsAmount
+    ? DUE_WORDS.upTo(formatCents(payment.totalCents))
+    : formatCents(payment.totalCents);
   const getProgress = () => {
     if (payment.paid)
       return COST_PAID_WORDS.paidHead(
         formatDateOrdinalUTC(payment.paid.paidOn),
       );
-    return paid.needsAmount ? COST_PAID_WORDS.rowHint : null;
+    if (paid.needsAmount) return COST_PAID_WORDS.rowHint;
+    if (line.cents >= payment.totalCents) return BILL_WORDS.readyToPay;
+    return `${formatCentsShort(line.cents)} of ${formatCentsShort(payment.totalCents)} set aside`;
   };
   const amountPayment = isAsking ? paid.toAmountPayment() : null;
 
@@ -361,6 +367,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     row.payment ? row.payment.paid !== null : done.has(row.line.lineId);
   const doneCount = ready.filter(isSettled).length;
   const isAllSettled = doneCount === ready.length;
+  const hasCosts = costRows.length > 0;
 
   if (rows.length === 0 && costRows.length === 0) return null;
 
@@ -538,24 +545,32 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               onCheckedChange={(next) => {
                 if (next) void markAll();
               }}
-              aria-label={ITEM_SHEET_R2_WORDS.everythingPaid}
+              aria-label={
+                hasCosts
+                  ? CHECKLIST_WORDS.allBillsPaidAction
+                  : ITEM_SHEET_R2_WORDS.everythingPaid
+              }
             />
           )}
           <span className='min-w-0 flex-1 font-medium'>
             {isAllSettled
-              ? CHECKLIST_R3_WORDS.allPaid
-              : ITEM_SHEET_R2_WORDS.everythingPaid}
+              ? hasCosts
+                ? CHECKLIST_WORDS.allBillsPaid
+                : CHECKLIST_R3_WORDS.allPaid
+              : hasCosts
+                ? CHECKLIST_WORDS.allBillsPaidAction
+                : ITEM_SHEET_R2_WORDS.everythingPaid}
           </span>
           <span className='text-muted-foreground text-sm whitespace-nowrap tabular-nums'>
             {doneCount} of {ready.length}
           </span>
         </div>
       )}
-      {ready.length + costRows.length > 0 && (
+      {ready.length > 0 && (
         <ChecklistGroup
           label={CHECKLIST_WORDS.billsGroup}
-          doneCount={doneCount + costDoneCount}
-          total={ready.length + costRows.length}
+          doneCount={doneCount}
+          total={ready.length}
         >
           {ready.map(({ line, payment }) => (
             <ChecklistBillRow
@@ -567,6 +582,14 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               onDone={(isDone) => setDone([line.lineId], isDone)}
             />
           ))}
+        </ChecklistGroup>
+      )}
+      {hasCosts && (
+        <ChecklistGroup
+          label={CHECKLIST_WORDS.costsGroup}
+          doneCount={costDoneCount}
+          total={costRows.length}
+        >
           {costRows.map(({ line, horizon, cost, payment }) => (
             <ChecklistCostRow
               key={line.lineId}

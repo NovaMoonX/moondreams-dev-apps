@@ -93,7 +93,8 @@ function HorizonSheet({
     plannedCents,
     plannedHighCents,
     isPlannedRange,
-    outsideCents,
+    outsidePaidCents,
+    outsideDueCents,
     hasRepeats,
   } = getHorizonStatus(
     horizon,
@@ -102,6 +103,7 @@ function HorizonSheet({
     stance,
     paid,
     balances.costPaidByItem[itemId] ?? 0,
+    balances.costFromFreeByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
@@ -156,7 +158,10 @@ function HorizonSheet({
         isPlannedRange,
         hasRepeats,
       ),
-    outsideCents > 0 && HORIZON_WORDS.outsideTotal(formatCents(outsideCents)),
+    outsidePaidCents > 0 &&
+      HORIZON_WORDS.outsideTotal(formatCents(outsidePaidCents)),
+    outsideDueCents > 0 &&
+      HORIZON_WORDS.outsideDue(formatCents(outsideDueCents)),
     when,
   ]
     .filter(Boolean)
@@ -188,7 +193,7 @@ function HorizonSheet({
     }
   }, [viewKey]);
   const payments = costPayments[itemId] ?? [];
-  const getPaidLine = (costId: string) => {
+  const getPaid = (costId: string) => {
     const latest = payments
       .flatMap((payment) =>
         payment.costId === costId && payment.paid ? [payment.paid] : [],
@@ -198,12 +203,19 @@ function HorizonSheet({
         null,
       );
     if (!latest) return null;
-    return latest.mark === 'outside'
-      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(latest.paidOn))
-      : COST_PAID_WORDS.paidRow(
-          formatDateOrdinalUTC(latest.paidOn),
-          formatCents(latest.amountCents),
-        );
+    return {
+      line:
+        latest.mark === 'outside'
+          ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(latest.paidOn))
+          : COST_PAID_WORDS.paidRow(
+              formatDateOrdinalUTC(latest.paidOn),
+              formatCents(latest.amountCents),
+            ),
+      amountCents: latest.amountCents,
+      isSettled: !payments.some(
+        (payment) => payment.costId === costId && payment.paid === null,
+      ),
+    };
   };
   const outsideToMark = horizon.costs.flatMap((cost) => {
     const payment = payments.find(
@@ -336,6 +348,9 @@ function HorizonSheet({
                 : HORIZON_WORDS.leftFact(
                     formatCents(figures.setAsideCents),
                     formatCents(figures.spentCents),
+                    figures.fromFreeCents > 0 || isHidden
+                      ? formatCents(figures.fromFreeCents)
+                      : null,
                   )
             }
           />
@@ -424,7 +439,7 @@ function HorizonSheet({
                 <CostRow
                   key={cost.id}
                   cost={cost}
-                  paidLine={getPaidLine(cost.id)}
+                  paid={getPaid(cost.id)}
                   onOpen={() => {
                     setCostId(cost.id);
                     setCostEdit(null);
@@ -448,17 +463,21 @@ function HorizonSheet({
                 {HORIZON_WORDS.addCost}
               </Button>
             )}
+            {outsideToMark.length > 0 && (
+              <ActionGroup isRoomy>
+                {outsideToMark.map(({ cost, payment }) => (
+                  <MarkOutsideCostRow
+                    key={cost.id}
+                    itemId={itemId}
+                    itemName={horizon.name}
+                    cost={cost}
+                    payment={payment}
+                  />
+                ))}
+              </ActionGroup>
+            )}
           </div>
           <ActionGroup isRoomy>
-            {outsideToMark.map(({ cost, payment }) => (
-              <MarkOutsideCostRow
-                key={cost.id}
-                itemId={itemId}
-                itemName={horizon.name}
-                cost={cost}
-                payment={payment}
-              />
-            ))}
             {!shortfall && (
               <ActionRow
                 isGrouped

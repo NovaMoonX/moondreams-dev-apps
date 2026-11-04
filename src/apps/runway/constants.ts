@@ -465,8 +465,8 @@ export const HORIZON_WORDS = {
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',
-  leftFact: (setAside: string, spent: string) =>
-    `${setAside} set aside, ${spent} spent`,
+  leftFact: (setAside: string, spent: string, fromFree: string | null) =>
+    `${setAside} set aside, ${spent} spent${fromFree ? `, ${fromFree} of it from Free to Spend` : ''}`,
   shortTitle: (amount: string, date: string, more: string | null) =>
     `${amount} short on ${date}${more ? `, ${more} more after` : ''}`,
   shortBody: (
@@ -481,6 +481,7 @@ export const HORIZON_WORDS = {
   shortAfter: (cost: string, earlier: string) =>
     `Nothing is left for ${cost} after ${earlier}.`,
   outsideTotal: (amount: string) => `${amount} paid outside the plan`,
+  outsideDue: (amount: string) => `${amount} still to pay outside the plan`,
   needsAShortLook: 'Needs a look',
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
@@ -522,6 +523,7 @@ export const HORIZON_WORDS = {
   effectBefore: 'Now',
   effectAfter: 'After this change',
   changeLastCost: "It's the only cost left.",
+  paidStaysInRecord: "It's paid, so it stays in the record.",
   changeCostRow: 'Change',
   changeCostSub: "Name, date and how it's paid",
   removeCostRow: 'Remove this cost',
@@ -1094,6 +1096,9 @@ export const CHECKLIST_WORDS = {
   everything: 'Mark everything done',
   everythingShort: 'Mark all done',
   billsGroup: 'Bills to pay',
+  costsGroup: 'Costs to pay',
+  allBillsPaid: 'All bills paid',
+  allBillsPaidAction: 'Mark all bills paid',
   waitingGroup: 'Waiting for more money',
   markPaid: 'Mark paid',
   undoPaid: 'Undo',
@@ -1154,6 +1159,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
+  upTo: (amount: string) => `up\u00A0to\u00A0${amount}`,
   wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
     when: string,
@@ -2085,17 +2091,21 @@ export const COST_PAID_WORDS = {
     `Marked ${cost} paid on ${item}: ${amount} due\u00a0${due}.`,
   outsideSummary: (cost: string, item: string, due: string, amount: string) =>
     `Marked ${cost} paid outside the plan on ${item}: ${amount} due\u00a0${due}.`,
-  undoText: (cost: string, item: string, due: string) =>
-    `Took back the ${due} payment of ${cost} on ${item}`,
-  confirm: (
+  undoText: (cost: string, item: string, due: string, gives: string | null) =>
+    `Took back the ${due} payment of ${cost} on ${item}${gives === null ? '' : `: ${gives}`}`,
+  confirm: (cost: string, item: string, due: string, gives: string | null) =>
+    `${cost}'s ${due} payment on ${item} goes back to unpaid${gives === null ? '' : `. ${gives}`}.`,
+  givesBackItem: (item: string, amount: string) =>
+    `${item} gets ${amount} back`,
+  givesBackFree: (amount: string) => `${amount} goes back to Free to Spend`,
+  confirmMark: (
     cost: string,
+    totalCents: string,
     item: string,
-    due: string,
-    freeCents: string | null,
+    heldCents: string,
+    freeCents: string,
   ) =>
-    `${cost}'s ${due} payment on ${item} goes back to unpaid${freeCents === null ? '' : `, and ${freeCents} returns to Free to Spend`}.`,
-  confirmMark: (item: string, heldCents: string, freeCents: string) =>
-    `${item} has ${heldCents} left. The other ${freeCents} comes out of Free to Spend.`,
+    `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
   confirmTitle: (cost: string) => `Mark ${cost} paid`,
   markRow: 'Mark paid',
   markOutsideRow: (cost: string) => `Mark ${cost} paid`,
@@ -2106,8 +2116,10 @@ export const COST_PAID_WORDS = {
   markSubRange: 'Say what it came to',
   markSubOutside: (item: string) =>
     `Paid outside the plan. Nothing comes from ${item}.`,
-  paidRow: (paidOn: string, amount: string) => `Paid ${paidOn} · ${amount}`,
-  paidOutsideRow: (paidOn: string) => `Paid ${paidOn} · outside the plan`,
+  paidRow: (paidOn: string, amount: string) =>
+    `Paid ${paidOn} ·\u00A0${amount}`,
+  paidOutsideRow: (paidOn: string) =>
+    `Paid ${paidOn} ·\u00A0outside\u00A0the\u00A0plan`,
   paidHead: (paidOn: string) => `Paid ${paidOn}`,
   paidSheetTitle: (cost: string) => `${cost} payment`,
   cameTo: 'What it came to',
@@ -2115,7 +2127,6 @@ export const COST_PAID_WORDS = {
   fromFree: (amount: string) => `${amount} from Free to Spend`,
   outsideNote: 'Paid outside the plan. Nothing came from the item.',
   takeBack: 'Take it back',
-  takeBackSub: (item: string, amount: string) => `${item} gets ${amount} back`,
   takeBackSubOutside: 'It goes back to unpaid. No money moves.',
   marked: (cost: string) => `Marked ${cost} paid`,
   markedFrom: (cost: string, amount: string, item: string) =>
@@ -2126,8 +2137,6 @@ export const COST_PAID_WORDS = {
   notChanged: (cost: string) => `${cost} was not changed`,
   alreadyPaid: (cost: string) => `${cost} was already marked paid`,
   alreadyTakenBack: (cost: string) => `${cost} was already taken back`,
-  dueToday: (item: string) => `Due today · from ${item}'s money`,
-  dueOutside: 'Paid outside the plan',
   rowHint: 'Varies · tick to say what it came to',
 } as const;
 

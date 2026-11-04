@@ -798,6 +798,8 @@ export interface ClosingSealed {
       string,
     ][]
   >;
+  /** `[costId, day]` for each confirmed day that gave back a fronted payment, by item id; missing on a closing written before it. */
+  repaid?: Record<string, [string, number][]>;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

@@ -45,7 +45,7 @@ const withCarry = (
     (acc, id) => ({
       ...acc,
       [id]: {
-        paid: (progress[id] ?? NO_PROGRESS).paid,
+        ...(progress[id] ?? NO_PROGRESS),
         funded: [...(progress[id] ?? NO_PROGRESS).funded, ...carry.funded[id]],
       },
     }),

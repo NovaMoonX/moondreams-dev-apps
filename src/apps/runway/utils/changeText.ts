@@ -424,9 +424,34 @@ export const describeCostPaid = (
     formatCents(amountCents),
   );
 
-/** The sentence that says what taking a cost's payment back restores, for the confirm, the toast and the log. */
+/** Where a taken-back payment's money returns, one part for each place that gets any ("Moving gets $50.00 back and $470.00 goes back to Free to Spend"); null when none moves. */
+export const describeCostGivesBack = (
+  item: string,
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) => {
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const free = mark === 'outside' ? 0 : fromFreeCents;
+  const parts = [
+    fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
+    free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
+  ].filter(Boolean);
+  return parts.length === 0 ? null : parts.join(' and ');
+};
+
+/** The sentence that says what taking a cost's payment back restores, for the toast and the log. */
 export const describeCostTakenBack = (
   cost: string,
   item: string,
   dueOn: number,
-) => COST_PAID_WORDS.undoText(cost, item, formatDateOrdinalUTC(dueOn));
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) =>
+  COST_PAID_WORDS.undoText(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+  );

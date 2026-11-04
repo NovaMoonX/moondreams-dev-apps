@@ -882,6 +882,8 @@ export interface DraftHorizonInput {
     paidOn: DateOnly;
     fromFreeCents: Cents;
   }[];
+  /** Confirmed days that gave back a fronted payment of a cost; a mark paid before such a day is not given back again. */
+  repaid?: readonly { costId: string; on: DateOnly }[];
 }
 
 export interface CostSharePlan {
@@ -972,8 +974,12 @@ export function planCostShares(
   const repaid = repayDay
     ? paid
         .filter(
-          ({ paidOn, fromFreeCents }) =>
-            fromFreeCents > 0 && paidOn < repayDay.on,
+          ({ costId, paidOn, fromFreeCents }) =>
+            fromFreeCents > 0 &&
+            paidOn < repayDay.on &&
+            !(item.repaid ?? []).some(
+              (given) => given.costId === costId && given.on > paidOn,
+            ),
         )
         .map((entry): CostSharePlan => ({
           costId: entry.costId,

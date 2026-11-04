@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HandCoins } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 import ActionRow from '@/components/ActionRow';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -34,7 +34,8 @@ function MarkOutsideCostRow({
       <ActionRow
         isGrouped
         isRoomy
-        icon={<HandCoins />}
+        hasChevron={paid.needsAmount}
+        icon={<Check />}
         label={COST_PAID_WORDS.markOutsideRow(cost.name)}
         subtitle={mask(
           paid.needsAmount

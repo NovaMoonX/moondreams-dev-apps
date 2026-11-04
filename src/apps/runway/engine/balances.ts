@@ -82,6 +82,8 @@ export interface Balances {
   paidCents: Cents;
   /** What each Horizon item paid out of its own money since the starting point; a payment outside the plan or made by a purchase is not in it. */
   costPaidByItem: Record<string, Cents>;
+  /** The part of those payments that came out of Free to Spend, by item. */
+  costFromFreeByItem: Record<string, Cents>;
   /** What was spent since the starting point, less refunds. */
   spentCents: Cents;
 }
@@ -164,13 +166,17 @@ export function deriveBalances(input: BalancesInput): Balances {
       itemId,
       amountCents: counted.reduce((sum, entry) => sum + entry.amountCents, 0),
       fromFreeCents: counted.reduce(
-        (sum, entry) => sum + entry.fromFreeCents,
+        (sum, entry) =>
+          sum + Math.min(Math.max(0, entry.fromFreeCents), entry.amountCents),
         0,
       ),
     };
   });
   const costPaidByItem = Object.fromEntries(
     costMarks.map((mark) => [mark.itemId, mark.amountCents]),
+  );
+  const costFromFreeByItem = Object.fromEntries(
+    costMarks.map((mark) => [mark.itemId, mark.fromFreeCents]),
   );
   const paidCents =
     paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0) +
@@ -327,6 +333,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     arrivedCents,
     paidCents,
     costPaidByItem,
+    costFromFreeByItem,
     spentCents,
   };
   return result;

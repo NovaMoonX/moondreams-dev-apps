@@ -49,6 +49,7 @@ import { getHomeHorizonShort } from '@apps/runway/utils/lookaheadText';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
+import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function HomeScreen() {
@@ -62,6 +63,7 @@ function HomeScreen() {
   const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
+  const dueCosts = useDueCostRows(lookahead, today);
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const stance = useAppSelector(selectStance);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -154,7 +156,7 @@ function HomeScreen() {
           lookahead === null ||
           hasWarnings ||
           lookahead.due.length > 0 ||
-          lookahead.dueCosts.length > 0
+          dueCosts.length > 0
         }
         otherwise={<TrackInviteCard />}
       />

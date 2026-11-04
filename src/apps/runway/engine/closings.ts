@@ -24,6 +24,7 @@ import {
   collectCostPaid,
   collectFunded,
   collectPaid,
+  collectRepaid,
   collectStarted,
   collectTransferEntries,
   sumTransfers,
@@ -65,6 +66,8 @@ export interface ClosingState {
   cardPaid: Record<string, CardPaid[]>;
   /** Each Horizon item's paid payments not undone; a closing written before they could be paid reads `{}`. */
   costPaid: Record<string, CostPaidEntry[]>;
+  /** The confirmed days that gave back a Horizon item's fronted payment; a closing written before they existed reads `{}`. */
+  repaid: Record<string, { costId: string; on: DateOnly }[]>;
   /** Each transfer not undone, with its day so a figure as of an earlier day can leave it out; money moved, never spent, so it stays when spending is left out. */
   transfers: TransferEntry[];
 }
@@ -209,6 +212,7 @@ export const emptyClosing = (
   chargedByCard: {},
   cardPaid: {},
   costPaid: {},
+  repaid: {},
   transfers: [],
 });
 
@@ -299,6 +303,7 @@ export function closing(
     chargedByCard: addCents(base.chargedByCard, chargedByCard),
     cardPaid: joinLists(base.cardPaid, collectCardPaid(entries.moves)),
     costPaid: joinLists(base.costPaid, collectCostPaid(entries.moves)),
+    repaid: joinLists(base.repaid, collectRepaid(counted, expectedOn)),
     transfers: [
       ...base.transfers,
       ...collectTransferEntries(entries.moves, startDate),
@@ -363,6 +368,12 @@ export function closingBefore(
       Object.entries(state.costPaid).map(([id, list]) => [
         id,
         list.filter((payment) => payment.paidOn < day),
+      ]),
+    ),
+    repaid: Object.fromEntries(
+      Object.entries(state.repaid).map(([id, list]) => [
+        id,
+        list.filter((given) => given.on < day),
       ]),
     ),
     transfers: state.transfers.filter((entry) => entry.on < day),
@@ -465,10 +476,15 @@ export function deriveBillProgress(
   );
   const paid = joinPaid(base, collectPaid(moves));
   const costPaid = joinCostPaid(base, collectCostPaid(moves));
+  const repaid = joinLists(
+    base?.repaid ?? {},
+    collectRepaid(records, expectedOn),
+  );
   const ids = new Set([
     ...Object.keys(funded),
     ...Object.keys(paid),
     ...Object.keys(costPaid),
+    ...Object.keys(repaid),
   ]);
   const result = Object.fromEntries(
     [...ids].map((id) => [
@@ -477,6 +493,7 @@ export function deriveBillProgress(
         funded: funded[id] ?? [],
         paid: settleCounted(funded[id] ?? [], paid[id] ?? [], startDate),
         ...(costPaid[id] ? { costPaid: costPaid[id] } : {}),
+        ...(repaid[id] ? { repaid: repaid[id] } : {}),
       },
     ]),
   );
@@ -573,6 +590,12 @@ export function encodeClosing(state: ClosingState): ClosingSealed {
             entry.moveId,
           ],
         ),
+      ]),
+    ),
+    repaid: Object.fromEntries(
+      Object.entries(state.repaid).map(([id, list]) => [
+        id,
+        list.map((given): [string, number] => [given.costId, toDays(given.on)]),
       ]),
     ),
     transfers: state.transfers.map(
@@ -674,6 +697,12 @@ export function decodeClosing(
             purchaseId,
           }),
         ),
+      ]),
+    ),
+    repaid: Object.fromEntries(
+      Object.entries(sealed.repaid ?? {}).map(([id, list]) => [
+        id,
+        list.map(([costId, day]) => ({ costId, on: day * DAY_MS })),
       ]),
     ),
     transfers: sealed.transfers.map(

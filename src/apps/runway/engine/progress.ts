@@ -2,7 +2,7 @@ import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
 
 import { START_DAY_KEY } from '@apps/runway/constants';
 
-import { getEffectiveSplits } from './correct';
+import { getEffectiveSplit, getEffectiveSplits } from './correct';
 import { toDayStamp } from './dates';
 import type { CostPaidEntry } from './horizon';
 
@@ -37,6 +37,8 @@ export interface BillProgressInput {
   paid: PaidPayment[];
   /** A Horizon item's paid payments; missing for a bill. */
   costPaid?: CostPaidEntry[];
+  /** The confirmed days that gave back a Horizon item's fronted payment; missing when none did. */
+  repaid?: { costId: string; on: DateOnly }[];
 }
 
 export const NO_PROGRESS: BillProgressInput = { funded: [], paid: [] };
@@ -122,6 +124,36 @@ export function collectCostPaid(
     });
     return acc;
   }, {});
+  return result;
+}
+
+/** The confirmed days' latest lines that give back to Free to Spend for a Horizon item's fronted payment, by item id, each with the day's date. */
+export function collectRepaid(
+  records: readonly OpenRecord[],
+  onByDay: ReadonlyMap<string, DateOnly>,
+): Record<string, { costId: string; on: DateOnly }[]> {
+  const byDay = records.reduce<Map<string, OpenRecord[]>>((acc, record) => {
+    acc.set(record.dayId, [...(acc.get(record.dayId) ?? []), record]);
+    return acc;
+  }, new Map());
+  const result = [...byDay.entries()]
+    .flatMap(([dayId, group]) => {
+      const on = onByDay.get(dayId);
+      return on === undefined
+        ? []
+        : (getEffectiveSplit(group)?.lines ?? []).flatMap((line) =>
+            line.repaysFree && line.costId !== null
+              ? [{ itemId: line.itemId, costId: line.costId, on }]
+              : [],
+          );
+    })
+    .reduce<Record<string, { costId: string; on: DateOnly }[]>>(
+      (acc, { itemId, costId, on }) => {
+        (acc[itemId] ??= []).push({ costId, on });
+        return acc;
+      },
+      {},
+    );
   return result;
 }
 

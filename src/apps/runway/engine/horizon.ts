@@ -46,13 +46,18 @@ export function listCostPayments(
   paid: readonly CostPaidEntry[] = [],
 ): CostPayment[] {
   const planned = pick(stance, cost.amount, 'expense');
+  const markOf = (dueOn: DateOnly) =>
+    paid.find((entry) => entry.costId === cost.id && entry.dueOn === dueOn) ??
+    null;
   const result = occurrences(cost.schedule, cost.ending, 0, horizon)
-    .filter((dueOn) => cost.endsAfter === null || dueOn <= cost.endsAfter)
+    .filter(
+      (dueOn) =>
+        cost.endsAfter === null ||
+        dueOn <= cost.endsAfter ||
+        markOf(dueOn) !== null,
+    )
     .map((dueOn) => {
-      const mark =
-        paid.find(
-          (entry) => entry.costId === cost.id && entry.dueOn === dueOn,
-        ) ?? null;
+      const mark = markOf(dueOn);
       return {
         costId: cost.id,
         dueOn,
@@ -295,9 +300,14 @@ export function planHorizon(
   return { covers, coveredUntil: first?.dueOn ?? null, shortfall };
 }
 
-/** An item's three figures. Left is what the ledger holds for it; what was spent from it is added back to give what was set aside. */
-export const getHorizonFigures = (leftCents: Cents, spentCents: Cents = 0) => ({
-  setAsideCents: leftCents + spentCents,
+/** An item's three figures. Left is what the ledger holds for it; what its payments took from the item is added back to give what was set aside, so the part Free to Spend fronted is not counted as set aside. */
+export const getHorizonFigures = (
+  leftCents: Cents,
+  spentCents: Cents = 0,
+  fromFreeCents: Cents = 0,
+) => ({
+  setAsideCents: leftCents + spentCents - fromFreeCents,
   spentCents,
+  fromFreeCents,
   leftCents,
 });

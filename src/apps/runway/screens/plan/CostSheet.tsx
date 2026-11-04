@@ -52,6 +52,7 @@ import {
   selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
+import { describeCostGivesBack } from '@apps/runway/utils/changeText';
 import {
   describeCost,
   describeCostInSentence,
@@ -207,8 +208,16 @@ function CostSheet({
 
   const isExact = cost.amount.lowCents === cost.amount.highCents;
   const isLive = cost.endsAfter === null;
-  const isRemovable = isLive && getLiveCosts(horizon).length > 1;
   const isRepeat = cost.schedule.kind !== 'once';
+  const isPaidOnce = !isRepeat && paidEntries.length > 0;
+  const isRemovable = isLive && !isPaidOnce && getLiveCosts(horizon).length > 1;
+  const settled =
+    next === null
+      ? paidEntries.reduce<CostPaidEntry | null>(
+          (best, entry) => (best && best.paidOn >= entry.paidOn ? best : entry),
+          null,
+        )
+      : null;
   const when = isRepeat
     ? describeCostTiming(cost.schedule, cost.ending)
     : HORIZON_WORDS.costDue(
@@ -351,9 +360,11 @@ function CostSheet({
   const getTakeBackSubtitle = (entry: CostPaidEntry) =>
     entry.mark === 'outside'
       ? COST_PAID_WORDS.takeBackSubOutside
-      : COST_PAID_WORDS.takeBackSub(
+      : describeCostGivesBack(
           horizon.name,
-          formatCents(entry.amountCents - entry.fromFreeCents),
+          entry.amountCents,
+          entry.fromFreeCents,
+          entry.mark,
         );
 
   const getMarkSubtitle = () => {
@@ -378,19 +389,30 @@ function CostSheet({
       <BackLink label={horizon.name} onBack={onBack} />
       <SheetHead
         label={cost.name}
-        figure={formatRange(cost.amount)}
+        figure={
+          settled ? formatCents(settled.amountCents) : formatRange(cost.amount)
+        }
         suffix={describeCost(cost).per || undefined}
-        fact={HORIZON_WORDS.costFact(
-          when,
-          cost.pricedOn === null ? null : formatDateOrdinalUTC(cost.pricedOn),
-        )}
+        fact={
+          settled
+            ? COST_PAID_WORDS.paidHead(formatDateOrdinalUTC(settled.paidOn))
+            : HORIZON_WORDS.costFact(
+                when,
+                cost.pricedOn === null
+                  ? null
+                  : formatDateOrdinalUTC(cost.pricedOn),
+              )
+        }
       />
-      <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
+      {!settled && (
+        <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
+      )}
       <ActionGroup isRoomy>
         {next && (
           <ActionRow
             isGrouped
             isRoomy
+            hasChevron={costPaid.needsAmount}
             icon={<HandCoins />}
             label={
               cost.isOutside
@@ -416,23 +438,25 @@ function CostSheet({
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}
-        <ActionRow
-          isGrouped
-          isRoomy
-          hasChevron
-          icon={<Tag />}
-          label={HORIZON_WORDS.setPrice}
-          subtitle={
-            isExact
-              ? mask(
-                  HORIZON_WORDS.setPriceSubExact(
-                    formatCents(cost.amount.lowCents),
-                  ),
-                )
-              : HORIZON_WORDS.setPriceSub
-          }
-          onClick={() => setView('price')}
-        />
+        {!settled && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Tag />}
+            label={HORIZON_WORDS.setPrice}
+            subtitle={
+              isExact
+                ? mask(
+                    HORIZON_WORDS.setPriceSubExact(
+                      formatCents(cost.amount.lowCents),
+                    ),
+                  )
+                : HORIZON_WORDS.setPriceSub
+            }
+            onClick={() => setView('price')}
+          />
+        )}
         <ActionRow
           isGrouped
           isRoomy
@@ -455,7 +479,12 @@ function CostSheet({
           />
         )}
       </ActionGroup>
-      {isLive && !isRemovable && (
+      {isPaidOnce && (
+        <p className='text-muted-foreground text-sm'>
+          {HORIZON_WORDS.paidStaysInRecord}
+        </p>
+      )}
+      {isLive && !isPaidOnce && !isRemovable && (
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.changeLastCost}
         </p>
@@ -496,7 +525,7 @@ function CostSheet({
                 isDestructive
                 icon={<Undo2 />}
                 label={COST_PAID_WORDS.takeBack}
-                subtitle={mask(getTakeBackSubtitle(takingBack))}
+                subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
                 isDisabled={costPaid.isBusy}
                 onClick={() => {
                   void costPaid.takeBack(takingBack).then((isDone) => {

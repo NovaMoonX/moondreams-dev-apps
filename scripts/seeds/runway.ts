@@ -42,6 +42,7 @@ import {
   describeCostPaid,
   describeCostTakenBack,
 } from '../../src/apps/runway/utils/changeText.ts';
+import { settleCostPaid } from '../../src/apps/runway/engine/horizon.ts';
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
@@ -261,7 +262,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (all of it from Free to Spend, since nothing is put toward it) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (the $50.00 its confirmed day's Surgery line set aside, the other $470.00 from Free to Spend) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -460,7 +461,7 @@ async function writeSeedHorizon(
       itemId: 'seed-horizon-surgery',
       cost: items[1].payload.costs[0],
       amountCents: 52_000,
-      fromFreeCents: 52_000,
+      fromFreeCents: settleCostPaid(52_000, 5_000).fromFreeCents,
       paidOn: today - 2 * DAY_MS,
       mark: 'item',
     },
@@ -488,7 +489,14 @@ async function writeSeedHorizon(
         mark: paid.mark,
         purchaseId: null,
       };
-      const undoText = describeCostTakenBack(paidCost.name, itemName, dueOn);
+      const undoText = describeCostTakenBack(
+        paidCost.name,
+        itemName,
+        dueOn,
+        paid.amountCents,
+        paid.fromFreeCents,
+        paid.mark,
+      );
       return {
         itemId,
         moveId,
