@@ -1,5 +1,12 @@
 import { useRef, useState } from 'react';
-import { Pencil, Tag, Trash2 } from 'lucide-react';
+import {
+  CircleCheck,
+  HandCoins,
+  Pencil,
+  Tag,
+  Trash2,
+  Undo2,
+} from 'lucide-react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -7,17 +14,21 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import AmountField from '@/components/AmountField';
 import BackLink from '@/components/BackLink';
+import FormSheet from '@/components/FormSheet';
+import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
-import { store } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import { MaskedText } from '@apps/runway/components/MaskedText';
+import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import RangeNote from '@apps/runway/components/RangeNote';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
+  COST_PAID_WORDS,
   FORM_FLOW_WORDS,
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
@@ -28,11 +39,18 @@ import {
   removeCost,
   restoreCost,
   setCostPrice,
+  settleCostPaid,
+  type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
-import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectCostPayments,
+  selectHorizonItems,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
 import {
   describeCost,
@@ -166,7 +184,26 @@ function CostSheet({
   const mask = useMaskedText();
   const [view, setView] = useState<'menu' | 'price'>('menu');
   const [isRemoving, setIsRemoving] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const [takingBackId, setTakingBackId] = useState<string | null>(null);
   const isRestoring = useRef(false);
+  const payments = useAppSelector((state) => selectCostPayments(state, today))[
+    itemId
+  ];
+  const heldCents = useAppSelector(
+    (state) => selectBalances(state).assignedByItem[itemId] ?? 0,
+  );
+  const costPayments = (payments ?? []).filter(
+    ({ costId }) => costId === cost.id,
+  );
+  const next = costPayments.find(({ paid }) => paid === null) ?? null;
+  const paidEntries = costPayments.flatMap(({ paid }) => (paid ? [paid] : []));
+  const costPaid = useCostPaid({
+    itemId,
+    itemName: horizon.name,
+    cost,
+    payment: next,
+  });
 
   const isExact = cost.amount.lowCents === cost.amount.highCents;
   const isLive = cost.endsAfter === null;
@@ -226,9 +263,11 @@ function CostSheet({
     const live = getLive();
     const index = live?.costs.findIndex(({ id }) => id === cost.id) ?? -1;
     const gone = live?.costs[index];
-    // No payment can be marked paid yet, so a removal is always a version without the cost.
-    const next = live && gone ? removeCost(live, cost.id, today, false) : null;
-    if (!next || !gone) {
+    const without =
+      live && gone
+        ? removeCost(live, cost.id, today, paidEntries.length > 0)
+        : null;
+    if (!without || !gone) {
       addToast({ title: HORIZON_WORDS.removeGone, type: 'error' });
       return;
     }
@@ -237,8 +276,8 @@ function CostSheet({
     setIsRemoving(true);
     try {
       await write(
-        next,
-        HORIZON_WORDS.removeSummary(next.name, gone.name, timing, from),
+        without,
+        HORIZON_WORDS.removeSummary(without.name, gone.name, timing, from),
       );
       addToast({
         title: HORIZON_WORDS.removedToast(gone.name),
@@ -288,6 +327,52 @@ function CostSheet({
     }
   };
 
+  const getPaidLine = (entry: CostPaidEntry) =>
+    entry.mark === 'outside'
+      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
+      : COST_PAID_WORDS.paidRow(
+          formatDateOrdinalUTC(entry.paidOn),
+          formatCents(entry.amountCents),
+        );
+
+  const getPaidSplit = (entry: CostPaidEntry) => {
+    if (entry.mark === 'outside') return COST_PAID_WORDS.outsideNote;
+    const fromItem = entry.amountCents - entry.fromFreeCents;
+    return [
+      fromItem > 0 &&
+        COST_PAID_WORDS.fromItem(horizon.name, formatCents(fromItem)),
+      entry.fromFreeCents > 0 &&
+        COST_PAID_WORDS.fromFree(formatCents(entry.fromFreeCents)),
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  };
+
+  const getTakeBackSubtitle = (entry: CostPaidEntry) =>
+    entry.mark === 'outside'
+      ? COST_PAID_WORDS.takeBackSubOutside
+      : COST_PAID_WORDS.takeBackSub(
+          horizon.name,
+          formatCents(entry.amountCents - entry.fromFreeCents),
+        );
+
+  const getMarkSubtitle = () => {
+    if (cost.isOutside) return COST_PAID_WORDS.markSubOutside(horizon.name);
+    if (costPaid.needsAmount) return COST_PAID_WORDS.markSubRange;
+    const total = next?.totalCents ?? 0;
+    const { fromItemCents, fromFreeCents } = settleCostPaid(total, heldCents);
+    return fromFreeCents > 0
+      ? COST_PAID_WORDS.markSubFree(
+          formatCents(fromItemCents),
+          horizon.name,
+          formatCents(fromFreeCents),
+        )
+      : COST_PAID_WORDS.markSub(formatCents(total), horizon.name);
+  };
+
+  const takingBack = paidEntries.find(({ moveId }) => moveId === takingBackId);
+  const amountPayment = isAsking ? costPaid.toAmountPayment() : null;
+
   return (
     <div className='space-y-4'>
       <BackLink label={horizon.name} onBack={onBack} />
@@ -302,6 +387,35 @@ function CostSheet({
       />
       <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       <ActionGroup isRoomy>
+        {next && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<HandCoins />}
+            label={
+              cost.isOutside
+                ? COST_PAID_WORDS.markOutsideRow(cost.name)
+                : COST_PAID_WORDS.markRow
+            }
+            subtitle={mask(getMarkSubtitle())}
+            isDisabled={!costPaid.isReady || costPaid.isBusy}
+            onClick={() => {
+              if (costPaid.needsAmount) setIsAsking(true);
+              else void costPaid.mark();
+            }}
+          />
+        )}
+        {paidEntries.map((entry) => (
+          <ActionRow
+            key={entry.moveId}
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<CircleCheck />}
+            label={mask(getPaidLine(entry))}
+            onClick={() => setTakingBackId(entry.moveId)}
+          />
+        ))}
         <ActionRow
           isGrouped
           isRoomy
@@ -345,6 +459,54 @@ function CostSheet({
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.changeLastCost}
         </p>
+      )}
+      {amountPayment && (
+        <PaidAmountSheet
+          payment={amountPayment}
+          onMark={costPaid.mark}
+          onClose={() => setIsAsking(false)}
+        />
+      )}
+      {takingBack && (
+        <FormSheet
+          isOpen
+          isDrawerWhenShort
+          onClose={() => setTakingBackId(null)}
+          title={COST_PAID_WORDS.paidSheetTitle(cost.name)}
+          actions={<ValuesEyeButton />}
+        >
+          <div className='space-y-4 pb-4'>
+            <div className='space-y-1 text-sm'>
+              <p className='font-medium'>
+                {COST_PAID_WORDS.paidHead(
+                  formatDateOrdinalUTC(takingBack.paidOn),
+                )}
+              </p>
+              <p className='text-muted-foreground'>
+                {COST_PAID_WORDS.cameTo}{' '}
+                <MaskedText>{formatCents(takingBack.amountCents)}</MaskedText>
+              </p>
+              <p className='text-muted-foreground'>
+                <MaskedText>{getPaidSplit(takingBack)}</MaskedText>
+              </p>
+            </div>
+            <ActionGroup>
+              <ActionRow
+                isGrouped
+                isDestructive
+                icon={<Undo2 />}
+                label={COST_PAID_WORDS.takeBack}
+                subtitle={mask(getTakeBackSubtitle(takingBack))}
+                isDisabled={costPaid.isBusy}
+                onClick={() => {
+                  void costPaid.takeBack(takingBack).then((isDone) => {
+                    if (isDone) setTakingBackId(null);
+                  });
+                }}
+              />
+            </ActionGroup>
+          </div>
+        </FormSheet>
       )}
     </div>
   );

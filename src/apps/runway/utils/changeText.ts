@@ -3,6 +3,7 @@ import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  COST_PAID_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
   PAID_FROM_WORDS,
@@ -19,6 +20,7 @@ import {
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
+  CostPaidMark,
   EnvelopeSealed,
   HorizonSealed,
   GoalSealed,
@@ -404,3 +406,27 @@ export function describeReplaced(
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
+
+/** The change-log line for a cost's payment marked paid: "Marked Movers paid on Moving: $600.00 due Jan 15th." */
+export const describeCostPaid = (
+  cost: string,
+  item: string,
+  dueOn: number,
+  amountCents: number,
+  mark: CostPaidMark,
+) =>
+  (mark === 'outside'
+    ? COST_PAID_WORDS.outsideSummary
+    : COST_PAID_WORDS.summary)(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    formatCents(amountCents),
+  );
+
+/** The sentence that says what taking a cost's payment back restores, for the confirm, the toast and the log. */
+export const describeCostTakenBack = (
+  cost: string,
+  item: string,
+  dueOn: number,
+) => COST_PAID_WORDS.undoText(cost, item, formatDateOrdinalUTC(dueOn));

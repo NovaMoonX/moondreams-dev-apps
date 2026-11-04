@@ -707,13 +707,14 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment` and a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it). */
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
 export const MOVE_KINDS = [
   'billPaid',
   'start',
   'trackingChange',
   'cardPayment',
   'transfer',
+  'costPaid',
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
@@ -1170,8 +1171,12 @@ export const DUE_WORDS = {
             : when;
     return `Missed ${list}${isDueAgainToday ? ' · due again today' : ''}`;
   },
-  count: (count: number, isAnyLate: boolean) =>
-    isAnyLate ? `${count} bills, oldest first` : `${count} bills`,
+  count: (count: number, isAnyLate: boolean, hasCosts = false) => {
+    const things = hasCosts ? 'payments' : 'bills';
+    return isAnyLate
+      ? `${count} ${things}, oldest first`
+      : `${count} ${things}`;
+  },
   more: (count: number) => `Show ${count} more`,
   fewer: 'Show fewer',
   seeAll: 'See all',
@@ -2072,6 +2077,58 @@ export const PAID_HISTORY_WORDS = {
   openMove: 'Open this payment',
   undoThis: 'Take back this payment',
   undoTitle: 'Take back this payment?',
+} as const;
+
+/** A Horizon cost's payment marked paid, or taken back. */
+export const COST_PAID_WORDS = {
+  summary: (cost: string, item: string, due: string, amount: string) =>
+    `Marked ${cost} paid on ${item}: ${amount} due\u00a0${due}.`,
+  outsideSummary: (cost: string, item: string, due: string, amount: string) =>
+    `Marked ${cost} paid outside the plan on ${item}: ${amount} due\u00a0${due}.`,
+  undoText: (cost: string, item: string, due: string) =>
+    `Took back the ${due} payment of ${cost} on ${item}`,
+  confirm: (
+    cost: string,
+    item: string,
+    due: string,
+    freeCents: string | null,
+  ) =>
+    `${cost}'s ${due} payment on ${item} goes back to unpaid${freeCents === null ? '' : `, and ${freeCents} returns to Free to Spend`}.`,
+  confirmMark: (item: string, heldCents: string, freeCents: string) =>
+    `${item} has ${heldCents} left. The other ${freeCents} comes out of Free to Spend.`,
+  confirmTitle: (cost: string) => `Mark ${cost} paid`,
+  markRow: 'Mark paid',
+  markOutsideRow: (cost: string) => `Mark ${cost} paid`,
+  markSub: (amount: string, item: string) =>
+    `${amount} comes from what ${item} has left`,
+  markSubFree: (amount: string, item: string, free: string) =>
+    `${amount} comes from ${item}; ${free} of it from Free to Spend`,
+  markSubRange: 'Say what it came to',
+  markSubOutside: (item: string) =>
+    `Paid outside the plan. Nothing comes from ${item}.`,
+  paidRow: (paidOn: string, amount: string) => `Paid ${paidOn} · ${amount}`,
+  paidOutsideRow: (paidOn: string) => `Paid ${paidOn} · outside the plan`,
+  paidHead: (paidOn: string) => `Paid ${paidOn}`,
+  paidSheetTitle: (cost: string) => `${cost} payment`,
+  cameTo: 'What it came to',
+  fromItem: (item: string, amount: string) => `${amount} from ${item}`,
+  fromFree: (amount: string) => `${amount} from Free to Spend`,
+  outsideNote: 'Paid outside the plan. Nothing came from the item.',
+  takeBack: 'Take it back',
+  takeBackSub: (item: string, amount: string) => `${item} gets ${amount} back`,
+  takeBackSubOutside: 'It goes back to unpaid. No money moves.',
+  marked: (cost: string) => `Marked ${cost} paid`,
+  markedFrom: (cost: string, amount: string, item: string) =>
+    `Marked ${cost} paid · ${amount} from ${item}`,
+  markedOutside: (cost: string) => `Marked ${cost} paid outside the plan`,
+  unmarked: (cost: string) => `${cost} is not marked paid`,
+  failed: (cost: string) => `${cost} was not marked paid`,
+  notChanged: (cost: string) => `${cost} was not changed`,
+  alreadyPaid: (cost: string) => `${cost} was already marked paid`,
+  alreadyTakenBack: (cost: string) => `${cost} was already taken back`,
+  dueToday: (item: string) => `Due today · from ${item}'s money`,
+  dueOutside: 'Paid outside the plan',
+  rowHint: 'Varies · tick to say what it came to',
 } as const;
 
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */

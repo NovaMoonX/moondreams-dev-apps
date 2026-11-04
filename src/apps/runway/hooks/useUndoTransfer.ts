@@ -2,9 +2,14 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { MOVE_WORDS, PAID_HISTORY_WORDS } from '@apps/runway/constants';
+import {
+  COST_PAID_WORDS,
+  MOVE_WORDS,
+  PAID_HISTORY_WORDS,
+} from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { undoCostPayment } from '@apps/runway/hooks/useCostPaid';
 import { undoPaymentPaid } from '@apps/runway/hooks/useBillPaid';
 import { undoTransfer } from '@apps/runway/store/actions/transferActions';
 import type { ChangeMove } from '@apps/runway/types';
@@ -38,6 +43,21 @@ export function useUndoTransfer() {
         if (!isWritten) {
           addToast({
             title: PAID_HISTORY_WORDS.alreadyTakenBack(moved.bill.name),
+            type: 'info',
+          });
+          return false;
+        }
+      } else if (moved.cost) {
+        const { cost } = moved;
+        const isWritten = await undoCostPayment(
+          user.uid,
+          cost.itemId,
+          { item: cost.itemName, cost: cost.name },
+          { ...cost, moveId: moved.moveId },
+        );
+        if (!isWritten) {
+          addToast({
+            title: COST_PAID_WORDS.alreadyTakenBack(cost.name),
             type: 'info',
           });
           return false;

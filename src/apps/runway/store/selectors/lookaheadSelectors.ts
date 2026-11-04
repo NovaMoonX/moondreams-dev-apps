@@ -108,13 +108,13 @@ export function computeLookahead(
     payments: inputs.payments,
     stance,
     freeToSpendCents: inputs.freeToSpendCents ?? null,
-    // No payment is marked paid until Issues 85 and 86, so none is passed.
     horizonItems: (inputs.horizonItems ?? []).map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
       rest: version.payload.rest,
       costs: version.payload.costs,
       heldCents: heldByItem[item.id] ?? 0,
+      paid: billProgress[item.id]?.costPaid ?? [],
     })),
     draftOf: (day, carry) => {
       const view = computeDraftView(

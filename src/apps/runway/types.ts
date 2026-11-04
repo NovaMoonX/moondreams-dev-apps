@@ -539,6 +539,19 @@ export interface ChangeMove {
     fromFreeCents: Cents;
     cardId: string | null;
   } | null;
+  /** Set when the entry is a Horizon cost's payment marked paid; null elsewhere and read as null on older entries. */
+  cost: {
+    itemId: string;
+    itemName: string;
+    costId: string;
+    name: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    amountCents: Cents;
+    fromFreeCents: Cents;
+    mark: CostPaidMark;
+    purchaseId: string | null;
+  } | null;
 }
 
 export interface ChangeSealed {
@@ -546,7 +559,12 @@ export interface ChangeSealed {
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
   /** A move written before outside moves existed has no `isOutside`. */
-  move?: (Omit<ChangeMove, 'isOutside'> & { isOutside?: boolean }) | null;
+  move?:
+    | (Omit<ChangeMove, 'isOutside' | 'cost'> & {
+        isOutside?: boolean;
+        cost?: ChangeMove['cost'];
+      })
+    | null;
 }
 
 export interface ChangeDoc {
@@ -620,6 +638,24 @@ export interface BillPaidSealed {
   cardId?: string | null;
 }
 
+/** How a Horizon cost's payment was marked: out of the item's money, by a purchase (which moved the money), or outside the plan (which moves nothing). */
+export type CostPaidMark = 'item' | 'purchase' | 'outside';
+
+/** A Horizon cost's payment marked paid: `refId` is the item, `date` the payment's due date. */
+export interface CostPaidSealed {
+  costId: string;
+  dueOn: DateOnly;
+  /** What it came to: the exact amount, or what the person said for a range. */
+  amountCents: Cents;
+  /** The day the person marked it paid. */
+  paidOn: DateOnly;
+  /** The part beyond what the item held, which came out of Free to Spend. */
+  fromFreeCents: Cents;
+  mark: CostPaidMark;
+  /** The purchase that moved the money when `mark` is `purchase`; null otherwise. */
+  purchaseId: string | null;
+}
+
 /** A card paid off: `refId` is the card, `date` the day it was paid. */
 export interface CardPaymentSealed {
   amountCents: Cents;
@@ -663,6 +699,7 @@ interface OpenMoveBase {
 
 export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
+  | (OpenMoveBase & { kind: 'costPaid'; payload: CostPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
   | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
   | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed })
@@ -747,6 +784,20 @@ export interface ClosingSealed {
   cardPaid: Record<string, [number, Cents, string][]>;
   /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
   transfers: [number, string | null, string | null, Cents, string, boolean][];
+  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
+  costPaid?: Record<
+    string,
+    [
+      string,
+      number,
+      Cents,
+      number,
+      Cents,
+      CostPaidMark,
+      string | null,
+      string,
+    ][]
+  >;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

@@ -4,6 +4,7 @@ import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getHorizonFigures,
+  type CostPaidEntry,
   listHorizonPayments,
   planHorizon,
 } from '@apps/runway/engine/horizon';
@@ -23,16 +24,20 @@ export function getHorizonStatus(
   assignedCents: number,
   today: number,
   stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+  spentCents = 0,
 ) {
   const through = addUtcMonths(today, LOOKAHEAD_MONTHS);
-  const payments = listHorizonPayments(horizon.costs, through, stance);
+  const payments = listHorizonPayments(horizon.costs, through, stance, paid);
   const outsideIds = new Set(
     horizon.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
   );
   const planned = payments.filter(({ costId }) => !outsideIds.has(costId));
-  const figures = getHorizonFigures(Math.max(0, assignedCents));
+  const figures = getHorizonFigures(Math.max(0, assignedCents), spentCents);
   const plan = planHorizon(horizon, figures.leftCents, payments);
-  const next = planned.find(({ dueOn }) => dueOn >= today);
+  const next = planned.find(
+    ({ dueOn, paid: mark }) => mark === null && dueOn >= today,
+  );
   return {
     figures,
     plan,
@@ -43,14 +48,21 @@ export function getHorizonStatus(
     ),
     plannedCents: planned.reduce((sum, { totalCents }) => sum + totalCents, 0),
     plannedHighCents: planned.reduce(
-      (sum, { costId }) =>
+      (sum, { costId, totalCents, paid: mark }) =>
         sum +
-        (horizon.costs.find(({ id }) => id === costId)?.amount.highCents ?? 0),
+        (mark
+          ? totalCents
+          : (horizon.costs.find(({ id }) => id === costId)?.amount.highCents ??
+            0)),
       0,
     ),
-    isPlannedRange: planned.some(({ costId }) => {
+    isPlannedRange: planned.some(({ costId, paid: mark }) => {
       const amount = horizon.costs.find(({ id }) => id === costId)?.amount;
-      return amount !== undefined && amount.lowCents !== amount.highCents;
+      return (
+        mark === null &&
+        amount !== undefined &&
+        amount.lowCents !== amount.highCents
+      );
     }),
     outsideCents: payments.reduce(
       (sum, { costId, totalCents }) =>

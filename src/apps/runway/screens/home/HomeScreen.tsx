@@ -151,7 +151,10 @@ function HomeScreen() {
       )}
       <PrioritiesNudge
         isHeldBack={
-          lookahead === null || hasWarnings || lookahead.due.length > 0
+          lookahead === null ||
+          hasWarnings ||
+          lookahead.due.length > 0 ||
+          lookahead.dueCosts.length > 0
         }
         otherwise={<TrackInviteCard />}
       />

@@ -17,19 +17,27 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
+import {
+  toBillAmountPayment,
+  useBillCardName,
+} from '@apps/runway/hooks/paidAmountPayment';
 import {
   BILL_WORDS,
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   CARD_WORDS,
+  COST_PAID_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_AMOUNT_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getLineTitle } from '@apps/runway/engine/differences';
+import type { CostPayment } from '@apps/runway/engine/horizon';
 import { countMarks } from '@apps/runway/engine/progress';
+import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   markBillsPaid,
@@ -39,11 +47,19 @@ import {
 } from '@apps/runway/store/actions/moveActions';
 import {
   selectBillPayments,
+  selectCostPayments,
+  selectHorizonItems,
   selectOpenDay,
+  selectStance,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import type { Cents, RecordLine } from '@apps/runway/types';
+import type {
+  Cents,
+  HorizonCost,
+  HorizonSealed,
+  RecordLine,
+} from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { needsPaidAmount, useBillPaid } from '@apps/runway/hooks/useBillPaid';
 import {
@@ -95,6 +111,7 @@ function ChecklistBillRow({
   const isChecked = pending ?? settled;
 
   const [isAsking, setIsAsking] = useState(false);
+  const sheetCardName = useBillCardName(line.itemId, payment?.dueOn ?? null);
 
   /** Resolves true once the tick is written; a bill that varies first asks what it came to. */
   const toggle = async (next: boolean, amountCents?: Cents) => {
@@ -170,11 +187,95 @@ function ChecklistBillRow({
       )}
       {isAsking && payment && (
         <PaidAmountSheet
-          billId={line.itemId}
-          billName={getLineTitle(line)}
-          payment={payment}
+          payment={toBillAmountPayment(
+            getLineTitle(line),
+            payment,
+            sheetCardName,
+          )}
           onMark={(cents) => toggle(true, cents)}
           onClose={() => setIsAsking(false)}
+        />
+      )}
+    </>
+  );
+}
+
+interface ChecklistCostRowProps {
+  line: RecordLine;
+  horizon: HorizonSealed;
+  cost: HorizonCost;
+  payment: CostPayment;
+  today: number;
+}
+
+/** A Horizon cost the day set money aside for, named with its event: tapping it records it paid out of the event's money (an Undo toast takes it back), and its chevron opens the event. */
+function ChecklistCostRow({
+  line,
+  horizon,
+  cost,
+  payment,
+  today,
+}: ChecklistCostRowProps) {
+  const stance = useAppSelector(selectStance);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isAsking, setIsAsking] = useState(false);
+  const [pending, setPending] = useState<boolean | null>(null);
+  const paid = useCostPaid({
+    itemId: line.itemId,
+    itemName: horizon.name,
+    cost,
+    payment,
+  });
+  const name = `${cost.name} \u00b7 ${horizon.name}`;
+  const amount = formatCents(payment.paid?.amountCents ?? line.cents);
+  const getProgress = () => {
+    if (payment.paid)
+      return COST_PAID_WORDS.paidHead(
+        formatDateOrdinalUTC(payment.paid.paidOn),
+      );
+    return paid.needsAmount ? COST_PAID_WORDS.rowHint : null;
+  };
+  const amountPayment = isAsking ? paid.toAmountPayment() : null;
+
+  const toggle = async (next: boolean) => {
+    if (!paid.isReady || paid.isBusy || next === paid.isPaid) return;
+    if (next && paid.needsAmount) {
+      setIsAsking(true);
+      return;
+    }
+    setPending(next);
+    if (next) await paid.mark();
+    else await paid.undo();
+    setPending(null);
+  };
+
+  return (
+    <>
+      <ItemRow
+        name={name}
+        detail={getProgress()}
+        figure={amount}
+        ariaLabel={`${name}, ${amount}`}
+        tick={{
+          checked: pending ?? paid.isPaid,
+          onChange: (next) => void toggle(next),
+        }}
+        onOpen={() => setIsOpen(true)}
+      />
+      {amountPayment && (
+        <PaidAmountSheet
+          payment={amountPayment}
+          onMark={paid.mark}
+          onClose={() => setIsAsking(false)}
+        />
+      )}
+      {isOpen && (
+        <HorizonSheet
+          itemId={line.itemId}
+          horizon={horizon}
+          today={today}
+          stance={stance}
+          onClose={() => setIsOpen(false)}
         />
       )}
     </>
@@ -232,6 +333,28 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         payment.fundedCents < payment.totalCents;
       return { line, payment, isWaiting };
     });
+  const horizons = useAppSelector((state) => selectHorizonItems(state, today));
+  const costPayments = useAppSelector((state) =>
+    selectCostPayments(state, today),
+  );
+  const costRows = lines.flatMap((line) => {
+    const horizon = horizons.find(({ item }) => item.id === line.itemId);
+    const cost = horizon?.version.payload.costs.find(
+      ({ id }) => id === line.costId,
+    );
+    const payment = (costPayments[line.itemId] ?? []).find(
+      (entry) => entry.costId === line.costId && entry.dueOn >= day.on,
+    );
+    return horizon &&
+      cost &&
+      payment &&
+      !cost.isOutside &&
+      !line.repaysFree &&
+      line.cents > 0
+      ? [{ line, horizon: horizon.version.payload, cost, payment }]
+      : [];
+  });
+  const costDoneCount = costRows.filter(({ payment }) => payment.paid).length;
   const ready = rows.filter((row) => !row.isWaiting);
   const waiting = rows.filter((row) => row.isWaiting);
   const isSettled = (row: (typeof ready)[number]) =>
@@ -239,7 +362,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const doneCount = ready.filter(isSettled).length;
   const isAllSettled = doneCount === ready.length;
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0 && costRows.length === 0) return null;
 
   const markAll = async () => {
     if (!user || isMarkingRef.current) return;
@@ -428,11 +551,11 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           </span>
         </div>
       )}
-      {ready.length > 0 && (
+      {ready.length + costRows.length > 0 && (
         <ChecklistGroup
           label={CHECKLIST_WORDS.billsGroup}
-          doneCount={doneCount}
-          total={ready.length}
+          doneCount={doneCount + costDoneCount}
+          total={ready.length + costRows.length}
         >
           {ready.map(({ line, payment }) => (
             <ChecklistBillRow
@@ -442,6 +565,16 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               today={today}
               isDone={done.has(line.lineId)}
               onDone={(isDone) => setDone([line.lineId], isDone)}
+            />
+          ))}
+          {costRows.map(({ line, horizon, cost, payment }) => (
+            <ChecklistCostRow
+              key={line.lineId}
+              line={line}
+              horizon={horizon}
+              cost={cost}
+              payment={payment}
+              today={today}
             />
           ))}
         </ChecklistGroup>

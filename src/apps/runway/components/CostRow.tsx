@@ -3,18 +3,21 @@ import { ChevronRight } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import SensitiveValue from '@/components/SensitiveValue';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { HORIZON_WORDS } from '@apps/runway/constants';
 import type { HorizonCost } from '@apps/runway/types';
 import { describeCost } from '@apps/runway/utils/horizonText';
 
 interface CostRowProps {
   cost: HorizonCost;
+  /** Where its latest payment stands once one is marked paid, e.g. "Paid Jan 15th · $600.00". */
+  paidLine?: string | null;
   /** Opens the cost to change it; the row then has a chevron. */
   onOpen?: () => void;
 }
 
 /** One cost of an event: its name and date on the left, its figure on the right. */
-function CostRow({ cost, onOpen }: CostRowProps) {
+function CostRow({ cost, paidLine = null, onOpen }: CostRowProps) {
   const { line, figure, per } = describeCost(cost);
 
   const label = (
@@ -23,6 +26,11 @@ function CostRow({ cost, onOpen }: CostRowProps) {
       <span className='text-muted-foreground block text-sm break-words'>
         {line}
       </span>
+      {paidLine && (
+        <span className='text-muted-foreground block text-sm break-words'>
+          <MaskedText>{paidLine}</MaskedText>
+        </span>
+      )}
     </span>
   );
   const amount = (

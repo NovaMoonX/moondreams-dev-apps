@@ -17,7 +17,10 @@ import { CHANGE_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectCostPaid,
+  selectStance,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
 import { getCoversText } from '@apps/runway/utils/coversText';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
@@ -66,8 +69,9 @@ function HorizonChangeView({
   const { setWarningBox } = flow;
   const mask = useMaskedText();
   const stance = useAppSelector(selectStance);
-  const assignedCents =
-    useAppSelector(selectBalances).assignedByItem[itemId] ?? 0;
+  const balances = useAppSelector(selectBalances);
+  const assignedCents = balances.assignedByItem[itemId] ?? 0;
+  const paid = useAppSelector(selectCostPaid)[itemId];
   const shownBlocker = flow.getBlocker(blocker);
   const readSide = (payload: HorizonSealed) => {
     const { plan, figures } = getHorizonStatus(
@@ -75,6 +79,8 @@ function HorizonChangeView({
       assignedCents,
       flow.today,
       stance,
+      paid,
+      balances.costPaidByItem[itemId] ?? 0,
     );
     const { shortfall } = plan;
     const text = shortfall

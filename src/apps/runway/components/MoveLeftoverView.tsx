@@ -225,6 +225,7 @@ function MoveLeftoverView({
             void undoMove({
               moveId,
               bill: null,
+              cost: null,
               date,
               fromId: envelopeId,
               toId,

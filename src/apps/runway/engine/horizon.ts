@@ -1,5 +1,6 @@
 import type {
   Cents,
+  CostPaidMark,
   DateOnly,
   HorizonCost,
   HorizonSealed,
@@ -13,24 +14,52 @@ import { addUtcMonths, DAY_MS } from './dates';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
 
+/** A cost's payment marked paid and not undone. */
+export interface CostPaidEntry {
+  moveId: string;
+  costId: string;
+  dueOn: DateOnly;
+  /** What it came to; it replaces the planned figure wherever the payment is counted. */
+  amountCents: Cents;
+  paidOn: DateOnly;
+  /** The part beyond what the item held, out of Free to Spend. */
+  fromFreeCents: Cents;
+  mark: CostPaidMark;
+  purchaseId: string | null;
+}
+
 /** One time a cost asks for money. */
 export interface CostPayment {
   costId: string;
   dueOn: DateOnly;
-  /** The amount the stance plans: a range reads at its expense end. */
+  /** The amount the stance plans: a range reads at its expense end; what it came to once it is paid. */
   totalCents: Cents;
+  /** The live mark that settled it; null while it is unpaid. */
+  paid: CostPaidEntry | null;
 }
 
-/** A cost's payments through `horizon`, soonest first. */
+/** A cost's payments through `horizon`, soonest first; one in `paid` carries its mark and what it came to. */
 export function listCostPayments(
   cost: HorizonCost,
   horizon: DateOnly,
   stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
 ): CostPayment[] {
-  const totalCents = pick(stance, cost.amount, 'expense');
+  const planned = pick(stance, cost.amount, 'expense');
   const result = occurrences(cost.schedule, cost.ending, 0, horizon)
     .filter((dueOn) => cost.endsAfter === null || dueOn <= cost.endsAfter)
-    .map((dueOn) => ({ costId: cost.id, dueOn, totalCents }));
+    .map((dueOn) => {
+      const mark =
+        paid.find(
+          (entry) => entry.costId === cost.id && entry.dueOn === dueOn,
+        ) ?? null;
+      return {
+        costId: cost.id,
+        dueOn,
+        totalCents: mark ? mark.amountCents : planned,
+        paid: mark,
+      };
+    });
   return result;
 }
 
@@ -49,14 +78,51 @@ export const listHorizonPayments = (
   costs: readonly HorizonCost[],
   horizon: DateOnly,
   stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
 ): CostPayment[] =>
   costs
-    .flatMap((cost) => listCostPayments(cost, horizon, stance))
+    .flatMap((cost) => listCostPayments(cost, horizon, stance, paid))
     .sort((a, b) => a.dueOn - b.dueOn);
 
 /** What the payments through `horizon` add up to. */
 export const sumCostPayments = (payments: readonly CostPayment[]): Cents =>
   payments.reduce((sum, { totalCents }) => sum + totalCents, 0);
+
+/** Where a payment of `amountCents` takes its money: the item's, up to what it holds, and Free to Spend for the rest. A mark that moves nothing (outside the plan, or by a purchase) takes none. */
+export function settleCostPaid(
+  amountCents: Cents,
+  heldCents: Cents,
+  mark: CostPaidMark = 'item',
+) {
+  if (mark !== 'item') return { fromItemCents: 0, fromFreeCents: 0 };
+  const fromItemCents = Math.min(amountCents, Math.max(0, heldCents));
+  return { fromItemCents, fromFreeCents: amountCents - fromItemCents };
+}
+
+/** A cost whose amount is a range is marked with what it came to, never the planned figure. */
+export const needsCostAmount = (cost: Pick<HorizonCost, 'amount'>) =>
+  cost.amount.lowCents !== cost.amount.highCents;
+
+/** What marked payments took out of the item's money: only a mark made from it counts, so a payment outside the plan is not spent. */
+export const sumCostSpent = (paid: readonly CostPaidEntry[]): Cents =>
+  paid.reduce(
+    (sum, entry) => (entry.mark === 'item' ? sum + entry.amountCents : sum),
+    0,
+  );
+
+/** The payments of costs paid outside the plan that nobody has marked, soonest first. Until each is marked the item is not ready to finish, whatever its date. */
+export const listUnmarkedOutside = (
+  costs: readonly HorizonCost[],
+  horizon: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+): CostPayment[] =>
+  listHorizonPayments(
+    costs.filter(({ isOutside }) => isOutside),
+    horizon,
+    stance,
+    paid,
+  ).filter((payment) => payment.paid === null);
 
 /** A stored payload with the fields later issues added filled in, so a version sealed before them reads as it always meant. */
 export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
@@ -195,7 +261,7 @@ export function planHorizon(
     item.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
   );
   const ordered = payments
-    .filter(({ costId }) => !outsideIds.has(costId))
+    .filter(({ costId, paid }) => paid === null && !outsideIds.has(costId))
     .sort((a, b) => a.dueOn - b.dueOn || a.costId.localeCompare(b.costId));
   const covers = ordered.reduce<{ left: Cents; list: HorizonCover[] }>(
     (walk, { costId, dueOn, totalCents }) => {

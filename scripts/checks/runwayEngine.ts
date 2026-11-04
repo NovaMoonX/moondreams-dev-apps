@@ -243,12 +243,17 @@ import {
   getLiveCosts,
   listCostPayments,
   listHorizonPayments,
+  listUnmarkedOutside,
+  needsCostAmount,
   planHorizon,
   readHorizon,
   removeCost,
   restoreCost,
   setCostPrice,
+  settleCostPaid,
   sumCostPayments,
+  sumCostSpent,
+  type CostPaidEntry,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
 import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
@@ -8239,6 +8244,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     due: [],
+    dueCosts: [],
     undated: [],
     horizonShort: [],
     steps: [],
@@ -10855,6 +10861,7 @@ const version = (
     horizonShort: [],
     steps: [],
     due: [],
+    dueCosts: [],
   });
   assert.equal(
     describeHoldsBlocks(look([water]), look([water, rent]))
@@ -11080,7 +11087,7 @@ const version = (
   const end = Date.UTC(2027, 11, 31);
   assert.deepEqual(
     listCostPayments(movers, end, 'conservative'),
-    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000 }],
+    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000, paid: null }],
     'a range plans at the high end under the default expense stance',
   );
   assert.equal(
@@ -11707,6 +11714,245 @@ const version = (
     readOld.costs[0].pricedOn === null && readOld.costs[0].endsAfter === null,
     true,
     'a cost sealed before pricedOn and endsAfter reads both as null',
+  );
+}
+
+// Mark a cost paid: what a mark settles, what balances and closings read, and the outside mark.
+{
+  const jan1 = utc(2027, 0, 1);
+  const jan15 = utc(2027, 0, 15);
+  const end = utc(2027, 11, 31);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const movers: HorizonCost = {
+    id: 'movers',
+    name: 'Movers',
+    amount: exact(60_000),
+    schedule: { kind: 'once', anchor: jan15, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  };
+  const truck: HorizonCost = {
+    ...movers,
+    id: 'truck',
+    name: 'Truck rental',
+    amount: exact(30_000),
+    isOutside: true,
+  };
+  const varies: HorizonCost = {
+    ...movers,
+    amount: { lowCents: 60_000, highCents: 80_000 },
+  };
+  const moving: HorizonSealed = {
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    rest: { kind: 'later' },
+    note: null,
+    costs: [movers, truck],
+  };
+  const entry = (
+    id: string,
+    costId: string,
+    amountCents: number,
+    fromFreeCents: number,
+    mark: 'item' | 'outside' = 'item',
+  ): CostPaidEntry => ({
+    moveId: id,
+    costId,
+    dueOn: jan15,
+    amountCents,
+    paidOn: jan15,
+    fromFreeCents,
+    mark,
+    purchaseId: null,
+  });
+  const markMove = (paid: CostPaidEntry): OpenMove => ({
+    id: paid.moveId,
+    kind: 'costPaid',
+    date: paid.dueOn,
+    refId: 'moving',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: {
+      costId: paid.costId,
+      dueOn: paid.dueOn,
+      amountCents: paid.amountCents,
+      paidOn: paid.paidOn,
+      fromFreeCents: paid.fromFreeCents,
+      mark: paid.mark,
+      purchaseId: paid.purchaseId,
+    },
+  });
+  const starts: OpenMove[] = [
+    {
+      id: 's1',
+      kind: 'start',
+      date: jan1,
+      refId: null,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 200_000, holding: 'money' },
+    },
+    {
+      id: 's2',
+      kind: 'start',
+      date: jan1,
+      refId: 'moving',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 50_000, holding: 'bill' },
+    },
+  ];
+  const balancesWith = (moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...starts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+    });
+  const none = balancesWith([]);
+
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000),
+    { fromItemCents: 50_000, fromFreeCents: 10_000 },
+    'fromFreeCents is the excess over what the item held',
+  );
+  assert.deepEqual(
+    settleCostPaid(40_000, 50_000),
+    { fromItemCents: 40_000, fromFreeCents: 0 },
+    'less than planned comes wholly from the item',
+  );
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000, 'outside'),
+    { fromItemCents: 0, fromFreeCents: 0 },
+    'an outside mark takes nothing from anywhere',
+  );
+  assert.equal(needsCostAmount(movers), false, 'an exact cost asks nothing');
+  assert.equal(needsCostAmount(varies), true, 'a range asks what it came to');
+
+  const itemMark = entry('paid_moving_movers_1', 'movers', 60_000, 10_000);
+  const marked = balancesWith([markMove(itemMark)]);
+  assert.equal(
+    marked.assignedByItem.moving,
+    0,
+    'a mark uses up what the item held',
+  );
+  assert.equal(
+    marked.freeToSpendCents,
+    none.freeToSpendCents - 10_000,
+    'and the part beyond it draws Free to Spend',
+  );
+  assert.equal(
+    marked.costPaidByItem.moving,
+    60_000,
+    'a mark from the item is in Spent',
+  );
+
+  const lessMark = entry('paid_moving_movers_2', 'movers', 40_000, 0);
+  assert.equal(
+    balancesWith([markMove(lessMark)]).assignedByItem.moving,
+    10_000,
+    'less than planned stays in the item',
+  );
+
+  const outsideMark = entry(
+    'paid_moving_truck_1',
+    'truck',
+    30_000,
+    0,
+    'outside',
+  );
+  const outside = balancesWith([markMove(outsideMark)]);
+  assert.equal(
+    outside.assignedByItem.moving,
+    none.assignedByItem.moving,
+    'an outside mark moves nothing from the item',
+  );
+  assert.equal(
+    outside.freeToSpendCents,
+    none.freeToSpendCents,
+    'and nothing from Free to Spend',
+  );
+  assert.equal(outside.costPaidByItem.moving ?? 0, 0, 'and is not in Spent');
+  assert.equal(
+    balancesWith([
+      markMove(itemMark),
+      {
+        ...markMove(itemMark),
+        id: 'unpaid_paid_moving_movers_1',
+        reversesMoveId: itemMark.moveId,
+        createdAt: 6,
+      },
+    ]).assignedByItem.moving,
+    50_000,
+    'taking a mark back gives the item its money again',
+  );
+
+  const payments = listHorizonPayments(moving.costs, end, 'conservative', [
+    itemMark,
+  ]);
+  const movePayment = payments.find(({ costId }) => costId === 'movers');
+  assert.equal(
+    movePayment?.paid?.moveId,
+    itemMark.moveId,
+    'a payment carries the mark that settled it',
+  );
+  assert.equal(
+    planHorizon(moving, 50_000, payments).covers.some(
+      ({ costId }) => costId === 'movers',
+    ),
+    false,
+    'a paid payment asks nothing of the plan',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative').map(
+      ({ costId }) => costId,
+    ),
+    ['truck'],
+    'an unmarked outside cost is what keeps its item from finishing',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative', [outsideMark]),
+    [],
+    'and a marked one no longer does',
+  );
+  assert.equal(
+    sumCostSpent([itemMark, outsideMark]),
+    60_000,
+    'Spent counts only marks made from the item',
+  );
+
+  const closed = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...starts, markMove(itemMark)],
+    purchases: [],
+    billIds: new Set(),
+  });
+  assert.equal(
+    closed.costPaid.moving?.length,
+    1,
+    'a closing carries the marks of its month',
+  );
+  const sealed = encodeClosing(closed);
+  assert.equal(
+    decodeClosing(toMonthKey(jan1), sealed).costPaid.moving?.[0].amountCents,
+    60_000,
+    'and reads them back',
+  );
+  const legacy = { ...sealed, costPaid: undefined };
+  assert.deepEqual(
+    decodeClosing(toMonthKey(jan1), legacy).costPaid,
+    {},
+    'a closing written before costs could be paid reads costPaid as {}',
   );
 }
 

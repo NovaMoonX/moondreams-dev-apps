@@ -18,7 +18,7 @@ import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
-import { listHorizonPayments, planHorizon } from './horizon';
+import { listCostPayments, listHorizonPayments, planHorizon } from './horizon';
 import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
 
@@ -139,6 +139,16 @@ export interface Lookahead {
   due: {
     billId: string;
     name: string;
+    dueOn: DateOnly;
+    isOverdue: boolean;
+    laterDueOn: DateOnly[];
+  }[];
+  /** Costs to pay now: the first unpaid payment of each cost inside the plan that is due today or before, soonest first (a tie by name), with the due dates of the unpaid ones after it. A cost paid outside the plan is never listed. They are to-dos, not gaps in the plan, so they are not in `problems`. */
+  dueCosts: {
+    itemId: string;
+    itemName: string;
+    costId: string;
+    costName: string;
     dueOn: DateOnly;
     isOverdue: boolean;
     laterDueOn: DateOnly[];
@@ -285,6 +295,41 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
         : [];
     })
     .sort((a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name));
+
+/** The first payment of each cost inside the plan that is due today or past due and not marked paid. */
+const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
+  (input.horizonItems ?? [])
+    .flatMap((item) =>
+      item.costs
+        .filter(({ isOutside }) => !isOutside)
+        .flatMap((cost) => {
+          const unpaid = listCostPayments(
+            cost,
+            input.today,
+            input.stance ?? 'conservative',
+          ).filter(
+            ({ dueOn }) =>
+              !(item.paid ?? []).some(
+                (entry) => entry.costId === cost.id && entry.dueOn === dueOn,
+              ),
+          );
+          const [first] = unpaid;
+          return first
+            ? [
+                {
+                  itemId: item.id,
+                  itemName: item.name,
+                  costId: cost.id,
+                  costName: cost.name,
+                  dueOn: first.dueOn,
+                  isOverdue: first.dueOn < input.today,
+                  laterDueOn: unpaid.slice(1).map(({ dueOn }) => dueOn),
+                },
+              ]
+            : [];
+        }),
+    )
+    .sort((a, b) => a.dueOn - b.dueOn || a.costName.localeCompare(b.costName));
 
 /** The first payment of each bill that the pays before it are not set to carry in full: none comes before it, the pay it names does not, or what is pinned leaves some of it. */
 const findNoIncome = (
@@ -507,6 +552,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     firstShortDay: walked.firstShortDay,
     incomeEndsOn,
     due: findDue(input),
+    dueCosts: findDueCosts(input),
     undated: input.bills
       .filter((bill) => bill.isUndated)
       .map((bill) => ({ billId: bill.id, name: bill.name })),

@@ -8,7 +8,6 @@ import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useAppSelector } from '@/store';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -19,51 +18,30 @@ import {
   PAID_AMOUNT_WORDS,
   VARIES_HINT,
 } from '@apps/runway/constants';
-import type { BillPayment } from '@apps/runway/engine/demands';
-import { getHeldFor } from '@apps/runway/hooks/useBillPaid';
+import type { PaidAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
 import type { Cents, MoneyRange } from '@apps/runway/types';
-import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import { getBillCardName } from '@apps/runway/utils/cardText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 
 interface PaidAmountSheetProps {
-  billId: string;
-  billName: string;
-  payment: BillPayment;
+  payment: PaidAmountPayment;
   /** Writes the mark with what it came to; resolves true once it is written or there is nothing more to do. */
   onMark: (amountCents: Cents) => Promise<boolean>;
   onClose: () => void;
 }
 
-/** Asks what a bill whose amount varies came to before it is marked paid, and says where any difference goes. */
-function PaidAmountSheet({
-  billId,
-  billName,
-  payment,
-  onMark,
-  onClose,
-}: PaidAmountSheetProps) {
+/** Asks what a payment whose amount varies came to before it is marked paid, and says where any difference goes. */
+function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
   const { isHidden } = useValuesHidden();
-  const cardName = useAppSelector((state) =>
-    selectLevel(state) === 'track'
-      ? getBillCardName(
-          state.runway.versions,
-          state.runway.cards,
-          billId,
-          payment.dueOn,
-        )
-      : null,
-  );
+  const { name, cardName } = payment;
   const [amount, setAmount] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const name = billName === '' ? 'this bill' : billName;
   const cents = parseMoneyToCents(amount);
   const paidCents =
     cents !== null && cents > 0 && cents <= MAX_PURCHASE_CENTS ? cents : null;
-  const heldCents = paidCents === null ? 0 : getHeldFor(payment, paidCents);
+  const heldCents = paidCents === null ? 0 : payment.getHeldCents(paidCents);
   const leftCents = Math.max(0, payment.heldMostCents - heldCents);
-  const isPaidElsewhere = payment.paid !== null && !isSaving;
+  const isPaidElsewhere = payment.isPaid && !isSaving;
   const requestClose = useDiscardGuard({
     isDirty: amount !== '' && !isPaidElsewhere,
     onClose,
@@ -88,7 +66,7 @@ function PaidAmountSheet({
       );
     return leftCents === 0 ? null : (
       <InlineNotice tone='info'>
-        {PAID_AMOUNT_WORDS.stays(formatCents(leftCents), name)}
+        {PAID_AMOUNT_WORDS.stays(formatCents(leftCents), payment.keeperName)}
       </InlineNotice>
     );
   };
@@ -137,8 +115,8 @@ function PaidAmountSheet({
             autoFocus
             disabled={isSaving}
             hint={
-              payment.ranged && (
-                <MaskedText>{getRangeHint(payment.ranged.range)}</MaskedText>
+              payment.range && (
+                <MaskedText>{getRangeHint(payment.range)}</MaskedText>
               )
             }
           />

@@ -179,6 +179,7 @@ function PutTowardView({
             void undoMove({
               moveId,
               bill: null,
+              cost: null,
               date,
               fromId,
               toId: itemId,

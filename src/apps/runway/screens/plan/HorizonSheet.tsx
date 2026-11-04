@@ -16,6 +16,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
+import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
@@ -25,6 +26,7 @@ import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
   CHANGE_REASON_CHIPS,
+  COST_PAID_WORDS,
   FIX_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
@@ -32,11 +34,19 @@ import {
   MAX_HORIZON_COSTS,
   RANGE_END_WORDS,
 } from '@apps/runway/constants';
-import { changeCost, type CostChange } from '@apps/runway/engine/horizon';
+import {
+  changeCost,
+  type CostChange,
+  type CostPaidEntry,
+} from '@apps/runway/engine/horizon';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectComingDays,
+  selectCostPaid,
+  selectCostPayments,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import CostForm from '@apps/runway/forms/CostForm';
 import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
 import CostSheet from '@apps/runway/screens/plan/CostSheet';
@@ -63,6 +73,10 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
+  const paid = useAppSelector(selectCostPaid)[itemId];
+  const costPayments = useAppSelector((state) =>
+    selectCostPayments(state, today),
+  );
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
@@ -86,6 +100,8 @@ function HorizonSheet({
     balances.assignedByItem[itemId] ?? 0,
     today,
     stance,
+    paid,
+    balances.costPaidByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
@@ -171,6 +187,30 @@ function HorizonSheet({
       }
     }
   }, [viewKey]);
+  const payments = costPayments[itemId] ?? [];
+  const getPaidLine = (costId: string) => {
+    const latest = payments
+      .flatMap((payment) =>
+        payment.costId === costId && payment.paid ? [payment.paid] : [],
+      )
+      .reduce<CostPaidEntry | null>(
+        (best, entry) => (best && best.paidOn >= entry.paidOn ? best : entry),
+        null,
+      );
+    if (!latest) return null;
+    return latest.mark === 'outside'
+      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(latest.paidOn))
+      : COST_PAID_WORDS.paidRow(
+          formatDateOrdinalUTC(latest.paidOn),
+          formatCents(latest.amountCents),
+        );
+  };
+  const outsideToMark = horizon.costs.flatMap((cost) => {
+    const payment = payments.find(
+      ({ costId, paid }) => costId === cost.id && paid === null,
+    );
+    return cost.isOutside && payment ? [{ cost, payment }] : [];
+  });
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
@@ -384,6 +424,7 @@ function HorizonSheet({
                 <CostRow
                   key={cost.id}
                   cost={cost}
+                  paidLine={getPaidLine(cost.id)}
                   onOpen={() => {
                     setCostId(cost.id);
                     setCostEdit(null);
@@ -409,6 +450,15 @@ function HorizonSheet({
             )}
           </div>
           <ActionGroup isRoomy>
+            {outsideToMark.map(({ cost, payment }) => (
+              <MarkOutsideCostRow
+                key={cost.id}
+                itemId={itemId}
+                itemName={horizon.name}
+                cost={cost}
+                payment={payment}
+              />
+            ))}
             {!shortfall && (
               <ActionRow
                 isGrouped

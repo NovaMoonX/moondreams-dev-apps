@@ -579,7 +579,8 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Horizon: an event with one-time and repeating costs, exact or a range, money put toward it now, and the rest from your pays, one pay, outside the plan or decided later, with set aside, spent and left
 - [x] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
 - [x] Set a cost's price, exact or a range, with what it changes on your pays and why
-- [ ] Pay a cost in one tap when exact, with its real amount when a range, as a purchase or a paid mark on Track and a paid mark on Plan; mark an outside cost paid
+- [x] Pay a cost in one tap when exact, with its real amount when a range, as a paid mark; mark an outside cost paid
+- [ ] Pay a cost as a purchase on Track (Add what you paid)
 - [ ] Turn a repeating cost into a bill, bringing what is left with it
 - [x] Change an event and its costs, and remove a cost (never an item's last)
 - [ ] Finish or call off an item, choosing where its money goes, and bring a called-off item back

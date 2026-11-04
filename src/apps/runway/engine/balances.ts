@@ -10,6 +10,7 @@ import {
   closingBefore,
   joinCardPaid,
   joinCents,
+  joinCostPaid,
   joinPaid,
   sumChargedByCard,
   type ClosingState,
@@ -19,6 +20,7 @@ import { START_DAY_KEY } from '@apps/runway/constants';
 
 import {
   collectCardPaid,
+  collectCostPaid,
   collectFunded,
   collectPaid,
   collectStarted,
@@ -78,6 +80,8 @@ export interface Balances {
   startMoneyCents: Cents;
   arrivedCents: Cents;
   paidCents: Cents;
+  /** What each Horizon item paid out of its own money since the starting point; a payment outside the plan or made by a purchase is not in it. */
+  costPaidByItem: Record<string, Cents>;
   /** What was spent since the starting point, less refunds. */
   spentCents: Cents;
 }
@@ -147,13 +151,40 @@ export function deriveBalances(input: BalancesInput): Balances {
       charged: counted.filter((p) => p.cardId !== null),
     };
   });
-  const paidCents = paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0);
-  const consumed = Object.fromEntries(
-    paidByBill.map((bill) => [
+  const costMarks = Object.entries(
+    joinCostPaid(base, collectCostPaid(input.moves)),
+  ).map(([itemId, entries]) => {
+    const counted = entries.filter(
+      (entry) =>
+        startDate !== null &&
+        entry.paidOn >= startDate &&
+        entry.mark === 'item',
+    );
+    return {
+      itemId,
+      amountCents: counted.reduce((sum, entry) => sum + entry.amountCents, 0),
+      fromFreeCents: counted.reduce(
+        (sum, entry) => sum + entry.fromFreeCents,
+        0,
+      ),
+    };
+  });
+  const costPaidByItem = Object.fromEntries(
+    costMarks.map((mark) => [mark.itemId, mark.amountCents]),
+  );
+  const paidCents =
+    paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0) +
+    costMarks.reduce((sum, mark) => sum + mark.amountCents, 0);
+  const consumed = Object.fromEntries([
+    ...costMarks.map((mark): [string, Cents] => [
+      mark.itemId,
+      mark.amountCents - mark.fromFreeCents,
+    ]),
+    ...paidByBill.map((bill): [string, Cents] => [
       bill.billId,
       bill.amountCents - bill.fromFreeCents,
     ]),
-  );
+  ]);
 
   const counted =
     startDate === null
@@ -189,6 +220,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       ...Object.keys(started.byItem),
       ...Object.keys(spentByItem),
       ...Object.keys(transfers),
+      ...costMarks.map((mark) => mark.itemId),
     ].filter((id) => !isCard(id)),
   );
   const assignedByItem = Object.fromEntries(
@@ -294,6 +326,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     startMoneyCents,
     arrivedCents,
     paidCents,
+    costPaidByItem,
     spentCents,
   };
   return result;
@@ -321,7 +354,8 @@ export function deriveBalancesBefore(
   const dropped = new Set(
     input.moves.flatMap((move) =>
       !move.reversesMoveId &&
-      ((move.kind === 'billPaid' && move.payload.paidOn >= day) ||
+      (((move.kind === 'billPaid' || move.kind === 'costPaid') &&
+        move.payload.paidOn >= day) ||
         (move.kind === 'cardPayment' && move.date >= day) ||
         (move.kind === 'transfer' && move.date >= day))
         ? [move.id]
