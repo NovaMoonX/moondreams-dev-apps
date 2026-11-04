@@ -44,7 +44,7 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
   // A choice that opens a field below can leave it under a short sheet's footer.
   const reveal = () =>
     requestAnimationFrame(() =>
-      endRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }),
+      endRef.current?.scrollIntoView({ block: 'nearest' }),
     );
 
   return (
@@ -133,7 +133,7 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
           )}
         </>
       )}
-      <div ref={endRef} />
+      <div ref={endRef} className='scroll-mb-24' />
     </div>
   );
 }

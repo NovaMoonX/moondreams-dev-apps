@@ -23,12 +23,14 @@ function CostRow({ cost, onOpen }: CostRowProps) {
         <span className='block font-medium break-words'>{cost.name}</span>
         <span className='text-muted-foreground block text-sm'>{line}</span>
       </span>
-      <span className='block max-w-[45%] shrink-0 text-right'>
+      <span className='block shrink-0 text-right'>
         <span className='block font-semibold tabular-nums'>
           <SensitiveValue>{figure}</SensitiveValue>
         </span>
         {per && (
-          <span className='text-muted-foreground block text-sm'>{per}</span>
+          <span className='text-muted-foreground block text-sm whitespace-nowrap'>
+            {per}
+          </span>
         )}
       </span>
     </>
