@@ -134,10 +134,11 @@ const toDayEntry = (
   };
 };
 
-/** Days that move the same way, with nothing of their own to say, become one row; the days where money moves come first (then the no-room days), each on its own. */
+/** Days that move the same way, with nothing of their own to say, become one row; the days where money moves, or that a warning names, come first (then the no-room days), each on its own. */
 const toEntries = (
   days: readonly PreviewDay[],
   pinned: ReadonlySet<string>,
+  namedOn: readonly number[],
 ): EffectEntry[] => {
   const kindOf = (day: PreviewDay) =>
     day.kind !== 'changed'
@@ -151,7 +152,8 @@ const toEntries = (
     day.kind === 'changed' &&
     (day.effect.lines.length > 0 ||
       day.effect.freeBeforeCents !== day.effect.freeAfterCents ||
-      day.effect.shortened.some((entry) => entry.putInCents > 0));
+      day.effect.shortened.some((entry) => entry.putInCents > 0) ||
+      namedOn.includes(day.on));
   const ownDays = days.filter((day) => kindOf(day) === 'own');
   const byDate = (a: PreviewDay, b: PreviewDay) => a.on - b.on;
   const ranked = [
@@ -414,7 +416,15 @@ function EffectPreview({
         </p>
       );
     }
-    const entries = toEntries(days, pinnedItemIds ?? NO_PINNED);
+    const entries = toEntries(
+      days,
+      pinnedItemIds ?? NO_PINNED,
+      (holdsText?.blocks ?? []).flatMap((block) =>
+        block.tone !== 'success' && block.namedOn != null
+          ? [block.namedOn]
+          : [],
+      ),
+    );
     const isCapped =
       isCompact && isOpen && !isEvery && entries.length > PREVIEW_SHOWN;
     const shown =

@@ -197,6 +197,8 @@ export interface HoldsBlock {
   isStanding?: boolean;
   /** The item a standing shortfall is of, so a note about that same item can stand in for it. */
   standingItemId?: string | null;
+  /** The day a warning names, so the card that lists the days can keep it in view. */
+  namedOn?: number | null;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -314,6 +316,7 @@ export function describeHoldsBlocks(
         figure: null,
         isStanding: true,
         standingItemId: first.kind === 'short' ? first.itemId : null,
+        namedOn: first.on,
       };
     }
     const ends = after.incomeEndsOn;
@@ -362,6 +365,7 @@ export function describeHoldsBlocks(
               : null,
             first.grewBy,
           ),
+          namedOn: first.problem.on,
         },
       ]
     : [];

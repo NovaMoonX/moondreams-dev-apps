@@ -23,6 +23,7 @@ import {
   ActionSection,
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
+import ClearOfFooter from '@/components/ClearOfFooter';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import {
@@ -850,7 +851,7 @@ function BillShareView({
       <div className='[@media(min-height:720px)]:bg-popover flex flex-col gap-3 pb-1 [@media(min-height:720px)]:sticky [@media(min-height:720px)]:top-0 [@media(min-height:720px)]:z-10'>
         <BackLink onBack={onBack} />
         <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
-        <div onBlurCapture={snapToCap}>
+        <ClearOfFooter onBlurCapture={snapToCap}>
           <AmountHero
             label={PAY_SHARE_WORDS.amount}
             value={amount}
@@ -858,7 +859,7 @@ function BillShareView({
             disabled={isSaving}
             hint={getHint()}
           />
-        </div>
+        </ClearOfFooter>
       </div>
       {isHidden && isChanged && (
         <ActionSection caption={CHANGE_WORDS.previewHeading}>

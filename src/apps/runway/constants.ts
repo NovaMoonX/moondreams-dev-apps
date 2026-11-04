@@ -250,19 +250,17 @@ export const HORIZON_REST_OPTIONS: readonly {
   {
     value: 'pays',
     label: 'My pays before each cost is due',
-    meaning:
-      'Each pay sets aside its share of what the money put toward it does not cover.',
+    meaning: "Each pay before a cost sets aside a share of what's left.",
   },
   {
     value: 'onePay',
     label: 'One pay I pick',
-    meaning:
-      'One pay sets aside everything the money put toward it does not cover.',
+    meaning: "One pay you pick sets aside all that's left.",
   },
   {
     value: 'outside',
     label: 'Outside the plan',
-    meaning: "I'll cover the rest myself. Runway never asks for it or warns.",
+    meaning: "You'll cover the rest yourself. Runway won't ask for it.",
   },
   {
     value: 'later',
@@ -404,7 +402,7 @@ export const HORIZON_WORDS = {
     `Put ${amount} toward ${name} from ${from}.`,
   putUndone: (amount: string, name: string, from: string) =>
     `Took ${amount} back out of ${name} to ${from}`,
-  restTitle: "What it doesn't cover comes from",
+  restTitle: 'Where does the rest come from?',
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
   onePayTitle: 'Which pay?',

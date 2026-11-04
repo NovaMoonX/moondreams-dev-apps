@@ -540,7 +540,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             {HORIZON_REST_OPTIONS.map(({ value, label, meaning }) => (
               <div
                 key={value}
-                className={join(formData.rest === value && 'bg-primary/10')}
+                className={join(
+                  formData.rest === value &&
+                    'bg-accent shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+                )}
                 aria-current={formData.rest === value ? 'true' : undefined}
               >
                 <ActionRow

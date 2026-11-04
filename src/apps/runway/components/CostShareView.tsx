@@ -17,6 +17,7 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
+import ClearOfFooter from '@/components/ClearOfFooter';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
@@ -181,12 +182,7 @@ function CostShareView({
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
       <ActionTitle>{HORIZON_WORDS.costShareTitle(costName)}</ActionTitle>
-      <div
-        className='scroll-mb-24'
-        onFocusCapture={(event) =>
-          event.currentTarget.scrollIntoView({ block: 'nearest' })
-        }
-      >
+      <ClearOfFooter>
         <AmountHero
           label={PAY_SHARE_WORDS.amount}
           value={amount}
@@ -200,7 +196,7 @@ function CostShareView({
             ) : undefined
           }
         />
-      </div>
+      </ClearOfFooter>
       <EffectPreview changeJson={changeJson} />
       <ModalFooterActions
         note={error ?? blocker}
