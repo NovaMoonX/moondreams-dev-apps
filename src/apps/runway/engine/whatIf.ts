@@ -39,7 +39,9 @@ export interface DayEffect {
 const sumByItem = (draft: Draft) =>
   draft.lines.reduce<Map<string, Cents>>(
     (acc, line) =>
-      acc.set(line.itemId, (acc.get(line.itemId) ?? 0) + line.cents),
+      line.repaysFree
+        ? acc
+        : acc.set(line.itemId, (acc.get(line.itemId) ?? 0) + line.cents),
     new Map(),
   );
 

@@ -137,7 +137,7 @@ const nextCarry = (
   draft: Draft,
 ): LookaheadCarry =>
   draft.lines.reduce<LookaheadCarry>((acc, line) => {
-    if (line.cents <= 0) return acc;
+    if (line.cents <= 0 || line.repaysFree) return acc;
     if (line.bill !== null) {
       const entry: FundedDay = {
         dayKey: day.dayKey,

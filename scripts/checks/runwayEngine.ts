@@ -195,6 +195,7 @@ import {
   countUnresolvedHolds,
   getFreeAfterArrival,
   sumConfirmedByItem,
+  toRecordLines,
 } from '../../src/apps/runway/engine/confirm.ts';
 import {
   applyLineEdits,
@@ -217,6 +218,7 @@ import {
 import {
   buildDemands,
   planBillPayments,
+  planCostShares,
   type DraftBillInput,
   type DraftGoalInput,
 } from '../../src/apps/runway/engine/demands.ts';
@@ -3784,6 +3786,8 @@ const version = (
           cents,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          repaysFree: false,
         },
       ],
     },
@@ -3808,6 +3812,8 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [{ dayId: 'd', cents }],
+    costId: null,
+    repaysFree: false,
   });
   const confirmed: OpenRecord = {
     id: 'd_confirmed',
@@ -4046,6 +4052,8 @@ const version = (
           cents: 10_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          repaysFree: false,
         },
         {
           lineId: 'd:food',
@@ -4057,6 +4065,8 @@ const version = (
           cents: 25_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          repaysFree: false,
         },
       ],
     },
@@ -5099,6 +5109,8 @@ const version = (
           cents: 30_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          repaysFree: false,
         },
       ],
     },
@@ -6907,6 +6919,8 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    repaysFree: false,
   });
   const pickCents = (max: number) => 100 + Math.floor(random() * max);
 
@@ -7678,6 +7692,8 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    repaysFree: false,
   });
   const dayRows = [
     {
@@ -8581,6 +8597,8 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    repaysFree: false,
   });
   const confirmedDay = (dayId: string, arrived: number, rent: number) =>
     ({
@@ -11057,6 +11075,8 @@ console.log('runway engine: ok');
     cents: 0,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    repaysFree: false,
   };
   const line = (
     lineId: string,
@@ -11290,6 +11310,8 @@ console.log('runway engine: ok');
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    repaysFree: false,
   });
   const day20 = {
     id: 'd20_confirmed',
@@ -11600,6 +11622,8 @@ console.log('runway engine: ok');
     cents,
     shortBy: 0,
     paidBy: [{ dayId: 'g9', cents }],
+    costId: null,
+    repaysFree: false,
   });
   const confirmedOf = (arrivedCents: number): OpenRecord => {
     const lines = [
@@ -13161,6 +13185,254 @@ console.log('runway engine: ok');
     ).length,
     0,
     'a bill paid from the last pay before it waits until that pay is in the plan',
+  );
+}
+
+// Horizon: the pays carry what the item's money does not cover.
+{
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const cost = (
+    id: string,
+    name: string,
+    cents: number,
+    anchor: number,
+    schedule: 'once' | 'monthly' = 'once',
+  ): HorizonCost => ({
+    id,
+    name,
+    amount: exact(cents),
+    schedule:
+      schedule === 'once'
+        ? { kind: 'once', anchor, monthDays: [] }
+        : {
+            kind: 'monthly',
+            anchor,
+            monthDays: [new Date(anchor).getUTCDate()],
+          },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    note: null,
+  });
+  const jan15 = utc(2027, 0, 15);
+  const jan31 = utc(2027, 0, 31);
+  const feb1 = utc(2027, 1, 1);
+  const storage = cost('storage', 'Storage unit', 10_000, feb1, 'monthly');
+  const days = [
+    jan15,
+    jan31,
+    utc(2027, 1, 14),
+    utc(2027, 1, 28),
+    utc(2027, 2, 14),
+  ].map((on) => ({
+    dayKey: toDayKey('pay', on),
+    sourceId: 'src',
+    on,
+    amount: exact(200_000),
+  }));
+  const item = (
+    rest: Parameters<typeof planCostShares>[0]['rest'],
+    costs: HorizonCost[],
+    heldCents = 0,
+    extra: Partial<Parameters<typeof planCostShares>[0]> = {},
+  ) => ({
+    itemId: 'moving',
+    createdAt: 1_000,
+    priority: 'should' as const,
+    orderIndex: 1,
+    rest,
+    costs,
+    heldCents,
+    ...extra,
+  });
+  const draftOn = (
+    on: number,
+    horizonItem: ReturnType<typeof item>,
+    upcoming = days,
+  ) =>
+    buildDraft({
+      days: upcoming.filter((entry) => entry.on === on),
+      plan: {
+        envelopes: [],
+        bills: [],
+        goals: [],
+        horizonItems: [horizonItem],
+        horizon: utc(2027, 11, 31),
+        incomeDays: upcoming,
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const costLines = (draft: ReturnType<typeof draftOn>) =>
+    draft.lines.filter((line) => line.costId);
+
+  const paysItem = item({ kind: 'pays' }, [storage]);
+  assert.deepEqual(
+    [jan15, jan31].map((on) =>
+      costLines(draftOn(on, paysItem)).map((line) => line.cents),
+    ),
+    [[5_000], [5_000]],
+    "a repeating cost's first payment spreads over the pays before it: Jan 15th and Jan 31st for Feb 1st",
+  );
+  assert.deepEqual(
+    costLines(draftOn(utc(2027, 1, 14), paysItem)).map((line) => line.cents),
+    [5_000],
+    'and the next payment spreads over the pays after the first one',
+  );
+  const plans = planCostShares(
+    paysItem,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  );
+  assert.ok(
+    plans.slice(0, 3).every((plan) => plan.parts.length > 0),
+    'every payment with pays before it has pays to carry it',
+  );
+
+  const held = item({ kind: 'pays' }, [storage], 3_000);
+  const heldPlan = planCostShares(
+    held,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  )[0];
+  assert.equal(
+    heldPlan.coveredCents + heldPlan.parts.reduce((sum, p) => sum + p.cents, 0),
+    heldPlan.totalCents,
+    'covered plus the days demands equals the payment total',
+  );
+  assert.equal(heldPlan.coveredCents, 3_000);
+
+  const confirmedUp = item({ kind: 'pays' }, [storage], 8_000);
+  const laterShare = (horizonItem: ReturnType<typeof item>) =>
+    costLines(draftOn(jan31, horizonItem))[0]?.cents ?? 0;
+  assert.ok(
+    laterShare(confirmedUp) < laterShare(paysItem),
+    'a confirmed day raises what the item holds and lowers the later days shares',
+  );
+  assert.equal(laterShare(confirmedUp), 1_000);
+
+  const onePay = item({ kind: 'onePay', dayKey: days[1].dayKey }, [storage]);
+  assert.deepEqual(
+    [jan15, jan31].map((on) =>
+      costLines(draftOn(on, onePay)).map((line) => line.cents),
+    ),
+    [[], [10_000]],
+    'the picked pay carries the first payment of a repeating cost',
+  );
+  const laterPayments = planCostShares(
+    onePay,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  );
+  assert.deepEqual(
+    laterPayments[1].parts.map((part) => part.day.on),
+    [utc(2027, 1, 14), utc(2027, 1, 28)],
+    'a later payment of a repeating cost spreads as the pays between the last payment and its own',
+  );
+
+  const movers = cost('movers', 'Movers', 60_000, utc(2027, 0, 10));
+  const early = [
+    {
+      dayKey: toDayKey('pay', utc(2027, 0, 5)),
+      sourceId: 'src',
+      on: utc(2027, 0, 5),
+      amount: exact(200_000),
+    },
+    ...days,
+  ];
+  const fronted = item(
+    { kind: 'onePay', dayKey: days[0].dayKey },
+    [movers],
+    0,
+    {
+      paid: [
+        { costId: 'movers', dueOn: utc(2027, 0, 10), fromFreeCents: 60_000 },
+      ],
+    },
+  );
+  assert.deepEqual(
+    costLines(draftOn(utc(2027, 0, 5), fronted, early)),
+    [],
+    'a payment due before the picked pay asks no earlier day',
+  );
+  const repaying = costLines(draftOn(jan15, fronted, early));
+  assert.equal(repaying.length, 1);
+  assert.equal(repaying[0].repaysFree, true);
+  assert.equal(
+    repaying[0].cents,
+    60_000,
+    "the picked day repaysFree equals the payment's fromFreeCents",
+  );
+  const withoutRepay = draftOn(
+    jan15,
+    item({ kind: 'onePay', dayKey: days[0].dayKey }, [movers], 0),
+    early,
+  );
+  const withRepay = draftOn(jan15, fronted, early);
+  assert.equal(
+    withRepay.freeToSpend.cents,
+    withoutRepay.freeToSpend.cents + 60_000,
+    'a repays line goes back to Free to Spend, not to the item',
+  );
+  const sealed = toRecordLines(withRepay, {
+    moving: { name: 'Moving', emoji: null },
+    'moving:cost:movers': { name: 'Movers · Moving', emoji: null },
+  });
+  const sealedLine = sealed.find((line) => line.costId === 'movers');
+  assert.equal(
+    sealedLine?.repaysFree,
+    true,
+    'a record line seals its cost and what it gives back',
+  );
+  assert.equal(sealedLine?.name, 'Movers · Moving');
+  assert.deepEqual(
+    sumConfirmedByItem([
+      {
+        id: 'r',
+        dayId: 'd',
+        createdAt: 1,
+        kind: 'confirmed',
+        payload: {
+          fingerprint: 'x',
+          stance: 'conservative',
+          arrivedCents: 200_000,
+          expectedCents: 200_000,
+          freeToSpendCents: 0,
+          lines: sealed,
+          differences: [],
+        },
+      },
+    ]),
+    {},
+    'a line that gives back to Free to Spend adds nothing to the item',
+  );
+
+  const moving = [
+    cost('truck', 'Truck rental', 12_000, utc(2027, 0, 14)),
+    { ...cost('movers', 'Movers', 60_000, jan15) },
+    cost('deposit', 'Deposit', 25_000, utc(2027, 0, 10)),
+    storage,
+  ];
+  const seeded = item({ kind: 'pays' }, moving, 80_000);
+  const sheet = planHorizon(
+    seeded,
+    80_000,
+    listHorizonPayments(moving, utc(2027, 11, 31), 'conservative'),
+  );
+  assert.deepEqual(
+    planCostShares(seeded, days, utc(2027, 11, 31), 'conservative').map(
+      (plan) => [plan.costId, plan.dueOn, plan.needCents],
+    ),
+    sheet.covers
+      .filter((cover) => cover.coveredCents < cover.totalCents)
+      .map((cover) => [
+        cover.costId,
+        cover.dueOn,
+        cover.totalCents - cover.coveredCents,
+      ]),
+    "the pays' figures are the item sheet's covers line",
   );
 }
 

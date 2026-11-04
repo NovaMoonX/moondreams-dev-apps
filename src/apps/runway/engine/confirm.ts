@@ -9,7 +9,7 @@ import type {
 
 import { getEffectiveSplits } from './correct';
 import type { Draft } from './draft';
-import { getPartName } from './parts';
+import { getCostNameKey, getPartName } from './parts';
 import {
   applyLineEdits,
   getLineDifferences,
@@ -20,17 +20,22 @@ export interface ItemNames {
   [itemId: string]: { name: string; emoji: string | null };
 }
 
+const nameKeyOf = (line: { itemId: string; costId?: string | null }) =>
+  line.costId ? getCostNameKey(line.itemId, line.costId) : line.itemId;
+
 /** Lines of a draft as a record keeps them, with the names they had that day. */
 export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
   const result = draft.lines.map((line): RecordLine => ({
     lineId: line.lineId,
     itemId: line.itemId,
     part: line.part,
-    name: getPartName(
-      Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
-      line,
-      draft.lines,
-    ),
+    name: Object.hasOwn(names, nameKeyOf(line))
+      ? names[nameKeyOf(line)].name
+      : getPartName(
+          Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
+          line,
+          draft.lines,
+        ),
     emoji: Object.hasOwn(names, line.itemId) ? names[line.itemId].emoji : null,
     tier: line.tier,
     demandCents: line.demandCents,
@@ -40,6 +45,8 @@ export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
       dayId: dayKey,
       cents,
     })),
+    costId: line.costId ?? null,
+    repaysFree: line.repaysFree ?? false,
   }));
   return result;
 }

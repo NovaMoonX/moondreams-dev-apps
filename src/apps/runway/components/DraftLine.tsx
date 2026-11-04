@@ -12,6 +12,7 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
 import BillShareView from '@apps/runway/components/BillShareView';
+import CostLineSheet from '@apps/runway/components/CostLineSheet';
 import ItemSheet, {
   type ItemSheetProps,
 } from '@apps/runway/components/ItemSheet';
@@ -19,6 +20,7 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHECKLIST_R3_WORDS,
   DRAFT_WORDS,
+  HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
   NEEDS_LOOK_WORDS,
@@ -38,6 +40,8 @@ import {
 interface DraftLineProps {
   line: DraftLineData;
   name: string;
+  /** A Horizon cost's line is named for the cost, so its sheet also needs the item's name. */
+  itemName?: string;
   /** The item's kind; a line whose item is gone has none and opens nothing. */
   kind: ItemKind | null;
   sourceNames: Record<string, string>;
@@ -69,6 +73,7 @@ interface DraftLineProps {
 function DraftLine({
   line,
   name,
+  itemName = '',
   kind,
   sourceNames,
   daySourceId,
@@ -163,6 +168,13 @@ function DraftLine({
         isStrong: true,
       };
     if (shortText) return { text: shortText, isStrong: isWarning };
+    if (line.cost)
+      return {
+        text: line.repaysFree
+          ? HORIZON_WORDS.lineBack
+          : HORIZON_WORDS.lineDue(formatDateOrdinalUTC(line.cost.dueOn)),
+        isStrong: false,
+      };
     if (isDayOnly && line.bill)
       return { text: PAY_SHARE_WORDS.changedFor, isStrong: false };
     return { text: billShareShort ?? reason, isStrong: false };
@@ -305,9 +317,22 @@ function DraftLine({
         isDetailWarning={isShort && state !== 'held' && !isHidden}
         figure={amount}
         ariaLabel={`${name}: ${PRIORITY_LABELS[line.tier]}, ${amount}. ${detail.text}`}
-        onOpen={kind === null ? undefined : () => setIsOpen(true)}
+        onOpen={kind === null && !line.cost ? undefined : () => setIsOpen(true)}
       />
-      {isOpen && sheetProps !== null && kind === 'bill' && (
+      {isOpen && line.cost && (
+        <CostLineSheet
+          line={line}
+          name={name}
+          itemName={itemName}
+          today={today}
+          dayKey={dayKey}
+          isDayOnly={isDayOnly}
+          canChange={canChange}
+          onResetShare={onResetShare}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+      {isOpen && !line.cost && sheetProps !== null && kind === 'bill' && (
         <BillLineSheet
           line={line}
           name={name}
@@ -316,7 +341,7 @@ function DraftLine({
           onOpenFunds={onOpenFunds}
         />
       )}
-      {isOpen && sheetProps !== null && kind !== 'bill' && (
+      {isOpen && !line.cost && sheetProps !== null && kind !== 'bill' && (
         <ItemSheet {...sheetProps} />
       )}
     </>

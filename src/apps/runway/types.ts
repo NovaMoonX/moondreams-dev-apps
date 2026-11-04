@@ -186,6 +186,10 @@ export interface RecordLine {
   cents: Cents;
   shortBy: Cents;
   paidBy: { dayId: string; cents: Cents }[];
+  /** The Horizon cost this line saves toward; null elsewhere, and on a record sealed before Horizon costs. */
+  costId: string | null;
+  /** True when the line gives back to Free to Spend what a fronted payment took; an older record reads false. */
+  repaysFree: boolean;
 }
 
 export interface ProposedSealed {
@@ -365,7 +369,11 @@ export interface GoalSealed {
 }
 
 /** What an event's costs fall back on once the money put toward it runs out. */
-export type HorizonRest = { kind: 'outside' } | { kind: 'later' };
+export type HorizonRest =
+  | { kind: 'pays' }
+  | { kind: 'onePay'; dayKey: string }
+  | { kind: 'outside' }
+  | { kind: 'later' };
 
 /** One event's costs. */
 export interface HorizonSealed {

@@ -49,6 +49,7 @@ import type {
   OpenDay,
   OpenVersion,
   Pairing,
+  PlanItemDoc,
   Stance,
 } from '@apps/runway/types';
 
@@ -71,6 +72,13 @@ export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
 export type PreviewChange =
   | { kind: 'version'; version: PreviewVersion; unpin?: PreviewUnpin }
   | { kind: 'versions'; versions: PreviewVersion[]; unpin?: PreviewUnpin }
+  | {
+      /** An item that is not saved yet, with what it will hold the day it is added. */
+      kind: 'addItem';
+      item: PlanItemDoc;
+      version: PreviewVersion;
+      heldCents: number;
+    }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -190,6 +198,13 @@ const layerPlan = (
       openDays: unpin(openDays, change.unpin),
     };
   }
+  if (change.kind === 'addItem') {
+    return {
+      items: [...items, change.item],
+      versions: layerVersion<OpenVersion>(versions, change.version),
+      openDays,
+    };
+  }
   if (change.kind === 'end') {
     return {
       items: items.map((item) =>
@@ -256,6 +271,10 @@ export function previewChange(
     buildComingDays(source.items, source.versions, today).filter(
       (day) => !settled.has(day.dayKey),
     );
+  const heldWith =
+    change.kind === 'addItem'
+      ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
+      : inputs.heldByItem;
   const draftOf = (source: typeof layered, dayKey: string) =>
     computeDraftView(
       source.items,
@@ -264,7 +283,7 @@ export function previewChange(
       source.openDays,
       dayKey,
       today,
-      inputs.heldByItem,
+      source === layered ? heldWith : inputs.heldByItem,
       inputs.settledKey,
       inputs.billProgress,
     );
@@ -365,7 +384,13 @@ export function previewLookahead(
   };
   const result = {
     before: selectLookahead(state, today),
-    after: selectLookahead(layeredState, today),
+    after: selectLookahead(
+      layeredState,
+      today,
+      change.kind === 'addItem'
+        ? { [change.item.id]: change.heldCents }
+        : undefined,
+    ),
   };
   return result;
 }

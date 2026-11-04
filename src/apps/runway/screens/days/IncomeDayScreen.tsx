@@ -51,9 +51,13 @@ import ConfirmSheet from '@apps/runway/screens/days/ConfirmSheet';
 import NotArrivedView from '@apps/runway/screens/days/NotArrivedView';
 import { getErrorMessage } from '@/utils/errorUtils';
 import type { DraftLine as DraftLineData } from '@apps/runway/engine/draft';
-import { getPartName } from '@apps/runway/engine/parts';
+import {
+  getCostNameKey,
+  getCostShareKey,
+  getPartName,
+} from '@apps/runway/engine/parts';
 import { effectiveStance } from '@apps/runway/engine/stance';
-import type { HoldChoice } from '@apps/runway/types';
+import type { HoldChoice, ItemKind } from '@apps/runway/types';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectChangeableKey,
@@ -77,6 +81,18 @@ interface IncomeDayScreenProps {
 }
 
 /** What one coming income day does with its money, worked out each time and never stored. */
+const getNameKey = (line: DraftLineData) =>
+  line.costId ? getCostNameKey(line.itemId, line.costId) : line.itemId;
+
+const getShareKey = (line: DraftLineData) =>
+  line.costId ? getCostShareKey(line.itemId, line.costId) : line.itemId;
+
+const getKind = (line: DraftLineData, isKnown: boolean): ItemKind | null => {
+  if (!isKnown) return null;
+  if (line.costId) return 'horizon';
+  return line.bill ? 'bill' : 'envelope';
+};
+
 function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -198,10 +214,11 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       ),
     }));
   const resetShare = async (line: DraftLineData) => {
-    const before = override?.billCents?.[line.itemId];
+    const before = override?.billCents?.[getShareKey(line)];
     if (!user || before === undefined) return;
-    const name = Object.hasOwn(items, line.itemId)
-      ? items[line.itemId].name
+    const nameKey = getNameKey(line);
+    const name = Object.hasOwn(items, nameKey)
+      ? items[nameKey].name
       : DRAFT_WORDS.billFallback;
     const dayRef = {
       payLineId: day.payLineId,
@@ -211,11 +228,18 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     const date = formatDateOrdinalUTC(day.on);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await saveBillShare(user.uid, encryption, dayRef, line.itemId, null, {
-        itemId: line.itemId,
-        summary: PAY_SHARE_WORDS.resetSummary(name, date),
-        note: null,
-      });
+      await saveBillShare(
+        user.uid,
+        encryption,
+        dayRef,
+        getShareKey(line),
+        null,
+        {
+          itemId: line.itemId,
+          summary: PAY_SHARE_WORDS.resetSummary(name, date),
+          note: null,
+        },
+      );
       addToast({
         title: PAY_SHARE_WORDS.resetToast(name),
         type: 'success',
@@ -226,7 +250,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
               user.uid,
               encryption,
               dayRef,
-              line.itemId,
+              getShareKey(line),
               before,
               {
                 itemId: line.itemId,
@@ -280,9 +304,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   };
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
-    const isKnown = Object.hasOwn(items, line.itemId);
+    const nameKey = getNameKey(line);
+    const isKnown = Object.hasOwn(items, nameKey);
     const envelope = isKnown
-      ? items[line.itemId]
+      ? items[nameKey]
       : {
           name: line.bill ? DRAFT_WORDS.billFallback : 'Envelope',
           emoji: null,
@@ -295,7 +320,10 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         isOpen={openLineId === line.lineId}
         onOpenChange={(isOpen) => setOpenLineId(isOpen ? line.lineId : null)}
         name={getPartName(envelope.name, line, draft.lines)}
-        kind={isKnown ? (line.bill ? 'bill' : 'envelope') : null}
+        itemName={
+          Object.hasOwn(items, line.itemId) ? items[line.itemId].name : ''
+        }
+        kind={getKind(line, isKnown)}
         sourceNames={sourceNames}
         daySourceId={day.sourceId}
         today={today}
@@ -305,10 +333,13 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
         isChoosing={isSaving}
         isDayOnly={
           Object.hasOwn(override?.payloads ?? {}, line.itemId) ||
-          Object.hasOwn(override?.billCents ?? {}, line.itemId)
+          Object.hasOwn(override?.billCents ?? {}, getShareKey(line))
         }
         onResetShare={resetShare}
-        canChange={day.on >= today && changeableIds.has(line.itemId)}
+        canChange={
+          day.on >= today &&
+          (line.cost != null || changeableIds.has(line.itemId))
+        }
         onOpenFunds={() => {
           setFundsFromLineId(line.lineId);
           setIsEditingFunds(true);

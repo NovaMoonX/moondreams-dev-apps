@@ -138,6 +138,22 @@ export const getLineId = (
   part: Priority | null = null,
 ) => (part === null ? `${dayKey}:${itemId}` : `${dayKey}:${itemId}:${part}`);
 
+/** A Horizon cost's line on a day: one per cost, so an item with several costs shows one row for each; the line that gives back what a fronted payment took is its own. */
+export const getCostLineId = (
+  dayKey: string,
+  itemId: string,
+  costId: string,
+  repaysFree = false,
+) => `${dayKey}:${itemId}:cost:${costId}${repaysFree ? ':free' : ''}`;
+
+/** Where a day keeps what a pay was told to put toward one cost, beside a bill's id in the same overrides. */
+export const getCostShareKey = (itemId: string, costId: string) =>
+  `${itemId}:${costId}`;
+
+/** Where a cost's own name ("Storage unit · Moving") sits among the names of a draft's items. */
+export const getCostNameKey = (itemId: string, costId: string) =>
+  `${itemId}:cost:${costId}`;
+
 /** A line's name: an item split into parts names each by its level ("Groceries · must", "Groceries · want"); an unsplit item keeps its name. */
 export function getPartName(
   name: string,

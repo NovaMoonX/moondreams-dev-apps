@@ -1,5 +1,11 @@
 import { useRef, useState } from 'react';
-import { Clock, Plus, Wallet } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarClock,
+  Clock,
+  Plus,
+  Wallet,
+} from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -38,6 +44,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import CostRow from '@apps/runway/components/CostRow';
+import EffectPreview from '@apps/runway/components/EffectPreview';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
@@ -47,9 +54,11 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { addHorizon } from '@apps/runway/store/actions/horizonActions';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
+import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
+  selectComingDays,
   selectEnvelopes,
   selectGoals,
   selectHorizonItems,
@@ -79,6 +88,8 @@ interface HorizonFormData {
   isNotNow: boolean;
   /** Null until the person picks one. */
   rest: HorizonRest['kind'] | null;
+  /** The pay "One pay I pick" names; null until picked. */
+  restDayKey: string | null;
   priority: Priority;
 }
 
@@ -94,6 +105,7 @@ const INITIAL_DATA: HorizonFormData = {
   putPlaceId: null,
   isNotNow: false,
   rest: null,
+  restDayKey: null,
   priority: 'should',
 };
 
@@ -104,9 +116,13 @@ const FROM_OPTIONS = [
 ];
 
 const REST_ICONS = {
+  pays: <CalendarClock />,
+  onePay: <CalendarCheck />,
   outside: <Wallet />,
   later: <Clock />,
 } as const;
+
+const MAX_PAY_CHOICES = 24;
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -128,6 +144,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const balances = useAppSelector(selectBalances);
   const emojiOf = useLiveEmojiResolver();
   const { isHidden } = useValuesHidden();
@@ -192,6 +209,40 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     return null;
   };
   const putBlocker = getPutBlocker();
+  const lastCostOn = formData.costs.reduce(
+    (latest, { schedule }) => Math.max(latest, schedule.anchor ?? 0),
+    0,
+  );
+  const payChoices = comingDays
+    .filter((day) => day.on <= lastCostOn)
+    .concat(comingDays.filter((day) => day.on > lastCostOn).slice(0, 1))
+    .slice(0, MAX_PAY_CHOICES);
+  const pickedDay = comingDays.find(
+    (day) => day.dayKey === formData.restDayKey,
+  );
+  const getRest = (): HorizonRest | null => {
+    if (formData.rest === 'onePay')
+      return pickedDay ? { kind: 'onePay', dayKey: pickedDay.dayKey } : null;
+    return formData.rest === null ? null : { kind: formData.rest };
+  };
+  const rest = getRest();
+  const getHorizon = (
+    happensOn: number,
+    restValue: HorizonRest,
+  ): HorizonSealed => ({
+    name,
+    emoji: formData.emoji?.trim() || null,
+    happensOn,
+    happensUntil: formData.isFewDays && endDate !== undefined ? endDate : null,
+    priority: formData.priority,
+    orderIndex: getNextTierRank(
+      [...bills, ...envelopes, ...goals, ...horizons],
+      formData.priority,
+    ),
+    rest: restValue,
+    note: null,
+    costs: formData.costs,
+  });
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
@@ -203,7 +254,35 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             ? putBlocker
             : formData.rest === null
               ? HORIZON_WORDS.needsRest
-              : null;
+              : formData.rest === 'onePay' && pickedDay === undefined
+                ? HORIZON_WORDS.needsPay
+                : null;
+
+  const isPaysAsked = rest?.kind === 'pays' || rest?.kind === 'onePay';
+  const previewJson =
+    isPaysAsked && blocker === null && date !== undefined
+      ? JSON.stringify({
+          kind: 'addItem',
+          item: {
+            id: horizonId,
+            kind: 'horizon',
+            parentId: null,
+            createdAt: today,
+            endedAt: null,
+            archivedAt: null,
+            heldReleasedOn: null,
+          },
+          version: {
+            itemId: horizonId,
+            kind: 'horizon',
+            effectiveFrom: today,
+            effectiveUntil: null,
+            changeId: 'what-if',
+            payload: getHorizon(date, rest),
+          },
+          heldCents: formData.isNotNow ? 0 : (putCents ?? 0),
+        } satisfies PreviewChange)
+      : null;
 
   const steps: QuestionStep[] = [
     {
@@ -429,26 +508,57 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       title: HORIZON_WORDS.restTitle,
       summaryLabel: HORIZON_WORDS.rest,
       summaryValue:
-        HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
-          ?.label ?? '',
-      isAnswered: formData.rest !== null,
+        formData.rest === 'onePay'
+          ? pickedDay
+            ? HORIZON_WORDS.restOnePaySummary(
+                formatDateOrdinalUTC(pickedDay.on),
+              )
+            : ''
+          : (HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
+              ?.label ?? ''),
+      isAnswered: rest !== null,
+      blocker: formData.rest === 'onePay' ? HORIZON_WORDS.needsPay : null,
       render: ({ moveOn }) => (
-        <ActionGroup isRoomy>
-          {HORIZON_REST_OPTIONS.map(({ value, label, meaning }) => (
-            <ActionRow
-              key={value}
-              isGrouped
-              isRoomy
-              icon={REST_ICONS[value]}
-              label={label}
-              subtitle={meaning}
-              onClick={() => {
-                set({ rest: value });
-                moveOn();
-              }}
-            />
-          ))}
-        </ActionGroup>
+        <div className='space-y-4'>
+          <ActionGroup isRoomy>
+            {HORIZON_REST_OPTIONS.map(({ value, label, meaning }) => (
+              <ActionRow
+                key={value}
+                isGrouped
+                isRoomy
+                icon={REST_ICONS[value]}
+                label={label}
+                subtitle={meaning}
+                onClick={() => {
+                  set({ rest: value, restDayKey: null });
+                  if (value !== 'onePay') moveOn();
+                }}
+              />
+            ))}
+          </ActionGroup>
+          {formData.rest === 'onePay' &&
+            (payChoices.length === 0 ? (
+              <p className='text-muted-foreground text-sm'>
+                {HORIZON_WORDS.noPays}
+              </p>
+            ) : (
+              <PillGroup
+                label={HORIZON_WORDS.onePayTitle}
+                options={payChoices.map((day) => ({
+                  value: day.dayKey,
+                  label: HORIZON_WORDS.onePayLabel(
+                    formatDateOrdinalUTC(day.on),
+                    day.sourceName ?? day.payLineName,
+                  ),
+                }))}
+                value={formData.restDayKey}
+                onChange={(restDayKey) => {
+                  set({ restDayKey });
+                  moveOn();
+                }}
+              />
+            ))}
+        </div>
       ),
     },
     {
@@ -481,29 +591,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   });
 
   const handleSubmit = async () => {
-    if (
-      !user ||
-      blocker !== null ||
-      date === undefined ||
-      formData.rest === null
-    ) {
+    if (!user || blocker !== null || date === undefined || rest === null) {
       return;
     }
-    const horizon: HorizonSealed = {
-      name,
-      emoji: formData.emoji?.trim() || null,
-      happensOn: date,
-      happensUntil:
-        formData.isFewDays && endDate !== undefined ? endDate : null,
-      priority: formData.priority,
-      orderIndex: getNextTierRank(
-        [...bills, ...envelopes, ...goals, ...horizons],
-        formData.priority,
-      ),
-      rest: { kind: formData.rest },
-      note: null,
-      costs: formData.costs,
-    };
+    const horizon = getHorizon(date, rest);
     const toward =
       formData.isNotNow || putCents === null || putFromName === undefined
         ? null
@@ -558,6 +649,13 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     >
       <div className='space-y-5'>
         <QuestionFlow flow={questions} />
+        {questions.hasReviewed && previewJson !== null && (
+          <EffectPreview
+            changeJson={previewJson}
+            caption={HORIZON_WORDS.effectCaption}
+            emptyText={HORIZON_WORDS.effectNone}
+          />
+        )}
         <ModalFooterActions
           note={error ?? (questions.hasReviewed ? blocker : questions.blocker)}
           cancelAction={

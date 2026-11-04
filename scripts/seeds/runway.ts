@@ -35,6 +35,7 @@ import {
   toMonthKey,
 } from '../../src/apps/runway/engine/closings.ts';
 import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
+import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
@@ -251,7 +252,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -340,7 +341,7 @@ async function writeSeedHorizon(
         happensUntil: null,
         priority: 'should',
         orderIndex: 21,
-        rest: { kind: 'later' },
+        rest: { kind: 'pays' },
         note: null,
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
@@ -1321,6 +1322,8 @@ export const seedLine = (
   cents,
   shortBy: 0,
   paidBy: [{ dayId, cents }],
+  costId: null,
+  repaysFree: false,
 });
 
 /** Two paydays that already arrived, sealed the way a confirmation seals them: one as expected, one with more than expected and a note. The first funds the emergency cushion, so that goal starts partly held. */
@@ -1339,6 +1342,7 @@ async function writeSeedConfirmedDays(
       note: null,
       withCushion: true,
       withBills: true,
+      withCost: true,
     },
     {
       on: when.today - 25 * DAY_MS,
@@ -1346,6 +1350,7 @@ async function writeSeedConfirmedDays(
       note: 'Overtime',
       withCushion: false,
       withBills: false,
+      withCost: false,
     },
     {
       on: when.today - 39 * DAY_MS,
@@ -1353,6 +1358,7 @@ async function writeSeedConfirmedDays(
       note: 'Bonus from the quarter',
       withCushion: false,
       withBills: false,
+      withCost: false,
       edits: {
         'seed-envelope-groceries': 12_000,
         'seed-goal-vacation': 40_000,
@@ -1368,7 +1374,8 @@ async function writeSeedConfirmedDays(
   ];
   const docs = await Promise.all(
     days.map(async (entry) => {
-      const { on, arrivedCents, note, withCushion, withBills } = entry;
+      const { on, arrivedCents, note, withCushion, withBills, withCost } =
+        entry;
       const byLine = (
         values: Record<string, never> | Record<string, number | string | null>,
       ) =>
@@ -1406,6 +1413,27 @@ async function writeSeedConfirmedDays(
                 'want',
                 6_000,
               ),
+            ]
+          : []),
+        ...(withCost
+          ? [
+              {
+                ...seedLine(
+                  dayId,
+                  'seed-horizon-surgery',
+                  "Surgery ·\u00A0Miso's surgery",
+                  '🐱',
+                  'should',
+                  5_000,
+                ),
+                lineId: getCostLineId(
+                  dayId,
+                  'seed-horizon-surgery',
+                  'seed-cost-surgery',
+                ),
+                costId: 'seed-cost-surgery',
+                repaysFree: false,
+              },
             ]
           : []),
         seedLine(

@@ -239,14 +239,26 @@ export const INCOME_ENDING_LABELS: Record<
 export const DEFAULT_PAY_LINE_NAME = 'Paycheck';
 export const MAX_HORIZON_COSTS = 20;
 
-/** What a Horizon item's costs fall back on once the money put toward it runs out. Issue 82 adds `pays` and `onePay`. */
-export const HORIZON_REST = ['outside', 'later'] as const;
+/** What a Horizon item's costs fall back on once the money put toward it runs out. */
+export const HORIZON_REST = ['pays', 'onePay', 'outside', 'later'] as const;
 
 export const HORIZON_REST_OPTIONS: readonly {
   value: (typeof HORIZON_REST)[number];
   label: string;
   meaning: string;
 }[] = [
+  {
+    value: 'pays',
+    label: 'My pays before each cost is due',
+    meaning:
+      'Each pay sets aside its share of what the money put toward it does not cover.',
+  },
+  {
+    value: 'onePay',
+    label: 'One pay I pick',
+    meaning:
+      'One pay sets aside everything the money put toward it does not cover.',
+  },
   {
     value: 'outside',
     label: 'Outside the plan',
@@ -297,6 +309,7 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
+  costLineName: (cost: string, item: string) => `${cost} ·\u00A0${item}`,
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => `${count} costs`,
@@ -383,6 +396,44 @@ export const HORIZON_WORDS = {
   restTitle: "What it doesn't cover comes from",
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
+  onePayTitle: 'Which pay?',
+  onePayLabel: (date: string, name: string) => `${date} ·\u00A0${name}`,
+  noPays: 'No pay is coming up to pick.',
+  needsPay: 'Pick the pay that carries it.',
+  restPaysSummary: 'My pays before each cost is due',
+  restOnePaySummary: (date: string) => `The ${date} pay`,
+  effectCaption: 'What changes on your pays',
+  effectNone: 'No pay moves.',
+  lineDue: (date: string) => `due\u00A0${date}`,
+  lineBack: 'Back to Free to Spend',
+  lineBackSheet: (cost: string, date: string) =>
+    `${cost} came due on ${date} and was paid from Free to Spend. This pay puts it back.`,
+  lineWhyPays: (cost: string, total: string, date: string) =>
+    `${cost} is ${total}, due ${date}. Your pays before it each put in a share, so no one pay carries it.`,
+  lineWhyOnePay: (cost: string, total: string, date: string) =>
+    `${cost} is ${total}, due ${date}. You picked this pay to carry it.`,
+  lineWhyLater: (cost: string, date: string) =>
+    `${cost} comes out of the pays after the one you picked, and was due ${date}.`,
+  openItem: (name: string) => `Open ${name}`,
+  openItemSub: 'Its costs, what is held and where the rest comes from',
+  costShareTitle: (cost: string) =>
+    `How much should this pay put toward ${cost}?`,
+  costShareCapped: (cost: string, needs: string) =>
+    `${cost} needs ${needs} more, so that is the most this pay can put in.`,
+  costShareSummary: (cost: string, item: string, cents: string, date: string) =>
+    `${item}, ${cost}: this pay puts in ${cents}, for ${date} only.`,
+  costShareResetSummary: (cost: string, item: string, date: string) =>
+    `${item}, ${cost}: this pay goes back to the plan's amount, for ${date} only.`,
+  costShareToast: (cost: string) => `Changed what this pay puts toward ${cost}`,
+  takeFromPays: 'Take it from my pays',
+  takeFromPaysSub: 'Each pay before a cost is due puts in a share.',
+  takeFromPaysTitle: (name: string) => `Take ${name} from your pays?`,
+  takeFromPaysSummary: (name: string) =>
+    `${name}: the rest now comes from my pays before each cost is due.`,
+  takeFromPaysBackSummary: (name: string) =>
+    `${name}: the rest goes back to how it was.`,
+  takeFromPaysDone: (name: string) => `${name} now comes from your pays`,
+  takeFromPaysConfirm: 'Take it from my pays',
   plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
     `${isUpTo ? (isAfterLead ? 'up\u00A0to\u00A0' : 'Up\u00A0to\u00A0') : ''}${amount}\u00A0planned`,
   overNextYear: 'Over the next year:',
@@ -846,6 +897,9 @@ export const PAIRING_STATES = [
 /** A draft line funded by a pairing rather than by the target's own rule. */
 export const PAIRING_DRAFT_CADENCES = ['pairing'] as const;
 
+/** A draft line for a Horizon cost: spread over the pays before it is due, or carried by the one pay picked. */
+export const HORIZON_DRAFT_CADENCES = ['horizonPays', 'horizonOnePay'] as const;
+
 export const DRAFT_REASON_CODES = [
   'funded',
   'poolExhausted',
@@ -860,9 +914,12 @@ export const DRAFT_CADENCE_WORDS: Record<
   | (typeof FUNDING_CADENCES)[number]
   | (typeof CALENDAR_PERIODS)[number]
   | (typeof BILL_DRAFT_CADENCES)[number]
-  | (typeof PAIRING_DRAFT_CADENCES)[number],
+  | (typeof PAIRING_DRAFT_CADENCES)[number]
+  | (typeof HORIZON_DRAFT_CADENCES)[number],
   string
 > = {
+  horizonPays: 'Spread over your pays before it is due',
+  horizonOnePay: 'Comes from the pay you picked',
   pairing: 'First from this pay',
   billSuggested: 'Spread over your income days',
   billChosen: 'A day you chose',

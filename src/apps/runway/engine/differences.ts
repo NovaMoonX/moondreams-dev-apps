@@ -3,9 +3,12 @@ import type { Cents, RecordDifference, RecordLine } from '@apps/runway/types';
 
 import { allocate } from './money';
 
-/** What a day's lines take in all. */
+/** What a day's lines take in all; a line that gives back to Free to Spend takes nothing from it. */
 export function sumLines(lines: readonly RecordLine[]): Cents {
-  const result = lines.reduce((sum, line) => sum + line.cents, 0);
+  const result = lines.reduce(
+    (sum, line) => (line.repaysFree ? sum : sum + line.cents),
+    0,
+  );
   return result;
 }
 

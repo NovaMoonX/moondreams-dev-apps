@@ -8,6 +8,7 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import {
   CONFIRM_WORDS,
   DRAFT_WORDS,
+  HORIZON_WORDS,
   PRIORITY_LABELS,
   RECORD_WORDS,
 } from '@apps/runway/constants';
@@ -66,7 +67,10 @@ function RecordLineRow({
     <ItemRow
       name={name}
       emoji={emoji}
-      detail={shortText ?? PRIORITY_LABELS[line.tier]}
+      detail={
+        shortText ??
+        (line.repaysFree ? HORIZON_WORDS.lineBack : PRIORITY_LABELS[line.tier])
+      }
       isDetailStrong={shortText !== null && !isHidden}
       figure={formatCents(line.cents)}
       ariaLabel={`${name}: ${formatCents(line.cents)}${shortText ? `, ${shortText.toLowerCase()}` : ''}`}
