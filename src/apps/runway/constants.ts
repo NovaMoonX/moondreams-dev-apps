@@ -280,7 +280,8 @@ export const HORIZON_WORDS = {
   due: (name: string, date: string) => `${name} · due\u00A0${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
-  rangesAt: (endWords: string) => `ranges at ${endWords}`,
+  rangesAt: (endWords: string) =>
+    `Ranges planned at ${endWords.replaceAll(' ', '\u00A0')}`,
   costsCaption: 'Costs',
   nameTitle: "What's on your horizon?",
   name: 'Name',
@@ -289,7 +290,7 @@ export const HORIZON_WORDS = {
   whenTitle: 'When is it?',
   when: 'When',
   around: (date: string) => `Around ${date}`,
-  aroundRange: (from: string, to: string) => `Around ${from} to ${to}`,
+  aroundRange: (range: string) => `Around ${range}`,
   fewDays: "It's a few days",
   oneDay: 'Just one day',
   startLabel: 'From',

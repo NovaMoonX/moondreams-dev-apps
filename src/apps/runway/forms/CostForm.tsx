@@ -4,6 +4,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
 import DateInput from '@/components/DateInput';
+import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -258,17 +259,15 @@ function CostForm({
     >
       <div className='space-y-5'>
         <QuestionFlow flow={questions} />
-        {onRemove && (
-          <Button
-            type='button'
-            variant='tertiary'
-            className='text-destructive!'
-            onClick={onRemove}
-          >
-            {HORIZON_WORDS.removeThisCost}
-          </Button>
-        )}
         <ModalFooterActions
+          leftActions={
+            onRemove && (
+              <DeleteIconButton
+                onClick={onRemove}
+                label={HORIZON_WORDS.removeThisCost}
+              />
+            )
+          }
           note={questions.hasReviewed ? blocker : questions.blocker}
           cancelAction={
             <Button type='button' variant='secondary' onClick={requestClose}>

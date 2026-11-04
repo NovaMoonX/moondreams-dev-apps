@@ -1,4 +1,4 @@
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { HorizonCost } from '@apps/runway/types';
 
@@ -13,4 +13,18 @@ export function describeCost(cost: HorizonCost) {
         ? formatCentsShort(lowCents)
         : `${formatCentsShort(lowCents)} to ${formatCentsShort(highCents)}`,
   };
+}
+
+/** "Jan 15th to 17th, 2027": the month and year are written once when both dates share them. */
+export function formatDateRangeOrdinalUTC(from: number, to: number) {
+  const start = new Date(from);
+  const end = new Date(to);
+  const isSameYear = start.getUTCFullYear() === end.getUTCFullYear();
+  if (!isSameYear)
+    return `${formatDateOrdinalUTC(from)} to ${formatDateOrdinalUTC(to)}`;
+  const [startDay] = formatDateOrdinalUTC(from).split(',');
+  const [endDay, ...endYear] = formatDateOrdinalUTC(to).split(',');
+  const isSameMonth = start.getUTCMonth() === end.getUTCMonth();
+  const lastDay = isSameMonth ? toDayOrdinal(end.getUTCDate()) : endDay;
+  return `${startDay} to ${lastDay}${endYear.map((year) => `,${year}`).join('')}`;
 }

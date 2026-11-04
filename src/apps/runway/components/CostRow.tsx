@@ -34,7 +34,7 @@ function CostRow({ cost, onOpen }: CostRowProps) {
       <Button
         type='button'
         variant='tertiary'
-        className='hover:bg-muted/60 h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
+        className='hover:bg-muted/60 text-foreground h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
         aria-label={HORIZON_WORDS.changeCost(cost.name)}
         onClick={onOpen}
       >

@@ -52,7 +52,6 @@ function PlanScreen() {
           label='Plan sections'
           isThin
           isScrolling
-          wrapsNarrow
           scrollKey={planSection}
         >
           {(isTracking ? sectionOptions : untrackedOptions).map((option) => (
@@ -61,7 +60,7 @@ function PlanScreen() {
               emoji={option.emoji}
               isThin
               isSelected={!isMore && planSection === option.value}
-              className='max-[359px]:px-2 max-[359px]:[&_[data-pill-emoji]]:hidden'
+              className='max-[413px]:px-2 max-[413px]:[&_[data-pill-emoji]]:hidden'
               onClick={() => showPlanSection(option.value)}
             >
               {option.label}

@@ -1,6 +1,7 @@
 import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -40,17 +41,19 @@ function HorizonSheet({ horizon, today, stance, onClose }: HorizonSheetProps) {
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
       : HORIZON_WORDS.aroundRange(
-          formatDateOrdinalUTC(horizon.happensOn),
-          formatDateOrdinalUTC(horizon.happensUntil),
+          formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
   const fact = [
-    HORIZON_WORDS.costCount(horizon.costs.length),
+    HORIZON_WORDS.costCount(horizon.costs.length).replace(' ', '\u00A0'),
     hasRange &&
       HORIZON_WORDS.rangesAt(RANGE_END_WORDS[getRangeEnd(stance, 'expense')]),
     when,
   ]
     .filter(Boolean)
-    .join(' · ');
+    .map((piece, index, pieces) =>
+      index < pieces.length - 1 ? `${piece}\u00A0·` : piece,
+    )
+    .join(' ');
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );

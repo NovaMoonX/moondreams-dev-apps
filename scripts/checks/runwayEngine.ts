@@ -234,6 +234,7 @@ import {
   listHorizonPayments,
   sumCostPayments,
 } from '../../src/apps/runway/engine/horizon.ts';
+import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
 import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
 import {
   collectStarted,
@@ -10696,6 +10697,28 @@ const version = (
     sumCostPayments(payments),
     92_000,
     'the planned total adds the stance figures',
+  );
+  const nb = (text: string) => text.replaceAll(' ', '\u00a0');
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 1, 15), utc(2027, 1, 17)),
+    nb('Jan 15th') + ' to 17th,' + nb(' 2027'),
+    'two days of one month name the month and year once',
+  );
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 1, 30), utc(2027, 2, 2)),
+    nb('Jan 30th') + ' to ' + nb('Feb 2nd') + ',' + nb(' 2027'),
+    'two months of one year name the year once',
+  );
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 12, 30), utc(2028, 1, 2)),
+    nb('Dec 30th') +
+      ',' +
+      nb(' 2027') +
+      ' to ' +
+      nb('Jan 2nd') +
+      ',' +
+      nb(' 2028'),
+    'two years keep both',
   );
 }
 

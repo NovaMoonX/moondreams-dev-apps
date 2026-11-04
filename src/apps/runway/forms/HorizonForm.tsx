@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
@@ -42,6 +42,7 @@ import {
   selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Priority } from '@apps/runway/types';
+import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
 interface HorizonFormData {
@@ -90,6 +91,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const [costDraft, setCostDraft] = useState<HorizonCost | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const addCostRef = useRef<HTMLButtonElement>(null);
   const set = (patch: Partial<HorizonFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -163,8 +165,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           ? ''
           : formData.isFewDays && endDate !== undefined
             ? HORIZON_WORDS.aroundRange(
-                formatDateOrdinalUTC(date),
-                formatDateOrdinalUTC(endDate),
+                formatDateRangeOrdinalUTC(date, endDate),
               )
             : HORIZON_WORDS.around(formatDateOrdinalUTC(date)),
       isAnswered: isDateValid && isEndValid,
@@ -253,6 +254,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             </ul>
           )}
           <Button
+            ref={addCostRef}
             type='button'
             variant='secondary'
             disabled={formData.costs.length >= MAX_HORIZON_COSTS}
@@ -384,6 +386,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
                 : [...formData.costs, saved],
             });
             setCostDraft(null);
+            requestAnimationFrame(() =>
+              addCostRef.current?.scrollIntoView({ block: 'nearest' }),
+            );
           }}
           onRemove={
             costDraft === 'new'
