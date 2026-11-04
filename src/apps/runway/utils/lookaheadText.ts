@@ -70,6 +70,7 @@ export type ProblemGroup =
   | { kind: 'day'; on: number; dayKey: string; shorts: ShortProblem[] }
   | { kind: 'single'; on: number; problem: LookaheadProblem }
   | { kind: 'horizon'; on: number; short: HorizonShort }
+  | { kind: 'afterIncome'; on: number; names: readonly string[] }
   | {
       kind: 'undated';
       bills: readonly { billId: string; name: string }[];
@@ -107,7 +108,29 @@ export function groupProblems(problems: readonly LookaheadProblem[]) {
         : group,
     );
   }, []);
-  return result;
+  return foldAfterIncome(result);
+}
+
+const isAfterIncome = (group: DatedProblemGroup) =>
+  group.kind === 'single' &&
+  group.problem.kind === 'noIncome' &&
+  group.problem.reason === 'noIncome';
+
+function foldAfterIncome(groups: DatedProblemGroup[]): DatedProblemGroup[] {
+  const after = groups.filter(isAfterIncome);
+  if (after.length < 2) return groups;
+  const folded: DatedProblemGroup = {
+    kind: 'afterIncome',
+    on: after[0].on,
+    names: after.flatMap((group) =>
+      group.kind === 'single' ? [getName(group.problem)] : [],
+    ),
+  };
+  const first = groups.indexOf(after[0]);
+  return groups.flatMap((group, at) => {
+    if (at === first) return [folded];
+    return isAfterIncome(group) ? [] : [group];
+  });
 }
 
 const getName = (problem: LookaheadProblem) =>
@@ -160,6 +183,14 @@ export function describeGroupRow(
           detail: FIX_WORDS.runsShortOn(on),
         };
   }
+  if (group.kind === 'afterIncome') {
+    return {
+      title: FIX_WORDS.noIncomeMany(group.names),
+      detail: FIX_WORDS.firstDueOn(
+        formatRelativeDayUTC(group.on, today, formatDateOrdinalUTC),
+      ),
+    };
+  }
   const result = {
     title: formatDateOrdinalUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
@@ -201,6 +232,13 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
           figure: formatCentsShort(short.shortCents),
           after: ` short on ${on}`,
         };
+  }
+  if (group.kind === 'afterIncome') {
+    return {
+      before: `${group.names[0]} on ${on} and ${group.names.length - 1} more have no income before them`,
+      figure: null,
+      after: '',
+    };
   }
   if (group.kind === 'single') {
     const problem = group.problem;

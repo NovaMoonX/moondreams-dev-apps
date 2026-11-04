@@ -13,31 +13,42 @@ import {
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeGroupHeadingLead } from '@apps/runway/utils/billText';
+import { formatCentsShort } from '@/utils/moneyUtils';
 
 interface GroupHeadingProps {
   figures: GroupFigures;
   /** The list the heading sits on: it shows the total of that kind alone. */
-  kind: 'bills' | 'envelopes';
+  kind: 'bills' | 'envelopes' | 'goals';
   onOpen: () => void;
+  /** For a list of balances (goals): what its rows have saved of their targets, shown instead of the monthly figure. */
+  saved?: { savedCents: number; targetCents: number };
 }
 
 /** The heading of a list's section for one group: its name and combined monthly total, opening the group's sheet. */
-function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
+function GroupHeading({ figures, kind, onOpen, saved }: GroupHeadingProps) {
   const { isHidden } = useValuesHidden();
   const stance = useAppSelector(selectStance);
   const { name } = figures;
   const emoji = useAppSelector(selectPurposeEmojis).get(figures.id);
-  const isBills = kind === 'bills';
-  const total = isBills ? figures.billsTotal : figures.envelopesTotal;
-  const count = isBills ? figures.bills.length : figures.envelopes.length;
-  const otherCount = isBills ? figures.envelopes.length : figures.bills.length;
+  const total = {
+    bills: figures.billsTotal,
+    envelopes: figures.envelopesTotal,
+    goals: figures.goalsTotal,
+  }[kind];
+  const count = figures[kind].length;
+  const otherCount =
+    figures.bills.length +
+    figures.envelopes.length +
+    figures.goals.length -
+    count;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
-  const lead = describeGroupHeadingLead(
-    total,
-    figures.total,
-    count,
-    otherCount,
-  );
+  const lead = saved
+    ? {
+        amount: formatCentsShort(saved.savedCents),
+        whole: formatCentsShort(saved.targetCents),
+        rest: GROUP_WORDS.savedWord,
+      }
+    : describeGroupHeadingLead(total, figures.total, count, otherCount);
 
   return (
     <div className='flex items-start gap-1'>
@@ -84,28 +95,29 @@ function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
               {lead.rest}
             </span>
           </Button>
-          {(hasRange ||
-            total.uncounted > 0 ||
-            total.oneTime.count > 0 ||
-            otherCount > 0) && (
-            <HelpTip title={GROUP_WORDS.basisTitle}>
-              <GroupTotalHelp
-                total={total}
-                hasRange={hasRange}
-                stance={stance}
-                only={
-                  otherCount > 0
-                    ? {
-                        kind,
-                        name,
-                        part: lead.whole === null ? null : lead.amount,
-                        whole: lead.whole,
-                      }
-                    : undefined
-                }
-              />
-            </HelpTip>
-          )}
+          {!saved &&
+            (hasRange ||
+              total.uncounted > 0 ||
+              total.oneTime.count > 0 ||
+              otherCount > 0) && (
+              <HelpTip title={GROUP_WORDS.basisTitle}>
+                <GroupTotalHelp
+                  total={total}
+                  hasRange={hasRange}
+                  stance={stance}
+                  only={
+                    otherCount > 0
+                      ? {
+                          kind,
+                          name,
+                          part: lead.whole === null ? null : lead.amount,
+                          whole: lead.whole,
+                        }
+                      : undefined
+                  }
+                />
+              </HelpTip>
+            )}
         </div>
       </div>
       <Button

@@ -2,6 +2,7 @@ import { useState, type CSSProperties } from 'react';
 import { Receipt, X } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import InlineNotice from '@/components/InlineNotice';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import LazyMount from '@/components/LazyMount';
@@ -70,8 +71,8 @@ function BillsScreen() {
   const {
     addRequest,
     clearAdd,
-    dueBillId,
-    closeDueBill,
+    openItem,
+    closeOpenItem,
     openDueBill,
     isUndatedBillsOnly,
     openUndatedBills,
@@ -100,6 +101,7 @@ function BillsScreen() {
   });
   const undated = listed.filter(({ payload }) => isUndatedBill(payload));
   const isNarrowed = isUndatedBillsOnly && undated.length > 0;
+  const isAllDated = isUndatedBillsOnly && undated.length === 0;
   const isShown = ({ payload, payment }: (typeof listed)[number]) =>
     (!isNarrowed || isUndatedBill(payload)) &&
     `${payload.name} ${payment ? formatDateOrdinalUTC(payment.dueOn) : ''}`
@@ -126,17 +128,25 @@ function BillsScreen() {
         rows.length > 0 ||
         (needle === '' &&
           !isNarrowed &&
-          figures.bills.length + figures.envelopes.length === 0),
+          figures.bills.length +
+            figures.envelopes.length +
+            figures.goals.length ===
+            0),
     );
   const isShowingTip =
     bills.length >= TIP_MIN_ROWS &&
     figuresByGroup.every(({ bills: inGroup }) => inGroup.length === 0);
   const ungrouped = visible.filter(({ groupId }) => groupId === null);
-  const openBill = listed.find(({ item, payload }) =>
-    openBillId !== null
-      ? item.id === openBillId
-      : item.id === dueBillId && payload.timing.schedule.anchor === null,
+  const openBill = listed.find(
+    ({ item }) => item.id === (openBillId ?? openItem?.itemId),
   );
+  const getOpenStep = () => {
+    if (!openBill) return undefined;
+    const isUndated = isUndatedBill(openBill.payload);
+    if (openBillId !== null) return isNarrowed && isUndated ? 'due' : undefined;
+    const step = openItem?.step ?? undefined;
+    return step === 'due' && !isUndated ? undefined : step;
+  };
 
   const getCard = (rows: typeof visible) => (
     <div className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -147,6 +157,7 @@ function BillsScreen() {
       ).map((chunk, index) => (
         <div
           key={chunk[0].item.id}
+          data-item-ids={chunk.map(({ item }) => item.id).join(' ')}
           className='defer-offscreen'
           style={
             {
@@ -162,6 +173,7 @@ function BillsScreen() {
               {chunk.map(({ item, payload, payment, groupId }) => (
                 <BillRow
                   key={item.id}
+                  itemId={item.id}
                   bill={payload}
                   payment={payment}
                   planStance={stance}
@@ -207,14 +219,33 @@ function BillsScreen() {
         {hasDue && !isNarrowed && (
           <SectionDivider label={BILL_WORDS.allBills} />
         )}
+        {isAllDated && (
+          <InlineNotice
+            tone='success'
+            onDismiss={closeUndatedBills}
+            dismissLabel={BILL_WORDS.showAllBills}
+          >
+            {BILL_WORDS.allDated}
+          </InlineNotice>
+        )}
         {undated.length > 0 &&
           (isNarrowed ? (
-            <div>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+              <div className='min-w-0'>
+                <p className='font-medium'>
+                  {undated.length === 1
+                    ? BILL_WORDS.undatedOne(undated[0].payload.name)
+                    : BILL_WORDS.undatedMany(undated.length)}
+                </p>
+                <p className='text-muted-foreground text-sm'>
+                  {BILL_WORDS.undatedOnlyHint}
+                </p>
+              </div>
               <RevealChip
                 icon={<X className='h-3.5 w-3.5' aria-hidden='true' />}
                 onClick={closeUndatedBills}
               >
-                {BILL_WORDS.needsDueDate}
+                {BILL_WORDS.showAllBills}
               </RevealChip>
             </div>
           ) : (
@@ -308,10 +339,10 @@ function BillsScreen() {
           payment={openBill.payment}
           planStance={stance}
           today={today}
-          startsAtStep={openBillId === null ? 'due' : undefined}
+          startsAtStep={getOpenStep()}
           onClose={() => {
             setOpenBillId(null);
-            closeDueBill();
+            if (openItem !== null) closeOpenItem();
           }}
         />
       )}

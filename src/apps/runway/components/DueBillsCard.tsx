@@ -353,8 +353,14 @@ function DueBillsCard({
   onOpenBill,
   overflow,
 }: DueBillsCardProps) {
-  const { showPlanSection, showTab, openAllDue, closeAllDue, isAllDueOpen } =
-    useRunwayUrlState();
+  const {
+    showPlanSection,
+    showTab,
+    showOnPlan,
+    openAllDue,
+    closeAllDue,
+    isAllDueOpen,
+  } = useRunwayUrlState();
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
@@ -449,7 +455,9 @@ function DueBillsCard({
               emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
               today={today}
               onOpen={() =>
-                onOpenBill ? onOpenBill(entry.billId) : openBills()
+                onOpenBill
+                  ? onOpenBill(entry.billId)
+                  : void showOnPlan('bills', { itemId: entry.billId })
               }
             />
           );

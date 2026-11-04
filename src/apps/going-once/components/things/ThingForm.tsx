@@ -69,7 +69,7 @@ function RowSheet({
   onSaveFailedLater,
   onClose,
 }: RowSheetProps) {
-  const { label, fields, Question } = THING_ROWS[rowKey];
+  const { label, fields, alsoFills = [], Question } = THING_ROWS[rowKey];
   const { addToast } = useToast();
   const [base] = useState(() => toFields(toAnswers(item)));
   const [draft, setDraft] = useState(() => ({
@@ -84,7 +84,7 @@ function RowSheet({
     const changed = diffFields(base, toFields(draft));
     const mine = Object.fromEntries(
       Object.entries(changed).filter(([key]) =>
-        fields.some((field) => field === key),
+        [...fields, ...alsoFills].some((field) => field === key),
       ),
     );
     if (Object.keys(mine).length === 0) {
