@@ -101,19 +101,12 @@ function HorizonSheet({
         formatCents(isPlannedRange ? plannedHighCents : plannedCents),
         isPlannedRange,
         hasRepeats,
-      ).replaceAll(' ', '\u00A0'),
-    outsideCents > 0 &&
-      HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
-        ' ',
-        '\u00A0',
       ),
-    when,
+    outsideCents > 0 && HORIZON_WORDS.outsideTotal(formatCents(outsideCents)),
+    when.replaceAll(' ', '\u00A0'),
   ]
     .filter(Boolean)
-    .map((piece, index, pieces) =>
-      index < pieces.length - 1 ? `${piece}\u00A0·` : piece,
-    )
-    .join(' ');
+    .join(' ·\u00A0');
   const costs = [...horizon.costs].sort(
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );

@@ -114,7 +114,7 @@ export function describeCost(cost: HorizonCost) {
       cost.isOutside && HORIZON_WORDS.outsideTag,
     ]
       .filter(Boolean)
-      .join(' · '),
+      .join(' ·\u00A0'),
     figure: amount,
     per,
   };

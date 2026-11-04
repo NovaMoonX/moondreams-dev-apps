@@ -20,7 +20,7 @@ function CostRow({ cost, onOpen }: CostRowProps) {
   const label = (
     <span className='block min-w-0 flex-1'>
       <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
-      <span className='text-muted-foreground block text-sm text-balance break-words'>
+      <span className='text-muted-foreground block text-sm break-words'>
         {line}
       </span>
     </span>

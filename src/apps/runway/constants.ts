@@ -384,7 +384,7 @@ export const HORIZON_WORDS = {
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
   plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
-    `${isUpTo ? (isAfterLead ? 'up to ' : 'Up to ') : ''}${amount} planned`,
+    `${isUpTo ? (isAfterLead ? 'up to ' : 'Up to ') : ''}${amount}\u00A0planned`,
   overNextYear: 'Over the next year:',
   setAside: 'Set aside',
   spent: 'Spent',
