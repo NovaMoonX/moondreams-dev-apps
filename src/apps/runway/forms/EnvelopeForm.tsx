@@ -277,7 +277,7 @@ function EnvelopeFormBody({
     if (isPriorityChosen) return data.priority;
     const { groupId } = resolveGroup(data);
     const startsWith = groups.find(({ item }) => item.id === groupId)?.version
-      .payload.startingPriority;
+      .payload.envelopePriority;
     return startsWith ?? data.priority;
   };
 

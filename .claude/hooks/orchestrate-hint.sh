@@ -9,7 +9,7 @@ mode=$(echo "$input" | jq -r '.permission_mode // ""' 2>/dev/null)
 prompt=$(echo "$input" | jq -r '.prompt // ""' 2>/dev/null)
 
 if [[ "$mode" == "plan" ]]; then
-  echo "Plan rules (orchestrate \"Writing a plan\"), which replace plan mode's default template: the plan is for the owner and readable in under a minute. Write the idea, what the person will see or be able to do, the criteria when they matter, and only uncertain or risky decisions as 🚩 questions with your recommendation, in plain words and flat bullets. No files, paths, code names, data shapes, verification steps or docs to update; no Context, Files or Verification sections. A follow-up plan covers only the owner's last message. The plan-check hook sends back a plan that breaks these. Load the orchestrate skill before building."
+  echo "Plan rules (orchestrate \"Writing a plan\"), which replace plan mode's default template: the plan is for the owner and readable in under a minute. Write the idea, what the person will see or be able to do, the criteria when they matter, a few one-line technical highlights (only what changes and is worth an engineer-owner knowing: polling, caching, new functions, stored data, limits, cost, permissions, shared or app-specific; how it works only when new to the repo; nothing about what stays the same), and only uncertain or risky decisions as 🚩 questions with your recommendation, in plain words and flat bullets. No files, paths, code names, data shapes, verification steps or docs to update; no Context, Files or Verification sections. A follow-up plan covers only the owner's last message. The plan-check hook sends back a plan that breaks these. Load the orchestrate skill before building."
   exit 0
 fi
 
