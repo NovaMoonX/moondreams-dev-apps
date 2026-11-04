@@ -9,6 +9,7 @@ import { shallowEqual } from 'react-redux';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { openFileChooser } from '@/utils/fileUtils';
+import { shrinkDocumentPhoto } from '@/utils/imageCompression';
 import { formatDateTime } from '@/utils/formatUtils';
 
 import {
@@ -21,6 +22,8 @@ import IngestionDraftReviewModal from './IngestionDraftReviewModal';
 
 /** Keeps the "reading" state visible for at least this long so it doesn't flash by unreadably on a fast response. */
 const MIN_EXTRACTION_LOADING_MS = 2000;
+
+const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024;
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -47,6 +50,20 @@ function DocumentIngestionModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const canTakePhoto = useCanTakePhoto();
+  const [isPreparing, setIsPreparing] = useState(false);
+
+  const handlePicked = async (picked: File) => {
+    setIsPreparing(true);
+    const shrunk = await shrinkDocumentPhoto(picked);
+    setIsPreparing(false);
+    if (shrunk.size > MAX_DOCUMENT_BYTES) {
+      setFile(null);
+      setError('That file is too big to keep. Try a photo, or a PDF under 10 MB.');
+      return;
+    }
+    setFile(shrunk);
+    setError(null);
+  };
 
   const pendingDrafts = useAppSelector(selectIngestionDraftsByHousehold(householdId), shallowEqual);
   const activeDraft = useAppSelector((state) =>
@@ -147,9 +164,9 @@ function DocumentIngestionModal({
           tabIndex={-1}
           aria-hidden='true'
           onChange={(event) => {
-            setFile(event.target.files?.[0] ?? null);
-            setError(null);
+            const picked = event.target.files?.[0] ?? null;
             event.target.value = '';
+            if (picked) void handlePicked(picked);
           }}
         />
         <div className={join('grid gap-2', canTakePhoto && 'grid-cols-2')}>
@@ -158,6 +175,7 @@ function DocumentIngestionModal({
               type='button'
               variant='secondary'
               className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+              disabled={isPreparing}
               onClick={() => openFileChooser(inputRef.current, { isCamera: true })}
             >
               <Camera className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
@@ -168,6 +186,8 @@ function DocumentIngestionModal({
             type='button'
             variant='secondary'
             className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+            loading={isPreparing}
+            disabled={isPreparing}
             onClick={() => openFileChooser(inputRef.current)}
           >
             <FileUp className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
@@ -180,7 +200,7 @@ function DocumentIngestionModal({
           <Button type='button' variant='secondary' onClick={handleClose}>
             Cancel
           </Button>
-          <Button type='button' disabled={!file} onClick={() => void handleSubmit()}>
+          <Button type='button' disabled={!file || isPreparing} onClick={() => void handleSubmit()}>
             Review document
           </Button>
         </div>

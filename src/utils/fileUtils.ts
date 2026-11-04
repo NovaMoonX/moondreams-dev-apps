@@ -29,11 +29,6 @@ export function isReadableFile({ name, type }: { name: string; type: string }) {
   return result;
 }
 
-/** Whether a picked file is a PDF, the one kind a reader caps by size: a photo is shrunk on the device first. */
-export function isPdf({ name, type }: { name: string; type: string }) {
-  return type === 'application/pdf' || /\.pdf$/i.test(name);
-}
-
 /** Whether this browser can hand these files to its share sheet (false on most desktops). */
 export function canShareFiles(files: File[]) {
   return (

@@ -16,7 +16,8 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { useAppSelector } from '@/store';
-import { isPdf, isReadableFile, openFileChooser } from '@/utils/fileUtils';
+import { isReadableFile, openFileChooser } from '@/utils/fileUtils';
+import { fitsReadLimit } from '@/utils/imageCompression';
 import { toWebLink } from '@/utils/urlUtils';
 import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
 import {
@@ -241,14 +242,14 @@ function RecipeReader({
     setFileKey((current) => current + 1);
   };
 
-  const handleFile = (next: File) => {
+  const handleFile = async (next: File) => {
     if (!isReadableFile(next)) {
       rejectFile("That file isn't a photo or a PDF.");
       return;
     }
-    if (isPdf(next) && next.size > MAX_UPLOAD_BYTES) {
+    if (!(await fitsReadLimit(next, MAX_UPLOAD_BYTES))) {
       rejectFile(
-        'That PDF is too big to read. Try a photo, or a PDF under 10 MB.',
+        'That file is too big to read. Try a photo, or a PDF under 10 MB.',
       );
       return;
     }
@@ -302,7 +303,7 @@ function RecipeReader({
 
   const handleRetryFile = () => {
     if (file !== null) {
-      handleFile(file);
+      void handleFile(file);
     }
   };
 
@@ -548,7 +549,7 @@ function RecipeReader({
             onTakePhoto={() =>
               openFileChooser(fileRef.current, { isCamera: true })
             }
-            onDropFile={handleFile}
+            onDropFile={(dropped) => void handleFile(dropped)}
           />
         ) : (
           <div
@@ -598,7 +599,7 @@ function RecipeReader({
           className='hidden'
           onChange={(event) => {
             const next = event.target.files?.[0];
-            if (next) handleFile(next);
+            if (next) void handleFile(next);
           }}
         />
       )}

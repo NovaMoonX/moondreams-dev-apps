@@ -20,7 +20,7 @@ import {
 } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
 import { openFileChooser } from '@/utils/fileUtils';
-import { compressImageForUse } from '@/utils/imageCompression';
+import { shrinkDocumentPhoto } from '@/utils/imageCompression';
 
 import { createCustomHealthRecordType } from '../store/actions/customHealthRecordTypesActions';
 import {
@@ -103,10 +103,7 @@ function FilePicker({
     }
 
     setIsPreparing(true);
-    const file =
-      getHealthRecordFileType(picked) === 'image'
-        ? ((await compressImageForUse(picked, 'document')) ?? picked)
-        : picked;
+    const file = await shrinkDocumentPhoto(picked);
     setIsPreparing(false);
 
     if (file.size > MAX_HEALTH_RECORD_BYTES) {
