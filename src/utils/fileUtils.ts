@@ -29,6 +29,11 @@ export function isReadableFile({ name, type }: { name: string; type: string }) {
   return result;
 }
 
+/** Whether a picked file is a PDF, the one kind a reader caps by size: a photo is shrunk on the device first. */
+export function isPdf({ name, type }: { name: string; type: string }) {
+  return type === 'application/pdf' || /\.pdf$/i.test(name);
+}
+
 /** Whether this browser can hand these files to its share sheet (false on most desktops). */
 export function canShareFiles(files: File[]) {
   return (
@@ -65,4 +70,12 @@ export async function shareOrDownloadFiles(
     window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   });
   return 'downloaded';
+}
+
+/** Opens a file input's chooser, or the phone's rear camera when `isCamera` (the input's `capture`), so one input serves both buttons. */
+export function openFileChooser(input: HTMLInputElement | null, { isCamera = false } = {}) {
+  if (!input) return;
+  if (isCamera) input.setAttribute('capture', 'environment');
+  else input.removeAttribute('capture');
+  input.click();
 }

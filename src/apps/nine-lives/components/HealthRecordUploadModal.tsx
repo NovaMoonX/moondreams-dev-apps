@@ -1,15 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 import {
   Button,
   Form,
   FormFactories,
-  Input,
   Modal,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Camera, FileUp } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useAppDispatch, useAppSelector } from '@/store';
 import {
   createDateInputField,
@@ -17,6 +19,8 @@ import {
   toDateInputValue,
 } from '@/utils';
 import { getErrorMessage, getStorageErrorMessage } from '@/utils/errorUtils';
+import { openFileChooser } from '@/utils/fileUtils';
+import { compressImageForUse } from '@/utils/imageCompression';
 
 import { createCustomHealthRecordType } from '../store/actions/customHealthRecordTypesActions';
 import {
@@ -86,40 +90,76 @@ function FilePicker({
   disabled?: boolean;
 }) {
   const [error, setError] = useState<string | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const canTakePhoto = useCanTakePhoto();
+  const isBusy = disabled || isPreparing;
+
+  const handleFile = async (picked: File) => {
+    if (!getHealthRecordFileType(picked)) {
+      setError('Unsupported file type. Please choose a PDF or image file.');
+      onValueChange(null);
+      return;
+    }
+
+    setIsPreparing(true);
+    const file =
+      getHealthRecordFileType(picked) === 'image'
+        ? ((await compressImageForUse(picked, 'document')) ?? picked)
+        : picked;
+    setIsPreparing(false);
+
+    if (file.size > MAX_HEALTH_RECORD_BYTES) {
+      setError('That file is too big to keep. Try a photo, or a PDF under 10 MB.');
+      onValueChange(null);
+      return;
+    }
+
+    setError(null);
+    onValueChange(file);
+  };
 
   return (
-    <div className='space-y-1'>
-      <Input
+    <div className='space-y-2'>
+      <input
+        ref={inputRef}
         type='file'
         accept='application/pdf,image/*'
-        disabled={disabled}
+        className='hidden'
+        tabIndex={-1}
+        aria-hidden='true'
         onChange={(event) => {
           const file = event.target.files?.[0] ?? null;
           event.target.value = '';
-
-          if (!file) {
-            return;
-          }
-
-          if (!getHealthRecordFileType(file)) {
-            setError(
-              'Unsupported file type. Please choose a PDF or image file.',
-            );
-            onValueChange(null);
-            return;
-          }
-
-          if (file.size > MAX_HEALTH_RECORD_BYTES) {
-            setError('Health record files must be under 10MB.');
-            onValueChange(null);
-            return;
-          }
-
-          setError(null);
-          onValueChange(file);
+          if (file) void handleFile(file);
         }}
       />
-      {value && <p className='text-muted-foreground text-sm'>{value.name}</p>}
+      <div className={join('grid gap-2', canTakePhoto && 'grid-cols-2')}>
+        {canTakePhoto && (
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+            disabled={isBusy}
+            onClick={() => openFileChooser(inputRef.current, { isCamera: true })}
+          >
+            <Camera className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
+            Take a photo
+          </Button>
+        )}
+        <Button
+          type='button'
+          variant='secondary'
+          className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+          disabled={isBusy}
+          loading={isPreparing}
+          onClick={() => openFileChooser(inputRef.current)}
+        >
+          <FileUp className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
+          {value ? 'Choose another' : 'Choose a file'}
+        </Button>
+      </div>
+      {value && <p className='text-muted-foreground truncate text-sm'>{value.name}</p>}
       {error && <p className='text-sm text-red-500'>{error}</p>}
     </div>
   );

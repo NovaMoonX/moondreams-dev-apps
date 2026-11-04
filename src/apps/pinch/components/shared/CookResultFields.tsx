@@ -115,8 +115,9 @@ function CookResultFields({ uid, cookId, isLarge = false }: CookResultFieldsProp
           <PhotoPicker
             photoUrl={hasPhoto ? (shownUrl ?? '') : null}
             showPreview={false}
+            canTakePhoto
             loading={isUploading || upload.isPreparing}
-            uploadLabel='Add a photo'
+            uploadLabel='Choose a photo'
             changeLabel='Change photo'
             onSelect={(file) => void handlePick(file)}
             onRemove={() => void handleRemove()}

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
+  Camera,
   ImagePlus,
   Layers,
   Pencil,
@@ -17,6 +18,7 @@ import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { maskFigures } from '@apps/runway/utils/maskText';
 import {
@@ -126,6 +128,7 @@ function PurchaseScreen({
   } | null>(null);
   const [groupViewFor, setGroupViewFor] = useState<string | null>(null);
   const receiptChooser = useRef<ReceiptChooser>(null);
+  const canTakePhoto = useCanTakePhoto();
   const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
   const sheetBody = useRef<HTMLDivElement>(null);
   const scrollBeforeReceipt = useRef<number | null>(null);
@@ -509,6 +512,20 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {canTakePhoto && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Camera />}
+                label={SPEND_WORDS.takeReceiptPhoto}
+                isDisabled={
+                  !isReceiptsLoaded ||
+                  isAddingReceipt ||
+                  receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                }
+                onClick={() => receiptChooser.current?.open({ isCamera: true })}
+              />
+            )}
             <ActionRow
               isGrouped
               isRoomy

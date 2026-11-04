@@ -1,10 +1,4 @@
-import {
-  useId,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 
 import { Avatar, Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -12,18 +6,10 @@ import { Camera, ImagePlus, Trash2 } from 'lucide-react';
 
 import ActionChips from '@/components/ActionChips';
 import FallbackImage from '@/components/FallbackImage';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
+import { openFileChooser } from '@/utils/fileUtils';
 
 export type PhotoPickerVariant = 'minimal' | 'enhanced' | 'cover';
-
-const TOUCH_QUERY = '(pointer: coarse)';
-
-const subscribeToPointer = (onChange: () => void) => {
-  const query = window.matchMedia(TOUCH_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-};
-
-const getIsTouch = () => window.matchMedia(TOUCH_QUERY).matches;
 
 interface PhotoPickerProps {
   photoUrl: string | null;
@@ -32,10 +18,12 @@ interface PhotoPickerProps {
   error?: string | null;
   disabled?: boolean;
   loading?: boolean;
-  /** `minimal`: avatar + buttons. `enhanced`: large preview, drag-and-drop zone and helper text. `cover`: a wide preview with choose, take (touch screens only) and remove, for an editor that holds only the picture. */
+  /** `minimal`: avatar + buttons. `enhanced`: large preview, drag-and-drop zone and helper text. `cover`: a wide preview with choose, take and remove, for an editor that holds only the picture. */
   variant?: PhotoPickerVariant;
   /** Minimal variant only: set false when the caller already renders its own preview bound to the same `photoUrl`. */
   showPreview?: boolean;
+  /** Adds "Take a photo" on a touch screen, for a photo of something usually in front of the person (a plate, a pet); never for one they already have (a cover, a profile picture). */
+  canTakePhoto?: boolean;
   uploadLabel?: string;
   changeLabel?: string;
   /** Cover variant only: shown in the preview while there is no photo, or when it can't load. */
@@ -58,6 +46,7 @@ function PhotoPicker({
   loading = false,
   variant = 'minimal',
   showPreview = true,
+  canTakePhoto = false,
   uploadLabel = 'Upload photo',
   changeLabel = 'Change photo',
   placeholder = null,
@@ -68,11 +57,8 @@ function PhotoPicker({
 }: PhotoPickerProps) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  const isTouch = useSyncExternalStore(
-    subscribeToPointer,
-    getIsTouch,
-    () => false,
-  );
+  const isTouch = useCanTakePhoto();
+  const isCameraShown = canTakePhoto && isTouch;
   const [isDragging, setIsDragging] = useState(false);
   const isBusy = disabled || loading;
   const shownUrl = photoUrl ?? fallbackUrl;
@@ -94,13 +80,8 @@ function PhotoPicker({
 
   const errorText = error && <p className='text-sm text-red-500'>{error}</p>;
 
-  const openPicker = (shouldCapture: boolean) => {
-    const input = inputRef.current;
-    if (!input) return;
-    if (shouldCapture) input.setAttribute('capture', 'environment');
-    else input.removeAttribute('capture');
-    input.click();
-  };
+  const openPicker = (isCamera: boolean) =>
+    openFileChooser(inputRef.current, { isCamera });
 
   if (variant === 'cover') {
     return (
@@ -126,7 +107,7 @@ function PhotoPicker({
             placeholder
           )}
         </div>
-        <div className={join('grid gap-2', isTouch && 'grid-cols-2')}>
+        <div className={join('grid gap-2', isCameraShown && 'grid-cols-2')}>
           <Button
             type='button'
             variant='secondary'
@@ -140,7 +121,7 @@ function PhotoPicker({
             />
             {photoUrl ? changeLabel : uploadLabel}
           </Button>
-          {isTouch && (
+          {isCameraShown && (
             <Button
               type='button'
               variant='secondary'
@@ -181,14 +162,27 @@ function PhotoPicker({
   }
 
   const buttons = (
-    <div className='flex items-center gap-2'>
+    <div className='flex flex-wrap items-center justify-center gap-2'>
+      {isCameraShown && (
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          className="relative gap-1.5 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+          disabled={isBusy}
+          onClick={() => openPicker(true)}
+        >
+          <Camera className='h-3.5 w-3.5 shrink-0' aria-hidden='true' />
+          Take a photo
+        </Button>
+      )}
       <Button
         type='button'
         variant='secondary'
         size='sm'
         className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
         disabled={isBusy}
-        onClick={() => inputRef.current?.click()}
+        onClick={() => openPicker(false)}
       >
         {photoUrl ? changeLabel : uploadLabel}
       </Button>

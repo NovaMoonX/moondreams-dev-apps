@@ -16,7 +16,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { useAppSelector } from '@/store';
-import { isReadableFile } from '@/utils/fileUtils';
+import { isPdf, isReadableFile, openFileChooser } from '@/utils/fileUtils';
 import { toWebLink } from '@/utils/urlUtils';
 import IdeaRow from '@apps/pinch/components/ideas/IdeaRow';
 import {
@@ -246,9 +246,9 @@ function RecipeReader({
       rejectFile("That file isn't a photo or a PDF.");
       return;
     }
-    if (next.size > MAX_UPLOAD_BYTES) {
+    if (isPdf(next) && next.size > MAX_UPLOAD_BYTES) {
       rejectFile(
-        'That file is too big to read. Try a photo or a PDF under 10 MB.',
+        'That PDF is too big to read. Try a photo, or a PDF under 10 MB.',
       );
       return;
     }
@@ -482,7 +482,7 @@ function RecipeReader({
           type='button'
           loading={isReading}
           disabled={isReading}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => openFileChooser(fileRef.current)}
         >
           {file !== null && state.status === 'failed'
             ? 'Choose another file'
@@ -533,7 +533,7 @@ function RecipeReader({
           <FilePickCard
             title='Tap to choose a file'
             accepts='Photo, screenshot or PDF'
-            limit={`up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
+            limit={`PDF up to ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB`}
             picked={
               file && {
                 name: file.name,
@@ -544,7 +544,10 @@ function RecipeReader({
             status={getStatusLine()}
             isDisabled={isReading}
             isFilling
-            onPick={() => fileRef.current?.click()}
+            onPick={() => openFileChooser(fileRef.current)}
+            onTakePhoto={() =>
+              openFileChooser(fileRef.current, { isCamera: true })
+            }
             onDropFile={handleFile}
           />
         ) : (

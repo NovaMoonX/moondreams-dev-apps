@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
-import { Button, Input, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
-import { Trash2 } from 'lucide-react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { Camera, FileUp, Trash2 } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useAppDispatch, useAppSelector } from '@/store';
+import { openFileChooser } from '@/utils/fileUtils';
 import { formatDateTime } from '@/utils/formatUtils';
 
 import {
@@ -42,6 +45,8 @@ function DocumentIngestionModal({
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const canTakePhoto = useCanTakePhoto();
 
   const pendingDrafts = useAppSelector(selectIngestionDraftsByHousehold(householdId), shallowEqual);
   const activeDraft = useAppSelector((state) =>
@@ -134,16 +139,42 @@ function DocumentIngestionModal({
         <p className='text-muted-foreground text-sm'>
           Upload a vet PDF or photo and review the structured records it finds before saving.
         </p>
-        <Input
+        <input
+          ref={inputRef}
           type='file'
           accept='application/pdf,image/*'
+          className='hidden'
+          tabIndex={-1}
+          aria-hidden='true'
           onChange={(event) => {
             setFile(event.target.files?.[0] ?? null);
             setError(null);
             event.target.value = '';
           }}
         />
-        {file && <p className='text-muted-foreground text-sm'>{file.name}</p>}
+        <div className={join('grid gap-2', canTakePhoto && 'grid-cols-2')}>
+          {canTakePhoto && (
+            <Button
+              type='button'
+              variant='secondary'
+              className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+              onClick={() => openFileChooser(inputRef.current, { isCamera: true })}
+            >
+              <Camera className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
+              Take a photo
+            </Button>
+          )}
+          <Button
+            type='button'
+            variant='secondary'
+            className='h-11 gap-1.5 px-2.5 whitespace-nowrap'
+            onClick={() => openFileChooser(inputRef.current)}
+          >
+            <FileUp className='h-4 w-4 shrink-0 max-[380px]:hidden' aria-hidden='true' />
+            {file ? 'Choose another' : 'Choose a file'}
+          </Button>
+        </div>
+        {file && <p className='text-muted-foreground truncate text-sm'>{file.name}</p>}
         {error && <p className='text-sm text-red-500'>{error}</p>}
         <div className='flex justify-end gap-2'>
           <Button type='button' variant='secondary' onClick={handleClose}>

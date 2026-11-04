@@ -8,6 +8,7 @@ import RevealChip from '@/components/RevealChip';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { extractReceiptFromFile } from '@/lib/receipts/extractReceiptFromFile';
 import type { ReceiptReading } from '@/lib/receipts/receiptTypes';
+import { isPdf, openFileChooser } from '@/utils/fileUtils';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const FILE_EXTENSIONS = /\.(pdf|jpe?g|png|webp|heic|heif)$/i;
@@ -45,8 +46,8 @@ function ReceiptPhotoStep({ noun = 'receipt', onRead, onManual }: ReceiptPhotoSt
       fail('That file type can’t be read. Try a photo, a screenshot or a PDF.');
       return;
     }
-    if (file.size > MAX_FILE_BYTES) {
-      fail(`That file is too big to read. Try a photo or a PDF under 10 MB.`);
+    if (isPdf(file) && file.size > MAX_FILE_BYTES) {
+      fail('That PDF is too big to read. Try a photo, or a PDF under 10 MB.');
       return;
     }
     setState({ status: 'reading', name: file.name, size: file.size });
@@ -92,11 +93,12 @@ function ReceiptPhotoStep({ noun = 'receipt', onRead, onManual }: ReceiptPhotoSt
       <FilePickCard
         title={`Choose a photo of the ${noun}`}
         accepts='Photo, screenshot or PDF'
-        limit='up to 10 MB'
+        limit='PDF up to 10 MB'
         picked={state.status === 'reading' ? { name: state.name, size: state.size, emoji: '🧾' } : null}
         status={status}
         isDisabled={isReading}
-        onPick={() => inputRef.current?.click()}
+        onPick={() => openFileChooser(inputRef.current)}
+        onTakePhoto={() => openFileChooser(inputRef.current, { isCamera: true })}
         onDropFile={(file) => void handleFile(file)}
       />
       <Input

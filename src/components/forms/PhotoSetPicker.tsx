@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  useSyncExternalStore,
   type ChangeEvent,
   type CSSProperties,
   type PointerEvent,
@@ -32,6 +31,7 @@ import {
   type PhotoSetUploads,
   type PhotoUpload,
 } from '@/hooks/usePhotoSetUploads';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 
 const DEFAULT_MAX = 12;
@@ -39,7 +39,6 @@ const DEFAULT_MAX = 12;
 const REMOVE_DELAY_MS = 6500;
 const FOCUS_AFTER_REMOVAL_MS = 350;
 const PENDING_ORDER_HOLD_MS = 3000;
-const TOUCH_QUERY = '(pointer: coarse)';
 const MOUSE_DRAG_PX = 5;
 const TOUCH_HOLD_MS = 300;
 const TOUCH_SLOP_PX = 8;
@@ -48,14 +47,6 @@ const EDGE_SCROLL_MAX_PX = 12;
 const CLICK_GUARD_MS = 80;
 // Positioning stays with the call site: a `relative` here would beat the `absolute` of a corner button.
 const HIT_AREA = "before:absolute before:-inset-2 before:content-['']";
-
-const subscribeToPointer = (onChange: () => void) => {
-  const query = window.matchMedia(TOUCH_QUERY);
-  query.addEventListener('change', onChange);
-  return () => query.removeEventListener('change', onChange);
-};
-
-const getIsTouch = () => window.matchMedia(TOUCH_QUERY).matches;
 
 /** A photo that is already saved with its record; the first is the cover. */
 export interface PickerPhoto {
@@ -233,11 +224,7 @@ function PhotoSetPicker({
 }: PhotoSetPickerProps) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const libraryRef = useRef<HTMLInputElement>(null);
-  const isTouch = useSyncExternalStore(
-    subscribeToPointer,
-    getIsTouch,
-    () => false,
-  );
+  const isTouch = useCanTakePhoto();
   const addAreaRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const endPress = useRef<(() => void) | null>(null);
