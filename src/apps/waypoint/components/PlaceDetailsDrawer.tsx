@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
 
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Archive, Layers, ListChecks, MessageSquarePlus, Receipt } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import FallbackImage from '@/components/FallbackImage';
 import { getMapNavigationUrl, openMapNavigation } from '@/utils/mapUrlUtils';
 import { useHasExpense, useIsNoExpense } from '@apps/waypoint/hooks/useHasExpense';

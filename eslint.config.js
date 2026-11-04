@@ -29,6 +29,12 @@ export default defineConfig([
               message:
                 "Use '@/components/InlineNotice': Callout hard-codes dark-mode text colours that disappear on a light theme.",
             },
+            {
+              name: '@moondreamsdev/dreamer-ui/components',
+              importNames: ['Drawer'],
+              message:
+                "Use '@/components/Drawer': it closes with a swipe down anywhere on the sheet, the same way its close control does.",
+            },
           ],
         },
       ],
@@ -45,6 +51,10 @@ export default defineConfig([
   {
     files: ['src/components/DateInput.tsx'],
     rules: { 'no-restricted-syntax': 'off' },
+  },
+  {
+    files: ['src/components/Drawer.tsx'],
+    rules: { 'no-restricted-imports': 'off' },
   },
   {
     files: ['scripts/**/*.ts'],
