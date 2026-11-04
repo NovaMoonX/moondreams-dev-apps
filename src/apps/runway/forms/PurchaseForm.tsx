@@ -1912,16 +1912,32 @@ function PurchaseFormBody({
             {SPEND_WORDS.readReceiptSends}
           </p>
           {canTakePhoto && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='h-11 w-full gap-1.5'
-              disabled={reading.isBusy}
-              onClick={() => readChooser.current?.open({ isCamera: true })}
-            >
-              <Camera className='h-4 w-4' aria-hidden='true' />
-              {SPEND_WORDS.takePhoto}
-            </Button>
+            <div className='grid grid-cols-2 gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                className='h-11 gap-1.5 px-2 whitespace-nowrap'
+                disabled={reading.isBusy}
+                onClick={() => readChooser.current?.open({ isCamera: true })}
+              >
+                <Camera
+                  className='h-4 w-4 max-[379px]:hidden'
+                  aria-hidden='true'
+                />
+                {SPEND_WORDS.takePhoto}
+              </Button>
+              <Button
+                type='button'
+                variant='secondary'
+                className='h-11 px-2 whitespace-nowrap'
+                disabled={reading.isBusy}
+                onClick={() => readChooser.current?.open()}
+              >
+                {reading.message === null
+                  ? SPEND_WORDS.readReceiptChoose
+                  : SPEND_WORDS.readReceiptChooseAnother}
+              </Button>
+            </div>
           )}
           <ReceiptFileInput
             chooser={readChooser}
@@ -1948,16 +1964,18 @@ function PurchaseFormBody({
               </Button>
             }
             rightActions={
-              <Button
-                type='button'
-                loading={reading.isBusy}
-                disabled={reading.isBusy}
-                onClick={() => readChooser.current?.open()}
-              >
-                {reading.message === null
-                  ? SPEND_WORDS.readReceiptChoose
-                  : SPEND_WORDS.readReceiptChooseAnother}
-              </Button>
+              canTakePhoto ? null : (
+                <Button
+                  type='button'
+                  loading={reading.isBusy}
+                  disabled={reading.isBusy}
+                  onClick={() => readChooser.current?.open()}
+                >
+                  {reading.message === null
+                    ? SPEND_WORDS.readReceiptChoose
+                    : SPEND_WORDS.readReceiptChooseAnother}
+                </Button>
+              )
             }
           />
         </div>

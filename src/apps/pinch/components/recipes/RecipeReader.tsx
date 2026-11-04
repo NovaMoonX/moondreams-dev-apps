@@ -16,6 +16,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useLinkPreview } from '@/hooks/useLinkPreview';
 import { useAppSelector } from '@/store';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { isReadableFile, openFileChooser } from '@/utils/fileUtils';
 import { fitsReadLimit } from '@/utils/imageCompression';
 import { toWebLink } from '@/utils/urlUtils';
@@ -469,6 +470,8 @@ function RecipeReader({
     ];
   };
 
+  const isTouch = useCanTakePhoto();
+
   const getNote = () => {
     if (method === 'file' || isReading || typed.trim() !== '') {
       return null;
@@ -477,6 +480,7 @@ function RecipeReader({
   };
 
   const getPrimary = () => {
+    if (method === 'file' && isTouch && file === null) return null;
     if (method === 'file') {
       return (
         <Button
