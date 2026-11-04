@@ -40,6 +40,8 @@ export function describeGroupLead(total: GroupTotal, memberCount: number) {
   if (memberCount === 0)
     return { amount: null, rest: GROUP_WORDS.noBills, isOneTime: false };
   const { oneTime } = total;
+  if (total.total.highCents === 0 && oneTime.count === 0 && total.uncounted > 0)
+    return { amount: null, rest: GROUP_WORDS.noSetMonthly, isOneTime: false };
   if (total.total.highCents === 0 && oneTime.count > 0) {
     return {
       amount: describeGroupTotal(oneTime.range),

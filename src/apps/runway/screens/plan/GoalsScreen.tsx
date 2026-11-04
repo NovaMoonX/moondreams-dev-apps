@@ -198,6 +198,15 @@ function GoalsScreen() {
                 <GroupHeading
                   figures={figures}
                   kind='goals'
+                  saved={rows.reduce(
+                    (sum, { item, payload }) => ({
+                      savedCents:
+                        sum.savedCents +
+                        Math.min(heldByItem[item.id] ?? 0, payload.targetCents),
+                      targetCents: sum.targetCents + payload.targetCents,
+                    }),
+                    { savedCents: 0, targetCents: 0 },
+                  )}
                   onOpen={() => setOpenGroupId(figures.id)}
                 />
                 {getList(rows)}

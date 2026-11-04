@@ -540,7 +540,7 @@ function GoalFormBody({
         getPriority(formData) === null
           ? ''
           : PRIORITY_LABELS[getPriority(formData) as Priority],
-      isAnswered: formData.priority !== null,
+      isAnswered: getPriority(formData) !== null,
       isPreAnswered: true,
       render: ({ moveOn }) => (
         <PillGroup

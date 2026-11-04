@@ -2430,6 +2430,8 @@ export const GROUP_WORDS = {
   unset: 'Nothing set',
   oneTimeNote: 'Not in monthly total',
   noBills: 'Nothing here yet',
+  noSetMonthly: 'No set amount a month',
+  savedWord: 'saved',
   nameTaken: (name: string) => `You already have ${name}.`,
   oneTimeDue: (date: string) => `due\u00a0${date}`,
   oneTimeCount: (count: number) => `in ${count} one-time bills`,
