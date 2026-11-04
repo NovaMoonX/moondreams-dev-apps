@@ -9,6 +9,7 @@ import {
   Pencil,
   Receipt,
   Smile,
+  Target,
   Wallet,
 } from 'lucide-react';
 
@@ -43,7 +44,9 @@ import {
   BILL_WORDS,
   FORM_FLOW_WORDS,
   GROUP_WORDS,
+  HOW_OFTEN_WORDS,
   ITEM_SHEET_R2_WORDS,
+  LIFECYCLE_WORDS,
   PRIORITY_DIAL_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
@@ -55,6 +58,7 @@ import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
+import GoalForm from '@apps/runway/forms/GoalForm';
 import ItemRow from '@apps/runway/components/ItemRow';
 import {
   useGroupFigures,
@@ -97,6 +101,8 @@ import type {
   BillVersion,
   EnvelopeSealed,
   EnvelopeVersion,
+  GoalSealed,
+  GoalVersion,
   GroupSealed,
   Priority,
   Schedule,
@@ -151,7 +157,7 @@ const SETTABLE_KINDS: readonly string[] = [
   'monthly',
 ];
 
-/** What a name is for, as a sheet: what its bills and envelopes come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
+/** What a name is for, as a sheet: what its bills, envelopes and goals come to a usual month, which they are, adding one, its name, the priority a new one starts with, and stopping its use. */
 const getWeekday = (date: number) =>
   new Date(date).toLocaleDateString('en-US', {
     weekday: 'long',
@@ -202,7 +208,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const getIncomeDays = useIncomeDaysPerMonth(today);
-  const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
+  const [adding, setAdding] = useState<GroupSection | null>(null);
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
   const [dueText, setDueText] = useState('');
@@ -221,13 +227,16 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     total,
     billsTotal,
     envelopesTotal,
+    goalsTotal,
     bills,
     envelopes,
+    goals,
     names: memberNames,
   } = figures;
   const billCount = bills.length;
   const envelopeCount = envelopes.length;
-  const memberCount = billCount + envelopeCount;
+  const goalCount = goals.length;
+  const memberCount = billCount + envelopeCount + goalCount;
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
@@ -297,32 +306,51 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
 
   const getMemberStretches = (
     versions: RootState['runway']['versions'],
-    kind: 'bill' | 'envelope',
+    kind: GroupSection,
     itemId: string,
     from = today,
-  ): VersionStretch<BillSealed | EnvelopeSealed>[] =>
+  ): VersionStretch<BillSealed | EnvelopeSealed | GoalSealed>[] =>
     kind === 'bill'
       ? getVersionStretches<BillVersion, BillSealed>(
           versions.filter((v): v is BillVersion => v.kind === 'bill'),
           itemId,
           from,
         )
-      : getVersionStretches<EnvelopeVersion, EnvelopeSealed>(
-          versions.filter((v): v is EnvelopeVersion => v.kind === 'envelope'),
-          itemId,
-          from,
-        );
+      : kind === 'envelope'
+        ? getVersionStretches<EnvelopeVersion, EnvelopeSealed>(
+            versions.filter((v): v is EnvelopeVersion => v.kind === 'envelope'),
+            itemId,
+            from,
+          )
+        : getVersionStretches<GoalVersion, GoalSealed>(
+            versions.filter((v): v is GoalVersion => v.kind === 'goal'),
+            itemId,
+            from,
+          );
 
+  const presentSections: GroupSection[] = [
+    ...(billCount > 0 ? (['bill'] as const) : []),
+    ...(envelopeCount > 0 ? (['envelope'] as const) : []),
+    ...(goalCount > 0 ? (['goal'] as const) : []),
+  ];
   const sectionsOf = (row: PriorityRow): GroupSection[] =>
-    row === 'all' ? ['bill', 'envelope'] : [row];
+    row !== 'all'
+      ? [row]
+      : presentSections.length === 0
+        ? ['bill', 'envelope', 'goal']
+        : presentSections;
 
-  type MemberRow = (typeof bills)[number] | (typeof envelopes)[number];
+  type MemberRow =
+    | (typeof bills)[number]
+    | (typeof envelopes)[number]
+    | (typeof goals)[number];
 
   const planPriority = (
     source: {
       versions: RootState['runway']['versions'];
       bills: readonly MemberRow[];
       envelopes: readonly MemberRow[];
+      goals: readonly MemberRow[];
     },
     sections: readonly GroupSection[],
     choice: Priority,
@@ -344,6 +372,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         ...(sections.includes('envelope')
           ? source.envelopes.map(toMember('envelope'))
           : []),
+        ...(sections.includes('goal')
+          ? source.goals.map(toMember('goal'))
+          : []),
       ],
       choice,
       firstRank,
@@ -358,6 +389,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     const state = store.getState();
     const liveBills = selectBills(state, today);
     const liveEnvelopes = selectEnvelopes(state, today);
+    const liveGoals = selectGoals(state, today);
     const isMember = ({ version }: MemberRow) =>
       version.payload.groupId === groupId;
     return planPriority(
@@ -365,13 +397,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         versions: state.runway.versions,
         bills: liveBills.filter(isMember),
         envelopes: liveEnvelopes.filter(isMember),
+        goals: liveGoals.filter(isMember),
       },
       sections,
       choice,
-      getNextTierRank(
-        [...liveBills, ...liveEnvelopes, ...selectGoals(state, today)],
-        choice,
-      ),
+      getNextTierRank([...liveBills, ...liveEnvelopes, ...liveGoals], choice),
     );
   };
 
@@ -531,7 +561,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         row,
         text:
           choice === 'none'
-            ? GROUP_WORDS.priorityNoneSet(row, payload.name)
+            ? GROUP_WORDS.priorityNoneSet(row, payload.name, sections)
             : written.length === 0
               ? GROUP_WORDS.priorityAlready(scope, label)
               : GROUP_WORDS.priorityDone(written.length, label),
@@ -553,7 +583,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     if (!user) return;
     const isConfirmed = await confirm({
       title: GROUP_WORDS.archiveTitle(payload.name),
-      message: GROUP_WORDS.archiveBody(billCount, envelopeCount),
+      message: GROUP_WORDS.archiveBody(billCount, envelopeCount, goalCount),
       confirmText: GROUP_WORDS.archive(payload.name),
       destructive: true,
     });
@@ -567,7 +597,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         encryption,
         {
           itemId: groupId,
-          summary: GROUP_WORDS.archived(payload.name, billCount, envelopeCount),
+          summary: GROUP_WORDS.archived(
+            payload.name,
+            billCount,
+            envelopeCount,
+            goalCount,
+          ),
           note: null,
           heldChoice: null,
         },
@@ -584,10 +619,6 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     }
   };
 
-  const presentSections: GroupSection[] = [
-    ...(billCount > 0 ? (['bill'] as const) : []),
-    ...(envelopeCount > 0 ? (['envelope'] as const) : []),
-  ];
   const priorityRows: PriorityRow[] =
     presentSections.length === 1
       ? presentSections
@@ -599,11 +630,13 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     );
     return picks.every((pick) => pick === picks[0]) ? picks[0] : 'mixed';
   };
-  /** The pick a row stands for: a section's own, or for Everything the one both sections share. */
+  /** The pick a row stands for: a section's own, or for Everything the one every section it covers shares. */
   const getRowPick = (row: PriorityRow): Priority | null => {
     if (row !== 'all') return getSectionPick(payload, row);
-    const bill = getSectionPick(payload, 'bill');
-    return bill === getSectionPick(payload, 'envelope') ? bill : null;
+    const picks = sectionsOf(row).map((section) =>
+      getSectionPick(payload, section),
+    );
+    return picks.every((pick) => pick === picks[0]) ? picks[0] : null;
   };
   /** Who a row covers that is not at its pick, from the live plan; Everything carries it when both sections share one, so the section rows do not repeat it. */
   const getOffPick = (row: PriorityRow): string[] => {
@@ -617,7 +650,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     const pick = getRowPick(row);
     if (pick === null) return [];
     return planPriority(
-      { versions: allVersions, bills, envelopes },
+      { versions: allVersions, bills, envelopes, goals },
       sectionsOf(row),
       pick,
       0,
@@ -908,6 +941,40 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   };
   const trimmedEmoji = emoji.trim();
 
+  /** An envelope's or goal's row at the dial's levels: what it comes to a month, else what each time puts in; `stopped` is the word for one that takes no money, which is not counted. */
+  const getFundedRow = (
+    funded: EnvelopeSealed | GoalSealed,
+    stopped: string | null = null,
+  ) => {
+    if (stopped !== null)
+      return { detail: stopped, figure: null, figureWord: null };
+    const atLevel = fundingAtLevel(funded, dial);
+    const funding = atLevel ?? withExtras(funded);
+    const leftOut =
+      atLevel === null
+        ? []
+        : getExtras(funded).filter((extra) => !isCountedAt(extra.tier, dial));
+    const monthly = describeEnvelopeMonthly(
+      funding,
+      getIncomeDays(funded.funding),
+    );
+    const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
+    return {
+      detail:
+        funding.amount.kind !== 'exact'
+          ? describeFundingShort(funding)
+          : monthly
+            ? `${monthly.payment}${describeExtras(leftOut, formatCentsShort)}`
+            : eachTime,
+      figure:
+        monthly?.figure ??
+        (funding.amount.kind === 'exact'
+          ? formatCents(funding.amount.cents)
+          : null),
+      figureWord: monthly ? BILL_WORDS.aMonth : null,
+    };
+  };
+
   if (adding === 'bill') {
     return (
       <BillForm
@@ -924,6 +991,17 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       <EnvelopeForm
         isOpen
         title='Envelope'
+        presetGroupId={groupId}
+        onClose={onClose}
+        onCancel={() => setAdding(null)}
+      />
+    );
+  }
+  if (adding === 'goal') {
+    return (
+      <GoalForm
+        isOpen
+        title='Goal'
         presetGroupId={groupId}
         onClose={onClose}
         onCancel={() => setAdding(null)}
@@ -1163,19 +1241,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
                   {envelopes.map(({ item, version }) => {
-                    const atLevel = fundingAtLevel(version.payload, dial);
-                    const funding = atLevel ?? withExtras(version.payload);
-                    const leftOut =
-                      atLevel === null
-                        ? []
-                        : getExtras(version.payload).filter(
-                            (extra) => !isCountedAt(extra.tier, dial),
-                          );
-                    const monthly = describeEnvelopeMonthly(
-                      funding,
-                      getIncomeDays(version.payload.funding),
-                    );
-                    const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
+                    const row = getFundedRow(version.payload);
                     return (
                       <ItemRow
                         key={item.id}
@@ -1185,20 +1251,45 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                           version.payload.groupId,
                           purposeEmojis,
                         )}
-                        detail={
-                          funding.amount.kind !== 'exact'
-                            ? describeFundingShort(funding)
-                            : monthly
-                              ? `${monthly.payment}${describeExtras(leftOut, formatCentsShort)}`
-                              : eachTime
-                        }
-                        figure={
-                          monthly?.figure ??
-                          (funding.amount.kind === 'exact'
-                            ? formatCents(funding.amount.cents)
-                            : null)
-                        }
-                        figureWord={monthly ? BILL_WORDS.aMonth : null}
+                        {...row}
+                      />
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+            {goals.length > 0 && (
+              <div className='space-y-1.5'>
+                <p className='text-muted-foreground text-xs'>
+                  <MaskedText>
+                    {getCaption(
+                      GROUP_WORDS.goalsHeading,
+                      goalsTotal,
+                      goalCount,
+                    )}
+                  </MaskedText>
+                </p>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {goals.map(({ item, version }) => {
+                    const { payload: goal } = version;
+                    const row = getFundedRow(
+                      goal,
+                      goal.state === 'paused'
+                        ? LIFECYCLE_WORDS.paused
+                        : goal.funding.cadence.kind === 'none'
+                          ? HOW_OFTEN_WORDS.notBeingAdded
+                          : null,
+                    );
+                    return (
+                      <ItemRow
+                        key={item.id}
+                        name={goal.name}
+                        emoji={resolveItemEmoji(
+                          goal.emoji,
+                          goal.groupId,
+                          purposeEmojis,
+                        )}
+                        {...row}
                       />
                     );
                   })}
@@ -1337,6 +1428,13 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 icon={<Wallet />}
                 label={GROUP_WORDS.addEnvelope(payload.name)}
                 onClick={() => setAdding('envelope')}
+              />
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Target />}
+                label={GROUP_WORDS.addGoal(payload.name)}
+                onClick={() => setAdding('goal')}
               />
               <ActionRow
                 isGrouped

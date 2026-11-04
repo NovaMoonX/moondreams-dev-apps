@@ -373,20 +373,29 @@ export interface CreateGoalInput {
   goal: GoalSealed;
   /** The first day this goal is in the plan. */
   startDate: number;
+  /** A group the person named while adding the goal; it is written in the same batch and the goal joins it. */
+  newGroup?: GroupSealed | null;
 }
 
 /**
- * Adds a goal as a header, a first version and one change entry in a single batch. Items and
- * versions are created and never updated; nothing is written to `days`.
+ * Adds a goal as a header, a first version and one change entry in a single batch, with the new
+ * group's three documents beside them when the goal names one. Items and versions are created and
+ * never updated; nothing is written to `days`.
  */
 export async function createGoal(
   uid: string,
   encryption: RunwayEncryption,
-  { goal, startDate }: CreateGoalInput,
+  { goal: draftGoal, startDate, newGroup = null }: CreateGoalInput,
 ): Promise<{ goalId: string }> {
   const now = Date.now();
   const goalId = generateUuid();
   const changeId = generateUuid();
+  const groupDocs = newGroup
+    ? await buildGroupDocs(encryption, { group: newGroup, startDate }, now)
+    : null;
+  const goal: GoalSealed = groupDocs
+    ? { ...draftGoal, groupId: groupDocs.groupId }
+    : draftGoal;
   const dateText =
     goal.targetDate === null
       ? ''
@@ -429,6 +438,14 @@ export async function createGoal(
   };
 
   const batch = writeBatch(db);
+  if (groupDocs) {
+    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
+    batch.set(
+      itemPath(uid, 'versions', groupDocs.version.id),
+      groupDocs.version,
+    );
+    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
+  }
   batch.set(itemPath(uid, 'items', goalId), header);
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
@@ -450,7 +467,7 @@ export interface ChangeItemInput {
   changeEffectiveFrom?: number | null;
   /** The first day the change no longer covers, so the version before it returns; null lasts until superseded. */
   effectiveUntil?: number | null;
-  /** A group the person named while changing a bill; it is written in the same batch and the bill joins it. */
+  /** A group the person named while changing a bill, envelope or goal; it is written in the same batch and the bill joins it. */
   newGroup?: GroupSealed | null;
   /** For a change to one field only: the item's stretches from `effectiveFrom` on, each written as its own version so later and temporary versions keep their amounts and dates. */
   stretches?: VersionStretch<ItemPayload>[];
@@ -473,7 +490,10 @@ export async function changeItem(
     note: input.note,
   };
   const groupDocs =
-    input.newGroup && (input.kind === 'bill' || input.kind === 'envelope')
+    input.newGroup &&
+    (input.kind === 'bill' ||
+      input.kind === 'envelope' ||
+      input.kind === 'goal')
       ? await buildGroupDocs(
           encryption,
           { group: input.newGroup, startDate: input.effectiveFrom },
@@ -483,7 +503,7 @@ export async function changeItem(
   const withGroup = (payload: ItemPayload): ItemPayload =>
     groupDocs
       ? {
-          ...(payload as BillSealed | EnvelopeSealed),
+          ...(payload as BillSealed | EnvelopeSealed | GoalSealed),
           groupId: groupDocs.groupId,
         }
       : payload;
@@ -606,7 +626,7 @@ export interface SetGroupPriorityInput {
   /** Each member's stretches from today on, as they will read. */
   members: {
     itemId: string;
-    kind: 'bill' | 'envelope';
+    kind: 'bill' | 'envelope' | 'goal';
     stretches: VersionStretch<ItemPayload>[];
   }[];
   summary: string;

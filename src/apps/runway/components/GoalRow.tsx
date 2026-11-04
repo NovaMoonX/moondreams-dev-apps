@@ -16,6 +16,7 @@ import {
 import type { Pace } from '@apps/runway/engine/pace';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { getExtras } from '@apps/runway/engine/parts';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
@@ -80,6 +81,7 @@ function GoalRow({
   onRequestDone,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const emoji = useItemEmoji(goal.emoji, goal.groupId);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
   const paceLine = `${detailLead === null ? '' : `${detailLead} · `}${describePaceShort(goal, pace, savedCents)}${
@@ -93,7 +95,7 @@ function GoalRow({
     <>
       <ItemRow
         name={goal.name}
-        emoji={goal.emoji}
+        emoji={emoji}
         detail={isPart ? funding : paceLine}
         figure={
           isPart && goal.funding.amount.kind === 'exact'

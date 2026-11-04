@@ -1830,7 +1830,7 @@ export const FORM_FLOW_WORDS = {
   priority: 'How much it matters',
   groupTitle: "What's it for?",
   groupHelp:
-    "Tie together the bills and envelopes that look after the same thing, like Pets or Home, to see what it costs you each month. It doesn't change how anything is funded.",
+    "Tie together the bills, envelopes and goals that look after the same thing, like Pets or Home, to see what it costs you each month. It doesn't change how anything is funded.",
   group: 'For',
   noGroup: 'Nothing set',
   newGroup: 'Something else',
@@ -2331,8 +2331,9 @@ export const GROUP_WORDS = {
     `${name}: ${change}, from ${from}.`,
   ungrouped: 'Other bills',
   ungroupedEnvelopes: 'Other envelopes',
+  ungroupedGoals: 'Other goals',
   setTip:
-    'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
+    'Tip: say what a bill, envelope or goal is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
   saved: 'saved',
   goalsHelpTitle: 'What your goals add up to',
@@ -2343,25 +2344,34 @@ export const GROUP_WORDS = {
   nameLabel: 'Name',
   startingPriority: 'Priority',
   startingPriorityHelp:
-    'Each bill or envelope here takes the priority you pick, with any extra folded into one amount, and so does a new one you add. You see what changes before anything is saved. None changes nothing now; a new one starts at Should.',
+    'Each bill, envelope or goal here takes the priority you pick, with any extra folded into one amount, and so does a new one you add. You see what changes before anything is saved. None changes nothing now; a new one starts at Should.',
   priorityRowLabel: {
     all: 'Everything',
     bill: 'Bills',
     envelope: 'Envelopes',
-  } as Record<'all' | 'bill' | 'envelope', string>,
+    goal: 'Goals',
+  } as Record<'all' | 'bill' | 'envelope' | 'goal', string>,
   priorityMixed: 'Mixed',
-  priorityScope: (row: 'all' | 'bill' | 'envelope', group: string) =>
+  priorityScope: (row: 'all' | 'bill' | 'envelope' | 'goal', group: string) =>
     row === 'all'
       ? `everything in ${group}`
       : row === 'bill'
         ? `${group}'s bills`
-        : `${group}'s envelopes`,
+        : row === 'envelope'
+          ? `${group}'s envelopes`
+          : `${group}'s goals`,
   priorityConfirmTitle: (scope: string, priority: string) =>
     `Set ${scope} to ${priority}?`,
   priorityConfirmLead: (priority: string) =>
     `New ones you add start at ${priority} too. This replaces the priority set on each of these:`,
-  priorityNoneSet: (row: 'all' | 'bill' | 'envelope', group: string) =>
-    `New ${row === 'all' ? 'bills and envelopes' : row === 'bill' ? 'bills' : 'envelopes'} in ${group} start at Should, as they do anywhere. Nothing already there changed.`,
+  priorityNoneSet: (
+    row: 'all' | 'bill' | 'envelope' | 'goal',
+    group: string,
+    kinds: readonly ('bill' | 'envelope' | 'goal')[],
+  ) =>
+    `New ${joinNames(
+      (row === 'all' ? kinds : [row]).map((kind) => `${kind}s`),
+    )} in ${group} start at Should, as they do anywhere. Nothing already there changed.`,
   priorityMoves: (name: string, from: string, to: string) =>
     `${name} goes from ${from} to ${to}`,
   priorityFolds: (
@@ -2397,27 +2407,31 @@ export const GROUP_WORDS = {
   priorityApplying: 'Changing priorities…',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
-  archiveSub: 'Its bills and envelopes stay, with nothing set.',
+  archiveSub: 'Its bills, envelopes and goals stay, with nothing set.',
   archiveTitle: (name: string) => `Stop using ${name}?`,
-  archiveBody: (bills: number, envelopes: number) =>
-    bills + envelopes === 0
+  archiveBody: (bills: number, envelopes: number, goals: number) =>
+    bills + envelopes + goals === 0
       ? 'Nothing is for it right now.'
-      : `Its ${countMembers(bills, envelopes)} stay in your plan, with nothing set.`,
-  archived: (name: string, bills: number, envelopes: number) =>
-    bills + envelopes === 0
+      : `Its ${countMembers(bills, envelopes, goals)} stay in your plan, with nothing set.`,
+  archived: (name: string, bills: number, envelopes: number, goals: number) =>
+    bills + envelopes + goals === 0
       ? `Stopped using ${name}.`
-      : `Stopped using ${name}. Its ${countMembers(bills, envelopes)} now have nothing set.`,
+      : `Stopped using ${name}. Its ${countMembers(bills, envelopes, goals)} now have nothing set.`,
   archivedToast: (name: string) => `Stopped using ${name}`,
   addBill: (name: string) => `Add a bill for ${name}`,
   addEnvelope: (name: string) => `Add an envelope for ${name}`,
+  addGoal: (name: string) => `Add a goal for ${name}`,
   billsHeading: 'Bills',
   envelopesHeading: 'Envelopes',
+  goalsHeading: 'Goals',
   changeLabel: 'For',
   inGroup: 'For',
   none: 'Nothing',
   unset: 'Nothing set',
   oneTimeNote: 'Not in monthly total',
-  noBills: 'No bills or envelopes yet',
+  noBills: 'Nothing here yet',
+  noSetMonthly: 'No set amount a month',
+  savedWord: 'saved',
   nameTaken: (name: string) => `You already have ${name}.`,
   oneTimeDue: (date: string) => `due\u00a0${date}`,
   oneTimeCount: (count: number) => `in ${count} one-time bills`,
@@ -2439,36 +2453,41 @@ export const GROUP_WORDS = {
   ofWord: 'of',
   basisTitle: 'How a month is worked out',
   rangeTotal:
-    'A bill or envelope that varies counts at its low and its high amount, so the total is a range.',
+    'A bill, envelope or goal that varies counts at its low and its high amount, so the total is a range.',
   basis:
-    'A usual month: each repeating bill at what it comes to in an average month, and each envelope at what it gets in one. A one-time bill is not in it.',
+    'A usual month: each repeating bill at what it comes to in an average month, and each envelope or active goal at what it gets in one. A one-time bill is not in it.',
   onlyBills: (name: string, part: string | null, whole: string | null) =>
     part === null || whole === null
-      ? `This counts bills only. Tap ${name} to see both.`
-      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+      ? `This counts bills only. Tap ${name} to see everything in it.`
+      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
   onlyEnvelopes: (name: string, part: string | null, whole: string | null) =>
     part === null || whole === null
-      ? `This counts envelopes only. Tap ${name} to see both.`
-      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+      ? `This counts envelopes only. Tap ${name} to see everything in it.`
+      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
+  onlyGoals: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts goals only. Tap ${name} to see everything in it.`
+      : `Goals come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
   chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
   changeEmoji: (name: string) => `Change the emoji for ${name}`,
   emojiLabel: 'Emoji',
   removeEmoji: 'Remove emoji',
   uncounted: (count: number) =>
     count === 1
-      ? 'One envelope or bill has no regular amount or schedule, so it is not in this total.'
-      : `${count} envelopes or bills have no regular amount or schedule, so they are not in this total.`,
+      ? 'One bill, envelope or goal has no regular amount or schedule, so it is not in this total.'
+      : `${count} bills, envelopes and goals have no regular amount or schedule, so they are not in this total.`,
 } as const;
 
-const countMembers = (bills: number, envelopes: number) =>
-  [
-    bills > 0 ? `${bills} ${bills === 1 ? 'bill' : 'bills'}` : null,
-    envelopes > 0
-      ? `${envelopes} ${envelopes === 1 ? 'envelope' : 'envelopes'}`
-      : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' and ');
+const countMembers = (bills: number, envelopes: number, goals: number) =>
+  joinNames(
+    [
+      bills > 0 ? `${bills} ${bills === 1 ? 'bill' : 'bills'}` : null,
+      envelopes > 0
+        ? `${envelopes} ${envelopes === 1 ? 'envelope' : 'envelopes'}`
+        : null,
+      goals > 0 ? `${goals} ${goals === 1 ? 'goal' : 'goals'}` : null,
+    ].filter((part): part is string => part !== null),
+  );
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {

@@ -126,7 +126,10 @@ function BillsScreen() {
         rows.length > 0 ||
         (needle === '' &&
           !isNarrowed &&
-          figures.bills.length + figures.envelopes.length === 0),
+          figures.bills.length +
+            figures.envelopes.length +
+            figures.goals.length ===
+            0),
     );
   const isShowingTip =
     bills.length >= TIP_MIN_ROWS &&

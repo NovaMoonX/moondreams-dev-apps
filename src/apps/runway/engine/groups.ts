@@ -120,7 +120,7 @@ export function toMonthlyEnvelopeCents(
 }
 
 /**
- * What a group's bills and envelopes come to in a usual month: each repeating bill at its monthly
+ * What a group's bills, envelopes and goals come to in a usual month: each repeating bill at its monthly
  * average, each envelope with an exact amount and a regular beat at what it gets in a month
  * (an income-day envelope with no regular pay to count is left out), nothing for an item that has
  * not begun or has ended by the month holding `on`. A one-time bill is not part of a usual month;
