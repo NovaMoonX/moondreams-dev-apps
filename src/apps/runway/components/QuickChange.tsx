@@ -45,9 +45,11 @@ function QuickChange({
   const isMoney = MONEY_STEPS.includes(step.id);
   const isShort = useIsShortScreen(599);
   const isLandscape = useIsShortScreen(419);
-  const shownIds = rowIds.slice(
-    0,
-    isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length,
+  const rowLimit = isShort && !isLandscape ? SHORT_SCREEN_ROWS : rowIds.length;
+  const limitedIds = rowIds.slice(0, rowLimit);
+  // The soft keyboard changes the viewport's height, and a row that owns an open sheet must stay in whichever list holds it or the sheet unmounts.
+  const shownIds = rowIds.filter(
+    (id) => limitedIds.includes(id) || id === flow.reopenedId,
   );
   const rows = shownIds
     .map((id) => flow.steps.find((other) => other.id === id))
@@ -61,13 +63,18 @@ function QuickChange({
     hasReviewed: true,
   });
   const rest = flow.steps.filter(
-    (other) => other.id !== step.id && !shownIds.includes(other.id),
+    (other) => other.id !== step.id && !limitedIds.includes(other.id),
+  );
+  const allSteps = flow.steps.filter(
+    (other) =>
+      other.id !== step.id &&
+      (!limitedIds.includes(other.id) || other.id === flow.reopenedId),
   );
   if (isAll) {
     return (
       <div className='space-y-4'>
         <BackLink onBack={onBack} />
-        <QuestionFlow flow={toRows(rest)} shouldFocus={false} />
+        <QuestionFlow flow={toRows(allSteps)} shouldFocus={false} />
         {after}
       </div>
     );
