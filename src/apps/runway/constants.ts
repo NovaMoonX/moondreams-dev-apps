@@ -278,6 +278,7 @@ export const PRIORITY_DIAL_WORDS = {
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
   notCounted: 'Not in this total',
+  notCountedShort: 'not counted',
   sheetSuffix: { must: 'Musts only', should: 'without Wants' },
   /** After a goal's finish date counted at the dial: "reaches it May 2027 on Musts". */
   paceSuffix: { must: 'on Musts', should: 'without Wants' },
@@ -2340,10 +2341,60 @@ export const GROUP_WORDS = {
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,
   nameLabel: 'Name',
-  startingPriority: 'Starting priority',
+  startingPriority: 'Priority',
   startingPriorityHelp:
-    'A new bill or envelope for this starts with this priority; with None, it starts at Should. You can still change it on the bill or envelope.',
-  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+    'Each bill or envelope here takes the priority you pick, with any extra folded into one amount, and so does a new one you add. You see what changes before anything is saved. None changes nothing now; a new one starts at Should.',
+  priorityRowLabel: {
+    all: 'Everything',
+    bill: 'Bills',
+    envelope: 'Envelopes',
+  } as Record<'all' | 'bill' | 'envelope', string>,
+  priorityMixed: 'Mixed',
+  priorityScope: (row: 'all' | 'bill' | 'envelope', group: string) =>
+    row === 'all'
+      ? `everything in ${group}`
+      : row === 'bill'
+        ? `${group}'s bills`
+        : `${group}'s envelopes`,
+  priorityConfirmTitle: (scope: string, priority: string) =>
+    `Set ${scope} to ${priority}?`,
+  priorityConfirmLead: (priority: string) =>
+    `New ones you add start at ${priority} too. This replaces the priority set on each of these:`,
+  priorityNoneSet: (row: 'all' | 'bill' | 'envelope', group: string) =>
+    `New ${row === 'all' ? 'bills and envelopes' : row === 'bill' ? 'bills' : 'envelopes'} in ${group} start at Should, as they do anywhere. Nothing already there changed.`,
+  priorityMoves: (name: string, from: string, to: string) =>
+    `${name} goes from ${from} to ${to}`,
+  priorityFolds: (
+    name: string,
+    priority: string,
+    total: string | null,
+    parts: string[],
+  ) =>
+    `${name} becomes ${priority} for ${total === null ? 'its full amount' : `the full ${total}`} (was ${parts.join(' + ')})`,
+  priorityAlsoMoves: (fold: string, from: string, to: string) =>
+    `${fold}; where it was ${from}, it becomes ${to} too`,
+  priorityConfirmMore: (count: number) => `and ${count} more`,
+  priorityConfirm: (priority: string) => `Set to ${priority}`,
+  prioritySummary: (
+    priority: string,
+    group: string,
+    lines: string[],
+    date: string,
+  ) =>
+    `Set to ${priority} with the ${group} group, from ${date}: ${lines.join('; ')}.`,
+  priorityDone: (count: number, priority: string) =>
+    `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}.`,
+  priorityAlready: (scope: string, priority: string) =>
+    `${scope.charAt(0).toUpperCase()}${scope.slice(1)} ${scope.startsWith('everything') ? 'is' : 'are'} already ${priority}.`,
+  priorityStale: (names: string[], priority: string) =>
+    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not fully ${priority}.`,
+  priorityMakeAll: (priority: string) => `Make all ${priority}`,
+  priorityFailed: 'The priority did not save. Nothing was changed.',
+  priorityMoved:
+    'Something in this group changed while you were deciding, so nothing was saved. Pick the priority again to see the new list.',
+  priorityTooMany:
+    'That changes too many items to save at once. Change one section at a time.',
+  priorityApplying: 'Changing priorities…',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
   archiveSub: 'Its bills and envelopes stay, with nothing set.',

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   Archive,
   CalendarDays,
@@ -64,9 +65,14 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
   changeItem,
+  MAX_REORDER_WRITES,
+  setGroupPriority,
 } from '@apps/runway/store/actions/itemActions';
 import {
   selectBillPayments,
+  selectBills,
+  selectEnvelopes,
+  selectGoals,
   selectGroups,
   selectStance,
   selectAllPurposeEmojis,
@@ -78,9 +84,19 @@ import {
   type VersionStretch,
 } from '@apps/runway/engine/resolve';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
+import {
+  getSectionPick,
+  planGroupPriority,
+  withSectionPick,
+  type GroupPriorityChange,
+  type GroupSection,
+} from '@apps/runway/utils/groupPriority';
 import type {
   BillSealed,
   BillVersion,
+  EnvelopeSealed,
+  EnvelopeVersion,
   GroupSealed,
   Priority,
   Schedule,
@@ -103,6 +119,10 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
+type PriorityRow = 'all' | GroupSection;
+
+/** How many changes a priority's confirmation names before it counts the rest. */
+const PRIORITY_CONFIRM_ROWS = 6;
 
 interface DueWritten {
   itemId: string;
@@ -170,10 +190,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [priorityError, setPriorityError] = useState<string | null>(null);
-  const [pickedPriority, setPickedPriority] = useState<StartingChoice | null>(
-    null,
-  );
+  const [priorityNote, setPriorityNote] = useState<{
+    row: PriorityRow;
+    text: string;
+    isError: boolean;
+  } | null>(null);
+  const [pendingPriority, setPendingPriority] = useState<{
+    row: PriorityRow;
+    choice: StartingChoice;
+  } | null>(null);
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const getIncomeDays = useIncomeDaysPerMonth(today);
@@ -188,6 +213,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const store = useStore<RootState>();
   const handledUndos = useRef(new WeakSet<DueWritten[]>());
   const [isUndoingDue, setIsUndoingDue] = useState(false);
+  const isApplyingPriority = useRef(false);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -205,9 +231,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
+  const getLivePayload = () =>
+    selectGroups(store.getState(), today).find(
+      ({ item }) => item.id === groupId,
+    )?.version.payload ?? payload;
+
   const save = async (
     next: GroupSealed,
     isQuiet = false,
+    before: GroupSealed = payload,
   ): Promise<string | null> => {
     if (!user) return null;
     if (!isQuiet) setIsSaving(true);
@@ -217,7 +249,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         itemId: groupId,
         kind: 'group',
         payload: next,
-        summary: `${next.name}: ${describeChange(payload, next, getCardNamer([]))}, from ${formatDateOrdinalUTC(today)}.`,
+        summary: `${next.name}: ${describeChange(before, next, getCardNamer([])) || 'Updated'}, from ${formatDateOrdinalUTC(today)}.`,
         note: null,
         effectiveFrom: today,
       });
@@ -263,17 +295,258 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     else setError(failure);
   };
 
-  const setStartingPriority = async (choice: StartingChoice) => {
-    setPriorityError(null);
-    setPickedPriority(choice);
-    const failure = await save(
-      { ...payload, startingPriority: choice === 'none' ? null : choice },
-      true,
+  const getMemberStretches = (
+    versions: RootState['runway']['versions'],
+    kind: 'bill' | 'envelope',
+    itemId: string,
+    from = today,
+  ): VersionStretch<BillSealed | EnvelopeSealed>[] =>
+    kind === 'bill'
+      ? getVersionStretches<BillVersion, BillSealed>(
+          versions.filter((v): v is BillVersion => v.kind === 'bill'),
+          itemId,
+          from,
+        )
+      : getVersionStretches<EnvelopeVersion, EnvelopeSealed>(
+          versions.filter((v): v is EnvelopeVersion => v.kind === 'envelope'),
+          itemId,
+          from,
+        );
+
+  const sectionsOf = (row: PriorityRow): GroupSection[] =>
+    row === 'all' ? ['bill', 'envelope'] : [row];
+
+  type MemberRow = (typeof bills)[number] | (typeof envelopes)[number];
+
+  const planPriority = (
+    source: {
+      versions: RootState['runway']['versions'];
+      bills: readonly MemberRow[];
+      envelopes: readonly MemberRow[];
+    },
+    sections: readonly GroupSection[],
+    choice: Priority,
+    firstRank: number,
+  ) => {
+    const toMember =
+      (kind: GroupSection) =>
+      ({ item, version }: MemberRow) => ({
+        kind,
+        itemId: item.id,
+        name: version.payload.name,
+        stretches: getMemberStretches(source.versions, kind, item.id),
+      });
+    return planGroupPriority(
+      [
+        ...(sections.includes('bill')
+          ? source.bills.map(toMember('bill'))
+          : []),
+        ...(sections.includes('envelope')
+          ? source.envelopes.map(toMember('envelope'))
+          : []),
+      ],
+      choice,
+      firstRank,
     );
-    setPriorityError(
-      failure === null ? null : GROUP_WORDS.startingPriorityFailed,
+  };
+
+  /** The group's members and every stretch of each as the store holds them now, so a write after a confirm sees edits made meanwhile. */
+  const planPriorityNow = (
+    sections: readonly GroupSection[],
+    choice: Priority,
+  ) => {
+    const state = store.getState();
+    const liveBills = selectBills(state, today);
+    const liveEnvelopes = selectEnvelopes(state, today);
+    const isMember = ({ version }: MemberRow) =>
+      version.payload.groupId === groupId;
+    return planPriority(
+      {
+        versions: state.runway.versions,
+        bills: liveBills.filter(isMember),
+        envelopes: liveEnvelopes.filter(isMember),
+      },
+      sections,
+      choice,
+      getNextTierRank(
+        [...liveBills, ...liveEnvelopes, ...selectGoals(state, today)],
+        choice,
+      ),
     );
-    setPickedPriority((current) => (current === choice ? null : current));
+  };
+
+  /** One line of a priority's confirmation; the dialog sits outside the sheet, so amounts are left out while hidden. */
+  const describePriorityChange = (
+    change: GroupPriorityChange,
+    label: string,
+    isMasked: boolean,
+  ): string => {
+    const { folded } = change;
+    if (folded === null)
+      return GROUP_WORDS.priorityMoves(
+        change.name,
+        change.wasPriority === null
+          ? label
+          : PRIORITY_LABELS[change.wasPriority],
+        label,
+      );
+    const parts = [
+      { cents: folded.cents, tier: folded.priority },
+      ...folded.extras,
+    ].map(({ cents, tier }) =>
+      isMasked
+        ? PRIORITY_LABELS[tier]
+        : `${formatCents(cents)} ${PRIORITY_LABELS[tier]}`,
+    );
+    const fold = GROUP_WORDS.priorityFolds(
+      change.name,
+      label,
+      isMasked ? null : formatCents(folded.totalCents),
+      parts,
+    );
+    return change.wasPriority === null || change.wasPriority === folded.priority
+      ? fold
+      : GROUP_WORDS.priorityAlsoMoves(
+          fold,
+          PRIORITY_LABELS[change.wasPriority],
+          label,
+        );
+  };
+
+  const pickPriority = async (row: PriorityRow, choice: StartingChoice) => {
+    if (!user || isApplyingPriority.current) return;
+    isApplyingPriority.current = true;
+    try {
+      const sections = sectionsOf(row);
+      const readPlan = () => {
+        const live = getLivePayload();
+        const next = withSectionPick(
+          live,
+          sections,
+          choice === 'none' ? null : choice,
+        );
+        const isPickSame = sections.every(
+          (section) =>
+            getSectionPick(live, section) === getSectionPick(next, section),
+        );
+        const changes =
+          choice === 'none' ? [] : planPriorityNow(sections, choice);
+        const writeCount =
+          (isPickSame ? 0 : 1) +
+          changes.reduce((sum, { written }) => sum + written.length, 0);
+        const key = JSON.stringify([
+          next,
+          changes.map(({ itemId, written }) => [itemId, written]),
+        ]);
+        return { live, next, isPickSame, changes, writeCount, key };
+      };
+      const plan = readPlan();
+      const { changes } = plan;
+      const label =
+        choice === 'none' ? GROUP_WORDS.noPriority : PRIORITY_LABELS[choice];
+      const scope = GROUP_WORDS.priorityScope(row, payload.name);
+      if (changes.length === 0 && plan.isPickSame) {
+        setPriorityNote(
+          choice === 'none'
+            ? null
+            : {
+                row,
+                text: GROUP_WORDS.priorityAlready(scope, label),
+                isError: false,
+              },
+        );
+        return;
+      }
+      if (plan.writeCount > MAX_REORDER_WRITES) {
+        setPriorityNote({
+          row,
+          text: GROUP_WORDS.priorityTooMany,
+          isError: true,
+        });
+        return;
+      }
+      if (changes.length > 0) {
+        const shown = changes.slice(0, PRIORITY_CONFIRM_ROWS);
+        const isConfirmed = await confirm({
+          title: GROUP_WORDS.priorityConfirmTitle(scope, label),
+          message: (
+            <div className='space-y-2 text-left text-sm'>
+              <p>{GROUP_WORDS.priorityConfirmLead(label)}</p>
+              <ul className='list-disc space-y-1 pl-5'>
+                {shown.map((change) => (
+                  <li key={change.itemId}>
+                    {describePriorityChange(change, label, isHidden)}
+                  </li>
+                ))}
+              </ul>
+              {changes.length > shown.length && (
+                <p className='text-muted-foreground'>
+                  {GROUP_WORDS.priorityConfirmMore(
+                    changes.length - shown.length,
+                  )}
+                </p>
+              )}
+            </div>
+          ),
+          confirmText: GROUP_WORDS.priorityConfirm(label),
+        });
+        if (!isConfirmed) return;
+      }
+      setPriorityNote(null);
+      setPendingPriority({ row, choice });
+      const encryption = await getRunwayEncryption(user.uid);
+      const fresh = readPlan();
+      if (fresh.key !== plan.key) {
+        setPriorityNote({
+          row,
+          text: GROUP_WORDS.priorityMoved,
+          isError: true,
+        });
+        return;
+      }
+      const { live, next, isPickSame, changes: written } = fresh;
+      const date = formatDateOrdinalUTC(today);
+      await setGroupPriority(user.uid, encryption, {
+        groupId,
+        group: isPickSame ? null : next,
+        members: written.map((change) => ({
+          itemId: change.itemId,
+          kind: change.kind,
+          stretches: change.written,
+        })),
+        summary:
+          written.length === 0
+            ? `${next.name}: ${describeChange(live, next, getCardNamer([])) || 'Updated'}, from ${date}.`
+            : GROUP_WORDS.prioritySummary(
+                label,
+                next.name,
+                written.map((change) =>
+                  describePriorityChange(change, label, false),
+                ),
+                date,
+              ),
+        effectiveFrom: today,
+      });
+      setPriorityNote({
+        row,
+        text:
+          choice === 'none'
+            ? GROUP_WORDS.priorityNoneSet(row, payload.name)
+            : written.length === 0
+              ? GROUP_WORDS.priorityAlready(scope, label)
+              : GROUP_WORDS.priorityDone(written.length, label),
+        isError: false,
+      });
+    } catch (pickError) {
+      setPriorityNote({
+        row,
+        text: getErrorMessage(pickError, GROUP_WORDS.priorityFailed),
+        isError: true,
+      });
+    } finally {
+      isApplyingPriority.current = false;
+      setPendingPriority(null);
+    }
   };
 
   const archive = async () => {
@@ -309,6 +582,46 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       setError(getErrorMessage(archiveError, GROUP_WORDS.archiveFailed));
       setIsSaving(false);
     }
+  };
+
+  const presentSections: GroupSection[] = [
+    ...(billCount > 0 ? (['bill'] as const) : []),
+    ...(envelopeCount > 0 ? (['envelope'] as const) : []),
+  ];
+  const priorityRows: PriorityRow[] =
+    presentSections.length === 1
+      ? presentSections
+      : ['all', ...presentSections];
+  const getRowValue = (row: PriorityRow): StartingChoice | 'mixed' => {
+    if (pendingPriority?.row === row) return pendingPriority.choice;
+    const picks = sectionsOf(row).map(
+      (section) => getSectionPick(payload, section) ?? 'none',
+    );
+    return picks.every((pick) => pick === picks[0]) ? picks[0] : 'mixed';
+  };
+  /** The pick a row stands for: a section's own, or for Everything the one both sections share. */
+  const getRowPick = (row: PriorityRow): Priority | null => {
+    if (row !== 'all') return getSectionPick(payload, row);
+    const bill = getSectionPick(payload, 'bill');
+    return bill === getSectionPick(payload, 'envelope') ? bill : null;
+  };
+  /** Who a row covers that is not at its pick, from the live plan; Everything carries it when both sections share one, so the section rows do not repeat it. */
+  const getOffPick = (row: PriorityRow): string[] => {
+    if (pendingPriority !== null) return [];
+    if (
+      row !== 'all' &&
+      priorityRows.includes('all') &&
+      getRowPick('all') !== null
+    )
+      return [];
+    const pick = getRowPick(row);
+    if (pick === null) return [];
+    return planPriority(
+      { versions: allVersions, bills, envelopes },
+      sectionsOf(row),
+      pick,
+      0,
+    ).map(({ name }) => name);
   };
 
   const dueDate = fromDateInputValue(dueText);
@@ -625,7 +938,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       title={payload.emoji ? `${payload.emoji} ${payload.name}` : payload.name}
       actions={<ValuesEyeButton />}
     >
-      <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
+      <div className='sheet-scrolls space-y-4 [@media(max-height:599px)]:space-y-2.5'>
         {isPickingEmoji ? (
           <>
             <BackLink onBack={() => setIsPickingEmoji(false)} />
@@ -892,28 +1205,87 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </ul>
               </div>
             )}
-            <div className='space-y-1.5'>
+            <div className='space-y-3'>
               <div className='flex items-center gap-1'>
-                <p className='text-muted-foreground text-xs'>
+                <h3 className='text-sm font-semibold'>
                   {GROUP_WORDS.startingPriority}
-                </p>
+                </h3>
                 <HelpTip title={GROUP_WORDS.startingPriority}>
                   <p>{GROUP_WORDS.startingPriorityHelp}</p>
                 </HelpTip>
               </div>
-              <PillGroup
-                label={GROUP_WORDS.startingPriority}
-                options={startingOptions}
-                value={pickedPriority ?? payload.startingPriority ?? 'none'}
-                onChange={(choice: StartingChoice) =>
-                  void setStartingPriority(choice)
-                }
-              />
-              {priorityError && (
-                <p className='text-destructive text-sm' role='alert'>
-                  {priorityError}
-                </p>
-              )}
+              {priorityRows.map((row) => {
+                const value = getRowValue(row);
+                const offPick = getOffPick(row);
+                const pick = getRowPick(row);
+                const note = priorityNote?.row === row ? priorityNote : null;
+                const rowLabel = GROUP_WORDS.priorityRowLabel[row];
+                return (
+                  <div key={row} className='space-y-1.5'>
+                    {priorityRows.length > 1 && (
+                      <p className='text-muted-foreground text-sm'>
+                        {rowLabel}
+                        {value === 'mixed' && (
+                          <span>{` · ${GROUP_WORDS.priorityMixed}`}</span>
+                        )}
+                      </p>
+                    )}
+                    <PillGroup
+                      label={
+                        priorityRows.length > 1
+                          ? `${GROUP_WORDS.startingPriority}: ${rowLabel}`
+                          : GROUP_WORDS.startingPriority
+                      }
+                      options={startingOptions}
+                      value={value === 'mixed' ? null : value}
+                      onChange={(choice: StartingChoice) =>
+                        void pickPriority(row, choice)
+                      }
+                    />
+                    {pendingPriority?.row === row && (
+                      <p
+                        role='status'
+                        className='text-muted-foreground text-sm'
+                      >
+                        {GROUP_WORDS.priorityApplying}
+                      </p>
+                    )}
+                    {note && (
+                      <p
+                        role={note.isError ? 'alert' : 'status'}
+                        className={join(
+                          'text-sm',
+                          note.isError
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {note.text}
+                      </p>
+                    )}
+                    {pick !== null && offPick.length > 0 && (
+                      <div className='flex min-h-7 items-center gap-2'>
+                        <p className='text-muted-foreground text-sm'>
+                          {GROUP_WORDS.priorityStale(
+                            offPick,
+                            PRIORITY_LABELS[pick],
+                          )}
+                        </p>
+                        <Button
+                          type='button'
+                          variant='secondary'
+                          size='sm'
+                          rounded='full'
+                          className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
+                          onClick={() => void pickPriority(row, pick)}
+                        >
+                          {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[pick])}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
             <ActionGroup>
               <ActionRow

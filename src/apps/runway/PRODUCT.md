@@ -123,6 +123,7 @@ An income day has a draft while it is coming, and is confirmed when the money is
 ### Priorities, In Detail
 
 - **Every bill, envelope and goal has a priority:** **Must**, **Should** or **Want**. New items start as Should. Groceries and the car note are Musts, a streaming subscription and a trip a year away are Wants.
+- **A group's priority moves what is in it, after you confirm.** A group has a priority for its bills and one for its envelopes, and an Everything pick that sets both (it says Mixed when they differ). Picking Must, Should or Want first shows what will change, naming each item whose priority is replaced and each envelope whose extras fold into one amount ("Groceries becomes Must for the full $300, was $200 Must + $100 Should"); confirming saves the group and every item at once, at the end of that tier, and each item's history says it came from the group. When everything already matches, it just says so. It is also what a new bill or envelope added to the group starts at. A group left at None changes nothing. When an item later stops matching its section, the sheet names it and offers "Make all Want", which confirms the same way.
 - **Order inside a tier is yours to arrange.** Within a tier, things due before the next income day come first, then your order.
 - **One item can hold money at several priorities.** An envelope or a goal's recurring contribution has its own amount at its own priority, and can add an extra at each lower one ("Groceries: $250 as a Must, +$250 as a Want"; no Should part needed). Each part is funded at its own level, so a short income day trims the Want extra before any Should and keeps the Must part; Plan's priority dial counts each part at its level, a goal's finish date follows the dial ("reaches it May 2027 on Musts"), and Priorities lists a split item as one row per part. Bills are not split: a bill is one fixed amount.
 - **Drafts fund in priority order.** When money covers everything, the order changes nothing. When it does not, Wants go unfunded first, then Shoulds, and a Must is the last to be cut. Runway says exactly what went unfunded and why, and a bill funded in part shows its progress.
@@ -559,7 +560,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [x] Monthly envelope funding, split across the month's income days
 - [x] Move leftover envelope money to another envelope, a goal or Free to Spend
 - [ ] Open the plan as of a past date
-- [ ] Say what a bill or envelope is for (Subscriptions, Housing, Car), with a monthly total and a starting priority per name
+- [ ] Say what a bill or envelope is for (Subscriptions, Housing, Car), with a monthly total and a priority per name that its bills and envelopes take
 - [ ] Irregular income with no schedule, and a rough monthly expectation for lookahead
 - [ ] Free to Spend shows how much came from each source, and you can assign a chosen source's money
 - [ ] Name accounts, say where each goal and envelope is held, and see the line-up against each balance (check a balance against all your money: built)

@@ -33,7 +33,12 @@ export function resolveGroupChoice(
   }
   return {
     groupId: null,
-    newGroup: { name: resolved.label, startingPriority: null, emoji: null },
+    newGroup: {
+      name: resolved.label,
+      startingPriority: null,
+      envelopePriority: null,
+      emoji: null,
+    },
     name: resolved.label,
   };
 }

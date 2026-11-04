@@ -99,6 +99,10 @@ async function openVersion(
       payload: {
         ...payload,
         startingPriority: payload.startingPriority ?? null,
+        envelopePriority:
+          payload.envelopePriority === undefined
+            ? (payload.startingPriority ?? null)
+            : payload.envelopePriority,
         emoji: payload.emoji ?? null,
       },
     };

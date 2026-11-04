@@ -1372,7 +1372,7 @@ async function writeSeedEnvelopes(
         emoji: '🛒',
         priority: 'must',
         orderIndex: 1,
-        groupId: null,
+        groupId: 'seed-group-home',
         maxCents: null,
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
         extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],
@@ -1810,11 +1810,21 @@ async function writeSeedBills(
   const groups: { id: string; payload: GroupSealed }[] = [
     {
       id: 'seed-group-home',
-      payload: { name: 'Home', startingPriority: 'must', emoji: '🏠' },
+      payload: {
+        name: 'Home',
+        startingPriority: 'must',
+        envelopePriority: 'must',
+        emoji: '🏠',
+      },
     },
     {
       id: 'seed-group-subscriptions',
-      payload: { name: 'Subscriptions', startingPriority: 'want', emoji: null },
+      payload: {
+        name: 'Subscriptions',
+        startingPriority: 'want',
+        envelopePriority: 'want',
+        emoji: null,
+      },
     },
   ];
 

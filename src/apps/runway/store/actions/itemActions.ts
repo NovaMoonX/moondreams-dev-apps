@@ -1,6 +1,7 @@
 import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { GROUP_WORDS } from '@apps/runway/constants';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -537,7 +538,8 @@ export async function changeItem(
 }
 
 /** A batch holds 500 writes; the change entry takes one and the rest is left for growth. */
-const MAX_REORDER_WRITES = 450;
+/** The most versions one batched plan write may hold, under Firestore's batch limit. */
+export const MAX_REORDER_WRITES = 450;
 
 export interface ReorderItemsInput {
   /** The stretches from today on each keep their own payload; only tiers and ranks change. */
@@ -588,6 +590,92 @@ export async function reorderItems(
       createdAt: now,
       effectiveFrom: segment.effectiveFrom,
       effectiveUntil: segment.effectiveUntil,
+      changeId,
+      sealed: versionsSealed[index],
+    };
+    batch.set(itemPath(uid, 'versions', version.id), version);
+  });
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+}
+
+export interface SetGroupPriorityInput {
+  groupId: string;
+  /** The group's new payload, or null when its pick stays as it is. */
+  group: GroupSealed | null;
+  /** Each member's stretches from today on, as they will read. */
+  members: {
+    itemId: string;
+    kind: 'bill' | 'envelope';
+    stretches: VersionStretch<ItemPayload>[];
+  }[];
+  summary: string;
+  effectiveFrom: number;
+}
+
+/**
+ * Saves a group's priority and what it does to its members as one batch: the group's new version, one
+ * version per stretch of each member and one change entry naming them all, so the group and its items
+ * never disagree half way. Nothing already written is touched.
+ */
+export async function setGroupPriority(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: SetGroupPriorityInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const writes: {
+    itemId: string;
+    kind: PlanVersionDoc['kind'];
+    stretch: VersionStretch<ItemPayload>;
+  }[] = [
+    ...(input.group === null
+      ? []
+      : [
+          {
+            itemId: input.groupId,
+            kind: 'group' as const,
+            stretch: {
+              payload: input.group,
+              effectiveFrom: input.effectiveFrom,
+              effectiveUntil: null,
+            },
+          },
+        ]),
+    ...input.members.flatMap((member) =>
+      member.stretches.map((stretch) => ({
+        itemId: member.itemId,
+        kind: member.kind,
+        stretch,
+      })),
+    ),
+  ];
+  if (writes.length > MAX_REORDER_WRITES)
+    throw new Error(GROUP_WORDS.priorityTooMany);
+  const [changeSealed, ...versionsSealed] = await Promise.all([
+    sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
+    ...writes.map(({ stretch }) => sealJson(stretch.payload, encryption)),
+  ]);
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.effectiveFrom,
+    itemIds: Array.from(
+      new Set([input.groupId, ...writes.map(({ itemId }) => itemId)]),
+    ),
+    sealed: changeSealed,
+  };
+  const batch = writeBatch(db);
+  writes.forEach(({ itemId, kind, stretch }, index) => {
+    const version: PlanVersionDoc = {
+      id: generateUuid(),
+      itemId,
+      kind,
+      createdAt: now,
+      effectiveFrom: stretch.effectiveFrom,
+      effectiveUntil: stretch.effectiveUntil,
       changeId,
       sealed: versionsSealed[index],
     };
