@@ -33,6 +33,7 @@ import {
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const FREE = 'free';
 const OUTSIDE = 'outside';
@@ -43,10 +44,6 @@ interface PutTowardViewProps {
   today: number;
   onBack: () => void;
 }
-
-const isOfflineFailure = (error: unknown) =>
-  !navigator.onLine ||
-  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 /** The view a Horizon item's sheet swaps in to put more money toward it from Free to Spend, an envelope or goal, or from outside the plan. */
 function PutTowardView({ itemId, name, today, onBack }: PutTowardViewProps) {

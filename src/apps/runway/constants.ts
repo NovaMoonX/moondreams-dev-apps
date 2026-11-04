@@ -571,6 +571,7 @@ export const START_HOLDINGS = [
   'goal',
   'bill',
   'envelope',
+  'horizon',
   'card',
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
@@ -1206,12 +1207,13 @@ export const TRACKING_WORDS = {
   history: 'Tracking history',
   lineUpTitle: 'Where is your money now?',
   lineUpHelp:
-    'Say what you have and what each envelope, goal and bill holds on the day tracking begins. Money that arrives or is paid after that day is added to it.',
+    'Say what you have and what each envelope, goal, Horizon item and bill holds on the day tracking begins. Money that arrives or is paid after that day is added to it.',
   startsOn: 'Tracking starts',
   moneyOnHand: 'Money on hand',
   moneyHint: 'One total for all of it. Named accounts come later.',
   envelopes: 'What each envelope holds',
   goals: 'What each goal holds',
+  horizon: 'What each Horizon item holds',
   bills: 'Already set aside for bills',
   cards: 'What each card owes',
   start: 'Start tracking',
@@ -1334,6 +1336,7 @@ export const START_AMOUNTS_WORDS = {
   cashHint:
     "What's in your account apart from what your goals and envelopes hold.",
   goals: 'What each goal holds',
+  horizon: 'What each Horizon item holds',
   envelopes: 'What each envelope holds',
   bills: 'Already set aside for bills',
   total: 'Total in your account',

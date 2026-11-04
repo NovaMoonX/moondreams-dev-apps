@@ -39,9 +39,11 @@ import {
   selectBills,
   selectEnvelopes,
   selectGoals,
+  selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SensitiveValue from '@/components/SensitiveValue';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 interface StartingAmountsDraft {
   date: string;
@@ -63,10 +65,6 @@ const parseStartingAmountsDraft = (
   });
   return draft;
 };
-
-const isOfflineFailure = (error: unknown) =>
-  !navigator.onLine ||
-  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 interface StartingAmountsSheetProps {
   isOpen: boolean;
@@ -171,6 +169,9 @@ function StartingAmountsSheet({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const horizonItems = useAppSelector((state) =>
+    selectHorizonItems(state, today),
+  );
 
   const started = collectStarted(moves, plan?.startDate ?? null);
   const toText = (cents: number | undefined) =>
@@ -183,7 +184,7 @@ function StartingAmountsSheet({
         : Math.max(
             0,
             started.money -
-              [...goals, ...envelopes, ...bills].reduce(
+              [...goals, ...envelopes, ...horizonItems, ...bills].reduce(
                 (sum, { item }) => sum + (started.byItem[item.id] ?? 0),
                 0,
               ),
@@ -203,6 +204,7 @@ function StartingAmountsSheet({
         ...Object.keys(started.byItem),
         ...goals.map(({ item }) => item.id),
         ...envelopes.map(({ item }) => item.id),
+        ...horizonItems.map(({ item }) => item.id),
         ...bills.map(({ item }) => item.id),
       ]);
       return {
@@ -280,7 +282,7 @@ function StartingAmountsSheet({
   const startDate = fromDateInputValue(date) ?? null;
   const getHoldings = (): StartHoldingInput[] => {
     const toHolding = (
-      holding: 'goal' | 'bill' | 'envelope',
+      holding: 'goal' | 'bill' | 'envelope' | 'horizon',
       id: string,
     ): StartHoldingInput[] => {
       const cents = parseMoneyToCents(amounts[id] ?? '');
@@ -304,6 +306,7 @@ function StartingAmountsSheet({
         refId: id,
         amountCents: cents,
       })),
+      ...horizonItems.flatMap(({ item }) => toHolding('horizon', item.id)),
       ...bills.flatMap(({ item }) => toHolding('bill', item.id)),
     ];
     const cashCents = parseMoneyToCents(money);
@@ -393,6 +396,17 @@ function StartingAmountsSheet({
       <AmountList
         label={START_AMOUNTS_WORDS.envelopes}
         rows={askedEnvelopes.map(({ item, version }) => ({
+          id: item.id,
+          name: version.payload.name,
+        }))}
+        values={amounts}
+        onChange={(id, value) =>
+          setAmounts((current) => ({ ...current, [id]: value }))
+        }
+      />
+      <AmountList
+        label={START_AMOUNTS_WORDS.horizon}
+        rows={horizonItems.map(({ item, version }) => ({
           id: item.id,
           name: version.payload.name,
         }))}

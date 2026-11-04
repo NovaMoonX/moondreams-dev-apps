@@ -45,6 +45,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, OpenMove } from '@apps/runway/types';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const FREE = 'free';
 
@@ -56,10 +57,6 @@ interface MoveLeftoverViewProps {
   today: number;
   onBack: () => void;
 }
-
-const isOfflineFailure = (error: unknown) =>
-  !navigator.onLine ||
-  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 /** The view an envelope's sheet swaps in to move what is left in it to another envelope, a goal or Free to Spend. Nothing is picked until the person picks it. */
 function MoveLeftoverView({

@@ -25,6 +25,8 @@ const planDoc = (uid: string, collectionName: string, id: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, collectionName, id);
 
 export interface AddHorizonInput {
+  /** Made once by the caller so a retry of the same add resolves to the same item. */
+  horizonId: string;
   horizon: HorizonSealed;
   /** The first day this item is in the plan. */
   startDate: number;
@@ -40,10 +42,9 @@ export interface AddHorizonInput {
 export async function addHorizon(
   uid: string,
   encryption: RunwayEncryption,
-  { horizon, startDate, toward }: AddHorizonInput,
+  { horizonId, horizon, startDate, toward }: AddHorizonInput,
 ): Promise<{ horizonId: string }> {
   const now = Date.now();
-  const horizonId = generateUuid();
   const changeId = generateUuid();
   const changePayload: ChangeSealed = { summary: `Added ${horizon.name}.` };
 

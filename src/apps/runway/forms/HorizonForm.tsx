@@ -22,6 +22,7 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { generateUuid } from '@/utils/idUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   FORM_FLOW_WORDS,
@@ -32,6 +33,7 @@ import {
   MAX_HORIZON_COSTS,
   MAX_NAME_LENGTH,
   MAX_PURCHASE_CENTS,
+  MOVE_WORDS,
   PRIORITIES,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -42,6 +44,7 @@ import CostForm from '@apps/runway/forms/CostForm';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { addHorizon } from '@apps/runway/store/actions/horizonActions';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -127,6 +130,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const emojiOf = useLiveEmojiResolver();
   const { isHidden } = useValuesHidden();
   const [moveId] = useState(newTransferMoveId);
+  const [horizonId] = useState(generateUuid);
   const [formData, setFormData] = useState<HorizonFormData>(INITIAL_DATA);
   const [costDraft, setCostDraft] = useState<HorizonCost | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -511,18 +515,27 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
               putFromName,
             ),
           };
+    if (toward !== null && !navigator.onLine) {
+      setError(MOVE_WORDS.offline);
+      return;
+    }
     setError(null);
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       await addHorizon(user.uid, encryption, {
+        horizonId,
         horizon,
         startDate: today,
         toward,
       });
       onClose();
     } catch (saveError) {
-      setError(getErrorMessage(saveError, HORIZON_WORDS.addFailed));
+      setError(
+        toward !== null && isOfflineFailure(saveError)
+          ? MOVE_WORDS.offline
+          : getErrorMessage(saveError, HORIZON_WORDS.addFailed),
+      );
     } finally {
       setIsSaving(false);
     }

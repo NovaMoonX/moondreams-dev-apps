@@ -10957,6 +10957,24 @@ const version = (
     'a released Horizon item no longer holds money',
   );
   assert.equal(released.freeToSpendCents, before.freeToSpendCents);
+  const rebased = deriveBalances({
+    ...input,
+    startDate: start + 2 * DAY_MS,
+    moves: [
+      toHorizon(80_000),
+      startMove('s2-money', null, 100_000, 'money'),
+      startMove('s2-moving', 'moving', 80_000, 'horizon'),
+    ].map((move) =>
+      move.kind === 'start' ? { ...move, date: start + 2 * DAY_MS } : move,
+    ),
+  });
+  assert.equal(
+    rebased.assignedByItem.moving,
+    80_000,
+    'a start move for a Horizon item holds its money across a new starting day',
+  );
+  assert.equal(rebased.assignedToHorizonCents, 80_000);
+  assert.equal(rebased.freeToSpendCents, 20_000);
 }
 
 console.log('runway engine: ok');
