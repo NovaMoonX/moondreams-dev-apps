@@ -44,6 +44,21 @@ const getMonthlyFactor = (schedule: Schedule): [number, number] | null => {
   return null;
 };
 
+/** What one payment's range comes to in a usual month at the schedule's beat; null for a bill paid once or with no fixed beat. */
+export function toMonthlyRange(
+  amount: MoneyRange,
+  schedule: Schedule,
+): MoneyRange | null {
+  const factor = getMonthlyFactor(schedule);
+  if (!factor) return null;
+  const scale = (cents: Cents): Cents =>
+    Math.round((cents * factor[0]) / factor[1]);
+  return {
+    lowCents: scale(amount.lowCents),
+    highCents: scale(amount.highCents),
+  };
+}
+
 const CALENDAR_FACTORS: Record<string, [number, number]> = {
   weekly: [52, 12],
   every2Weeks: [26, 12],
@@ -88,6 +103,21 @@ const getEnvelopeWeight = ({
   if (cadence.kind === 'everyNth') return [incomeDaysPerMonth, cadence.n];
   return null;
 };
+
+/** An envelope's exact amount for a usual month, the way `monthlyTotal` counts it; null when its amount or beat is not fixed. */
+export function toMonthlyEnvelopeCents(
+  funding: FundingRule,
+  incomeDaysPerMonth: number,
+): Cents | null {
+  const weight = getEnvelopeWeight({
+    funding,
+    startsOn: 0,
+    incomeDaysPerMonth,
+  });
+  return weight && funding.amount.kind === 'exact'
+    ? Math.round((funding.amount.cents * weight[0]) / weight[1])
+    : null;
+}
 
 /**
  * What a group's bills and envelopes come to in a usual month: each repeating bill at its monthly

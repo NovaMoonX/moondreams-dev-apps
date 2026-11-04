@@ -10,7 +10,13 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { ITEM_SHEET_R2_WORDS, PRIORITY_LABELS } from '@apps/runway/constants';
+import {
+  BILL_WORDS,
+  ITEM_SHEET_R2_WORDS,
+  PRIORITY_LABELS,
+} from '@apps/runway/constants';
+import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
+import { describeEnvelopeMonthly } from '@apps/runway/utils/billText';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
 import {
@@ -44,6 +50,8 @@ interface EnvelopeTileProps {
   isPart?: boolean;
   /** How far down the priorities Plan's dial counts: the figure is what the counted parts ask, and the line names the extras it leaves out. */
   dial?: Priority;
+  /** Which figure leads: what it comes to a month, or what each time puts in. */
+  figureKind?: 'monthly' | 'payment';
 }
 
 const capitalize = (text: string) =>
@@ -62,6 +70,7 @@ function EnvelopeTile({
   isFaded = false,
   isPart = false,
   dial = 'want',
+  figureKind = 'monthly',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -87,12 +96,17 @@ function EnvelopeTile({
     extras.length === 0
       ? null
       : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
+  const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
-  const rowFigure = isPlan || isPart ? eachTime : value;
+  const monthly =
+    figureKind === 'monthly' && (isPlan || isPart)
+      ? describeEnvelopeMonthly(counted, getIncomeDays(envelope.funding))
+      : null;
+  const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
   const rowDetail =
     isPlan || isPart
       ? eachTime
-        ? `${describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
+        ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
         : funding
       : isHidden
         ? funding
@@ -148,7 +162,8 @@ function EnvelopeTile({
           emoji={emoji}
           detail={rowDetail}
           figure={rowFigure}
-          ariaLabel={`${envelope.name}, ${isPlan ? funding : `${value} ${word}. ${funding}`}. Open`}
+          figureWord={monthly ? BILL_WORDS.aMonth : null}
+          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${funding}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}

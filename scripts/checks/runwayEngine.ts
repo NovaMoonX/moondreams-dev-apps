@@ -74,7 +74,14 @@ import {
 import {
   getIncomeDaysPerMonth,
   monthlyTotal,
+  toMonthlyEnvelopeCents,
+  toMonthlyRange,
 } from '../../src/apps/runway/engine/groups.ts';
+import {
+  describeBillMonthly,
+  describeEnvelopeMonthly,
+  joinPaymentAndState,
+} from '../../src/apps/runway/utils/billText.ts';
 import {
   clipStretches,
   withFundedBy,
@@ -11974,6 +11981,165 @@ console.log('runway engine: ok');
       oneTime: { count: 0, range: exact(0), dueOn: null },
     },
     'G10: an empty group comes to nothing',
+  );
+
+  const yearly: Schedule = {
+    kind: 'everyMonths',
+    anchor: utc(2027, 3, 1),
+    monthDays: [],
+    intervalMonths: 12,
+  };
+  assert.deepEqual(
+    toMonthlyRange(exact(15_000), yearly),
+    exact(1_250),
+    'G11: a yearly payment is a twelfth of itself in a usual month',
+  );
+  assert.deepEqual(
+    toMonthlyRange(exact(30_000), { ...yearly, intervalMonths: 3 }),
+    exact(10_000),
+    'G11: a payment every 3 months is a third of itself a month',
+  );
+  assert.deepEqual(
+    toMonthlyRange(exact(10_000), every('everyOtherWeek', utc(2026, 11, 3))),
+    exact(21_667),
+    'G11: a fortnightly payment is 26 a year over 12, rounded once',
+  );
+  assert.deepEqual(
+    toMonthlyRange(exact(2_500), every('weekly', utc(2026, 11, 3))),
+    exact(10_833),
+    'G11: a weekly payment is 52 a year over 12',
+  );
+  assert.deepEqual(
+    toMonthlyRange(exact(1_000), every('twiceMonthly', null)),
+    exact(2_000),
+    'G11: twice a month doubles the payment',
+  );
+  assert.deepEqual(
+    toMonthlyRange(
+      { lowCents: 14_000, highCents: 18_000 },
+      { ...yearly, intervalMonths: 2 },
+    ),
+    { lowCents: 7_000, highCents: 9_000 },
+    'G11: a range converts at both ends',
+  );
+  assert.equal(
+    toMonthlyRange(exact(9_000), every('once', utc(2026, 11, 30))),
+    null,
+    'G11: a bill paid once has no monthly figure',
+  );
+  assert.equal(
+    toMonthlyRange(exact(9_000), every('irregular', null)),
+    null,
+    'G11: a bill with no fixed beat has no monthly figure',
+  );
+  assert.equal(
+    monthlyTotal([member(exact(15_000), yearly)], nov).total.highCents,
+    toMonthlyRange(exact(15_000), yearly)?.highCents,
+    'G11: a row and the group total convert a bill the same way',
+  );
+  assert.deepEqual(
+    describeBillMonthly(exact(15_000), yearly),
+    { figure: '$12.50', payment: '$150 yearly' },
+    'G11: a yearly bill leads with its month and names the payment',
+  );
+  assert.deepEqual(
+    describeBillMonthly(
+      exact(10_000),
+      every('everyOtherWeek', utc(2026, 11, 3)),
+    ),
+    { figure: '$216.67', payment: '$100 every other week' },
+    'G11: a fortnightly bill leads with its month and names the payment',
+  );
+  assert.equal(
+    describeBillMonthly(exact(5_000), every('monthly', utc(2026, 11, 1))),
+    null,
+    'G11: a monthly bill keeps its payment as the figure',
+  );
+  assert.equal(
+    describeBillMonthly(exact(5_000), { ...yearly, intervalMonths: 1 }),
+    null,
+    'G11: a bill every 1 month is monthly too',
+  );
+  assert.equal(
+    describeBillMonthly(exact(9_000), every('once', utc(2026, 11, 30))),
+    null,
+    'G11: a bill paid once keeps its payment as the figure',
+  );
+  assert.equal(
+    joinPaymentAndState('$150 yearly', 'Due Mar 1, 2027'),
+    '$150 yearly\u00a0· due Mar 1, 2027',
+    'G11: a converted row names the payment first and keeps the dot with it',
+  );
+  const calendarFunding = (
+    cents: number,
+    period: 'yearly' | 'every2Weeks' | 'monthly',
+  ): FundingRule => ({
+    amount: { kind: 'exact', cents },
+    cadence: { kind: 'calendar', period, startsOn: null },
+  });
+  assert.equal(
+    toMonthlyEnvelopeCents(calendarFunding(60_000, 'yearly'), 0),
+    5_000,
+    'G11: a yearly envelope is a twelfth of itself a month',
+  );
+  assert.equal(
+    toMonthlyEnvelopeCents(calendarFunding(10_000, 'every2Weeks'), 0),
+    monthlyTotal([], nov, [
+      {
+        funding: calendarFunding(10_000, 'every2Weeks'),
+        startsOn: 0,
+        incomeDaysPerMonth: 0,
+      },
+    ]).total.highCents,
+    'G11: an envelope row and its group total convert a calendar beat the same way',
+  );
+  assert.deepEqual(
+    describeEnvelopeMonthly(calendarFunding(60_000, 'yearly'), 0),
+    { figure: '$50.00', payment: '$600 yearly' },
+    'G11: a yearly envelope leads with its month and names the amount',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(calendarFunding(60_000, 'monthly'), 0),
+    null,
+    'G11: a monthly envelope keeps its amount as the figure',
+  );
+  const incomeDay = (cadence: FundingRule['cadence']): FundingRule => ({
+    amount: { kind: 'exact', cents: 10_000 },
+    cadence,
+  });
+  assert.deepEqual(
+    describeEnvelopeMonthly(incomeDay({ kind: 'everyIncomeDay' }), 26 / 12),
+    { figure: '$216.67', payment: '$100 every income day' },
+    'G11: an envelope on every fortnightly pay reads as its month and names what each pay puts in',
+  );
+  assert.equal(
+    toMonthlyEnvelopeCents(incomeDay({ kind: 'everyIncomeDay' }), 2),
+    monthlyTotal([], nov, [
+      {
+        funding: incomeDay({ kind: 'everyIncomeDay' }),
+        startsOn: 0,
+        incomeDaysPerMonth: 2,
+      },
+    ]).total.highCents,
+    'G11: an income-day envelope row and its group total agree',
+  );
+  assert.equal(
+    toMonthlyEnvelopeCents(
+      incomeDay({ kind: 'everyNth', n: 2, anchorDayKey: 'x' }),
+      4,
+    ),
+    20_000,
+    'G11: an every-other-income-day envelope counts half the income days',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(incomeDay({ kind: 'everyIncomeDay' }), 0),
+    null,
+    'G11: an income-day envelope with no regular pay to count keeps its amount',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(incomeDay({ kind: 'chosen', dayKeys: ['a'] }), 2),
+    null,
+    'G11: an envelope on chosen days has no monthly figure',
   );
   assert.deepEqual(
     monthlyTotal(

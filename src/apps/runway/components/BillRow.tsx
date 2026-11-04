@@ -18,9 +18,11 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import type { BillSealed, Stance } from '@apps/runway/types';
 import {
+  describeBillMonthly,
   describeBillRepeat,
   isSavingUpBill,
   isUndatedBill,
+  joinPaymentAndState,
 } from '@apps/runway/utils/billText';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
@@ -35,6 +37,8 @@ interface BillRowProps {
   isOutsideTotal?: boolean;
   /** Said in the row's one line in place of the due date. */
   detailOverride?: string | null;
+  /** Which figure leads: what it comes to a month, or the payment. */
+  figureKind?: 'monthly' | 'payment';
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
@@ -91,19 +95,41 @@ function BillRow({
   today,
   isOutsideTotal = false,
   detailOverride = null,
+  figureKind = 'monthly',
   reorder,
   isHighlighted = false,
   isFaded = false,
   onOpen,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
-  const amount = formatCents(pick(stance, bill.amount, 'expense'));
+  const cents = pick(stance, bill.amount, 'expense');
+  const monthly =
+    figureKind === 'monthly'
+      ? describeBillMonthly(
+          { lowCents: cents, highCents: cents },
+          bill.timing.schedule,
+        )
+      : null;
+  const amount = monthly?.figure ?? formatCents(cents);
   const isUndated = isUndatedBill(bill);
   const isSavingUp = isSavingUpBill(bill.timing.schedule, bill.fundedBy);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
+  const stateLine = getDueLine(
+    payment,
+    isUndated,
+    today,
+    isSavingUp && monthly === null,
+  );
+  const figureWord = monthly
+    ? BILL_WORDS.aMonth
+    : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
+      ? BILL_WORDS.once
+      : null;
   const dueLine = isOutsideTotal
-    ? `${getDueLine(payment, isUndated, today, isSavingUp)} · ${GROUP_WORDS.oneTimeNote}`
-    : getDueLine(payment, isUndated, today, isSavingUp);
+    ? `${stateLine} · ${GROUP_WORDS.oneTimeNote}`
+    : monthly
+      ? joinPaymentAndState(monthly.payment, stateLine)
+      : stateLine;
 
   return (
     <ItemRow
@@ -112,7 +138,8 @@ function BillRow({
       detail={detailOverride ?? dueLine}
       isDetailWarning={isUndated && detailOverride === null}
       figure={amount}
-      ariaLabel={`${bill.name}, ${amount}. ${dueLine}. Open`}
+      figureWord={figureWord}
+      ariaLabel={`${bill.name}, ${amount}${figureWord ? ` ${figureWord}` : ''}. ${dueLine}. Open`}
       onOpen={reorder ? undefined : onOpen}
       reorder={reorder}
       isHighlighted={isHighlighted}

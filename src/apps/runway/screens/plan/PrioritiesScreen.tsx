@@ -327,6 +327,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
               }
               planStance={stance}
               today={today}
+              figureKind='payment'
               onOpen={() => setOpenBillId(item.id)}
               detailOverride={
                 dueFirst.isFirst
@@ -351,6 +352,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         version.payload,
         (rowId, envelope, reorder, isHighlighted) => (
           <EnvelopeTile
+            figureKind='payment'
             reorder={reorder}
             isHighlighted={isHighlighted}
             key={rowId}

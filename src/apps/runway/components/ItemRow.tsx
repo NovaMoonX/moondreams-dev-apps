@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -99,6 +99,15 @@ function ItemRow({
       : baseAriaLabel;
   const hide = (node: ReactNode, isOn: boolean) =>
     isOn ? <SensitiveValue>{node}</SensitiveValue> : node;
+  // A range ("$33.33 to $66.67") breaks at "to", never inside a number.
+  const figureNode = figure
+    ? figure.split(' to ').map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 && ' to '}
+          <span className='whitespace-nowrap'>{part}</span>
+        </Fragment>
+      ))
+    : null;
   const shownDetail =
     reorder?.isFixed && reorder.fixedNote ? reorder.fixedNote : detail;
   const hasDetail = Boolean(shownDetail) || Boolean(warningLine);
@@ -132,7 +141,7 @@ function ItemRow({
               aria-hidden='true'
             />
           )}
-          <span className='line-clamp-2'>
+          <span className='line-clamp-2 max-[359px]:line-clamp-3'>
             {isPrivate && shownDetail ? (
               <MaskedText>{shownDetail}</MaskedText>
             ) : (
@@ -165,11 +174,11 @@ function ItemRow({
           <span className='block shrink-0 text-right'>
             <span
               className={join(
-                'block whitespace-nowrap tabular-nums',
+                'block tabular-nums',
                 isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
               )}
             >
-              {hide(figure, isPrivate)}
+              {hide(figureNode, isPrivate)}
             </span>
             {figureWord && (
               <span className='text-muted-foreground block text-xs'>

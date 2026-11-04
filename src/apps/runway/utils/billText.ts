@@ -7,7 +7,11 @@ import {
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
-import { monthlyTotal } from '@apps/runway/engine/groups';
+import {
+  monthlyTotal,
+  toMonthlyEnvelopeCents,
+  toMonthlyRange,
+} from '@apps/runway/engine/groups';
 import { getIntervalMonths } from '@apps/runway/engine/schedule';
 import type {
   GroupEnvelopeMember,
@@ -16,12 +20,14 @@ import type {
 } from '@apps/runway/engine/groups';
 import type {
   BillFundedBy,
+  FundingRule,
   MoneyRange,
   Priority,
   Schedule,
 } from '@apps/runway/types';
+import { describeCadenceLine } from '@apps/runway/utils/fundingText';
 import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
 /** What a group's bills and envelopes come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
 export const describeGroupTotal = (range: MoneyRange) =>
@@ -104,6 +110,49 @@ export function describeBillRepeat(schedule: Schedule) {
     ? BILL_FREQUENCY_LABELS[known]
     : SCHEDULE_LABELS[schedule.kind];
   return result;
+}
+
+/** A repeating bill's figure for a usual month and its payment; null when it is paid once, has no fixed beat or is already monthly. */
+export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
+  const monthly = toMonthlyRange(amount, schedule);
+  if (
+    monthly === null ||
+    (monthly.lowCents === amount.lowCents &&
+      monthly.highCents === amount.highCents)
+  ) {
+    return null;
+  }
+  return {
+    figure: describeGroupTotal(monthly),
+    payment: `${
+      amount.lowCents === amount.highCents
+        ? formatCentsShort(amount.lowCents)
+        : `${formatCentsShort(amount.lowCents)} to ${formatCentsShort(amount.highCents)}`
+    } ${describeBillRepeat(schedule).toLowerCase()}`,
+  };
+}
+
+/** A converted row's line: the payment first, then where the next one stands. */
+export const joinPaymentAndState = (payment: string, state: string) =>
+  `${payment}\u00a0· ${state.charAt(0).toLowerCase()}${state.slice(1)}`;
+
+/** An envelope's figure for a usual month and what each time puts in ("$100 every income day"); null when its amount or beat is not fixed or it already comes monthly. */
+export function describeEnvelopeMonthly(
+  funding: FundingRule,
+  incomeDaysPerMonth: number,
+) {
+  const cents = toMonthlyEnvelopeCents(funding, incomeDaysPerMonth);
+  if (
+    cents === null ||
+    funding.amount.kind !== 'exact' ||
+    funding.amount.cents === cents
+  ) {
+    return null;
+  }
+  return {
+    figure: formatCents(cents),
+    payment: `${formatCentsShort(funding.amount.cents)} ${describeCadenceLine(funding.cadence).toLowerCase()}`,
+  };
 }
 
 /** A bill that comes round less often than monthly is saved up for over the pays before it, unless it is paid all from the pay right before it is due. */

@@ -235,6 +235,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           }
           planStance={stance}
           today={today}
+          figureKind='payment'
           onOpen={() => setOpenBillRef({ billId: entry.billId, on: entry.on })}
         />
       ) : null;

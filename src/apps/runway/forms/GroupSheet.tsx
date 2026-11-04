@@ -55,7 +55,10 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
+import {
+  useGroupFigures,
+  useIncomeDaysPerMonth,
+} from '@apps/runway/hooks/useGroupFigures';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -83,6 +86,9 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import {
+  describeBillMonthly,
+  describeEnvelopeMonthly,
+  joinPaymentAndState,
   describeBillRepeat,
   describeGroupLead,
   describeGroupTotal,
@@ -170,6 +176,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   );
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
+  const getIncomeDays = useIncomeDaysPerMonth(today);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
@@ -355,10 +362,18 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const isPast = dueDate !== undefined && dueDate < today;
   const skippedCount = billCount - eligibleBills.length;
 
-  const describeBillDue = (schedule: Schedule, due: number | null) =>
+  const describeBillDue = (
+    schedule: Schedule,
+    due: number | null,
+    payment: string | null,
+  ) =>
     due === null
-      ? BILL_WORDS.needsDueDate
-      : `Due ${formatDateShortUTC(due)} · ${describeBillRepeat(schedule)}`;
+      ? payment
+        ? joinPaymentAndState(payment, BILL_WORDS.needsDueDate)
+        : BILL_WORDS.needsDueDate
+      : payment
+        ? joinPaymentAndState(payment, `Due ${formatDateShortUTC(due)}`)
+        : `Due ${formatDateShortUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -787,22 +802,35 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   </MaskedText>
                 </p>
                 <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                  {bills.map(({ item, version }) => (
-                    <ItemRow
-                      key={item.id}
-                      name={version.payload.name}
-                      emoji={resolveItemEmoji(
-                        version.payload.emoji,
-                        version.payload.groupId,
-                        purposeEmojis,
-                      )}
-                      detail={describeBillDue(
-                        version.payload.timing.schedule,
-                        getCurrentDue({ item, version }),
-                      )}
-                      figure={describeGroupTotal(version.payload.amount)}
-                    />
-                  ))}
+                  {bills.map(({ item, version }) => {
+                    const { amount } = version.payload;
+                    const { schedule } = version.payload.timing;
+                    const monthly = describeBillMonthly(amount, schedule);
+                    return (
+                      <ItemRow
+                        key={item.id}
+                        name={version.payload.name}
+                        emoji={resolveItemEmoji(
+                          version.payload.emoji,
+                          version.payload.groupId,
+                          purposeEmojis,
+                        )}
+                        detail={describeBillDue(
+                          schedule,
+                          getCurrentDue({ item, version }),
+                          monthly?.payment ?? null,
+                        )}
+                        figure={monthly?.figure ?? describeGroupTotal(amount)}
+                        figureWord={
+                          monthly
+                            ? BILL_WORDS.aMonth
+                            : schedule.kind === 'once'
+                              ? BILL_WORDS.once
+                              : null
+                        }
+                      />
+                    );
+                  })}
                 </ul>
               </div>
             )}
@@ -827,6 +855,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         : getExtras(version.payload).filter(
                             (extra) => !isCountedAt(extra.tier, dial),
                           );
+                    const monthly = describeEnvelopeMonthly(
+                      funding,
+                      getIncomeDays(version.payload.funding),
+                    );
+                    const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
                     return (
                       <ItemRow
                         key={item.id}
@@ -837,15 +870,19 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                           purposeEmojis,
                         )}
                         detail={
-                          funding.amount.kind === 'exact'
-                            ? `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
-                            : describeFundingShort(funding)
+                          funding.amount.kind !== 'exact'
+                            ? describeFundingShort(funding)
+                            : monthly
+                              ? `${monthly.payment}${describeExtras(leftOut, formatCentsShort)}`
+                              : eachTime
                         }
                         figure={
-                          funding.amount.kind === 'exact'
+                          monthly?.figure ??
+                          (funding.amount.kind === 'exact'
                             ? formatCents(funding.amount.cents)
-                            : null
+                            : null)
                         }
+                        figureWord={monthly ? BILL_WORDS.aMonth : null}
                       />
                     );
                   })}
