@@ -25,6 +25,13 @@ const toBillMember = ({ version: bill }: ResolvedBill) => ({
   ending: bill.payload.ending,
 });
 
+/** The one count of income days a month an envelope's pay holds, shared by its group total and its row. */
+const getEnvelopeIncomeDays = (
+  payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
+  today: number,
+  funding: FundingRule,
+) => getIncomeDaysPerMonth(payLines, today, funding.sourceId ?? null);
+
 const toEnvelopeMember = (
   { version: envelope }: ResolvedEnvelope,
   today: number,
@@ -34,10 +41,10 @@ const toEnvelopeMember = (
   name: envelope.payload.name,
   funding,
   startsOn: envelope.effectiveFrom,
-  incomeDaysPerMonth: getIncomeDaysPerMonth(
+  incomeDaysPerMonth: getEnvelopeIncomeDays(
     payLines,
     today,
-    envelope.payload.funding.sourceId ?? null,
+    envelope.payload.funding,
   ),
 });
 
@@ -68,11 +75,11 @@ const useResolvedPayLines = (today: number) => {
   );
 };
 
-/** Income days a usual month holds for the pay an envelope draws on (any pay when `sourceId` is null), counted as the group totals count them. */
+/** Income days a usual month holds for the pay an envelope's rule draws on, counted as its group total counts them. */
 export function useIncomeDaysPerMonth(today: number) {
   const payLines = useResolvedPayLines(today);
-  return (sourceId: string | null) =>
-    getIncomeDaysPerMonth(payLines, today, sourceId);
+  return (funding: FundingRule) =>
+    getEnvelopeIncomeDays(payLines, today, funding);
 }
 
 /** What the whole plan's income, bills and envelopes each come to in a usual month, counting only the bills and envelopes at or above `dial`. */

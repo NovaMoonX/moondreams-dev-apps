@@ -857,7 +857,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                           );
                     const monthly = describeEnvelopeMonthly(
                       funding,
-                      getIncomeDays(version.payload.funding.sourceId ?? null),
+                      getIncomeDays(version.payload.funding),
                     );
                     const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
                     return (

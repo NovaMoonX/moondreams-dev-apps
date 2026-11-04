@@ -100,10 +100,7 @@ function EnvelopeTile({
   const isPlan = level === 'plan';
   const monthly =
     figureKind === 'monthly' && (isPlan || isPart)
-      ? describeEnvelopeMonthly(
-          counted,
-          getIncomeDays(envelope.funding.sourceId ?? null),
-        )
+      ? describeEnvelopeMonthly(counted, getIncomeDays(envelope.funding))
       : null;
   const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
   const rowDetail =
