@@ -205,7 +205,9 @@ function StartFlow({
     goal: rows.goal.length,
   };
   const total = counts.income + counts.bill + counts.envelope + counts.goal;
-  const [isAsking, setIsAsking] = useState(total > 0);
+  const [isAsking, setIsAsking] = useState(
+    total > 0 && startMethod !== 'continue',
+  );
   const [stage, setStage] = useState<'choose' | 'budget' | 'steps'>(
     getFirstStage(total, budget, startMethod),
   );
@@ -549,6 +551,17 @@ function StartFlow({
           </div>
           {index === 0 && notice}
           <div className='space-y-3'>{body.content}</div>
+          {index === 0 && total > 0 && startMethod === 'continue' && (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='text-muted-foreground! relative -ml-2 self-start after:absolute after:inset-x-0 after:-inset-y-2 after:content-[""]'
+              onClick={() => void handleStartOver()}
+            >
+              {START_WORDS.resumeStartOver}
+            </Button>
+          )}
           {error && (
             <p className='text-destructive text-sm' role='alert'>
               {error}

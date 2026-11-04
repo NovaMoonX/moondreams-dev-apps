@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, ListChecks, ShoppingBag } from 'lucide-react';
+import { Home, ShoppingBag } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -35,10 +35,8 @@ import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   selectAllCards,
-  selectBills,
   selectHasIncome,
   selectEnvelopes,
-  selectGoals,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -61,13 +59,6 @@ function HomeScreen() {
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
-  const isSetupOpen = useAppSelector(
-    (state) =>
-      selectBills(state, today).length === 0 &&
-      selectEnvelopes(state, today).length === 0 &&
-      selectGoals(state, today).length === 0 &&
-      state.runway.plan?.startDate == null,
-  );
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
@@ -162,18 +153,6 @@ function HomeScreen() {
         }
         otherwise={<TrackInviteCard />}
       />
-      {isSetupOpen && (
-        <EmptyCard
-          icon={<ListChecks className='h-5 w-5' />}
-          action={
-            <Button size='sm' onClick={() => openView('start')}>
-              {HOME_WORDS.resumeAction}
-            </Button>
-          }
-        >
-          {HOME_WORDS.resume}
-        </EmptyCard>
-      )}
       <LevelGate level='track'>
         <HomeCards today={today} />
       </LevelGate>
