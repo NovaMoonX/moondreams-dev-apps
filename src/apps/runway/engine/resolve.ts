@@ -169,7 +169,8 @@ export function getVersionStretches<
 
 const canonical = (value: unknown): unknown => {
   if (value === undefined || value === null) return null;
-  if (Array.isArray(value)) return value.map(canonical);
+  if (Array.isArray(value))
+    return value.length === 0 ? null : value.map(canonical);
   if (typeof value !== 'object') return value;
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
@@ -179,7 +180,7 @@ const canonical = (value: unknown): unknown => {
   );
 };
 
-/** Whether two values hold the same thing: key order does not matter and a missing field equals null. */
+/** Whether two values hold the same thing: key order does not matter, and a missing field, null and an empty list are equal. */
 export const isSameValue = (a: unknown, b: unknown) =>
   JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
 

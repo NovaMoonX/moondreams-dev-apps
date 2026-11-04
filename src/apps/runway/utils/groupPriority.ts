@@ -21,9 +21,9 @@ export interface GroupPriorityMember {
 
 export interface GroupPriorityChange extends GroupPriorityMember {
   written: VersionStretch<MemberPayload>[];
-  /** Its priority today when that changes, else null. */
+  /** The priority it moves from, from the first stretch that changes tier, else null. */
   wasPriority: Priority | null;
-  /** Its amount today when extras fold into it: the main part and each extra. */
+  /** Its amount when extras fold into it, from the first stretch that has them: the main part and each extra. */
   folded: {
     priority: Priority;
     cents: number;
@@ -66,7 +66,7 @@ const toSingleTier = (
         priority,
         orderIndex,
         funding: withExtras(payload),
-        extras: [],
+        extras: null,
       }
     : { ...payload, priority, orderIndex };
 
@@ -91,11 +91,18 @@ export function planGroupPriority(
   );
   return open.map((member) => {
     const moverIndex = movers.indexOf(member);
-    const today = member.stretches[0].payload;
-    const extras = getFoldedExtras(today);
+    const moving = member.stretches.find(
+      ({ payload }) => payload.priority !== priority,
+    )?.payload;
+    const withParts = member.stretches.find(
+      ({ payload }) => getFoldedExtras(payload).length > 0,
+    )?.payload;
+    const extras = withParts ? getFoldedExtras(withParts) : [];
     const ownCents =
-      'funding' in today && today.funding.amount.kind === 'exact'
-        ? today.funding.amount.cents
+      withParts &&
+      'funding' in withParts &&
+      withParts.funding.amount.kind === 'exact'
+        ? withParts.funding.amount.cents
         : 0;
     return {
       ...member,
@@ -109,12 +116,12 @@ export function planGroupPriority(
             : firstRank + moverIndex * ENVELOPE_ORDER_STEP,
         ),
       })),
-      wasPriority: today.priority === priority ? null : today.priority,
+      wasPriority: moving?.priority ?? null,
       folded:
-        extras.length === 0
+        withParts === undefined
           ? null
           : {
-              priority: today.priority,
+              priority: withParts.priority,
               cents: ownCents,
               extras,
               totalCents:

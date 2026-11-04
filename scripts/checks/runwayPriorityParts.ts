@@ -413,7 +413,7 @@ assert.deepEqual(
     (folded?.written[0].payload as { extras: unknown }).extras,
     folded?.folded?.totalCents,
   ],
-  [{ kind: 'exact', cents: 2_500 }, [], 2_500],
+  [{ kind: 'exact', cents: 2_500 }, null, 2_500],
   'an extra folds into the main amount at the new level',
 );
 const atLevel = planGroupPriority(
@@ -434,6 +434,32 @@ assert.deepEqual(
   ]),
   [[3, null, 2_000, 3_000]],
   'an envelope already at the level keeps its rank and only folds its extra in (Groceries $200 Must + $100 Should is $300 Must)',
+);
+
+const today = member('h', 'bill', 'want');
+const laterStretch = planGroupPriority(
+  [
+    {
+      ...today,
+      stretches: [
+        today.stretches[0],
+        {
+          ...today.stretches[0],
+          payload: { ...today.stretches[0].payload, priority: 'must' },
+        },
+      ],
+    },
+  ] as never,
+  'want',
+  20,
+);
+assert.deepEqual(
+  laterStretch.map(({ written, wasPriority }) => [
+    written.map(({ payload }) => payload.priority),
+    wasPriority,
+  ]),
+  [[['want', 'want'], 'must']],
+  'a bill at the level today but not in a later stretch moves from the later priority, never a made-up one',
 );
 
 console.log('runway priority parts: ok');

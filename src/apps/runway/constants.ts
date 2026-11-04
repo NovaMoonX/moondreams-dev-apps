@@ -2342,7 +2342,10 @@ export const GROUP_WORDS = {
         : `${group}'s envelopes`,
   priorityConfirmTitle: (scope: string, priority: string) =>
     `Set ${scope} to ${priority}?`,
-  priorityConfirmLead: 'This replaces the priority set on each of these:',
+  priorityConfirmLead: (priority: string) =>
+    `New ones you add start at ${priority} too. This replaces the priority set on each of these:`,
+  priorityNoneSet: (row: 'all' | 'bill' | 'envelope', group: string) =>
+    `New ${row === 'all' ? 'bills and envelopes' : row === 'bill' ? 'bills' : 'envelopes'} in ${group} start with no priority. Nothing already there changed.`,
   priorityMoves: (name: string, from: string, to: string) =>
     `${name} goes from ${from} to ${to}`,
   priorityFolds: (
@@ -2357,18 +2360,22 @@ export const GROUP_WORDS = {
   prioritySummary: (
     priority: string,
     group: string,
-    names: string[],
+    lines: string[],
     date: string,
   ) =>
-    `Set to ${priority} with the ${group} group (${joinNames(names)}), from ${date}.`,
+    `Set to ${priority} with the ${group} group, from ${date}: ${lines.join('; ')}.`,
   priorityDone: (count: number, priority: string) =>
     `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}.`,
   priorityAlready: (scope: string, priority: string) =>
     `${scope.charAt(0).toUpperCase()}${scope.slice(1)} ${scope.startsWith('everything') ? 'is' : 'are'} already ${priority}.`,
   priorityStale: (names: string[], priority: string) =>
-    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority}.`,
+    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not fully ${priority}.`,
   priorityMakeAll: (priority: string) => `Make all ${priority}`,
   priorityFailed: 'The priority did not save. Nothing was changed.',
+  priorityMoved:
+    'Something in this group changed while you were deciding, so nothing was saved. Pick the priority again to see the new list.',
+  priorityTooMany:
+    'That changes too many items to save at once. Change one section at a time.',
   priorityApplying: 'Changing priorities…',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,

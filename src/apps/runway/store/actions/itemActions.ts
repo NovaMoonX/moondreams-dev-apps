@@ -1,6 +1,7 @@
 import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { GROUP_WORDS } from '@apps/runway/constants';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -537,7 +538,8 @@ export async function changeItem(
 }
 
 /** A batch holds 500 writes; the change entry takes one and the rest is left for growth. */
-const MAX_REORDER_WRITES = 450;
+/** The most versions one batched plan write may hold, under Firestore's batch limit. */
+export const MAX_REORDER_WRITES = 450;
 
 export interface ReorderItemsInput {
   /** The stretches from today on each keep their own payload; only tiers and ranks change. */
@@ -650,9 +652,7 @@ export async function setGroupPriority(
     ),
   ];
   if (writes.length > MAX_REORDER_WRITES)
-    throw new Error(
-      'That changes too many items to save at once. Change one section at a time.',
-    );
+    throw new Error(GROUP_WORDS.priorityTooMany);
   const [changeSealed, ...versionsSealed] = await Promise.all([
     sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
     ...writes.map(({ stretch }) => sealJson(stretch.payload, encryption)),
@@ -662,7 +662,9 @@ export async function setGroupPriority(
     kind: 'planChange',
     createdAt: now,
     effectiveFrom: input.effectiveFrom,
-    itemIds: Array.from(new Set(writes.map(({ itemId }) => itemId))),
+    itemIds: Array.from(
+      new Set([input.groupId, ...writes.map(({ itemId }) => itemId)]),
+    ),
     sealed: changeSealed,
   };
   const batch = writeBatch(db);
