@@ -87,7 +87,7 @@ export type HorizonShort =
       /** The cost's own name. */
       name: string;
       dueOn: DateOnly;
-      /** How far below zero Free to Spend is on the due date. */
+      /** The part of this cost Free to Spend cannot front on the due date. */
       shortCents: Cents;
       /** The picked pay that gives it back. */
       payOn: DateOnly;
@@ -328,10 +328,11 @@ const findNoIncome = (
     ];
   });
 
-/** A `later` item's first uncovered payment, and every cost payment fronted by Free to Spend (due before the pay picked for it) when the simulated Free to Spend, walked pay by pay, is below zero on its due date. Outside costs and items are never read. */
+/** A `later` item's first uncovered payment, and every cost payment fronted by Free to Spend (due before the pay picked for it) when the simulated Free to Spend, walked pay by pay, is below zero on its due date and the picked pay's own line is not already short. Outside costs and items are never read. */
 const findHorizonShort = (
   input: LookaheadInput,
   steps: Lookahead['steps'],
+  problems: readonly LookaheadProblem[],
 ): HorizonShort[] => {
   const stance = input.stance ?? 'conservative';
   const items = (input.horizonItems ?? []).map((item) => {
@@ -376,6 +377,7 @@ const findHorizonShort = (
       )
       .map((cover) => ({
         itemId: item.id,
+        costId: cover.costId,
         name:
           item.costs.find(({ id }) => id === cover.costId)?.name ?? item.name,
         dueOn: cover.dueOn,
@@ -386,6 +388,14 @@ const findHorizonShort = (
   const base = input.freeToSpendCents;
   const warned = fronted.flatMap((entry): HorizonShort[] => {
     if (base === null || base === undefined) return [];
+    // The picked pay's own short line already warns about this cost.
+    const isPayShort = problems.some(
+      (problem) =>
+        problem.kind === 'short' &&
+        problem.costId === entry.costId &&
+        problem.on === entry.payOn,
+    );
+    if (isPayShort) return [];
     const free =
       base +
       steps
@@ -403,7 +413,7 @@ const findHorizonShort = (
             itemId: entry.itemId,
             name: entry.name,
             dueOn: entry.dueOn,
-            shortCents: -free,
+            shortCents: Math.min(entry.needCents, -free),
             payOn: entry.payOn,
           },
         ]
@@ -500,7 +510,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     undated: input.bills
       .filter((bill) => bill.isUndated)
       .map((bill) => ({ billId: bill.id, name: bill.name })),
-    horizonShort: findHorizonShort(input, walked.steps),
+    horizonShort: findHorizonShort(input, walked.steps, problems),
     steps: walked.steps,
   };
   return result;

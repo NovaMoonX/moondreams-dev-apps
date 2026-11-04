@@ -5740,6 +5740,42 @@ const version = (
       0,
       'an outside cost is never fronted',
     );
+    const payShort = fronted(25_000, {
+      draftOf: (onDay: ComingDay) => ({
+        draft: {
+          ...emptyDraft(
+            onDay.dayKey === pick.dayKey
+              ? ([
+                  {
+                    lineId: 'movers',
+                    itemId: 'movers',
+                    cents: 10_000,
+                    shortBy: 50_000,
+                    tier: 'should',
+                    bill: null,
+                    pairing: null,
+                    costId: 'movers',
+                    repaysFree: false,
+                    cost: { costId: 'movers', dueOn: today + 20 * DAY_MS },
+                  },
+                ] as unknown as LookaheadDraft['draft']['lines'])
+              : [],
+          ),
+          freeToSpend: { cents: 10_000, bySource: [] },
+        },
+        names: {},
+      }),
+    });
+    assert.deepEqual(
+      [
+        payShort.horizonShort.length,
+        payShort.problems.filter(
+          (problem) => problem.kind === 'short' && problem.costId === 'movers',
+        ).length,
+      ],
+      [0, 1],
+      'a cost its picked pay is already short on warns once, on that pay',
+    );
     assert.equal(
       fronted(0).holdsThrough,
       run(weekly.slice(0, 10)).holdsThrough,

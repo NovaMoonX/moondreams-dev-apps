@@ -52,8 +52,14 @@ function ProblemRow({ group }: ProblemRowProps) {
       openDay(group.dayKey);
       return;
     }
-    if (group.kind === 'horizon') {
+    if (group.kind === 'horizon' && found) {
       setIsItemOpen(true);
+      return;
+    }
+    if (group.kind === 'horizon') {
+      closeFixes();
+      showPlanSection('horizon');
+      showTab('plan');
       return;
     }
     closeFixes();
@@ -110,6 +116,11 @@ function ProblemRow({ group }: ProblemRowProps) {
           horizon={found.version.payload}
           today={today}
           stance={stance}
+          fronted={
+            group.kind === 'horizon' && group.short.kind === 'fronted'
+              ? group.short
+              : null
+          }
           onClose={() => setIsItemOpen(false)}
         />
       )}

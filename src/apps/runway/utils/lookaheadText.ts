@@ -181,7 +181,11 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
     const { short } = group;
     if (short.kind === 'fronted') {
       return {
-        before: `Free to Spend can't cover ${short.name} on ${on} before the ${formatDateOrdinalUTC(short.payOn).replace(/ /g, '\u00a0')} pay`,
+        before: FIX_WORDS.frontedSummary(
+          short.name,
+          on,
+          formatDateOrdinalUTC(short.payOn).replace(/ /g, '\u00a0'),
+        ),
         figure: null,
         after: '',
       };
