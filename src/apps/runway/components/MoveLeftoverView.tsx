@@ -102,7 +102,7 @@ function MoveLeftoverView({
       .map(({ item, version }) => ({
         id: item.id,
         name: version.payload.name,
-        emoji: version.payload.emoji,
+        emoji: emojiOf(version.payload.emoji, version.payload.groupId),
       })),
   ];
   const options: PillOption<string>[] = [

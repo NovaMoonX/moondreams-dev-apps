@@ -29,7 +29,7 @@ import { describeCadenceLine } from '@apps/runway/utils/fundingText';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
-/** What a group's bills and envelopes come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
+/** What a group's bills, envelopes and goals come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
 export const describeGroupTotal = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)

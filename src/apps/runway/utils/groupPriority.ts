@@ -4,13 +4,14 @@ import { getExtras, withExtras } from '@apps/runway/engine/parts';
 import type {
   BillSealed,
   EnvelopeSealed,
+  GoalSealed,
   GroupSealed,
   Priority,
   PriorityExtra,
 } from '@apps/runway/types';
 
-type MemberPayload = BillSealed | EnvelopeSealed;
-export type GroupSection = 'bill' | 'envelope';
+type MemberPayload = BillSealed | EnvelopeSealed | GoalSealed;
+export type GroupSection = 'bill' | 'envelope' | 'goal';
 
 export interface GroupPriorityMember {
   itemId: string;
@@ -32,9 +33,13 @@ export interface GroupPriorityChange extends GroupPriorityMember {
   } | null;
 }
 
-/** The priority a group holds for its bills or its envelopes. */
+/** The priority a group holds for its bills, envelopes or goals. */
 export const getSectionPick = (group: GroupSealed, section: GroupSection) =>
-  section === 'bill' ? group.startingPriority : group.envelopePriority;
+  section === 'bill'
+    ? group.startingPriority
+    : section === 'envelope'
+      ? group.envelopePriority
+      : group.goalPriority;
 
 /** The group with one section's pick (or both, for every section) set to `priority`. */
 export const withSectionPick = (
@@ -49,12 +54,13 @@ export const withSectionPick = (
   envelopePriority: sections.includes('envelope')
     ? priority
     : group.envelopePriority,
+  goalPriority: sections.includes('goal') ? priority : group.goalPriority,
 });
 
 const getFoldedExtras = (payload: MemberPayload) =>
   'funding' in payload ? getExtras(payload) : [];
 
-/** A stretch at `priority` with one amount: an envelope's extras fold into its main amount. */
+/** A stretch at `priority` with one amount: an envelope's or goal's extras fold into its main amount. */
 const toSingleTier = (
   payload: MemberPayload,
   priority: Priority,

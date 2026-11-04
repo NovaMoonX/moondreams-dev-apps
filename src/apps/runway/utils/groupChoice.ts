@@ -37,6 +37,7 @@ export function resolveGroupChoice(
       name: resolved.label,
       startingPriority: null,
       envelopePriority: null,
+      goalPriority: null,
       emoji: null,
     },
     name: resolved.label,

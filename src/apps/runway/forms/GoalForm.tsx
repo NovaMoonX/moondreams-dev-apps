@@ -13,9 +13,15 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
+import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
+import HelpTip from '@/components/HelpTip';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
@@ -47,6 +53,7 @@ import {
   fundingFieldChecks,
   isNullableOneOf,
   isNullableText,
+  isPickOrCreate,
   isText,
   readDraftFields,
   readKeptWithChange,
@@ -79,6 +86,11 @@ import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
+  NEW_GROUP_ID,
+  getGroupChoices,
+  resolveGroupChoice,
+} from '@apps/runway/utils/groupChoice';
+import {
   buildFundingRule,
   buildFundingSteps,
   getFundingBlocker,
@@ -91,6 +103,7 @@ import {
   selectEnvelopes,
   selectBills,
   selectGoals,
+  selectGroups,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
@@ -108,6 +121,8 @@ interface GoalFormData extends FundingFormData, ExtrasFormData {
   current: string;
   /** Null until the person adds one. */
   emoji: string | null;
+  /** An existing group's id, `NEW_CHOICE` while naming one, or '' for none. */
+  group: { choice: string; newText: string };
 }
 
 const parseGoalDraftFields = (stored: unknown) =>
@@ -119,6 +134,7 @@ const parseGoalDraftFields = (stored: unknown) =>
     date: isNullableText,
     current: isText,
     emoji: isNullableText,
+    group: isPickOrCreate,
     extras: isExtrasAnswer,
   });
 
@@ -139,6 +155,8 @@ interface GoalFormProps {
   openStep?: GoalStepId | null;
   /** Hands the built goal over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<GoalSealed>;
+  /** A group the new goal starts in, already answered (the add action on a group's sheet). */
+  presetGroupId?: string;
 }
 
 export type GoalStepId =
@@ -149,6 +167,7 @@ export type GoalStepId =
   | 'often'
   | 'amount'
   | 'cadence'
+  | 'group'
   | 'priority'
   | 'extras'
   | 'emoji';
@@ -170,6 +189,7 @@ const EMPTY_GOAL: GoalSealed = {
     cadence: { kind: 'everyIncomeDay' },
   },
   state: 'active',
+  groupId: null,
 };
 
 const getEditingData = (payload: GoalSealed): GoalFormData => ({
@@ -181,6 +201,7 @@ const getEditingData = (payload: GoalSealed): GoalFormData => ({
     payload.targetDate === null ? null : toDateInputValue(payload.targetDate),
   current: '',
   emoji: payload.emoji,
+  group: { choice: payload.groupId ?? '', newText: '' },
   ...toExtrasForm(payload),
 });
 
@@ -192,6 +213,7 @@ const INITIAL_DATA: GoalFormData = {
   date: null,
   current: '',
   emoji: null,
+  group: { choice: '', newText: '' },
   ...INITIAL_EXTRAS_FORM,
 };
 
@@ -202,6 +224,8 @@ const getBlocker = (
   today: number,
 ) => {
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
+  if (data.group.choice === NEW_CHOICE && data.group.newText.trim() === '')
+    return FORM_FLOW_WORDS.nameGroup;
   if (data.name.trim() === '') return 'Name the goal.';
   if (data.priority === null) return 'Pick how much it matters.';
   if (targetCents === null || targetCents <= 0)
@@ -228,6 +252,7 @@ function GoalFormBody({
   presetDayKey,
   openStep = null,
   draft,
+  presetGroupId,
 }: GoalFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -235,6 +260,17 @@ function GoalFormBody({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const groups = useAppSelector((state) => selectGroups(state, today));
+  const groupChoices = getGroupChoices(
+    groups.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+    })),
+  );
+  const groupOptions = groupChoices.map(({ id, name }) => ({
+    value: id,
+    label: name,
+  }));
   const plan = useAppSelector((state) => state.runway.plan);
   const [startData] = useState<GoalFormData>(() =>
     editing
@@ -247,7 +283,13 @@ function GoalFormBody({
                 ? ''
                 : centsToInputValue(draft.initial.startingCents),
           }
-        : INITIAL_DATA,
+        : {
+            ...INITIAL_DATA,
+            group: { choice: presetGroupId ?? '', newText: '' },
+          },
+  );
+  const [isPriorityChosen, setIsPriorityChosen] = useState(
+    editing !== undefined || draft !== undefined,
   );
   const draftKey = draft
     ? null
@@ -267,11 +309,26 @@ function GoalFormBody({
   const set = (patch: Partial<GoalFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
+  const resolveGroup = (data: GoalFormData) =>
+    resolveGroupChoice(data.group.choice, data.group.newText, groupChoices);
+  /** The priority the person chose, else the starting priority of the group the goal joins. */
+  const getPriority = (data: GoalFormData): Priority | null => {
+    if (isPriorityChosen) return data.priority;
+    const { groupId } = resolveGroup(data);
+    const startsWith = groups.find(({ item }) => item.id === groupId)?.version
+      .payload.goalPriority;
+    return startsWith ?? data.priority;
+  };
+
   const targetCents = parseMoneyToCents(formData.target);
   const hasDays = comingDays.length > 0 || !!draft;
   const blocker =
-    getBlocker(formData, targetCents, hasDays, today) ??
-    getExtrasBlocker(formData, formData.priority);
+    getBlocker(
+      { ...formData, priority: getPriority(formData) },
+      targetCents,
+      hasDays,
+      today,
+    ) ?? getExtrasBlocker(formData, getPriority(formData));
   const currentCents = parseMoneyToCents(formData.current) ?? 0;
 
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
@@ -437,20 +494,61 @@ function GoalFormBody({
       ),
     },
     ...fundingSteps,
+    ...(draft
+      ? []
+      : [
+          {
+            id: 'group',
+            title: FORM_FLOW_WORDS.groupTitle,
+            summaryLabel: FORM_FLOW_WORDS.group,
+            summaryValue:
+              resolveGroup(formData).name || FORM_FLOW_WORDS.noGroup,
+            isAnswered:
+              formData.group.choice !== NEW_CHOICE ||
+              formData.group.newText.trim() !== '',
+            blocker: FORM_FLOW_WORDS.nameGroup,
+            isPreAnswered: true,
+            titleHelp: (
+              <HelpTip title={FORM_FLOW_WORDS.groupTitle}>
+                <p>{FORM_FLOW_WORDS.groupHelp}</p>
+              </HelpTip>
+            ),
+            render: ({ moveOn }: QuestionControls) => (
+              <PickOrCreate
+                label={FORM_FLOW_WORDS.group}
+                options={groupOptions}
+                choice={formData.group.choice}
+                newText={formData.group.newText}
+                newPillLabel={FORM_FLOW_WORDS.newGroup}
+                newPlaceholder={FORM_FLOW_WORDS.newGroupPlaceholder}
+                hasPlus={false}
+                maxLength={MAX_NAME_LENGTH}
+                clearLabel={FORM_FLOW_WORDS.clearGroup}
+                onChange={(choice, newText) => {
+                  set({ group: { choice, newText } });
+                  if (choice !== '' && choice !== NEW_CHOICE) moveOn();
+                }}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]),
     {
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
       summaryLabel: FORM_FLOW_WORDS.priority,
       summaryValue:
-        formData.priority === null ? '' : PRIORITY_LABELS[formData.priority],
+        getPriority(formData) === null
+          ? ''
+          : PRIORITY_LABELS[getPriority(formData) as Priority],
       isAnswered: formData.priority !== null,
       isPreAnswered: true,
       render: ({ moveOn }) => (
         <PillGroup
           label={FORM_FLOW_WORDS.priority}
           options={priorityOptions}
-          value={formData.priority}
+          value={getPriority(formData)}
           onChange={(priority) => {
+            setIsPriorityChosen(true);
             set({ priority });
             moveOn();
           }}
@@ -459,7 +557,7 @@ function GoalFormBody({
     },
     ...buildExtrasSteps({
       data: formData,
-      priority: formData.priority,
+      priority: getPriority(formData),
       set,
     }),
     {
@@ -510,16 +608,17 @@ function GoalFormBody({
       today,
     });
     const target = parseMoneyToCents(data.target);
-    if (data.priority === null || funding === null || target === null)
-      return null;
+    const priority = getPriority(data);
+    if (priority === null || funding === null || target === null) return null;
 
     const orderIndex =
-      editing && editing.payload.priority === data.priority
+      editing && editing.payload.priority === priority
         ? editing.payload.orderIndex
-        : getNextTierRank([...bills, ...envelopes, ...goals], data.priority);
+        : getNextTierRank([...bills, ...envelopes, ...goals], priority);
+    const { groupId, newGroup } = resolveGroup(data);
     const extras = buildExtras({
       data,
-      priority: data.priority,
+      priority,
       funding,
       saved: editing?.payload.extras,
       getNextRank: (tier) =>
@@ -528,8 +627,9 @@ function GoalFormBody({
     const result: GoalSealed = {
       name: data.name.trim(),
       emoji: data.emoji?.trim() || null,
-      priority: data.priority,
+      priority,
       orderIndex,
+      groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       targetCents: target,
       targetDate:
         data.date === null ? null : (fromDateInputValue(data.date) ?? null),
@@ -558,6 +658,7 @@ function GoalFormBody({
       : EMPTY_GOAL,
     candidate,
     presetDayKey,
+    newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from,
@@ -616,6 +717,7 @@ function GoalFormBody({
       const { goalId } = await createGoal(user.uid, encryption, {
         startDate: today,
         goal,
+        newGroup: resolveGroup(formData).newGroup,
       });
       if (plan?.startDate != null && currentCents > 0) {
         const isRecorded = await recordHolding(

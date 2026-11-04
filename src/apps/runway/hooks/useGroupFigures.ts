@@ -7,10 +7,12 @@ import {
 import {
   selectBills,
   selectEnvelopes,
+  selectGoals,
   selectGroups,
   selectResolvedPlan,
   type ResolvedBill,
   type ResolvedEnvelope,
+  type ResolvedGoal,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { fundingAtLevel } from '@apps/runway/engine/parts';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
@@ -32,7 +34,7 @@ const getEnvelopeIncomeDays = (
 ) => getIncomeDaysPerMonth(payLines, today, funding.sourceId ?? null);
 
 const toEnvelopeMember = (
-  { version: envelope }: ResolvedEnvelope,
+  { version: envelope }: ResolvedEnvelope | ResolvedGoal,
   today: number,
   payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
   funding: FundingRule,
@@ -47,9 +49,9 @@ const toEnvelopeMember = (
   ),
 });
 
-/** The envelopes that count at `dial`, each with only its parts at or above it. */
+/** The envelopes or goals that count at `dial`, each with only its parts at or above it. */
 const toCountedMembers = (
-  envelopes: readonly ResolvedEnvelope[],
+  envelopes: readonly (ResolvedEnvelope | ResolvedGoal)[],
   dial: Priority,
   today: number,
   payLines: Parameters<typeof getIncomeDaysPerMonth>[0],
@@ -104,21 +106,28 @@ export function usePlanTotals(
   };
 }
 
+/** A goal adds a monthly amount only while it is active and money goes into it. */
+const isFundedGoal = ({ version }: ResolvedGoal) =>
+  version.payload.state !== 'paused' &&
+  version.payload.funding.cadence.kind !== 'none';
+
 export interface GroupFigures {
   id: string;
   name: string;
-  /** What its bills and envelopes come to in a usual month: the one figure a heading and the group's sheet both show. */
+  /** What its bills, envelopes and active goals come to in a usual month: the one figure a heading and the group's sheet both show. */
   total: GroupTotal;
-  /** The same figure for its bills alone and its envelopes alone: the Bills and Envelopes headings each show their own. */
+  /** The same figure for each kind alone: the Bills, Envelopes and Goals headings each show their own. */
   billsTotal: GroupTotal;
   envelopesTotal: GroupTotal;
+  goalsTotal: GroupTotal;
   bills: ResolvedBill[];
   envelopes: ResolvedEnvelope[];
+  goals: ResolvedGoal[];
   /** The names its monthly figure stands for. */
   names: string[];
 }
 
-/** Every live group with the bills and envelopes that are for it and their monthly totals (counting only those at or above `dial`), combined and for each kind alone; one with an archived group sits in none. */
+/** Every live group with the bills, envelopes and goals that are for it and their monthly totals (counting only those at or above `dial`), combined and for each kind alone; one with an archived group sits in none. */
 export function useGroupFigures(
   today: number,
   dial: Priority = 'want',
@@ -126,6 +135,7 @@ export function useGroupFigures(
   const groups = useAppSelector((state) => selectGroups(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
   const payLines = useResolvedPayLines(today);
   return groups.map(({ item, version }) => {
     const memberBills = bills.filter(
@@ -134,6 +144,10 @@ export function useGroupFigures(
     const memberEnvelopes = envelopes.filter(
       ({ version: envelope }) => envelope.payload.groupId === item.id,
     );
+    const memberGoals = goals.filter(
+      ({ version: goal }) => goal.payload.groupId === item.id,
+    );
+    const fundedGoals = memberGoals.filter(isFundedGoal);
     const billMembers = memberBills.map(toBillMember);
     const envelopeMembers = toCountedMembers(
       memberEnvelopes,
@@ -141,6 +155,7 @@ export function useGroupFigures(
       today,
       payLines,
     );
+    const goalMembers = toCountedMembers(fundedGoals, 'want', today, payLines);
     const countedBills = memberBills
       .filter(({ version: bill }) => isCountedAt(bill.payload.priority, dial))
       .map(toBillMember);
@@ -150,15 +165,25 @@ export function useGroupFigures(
       today,
       payLines,
     );
+    const countedGoals = toCountedMembers(fundedGoals, dial, today, payLines);
     return {
       id: item.id,
       name: version.payload.name,
-      total: monthlyTotal(countedBills, today, countedEnvelopes),
+      total: monthlyTotal(countedBills, today, [
+        ...countedEnvelopes,
+        ...countedGoals,
+      ]),
       billsTotal: monthlyTotal(countedBills, today),
       envelopesTotal: monthlyTotal([], today, countedEnvelopes),
+      goalsTotal: monthlyTotal([], today, countedGoals),
       bills: memberBills,
       envelopes: memberEnvelopes,
-      names: getGroupMemberNames(billMembers, envelopeMembers, today),
+      goals: memberGoals,
+      names: getGroupMemberNames(
+        billMembers,
+        [...envelopeMembers, ...goalMembers],
+        today,
+      ),
     };
   });
 }

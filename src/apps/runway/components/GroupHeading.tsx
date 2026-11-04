@@ -17,7 +17,7 @@ import { describeGroupHeadingLead } from '@apps/runway/utils/billText';
 interface GroupHeadingProps {
   figures: GroupFigures;
   /** The list the heading sits on: it shows the total of that kind alone. */
-  kind: 'bills' | 'envelopes';
+  kind: 'bills' | 'envelopes' | 'goals';
   onOpen: () => void;
 }
 
@@ -27,10 +27,17 @@ function GroupHeading({ figures, kind, onOpen }: GroupHeadingProps) {
   const stance = useAppSelector(selectStance);
   const { name } = figures;
   const emoji = useAppSelector(selectPurposeEmojis).get(figures.id);
-  const isBills = kind === 'bills';
-  const total = isBills ? figures.billsTotal : figures.envelopesTotal;
-  const count = isBills ? figures.bills.length : figures.envelopes.length;
-  const otherCount = isBills ? figures.envelopes.length : figures.bills.length;
+  const total = {
+    bills: figures.billsTotal,
+    envelopes: figures.envelopesTotal,
+    goals: figures.goalsTotal,
+  }[kind];
+  const count = figures[kind].length;
+  const otherCount =
+    figures.bills.length +
+    figures.envelopes.length +
+    figures.goals.length -
+    count;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
   const lead = describeGroupHeadingLead(
     total,
