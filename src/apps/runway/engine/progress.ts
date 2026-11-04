@@ -232,21 +232,35 @@ export const sumOutsideTransfers = (entries: readonly TransferEntry[]): Cents =>
     0,
   );
 
-/** The money moved into each item, counted as set aside from the day it moved. */
+/** The money moved into each item, counted as set aside from the day it moved, less what a transfer out of that item later took back (the latest money in goes first). */
 export function collectMovedIn(
   entries: readonly TransferEntry[],
 ): Record<string, FundedDay[]> {
-  return entries.reduce<Record<string, FundedDay[]>>((acc, entry) => {
-    if (entry.toId !== null && entry.cents > 0) {
-      (acc[entry.toId] ??= []).push({
-        dayKey: `moved_${entry.moveId}`,
-        on: entry.on,
-        cents: entry.cents,
-        isMoved: true,
-      });
-    }
-    return acc;
-  }, {});
+  const takenOut = entries.reduce<Record<string, Cents>>(
+    (acc, { fromId, cents }) =>
+      fromId !== null && cents > 0
+        ? { ...acc, [fromId]: (acc[fromId] ?? 0) + cents }
+        : acc,
+    {},
+  );
+  const left = { ...takenOut };
+  return entries
+    .filter((entry) => entry.toId !== null && entry.cents > 0)
+    .sort((a, b) => a.on - b.on)
+    .reduceRight<Record<string, FundedDay[]>>((acc, entry) => {
+      const toId = entry.toId ?? '';
+      const took = Math.min(left[toId] ?? 0, entry.cents);
+      left[toId] = (left[toId] ?? 0) - took;
+      if (entry.cents > took) {
+        (acc[toId] ??= []).unshift({
+          dayKey: `moved_${entry.moveId}`,
+          on: entry.on,
+          cents: entry.cents - took,
+          isMoved: true,
+        });
+      }
+      return acc;
+    }, {});
 }
 
 /** What transfers added to (positive) or took from (negative) each item. */

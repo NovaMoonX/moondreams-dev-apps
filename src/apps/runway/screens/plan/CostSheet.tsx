@@ -3,6 +3,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
+  Lock,
   Pencil,
   Receipt,
   ReceiptText,
@@ -44,8 +45,11 @@ import {
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import {
+  getCostShare,
   getLiveCosts,
+  getMakeBillBlock,
   getPurchaseMarkFigures,
+  hasOtherOpenCost,
   removeCost,
   restoreCost,
   setCostPrice,
@@ -62,6 +66,7 @@ import { changeItem } from '@apps/runway/store/actions/itemActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectCostPaid,
   selectCostPayments,
   selectHorizonItems,
   selectSpendPurchases,
@@ -255,14 +260,18 @@ function CostSheet({
   const isRepeat = cost.schedule.kind !== 'once';
   const isPaidOnce = !isRepeat && paidEntries.length > 0;
   const isBill = cost.becameBillId !== null;
+  const itemPaid = useAppSelector(selectCostPaid)[itemId];
+  const makeBillBlock = getMakeBillBlock(costPayments, today);
   const canMakeBill =
     isRepeat && isLive && !cost.isOutside && !isBill && next !== null;
-  const hasOtherOpenCost = (payments ?? []).some(
-    ({ costId, paid }) =>
-      costId !== cost.id &&
-      paid === null &&
-      !horizon.costs.find(({ id }) => id === costId)?.isOutside,
+  const hasOtherOpen = hasOtherOpenCost(
+    horizon,
+    cost.id,
+    today,
+    stance,
+    itemPaid ?? [],
   );
+  const shareCents = getCostShare(horizon, cost.id, heldCents, payments ?? []);
   const isRemovable =
     isLive && !isPaidOnce && !isBill && getLiveCosts(horizon).length > 1;
   const settled =
@@ -623,7 +632,7 @@ function CostSheet({
           subtitle={HORIZON_WORDS.changeCostSub}
           onClick={onChange}
         />
-        {canMakeBill && (
+        {canMakeBill && makeBillBlock === null && (
           <ActionRow
             isGrouped
             isRoomy
@@ -632,6 +641,24 @@ function CostSheet({
             label={MAKE_BILL_WORDS.row}
             subtitle={MAKE_BILL_WORDS.rowSub}
             onClick={() => setIsMakingBill(true)}
+          />
+        )}
+        {canMakeBill && makeBillBlock !== null && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<Lock />}
+            label={MAKE_BILL_WORDS.row}
+            subtitle={
+              makeBillBlock.kind === 'laterPaid'
+                ? MAKE_BILL_WORDS.lockedLaterPaid(
+                    formatDateOrdinalUTC(makeBillBlock.dueOn),
+                  )
+                : MAKE_BILL_WORDS.lockedPastDue(
+                    formatDateOrdinalUTC(makeBillBlock.dueOn),
+                  )
+            }
+            onClick={() => undefined}
           />
         )}
         {cost.becameBillId !== null && (
@@ -701,8 +728,8 @@ function CostSheet({
             horizon,
             cost,
             firstDueOn: next.dueOn,
-            heldCents,
-            hasOtherOpenCost,
+            shareCents,
+            hasOtherOpenCost: hasOtherOpen,
           }}
           onClose={() => setIsMakingBill(false)}
         />

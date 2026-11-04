@@ -8,6 +8,7 @@ import {
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 
+import { MAKE_BILL_WORDS } from '@apps/runway/constants';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
@@ -409,7 +410,7 @@ export async function undoCostPaid(
 }
 
 export interface MakeCostABillInput {
-  /** Made once by the caller so a retry of the same save resolves to the same bill. */
+  /** `getMadeBillId` of the item and cost, so a retry or a second device resolves to the same bill. */
   billId: string;
   /** Made once by the caller, for the move of money. */
   moveId: string;
@@ -430,13 +431,14 @@ export interface MakeCostABillInput {
 /**
  * Makes a cost a bill in one transaction: the bill's header, first version and change (as `createBill`
  * writes them), the item's next version with the cost's `becameBillId`, and the move of money when any
- * goes. One change names both items. Resolves false when the bill is already there.
+ * goes. One change names both items. The bill's id comes from its cost, so a second device making the
+ * same cost a bill finds the first one's header and throws the already-done error.
  */
 export async function makeCostABill(
   uid: string,
   encryption: RunwayEncryption,
   input: MakeCostABillInput,
-): Promise<boolean> {
+): Promise<void> {
   const now = Date.now();
   const changeId = generateUuid();
   const movedCents = input.bringCents + input.freeCents;
@@ -514,7 +516,7 @@ export async function makeCostABill(
       transaction.get(planDoc(uid, 'items', input.itemId)),
       transaction.get(planDoc(uid, 'items', input.billId)),
     ]);
-    if (existing.exists()) return false;
+    if (existing.exists()) throw new Error(MAKE_BILL_WORDS.alreadyDone);
     if (movedCents > 0) assertPlanStarted(plan.data(), input.startDate);
     assertSourceLive(item.data() as Partial<PlanItemDoc> | undefined);
     if (groupDocs) {
@@ -549,6 +551,5 @@ export async function makeCostABill(
         sealed: moveSealed,
       } satisfies MoveDoc);
     }
-    return true;
   });
 }

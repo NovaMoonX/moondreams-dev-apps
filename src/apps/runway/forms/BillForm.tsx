@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
+import SummaryRow from '@/components/SummaryRow';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import HelpTip from '@/components/HelpTip';
@@ -55,13 +56,24 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { listCoveredFrom, setCostBill } from '@apps/runway/engine/horizon';
+import {
+  getCostShare,
+  getMadeBillId,
+  getMakeBillBlock,
+  hasOtherOpenCost,
+  listCoveredFrom,
+  setCostBill,
+} from '@apps/runway/engine/horizon';
 import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import { makeCostABill } from '@apps/runway/store/actions/horizonActions';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectCostPaid,
+  selectCostPayments,
+  selectHorizonItems,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { clearBillPins } from '@apps/runway/store/actions/dayActions';
@@ -230,8 +242,8 @@ export interface BillFromCost {
   cost: HorizonCost;
   /** The cost's next unpaid payment, which is the bill's first due date. */
   firstDueOn: DateOnly;
-  /** What the item holds now. */
-  heldCents: Cents;
+  /** The part of what the item holds that is this cost's to bring: what its other open costs still need stays. */
+  shareCents: Cents;
   /** Another cost of the item still has a payment to pay with this money. */
   hasOtherOpenCost: boolean;
 }
@@ -565,7 +577,9 @@ function BillFormBody({
   const { isHidden } = useValuesHidden();
   const mask = useMaskedText();
   const [made] = useState(() => ({
-    billId: generateUuid(),
+    billId: fromCost
+      ? getMadeBillId(fromCost.itemId, fromCost.cost.id)
+      : generateUuid(),
     moveId: newTransferMoveId(),
   }));
   const [bring, setBring] = useState<Bring | null>(null);
@@ -738,7 +752,7 @@ function BillFormBody({
     getEveryMonths(formData) === getEveryMonths(startData) &&
     formData.isLater === startData.isLater &&
     JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
-  const heldCents = fromCost ? Math.max(0, fromCost.heldCents) : 0;
+  const heldCents = fromCost ? Math.max(0, fromCost.shareCents) : 0;
   const isBringAsked = fromCost !== undefined && heldCents > 0;
   const bringChoice: Bring | null = isBringAsked ? bring : 'no';
   const blocker =
@@ -1349,7 +1363,10 @@ function BillFormBody({
   const maskNote = (note: string | null | undefined) =>
     note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps: maskSummaries(steps, isHidden),
+    steps: maskSummaries(
+      fromCost ? steps.filter(({ id }) => id !== 'due') : steps,
+      isHidden,
+    ),
     startFolded: editing !== undefined || !!draft?.initial,
     foldAnswered: kept.restored !== null || fromCost !== undefined,
     initialOpenId: draft?.openStep ?? null,
@@ -1462,6 +1479,7 @@ function BillFormBody({
           ],
           itemId: fromCost.itemId,
           bringCents: bringChoice === 'yes' ? heldCents : 0,
+          freeCents: bringChoice === 'no' && isFreeInstead ? heldCents : 0,
           on: today,
         } satisfies PreviewChange)
       : null;
@@ -1582,12 +1600,36 @@ function BillFormBody({
         if (!live || !cost || cost.becameBillId !== null || anchor === null) {
           throw new Error(MAKE_BILL_WORDS.alreadyDone);
         }
-        const held = Math.max(
-          0,
-          selectBalances(state).assignedByItem[fromCost.itemId] ?? 0,
+        const livePayments =
+          selectCostPayments(state, today)[fromCost.itemId] ?? [];
+        const liveNext = livePayments.find(
+          ({ costId, paid }) => costId === cost.id && paid === null,
         );
-        const bringCents = bringChoice === 'yes' ? held : 0;
-        const freeCents = bringChoice === 'no' && isFreeInstead ? held : 0;
+        if (
+          !liveNext ||
+          liveNext.dueOn !== anchor ||
+          getMakeBillBlock(
+            livePayments.filter(({ costId }) => costId === cost.id),
+            today,
+          ) !== null
+        ) {
+          throw new Error(MAKE_BILL_WORDS.changed);
+        }
+        const shareCents = getCostShare(
+          live,
+          cost.id,
+          selectBalances(state).assignedByItem[fromCost.itemId] ?? 0,
+          livePayments,
+        );
+        const isFreeLive = !hasOtherOpenCost(
+          live,
+          cost.id,
+          today,
+          selectStance(state),
+          selectCostPaid(state)[fromCost.itemId] ?? [],
+        );
+        const bringCents = bringChoice === 'yes' ? shareCents : 0;
+        const freeCents = bringChoice === 'no' && isFreeLive ? shareCents : 0;
         await makeCostABill(user.uid, encryption, {
           billId: made.billId,
           moveId: made.moveId,
@@ -1702,6 +1744,11 @@ function BillFormBody({
               <>
                 {openStep !== null && editing && (
                   <BackLink onBack={() => setIsAll(false)} />
+                )}
+                {fromCost && (
+                  <SummaryRow label={MAKE_BILL_WORDS.firstDue}>
+                    {formatDateOrdinalUTC(fromCost.firstDueOn)}
+                  </SummaryRow>
                 )}
                 <QuestionFlow flow={questions} />
               </>

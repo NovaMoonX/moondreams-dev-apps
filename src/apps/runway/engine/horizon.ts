@@ -171,6 +171,72 @@ export function listCoveredFrom(
   ).covered;
 }
 
+/** The id of the bill a cost becomes: one per cost, so two devices making the same cost a bill write the same document and the second is refused. */
+export const getMadeBillId = (itemId: string, costId: string) =>
+  `bill_${itemId}_${costId}`;
+
+/** What the item holds that is this cost's to bring: its held money less what the unpaid payments of its other live costs paid inside the plan still need, never below zero or above what it holds. */
+export function getCostShare(
+  horizon: Pick<HorizonSealed, 'costs'>,
+  costId: string,
+  heldCents: Cents,
+  payments: readonly CostPayment[],
+): Cents {
+  const held = Math.max(0, heldCents);
+  const others = new Set(
+    horizon.costs
+      .filter(
+        (cost) =>
+          cost.id !== costId &&
+          cost.endsAfter === null &&
+          !cost.isOutside &&
+          cost.becameBillId === null,
+      )
+      .map(({ id }) => id),
+  );
+  const needed = payments.reduce(
+    (sum, { costId: id, paid, totalCents }) =>
+      others.has(id) && paid === null ? sum + totalCents : sum,
+    0,
+  );
+  return Math.min(held, Math.max(0, held - needed));
+}
+
+/** Whether another live cost of the item, paid inside the plan and not yet a bill, has a payment still to come or to pay, however far off. */
+export function hasOtherOpenCost(
+  horizon: Pick<HorizonSealed, 'costs'>,
+  costId: string,
+  today: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+): boolean {
+  const farOn = addUtcMonths(today, 120);
+  return horizon.costs.some(
+    (cost) =>
+      cost.id !== costId &&
+      cost.endsAfter === null &&
+      !cost.isOutside &&
+      cost.becameBillId === null &&
+      listCostPayments(cost, farOn, stance, paid).some(
+        ({ paid: mark }) => mark === null,
+      ),
+  );
+}
+
+/** Why a cost cannot be made a bill yet, or null when it can: a later payment already marked paid has to be taken back, and an unpaid payment already past has to be paid or marked first, because the bill starts at the cost's next unpaid payment. */
+export function getMakeBillBlock(
+  payments: readonly CostPayment[],
+  today: DateOnly,
+): { kind: 'laterPaid' | 'pastDue'; dueOn: DateOnly } | null {
+  const next = payments.find(({ paid }) => paid === null);
+  if (!next) return null;
+  const laterPaid = payments.find(
+    ({ dueOn, paid }) => paid !== null && dueOn > next.dueOn,
+  );
+  if (laterPaid) return { kind: 'laterPaid', dueOn: laterPaid.dueOn };
+  return next.dueOn < today ? { kind: 'pastDue', dueOn: next.dueOn } : null;
+}
+
 /** The item with a cost handed to the bill that now plans its payments from `billOn`. */
 export const setCostBill = (
   horizon: HorizonSealed,

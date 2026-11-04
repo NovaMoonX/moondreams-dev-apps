@@ -86,6 +86,8 @@ export type PreviewChange =
       versions: PreviewVersion[];
       itemId: string;
       bringCents: number;
+      /** Money the item gives to Free to Spend instead of the bill. */
+      freeCents: number;
       on: number;
     }
   | { kind: 'end'; itemId: string; endedAt: number }
@@ -250,35 +252,40 @@ const layerPlan = (
   return { items, versions, openDays: layerDay(openDays, change) };
 };
 
-/** The held money and bill progress as a made bill leaves them: the item holds the money brought less, and the bill counts it as set aside from the day it moved. */
+/** The held money and bill progress as a made bill leaves them: the item holds what moved less, and the bill counts what it was brought as set aside from the day it moved. */
 const withBrought = (
   inputs: Pick<PreviewInputs, 'heldByItem' | 'billProgress'>,
   change: PreviewChange,
 ) =>
-  change.kind !== 'makeBill' || change.bringCents <= 0
+  change.kind !== 'makeBill' || change.bringCents + change.freeCents <= 0
     ? inputs
     : {
         heldByItem: {
           ...inputs.heldByItem,
           [change.itemId]: Math.max(
             0,
-            (inputs.heldByItem[change.itemId] ?? 0) - change.bringCents,
+            (inputs.heldByItem[change.itemId] ?? 0) -
+              change.bringCents -
+              change.freeCents,
           ),
         },
-        billProgress: {
-          ...inputs.billProgress,
-          [change.item.id]: {
-            funded: [
-              {
-                dayKey: `moved_${WHAT_IF_VERSION_ID}`,
-                on: change.on,
-                cents: change.bringCents,
-                isMoved: true,
+        billProgress:
+          change.bringCents <= 0
+            ? inputs.billProgress
+            : {
+                ...inputs.billProgress,
+                [change.item.id]: {
+                  funded: [
+                    {
+                      dayKey: `moved_${WHAT_IF_VERSION_ID}`,
+                      on: change.on,
+                      cents: change.bringCents,
+                      isMoved: true,
+                    },
+                  ],
+                  paid: [],
+                },
               },
-            ],
-            paid: [],
-          },
-        },
       };
 
 export interface PreviewDay {
@@ -511,7 +518,7 @@ export function previewLookahead(
       versions,
       days: openDays,
       moves:
-        change.kind === 'makeBill' && change.bringCents > 0
+        change.kind === 'makeBill' && change.bringCents + change.freeCents > 0
           ? [
               ...state.runway.moves,
               {
@@ -523,8 +530,8 @@ export function previewLookahead(
                 createdAt: Number.MAX_SAFE_INTEGER,
                 payload: {
                   fromId: change.itemId,
-                  toId: change.item.id,
-                  cents: change.bringCents,
+                  toId: change.bringCents > 0 ? change.item.id : null,
+                  cents: change.bringCents + change.freeCents,
                   note: null,
                   isOutside: false,
                 },

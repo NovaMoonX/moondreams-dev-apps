@@ -603,6 +603,10 @@ export const MAKE_BILL_WORDS = {
     `${bill} is a bill now, and ${item}'s ${money} is Free to Spend`,
   failed: 'This did not save. Nothing was changed.',
   alreadyDone: 'This cost is already a bill. Open it again.',
+  changed: 'This cost changed. Open it again.',
+  firstDue: 'First due date',
+  lockedLaterPaid: (date: string) => `Take back the ${date} payment first`,
+  lockedPastDue: (date: string) => `Pay or mark the ${date} payment first`,
   summary: (item: string, cost: string, amount: string, timing: string) =>
     `${item}: ${cost} became a bill, ${amount}. ${timing}.`,
   summaryBrought: (money: string, item: string) =>
