@@ -13,6 +13,7 @@ import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
@@ -94,8 +95,15 @@ function EnvelopeTile({
       : 0;
   const partsText =
     extras.length === 0
-      ? null
-      : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
+      ? PRIORITY_LABELS[envelope.priority]
+      : [
+          `${PRIORITY_LABELS[envelope.priority]} ${formatCentsShort(ownCents)}`,
+          ...extras.map(
+            (extra) =>
+              `${PRIORITY_LABELS[extra.tier]} +${formatCentsShort(extra.cents)}${isCountedAt(extra.tier, dial) ? '' : ` (${PRIORITY_DIAL_WORDS.notCounted.toLowerCase()})`}`,
+          ),
+        ].join(' · ');
+  const isTrimmedHere = leftOut.length > 0;
   const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
   const monthly =
@@ -178,22 +186,16 @@ function EnvelopeTile({
           figureLabel={
             isPlan
               ? eachTime
-                ? describeCadenceLine(envelope.funding.cadence)
+                ? `${describeCadenceLine(envelope.funding.cadence)}${isTrimmedHere && dial !== 'want' ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}` : ''}`
                 : ITEM_SHEET_R2_WORDS.eachTime
               : isHidden
                 ? ITEM_SHEET_R2_WORDS.balance
                 : capitalize(word)
           }
-          figure={
-            isPlan
-              ? whole.amount.kind === 'exact'
-                ? formatCents(whole.amount.cents)
-                : undefined
-              : value
-          }
+          figure={isPlan ? (eachTime ?? undefined) : value}
           fact={[
-            PRIORITY_LABELS[envelope.priority],
-            isPlan && eachTime ? partsText : funding,
+            isPlan && eachTime ? partsText : PRIORITY_LABELS[envelope.priority],
+            isPlan && eachTime ? null : funding,
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
