@@ -35,6 +35,7 @@ import {
 import { selectBalanceInputs } from '@apps/runway/store/selectors/balanceSelectors';
 import type { Cents, OpenMove } from '@apps/runway/types';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
+import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 interface SetHeldViewProps {
   itemId: string;
@@ -45,10 +46,6 @@ interface SetHeldViewProps {
   today: number;
   onBack: () => void;
 }
-
-const isOfflineFailure = (error: unknown) =>
-  !navigator.onLine ||
-  /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
 /** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
 function SetHeldView({

@@ -251,7 +251,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Two Horizon items: Moving around the next Jan 15th with a truck, movers (a range) and a deposit, and Miso's surgery in December with the surgery (a range) and a follow-up. Each is a header, a first version and an "Added" change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan and movers (a range) covered by the $800 put toward it, Miso's surgery in December with nothing put toward it, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -262,17 +262,20 @@ async function writeSeedHorizon(
   const addedAt = context.now - 3 * DAY_MS;
   const jan15 = nextCalendarDay(today, 0, 15);
   const dec18 = nextCalendarDay(today, 11, 18);
+  const dec19 = nextCalendarDay(today, 11, 19);
   const cost = (
     id: string,
     name: string,
     lowCents: number,
     highCents: number,
     anchor: number,
+    isOutside = false,
   ) => ({
     id,
     name,
     amount: { lowCents, highCents },
     schedule: { kind: 'once' as const, anchor, monthDays: [] },
+    isOutside,
     note: null,
   });
 
@@ -286,6 +289,7 @@ async function writeSeedHorizon(
         happensUntil: null,
         priority: 'should',
         orderIndex: 20,
+        rest: { kind: 'outside' },
         note: null,
         costs: [
           cost(
@@ -294,6 +298,7 @@ async function writeSeedHorizon(
             12_000,
             12_000,
             jan15 - DAY_MS,
+            true,
           ),
           cost('seed-cost-movers', 'Movers', 60_000, 80_000, jan15),
           cost(
@@ -302,6 +307,7 @@ async function writeSeedHorizon(
             25_000,
             25_000,
             jan15 - 5 * DAY_MS,
+            true,
           ),
         ],
       },
@@ -315,6 +321,7 @@ async function writeSeedHorizon(
         happensUntil: null,
         priority: 'should',
         orderIndex: 21,
+        rest: { kind: 'later' },
         note: null,
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
@@ -327,6 +334,42 @@ async function writeSeedHorizon(
           ),
         ],
       },
+    },
+    {
+      id: 'seed-horizon-wedding',
+      payload: {
+        name: "Sam's wedding",
+        emoji: '💍',
+        happensOn: dec19 + 42 * DAY_MS,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 22,
+        rest: { kind: 'later' },
+        note: null,
+        costs: [
+          cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
+          cost(
+            'seed-cost-photographer',
+            'Photographer',
+            80_000,
+            80_000,
+            dec19 + 42 * DAY_MS,
+          ),
+        ],
+      },
+    },
+  ];
+  const movedOn = today - 2 * DAY_MS;
+  const toward: { itemId: string; cents: number; summary: string }[] = [
+    {
+      itemId: 'seed-horizon-moving',
+      cents: 80_000,
+      summary: 'Put $800.00 toward Moving from Free to Spend.',
+    },
+    {
+      itemId: 'seed-horizon-wedding',
+      cents: 120_000,
+      summary: "Put $1,200.00 toward Sam's wedding from Free to Spend.",
     },
   ];
 
@@ -342,7 +385,54 @@ async function writeSeedHorizon(
     ),
   ]);
 
+  const transfers = await Promise.all(
+    toward.map(async ({ itemId, cents, summary }) => {
+      const transfer: TransferSealed = {
+        fromId: null,
+        toId: itemId,
+        cents,
+        note: null,
+        isOutside: false,
+      };
+      return {
+        itemId,
+        transfer,
+        sealed: await sealJson(transfer, encryption),
+        change: await sealJson(
+          { summary, note: null } satisfies ChangeSealed,
+          encryption,
+        ),
+      };
+    }),
+  );
+
   const batch = context.firestore.batch();
+  transfers.forEach(
+    ({ itemId, transfer, sealed: moveSealed, change: moveChange }) => {
+      const moveId = `transfer_seed-toward-${itemId}`;
+      const createdAt = movedOn + 10 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'transfer',
+        date: movedOn,
+        refId: transfer.toId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: moveSealed,
+      } satisfies MoveDoc);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-toward-${itemId}`),
+        {
+          id: `seed-change-toward-${itemId}`,
+          kind: 'moveChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [itemId],
+          sealed: moveChange,
+        } satisfies ChangeDoc,
+      );
+    },
+  );
   items.forEach(({ id }, index) => {
     const createdAt = addedAt + index * 1000;
     const changeId = `seed-change-${id}`;
@@ -368,7 +458,7 @@ async function writeSeedHorizon(
     );
   });
   await batch.commit();
-  return items.length * 3;
+  return items.length * 3 + transfers.length * 2;
 }
 
 const KEPT_ENVELOPE_ID = 'seed-envelope-concert';
@@ -2548,7 +2638,7 @@ async function writeSeedPurchases(
 /**
  * Writes the closings the app would build for a seeded plan: every month from the starting day's through
  * the last one that may be closed, read back from the emulator and summed by the same code the app runs.
- * Emulators only. Returns how many it wrote.
+ * Closings left by an earlier run go first, since one for a later month would hide the seeded moves. Emulators only. Returns how many it wrote.
  */
 export async function seedClosings(
   context: SeedContext,
@@ -2558,6 +2648,8 @@ export async function seedClosings(
 ): Promise<number> {
   const plan = `apps/runway/plans/${uid}`;
   const target = getLastClosableMonth(startOfUtcDay(context.now));
+  const kept = await context.firestore.collection(`${plan}/closings`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
   if (toMonthKey(startDate) > target) return 0;
   const items = await context.firestore.collection(`${plan}/items`).get();
   const billIds = new Set(

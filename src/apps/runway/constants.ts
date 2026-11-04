@@ -239,6 +239,26 @@ export const INCOME_ENDING_LABELS: Record<
 export const DEFAULT_PAY_LINE_NAME = 'Paycheck';
 export const MAX_HORIZON_COSTS = 20;
 
+/** What a Horizon item's costs fall back on once the money put toward it runs out. Issue 82 adds `pays` and `onePay`. */
+export const HORIZON_REST = ['outside', 'later'] as const;
+
+export const HORIZON_REST_OPTIONS: readonly {
+  value: (typeof HORIZON_REST)[number];
+  label: string;
+  meaning: string;
+}[] = [
+  {
+    value: 'outside',
+    label: 'Outside the plan',
+    meaning: "I'll cover the rest myself. Runway never asks for it or warns.",
+  },
+  {
+    value: 'later',
+    label: "I'll decide later",
+    meaning: 'Runway asks for nothing yet, and warns you if it runs short.',
+  },
+];
+
 /** Cost names offered under "What is it?", keyed on simple words in the item's name. */
 export const HORIZON_COST_SUGGESTIONS: readonly {
   words: readonly string[];
@@ -277,11 +297,9 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  due: (name: string, date: string) => `${name} · due\u00A0${date}`,
+  due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
-  rangesAt: (endWords: string) =>
-    `A cost given as a range is planned at ${endWords}, so the total holds if it comes in high.`,
   costsCaption: 'Costs',
   nameTitle: "What's on your horizon?",
   name: 'Name',
@@ -323,6 +341,82 @@ export const HORIZON_WORDS = {
   needsCostName: 'Name the cost.',
   needsCostDate: 'Pick a day within the next year that has not passed.',
   addCostNamed: (name: string) => `Add ${name}`,
+  costOutside: 'Paid outside the plan',
+  costPaidTitle: "How it's paid",
+  costPaidLabel: "How it's paid",
+  costPaidLike: (name: string) => `Like the rest of ${name}`,
+  costOutsideHint:
+    'Stays on your list. Runway never sets money aside for it or warns you about it.',
+  outsideTag: 'Outside the plan',
+  putTitle: 'Put money toward it now?',
+  putAmount: 'Amount',
+  putFrom: 'Take it from',
+  putFromFree: 'From Free to Spend',
+  putFromPlace: 'From an envelope or goal',
+  putPlaces: 'Envelopes and goals',
+  putNotNow: 'Not now',
+  putSummary: (amount: string, from: string) => `${amount} from ${from}`,
+  putFreeName: 'Free to Spend',
+  needsPutAmount: 'Enter how much to put toward it.',
+  needsPutFrom: 'Pick where it comes from.',
+  needsPutPlace: 'Pick the envelope or goal.',
+  putTooMuch: (from: string) => `That is more than ${from} has.`,
+  putAdded: (amount: string, from: string, name: string) =>
+    `Put ${amount} toward ${name} from ${from}.`,
+  putUndone: (amount: string, name: string, from: string) =>
+    `Took ${amount} back out of ${name} to ${from}`,
+  restTitle: "What it doesn't cover comes from",
+  rest: 'The rest',
+  needsRest: 'Pick where the rest comes from.',
+  plannedTotal: (amount: string, isUpTo: boolean) =>
+    `${isUpTo ? 'Up to ' : ''}${amount} planned`,
+  setAside: 'Set aside',
+  spent: 'Spent',
+  left: 'Left',
+  leftFact: (setAside: string, spent: string) =>
+    `${setAside} set aside, ${spent} spent`,
+  shortTitle: (amount: string, date: string) => `${amount} short on ${date}`,
+  shortBody: (
+    cost: string,
+    planned: string,
+    available: string,
+    isAfterEarlier: boolean,
+    endWords: string | null,
+  ) =>
+    `${cost} is planned at ${endWords ? `${endWords}, ` : ''}${planned}, more than the ${available} ${isAfterEarlier ? 'left for it' : 'set aside'}.`,
+  shortNothing: (name: string) => `Nothing is set aside for ${name} yet.`,
+  shortAfter: (cost: string, earlier: string) =>
+    `Nothing is left for ${cost} after ${earlier}.`,
+  outsideTotal: (amount: string) => `${amount} paid outside the plan`,
+  needsAShortLook: 'Needs a look',
+  putHolds: (name: string, amount: string) => `${name} has ${amount}`,
+  needsPutOrNotNow: 'Pick where it comes from, or Not now.',
+  restOutsideNote: 'The rest is on you, outside the plan.',
+  putMore: 'Put more toward it',
+  putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
+  putMoreTitle: 'Put more toward it',
+  putMorePlaces: 'Places',
+  putMoreEmpty: 'Add money',
+  putShowToCheck: (from: string) => `Show amounts to check what ${from} has.`,
+  putMoreAmount: 'Amount to put toward it',
+  putMoreFrom: 'Where it comes from',
+  putMoreOutside: 'Outside the plan',
+  putOutsideName: 'outside the plan',
+  putMoreAction: (amount: string) => `Put ${amount} toward it`,
+  putMoreDone: (amount: string, name: string) => `Put ${amount} toward ${name}`,
+  needsPutMoreFrom: 'Pick where it comes from.',
+  covers: {
+    nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    none: "What's set aside doesn't cover a whole cost yet.",
+    all: 'Covers every cost.',
+    listed: (list: string, atEnd: string) => `Covers ${list}${atEnd}.`,
+    atEnd: (endWords: string) => ` at ${endWords}`,
+    on: (name: string, date: string) => `${name} on ${date}`,
+    more: (count: number) => `${count} more`,
+    helpTitle: 'About the range',
+    helpRange: (name: string, low: string, high: string, end: string) =>
+      `${name} could be ${low} to ${high}. Runway plans it at ${end}.`,
+  },
 } as const;
 
 export const MAX_NAME_LENGTH = 60;
@@ -498,6 +592,7 @@ export const START_HOLDINGS = [
   'goal',
   'bill',
   'envelope',
+  'horizon',
   'card',
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
@@ -1137,12 +1232,13 @@ export const TRACKING_WORDS = {
   history: 'Tracking history',
   lineUpTitle: 'Where is your money now?',
   lineUpHelp:
-    'Say what you have and what each envelope, goal and bill holds on the day tracking begins. Money that arrives or is paid after that day is added to it.',
+    'Say what you have and what each envelope, goal, Horizon item and bill holds on the day tracking begins. Money that arrives or is paid after that day is added to it.',
   startsOn: 'Tracking starts',
   moneyOnHand: 'Money on hand',
   moneyHint: 'One total for all of it. Named accounts come later.',
   envelopes: 'What each envelope holds',
   goals: 'What each goal holds',
+  horizon: 'What each Horizon item holds',
   bills: 'Already set aside for bills',
   cards: 'What each card owes',
   start: 'Start tracking',
@@ -1265,6 +1361,7 @@ export const START_AMOUNTS_WORDS = {
   cashHint:
     "What's in your account apart from what your goals and envelopes hold.",
   goals: 'What each goal holds',
+  horizon: 'What each Horizon item holds',
   envelopes: 'What each envelope holds',
   bills: 'Already set aside for bills',
   total: 'Total in your account',
@@ -2591,6 +2688,7 @@ export const FREE_SUM_WORDS = {
   cards: 'Set aside for cards',
   bills: 'Held for bills',
   goals: 'Held for goals',
+  horizon: 'Held for Horizon',
   envelopesTrack: 'Left in envelopes',
   envelopesPlan: 'Set aside in envelopes',
   result: 'Free to Spend',

@@ -105,6 +105,16 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       value: formatCents(balances.assignedToGoalsCents),
       section: 'goals',
     },
+    ...(balances.assignedToHorizonCents !== 0
+      ? [
+          {
+            sign: '+',
+            name: FREE_SUM_WORDS.horizon,
+            value: formatCents(balances.assignedToHorizonCents),
+            section: 'horizon' as const,
+          },
+        ]
+      : []),
     {
       sign: '+',
       name: FREE_SUM_WORDS.bills,

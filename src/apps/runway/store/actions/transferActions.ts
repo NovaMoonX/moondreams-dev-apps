@@ -1,4 +1,4 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -79,12 +79,11 @@ const getItemIds = (fromId: string | null, toId: string | null) =>
 const isStopped = (item: Partial<PlanItemDoc> | undefined) =>
   item === undefined || (item.archivedAt ?? null) !== null;
 
-/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand changes only for an `isOutside` move. Resolves with the day it is dated, so an Undo can name it. */
-export async function moveLeftover(
-  uid: string,
+/** Checks a move and seals it with its change entry; nothing is written. */
+export async function sealMoveLeftover(
   encryption: RunwayEncryption,
   input: MoveLeftoverInput,
-): Promise<DateOnly> {
+) {
   if (input.cents <= 0 || input.cents > MAX_PURCHASE_CENTS) {
     throw new Error('Enter how much to move.');
   }
@@ -126,6 +125,55 @@ export async function moveLeftover(
       },
     ),
   ]);
+  return { date, sealed, change };
+}
+
+export type SealedMove = Awaited<ReturnType<typeof sealMoveLeftover>>;
+
+/** Throws when the plan has not started by the move's day. */
+export function assertPlanStarted(
+  plan: Partial<PlanDoc> | undefined,
+  date: DateOnly,
+) {
+  if (plan?.startDate == null || plan.startDate > date) {
+    throw new Error('Money can be moved once your plan has started.');
+  }
+}
+
+/** Throws when a source item is archived or gone. */
+export function assertSourceLive(item: Partial<PlanItemDoc> | undefined) {
+  if (isStopped(item)) throw new Error('That one was archived.');
+}
+
+/** Writes a sealed move and its change entry inside a transaction that has read the plan; the ledger is marked. */
+export function writeSealedMove(
+  transaction: Transaction,
+  uid: string,
+  moveId: string,
+  plan: Partial<PlanDoc> | undefined,
+  { date, sealed, change }: SealedMove,
+  refId: string | null,
+) {
+  markLedgerWrite(transaction, uid, plan, [date]);
+  transaction.set(moveRef(uid, moveId), {
+    id: moveId,
+    kind: 'transfer',
+    date,
+    refId,
+    reversesMoveId: null,
+    createdAt: Date.now(),
+    sealed,
+  } satisfies MoveDoc);
+  transaction.set(changeRef(uid, change.id), change);
+}
+
+/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand changes only for an `isOutside` move. Resolves with the day it is dated, so an Undo can name it. */
+export async function moveLeftover(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: MoveLeftoverInput,
+): Promise<DateOnly> {
+  const sealedMove = await sealMoveLeftover(encryption, input);
   await runTransaction(db, async (transaction) => {
     const [plan, from, to, existing] = await Promise.all([
       transaction.get(planRef(uid)),
@@ -139,14 +187,9 @@ export async function moveLeftover(
     ]);
     if (existing.exists()) return;
     const data = plan.data() as Partial<PlanDoc> | undefined;
-    if (data?.startDate == null || data.startDate > date) {
-      throw new Error('Money can be moved once your plan has started.');
-    }
-    if (
-      from !== null &&
-      isStopped(from.data() as Partial<PlanItemDoc> | undefined)
-    ) {
-      throw new Error('That one was archived.');
+    assertPlanStarted(data, sealedMove.date);
+    if (from !== null) {
+      assertSourceLive(from.data() as Partial<PlanItemDoc> | undefined);
     }
     if (
       to !== null &&
@@ -154,19 +197,16 @@ export async function moveLeftover(
     ) {
       throw new Error('That place was archived. Pick another.');
     }
-    markLedgerWrite(transaction, uid, data, [date]);
-    transaction.set(moveRef(uid, input.moveId), {
-      id: input.moveId,
-      kind: 'transfer',
-      date,
-      refId: input.fromId ?? input.toId,
-      reversesMoveId: null,
-      createdAt: Date.now(),
-      sealed,
-    } satisfies MoveDoc);
-    transaction.set(changeRef(uid, change.id), change);
+    writeSealedMove(
+      transaction,
+      uid,
+      input.moveId,
+      data,
+      sealedMove,
+      input.fromId ?? input.toId,
+    );
   });
-  return date;
+  return sealedMove.date;
 }
 
 export type UndoTransferInput = Omit<ChangeMove, 'isUndo'>;

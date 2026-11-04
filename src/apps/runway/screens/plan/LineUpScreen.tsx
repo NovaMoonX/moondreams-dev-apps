@@ -41,6 +41,7 @@ import {
   selectBills,
   selectEnvelopes,
   selectGoals,
+  selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -65,6 +66,9 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
+  const horizonItems = useAppSelector((state) =>
+    selectHorizonItems(state, today),
+  );
   const earliest = getEarliestTrackingStart(plan?.trackingPeriods ?? []);
 
   const defaultDate = toDateInputValue(today);
@@ -116,6 +120,11 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
     })),
     ...goals.map(({ item, version }) => ({
       holding: 'goal' as const,
+      id: item.id,
+      name: version.payload.name,
+    })),
+    ...horizonItems.map(({ item, version }) => ({
+      holding: 'horizon' as const,
       id: item.id,
       name: version.payload.name,
     })),
@@ -268,6 +277,12 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
         <AmountList
           label={TRACKING_WORDS.goals}
           rows={pick('goal')}
+          values={amounts}
+          onChange={setAmount}
+        />
+        <AmountList
+          label={TRACKING_WORDS.horizon}
+          rows={pick('horizon')}
           values={amounts}
           onChange={setAmount}
         />

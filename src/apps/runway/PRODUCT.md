@@ -578,7 +578,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Reminders for income days and bills coming due, which need no linked account
 - [x] Every date Runway shows reads with an ordinal and a short month ("Feb 1st", "Mar 31st")
 - [ ] Horizon: an event with one-time and repeating costs, exact or a range, money put toward it now, and the rest from your pays, one pay, outside the plan or decided later, with set aside, spent and left
-- [ ] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
+- [x] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
 - [ ] Set a cost's price; pay it in one tap when exact, with its real amount when a range, as a purchase or a paid mark on Track and a paid mark on Plan; mark an outside cost paid
 - [ ] Turn a repeating cost into a bill, bringing what is left with it
 - [ ] Change or remove costs, finish or call off an item, choosing where its money goes, and bring a called-off item back

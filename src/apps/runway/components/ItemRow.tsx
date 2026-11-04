@@ -146,7 +146,7 @@ function ItemRow({
               aria-hidden='true'
             />
           )}
-          <span className='line-clamp-2 max-[359px]:line-clamp-3'>
+          <span className='line-clamp-2 text-pretty max-[359px]:line-clamp-3'>
             {detailLead && (
               <>
                 <span

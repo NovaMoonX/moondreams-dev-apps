@@ -232,6 +232,8 @@ import {
 import {
   listCostPayments,
   listHorizonPayments,
+  planHorizon,
+  readHorizon,
   sumCostPayments,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
@@ -10652,6 +10654,7 @@ const version = (
     name: 'Movers',
     amount: { lowCents: 60_000, highCents: 80_000 },
     schedule: { kind: 'once' as const, anchor: jan15, monthDays: [] },
+    isOutside: false,
     note: null,
   };
   const truck = {
@@ -10720,6 +10723,265 @@ const version = (
       nb(' 2028'),
     'two years keep both',
   );
+}
+
+// Horizon: the walk over the money held, and what a Horizon item holds in the balances.
+{
+  const jan15 = Date.UTC(2027, 0, 15);
+  const end = Date.UTC(2027, 11, 31);
+  const cost = (
+    id: string,
+    lowCents: number,
+    highCents: number,
+    dueOn: number,
+    isOutside = false,
+  ) => ({
+    id,
+    name: id,
+    amount: { lowCents, highCents },
+    schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+    isOutside,
+    note: null,
+  });
+  const costs = [
+    cost('c-movers', 60_000, 80_000, jan15),
+    cost('a-deposit', 25_000, 25_000, jan15 - 5 * DAY_MS),
+    cost('b-truck', 12_000, 12_000, jan15 - DAY_MS),
+  ];
+  const later = { rest: { kind: 'later' as const }, costs };
+  const paymentsOf = (list: typeof costs) =>
+    listHorizonPayments(list, end, 'conservative');
+
+  const walk = planHorizon(later, 40_000, paymentsOf(costs));
+  assert.deepEqual(
+    walk.covers.map(({ costId, coveredCents }) => [costId, coveredCents]),
+    [
+      ['a-deposit', 25_000],
+      ['b-truck', 12_000],
+      ['c-movers', 3_000],
+    ],
+    'the money pays in due order and the last payment takes what is left',
+  );
+  assert.equal(
+    walk.covers.reduce((sum, { coveredCents }) => sum + coveredCents, 0),
+    40_000,
+    'the walk never covers more than is held',
+  );
+  assert.equal(
+    walk.coveredUntil,
+    jan15,
+    'it is covered until the first payment not covered in full',
+  );
+  assert.deepEqual(
+    walk.shortfall,
+    {
+      costId: 'c-movers',
+      paymentCents: 80_000,
+      availableCents: 3_000,
+      dueOn: jan15,
+      shortCents: 77_000,
+      totalShortCents: 77_000,
+    },
+    'a later item names the first payment that lacks money and the total lacking',
+  );
+  assert.equal(
+    planHorizon(later, -500, paymentsOf(costs)).covers.every(
+      ({ coveredCents }) => coveredCents === 0,
+    ),
+    true,
+    'money below zero covers nothing',
+  );
+
+  const shuffled = [...paymentsOf(costs)].reverse();
+  assert.deepEqual(
+    planHorizon(later, 40_000, shuffled),
+    walk,
+    'shuffling the payments changes nothing',
+  );
+  const sameDay = [
+    cost('z', 1_000, 1_000, jan15),
+    cost('y', 1_000, 1_000, jan15),
+  ];
+  assert.deepEqual(
+    planHorizon(later, 1_000, paymentsOf(sameDay)).covers.map(
+      ({ costId }) => costId,
+    ),
+    ['y', 'z'],
+    'payments on one day are ordered by cost id',
+  );
+
+  const covered = planHorizon(later, 200_000, paymentsOf(costs));
+  assert.equal(
+    covered.coveredUntil,
+    null,
+    'when everything is covered nothing is short',
+  );
+  assert.equal(covered.shortfall, null);
+
+  const outside = planHorizon(
+    { rest: { kind: 'outside' }, costs },
+    0,
+    paymentsOf(costs),
+  );
+  assert.equal(
+    outside.shortfall,
+    null,
+    'an item whose rest is outside the plan never warns',
+  );
+  assert.notEqual(outside.coveredUntil, null);
+
+  const withOutsideCost = [
+    cost('a-deposit', 25_000, 25_000, jan15 - 5 * DAY_MS, true),
+    cost('c-movers', 60_000, 80_000, jan15),
+  ];
+  const skipped = planHorizon(
+    { rest: { kind: 'later' }, costs: withOutsideCost },
+    80_000,
+    paymentsOf(withOutsideCost),
+  );
+  assert.deepEqual(
+    skipped.covers.map(({ costId }) => costId),
+    ['c-movers'],
+    'a cost paid outside the plan is never covered',
+  );
+  assert.equal(skipped.shortfall, null, 'and never short');
+  assert.equal(
+    planHorizon(
+      { rest: { kind: 'later' }, costs: withOutsideCost },
+      0,
+      paymentsOf(withOutsideCost),
+    ).shortfall?.totalShortCents,
+    80_000,
+    'with nothing held only the costs inside the plan are short',
+  );
+
+  const read = readHorizon({
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    note: null,
+    costs: [
+      {
+        id: 'c',
+        name: 'Movers',
+        amount: { lowCents: 1, highCents: 1 },
+        schedule: { kind: 'once', anchor: jan15, monthDays: [] },
+        note: null,
+      },
+    ],
+  });
+  assert.deepEqual(
+    read.rest,
+    { kind: 'later' },
+    'a version sealed before rest reads as decide later',
+  );
+  assert.equal(
+    read.costs[0].isOutside,
+    false,
+    'and a cost before isOutside reads as inside the plan',
+  );
+
+  const start = Date.UTC(2026, 9, 1);
+  const startMove = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: string,
+  ) =>
+    ({
+      id,
+      kind: 'start',
+      date: start,
+      refId,
+      reversesMoveId: null,
+      createdAt: start,
+      payload: { amountCents: cents, holding },
+    }) as unknown as OpenMove;
+  const toHorizon = (cents: number) =>
+    ({
+      id: 'transfer_h',
+      kind: 'transfer',
+      date: start + DAY_MS,
+      refId: 'moving',
+      reversesMoveId: null,
+      createdAt: start + DAY_MS,
+      payload: {
+        fromId: null,
+        toId: 'moving',
+        cents,
+        note: null,
+        isOutside: false,
+      },
+    }) as unknown as OpenMove;
+  const input = {
+    startDate: start,
+    moves: [
+      startMove('s-money', null, 100_000, 'money'),
+      startMove('s-food', 'food', 10_000, 'envelope'),
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { food: 'envelope', moving: 'horizon' } as const,
+  };
+  const before = deriveBalances(input);
+  const after = deriveBalances({
+    ...input,
+    moves: [...input.moves, toHorizon(80_000)],
+  });
+  assert.equal(
+    after.freeToSpendCents,
+    before.freeToSpendCents - 80_000,
+    'Free to Spend falls by what was put toward a Horizon item',
+  );
+  assert.equal(after.assignedToHorizonCents, 80_000);
+  assert.equal(after.assignedByItem.moving, 80_000);
+  assert.equal(
+    after.assignedToEnvelopesCents +
+      after.assignedToGoalsCents +
+      after.assignedToBillsCents +
+      after.assignedToHorizonCents +
+      after.freeToSpendCents,
+    after.moneyOnHandCents,
+    'and everything held plus Free to Spend still adds up to the money on hand',
+  );
+  assert.equal(
+    after.moneyOnHandCents,
+    before.moneyOnHandCents,
+    'moving money does not change what is on hand',
+  );
+  const released = deriveBalances({
+    ...input,
+    moves: [...input.moves, toHorizon(80_000)],
+    releasedFrom: { moving: start + 2 * DAY_MS },
+    asOf: start + 3 * DAY_MS,
+  });
+  assert.equal(
+    released.assignedToHorizonCents,
+    0,
+    'a released Horizon item no longer holds money',
+  );
+  assert.equal(released.freeToSpendCents, before.freeToSpendCents);
+  const rebased = deriveBalances({
+    ...input,
+    startDate: start + 2 * DAY_MS,
+    moves: [
+      toHorizon(80_000),
+      startMove('s2-money', null, 100_000, 'money'),
+      startMove('s2-moving', 'moving', 80_000, 'horizon'),
+    ].map((move) =>
+      move.kind === 'start' ? { ...move, date: start + 2 * DAY_MS } : move,
+    ),
+  });
+  assert.equal(
+    rebased.assignedByItem.moving,
+    80_000,
+    'a start move for a Horizon item holds its money across a new starting day',
+  );
+  assert.equal(rebased.assignedToHorizonCents, 80_000);
+  assert.equal(rebased.freeToSpendCents, 20_000);
 }
 
 console.log('runway engine: ok');

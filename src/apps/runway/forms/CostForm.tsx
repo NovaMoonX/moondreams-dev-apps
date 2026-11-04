@@ -7,6 +7,7 @@ import DateInput from '@/components/DateInput';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import SuggestionChips from '@/components/SuggestionChips';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -39,6 +40,7 @@ interface CostFormData {
   amount: AmountDraft;
   name: string;
   date: string;
+  isOutside: boolean;
 }
 
 const MODE_OPTIONS = [
@@ -91,6 +93,7 @@ const toDraftData = (
         cost.schedule.anchor === null
           ? ''
           : toDateInputValue(cost.schedule.anchor),
+      isOutside: cost.isOutside,
     };
   }
   return {
@@ -100,6 +103,7 @@ const toDraftData = (
       happensOn >= today && happensOn <= lastDate
         ? toDateInputValue(happensOn)
         : '',
+    isOutside: false,
   };
 };
 
@@ -220,6 +224,40 @@ function CostForm({
         </div>
       ),
     },
+    {
+      id: 'paid',
+      title: HORIZON_WORDS.costPaidTitle,
+      summaryLabel: HORIZON_WORDS.costPaidLabel,
+      summaryValue: formData.isOutside
+        ? HORIZON_WORDS.costOutside
+        : HORIZON_WORDS.costPaidLike(itemName),
+      isAnswered: true,
+      isPreAnswered: true,
+      render: ({ moveOn }) => (
+        <div className='space-y-2'>
+          <PillGroup
+            label={HORIZON_WORDS.costPaidLabel}
+            options={[
+              {
+                value: 'like' as const,
+                label: HORIZON_WORDS.costPaidLike(itemName),
+              },
+              { value: 'outside' as const, label: HORIZON_WORDS.costOutside },
+            ]}
+            value={formData.isOutside ? 'outside' : 'like'}
+            onChange={(value) => {
+              set({ isOutside: value === 'outside' });
+              moveOn();
+            }}
+          />
+          {formData.isOutside && (
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_WORDS.costOutsideHint}
+            </p>
+          )}
+        </div>
+      ),
+    },
   ];
   const { isHidden } = useValuesHidden();
   const questions = useQuestionFlow({
@@ -246,6 +284,7 @@ function CostForm({
         anchor: date,
         monthDays: [],
       },
+      isOutside: formData.isOutside,
       note: cost?.note ?? null,
     });
   };
