@@ -150,7 +150,7 @@ function HorizonSheet({
       : HORIZON_WORDS.aroundRange(
           formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
-  const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear} ` : '';
+  const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear}\u00A0` : '';
   const fact = [
     yearLead +
       HORIZON_WORDS.plannedTotal(
@@ -170,6 +170,8 @@ function HorizonSheet({
   ]
     .filter(Boolean)
     .join('\u00A0· ');
+  const outsideLine =
+    outsideFact && `${HORIZON_WORDS.outsideLead}\u00A0${outsideFact}`;
   const openCost = horizon.costs.find(({ id }) => id === costId);
   const bodyRef = useRef<HTMLDivElement>(null);
   const viewKey = [
@@ -436,9 +438,9 @@ function HorizonSheet({
             <p>
               <MaskedText>{fact}</MaskedText>
             </p>
-            {outsideFact && (
+            {outsideLine && (
               <p>
-                <MaskedText>{outsideFact}</MaskedText>
+                <MaskedText>{outsideLine}</MaskedText>
               </p>
             )}
           </div>

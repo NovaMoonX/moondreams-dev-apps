@@ -480,8 +480,9 @@ export const HORIZON_WORDS = {
   shortNothing: (name: string) => `Nothing is set aside for ${name} yet.`,
   shortAfter: (cost: string, earlier: string) =>
     `Nothing is left for ${cost} after ${earlier}.`,
-  outsideTotal: (amount: string) => `${amount} paid outside the plan`,
-  outsideDue: (amount: string) => `${amount} still to pay outside the plan`,
+  outsideLead: 'Outside the plan:',
+  outsideTotal: (amount: string) => `${amount}\u00A0paid`,
+  outsideDue: (amount: string) => `${amount} still\u00A0to\u00A0pay`,
   needsAShortLook: 'Needs a look',
   putHolds: (name: string, amount: string) => `${name} has ${amount}`,
   needsPutOrNotNow: 'Pick where it comes from, or Not now.',
