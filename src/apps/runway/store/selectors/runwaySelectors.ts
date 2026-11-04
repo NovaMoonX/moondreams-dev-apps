@@ -1105,6 +1105,21 @@ export const selectHasIncome = (state: RootState, today: number) =>
 export const selectHasEverHadIncome = (state: RootState) =>
   state.runway.items.some((item) => item.kind === 'payLine');
 
+/** Where a plan stands before its tabs show: new, started (something saved, no bill, envelope or goal) or ready. */
+export const selectSetupState = (
+  state: RootState,
+): 'new' | 'started' | 'ready' => {
+  const { items, plan } = state.runway;
+  if (items.length === 0 && plan?.startDate == null) return 'new';
+  const hasLive = items.some((item) => item.archivedAt === null);
+  const hasPlanned = items.some(
+    (item) =>
+      item.kind === 'bill' || item.kind === 'envelope' || item.kind === 'goal',
+  );
+  if (hasPlanned || plan?.startDate != null || !hasLive) return 'ready';
+  return 'started';
+};
+
 /** The pay lines whose ending has been reached and whose header is not yet marked ended, as JSON of `[itemId, lastDay, name]` rows ('' when none), so a consumer re-runs only when the set changes. */
 export const selectReachedEndingsKey = (state: RootState, today: number) => {
   const { items, versions, days } = state.runway;
