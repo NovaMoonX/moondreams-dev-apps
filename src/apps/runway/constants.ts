@@ -1120,6 +1120,40 @@ export const SETUP_WORDS = {
   outKeptAction: 'Keep planning',
 } as const;
 
+export const MONEY_CHART_WORDS = {
+  figure: 'Which figure',
+  free: 'Free to Spend',
+  all: 'All money',
+  range: 'How far back',
+  past: 'Past',
+  hidden: 'Show amounts to see your history',
+  hideChart: 'Hide chart',
+  showChart: 'Show chart',
+  young: 'Your money history shows here after your first two weeks.',
+  today: 'Today',
+  on: 'On',
+  expected: 'Expected',
+  since: 'since',
+  sinceStart: 'since you started',
+  up: 'Up',
+  down: 'Down',
+  same: 'No change',
+  lowest: 'Lowest',
+  aheadHelp:
+    'The solid line is what happened. The dotted line is where your plan takes it over the next year: the pay you expect, the bills due, and what your envelopes get, counted as spent the day they get it.',
+  aheadFreeHelp:
+    'A pay you expect is mostly given to your envelopes, bills and goals, so Free to Spend only rises by what a pay leaves over.',
+  allHelp:
+    'Up to today, All money is everything you hold: Free to Spend plus what your envelopes, goals, bills and cards hold.',
+  endsHelp: (on: string) =>
+    `The dotted line stops at your last income day, ${on}, since your plan has no pay after it. Bills due after it aren't counted.`,
+  rangeHelp:
+    'The buttons under the chart choose how far back the solid line goes. All goes back to the day you started.',
+} as const;
+
+/** Days of history before the money chart draws a line, so a near-flat start never shows. */
+export const MONEY_CHART_MIN_DAYS = 14;
+
 export const HISTORY_WORDS = {
   updating: 'Updating your history',
   updatingBody:

@@ -24,6 +24,9 @@ html.runway-theme {
   --runway-selected: var(--color-blue-700);
   --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 10%, var(--color-background));
 
+  /* Every chart's line and fill: brighter than the primary, so a line reads as data, not as a button. */
+  --chart-line: oklch(0.56 0.17 262);
+
   --subview-backdrop: color-mix(in oklab, var(--color-primary) 14%, var(--color-background));
 }
 
@@ -46,6 +49,8 @@ html.runway-theme.dark {
 
   --runway-selected: var(--color-blue-300);
   --runway-selected-soft: color-mix(in oklab, var(--runway-selected) 16%, var(--color-background));
+
+  --chart-line: oklch(0.74 0.14 268);
 
   --subview-backdrop-dark: oklch(0.11 0.012 255);
   --subview-border: color-mix(in oklab, var(--runway-selected) 22%, var(--color-border));

@@ -7838,6 +7838,7 @@ const version = (
     incomeEndsOn: null,
     due: [],
     undated: [],
+    steps: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
     ({
@@ -10438,6 +10439,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     undated: [],
+    steps: [],
     due: [],
   });
   assert.equal(
