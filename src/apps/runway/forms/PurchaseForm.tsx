@@ -68,13 +68,19 @@ import {
   MAX_RECEIPTS_PER_PURCHASE,
   MAX_RECEIPT_TEXT_LENGTH,
   MAX_NOTE_LENGTH,
+  HORIZON_WORDS,
   MAX_PURCHASE_CENTS,
+  PURCHASE_COST_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   MAX_NAME_LENGTH,
+  MOVE_WORDS,
   SPEND_WORDS,
+  VARIES_HINT,
 } from '@apps/runway/constants';
 import { getUsualCardId } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { needsCostAmount } from '@apps/runway/engine/horizon';
+import { countCostMarks } from '@apps/runway/engine/progress';
 import {
   getCountedFrom,
   getPurchaseEffect,
@@ -99,21 +105,31 @@ import { linkPageQueryOptions } from '@apps/runway/queries/linkPageQueries';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   addPurchase,
+  deletePurchase,
   editPurchase,
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAllCards,
   selectCards,
+  selectCostPayments,
   selectEnvelopes,
   selectExpenses,
+  selectHorizonItems,
   selectItemLooks,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
+import type {
+  CostRef,
+  DateOnly,
+  OpenPurchase,
+  PurchaseLine,
+} from '@apps/runway/types';
+import { formatRange } from '@apps/runway/utils/rangeText';
 import {
   describeEnvelopes,
   describePurchaseEdit,
+  describePurchaseRemoval,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -133,6 +149,9 @@ const MOST_USED_SHOWN = 5;
 const RECENT_PURCHASES = 60;
 const FREE_VALUE = 'free';
 const CASH_VALUE = 'cash';
+const NO_COST_VALUE = 'none';
+
+const toPayKey = (costId: string, dueOn: DateOnly) => `${costId}|${dueOn}`;
 
 const USUAL_NOTE_KEY = 'runway.usualCardNotes';
 const USUAL_NOTE_TIMES = 3;
@@ -294,6 +313,8 @@ interface PurchaseFormProps {
   onCancel?: () => void;
   /** The envelope the form opened from; it starts chosen. */
   presetEnvelopeId?: string | null;
+  /** The cost payment the form opened from (Add what you paid): its item starts chosen as the envelope, an exact amount is filled in, and saving marks the payment paid. */
+  presetCost?: CostRef | null;
   /** The purchase being changed; the form then saves over it instead of adding. */
   editing?: OpenPurchase;
   /** How many receipts the purchase already holds, so the cap counts them. */
@@ -315,7 +336,8 @@ function PurchaseFormBody({
   isOpen,
   onClose,
   onCancel,
-  presetEnvelopeId = null,
+  presetEnvelopeId: presetEnvelopeProp = null,
+  presetCost = null,
   editing,
   heldReceiptCount = 0,
 }: PurchaseFormProps & StartOverProps) {
@@ -324,6 +346,12 @@ function PurchaseFormBody({
   const isMounted = useRef(true);
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const horizons = useAppSelector((state) => selectHorizonItems(state, today));
+  const costPayments = useAppSelector((state) =>
+    selectCostPayments(state, today),
+  );
+  const moves = useAppSelector((state) => state.runway.moves);
+  const planItems = useAppSelector((state) => state.runway.items);
   const balances = useAppSelector(selectBalances);
   const purchases = useAppSelector(selectSpendPurchases);
   const looks = useAppSelector(selectItemLooks);
@@ -335,8 +363,39 @@ function PurchaseFormBody({
     (state) => state.runway.plan?.trackingPeriods ?? [],
   );
 
+  const getPreset = () => {
+    const horizon = horizons.find(({ item }) => item.id === presetCost?.itemId);
+    const cost = horizon?.version.payload.costs.find(
+      ({ id }) => id === presetCost?.costId,
+    );
+    const payment = (costPayments[presetCost?.itemId ?? ''] ?? []).find(
+      ({ costId, dueOn, paid }) =>
+        costId === presetCost?.costId &&
+        dueOn === presetCost.dueOn &&
+        paid === null,
+    );
+    return presetCost && horizon && cost && payment && !cost.isOutside
+      ? {
+          itemId: presetCost.itemId,
+          itemName: horizon.version.payload.name,
+          cost,
+          key: toPayKey(cost.id, payment.dueOn),
+          isExact: !needsCostAmount(cost),
+        }
+      : null;
+  };
+  const preset = getPreset();
+  const presetEnvelopeId = preset?.itemId ?? presetEnvelopeProp;
+  const horizonIds = new Set(
+    planItems.filter((item) => item.kind === 'horizon').map(({ id }) => id),
+  );
+
   const [initialData] = useState<PurchaseFormData>(() => ({
-    amount: editing ? (Math.abs(editing.amountCents) / 100).toFixed(2) : '',
+    amount: editing
+      ? (Math.abs(editing.amountCents) / 100).toFixed(2)
+      : preset?.isExact
+        ? (preset.cost.amount.lowCents / 100).toFixed(2)
+        : '',
     date: toDateInputValue(editing ? editing.date : todayAsUtcDate()),
     receiptText: editing?.receiptText ?? null,
     extras: {
@@ -379,7 +438,7 @@ function PurchaseFormBody({
         : FREE_VALUE,
     paidByChoice: editing ? (editing.paidByCardId ?? null) : undefined,
   }));
-  const draftKey = `${FORM_DRAFT_PREFIX}purchase:${editing?.id ?? 'new'}`;
+  const draftKey = `${FORM_DRAFT_PREFIX}purchase:${editing?.id ?? (preset ? `cost:${preset.itemId}:${preset.cost.id}` : 'new')}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? { initialData, start } : null;
   const kept = useFormDraft({
@@ -390,6 +449,7 @@ function PurchaseFormBody({
       if (draft === null) return null;
       const known = new Set([
         ...envelopes.map(({ item }) => item.id),
+        ...horizons.map(({ item }) => item.id),
         ...editingLines.flatMap((line) =>
           line.envelopeId === null ? [] : [line.envelopeId],
         ),
@@ -462,6 +522,12 @@ function PurchaseFormBody({
         ? restored.paidBy.cardId
         : undefined
       : start.paidByChoice,
+  );
+  const [payPick, setPayPick] = useState<{
+    itemId: string;
+    key: string;
+  } | null>(() =>
+    preset === null ? null : { itemId: preset.itemId, key: preset.key },
   );
   const [usualNotesSeen] = useState(readUsualNotesSeen);
   const [originQuery, setOriginQuery] = useState('');
@@ -579,12 +645,20 @@ function PurchaseFormBody({
           (sum, line) => (line.envelopeId === id ? sum + line.cents : sum),
           0,
         );
-  const liveOptions = envelopes.map(({ item, version }) => ({
-    id: item.id,
-    name: version.payload.name,
-    emoji: emojiOf(version.payload.emoji, version.payload.groupId),
-    leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
-  }));
+  const liveOptions = [
+    ...envelopes.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      emoji: emojiOf(version.payload.emoji, version.payload.groupId),
+      leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
+    })),
+    ...horizons.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      emoji: emojiOf(version.payload.emoji, null),
+      leftCents: (balances.assignedByItem[item.id] ?? 0) + ownCents(item.id),
+    })),
+  ];
   const keptOptions = [
     ...new Set(
       editingLines.flatMap((line) =>
@@ -718,6 +792,52 @@ function PurchaseFormBody({
   };
   const lines = getLines();
 
+  const getPayChoices = () => {
+    const horizon = horizons.find(({ item }) => item.id === envelopeId);
+    if (!horizon || editing || isRefund || isSplit) return [];
+    const payments = costPayments[horizon.item.id] ?? [];
+    return horizon.version.payload.costs
+      .flatMap((cost) => {
+        const wanted =
+          preset?.itemId === horizon.item.id && preset.cost.id === cost.id
+            ? preset.key
+            : null;
+        const next = payments.find(
+          (payment) =>
+            payment.costId === cost.id &&
+            payment.paid === null &&
+            (wanted === null || toPayKey(cost.id, payment.dueOn) === wanted),
+        );
+        return cost.isOutside || !next
+          ? []
+          : [
+              {
+                key: toPayKey(cost.id, next.dueOn),
+                costId: cost.id,
+                dueOn: next.dueOn,
+                name: cost.name,
+              },
+            ];
+      })
+      .sort((a, b) => a.dueOn - b.dueOn);
+  };
+  const payChoices = getPayChoices();
+  const payKey =
+    payPick !== null && payPick.itemId === envelopeId ? payPick.key : undefined;
+  const chosenPay =
+    payKey === undefined
+      ? null
+      : (payChoices.find(({ key }) => key === payKey) ?? null);
+  const costRef: CostRef | null =
+    chosenPay === null || envelopeId === null
+      ? null
+      : {
+          itemId: envelopeId,
+          costId: chosenPay.costId,
+          dueOn: chosenPay.dueOn,
+        };
+  const isPresetPay = preset !== null && payKey === preset.key;
+
   const linkText = formData.extras.link?.trim() ?? '';
   const linkPreview = useLinkPreview(linkText, {
     getQueryOptions: linkPageQueryOptions,
@@ -735,6 +855,13 @@ function PurchaseFormBody({
     if (lines === null) {
       if (isSplit && !isRefund) return SPEND_WORDS.needsShares;
       return SPEND_WORDS.needsEnvelope;
+    }
+    const heldCost = editing?.costRef ?? null;
+    if (
+      heldCost !== null &&
+      lines.some((line) => line.envelopeId !== heldCost.itemId)
+    ) {
+      return PURCHASE_COST_WORDS.staysOnItem(nameOf(heldCost.itemId));
     }
     const shortKey = isRefund
       ? undefined
@@ -769,6 +896,7 @@ function PurchaseFormBody({
     originalId,
     returnTo,
     paidByCardId,
+    payKey: payKey ?? null,
   });
   const [startSnapshot] = useState(() =>
     JSON.stringify({
@@ -783,6 +911,7 @@ function PurchaseFormBody({
         start.paidByChoice !== undefined
           ? start.paidByChoice
           : (getUsual(start.envelopeId, start.isRefund, start.isSplit) ?? null),
+      payKey: preset?.key ?? null,
     }),
   );
   const isCounted =
@@ -807,6 +936,7 @@ function PurchaseFormBody({
         name: nameOf(id),
         beforeCents: (leftById[id] ?? 0) - centsAt(own, id),
         afterCents: (leftById[id] ?? 0) - centsAt(lines, id),
+        isHorizon: horizonIds.has(id),
       }))
       .filter((change) => change.beforeCents !== change.afterCents);
     const freeDropCents =
@@ -940,6 +1070,24 @@ function PurchaseFormBody({
         refundOfId: isRefund ? originalId : null,
         paidByCardId: cardId,
         receiptText: formData.receiptText?.trim() || null,
+        cost:
+          costRef === null || chosenPay === null
+            ? null
+            : {
+                ref: costRef,
+                itemName: nameOf(costRef.itemId),
+                costName: chosenPay.name,
+                fromFreeCents: Math.max(
+                  0,
+                  amount - Math.max(0, leftById[costRef.itemId] ?? 0),
+                ),
+                marks: countCostMarks(
+                  moves,
+                  costRef.itemId,
+                  costRef.costId,
+                  costRef.dueOn,
+                ),
+              },
       };
       if (editing) {
         const isUnchanged =
@@ -976,9 +1124,47 @@ function PurchaseFormBody({
         onClose();
         return;
       }
-      const purchaseId = await addPurchase(user.uid, encryption, input);
+      const added = await addPurchase(user.uid, encryption, input);
       if (isUsualCard) countUsualNote(usualNotesSeen);
-      finishReceipts(purchaseId, isRefund ? 'Refund added' : 'Purchase added');
+      if (added.paid !== null && input.cost !== null) {
+        const { paid } = added;
+        const { itemName, costName, fromFreeCents } = input.cost;
+        addToast({
+          title: mask(
+            PURCHASE_COST_WORDS.added(costName, formatCents(amount), itemName),
+          ),
+          description:
+            fromFreeCents > 0
+              ? mask(PURCHASE_COST_WORDS.addedFree(formatCents(fromFreeCents)))
+              : undefined,
+          type: 'success',
+          action: {
+            label: MOVE_WORDS.undo,
+            onClick: () =>
+              void deletePurchase(
+                user.uid,
+                encryption,
+                added.purchase,
+                describePurchaseRemoval(added.purchase, () => itemName),
+                { paid, names: { item: itemName, cost: costName } },
+              ).catch((undoError: unknown) =>
+                addToast({
+                  title: PURCHASE_COST_WORDS.undoFailed(costName),
+                  description: getErrorMessage(undoError, MOVE_WORDS.failed),
+                  type: 'error',
+                }),
+              ),
+          },
+        });
+      }
+      finishReceipts(
+        added.purchase.id,
+        added.paid !== null
+          ? null
+          : isRefund
+            ? 'Refund added'
+            : 'Purchase added',
+      );
       onClose();
     } catch (saveError) {
       if (isMounted.current) {
@@ -1087,6 +1273,9 @@ function PurchaseFormBody({
   );
   const getEnvelopeSummary = () => {
     if (lines === null) return '';
+    if (isPresetPay && preset !== null) {
+      return HORIZON_WORDS.costLineName(preset.cost.name, preset.itemName);
+    }
     if (isRefund) return `Back to ${describeEnvelopes(lines, nameOf)}`;
     return describeEnvelopes(lines, nameOf);
   };
@@ -1101,6 +1290,7 @@ function PurchaseFormBody({
       summaryLabel: isRefund ? SPEND_WORDS.refundAmount : SPEND_WORDS.amount,
       summaryValue: amount === null ? '' : formatCents(amount),
       isAnswered: amount !== null,
+      isPreAnswered: preset?.isExact === true && isPresetPay,
       blocker:
         formData.amount.trim() === ''
           ? null
@@ -1115,6 +1305,13 @@ function PurchaseFormBody({
             setFormData((current) => ({ ...current, amount: next }))
           }
           disabled={isSaving}
+          hint={
+            preset !== null && !preset.isExact && isPresetPay ? (
+              <MaskedText>
+                {VARIES_HINT(formatRange(preset.cost.amount))}
+              </MaskedText>
+            ) : undefined
+          }
           ways={
             editing
               ? []
@@ -1253,6 +1450,42 @@ function PurchaseFormBody({
         </div>
       ),
     },
+    ...(payChoices.length > 0 && !isPresetPay
+      ? [
+          {
+            id: 'cost',
+            title: PURCHASE_COST_WORDS.whichTitle,
+            summaryLabel: PURCHASE_COST_WORDS.whichLabel,
+            summaryValue:
+              payKey === undefined
+                ? ''
+                : (chosenPay?.name ?? PURCHASE_COST_WORDS.none),
+            isAnswered: payKey !== undefined,
+            render: ({ moveOn }: QuestionControls) => (
+              <PillGroup
+                label={PURCHASE_COST_WORDS.whichLabel}
+                options={[
+                  ...payChoices.map((choice) => ({
+                    value: choice.key,
+                    label: PURCHASE_COST_WORDS.pick(
+                      choice.name,
+                      formatDateOrdinalUTC(choice.dueOn),
+                    ),
+                  })),
+                  { value: NO_COST_VALUE, label: PURCHASE_COST_WORDS.none },
+                ]}
+                value={payKey ?? null}
+                onChange={(value) => {
+                  if (envelopeId !== null) {
+                    setPayPick({ itemId: envelopeId, key: value });
+                  }
+                  moveOn();
+                }}
+              />
+            ),
+          },
+        ]
+      : []),
     ...(cardOptions.length > 0 && !(isRefund && original !== null)
       ? [
           {

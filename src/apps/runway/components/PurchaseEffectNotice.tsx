@@ -2,6 +2,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import InlineNotice from '@/components/InlineNotice';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
+import { PURCHASE_COST_WORDS } from '@apps/runway/constants';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { describeEnvelopeFigure } from '@apps/runway/utils/purchaseText';
@@ -13,6 +14,8 @@ export interface EnvelopeChange {
   name: string;
   beforeCents: number;
   afterCents: number;
+  /** An event on the horizon, whose shortfall is said in a sentence of its own. */
+  isHorizon?: boolean;
 }
 
 interface PurchaseEffectNoticeProps {
@@ -38,11 +41,16 @@ function PurchaseEffectNotice({
   if (changes.length === 0 && (freeDropCents === 0 || isHidden)) return null;
   if (isHidden && isOver) return <NeedsALookRow />;
 
+  const isHorizonOver = (change: EnvelopeChange) =>
+    change.isHorizon === true && isWorseOver(change);
+  const horizonShort = changes.filter(isHorizonOver);
   const shown = [
-    ...changes.filter(isWorseOver),
+    ...changes.filter(
+      (change) => isWorseOver(change) && !isHorizonOver(change),
+    ),
     ...changes.filter((change) => !isWorseOver(change)),
   ].slice(0, SHOWN);
-  const rest = changes.length - shown.length;
+  const rest = changes.length - shown.length - horizonShort.length;
   const freeLine =
     freeDropCents > 0
       ? `Free to Spend drops by ${formatCents(freeDropCents)}.`
@@ -74,10 +82,23 @@ function PurchaseEffectNotice({
             ))}
           </ul>
         )}
+        {horizonShort.map((change) => (
+          <p key={change.id} className='mt-1 first:mt-0'>
+            {PURCHASE_COST_WORDS.freeShort(
+              change.name,
+              formatCents(Math.max(0, change.beforeCents)),
+              formatCents(-change.afterCents),
+            )}
+          </p>
+        ))}
         {rest > 0 && (
           <p className='text-muted-foreground mt-1'>and {rest} more</p>
         )}
-        {freeDropCents !== 0 && !isHidden && <p className='mt-1'>{freeLine}</p>}
+        {freeDropCents !== 0 &&
+          !isHidden &&
+          !(horizonShort.length > 0 && changes.length === 1) && (
+            <p className='mt-1'>{freeLine}</p>
+          )}
       </InlineNotice>
     </div>
   );

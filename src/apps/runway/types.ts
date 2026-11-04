@@ -725,6 +725,13 @@ export interface PurchaseLine {
   via: PurchaseLineVia;
 }
 
+/** The Horizon cost payment a purchase pays: the item (also the purchase's one line), the cost and the payment's due date. */
+export interface CostRef {
+  itemId: string;
+  costId: string;
+  dueOn: DateOnly;
+}
+
 export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
@@ -743,6 +750,8 @@ export interface PurchaseSealed {
   link: string | null;
   /** The items read from a receipt, one per line; null (or missing on an older purchase) when none were read. */
   receiptText: string | null;
+  /** The cost payment this purchase marks paid; null (or missing on an older purchase) when it pays none. */
+  costRef?: CostRef | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */

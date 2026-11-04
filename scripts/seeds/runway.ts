@@ -74,6 +74,7 @@ import type {
   PurchaseDoc,
   PurchaseLine,
   PurchaseSealed,
+  CostRef,
   SourceSealed,
   StartHolding,
   StartSealed,
@@ -456,6 +457,7 @@ async function writeSeedHorizon(
     fromFreeCents: number;
     paidOn: number;
     mark: CostPaidSealed['mark'];
+    purchaseId?: string;
   }[] = [
     {
       itemId: 'seed-horizon-surgery',
@@ -473,6 +475,15 @@ async function writeSeedHorizon(
       paidOn: today - DAY_MS,
       mark: 'outside',
     },
+    {
+      itemId: 'seed-horizon-moving',
+      cost: items[0].payload.costs[1],
+      amountCents: 60_000,
+      fromFreeCents: 0,
+      paidOn: today - 4 * DAY_MS,
+      mark: 'purchase',
+      purchaseId: MOVERS_PURCHASE_ID,
+    },
   ];
   const marks = await Promise.all(
     marked.map(async ({ itemId, cost: paidCost, ...paid }) => {
@@ -487,7 +498,7 @@ async function writeSeedHorizon(
         paidOn: paid.paidOn,
         fromFreeCents: paid.fromFreeCents,
         mark: paid.mark,
-        purchaseId: null,
+        purchaseId: paid.purchaseId ?? null,
       };
       const undoText = describeCostTakenBack(
         paidCost.name,
@@ -534,7 +545,7 @@ async function writeSeedHorizon(
                 amountCents: paid.amountCents,
                 fromFreeCents: paid.fromFreeCents,
                 mark: paid.mark,
-                purchaseId: null,
+                purchaseId: paid.purchaseId ?? null,
               },
             },
           } satisfies ChangeSealed,
@@ -623,6 +634,8 @@ async function writeSeedHorizon(
   await batch.commit();
   return items.length * 3 + transfers.length * 2 + marks.length * 2;
 }
+
+const MOVERS_PURCHASE_ID = 'seed-purchase-movers';
 
 const KEPT_ENVELOPE_ID = 'seed-envelope-concert';
 
@@ -2673,6 +2686,7 @@ async function writeSeedPurchases(
     link?: string;
     receiptText?: string;
     expenseId?: string;
+    costRef?: CostRef;
   }[] = [
     {
       id: 'seed-purchase-safeway',
@@ -2742,6 +2756,18 @@ async function writeSeedPurchases(
       expenseId: SEED_BIRTHDAY_EXPENSE,
     },
     {
+      id: MOVERS_PURCHASE_ID,
+      daysAgo: 4,
+      merchant: 'Bay Movers',
+      note: null,
+      lines: [line('seed-horizon-moving', 60_000)],
+      costRef: {
+        itemId: 'seed-horizon-moving',
+        costId: 'seed-cost-movers',
+        dueOn: nextCalendarDay(today, 0, 15),
+      },
+    },
+    {
       id: 'seed-purchase-market',
       daysAgo: 24,
       merchant: 'Farmers market',
@@ -2775,6 +2801,7 @@ async function writeSeedPurchases(
             paidByCardId: entry.paidByCardId ?? null,
             link: entry.link ?? null,
             receiptText: entry.receiptText ?? null,
+            costRef: entry.costRef ?? null,
           } satisfies PurchaseSealed,
           encryption,
         ),

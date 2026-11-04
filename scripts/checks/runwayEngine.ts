@@ -231,7 +231,11 @@ import {
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
 import { getCostNameKey } from '../../src/apps/runway/engine/parts.ts';
-import { withLineDefaults } from '../../src/apps/runway/store/listeners/openLedger.ts';
+import {
+  openPurchase,
+  withLineDefaults,
+} from '../../src/apps/runway/store/listeners/openLedger.ts';
+import { describeCostGivesBack } from '../../src/apps/runway/utils/changeText.ts';
 import {
   getStanceCushion,
   lookahead,
@@ -11786,7 +11790,7 @@ const version = (
     costId: string,
     amountCents: number,
     fromFreeCents: number,
-    mark: 'item' | 'outside' = 'item',
+    mark: 'item' | 'outside' | 'purchase' = 'item',
   ): CostPaidEntry => ({
     moveId: id,
     costId,
@@ -12002,6 +12006,235 @@ const version = (
     decodeClosing(toMonthKey(jan1), legacy).costPaid,
     {},
     'a closing written before costs could be paid reads costPaid as {}',
+  );
+
+  // Add what you paid: a purchase against the item moves the money, and the purchase mark only marks the payment.
+  const heldStarts: OpenMove[] = starts.map((move) =>
+    move.id === 's2' && move.kind === 'start'
+      ? { ...move, payload: { ...move.payload, amountCents: 80_000 } }
+      : move,
+  );
+  const purchaseOf = (id: string, cents: number): OpenPurchase => ({
+    id,
+    date: jan15,
+    source: 'manual',
+    needsHome: false,
+    expenseId: null,
+    createdAt: 6,
+    updatedAt: 6,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: [{ envelopeId: 'moving', cents, via: 'chosen' }],
+    refundOfId: null,
+    paidByCardId: 'card',
+    link: null,
+    receiptText: null,
+    costRef: { itemId: 'moving', costId: 'movers', dueOn: jan15 },
+  });
+  const purchaseMark: CostPaidEntry = {
+    ...entry('paid_moving_movers_4', 'movers', 60_000, 0, 'purchase'),
+    purchaseId: 'p1',
+  };
+  const withPurchase = (moves: OpenMove[], purchases: OpenPurchase[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...heldStarts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+      purchases,
+    });
+  const untouched = withPurchase([], []);
+  const bought = withPurchase([], [purchaseOf('p1', 60_000)]);
+  const boughtAndMarked = withPurchase(
+    [markMove(purchaseMark)],
+    [purchaseOf('p1', 60_000)],
+  );
+  assert.equal(
+    bought.assignedByItem.moving,
+    20_000,
+    'a purchase against the item lowers what it has left',
+  );
+  assert.equal(
+    boughtAndMarked.assignedByItem.moving,
+    bought.assignedByItem.moving,
+    'and its mark lowers it no further: the item is charged once, not by the purchase and the mark',
+  );
+  assert.equal(
+    boughtAndMarked.freeToSpendCents,
+    untouched.freeToSpendCents,
+    'a purchase the item covers leaves Free to Spend as it was',
+  );
+  assert.equal(
+    boughtAndMarked.costPaidByItem.moving,
+    60_000,
+    'the purchase counts in Spent once',
+  );
+  assert.deepEqual(
+    getHorizonFigures(
+      boughtAndMarked.assignedByItem.moving,
+      boughtAndMarked.costPaidByItem.moving,
+      boughtAndMarked.costFromFreeByItem.moving ?? 0,
+    ),
+    {
+      setAsideCents: 80_000,
+      spentCents: 60_000,
+      fromFreeCents: 0,
+      leftCents: 20_000,
+    },
+    '$200 left, $800 set aside, $600 spent',
+  );
+  assert.deepEqual(
+    settleCostPaid(60_000, 80_000, 'purchase'),
+    { fromItemCents: 0, fromFreeCents: 0 },
+    'a purchase mark takes no money of its own',
+  );
+  const purchasePayments = listHorizonPayments(
+    moving.costs,
+    end,
+    'conservative',
+    [purchaseMark],
+  );
+  assert.equal(
+    purchasePayments.find(({ costId }) => costId === 'movers')?.paid?.mark,
+    'purchase',
+    'a purchase-marked payment settles',
+  );
+  assert.equal(
+    planHorizon(moving, 20_000, purchasePayments).covers.some(
+      ({ costId }) => costId === 'movers',
+    ),
+    false,
+    'and asks nothing more of the item',
+  );
+  const over = withPurchase([], [purchaseOf('p2', 90_000)]);
+  assert.equal(
+    over.assignedByItem.moving,
+    -10_000,
+    'a larger purchase is over',
+  );
+  assert.equal(
+    over.assignedToHorizonCents,
+    0,
+    'an item that is over holds nothing',
+  );
+  assert.equal(
+    over.freeToSpendCents,
+    untouched.freeToSpendCents - 10_000,
+    'and the rest comes out of Free to Spend',
+  );
+  assert.equal(over.costFromFreeByItem.moving, 10_000, 'kept apart as fronted');
+  assert.equal(
+    getHorizonFigures(
+      0,
+      over.costPaidByItem.moving,
+      over.costFromFreeByItem.moving,
+    ).setAsideCents,
+    80_000,
+    'set aside is still only what was put in',
+  );
+  const takenBack = withPurchase(
+    [
+      markMove(purchaseMark),
+      {
+        ...markMove(purchaseMark),
+        id: 'unpaid_paid_moving_movers_4',
+        reversesMoveId: purchaseMark.moveId,
+        createdAt: 7,
+      },
+    ],
+    [],
+  );
+  assert.equal(
+    takenBack.assignedByItem.moving,
+    untouched.assignedByItem.moving,
+    'removing the purchase and taking its mark back restores the item',
+  );
+  assert.equal(
+    takenBack.costPaidByItem.moving ?? 0,
+    0,
+    'and takes it out of Spent',
+  );
+  assert.equal(
+    withPurchase([], [purchaseOf('p3', 25_000)]).assignedByItem.moving,
+    55_000,
+    'a purchase that pays no cost still lowers what the item has left',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 0, 'purchase'),
+    'Moving gets $600.00 back and the purchase is removed from Spend',
+    'taking back a purchase mark says the purchase goes',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 10_000, 'purchase'),
+    'Moving gets $500.00 back, $100.00 goes back to Free to Spend and the purchase is removed from Spend',
+    'and lists each place that gets money',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 0, 'item'),
+    'Moving gets $600.00 back',
+    'a plain mark does not mention a purchase',
+  );
+  const closedPurchase = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...heldStarts, markMove(purchaseMark)],
+    purchases: [purchaseOf('p1', 60_000)],
+    billIds: new Set(),
+  });
+  assert.equal(
+    closedPurchase.spentByItem.moving,
+    60_000,
+    'a closing carries the purchase against the item',
+  );
+  assert.equal(
+    deriveBalances({
+      startDate: jan1,
+      moves: heldStarts,
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+      closing: closedPurchase,
+    }).assignedByItem.moving,
+    20_000,
+    'and the balances read from it match',
+  );
+  void openPurchase(
+    {
+      id: 'old',
+      date: jan15,
+      source: 'manual',
+      needsHome: false,
+      expenseId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      sealed: {
+        nonce: '',
+        value: '',
+        keyId: '',
+        keyVersion: 1,
+        algorithm: 'AES-256-GCM',
+      },
+    },
+    (async () => ({
+      amountCents: 100,
+      merchant: null,
+      label: null,
+      note: null,
+      lines: [],
+      refundOfId: null,
+      link: null,
+      receiptText: null,
+    })) as never,
+  ).then((opened) =>
+    assert.equal(
+      opened.costRef,
+      null,
+      'an older purchase reads costRef as null',
+    ),
   );
 }
 

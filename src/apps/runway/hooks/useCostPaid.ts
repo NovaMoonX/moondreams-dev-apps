@@ -30,6 +30,7 @@ import {
   undoCostPaid,
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
+import { removePurchaseOfCost } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectIsMovesLoaded,
@@ -40,7 +41,7 @@ import type { Cents, HorizonCost } from '@apps/runway/types';
 const getHeldNow = (itemId: string) =>
   selectBalances(store.getState()).assignedByItem[itemId] ?? 0;
 
-/** Takes a cost payment's paid mark back; resolves false when it had already been taken back. */
+/** Takes a cost payment's paid mark back, removing the purchase that made it; resolves false when it had already been taken back. */
 export async function undoCostPayment(
   uid: string,
   itemId: string,
@@ -49,7 +50,11 @@ export async function undoCostPayment(
 ) {
   const encryption = await getRunwayEncryption(uid);
   const written: WrittenCostPaid = { ...paid, itemId };
-  return inTurn(() => undoCostPaid(uid, encryption, written, names));
+  return inTurn(() =>
+    paid.mark === 'purchase'
+      ? removePurchaseOfCost(uid, encryption, written, names)
+      : undoCostPaid(uid, encryption, written, names),
+  );
 }
 
 interface UseCostPaidOptions {

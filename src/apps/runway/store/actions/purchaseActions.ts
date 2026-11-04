@@ -1,24 +1,49 @@
-import { doc, runTransaction, type Transaction } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  runTransaction,
+  type Transaction,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { MAX_PURCHASE_LINES, SPEND_WORDS } from '@apps/runway/constants';
+import {
+  MAX_PURCHASE_LINES,
+  PURCHASE_COST_WORDS,
+  SPEND_WORDS,
+} from '@apps/runway/constants';
 import {
   getCountedFrom,
   isInTrackingPeriods,
   sumLines,
 } from '@apps/runway/engine/purchases';
-import { sealJson } from '@apps/runway/security';
+import { createSealedReader, sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
+import {
+  findOpenCostMark,
+  getCostPaidChange,
+  isCostUnmarked,
+  sealCostUnmark,
+  setCostUnmark,
+  undoCostPaid,
+  type CostPaidNames,
+  type WrittenCostPaid,
+} from '@apps/runway/store/actions/horizonActions';
+import { openPurchase } from '@apps/runway/store/listeners/openLedger';
+import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
+import { describePurchaseRemoval } from '@apps/runway/utils/purchaseText';
 import type {
   Cents,
+  CostPaidSealed,
+  CostRef,
   DateOnly,
   OpenPurchase,
   ChangeDoc,
   ChangeSealed,
   PlanDoc,
+  MoveDoc,
   PlanItemDoc,
   PurchaseDoc,
   PurchaseLine,
@@ -31,6 +56,17 @@ import type {
 
 const purchaseRef = (uid: string, id: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, 'purchases', id);
+
+/** The cost payment a new purchase marks paid, in the same write that adds it. */
+export interface AddPurchaseCost {
+  ref: CostRef;
+  itemName: string;
+  costName: string;
+  /** The part beyond what the item held, which comes out of Free to Spend. */
+  fromFreeCents: Cents;
+  /** How many times this payment has been marked before, undone marks included. */
+  marks: number;
+}
 
 export interface AddPurchaseInput {
   date: DateOnly;
@@ -51,6 +87,20 @@ export interface AddPurchaseInput {
   expenseId: string | null;
   /** The name of a group made with this purchase, written in the same transaction under `expenseId`. */
   newExpenseName: string | null;
+  /** The cost payment it pays; used when adding, since an edit keeps the cost the purchase already pays. */
+  cost: AddPurchaseCost | null;
+}
+
+/** What taking a purchase back needs to take its cost's mark back with it. */
+export interface PurchaseCostMark {
+  paid: WrittenCostPaid;
+  names: CostPaidNames;
+}
+
+export interface AddedPurchase {
+  purchase: OpenPurchase;
+  /** The mark written with it; null when it pays no cost. */
+  paid: WrittenCostPaid | null;
 }
 
 const sealNewExpense = (
@@ -83,12 +133,12 @@ const setNewExpense = (
   );
 };
 
-/** Adds a purchase by hand; the plan and each envelope are read fresh in the same transaction, so a day outside tracking or an archived envelope is refused. */
+/** Adds a purchase by hand; the plan and each envelope are read fresh in the same transaction, so a day outside tracking or an archived envelope is refused. A purchase that pays a cost marks that payment paid in the same transaction, and is refused when the payment is already marked. */
 export async function addPurchase(
   uid: string,
   encryption: RunwayEncryption,
   input: AddPurchaseInput,
-): Promise<string> {
+): Promise<AddedPurchase> {
   if (input.amountCents === 0) throw new Error('Enter an amount.');
   if (input.lines.length === 0 || input.lines.length > MAX_PURCHASE_LINES) {
     throw new Error('Pick where it comes from.');
@@ -98,23 +148,38 @@ export async function addPurchase(
   }
 
   const id = generateUuid();
+  const { cost } = input;
+  const costRef = cost?.ref ?? null;
   const expenseSealed = await sealNewExpense(input, encryption);
-  const sealed = await sealJson(
-    {
-      amountCents: input.amountCents,
-      merchant: input.merchant,
-      label: input.label,
-      note: input.note,
-      lines: input.lines,
-      refundOfId: input.refundOfId,
-      paidByCardId: input.paidByCardId,
-      link: input.link,
-      receiptText: input.receiptText,
-    } satisfies PurchaseSealed,
-    encryption,
-  );
+  const payload = {
+    amountCents: input.amountCents,
+    merchant: input.merchant,
+    label: input.label,
+    note: input.note,
+    lines: input.lines,
+    refundOfId: input.refundOfId,
+    paidByCardId: input.paidByCardId,
+    link: input.link,
+    receiptText: input.receiptText,
+    costRef,
+  } satisfies PurchaseSealed;
+  const sealed = await sealJson(payload, encryption);
+  const markPayload: CostPaidSealed | null =
+    cost === null
+      ? null
+      : {
+          costId: cost.ref.costId,
+          dueOn: cost.ref.dueOn,
+          amountCents: input.amountCents,
+          paidOn: input.date,
+          fromFreeCents: cost.fromFreeCents,
+          mark: 'purchase',
+          purchaseId: id,
+        };
+  const markSealed =
+    markPayload === null ? null : await sealJson(markPayload, encryption);
 
-  await runTransaction(db, async (transaction) => {
+  const written = await runTransaction(db, async (transaction) => {
     const plan = await checkDayAndEnvelopes(
       transaction,
       uid,
@@ -125,8 +190,19 @@ export async function addPurchase(
     );
 
     const now = Date.now();
-    markLedgerWrite(transaction, uid, plan, [input.date]);
+    markLedgerWrite(transaction, uid, plan, [
+      input.date,
+      ...(cost === null ? [] : [cost.ref.dueOn]),
+    ]);
     setNewExpense(transaction, uid, input, expenseSealed, now);
+    const paid = await setCostMark(
+      transaction,
+      uid,
+      encryption,
+      cost,
+      markPayload,
+      markSealed,
+    );
     transaction.set(purchaseRef(uid, id), {
       id,
       date: input.date,
@@ -137,8 +213,69 @@ export async function addPurchase(
       updatedAt: now,
       sealed,
     } satisfies PurchaseDoc);
+    return { paid, now };
   });
-  return id;
+  return {
+    paid: written.paid,
+    purchase: {
+      ...payload,
+      id,
+      date: input.date,
+      source: 'manual',
+      needsHome: false,
+      expenseId: input.expenseId,
+      createdAt: written.now,
+      updatedAt: written.now,
+    },
+  };
+}
+
+/** Writes the `costPaid` move for a purchase that pays a cost, with its History entry; the move's id refuses a payment that is already marked. */
+async function setCostMark(
+  transaction: Transaction,
+  uid: string,
+  encryption: RunwayEncryption,
+  cost: AddPurchaseCost | null,
+  payload: CostPaidSealed | null,
+  sealed: Sealed | null,
+): Promise<WrittenCostPaid | null> {
+  if (cost === null || payload === null || sealed === null) return null;
+  const moveId = await findOpenCostMark(
+    transaction,
+    uid,
+    cost.ref.itemId,
+    cost.ref.costId,
+    cost.ref.dueOn,
+    cost.marks,
+  );
+  if (moveId === null) {
+    throw new Error(PURCHASE_COST_WORDS.alreadyPaid(cost.costName));
+  }
+  const paid: WrittenCostPaid = {
+    moveId,
+    itemId: cost.ref.itemId,
+    ...payload,
+  };
+  const change = await getCostPaidChange(
+    encryption,
+    paid,
+    { item: cost.itemName, cost: cost.costName },
+    false,
+  );
+  transaction.set(doc(db, 'apps', 'runway', 'plans', uid, 'moves', moveId), {
+    id: moveId,
+    kind: 'costPaid',
+    date: cost.ref.dueOn,
+    refId: cost.ref.itemId,
+    reversesMoveId: null,
+    createdAt: Date.now(),
+    sealed,
+  } satisfies MoveDoc);
+  transaction.set(
+    doc(db, 'apps', 'runway', 'plans', uid, 'changes', change.id),
+    change,
+  );
+  return paid;
 }
 
 /** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
@@ -185,11 +322,16 @@ async function checkDayAndEnvelopes(
   }
   const isGone = envelopes.some((snapshot) => {
     const item = snapshot.data() as PlanItemDoc | undefined;
-    return !item || item.kind !== 'envelope' || item.archivedAt !== null;
+    return (
+      !item ||
+      (item.kind !== 'envelope' && item.kind !== 'horizon') ||
+      item.archivedAt !== null ||
+      (item.kind === 'horizon' && item.endedAt !== null)
+    );
   });
   if (isGone) {
     throw new Error(
-      'An envelope you picked was archived or removed on another device. Pick again.',
+      'An envelope you picked was archived, finished or removed on another device. Pick again.',
     );
   }
   return planData;
@@ -248,6 +390,7 @@ export async function editPurchase(
         paidByCardId: input.paidByCardId,
         link: input.link,
         receiptText: input.receiptText,
+        costRef: previous.costRef ?? null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -294,22 +437,45 @@ export async function editPurchase(
   });
 }
 
-/** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. */
+/** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. A purchase that pays a cost takes that cost's mark back in the same transaction (`costMark`), unless it was already taken back. */
 export async function deletePurchase(
   uid: string,
   encryption: RunwayEncryption,
   previous: OpenPurchase,
   summary: string,
+  costMark: PurchaseCostMark | null = null,
 ): Promise<void> {
   const changeSealed = await sealJson(
     { summary, note: null } satisfies ChangeSealed,
     encryption,
   );
+  const [unmarkSealed, unmarkChange] =
+    costMark === null
+      ? [null, null]
+      : await Promise.all([
+          sealCostUnmark(encryption, costMark.paid),
+          getCostPaidChange(encryption, costMark.paid, costMark.names, true),
+        ]);
   const changeId = generateUuid();
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
-    markLedgerWrite(transaction, uid, plan.data(), [previous.date]);
+    const isUnmarkNeeded =
+      costMark !== null &&
+      !(await isCostUnmarked(transaction, uid, costMark.paid));
+    markLedgerWrite(transaction, uid, plan.data(), [
+      previous.date,
+      ...(isUnmarkNeeded && costMark ? [costMark.paid.dueOn] : []),
+    ]);
+    if (isUnmarkNeeded && costMark && unmarkSealed && unmarkChange) {
+      setCostUnmark(
+        transaction,
+        uid,
+        costMark.paid,
+        unmarkSealed,
+        unmarkChange,
+      );
+    }
     transaction.delete(purchaseRef(uid, previous.id));
     transaction.set(
       doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
@@ -323,4 +489,35 @@ export async function deletePurchase(
       } satisfies ChangeDoc,
     );
   });
+}
+
+/** Takes a cost's purchase mark back by removing the purchase that made it, which writes the undo with it. The purchase is read from its own document, since the loaded window may not hold it; one already gone leaves only the mark to take back. Resolves false when the mark was already taken back. */
+export async function removePurchaseOfCost(
+  uid: string,
+  encryption: RunwayEncryption,
+  paid: WrittenCostPaid,
+  names: CostPaidNames,
+): Promise<boolean> {
+  const snapshot =
+    paid.purchaseId === null
+      ? null
+      : await getDoc(purchaseRef(uid, paid.purchaseId));
+  if (snapshot === null || !snapshot.exists()) {
+    return undoCostPaid(uid, encryption, paid, names);
+  }
+  const previous = await openPurchase(
+    { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
+    createSealedReader(encryption),
+  );
+  await deletePurchase(
+    uid,
+    encryption,
+    previous,
+    describePurchaseRemoval(previous, () => names.item),
+    { paid, names },
+  );
+  await removeReceiptImagesOf(uid, previous.id).catch((cleanupError) => {
+    console.error('A removed purchase left receipts behind', cleanupError);
+  });
+  return true;
 }

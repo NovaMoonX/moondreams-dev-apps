@@ -581,7 +581,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [x] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
 - [x] Set a cost's price, exact or a range, with what it changes on your pays and why
 - [x] Pay a cost in one tap when exact, with its real amount when a range, as a paid mark; mark an outside cost paid
-- [ ] Pay a cost as a purchase on Track (Add what you paid)
+- [x] Pay a cost as a purchase on Track (Add what you paid)
 - [ ] Turn a repeating cost into a bill, bringing what is left with it
 - [x] Change an event and its costs, and remove a cost (never an item's last)
 - [ ] Finish or call off an item, choosing where its money goes, and bring a called-off item back

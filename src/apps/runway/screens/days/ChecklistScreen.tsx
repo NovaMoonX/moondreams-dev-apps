@@ -219,6 +219,7 @@ function ChecklistCostRow({
   today,
 }: ChecklistCostRowProps) {
   const stance = useAppSelector(selectStance);
+  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
   const [isOpen, setIsOpen] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [pending, setPending] = useState<boolean | null>(null);
@@ -281,6 +282,7 @@ function ChecklistCostRow({
           horizon={horizon}
           today={today}
           stance={stance}
+          openCostId={isTrack ? cost.id : null}
           onClose={() => setIsOpen(false)}
         />
       )}

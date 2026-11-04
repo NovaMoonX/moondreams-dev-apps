@@ -139,6 +139,7 @@ export async function openPurchase(
     paidByCardId: payload.paidByCardId ?? null,
     link: payload.link ?? null,
     receiptText: payload.receiptText ?? null,
+    costRef: payload.costRef ?? null,
   };
   return result;
 }

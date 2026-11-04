@@ -1,4 +1,9 @@
-import { doc, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  runTransaction,
+  writeBatch,
+  type Transaction,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
@@ -30,6 +35,7 @@ import type {
   PlanItemDoc,
   PlanVersionDoc,
   RunwayEncryption,
+  Sealed,
 } from '@apps/runway/types';
 
 const planDoc = (uid: string, collectionName: string, id: string) =>
@@ -153,6 +159,12 @@ export interface MarkCostPaidInput {
   marks: number;
 }
 
+/** The names a cost payment's History entries and toasts are written with. */
+export interface CostPaidNames {
+  item: string;
+  cost: string;
+}
+
 export type WrittenCostPaid = {
   moveId: string;
   itemId: string;
@@ -162,10 +174,10 @@ export type WrittenCostPaid = {
 const MAX_MARK_PROBES = 12;
 
 /** The History entry for one cost's payment marked paid or taken back, which carries what its Undo needs. */
-async function getCostPaidChange(
+export async function getCostPaidChange(
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
-  names: { item: string; cost: string },
+  names: CostPaidNames,
   isUndo: boolean,
 ) {
   const undoText = describeCostTakenBack(
@@ -226,6 +238,43 @@ async function getCostPaidChange(
 }
 
 /**
+ * The id the next mark of one payment takes, past marks that were undone; null when a live mark already
+ * holds the payment, which is how a second mark of it is refused.
+ */
+export async function findOpenCostMark(
+  transaction: Transaction,
+  uid: string,
+  itemId: string,
+  costId: string,
+  dueOn: DateOnly,
+  marks: number,
+  firstMark = marks,
+): Promise<string | null> {
+  if (marks >= firstMark + MAX_MARK_PROBES) {
+    throw new Error(
+      'This payment was marked and taken back too many times. Open the cost to change it.',
+    );
+  }
+  const id = getCostPaidMoveId(itemId, costId, dueOn, marks);
+  const existing = await transaction.get(planDoc(uid, 'moves', id));
+  if (!existing.exists()) return id;
+  const undone = await transaction.get(
+    planDoc(uid, 'moves', getUndoMoveId(id)),
+  );
+  return undone.exists()
+    ? findOpenCostMark(
+        transaction,
+        uid,
+        itemId,
+        costId,
+        dueOn,
+        marks + 1,
+        firstMark,
+      )
+    : null;
+}
+
+/**
  * Records a cost's payment as paid, from the item's money or outside the plan. The move's id names the
  * item, the cost, the due date and which mark it is, so a second tap on a paid payment writes nothing and
  * a payment from a month the device has not loaded can still be marked after an undo.
@@ -247,26 +296,14 @@ export async function markCostPaid(
   const sealed = await sealJson(payload, encryption);
   const written = await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
-    const findOpenMark = async (marks: number): Promise<string | null> => {
-      if (marks >= input.marks + MAX_MARK_PROBES) {
-        throw new Error(
-          'This payment was marked and taken back too many times. Open the cost to change it.',
-        );
-      }
-      const id = getCostPaidMoveId(
-        input.itemId,
-        input.costId,
-        input.dueOn,
-        marks,
-      );
-      const existing = await transaction.get(planDoc(uid, 'moves', id));
-      if (!existing.exists()) return id;
-      const undone = await transaction.get(
-        planDoc(uid, 'moves', getUndoMoveId(id)),
-      );
-      return undone.exists() ? findOpenMark(marks + 1) : null;
-    };
-    const id = await findOpenMark(input.marks);
+    const id = await findOpenCostMark(
+      transaction,
+      uid,
+      input.itemId,
+      input.costId,
+      input.dueOn,
+      input.marks,
+    );
     if (id === null) return null;
     const mark: WrittenCostPaid = {
       moveId: id,
@@ -295,15 +332,12 @@ export async function markCostPaid(
   return written;
 }
 
-/** Undoes a cost's paid mark by appending a move that names it; the mark itself stays in the ledger. Resolves false when it was already taken back. */
-export async function undoCostPaid(
-  uid: string,
+/** The sealed payload of the move that takes a cost's paid mark back. */
+export const sealCostUnmark = (
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
-  names: { item: string; cost: string },
-): Promise<boolean> {
-  const id = getUndoMoveId(paid.moveId);
-  const sealed = await sealJson(
+) =>
+  sealJson(
     {
       costId: paid.costId,
       dueOn: paid.dueOn,
@@ -315,25 +349,55 @@ export async function undoCostPaid(
     } satisfies CostPaidSealed,
     encryption,
   );
-  const ref = planDoc(uid, 'moves', id);
+
+/** Whether the move that takes a mark back is already written; read before any write of the transaction. */
+export const isCostUnmarked = async (
+  transaction: Transaction,
+  uid: string,
+  paid: WrittenCostPaid,
+) =>
+  (
+    await transaction.get(planDoc(uid, 'moves', getUndoMoveId(paid.moveId)))
+  ).exists();
+
+/** Appends the move that reverses a mark, and its History entry, to a transaction that has read `isCostUnmarked` as false; the caller marks the ledger, once for all it writes. */
+export function setCostUnmark(
+  transaction: Transaction,
+  uid: string,
+  paid: WrittenCostPaid,
+  sealed: Sealed,
+  change: ChangeDoc,
+) {
+  const id = getUndoMoveId(paid.moveId);
+  transaction.set(planDoc(uid, 'moves', id), {
+    id,
+    kind: 'costPaid',
+    date: paid.dueOn,
+    refId: paid.itemId,
+    reversesMoveId: paid.moveId,
+    createdAt: Date.now(),
+    sealed,
+  } satisfies MoveDoc);
+  transaction.set(planDoc(uid, 'changes', change.id), change);
+}
+
+/** Undoes a cost's paid mark by appending a move that names it; the mark itself stays in the ledger. Resolves false when it was already taken back. */
+export async function undoCostPaid(
+  uid: string,
+  encryption: RunwayEncryption,
+  paid: WrittenCostPaid,
+  names: CostPaidNames,
+): Promise<boolean> {
+  const sealed = await sealCostUnmark(encryption, paid);
   const isWritten = await runTransaction(db, async (transaction) => {
-    const [existing, plan] = await Promise.all([
-      transaction.get(ref),
+    const [isDone, plan] = await Promise.all([
+      isCostUnmarked(transaction, uid, paid),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
     ]);
-    if (existing.exists()) return false;
+    if (isDone) return false;
     const change = await getCostPaidChange(encryption, paid, names, true);
     markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
-    transaction.set(ref, {
-      id,
-      kind: 'costPaid',
-      date: paid.dueOn,
-      refId: paid.itemId,
-      reversesMoveId: paid.moveId,
-      createdAt: Date.now(),
-      sealed,
-    } satisfies MoveDoc);
-    transaction.set(planDoc(uid, 'changes', change.id), change);
+    setCostUnmark(transaction, uid, paid, sealed, change);
     return true;
   });
   return isWritten;

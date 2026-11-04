@@ -34,6 +34,7 @@ import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   MAX_RECEIPTS_PER_PURCHASE,
+  PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
@@ -61,8 +62,11 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  selectCostPaid,
   selectExpenses,
+  selectHorizonItems,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -123,6 +127,10 @@ function PurchaseScreen({
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
   const expenses = useAppSelector(selectExpenses);
+  const costMarks = useAppSelector(selectCostPaid);
+  const horizons = useAppSelector((state) =>
+    selectHorizonItems(state, todayAsUtcDate()),
+  );
   const [editTarget, setEditTarget] = useState<{
     key: number;
     purchase: OpenPurchase;
@@ -222,8 +230,32 @@ function PurchaseScreen({
   const link = purchase.link?.trim() || null;
   const linkHost = link === null ? null : getWebLinkHost(link);
 
+  const getCostMark = () => {
+    const ref = purchase.costRef ?? null;
+    const paid =
+      ref === null
+        ? null
+        : ((costMarks[ref.itemId] ?? []).find(
+            (entry) => entry.purchaseId === purchase.id,
+          ) ?? null);
+    return ref === null || paid === null
+      ? null
+      : {
+          paid: { ...paid, itemId: ref.itemId },
+          names: {
+            item: nameOf(ref.itemId),
+            cost:
+              horizons
+                .find(({ item }) => item.id === ref.itemId)
+                ?.version.payload.costs.find(({ id }) => id === ref.costId)
+                ?.name ?? paid.costId,
+          },
+        };
+  };
+
   const remove = async () => {
     if (!user || isBusy) return;
+    const costMark = getCostMark();
     const names = purchase.lines.map((line) =>
       line.envelopeId === null
         ? SPEND_WORDS.freeToSpend
@@ -242,6 +274,12 @@ function PurchaseScreen({
           receipts.length > 0
             ? SPEND_WORDS.receiptsRemovedWithPurchase(receipts.length)
             : null,
+          costMark === null
+            ? null
+            : PURCHASE_COST_WORDS.removeAlsoUnpays(
+                costMark.names.cost,
+                costMark.names.item,
+              ),
           'It stays in the change log.',
         ]
           .filter(Boolean)
@@ -260,6 +298,7 @@ function PurchaseScreen({
         encryption,
         purchase,
         describePurchaseRemoval(purchase, nameOf),
+        costMark,
       );
       const hasLeftovers = await removeReceiptImagesOf(
         user.uid,

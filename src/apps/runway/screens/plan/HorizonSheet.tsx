@@ -60,6 +60,8 @@ interface HorizonSheetProps {
   stance: Stance;
   /** The fronted payment the sheet was opened for, said again inside it. */
   fronted?: Extract<HorizonShort, { kind: 'fronted' }> | null;
+  /** A cost to open on, with Back leading to the event's sheet. */
+  openCostId?: string | null;
   onClose: () => void;
 }
 
@@ -70,6 +72,7 @@ function HorizonSheet({
   today,
   stance,
   fronted = null,
+  openCostId = null,
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
@@ -81,7 +84,7 @@ function HorizonSheet({
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [view, setView] = useState<'main' | 'change' | 'history'>('main');
-  const [costId, setCostId] = useState<string | null>(null);
+  const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
   const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
   const [putting, setPutting] = useState<{

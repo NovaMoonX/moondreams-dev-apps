@@ -80,9 +80,9 @@ export interface Balances {
   startMoneyCents: Cents;
   arrivedCents: Cents;
   paidCents: Cents;
-  /** What each Horizon item paid out of its own money since the starting point; a payment outside the plan or made by a purchase is not in it. */
+  /** What each Horizon item has spent since the starting point: payments marked from its own money plus its purchases, whatever cost they pay; a payment outside the plan is not in it. */
   costPaidByItem: Record<string, Cents>;
-  /** The part of those payments that came out of Free to Spend, by item. */
+  /** The part of that spending that came out of Free to Spend, by item. */
   costFromFreeByItem: Record<string, Cents>;
   /** What was spent since the starting point, less refunds. */
   spentCents: Cents;
@@ -172,10 +172,10 @@ export function deriveBalances(input: BalancesInput): Balances {
       ),
     };
   });
-  const costPaidByItem = Object.fromEntries(
+  const markedByItem = Object.fromEntries(
     costMarks.map((mark) => [mark.itemId, mark.amountCents]),
   );
-  const costFromFreeByItem = Object.fromEntries(
+  const markedFromFreeByItem = Object.fromEntries(
     costMarks.map((mark) => [mark.itemId, mark.fromFreeCents]),
   );
   const paidCents =
@@ -238,6 +238,21 @@ export function deriveBalances(input: BalancesInput): Balances {
         (spentByItem[id] ?? 0) +
         (transfers[id] ?? 0),
     ]),
+  );
+  const horizonSpentByItem = Object.fromEntries(
+    Object.entries(spentByItem)
+      .filter(([id]) => input.kinds[id] === 'horizon')
+      .map(([id, cents]) => [id, Math.max(0, cents)]),
+  );
+  const costPaidByItem = joinCents(markedByItem, horizonSpentByItem);
+  const costFromFreeByItem = joinCents(
+    markedFromFreeByItem,
+    Object.fromEntries(
+      Object.entries(horizonSpentByItem).map(([id, cents]) => [
+        id,
+        Math.min(cents, Math.max(0, -(assignedByItem[id] ?? 0))),
+      ]),
+    ),
   );
   const isReleased = (id: string) =>
     Object.hasOwn(input.releasedFrom ?? {}, id) &&

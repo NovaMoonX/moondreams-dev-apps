@@ -1,8 +1,10 @@
 import { useRef, useState } from 'react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
   Pencil,
+  ReceiptText,
   Tag,
   Trash2,
   Undo2,
@@ -15,6 +17,8 @@ import ActionRow from '@/components/ActionRow';
 import AmountField from '@/components/AmountField';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
+import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -34,7 +38,9 @@ import {
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
   PAY_SHARE_WORDS,
+  PURCHASE_COST_WORDS,
 } from '@apps/runway/constants';
+import { DAY_MS } from '@apps/runway/engine/dates';
 import {
   getLiveCosts,
   removeCost,
@@ -43,11 +49,13 @@ import {
   settleCostPaid,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectCostPayments,
   selectHorizonItems,
@@ -189,6 +197,9 @@ function CostSheet({
   const [isRemoving, setIsRemoving] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [takingBackId, setTakingBackId] = useState<string | null>(null);
+  const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const isTrack = useAppSelector(selectLevel) === 'track';
   const isRestoring = useRef(false);
   const payments = useAppSelector((state) => selectCostPayments(state, today))[
     itemId
@@ -208,6 +219,9 @@ function CostSheet({
     payment: next,
   });
 
+  const canAddPurchase = isTrack && next !== null && !cost.isOutside;
+  const isNear = next !== null && next.dueOn - 7 * DAY_MS <= today;
+  const isMarkShown = !canAddPurchase || isNear || isMoreOpen;
   const isExact = cost.amount.lowCents === cost.amount.highCents;
   const isLive = cost.endsAfter === null;
   const isRepeat = cost.schedule.kind !== 'once';
@@ -373,7 +387,7 @@ function CostSheet({
           horizon.name,
           entry.amountCents,
           entry.fromFreeCents,
-          entry.mark,
+          isTrack ? entry.mark : 'item',
         );
 
   const getMarkSubtitle = () => {
@@ -402,6 +416,30 @@ function CostSheet({
           horizon.name,
           formatCents(fromFreeCents),
         );
+  };
+
+  const takeBackEntry = async (entry: CostPaidEntry) => {
+    if (entry.mark === 'purchase' && isTrack) {
+      const isConfirmed = await confirm({
+        title: PURCHASE_COST_WORDS.takeBackTitle(cost.name),
+        message: mask(
+          PURCHASE_COST_WORDS.takeBackText(
+            formatCents(entry.amountCents),
+            formatDateOrdinalUTC(entry.paidOn),
+            describeCostGivesBack(
+              horizon.name,
+              entry.amountCents,
+              entry.fromFreeCents,
+              'item',
+            ),
+          ),
+        ),
+        confirmText: COST_PAID_WORDS.takeBack,
+        destructive: true,
+      });
+      if (!isConfirmed) return;
+    }
+    if (await costPaid.takeBack(entry)) setTakingBackId(null);
   };
 
   const takingBack = paidEntries.find(({ moveId }) => moveId === takingBackId);
@@ -435,7 +473,19 @@ function CostSheet({
         <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       )}
       <ActionGroup isRoomy>
-        {next && (
+        {canAddPurchase && !isNear && isMoreOpen && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<ReceiptText />}
+            label={PURCHASE_COST_WORDS.addRow}
+            subtitle={PURCHASE_COST_WORDS.addSub}
+            isDisabled={!costPaid.isReady || costPaid.isBusy}
+            onClick={() => setIsAddingPurchase(true)}
+          />
+        )}
+        {next && isMarkShown && (
           <ActionRow
             isGrouped
             isRoomy
@@ -506,6 +556,13 @@ function CostSheet({
           />
         )}
       </ActionGroup>
+      {canAddPurchase && !isNear && !isMoreOpen && (
+        <div>
+          <RevealChip onClick={() => setIsMoreOpen(true)}>
+            {PURCHASE_COST_WORDS.moreWays}
+          </RevealChip>
+        </div>
+      )}
       {isPaidOnce && (
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.paidStaysInRecord}
@@ -515,6 +572,30 @@ function CostSheet({
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.changeLastCost}
         </p>
+      )}
+      {canAddPurchase && isNear && (
+        <ModalFooterActions
+          rightActions={
+            <Button
+              type='button'
+              disabled={!costPaid.isReady || costPaid.isBusy}
+              onClick={() => setIsAddingPurchase(true)}
+            >
+              {PURCHASE_COST_WORDS.addRow}
+            </Button>
+          }
+        />
+      )}
+      {isAddingPurchase && next && (
+        <PurchaseForm
+          isOpen
+          presetCost={{ itemId, costId: cost.id, dueOn: next.dueOn }}
+          onCancel={() => setIsAddingPurchase(false)}
+          onClose={() => {
+            setIsAddingPurchase(false);
+            onBack();
+          }}
+        />
       )}
       {amountPayment && (
         <PaidAmountSheet
@@ -554,11 +635,7 @@ function CostSheet({
                 label={COST_PAID_WORDS.takeBack}
                 subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
                 isDisabled={costPaid.isBusy}
-                onClick={() => {
-                  void costPaid.takeBack(takingBack).then((isDone) => {
-                    if (isDone) setTakingBackId(null);
-                  });
-                }}
+                onClick={() => void takeBackEntry(takingBack)}
               />
             </ActionGroup>
           </div>
