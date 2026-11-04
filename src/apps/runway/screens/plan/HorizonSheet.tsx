@@ -167,6 +167,13 @@ function HorizonSheet({
             costs={horizon.costs}
             heldCents={figures.leftCents}
             stance={stance}
+            after={
+              (horizon.rest.kind === 'pays' ||
+                horizon.rest.kind === 'onePay') &&
+              plan.coveredUntil !== null
+                ? getRestFromPaysNote()
+                : null
+            }
           />
           {shortfall && (
             <InlineNotice
@@ -217,12 +224,6 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
-          {(horizon.rest.kind === 'pays' || horizon.rest.kind === 'onePay') &&
-            plan.coveredUntil !== null && (
-              <p className='text-muted-foreground text-sm'>
-                {getRestFromPaysNote()}
-              </p>
-            )}
           {!shortfall && (
             <ActionGroup isRoomy>
               <ActionRow

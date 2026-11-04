@@ -20,10 +20,18 @@ interface CoversLineProps {
   /** What the item holds now. */
   heldCents: Cents;
   stance: Stance;
+  /** A sentence that follows in the same paragraph, such as where the rest comes from. */
+  after?: string | null;
 }
 
 /** What the money set aside pays for, in due order ("Covers Movers on Jan 15th at the high end."), with the other end of a range behind a help icon. */
-function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
+function CoversLine({
+  plan,
+  costs,
+  heldCents,
+  stance,
+  after = null,
+}: CoversLineProps) {
   const words = HORIZON_WORDS.covers;
   const covered = plan.covers.flatMap((cover) => {
     const cost = costs.find(({ id }) => id === cover.costId);
@@ -80,7 +88,10 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
     return words.listed(list, ranged.length > 0 ? words.atEnd(endWords) : '');
   };
   const text = getText();
-  if (text === null) return null;
+  if (text === null)
+    return after === null ? null : (
+      <p className='text-sm text-pretty'>{after}</p>
+    );
 
   const cut = text.lastIndexOf(' ') + 1;
 
@@ -108,6 +119,7 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
           </span>
         )}
       </span>
+      {after !== null && ` ${after}`}
     </p>
   );
 }

@@ -312,7 +312,13 @@ export function describeHoldsBlocks(
     if (first) {
       return {
         tone: 'info',
-        text: COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
+        text:
+          first.kind === 'short'
+            ? COVERAGE_WORDS.stillShortOf(
+                first.name,
+                formatDateOrdinalUTC(first.on),
+              )
+            : COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
         figure: null,
         isStanding: true,
         standingItemId: first.kind === 'short' ? first.itemId : null,

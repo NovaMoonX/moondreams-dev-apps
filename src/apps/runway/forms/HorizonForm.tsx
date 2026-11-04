@@ -283,21 +283,25 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         } satisfies PreviewChange)
       : null;
 
-  const pickedOn = pickedDay?.on ?? null;
   const shortNote = {
     itemId: horizonId,
-    describe: ({ shorts, payCount, roomCount }: ItemShortsReading) => {
-      const total = shorts.reduce((sum, entry) => sum + entry.cents, 0);
-      if (total === 0) return null;
-      return pickedOn !== null && formData.rest === 'onePay'
-        ? HORIZON_WORDS.effectShortOnePay(formatDateOrdinalUTC(pickedOn))
-        : HORIZON_WORDS.effectShortPays(
-            name,
-            formatCents(total),
+    describe: ({
+      shorts,
+      carriedCents,
+      askedCents,
+      payCount,
+      roomCount,
+    }: ItemShortsReading) =>
+      // One pay's card row already says it has no room, so only spread pays get a note.
+      formData.rest === 'onePay' || shorts.every((entry) => entry.cents === 0)
+        ? null
+        : HORIZON_WORDS.takeFromPaysShort(
+            formatCents(carriedCents),
+            formatCents(askedCents),
+            formatCents(askedCents - carriedCents),
             roomCount,
             payCount,
-          );
-    },
+          ),
   };
 
   const steps: QuestionStep[] = [
@@ -542,7 +546,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
                 key={value}
                 className={join(
                   formData.rest === value &&
-                    'bg-accent shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+                    'bg-primary/10 shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
                 )}
                 aria-current={formData.rest === value ? 'true' : undefined}
               >

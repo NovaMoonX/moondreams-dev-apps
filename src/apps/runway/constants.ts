@@ -407,17 +407,6 @@ export const HORIZON_WORDS = {
   needsRest: 'Pick where the rest comes from.',
   onePayTitle: 'Which pay?',
   onePayCapped: "Later pays aren't listed.",
-  effectShortOnePay: (date: string) =>
-    `Higher priorities take the ${date} pay first.`,
-  effectShortPays: (
-    name: string,
-    short: string,
-    roomCount: number,
-    payCount: number,
-  ) =>
-    roomCount === payCount
-      ? `${name} stays ${short} short on your pays. Higher priorities take them first.`
-      : `${getPaysRoom(roomCount, payCount)} for ${name}: it stays ${short} short. Higher priorities take them first.`,
   takeFromPaysShort: (
     carried: string,
     asked: string,
@@ -2278,6 +2267,8 @@ export const COVERAGE_WORDS = {
     `covers every bill until your last income day, ${on}`,
   shortLead: 'Your plan comes up short',
   stillShort: (on: string) => `Your plan still comes up short on ${on}.`,
+  stillShortOf: (name: string, on: string) =>
+    `Your plan still comes up short for ${name} on ${on}.`,
 };
 
 export const ITEM_SHEET_R2_WORDS = {
