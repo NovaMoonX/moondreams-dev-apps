@@ -36,8 +36,10 @@ export interface BalancesInput {
   arrivedOn: ReadonlyMap<string, DateOnly>;
   /** Each day's scheduled date, by day id, which places what it set aside for a bill against that bill's payments; `arrivedOn` stands in when it is left out. */
   expectedOn?: ReadonlyMap<string, DateOnly>;
-  /** Which plan items are goals, bills and envelopes, and which ids are cards. */
-  kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope' | 'card'>>;
+  /** Which plan items are goals, bills, envelopes and Horizon items, and which ids are cards. */
+  kinds: Readonly<
+    Record<string, 'goal' | 'bill' | 'envelope' | 'horizon' | 'card'>
+  >;
   /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to Spend from then. */
   releasedFrom?: Readonly<Record<string, DateOnly>>;
   /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
@@ -61,6 +63,8 @@ export interface Balances {
   assignedByItem: Record<string, Cents>;
   assignedToBillsCents: Cents;
   assignedToGoalsCents: Cents;
+  /** What Horizon items still hold; one that is over holds nothing, as an envelope. */
+  assignedToHorizonCents: Cents;
   /** What envelopes still hold; an envelope that is over holds nothing, and its overspend has already left the money on hand. */
   assignedToEnvelopesCents: Cents;
   /** What each card owes and waits to be paid: what it owed on the starting day, plus what was charged to it, less what was paid off; below zero when it was overpaid. */
@@ -200,17 +204,21 @@ export function deriveBalances(input: BalancesInput): Balances {
   const isReleased = (id: string) =>
     Object.hasOwn(input.releasedFrom ?? {}, id) &&
     (input.releasedFrom?.[id] ?? 0) <= (input.asOf ?? Infinity);
-  const sumKind = (kind: 'goal' | 'bill' | 'envelope') =>
+  const sumKind = (kind: 'goal' | 'bill' | 'envelope' | 'horizon') =>
     Object.entries(assignedByItem)
       .filter(([id]) => input.kinds[id] === kind && !isReleased(id))
       .reduce(
         (sum, [, cents]) =>
-          sum + (kind === 'envelope' ? Math.max(0, cents) : cents),
+          sum +
+          (kind === 'envelope' || kind === 'horizon'
+            ? Math.max(0, cents)
+            : cents),
         0,
       );
   const assignedToBillsCents = sumKind('bill');
   const assignedToGoalsCents = sumKind('goal');
   const assignedToEnvelopesCents = sumKind('envelope');
+  const assignedToHorizonCents = sumKind('horizon');
 
   const isCountingCards = input.isCountingCards ?? true;
   const allCharged = joinCents(
@@ -269,6 +277,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     assignedByItem,
     assignedToBillsCents,
     assignedToGoalsCents,
+    assignedToHorizonCents,
     assignedToEnvelopesCents,
     reserveByCard,
     assignedToCardsCents,
@@ -279,6 +288,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       moneyOnHandCents -
       assignedToBillsCents -
       assignedToGoalsCents -
+      assignedToHorizonCents -
       assignedToEnvelopesCents -
       assignedToCardsCents,
     startMoneyCents,

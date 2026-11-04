@@ -7,7 +7,7 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
-  HorizonSealed,
+  HorizonStored,
   Cents,
   GroupSealed,
   OpenVersion,
@@ -18,6 +18,7 @@ import type {
   RunwayEncryption,
   SourceSealed,
 } from '@apps/runway/types';
+import { readHorizon } from '@apps/runway/engine/horizon';
 import { normalizeFunding } from '@apps/runway/utils/fundingText';
 import { readHeldReleasedOn } from '@apps/runway/engine/endings';
 
@@ -113,8 +114,8 @@ async function openVersion(
     };
   }
   if (version.kind === 'horizon') {
-    const payload = await read<HorizonSealed>(version.sealed);
-    return { ...base, kind: 'horizon', payload };
+    const payload = await read<HorizonStored>(version.sealed);
+    return { ...base, kind: 'horizon', payload: readHorizon(payload) };
   }
   return null;
 }

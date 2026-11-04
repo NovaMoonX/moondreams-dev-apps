@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
+import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
@@ -39,6 +40,7 @@ interface CostFormData {
   amount: AmountDraft;
   name: string;
   date: string;
+  isOutside: boolean;
 }
 
 const MODE_OPTIONS = [
@@ -91,6 +93,7 @@ const toDraftData = (
         cost.schedule.anchor === null
           ? ''
           : toDateInputValue(cost.schedule.anchor),
+      isOutside: cost.isOutside,
     };
   }
   return {
@@ -100,6 +103,7 @@ const toDraftData = (
       happensOn >= today && happensOn <= lastDate
         ? toDateInputValue(happensOn)
         : '',
+    isOutside: false,
   };
 };
 
@@ -198,7 +202,14 @@ function CostForm({
       id: 'date',
       title: HORIZON_WORDS.costWhenTitle,
       summaryLabel: HORIZON_WORDS.costWhen,
-      summaryValue: isDateValid ? formatDateOrdinalUTC(date) : '',
+      summaryValue: !isDateValid
+        ? ''
+        : [
+            formatDateOrdinalUTC(date),
+            formData.isOutside && HORIZON_WORDS.outsideTag,
+          ]
+            .filter(Boolean)
+            .join(' · '),
       isAnswered: isDateValid,
       blocker:
         formData.date !== '' && !isDateValid
@@ -217,6 +228,22 @@ function CostForm({
           <p className='text-muted-foreground text-sm'>
             {HORIZON_WORDS.costDateHint}
           </p>
+          <label className='flex items-start justify-between gap-3 pt-2 text-sm'>
+            <span className='min-w-0'>
+              <span className='block font-medium'>
+                {HORIZON_WORDS.costOutside}
+              </span>
+              <span className='text-muted-foreground block'>
+                {HORIZON_WORDS.costOutsideHint}
+              </span>
+            </span>
+            <AppToggle
+              aria-label={HORIZON_WORDS.costOutside}
+              checked={formData.isOutside}
+              onCheckedChange={(isOutside) => set({ isOutside })}
+              className='mt-0.5 shrink-0'
+            />
+          </label>
         </div>
       ),
     },
@@ -246,6 +273,7 @@ function CostForm({
         anchor: date,
         monthDays: [],
       },
+      isOutside: formData.isOutside,
       note: cost?.note ?? null,
     });
   };

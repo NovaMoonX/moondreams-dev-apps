@@ -364,6 +364,9 @@ export interface GoalSealed {
   extras?: PriorityExtra[] | null;
 }
 
+/** What an event's costs fall back on once the money put toward it runs out. */
+export type HorizonRest = { kind: 'outside' } | { kind: 'later' };
+
 /** One event's costs. */
 export interface HorizonSealed {
   name: string;
@@ -375,9 +378,17 @@ export interface HorizonSealed {
   priority: Priority;
   /** A fractional rank inside the priority tier. */
   orderIndex: number;
+  /** Where what the money put toward it does not cover comes from. */
+  rest: HorizonRest;
   note: string | null;
   costs: HorizonCost[];
 }
+
+/** A horizon payload as it may be stored: a version sealed before `rest` or `isOutside` existed lacks them. */
+export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
+  rest?: HorizonRest | null;
+  costs: (Omit<HorizonCost, 'isOutside'> & { isOutside?: boolean })[];
+};
 
 export interface HorizonCost {
   /** Stable across versions. */
@@ -386,6 +397,8 @@ export interface HorizonCost {
   /** Equal ends for an exact amount. */
   amount: MoneyRange;
   schedule: Schedule;
+  /** Paid outside the plan: listed, never covered, never short. */
+  isOutside: boolean;
   note: string | null;
 }
 

@@ -13,13 +13,14 @@ import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 
 interface HorizonRowProps {
+  itemId: string;
   horizon: HorizonSealed;
   today: number;
   stance: Stance;
 }
 
 /** An event in the plan: its badge, name, the next cost due and what its costs add up to; it opens the event's sheet. */
-function HorizonRow({ horizon, today, stance }: HorizonRowProps) {
+function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const payments = listHorizonPayments(
     horizon.costs,
@@ -46,6 +47,7 @@ function HorizonRow({ horizon, today, stance }: HorizonRowProps) {
       />
       {isOpen && (
         <HorizonSheet
+          itemId={itemId}
           horizon={horizon}
           today={today}
           stance={stance}

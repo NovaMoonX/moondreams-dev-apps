@@ -1,5 +1,6 @@
 import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import { HORIZON_WORDS } from '@apps/runway/constants';
 import type { HorizonCost } from '@apps/runway/types';
 
 /** A cost in two plain pieces: the date line ("Jan 15th") and the figure ("$600 to $800" for a range). */
@@ -7,7 +8,12 @@ export function describeCost(cost: HorizonCost) {
   const { lowCents, highCents } = cost.amount;
   const { anchor } = cost.schedule;
   return {
-    line: anchor === null ? '' : formatDateOrdinalUTC(anchor),
+    line: [
+      anchor !== null && formatDateOrdinalUTC(anchor),
+      cost.isOutside && HORIZON_WORDS.outsideTag,
+    ]
+      .filter(Boolean)
+      .join(' · '),
     figure:
       lowCents === highCents
         ? formatCentsShort(lowCents)

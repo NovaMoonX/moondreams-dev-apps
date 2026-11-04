@@ -239,6 +239,26 @@ export const INCOME_ENDING_LABELS: Record<
 export const DEFAULT_PAY_LINE_NAME = 'Paycheck';
 export const MAX_HORIZON_COSTS = 20;
 
+/** What a Horizon item's costs fall back on once the money put toward it runs out. Issue 82 adds `pays` and `onePay`. */
+export const HORIZON_REST = ['outside', 'later'] as const;
+
+export const HORIZON_REST_OPTIONS: readonly {
+  value: (typeof HORIZON_REST)[number];
+  label: string;
+  meaning: string;
+}[] = [
+  {
+    value: 'outside',
+    label: 'Outside the plan',
+    meaning: "I'll cover the rest myself. Runway never asks for it or warns.",
+  },
+  {
+    value: 'later',
+    label: "I'll decide later",
+    meaning: 'Runway asks for nothing yet, and warns you if it runs short.',
+  },
+];
+
 /** Cost names offered under "What is it?", keyed on simple words in the item's name. */
 export const HORIZON_COST_SUGGESTIONS: readonly {
   words: readonly string[];
@@ -323,6 +343,62 @@ export const HORIZON_WORDS = {
   needsCostName: 'Name the cost.',
   needsCostDate: 'Pick a day within the next year that has not passed.',
   addCostNamed: (name: string) => `Add ${name}`,
+  costOutside: 'Paid outside the plan',
+  costOutsideHint:
+    'Listed here, but never set aside for and never warned about.',
+  outsideTag: 'Outside the plan',
+  putTitle: 'Put money toward it now?',
+  putAmount: 'Amount',
+  putFrom: 'Take it from',
+  putFromFree: 'From Free to Spend',
+  putFromPlace: 'From an envelope or goal',
+  putPlaces: 'Envelopes and goals',
+  putNotNow: 'Not now',
+  putSummary: (amount: string, from: string) => `${amount} from ${from}`,
+  putFreeName: 'Free to Spend',
+  needsPutAmount: 'Enter how much to put toward it.',
+  needsPutFrom: 'Pick where it comes from.',
+  needsPutPlace: 'Pick the envelope or goal.',
+  putTooMuch: (from: string) => `That is more than ${from} has.`,
+  putAdded: (amount: string, from: string, name: string) =>
+    `Put ${amount} toward ${name} from ${from}.`,
+  putUndone: (amount: string, name: string, from: string) =>
+    `Took ${amount} back out of ${name} to ${from}`,
+  restTitle: "What it doesn't cover comes from",
+  rest: 'The rest',
+  needsRest: 'Pick where the rest comes from.',
+  totalCostIs: (amount: string) => `${amount} total cost`,
+  setAside: 'Set aside',
+  spent: 'Spent',
+  left: 'Left',
+  leftFact: (setAside: string, spent: string) =>
+    `${setAside} set aside, ${spent} spent`,
+  shortTitle: (amount: string, date: string) => `${amount} short on ${date}`,
+  shortBody: (name: string) =>
+    `What you have put toward ${name} runs out before its costs do.`,
+  restOutsideNote: 'The rest is on you, outside the plan.',
+  putMore: 'Put more toward it',
+  putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
+  putMoreTitle: (name: string) => `Put more toward ${name}`,
+  putMoreAmount: 'Amount to put toward it',
+  putMoreFrom: 'Where it comes from',
+  putMoreOutside: 'Outside the plan',
+  putOutsideName: 'outside the plan',
+  putMoreAction: (amount: string) => `Put ${amount} toward it`,
+  putMoreDone: (amount: string, name: string) => `Put ${amount} toward ${name}`,
+  needsPutMoreFrom: 'Pick where it comes from.',
+  covers: {
+    nothingSet: 'Nothing is set aside yet, so nothing is covered.',
+    none: "What's set aside doesn't cover a whole cost yet.",
+    all: 'Covers every cost.',
+    listed: (list: string, atEnd: string) => `Covers ${list}${atEnd}.`,
+    atEnd: (endWords: string) => ` at ${endWords}`,
+    on: (name: string, date: string) => `${name} on ${date}`,
+    more: (count: number) => `${count} more`,
+    helpTitle: 'About the range',
+    helpRange: (name: string, low: string, high: string, end: string) =>
+      `${name} could be ${low} to ${high}. Runway plans it at ${end}.`,
+  },
 } as const;
 
 export const MAX_NAME_LENGTH = 60;
@@ -2506,6 +2582,7 @@ export const FREE_SUM_WORDS = {
   cards: 'Set aside for cards',
   bills: 'Held for bills',
   goals: 'Held for goals',
+  horizon: 'Held for Horizon',
   envelopesTrack: 'Left in envelopes',
   envelopesPlan: 'Set aside in envelopes',
   result: 'Free to Spend',

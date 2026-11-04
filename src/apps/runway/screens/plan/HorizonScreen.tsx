@@ -68,6 +68,7 @@ function HorizonScreen() {
             {visible.map(({ item, version }) => (
               <HorizonRow
                 key={item.id}
+                itemId={item.id}
                 horizon={version.payload}
                 today={today}
                 stance={stance}

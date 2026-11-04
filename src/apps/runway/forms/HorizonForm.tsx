@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Clock, Plus, Wallet } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
+import AmountHero from '@/components/AmountHero';
 import DateInput from '@/components/DateInput';
 import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
@@ -19,13 +22,16 @@ import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
   FORM_FLOW_WORDS,
+  HORIZON_REST_OPTIONS,
   HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_EMOJI_LENGTH,
   MAX_HORIZON_COSTS,
   MAX_NAME_LENGTH,
+  MAX_PURCHASE_CENTS,
   PRIORITIES,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -33,15 +39,23 @@ import CostRow from '@apps/runway/components/CostRow';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import CostForm from '@apps/runway/forms/CostForm';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { addHorizon } from '@apps/runway/store/actions/horizonActions';
+import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBills,
   selectEnvelopes,
   selectGoals,
   selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { HorizonCost, HorizonSealed, Priority } from '@apps/runway/types';
+import type {
+  HorizonCost,
+  HorizonRest,
+  HorizonSealed,
+  Priority,
+} from '@apps/runway/types';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
@@ -53,6 +67,14 @@ interface HorizonFormData {
   isFewDays: boolean;
   endDate: string;
   costs: HorizonCost[];
+  /** The amount typed for "Put money toward it now?". */
+  putAmount: string;
+  putFrom: 'free' | 'place' | null;
+  putPlaceId: string | null;
+  /** "Not now" was chosen: the question is answered with no money. */
+  isNotNow: boolean;
+  /** Null until the person picks one. */
+  rest: HorizonRest['kind'] | null;
   priority: Priority;
 }
 
@@ -63,8 +85,23 @@ const INITIAL_DATA: HorizonFormData = {
   isFewDays: false,
   endDate: '',
   costs: [],
+  putAmount: '',
+  putFrom: null,
+  putPlaceId: null,
+  isNotNow: false,
+  rest: null,
   priority: 'should',
 };
+
+const FROM_OPTIONS = [
+  { value: 'free' as const, label: HORIZON_WORDS.putFromFree },
+  { value: 'place' as const, label: HORIZON_WORDS.putFromPlace },
+];
+
+const REST_ICONS = {
+  outside: <Wallet />,
+  later: <Clock />,
+} as const;
 
 const priorityOptions = PRIORITIES.map((value) => ({
   value,
@@ -86,7 +123,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
+  const balances = useAppSelector(selectBalances);
+  const emojiOf = useLiveEmojiResolver();
   const { isHidden } = useValuesHidden();
+  const [moveId] = useState(newTransferMoveId);
   const [formData, setFormData] = useState<HorizonFormData>(INITIAL_DATA);
   const [costDraft, setCostDraft] = useState<HorizonCost | 'new' | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +149,43 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     return null;
   };
   const dateBlocker = getDateBlocker();
+  const places = [
+    ...envelopes.map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      emoji: emojiOf(version.payload.emoji, version.payload.groupId),
+    })),
+    ...goals
+      .filter(({ version }) => version.payload.state !== 'paused')
+      .map(({ item, version }) => ({
+        id: item.id,
+        name: version.payload.name,
+        emoji: version.payload.emoji,
+      })),
+  ];
+  const place = places.find(({ id }) => id === formData.putPlaceId);
+  const parsedPut = parseMoneyToCents(formData.putAmount);
+  const putCents =
+    parsedPut !== null && parsedPut > 0 && parsedPut <= MAX_PURCHASE_CENTS
+      ? parsedPut
+      : null;
+  const putFromName =
+    formData.putFrom === 'free' ? HORIZON_WORDS.putFreeName : place?.name;
+  const putLeftCents =
+    formData.putFrom === 'place'
+      ? Math.max(0, balances.assignedByItem[place?.id ?? ''] ?? 0)
+      : formData.putFrom === 'free' && balances.hasMoney
+        ? Math.max(0, balances.freeToSpendCents)
+        : Infinity;
+  const getPutBlocker = () => {
+    if (formData.isNotNow) return null;
+    if (putCents === null) return HORIZON_WORDS.needsPutAmount;
+    if (formData.putFrom === null) return HORIZON_WORDS.needsPutFrom;
+    if (putFromName === undefined) return HORIZON_WORDS.needsPutPlace;
+    if (putCents > putLeftCents) return HORIZON_WORDS.putTooMuch(putFromName);
+    return null;
+  };
+  const putBlocker = getPutBlocker();
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
@@ -116,7 +193,11 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         ? (dateBlocker ?? FORM_FLOW_WORDS.pastDay)
         : formData.costs.length === 0
           ? HORIZON_WORDS.needsCost
-          : null;
+          : putBlocker !== null
+            ? putBlocker
+            : formData.rest === null
+              ? HORIZON_WORDS.needsRest
+              : null;
 
   const steps: QuestionStep[] = [
     {
@@ -272,6 +353,93 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       ),
     },
     {
+      id: 'put',
+      title: HORIZON_WORDS.putTitle,
+      summaryLabel: HORIZON_WORDS.putTitle,
+      summaryValue: formData.isNotNow
+        ? HORIZON_WORDS.putNotNow
+        : putBlocker === null && putCents !== null && putFromName
+          ? HORIZON_WORDS.putSummary(formatCents(putCents), putFromName)
+          : '',
+      isAnswered: putBlocker === null,
+      blocker:
+        formData.putAmount !== '' || formData.putFrom !== null
+          ? putBlocker
+          : null,
+      render: ({ moveOn }) => (
+        <div className='space-y-4'>
+          <AmountHero
+            autoFocus
+            label={HORIZON_WORDS.putAmount}
+            value={formData.putAmount}
+            onChange={(putAmount) => set({ putAmount, isNotNow: false })}
+          />
+          <PillGroup
+            label={HORIZON_WORDS.putFrom}
+            options={FROM_OPTIONS}
+            value={formData.putFrom}
+            onChange={(putFrom) =>
+              set({ putFrom, isNotNow: false, putPlaceId: null })
+            }
+          />
+          {formData.putFrom === 'place' && (
+            <PillGroup
+              label={HORIZON_WORDS.putPlaces}
+              options={places.map(({ id, name: placeName, emoji }) => ({
+                value: id,
+                label: placeName,
+                emoji: emoji ?? undefined,
+              }))}
+              value={formData.putPlaceId}
+              onChange={(putPlaceId) => set({ putPlaceId, isNotNow: false })}
+            />
+          )}
+          <div>
+            <RevealChip
+              onClick={() => {
+                set({
+                  putAmount: '',
+                  putFrom: null,
+                  putPlaceId: null,
+                  isNotNow: true,
+                });
+                moveOn();
+              }}
+            >
+              {HORIZON_WORDS.putNotNow}
+            </RevealChip>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: 'rest',
+      title: HORIZON_WORDS.restTitle,
+      summaryLabel: HORIZON_WORDS.rest,
+      summaryValue:
+        HORIZON_REST_OPTIONS.find(({ value }) => value === formData.rest)
+          ?.label ?? '',
+      isAnswered: formData.rest !== null,
+      render: ({ moveOn }) => (
+        <ActionGroup isRoomy>
+          {HORIZON_REST_OPTIONS.map(({ value, label, meaning }) => (
+            <ActionRow
+              key={value}
+              isGrouped
+              isRoomy
+              icon={REST_ICONS[value]}
+              label={label}
+              subtitle={meaning}
+              onClick={() => {
+                set({ rest: value });
+                moveOn();
+              }}
+            />
+          ))}
+        </ActionGroup>
+      ),
+    },
+    {
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
       summaryLabel: HORIZON_WORDS.priority,
@@ -301,7 +469,14 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   });
 
   const handleSubmit = async () => {
-    if (!user || blocker !== null || date === undefined) return;
+    if (
+      !user ||
+      blocker !== null ||
+      date === undefined ||
+      formData.rest === null
+    ) {
+      return;
+    }
     const horizon: HorizonSealed = {
       name,
       emoji: formData.emoji?.trim() || null,
@@ -313,14 +488,38 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         [...bills, ...envelopes, ...goals, ...horizons],
         formData.priority,
       ),
+      rest: { kind: formData.rest },
       note: null,
       costs: formData.costs,
     };
+    const toward =
+      formData.isNotNow || putCents === null || putFromName === undefined
+        ? null
+        : {
+            moveId,
+            fromId: formData.putFrom === 'place' ? (place?.id ?? null) : null,
+            cents: putCents,
+            leftCents: putLeftCents === Infinity ? 0 : putLeftCents,
+            summary: HORIZON_WORDS.putAdded(
+              formatCents(putCents),
+              putFromName,
+              name,
+            ),
+            undoText: HORIZON_WORDS.putUndone(
+              formatCents(putCents),
+              name,
+              putFromName,
+            ),
+          };
     setError(null);
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await addHorizon(user.uid, encryption, { horizon, startDate: today });
+      await addHorizon(user.uid, encryption, {
+        horizon,
+        startDate: today,
+        toward,
+      });
       onClose();
     } catch (saveError) {
       setError(getErrorMessage(saveError, HORIZON_WORDS.addFailed));
