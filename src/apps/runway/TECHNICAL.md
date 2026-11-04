@@ -323,6 +323,8 @@ interface HorizonCost {
 
 `OpenVersion` gains `{ kind: 'horizon'; payload: HorizonSealed }`. Each field lands in the issue that uses it (Issues 79 to 88 in ISSUES.md); a version sealed before a field existed reads it as its empty value (`?? null`, `rest ?? { kind: 'later' }`, `isOutside ?? false`, `state ?? 'open'`), and nothing re-seals old versions. `rest.onePay.dayKey` follows Invariant 2: a pay line change that drops that day says so in its effect preview, as for a bill's chosen days.
 
+**As built (Issue 79).** `HorizonSealed` holds `name`, `emoji`, `happensOn`, `happensUntil`, `priority`, `orderIndex`, `note` and `costs`; `HorizonCost` holds `id`, `name`, `amount`, `schedule` (`once`) and `note`. The other fields land with their issues. `listCostPayments(cost, horizon, stance)` takes the stance directly, with `listHorizonPayments` (date order) and `sumCostPayments` beside it, and `selectHorizonItems` lists the items. A horizon plans nothing yet: no demands, lines or balances, and it is left out of Priorities and the change flow (`ItemSheet` returns nothing for the kind; `HorizonSheet` is its own sheet).
+
 **Additions to existing payloads.**
 
 ```ts
@@ -1408,7 +1410,7 @@ src/apps/runway/
 ├── engine/lookahead.ts               horizonShort, dueCosts
 ├── hooks/useCostPaid.ts              the cost's mark, one tap when exact
 ├── hooks/paidQueue.ts                inTurn, moved from useBillPaid.ts unchanged
-├── components/HorizonRow.tsx, CostRow.tsx, CoversLine.tsx   (UX "Reusable components"; describeCost lives in CostRow)
+├── components/HorizonRow.tsx, CostRow.tsx, CoversLine.tsx   (UX "Reusable components"; `describeCost` lives in `utils/horizonText.ts`)
 ├── components/PaidAmountSheet.tsx    takes a neutral payment shape; bill call sites unchanged in behaviour
 ├── screens/plan/HorizonScreen.tsx    Plan > Horizon (list, Done folded)
 ├── screens/plan/HorizonSheet.tsx     one item (and the done or called-off view, Bring it back)

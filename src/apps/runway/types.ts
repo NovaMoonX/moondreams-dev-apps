@@ -364,6 +364,31 @@ export interface GoalSealed {
   extras?: PriorityExtra[] | null;
 }
 
+/** One event's costs. */
+export interface HorizonSealed {
+  name: string;
+  emoji: string | null;
+  /** "Around Jan 15th"; display only. */
+  happensOn: DateOnly;
+  /** Null for a single day. */
+  happensUntil: DateOnly | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  note: string | null;
+  costs: HorizonCost[];
+}
+
+export interface HorizonCost {
+  /** Stable across versions. */
+  id: string;
+  name: string;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  schedule: Schedule;
+  note: string | null;
+}
+
 export interface PlanItemDoc {
   id: string;
   kind: ItemKind;
@@ -524,7 +549,8 @@ export type OpenVersion =
   | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
   | (OpenVersionBase & { kind: 'bill'; payload: BillSealed })
   | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed })
-  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed });
+  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed })
+  | (OpenVersionBase & { kind: 'horizon'; payload: HorizonSealed });
 
 export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
 export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
@@ -532,6 +558,7 @@ export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
 export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
 export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
 export type GroupVersion = Extract<OpenVersion, { kind: 'group' }>;
+export type HorizonVersion = Extract<OpenVersion, { kind: 'horizon' }>;
 
 export type MoveKind = (typeof MOVE_KINDS)[number];
 

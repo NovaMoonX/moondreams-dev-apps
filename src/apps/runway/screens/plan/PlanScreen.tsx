@@ -13,6 +13,7 @@ import CardsScreen from '@apps/runway/screens/plan/CardsScreen';
 import BillsScreen from '@apps/runway/screens/plan/BillsScreen';
 import EnvelopesScreen from '@apps/runway/screens/plan/EnvelopesScreen';
 import GoalsScreen from '@apps/runway/screens/plan/GoalsScreen';
+import HorizonScreen from '@apps/runway/screens/plan/HorizonScreen';
 import MoreScreen from '@apps/runway/screens/plan/MoreScreen';
 import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -59,6 +60,7 @@ function PlanScreen() {
       {planSection === 'envelopes' && <EnvelopesScreen />}
       {isMore && <MoreScreen />}
       {planSection === 'goals' && <GoalsScreen />}
+      {planSection === 'horizon' && <HorizonScreen />}
       {planSection === 'bills' && <BillsScreen />}
       {planSection === 'cards' && <CardsScreen />}
       {planSection === 'income' && <IncomeScreen />}

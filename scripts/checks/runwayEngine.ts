@@ -229,6 +229,11 @@ import {
   lookahead,
   type LookaheadDraft,
 } from '../../src/apps/runway/engine/lookahead.ts';
+import {
+  listCostPayments,
+  listHorizonPayments,
+  sumCostPayments,
+} from '../../src/apps/runway/engine/horizon.ts';
 import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
 import {
   collectStarted,
@@ -10635,6 +10640,62 @@ const version = (
     formatDateOrdinal(localNoon),
     'Jul\u00a03rd',
     'an instant reads its local day',
+  );
+}
+
+// Horizon: a one-time cost's payment.
+{
+  const jan15 = Date.UTC(2027, 0, 15);
+  const movers = {
+    id: 'movers',
+    name: 'Movers',
+    amount: { lowCents: 60_000, highCents: 80_000 },
+    schedule: { kind: 'once' as const, anchor: jan15, monthDays: [] },
+    note: null,
+  };
+  const truck = {
+    ...movers,
+    id: 'truck',
+    name: 'Truck rental',
+    amount: { lowCents: 12_000, highCents: 12_000 },
+    schedule: { kind: 'once' as const, anchor: jan15 - DAY_MS, monthDays: [] },
+  };
+  const end = Date.UTC(2027, 11, 31);
+  assert.deepEqual(
+    listCostPayments(movers, end, 'conservative'),
+    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000 }],
+    'a range plans at the high end under the default expense stance',
+  );
+  assert.equal(
+    listCostPayments(movers, end, 'optimistic')[0].totalCents,
+    60_000,
+    'an optimistic stance plans a cost at its low end',
+  );
+  assert.equal(
+    listCostPayments(movers, end, 'middle')[0].totalCents,
+    70_000,
+    'the middle stance plans halfway',
+  );
+  assert.equal(
+    listCostPayments(truck, end, 'conservative')[0].totalCents,
+    12_000,
+    'an exact cost plans at its amount',
+  );
+  assert.equal(
+    listCostPayments(movers, jan15 - DAY_MS, 'conservative').length,
+    0,
+    'a cost after the horizon is not listed',
+  );
+  const payments = listHorizonPayments([movers, truck], end, 'conservative');
+  assert.deepEqual(
+    payments.map(({ costId }) => costId),
+    ['truck', 'movers'],
+    'payments come in date order whatever order the costs were listed',
+  );
+  assert.equal(
+    sumCostPayments(payments),
+    92_000,
+    'the planned total adds the stance figures',
   );
 }
 
