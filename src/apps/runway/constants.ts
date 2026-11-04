@@ -1096,7 +1096,22 @@ export const HOME_WORDS = {
   getStarted: 'Get started',
   resume:
     'Your income source is in. Add what you pay and what you spend on, and this page can say what is free.',
-  resumeAction: 'Continue setting up',
+} as const;
+
+export const SETUP_WORDS = {
+  newTitle: 'Plan your first paycheck',
+  newBody:
+    'Tell Runway who pays you and what you pay. It works out what each income day sets aside, and what is free.',
+  newAction: 'Start your plan',
+  steps: [
+    { title: 'Your income', body: 'Who pays you, and how often.' },
+    { title: 'Bills and spending', body: 'What you pay and what you spend on.' },
+    { title: 'Goals', body: 'What you are saving toward.' },
+  ],
+  startedTitle: 'Pick up where you left off',
+  startedBody: (parts: string) =>
+    `You have added ${parts}. Add what you pay and what you spend on, and Runway can say what is free.`,
+  startedAction: 'Continue setting up',
 } as const;
 
 export const HISTORY_WORDS = {

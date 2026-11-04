@@ -18,6 +18,7 @@ import DaysScreen from '@apps/runway/screens/days/DaysScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
 import SignedOutLanding from '@apps/runway/screens/start/SignedOutLanding';
+import SetupLanding from '@apps/runway/screens/start/SetupLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
@@ -42,6 +43,7 @@ import {
   selectListedDays,
   selectSpendPurchases,
   selectIsPlanItemsLoaded,
+  selectSetupState,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
@@ -179,6 +181,7 @@ function RunwayContent() {
     closeDay();
     if (month !== null && activeTab === 'days') showDaysMonth(month);
   };
+  const setupState = useAppSelector(selectSetupState);
   const level = useAppSelector(selectLevel);
   const activeTab =
     requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
@@ -360,6 +363,22 @@ function RunwayContent() {
         <IncomeDayScreen dayKey={openDayKey} onClose={closeOpenDay} />
       </div>
     );
+  }
+
+  if (!isPlanItemsLoaded) {
+    return (
+      <div className='page'>
+        <div className='mx-auto max-w-4xl py-6'>
+          <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+            Getting your plan ready.
+          </EmptyCard>
+        </div>
+      </div>
+    );
+  }
+
+  if (setupState !== 'ready') {
+    return <SetupLanding isStarted={setupState === 'started'} />;
   }
 
   return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
