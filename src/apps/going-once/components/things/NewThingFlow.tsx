@@ -354,7 +354,26 @@ function ThingSteps({
 
   const renderExtra = (key: ExtraKey) => {
     const { Question } = THING_ROWS[key];
-    return <Question answers={answers} onChange={set} />;
+    return (
+      <Question
+        answers={answers}
+        onChange={(patch) => {
+          const { extras } = latestAnswers.current;
+          const filled = EXTRA_KEYS.filter(
+            (extra) =>
+              !extras.includes(extra) &&
+              EXTRA_ANSWER_KEYS[extra].some(
+                (name) => name in patch && patch[name] !== EMPTY_ANSWERS[name],
+              ),
+          );
+          set(
+            filled.length === 0
+              ? patch
+              : { ...patch, extras: [...extras, ...filled] },
+          );
+        }}
+      />
+    );
   };
   const addExtra = (key: ExtraKey | null) => {
     if (key === null) return;

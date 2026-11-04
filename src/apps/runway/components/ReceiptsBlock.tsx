@@ -3,6 +3,7 @@ import { ReceiptText } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import FallbackImage from '@/components/FallbackImage';
+import CameraGridTile from '@/components/forms/CameraGridTile';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { SPEND_WORDS } from '@apps/runway/constants';
 import { useReceiptImageUrl } from '@apps/runway/hooks/useReceiptImageUrl';
@@ -54,10 +55,18 @@ function ReceiptThumb({ image, onOpen }: ReceiptThumbProps) {
 interface ReceiptsBlockProps {
   images: OpenReceiptImage[];
   onOpen: (imageId: string) => void;
+  /** Ends the grid with a camera box on a touch screen; left out on a computer. */
+  onTakePhoto?: () => void;
+  isAddDisabled?: boolean;
 }
 
 /** A purchase's receipts as a row of square thumbnails, each opening the viewer. */
-function ReceiptsBlock({ images, onOpen }: ReceiptsBlockProps) {
+function ReceiptsBlock({
+  images,
+  onOpen,
+  onTakePhoto,
+  isAddDisabled = false,
+}: ReceiptsBlockProps) {
   return (
     <section className='space-y-2'>
       <h3 className='text-muted-foreground text-sm font-medium'>
@@ -69,6 +78,15 @@ function ReceiptsBlock({ images, onOpen }: ReceiptsBlockProps) {
             <ReceiptThumb image={image} onOpen={() => onOpen(image.id)} />
           </li>
         ))}
+        {onTakePhoto && (
+          <li>
+            <CameraGridTile
+              label={SPEND_WORDS.takeAnotherPhoto}
+              isDisabled={isAddDisabled}
+              onClick={onTakePhoto}
+            />
+          </li>
+        )}
       </ul>
     </section>
   );

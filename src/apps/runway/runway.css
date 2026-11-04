@@ -111,9 +111,10 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   overflow-y: auto;
 }
 
-/* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge. */
+/* On a screen tall enough for a form to fit, the card does not clip, so an open Select's list can run past its edge.
+   A sheet that can outgrow any screen (a group's members and priorities) marks itself and keeps scrolling. */
 @media (min-height: 700px) {
-  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl {
+  html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.shadow-xl:not(:has(.sheet-scrolls)) {
     overflow: visible;
   }
 }
