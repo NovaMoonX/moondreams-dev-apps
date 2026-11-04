@@ -2325,10 +2325,26 @@ export const GROUP_WORDS = {
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,
   nameLabel: 'Name',
-  startingPriority: 'Starting priority',
+  startingPriority: 'Priority',
   startingPriorityHelp:
-    'A new bill or envelope for this starts with this priority; with None, it starts at Should. You can still change it on the bill or envelope.',
+    'Everything for this takes the priority you pick, and so does a new bill or envelope you add. None changes nothing now and a new one starts at Should. You can still change one on its own.',
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+  priorityDone: (count: number, priority: string) =>
+    `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}`,
+  priorityToast: (count: number, priority: string) =>
+    `Set ${count === 1 ? '1 item' : `${count} items`} to ${priority}`,
+  priorityPartial: (done: number, total: number, failed: string[]) =>
+    `Set ${done} of ${total} to the new priority. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not save; the others did.`,
+  priorityFailed:
+    'The priority is saved for new ones, but the items already here did not change.',
+  prioritySkipped: (names: string[]) =>
+    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} ${names.length === 1 ? 'has' : 'have'} extra money at a level that doesn't fit, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
+  priorityUndone: 'Priorities put back',
+  priorityUndoPartial: (done: number, total: number, failed: string[]) =>
+    `Put back ${done} of ${total} priorities. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
+  priorityUndoStale: (names: string[]) =>
+    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
+  priorityUndoFailed: 'The priorities did not change back. Nothing was undone.',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
   archiveSub: 'Its bills and envelopes stay, with nothing set.',

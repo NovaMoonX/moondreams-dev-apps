@@ -67,6 +67,9 @@ import {
 } from '@apps/runway/store/actions/itemActions';
 import {
   selectBillPayments,
+  selectBills,
+  selectEnvelopes,
+  selectGoals,
   selectGroups,
   selectStance,
   selectAllPurposeEmojis,
@@ -78,9 +81,16 @@ import {
   type VersionStretch,
 } from '@apps/runway/engine/resolve';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
+import { getNextTierRank } from '@apps/runway/engine/priorities';
+import {
+  planGroupPriority,
+  type GroupPriorityChange,
+} from '@apps/runway/utils/groupPriority';
 import type {
   BillSealed,
   BillVersion,
+  EnvelopeSealed,
+  EnvelopeVersion,
   GroupSealed,
   Priority,
   Schedule,
@@ -103,6 +113,7 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
+type PriorityWritten = GroupPriorityChange;
 
 interface DueWritten {
   itemId: string;
@@ -186,8 +197,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     undo: DueWritten[] | null;
   } | null>(null);
   const store = useStore<RootState>();
-  const handledUndos = useRef(new WeakSet<DueWritten[]>());
+  const handledUndos = useRef(
+    new WeakSet<DueWritten[] | PriorityWritten[]>(),
+  );
   const [isUndoingDue, setIsUndoingDue] = useState(false);
+  const [priorityRecord, setPriorityRecord] = useState<{
+    note: string;
+    undo: PriorityWritten[] | null;
+  } | null>(null);
+  const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -263,16 +281,202 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     else setError(failure);
   };
 
+  const getMemberStretches = (
+    versions: RootState['runway']['versions'],
+    kind: 'bill' | 'envelope',
+    itemId: string,
+    from = today,
+  ): VersionStretch<BillSealed | EnvelopeSealed>[] =>
+    kind === 'bill'
+      ? getVersionStretches<BillVersion, BillSealed>(
+          versions.filter((v): v is BillVersion => v.kind === 'bill'),
+          itemId,
+          from,
+        )
+      : getVersionStretches<EnvelopeVersion, EnvelopeSealed>(
+          versions.filter((v): v is EnvelopeVersion => v.kind === 'envelope'),
+          itemId,
+          from,
+        );
+
+  const undoPriorities = async (written: PriorityWritten[]) => {
+    if (!user || handledUndos.current.has(written)) return;
+    handledUndos.current.add(written);
+    setIsUndoingPriority(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const live = store.getState().runway.versions;
+      const isUntouched = (entry: PriorityWritten) =>
+        isSameValue(
+          getMemberStretches(
+            live,
+            entry.kind,
+            entry.itemId,
+            entry.written[0].effectiveFrom,
+          ),
+          entry.written,
+        );
+      const untouched = written.filter(isUntouched);
+      const stale = written
+        .filter((entry) => !isUntouched(entry))
+        .map((entry) => entry.name);
+      const results = await Promise.allSettled(
+        untouched.map((entry) =>
+          changeItem(user.uid, encryption, {
+            itemId: entry.itemId,
+            kind: entry.kind,
+            payload: entry.stretches[0].payload,
+            summary: GROUP_WORDS.dueSummary(
+              entry.name,
+              describeChange(
+                entry.written[0].payload,
+                entry.stretches[0].payload,
+                getCardNamer([]),
+              ) || 'Updated',
+              formatDateOrdinalUTC(today),
+            ),
+            note: null,
+            effectiveFrom: today,
+            stretches: entry.stretches,
+          }),
+        ),
+      );
+      const failed = untouched.flatMap((entry, index) =>
+        results[index].status === 'rejected' ? [entry.name] : [],
+      );
+      const isClean = failed.length === 0 && stale.length === 0;
+      const title = isClean
+        ? GROUP_WORDS.priorityUndone
+        : GROUP_WORDS.priorityUndoPartial(
+            untouched.length - failed.length,
+            written.length,
+            [...failed, ...stale],
+          );
+      const description =
+        stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
+      setPriorityRecord({
+        note: description ? `${title} ${description}` : title,
+        undo: null,
+      });
+      addToast({ title, description, type: isClean ? 'success' : 'error' });
+    } catch (undoError) {
+      const message = getErrorMessage(
+        undoError,
+        GROUP_WORDS.priorityUndoFailed,
+      );
+      handledUndos.current.delete(written);
+      setPriorityRecord({ note: message, undo: written });
+      addToast({ title: message, type: 'error' });
+    } finally {
+      setIsUndoingPriority(false);
+    }
+  };
+
+  const applyPriorityToMembers = async (choice: Priority) => {
+    if (!user) return;
+    const state = store.getState();
+    const { versions } = state.runway;
+    const everyItem = [
+      ...selectBills(state, today),
+      ...selectEnvelopes(state, today),
+      ...selectGoals(state, today),
+    ];
+    const members = [
+      ...bills.map(({ item, version }) => ({
+        kind: 'bill' as const,
+        itemId: item.id,
+        name: version.payload.name,
+      })),
+      ...envelopes.map(({ item, version }) => ({
+        kind: 'envelope' as const,
+        itemId: item.id,
+        name: version.payload.name,
+      })),
+    ].map((member) => ({
+      ...member,
+      stretches: getMemberStretches(versions, member.kind, member.itemId),
+    }));
+    const { changes, skipped } = planGroupPriority(
+      members,
+      choice,
+      getNextTierRank(everyItem, choice),
+    );
+    const skippedNote =
+      skipped.length === 0 ? '' : ` ${GROUP_WORDS.prioritySkipped(skipped)}`;
+    if (changes.length === 0) {
+      setPriorityRecord(
+        skippedNote === '' ? null : { note: skippedNote.trim(), undo: null },
+      );
+      return;
+    }
+    const encryption = await getRunwayEncryption(user.uid);
+    const results = await Promise.allSettled(
+      changes.map((change) =>
+        changeItem(user.uid, encryption, {
+          itemId: change.itemId,
+          kind: change.kind,
+          payload: change.written[0].payload,
+          summary: GROUP_WORDS.dueSummary(
+            change.name,
+            describeChange(
+              change.stretches[0].payload,
+              change.written[0].payload,
+              getCardNamer([]),
+            ) || 'Updated',
+            formatDateOrdinalUTC(today),
+          ),
+          note: null,
+          effectiveFrom: today,
+          stretches: change.written,
+        }),
+      ),
+    );
+    const saved = changes.filter(
+      (_, index) => results[index].status === 'fulfilled',
+    );
+    const failed = changes
+      .filter((_, index) => results[index].status === 'rejected')
+      .map(({ name }) => name);
+    if (saved.length > 0) {
+      const label = PRIORITY_LABELS[choice];
+      setPriorityRecord({
+        note: `${GROUP_WORDS.priorityDone(saved.length, label)}.${skippedNote}`,
+        undo: saved,
+      });
+      addToast({
+        title: GROUP_WORDS.priorityToast(saved.length, label),
+        type: 'success',
+        action: {
+          label: ITEM_SHEET_R2_WORDS.undo,
+          onClick: () => void undoPriorities(saved),
+        },
+      });
+    }
+    if (failed.length > 0) {
+      setPriorityError(
+        saved.length === 0
+          ? GROUP_WORDS.priorityFailed
+          : GROUP_WORDS.priorityPartial(saved.length, changes.length, failed),
+      );
+    }
+  };
+
   const setStartingPriority = async (choice: StartingChoice) => {
     setPriorityError(null);
+    setPriorityRecord(null);
     setPickedPriority(choice);
     const failure = await save(
       { ...payload, startingPriority: choice === 'none' ? null : choice },
       true,
     );
-    setPriorityError(
-      failure === null ? null : GROUP_WORDS.startingPriorityFailed,
-    );
+    if (failure !== null) setPriorityError(GROUP_WORDS.startingPriorityFailed);
+    else if (choice !== 'none') {
+      try {
+        await applyPriorityToMembers(choice);
+      } catch {
+        setPriorityError(GROUP_WORDS.priorityFailed);
+      }
+    }
     setPickedPriority((current) => (current === choice ? null : current));
   };
 
@@ -913,6 +1117,29 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 <p className='text-destructive text-sm' role='alert'>
                   {priorityError}
                 </p>
+              )}
+              {priorityRecord && (
+                <div className='flex items-center justify-between gap-2'>
+                  <p className='text-muted-foreground text-sm'>
+                    {priorityRecord.note}
+                  </p>
+                  {priorityRecord.undo && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      rounded='full'
+                      loading={isUndoingPriority}
+                      disabled={isUndoingPriority}
+                      className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
+                      onClick={() =>
+                        void undoPriorities(priorityRecord.undo ?? [])
+                      }
+                    >
+                      {ITEM_SHEET_R2_WORDS.undo}
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
             <ActionGroup>
