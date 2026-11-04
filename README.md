@@ -185,7 +185,7 @@ Problems we've hit before, so we don't hit them again.
 
 - **Symptom:** a shared Going Once link previewed with Waypoint's picture, though `cloudflare-worker.js` named `banner-going-once.png`.
 - **Cause:** the new app's placeholder banner was a byte-for-byte copy of Waypoint's.
-- **Fix:** a real banner, and `check:apps` (run before every build) now fails when an app's banner is missing, is the same image as another app's, or isn't the one its worker entry names. Chat apps cache a preview, so a link already shared may keep the old picture for a while.
+- **Fix:** a real banner (made with `npm run make:banner -- <id>`, which every new app now runs), and `check:apps` (run before every build) now fails when an app's banner is missing, is the same image as another app's, or isn't the one its worker entry names. Chat apps cache a preview, so a link already shared may keep the old picture for a while.
 
 ### Every AI call fails with `401 Firebase App Check token is invalid`
 
