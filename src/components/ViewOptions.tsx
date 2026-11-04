@@ -1,9 +1,10 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Eye } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import AppToggle from '@/components/AppToggle';
 import HeaderIconButton from '@/components/HeaderIconButton';
 import { useSheetHistory } from '@/hooks/useBackHistory';

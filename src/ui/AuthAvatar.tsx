@@ -1,10 +1,11 @@
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronDown, Google } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { House } from 'lucide-react';
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import Drawer from '@/components/Drawer';
 import { useAccountSwitch } from '@/hooks/useAccountSwitch';
 import type { RememberedAccount } from '@/lib/auth/rememberedAccounts';
 import { useSheetHistory } from '@/hooks/useBackHistory';

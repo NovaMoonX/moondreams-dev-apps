@@ -3,7 +3,6 @@ import { shallowEqual } from 'react-redux';
 
 import {
   Button,
-  Drawer,
   RadioGroup,
   Select,
   Separator,
@@ -12,6 +11,7 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import Drawer from '@/components/Drawer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';

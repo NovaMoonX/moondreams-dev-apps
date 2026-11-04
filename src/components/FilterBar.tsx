@@ -1,9 +1,10 @@
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { FilterX, SlidersHorizontal, X } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import ActionChips from '@/components/ActionChips';
 import LabelChip from '@/components/LabelChip';
 import SearchInput from '@/components/SearchInput';

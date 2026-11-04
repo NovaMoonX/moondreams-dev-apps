@@ -3,7 +3,6 @@ import { memo, useMemo, useState, type CSSProperties } from 'react';
 import {
   Button,
   Clickable,
-  Drawer,
   Input,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
@@ -11,6 +10,7 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, HandCoins, ListFilter, Lock, Receipt, Users } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
 import LockedButton from '@/components/LockedButton';

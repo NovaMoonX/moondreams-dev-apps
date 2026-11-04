@@ -3,12 +3,12 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import {
   Button,
   Checkbox,
-  Drawer,
   Tooltip,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import Drawer from '@/components/Drawer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';

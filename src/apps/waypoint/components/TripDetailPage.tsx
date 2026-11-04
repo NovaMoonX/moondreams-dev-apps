@@ -1,3 +1,4 @@
+import Drawer from '@/components/Drawer';
 import FallbackImage from '@/components/FallbackImage';
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useStore } from 'react-redux';
@@ -6,7 +7,6 @@ import { useSearchParams } from 'react-router-dom';
 import {
   Badge,
   Button,
-  Drawer,
   DropdownMenu,
   DropdownMenuFactories,
   Tabs,

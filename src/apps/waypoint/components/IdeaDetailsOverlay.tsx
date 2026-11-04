@@ -1,10 +1,11 @@
 import { useId, useState, useSyncExternalStore, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 
-import { Badge, Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Badge, Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';

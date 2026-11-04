@@ -1,8 +1,9 @@
 import { useState } from 'react';
 
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { SlidersHorizontal } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import AppToggle from '@/components/AppToggle';
 import IconBadge from '@/components/IconBadge';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
