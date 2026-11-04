@@ -63,6 +63,7 @@ import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
   HorizonCost,
+  HorizonSealed,
   OpenDay,
   Pairing,
 } from '../../src/apps/runway/types.ts';
@@ -11482,7 +11483,7 @@ const version = (
   });
   const movers = cost('movers', range(60_000, 80_000), jan15);
   const storage = cost('storage', range(10_000, 10_000), feb1, 'monthly');
-  const moving = {
+  const moving: HorizonSealed = {
     name: 'Moving',
     emoji: null,
     happensOn: jan15,
@@ -11493,7 +11494,7 @@ const version = (
     note: null,
     costs: [movers, storage],
   };
-  const coveredUntil = (item: typeof moving, heldCents: number) =>
+  const coveredUntil = (item: HorizonSealed, heldCents: number) =>
     planHorizon(
       item,
       heldCents,
