@@ -206,6 +206,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const isApplyingPriority = useRef(false);
+  const priorityLinesRef = useRef<HTMLDivElement>(null);
+  const [reservedLinesHeight, setReservedLinesHeight] = useState(0);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -241,7 +243,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         itemId: groupId,
         kind: 'group',
         payload: next,
-        summary: `${next.name}: ${describeChange(before, next, getCardNamer([]))}, from ${formatDateOrdinalUTC(today)}.`,
+        summary: `${next.name}: ${describeChange(before, next, getCardNamer([])) || 'Updated'}, from ${formatDateOrdinalUTC(today)}.`,
         note: null,
         effectiveFrom: today,
       });
@@ -493,6 +495,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const setStartingPriority = async (choice: StartingChoice) => {
     if (isApplyingPriority.current) return;
     isApplyingPriority.current = true;
+    setReservedLinesHeight(priorityLinesRef.current?.offsetHeight ?? 0);
     setPriorityError(null);
     setPriorityRecord(null);
     setPickedPriority(choice);
@@ -1169,71 +1172,78 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   void setStartingPriority(choice)
                 }
               />
-              {priorityError && (
-                <p className='text-destructive text-sm' role='alert'>
-                  {priorityError}
-                </p>
-              )}
-              {isApplyingNow && pickedPriority !== 'none' && (
-                <p className='text-muted-foreground flex min-h-7 items-center text-sm'>
-                  {GROUP_WORDS.priorityApplying}
-                </p>
-              )}
-              {priorityRecord && (
-                <div className='flex min-h-7 items-center gap-2'>
-                  <p className='text-muted-foreground text-sm'>
-                    {priorityRecord.note}
+              <div ref={priorityLinesRef} className='space-y-1.5 empty:hidden'>
+                {priorityError && (
+                  <p className='text-destructive text-sm' role='alert'>
+                    {priorityError}
                   </p>
-                  {priorityRecord.undo && (
+                )}
+                {isApplyingNow && (
+                  <p
+                    className='text-muted-foreground flex min-h-7 items-center text-sm'
+                    style={{ minHeight: reservedLinesHeight || undefined }}
+                  >
+                    {pickedPriority === 'none'
+                      ? null
+                      : GROUP_WORDS.priorityApplying}
+                  </p>
+                )}
+                {priorityRecord && (
+                  <div className='flex min-h-7 items-center gap-2'>
+                    <p className='text-muted-foreground text-sm'>
+                      {priorityRecord.note}
+                    </p>
+                    {priorityRecord.undo && (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        size='sm'
+                        rounded='full'
+                        loading={isUndoingPriority}
+                        disabled={isUndoingPriority}
+                        className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
+                        onClick={() =>
+                          void undoPriorities(
+                            priorityRecord.undo ?? [],
+                            priorityRecord.restorePick,
+                          )
+                        }
+                      >
+                        {ITEM_SHEET_R2_WORDS.undo}
+                      </Button>
+                    )}
+                  </div>
+                )}
+                {savedPick !== null && keptAsIs.length > 0 && (
+                  <p className='text-muted-foreground text-sm'>
+                    {GROUP_WORDS.prioritySkipped(
+                      keptAsIs,
+                      PRIORITY_LABELS[savedPick],
+                    )}
+                  </p>
+                )}
+                {savedPick !== null && notAtPick.length > 0 && (
+                  <div className='flex min-h-7 items-center gap-2'>
+                    <p className='text-muted-foreground text-sm'>
+                      {GROUP_WORDS.priorityStale(
+                        notAtPick,
+                        PRIORITY_LABELS[savedPick],
+                      )}
+                    </p>
                     <Button
                       type='button'
                       variant='secondary'
                       size='sm'
                       rounded='full'
-                      loading={isUndoingPriority}
                       disabled={isUndoingPriority}
                       className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
-                      onClick={() =>
-                        void undoPriorities(
-                          priorityRecord.undo ?? [],
-                          priorityRecord.restorePick,
-                        )
-                      }
+                      onClick={() => void setStartingPriority(savedPick)}
                     >
-                      {ITEM_SHEET_R2_WORDS.undo}
+                      {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[savedPick])}
                     </Button>
-                  )}
-                </div>
-              )}
-              {savedPick !== null && keptAsIs.length > 0 && (
-                <p className='text-muted-foreground text-sm'>
-                  {GROUP_WORDS.prioritySkipped(
-                    keptAsIs,
-                    PRIORITY_LABELS[savedPick],
-                  )}
-                </p>
-              )}
-              {savedPick !== null && notAtPick.length > 0 && (
-                <div className='flex min-h-7 items-center gap-2'>
-                  <p className='text-muted-foreground text-sm'>
-                    {GROUP_WORDS.priorityStale(
-                      notAtPick,
-                      PRIORITY_LABELS[savedPick],
-                    )}
-                  </p>
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    size='sm'
-                    rounded='full'
-                    disabled={isUndoingPriority}
-                    className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
-                    onClick={() => void setStartingPriority(savedPick)}
-                  >
-                    {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[savedPick])}
-                  </Button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
             <ActionGroup>
               <ActionRow
