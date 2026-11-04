@@ -229,6 +229,39 @@ function TrendLineChart({
     fontSize: isSoft ? 11 : 12,
   };
 
+  const firstX = sorted[0].x;
+  const lastX = sorted[sorted.length - 1].x;
+  // A date at either end of the plot is anchored inward at its own point (the chart nudges an end label to centre it), so it never runs past the chart's edge.
+  const renderSoftTick = ({
+    x,
+    y,
+    payload,
+  }: {
+    x: number | string;
+    y: number | string;
+    payload: { value: unknown; coordinate?: number };
+  }) => (
+    <text
+      x={
+        payload.value === firstX || payload.value === lastX
+          ? (payload.coordinate ?? x)
+          : x
+      }
+      y={y}
+      dy='0.71em'
+      textAnchor={
+        payload.value === firstX
+          ? 'start'
+          : payload.value === lastX
+            ? 'end'
+            : 'middle'
+      }
+      {...tickStyle}
+    >
+      {formatX(Number(payload.value))}
+    </text>
+  );
+
   const readoutText = formatValue ?? formatY;
   const read = ({ activeTooltipIndex }: { activeTooltipIndex?: unknown }) =>
     onRead?.(
@@ -335,7 +368,7 @@ function TrendLineChart({
             ticks={xTicks}
             tickFormatter={formatX}
             stroke='var(--color-muted-foreground)'
-            tick={tickStyle}
+            tick={isSoft ? renderSoftTick : tickStyle}
             axisLine={!isSoft}
             tickLine={!isSoft}
             tickCount={isSoft ? 3 : undefined}

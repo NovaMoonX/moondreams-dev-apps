@@ -78,7 +78,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
   const [isAll, setIsAll] = useLocalStoragePreference(FIGURE_KEY, false);
   const [isChartHidden, setIsChartHidden] = useLocalStoragePreference(
     CHART_HIDDEN_KEY,
-    false,
+    true,
   );
   const [range, setRange] = useState<MoneyRange>('all');
   const [reading, setReading] = useState<TrendPoint | null>(null);
@@ -210,7 +210,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         <div
           role='img'
           aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.${end === null ? '' : ` ${MONEY_CHART_WORDS.expected} ${formatFigure(pick(end), figure)} on ${formatDateShortUTC(end.on)}.`}`}
-          className='-mr-2'
+          className='-mr-3'
         >
           <TrendLineChart
             isSoft
