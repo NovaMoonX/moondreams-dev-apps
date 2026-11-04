@@ -9,6 +9,7 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getAccountHoldings } from '@apps/runway/engine/accounts';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
@@ -1256,4 +1257,35 @@ export const selectExpenses = createSelector([selectExpenseList], (expenses) =>
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>
   cards.filter((card) => card.archivedAt === null),
+);
+
+const selectAccountList = (state: RootState) => state.runway.accounts;
+
+/** Every account, archived ones too, oldest first. */
+export const selectAllAccounts = createSelector(
+  [selectAccountList],
+  (accounts) =>
+    [...accounts].sort(
+      (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+    ),
+);
+
+/** The accounts still in use, oldest first. */
+export const selectAccounts = createSelector([selectAllAccounts], (accounts) =>
+  accounts.filter((account) => account.archivedAt === null),
+);
+
+export const selectIsAccountsLoaded = (state: RootState) =>
+  state.runway.isAccountsLoaded;
+
+/** Each open account with what its goals and envelopes hold, keyed by account id. */
+export const selectAccountHoldings = createSelector(
+  [selectAccounts, selectBalances],
+  (accounts, balances) =>
+    Object.fromEntries(
+      accounts.map((account) => [
+        account.id,
+        getAccountHoldings(account, { byId: balances.assignedByItem }),
+      ]),
+    ),
 );

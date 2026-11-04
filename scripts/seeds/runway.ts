@@ -38,6 +38,8 @@ import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
+  AccountDoc,
+  AccountSealed,
   CardDoc,
   CardPaymentSealed,
   TransferSealed,
@@ -734,6 +736,80 @@ async function writeSeedCards(
     ),
   } satisfies MoveDoc);
   return cards.length + 4;
+}
+
+const SEED_WEALTHFRONT_GOALS = [
+  'seed-goal-vacation',
+  'seed-goal-cushion',
+  'seed-goal-phone',
+];
+
+/** The owner's three accounts: Checking A (not pulled from, $2,140.00), Checking B (cards and bills pull from it, $650.00) and a Wealthfront cash account holding the vacation, cushion and phone goals with $800.00, a little above what they hold. Three documents. */
+async function writeSeedAccounts(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  batch: ReturnType<SeedContext['firestore']['batch']>,
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const createdAt = context.now - 14 * DAY_MS;
+  const balanceOn = startOfUtcDay(context.now);
+  const base = {
+    countedTowardTotal: true,
+    isPullAccount: false,
+    lastFour: null,
+    balanceOn,
+    holds: [],
+  } satisfies Partial<AccountSealed>;
+  const accounts: { id: string; sealed: AccountSealed }[] = [
+    {
+      id: 'seed-account-checking-a',
+      sealed: {
+        ...base,
+        name: 'Checking A',
+        institution: 'Capital One',
+        kind: 'checking',
+        lastFour: '4821',
+        balanceCents: 214_000,
+      },
+    },
+    {
+      id: 'seed-account-checking-b',
+      sealed: {
+        ...base,
+        name: 'Checking B',
+        institution: 'Capital One',
+        kind: 'checking',
+        lastFour: '1177',
+        isPullAccount: true,
+        balanceCents: 65_000,
+      },
+    },
+    {
+      id: 'seed-account-wealthfront',
+      sealed: {
+        ...base,
+        name: 'Wealthfront Cash',
+        institution: 'Wealthfront',
+        kind: 'cashManagement',
+        balanceCents: 80_000,
+        holds: SEED_WEALTHFRONT_GOALS,
+      },
+    },
+  ];
+  await Promise.all(
+    accounts.map(async (account, index) => {
+      batch.set(context.firestore.doc(`${plan}/accounts/${account.id}`), {
+        id: account.id,
+        createdAt: createdAt + index * 60_000,
+        updatedAt: createdAt + index * 60_000,
+        archivedAt: null,
+        linkId: null,
+        sealed: await sealJson(account.sealed, encryption),
+      } satisfies AccountDoc);
+    }),
+  );
+  return accounts.length;
 }
 
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside, and $42.00 moved from Groceries to the Vacation fund three days ago. Two changes and six moves. */
@@ -2159,6 +2235,12 @@ async function seedTrackingPlan(
     encryption,
     startBatch,
   );
+  const accountDocuments = await writeSeedAccounts(
+    context,
+    owner.uid,
+    encryption,
+    startBatch,
+  );
   await startBatch.commit();
   const purchaseDocuments = await writeSeedPurchases(
     context,
@@ -2180,6 +2262,7 @@ async function seedTrackingPlan(
     documents +
     startDocuments +
     cardDocuments +
+    accountDocuments +
     purchaseDocuments
   );
 }

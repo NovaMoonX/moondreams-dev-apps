@@ -17,6 +17,11 @@ import {
   getFreeToSpendFigure,
 } from '../../src/apps/runway/engine/balances.ts';
 import {
+  getAccountHoldings,
+  getPullAccounts,
+  resolvePayFromAccountId,
+} from '../../src/apps/runway/engine/accounts.ts';
+import {
   collectCardHistory,
   getCardDueState,
   getDueCards,
@@ -62,6 +67,7 @@ import {
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
+  OpenAccount,
   OpenDay,
   Pairing,
 } from '../../src/apps/runway/types.ts';
@@ -12683,6 +12689,92 @@ console.log('runway engine: ok');
     ).length,
     0,
     'a bill paid from the last pay before it waits until that pay is in the plan',
+  );
+}
+
+// Accounts (Issue 52): which account pays, and what an account holds.
+{
+  const account = (
+    id: string,
+    changes: Partial<OpenAccount> = {},
+  ): OpenAccount => ({
+    id,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+    linkId: null,
+    name: id,
+    institution: 'Capital One',
+    kind: 'checking',
+    countedTowardTotal: true,
+    isPullAccount: false,
+    lastFour: null,
+    balanceCents: null,
+    balanceOn: null,
+    holds: [],
+    ...changes,
+  });
+  const a = account('a');
+  const b = account('b', { isPullAccount: true });
+  const oldPull = account('c', { isPullAccount: true, archivedAt: 5 });
+  assert.deepEqual(
+    getPullAccounts([a, b, oldPull]).map((entry) => entry.id),
+    ['b'],
+    'only open pull accounts pull',
+  );
+  assert.equal(
+    resolvePayFromAccountId(null, [a, b]),
+    'b',
+    'the one pull account pays by default',
+  );
+  assert.equal(
+    resolvePayFromAccountId(undefined, [a, b, oldPull]),
+    'b',
+    'an archived pull account is not counted',
+  );
+  assert.equal(
+    resolvePayFromAccountId('a', [a, b]),
+    'a',
+    'a named open account wins',
+  );
+  assert.equal(
+    resolvePayFromAccountId('c', [a, b, oldPull]),
+    'b',
+    'a named archived account falls back',
+  );
+  assert.equal(
+    resolvePayFromAccountId('gone', [a]),
+    null,
+    'no pull account means none',
+  );
+  assert.equal(
+    resolvePayFromAccountId(null, [b, account('d', { isPullAccount: true })]),
+    null,
+    'two pull accounts are not guessed between',
+  );
+  const held = getAccountHoldings(
+    account('w', { holds: ['g1', 'g2', 'g3'], balanceCents: 100_000 }),
+    { byId: { g1: 40_000, g2: 25_000, other: 9 } },
+  );
+  assert.deepEqual(held.items, [
+    { id: 'g1', cents: 40_000 },
+    { id: 'g2', cents: 25_000 },
+    { id: 'g3', cents: 0 },
+  ]);
+  assert.equal(held.heldCents, 65_000);
+  assert.equal(held.unassignedCents, 35_000);
+  assert.equal(
+    getAccountHoldings(account('x', { holds: ['g1'], balanceCents: 10_000 }), {
+      byId: { g1: 40_000 },
+    }).unassignedCents,
+    -30_000,
+    'holding more than the balance is negative',
+  );
+  assert.equal(
+    getAccountHoldings(account('y', { holds: ['g1'] }), { byId: { g1: 5 } })
+      .unassignedCents,
+    null,
+    'no balance means no unassigned figure',
   );
 }
 
