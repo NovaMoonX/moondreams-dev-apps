@@ -153,9 +153,15 @@ const toEntries = (
       day.effect.freeBeforeCents !== day.effect.freeAfterCents ||
       day.effect.shortened.some((entry) => entry.putInCents > 0));
   const ownDays = days.filter((day) => kindOf(day) === 'own');
-  const own = [
+  const byDate = (a: PreviewDay, b: PreviewDay) => a.on - b.on;
+  const ranked = [
     ...ownDays.filter(isMoved),
     ...ownDays.filter((day) => !isMoved(day)),
+  ];
+  // The days a folded card shows first are the ones where money moved, each part kept in date order.
+  const own = [
+    ...ranked.slice(0, PREVIEW_SHOWN).sort(byDate),
+    ...ranked.slice(PREVIEW_SHOWN).sort(byDate),
   ].map((day) => toDayEntry(day, pinned));
   const folded = (['removed', 'added', 'same'] as const).flatMap((kind) => {
     const group = days.filter((day) => kindOf(day) === kind);
