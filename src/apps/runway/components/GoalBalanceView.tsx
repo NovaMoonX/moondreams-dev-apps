@@ -61,6 +61,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
           isSoft
           isReadoutAbove
           referenceLabelSoft
+          isSecondaryAhead
           className='h-[clamp(14rem,calc(100dvh-27rem),26rem)]'
           data={series.points}
           seriesLabel='Held'

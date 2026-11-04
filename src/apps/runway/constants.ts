@@ -1099,6 +1099,31 @@ export const HOME_WORDS = {
   resumeAction: 'Continue setting up',
 } as const;
 
+export const MONEY_CHART_WORDS = {
+  figure: 'Which figure',
+  free: 'Free to Spend',
+  all: 'All money',
+  range: 'How far back',
+  hidden: 'Show amounts to see your history',
+  young: 'Your money history shows here after your first two weeks.',
+  today: 'Today',
+  on: 'On',
+  expected: 'Expected',
+  since: 'since',
+  sinceStart: 'since you started',
+  up: 'Up',
+  down: 'Down',
+  same: 'No change',
+  lowest: 'Lowest',
+  aheadHelp:
+    'The solid line is what happened. The dotted line is where your plan takes it over the next two paydays: the pay you expect and the bills due. It does not guess your everyday spending.',
+  allHelp:
+    'All money is Free to Spend plus what your envelopes, goals, bills and cards hold.',
+} as const;
+
+/** Days of history before the money chart draws a line, so a near-flat start never shows. */
+export const MONEY_CHART_MIN_DAYS = 14;
+
 export const HISTORY_WORDS = {
   updating: 'Updating your history',
   updatingBody:

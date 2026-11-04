@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   Area,
@@ -62,6 +64,10 @@ interface TrendLineChartProps {
   className?: string;
   /** Dots on every point; off for a dense series. */
   hasDots?: boolean;
+  /** Hands the point under the finger or pointer to the caller (null when it lifts) in place of the readout, for a screen that shows it in its own figure. */
+  onRead?: (point: TrendPoint | null) => void;
+  /** The `y2` line carries the main one on into what is expected, so it takes the series colour, dotted. */
+  isSecondaryAhead?: boolean;
 }
 
 export interface ChartMarker {
@@ -73,6 +79,9 @@ export interface ChartMarker {
   /** A hollow dot, to tell a second marker from the first. */
   isHollow?: boolean;
 }
+
+/** The series colour: an app may set `--chart-line` for every chart it draws; the primary otherwise. */
+const LINE = 'var(--chart-line, var(--color-primary))';
 
 const CALLOUT_HEIGHT = 22;
 const CALLOUT_ARROW = 6;
@@ -123,8 +132,8 @@ function MarkerCallout({
       cx={cx}
       cy={cy}
       r={4.5}
-      fill={isHollow ? 'var(--color-popover)' : 'var(--color-primary)'}
-      stroke={isHollow ? 'var(--color-primary)' : 'var(--color-popover)'}
+      fill={isHollow ? 'var(--color-popover)' : LINE}
+      stroke={isHollow ? LINE : 'var(--color-popover)'}
       strokeWidth={2}
     />
   );
@@ -197,7 +206,10 @@ function TrendLineChart({
   isSoft = false,
   isReadoutAbove = false,
   referenceLabelSoft = false,
+  onRead,
+  isSecondaryAhead = false,
 }: TrendLineChartProps) {
+  const fillId = `trend-soft-fill-${useId().replace(/:/g, '')}`;
   if (data.length < 2) {
     return (
       <p className='text-muted-foreground py-8 text-center text-sm'>
@@ -214,6 +226,13 @@ function TrendLineChart({
   };
 
   const readoutText = formatValue ?? formatY;
+  const read = ({ activeTooltipIndex }: { activeTooltipIndex?: unknown }) =>
+    onRead?.(
+      activeTooltipIndex == null
+        ? null
+        : (sorted[Number(activeTooltipIndex)] ?? null),
+    );
+  const stopReading = () => onRead?.(null);
   const renderReadout = ({
     active,
     payload,
@@ -260,19 +279,16 @@ function TrendLineChart({
         <ComposedChart
           data={sorted}
           margin={{ top: isReadoutAbove ? 34 : 8, right: isSoft ? 12 : 16, bottom: 0, left: 0 }}
+          onMouseMove={onRead ? read : undefined}
+          onTouchMove={onRead ? read : undefined}
+          onTouchStart={onRead ? read : undefined}
+          onMouseLeave={onRead ? stopReading : undefined}
+          onTouchEnd={onRead ? stopReading : undefined}
         >
           <defs>
-            <linearGradient id='trend-soft-fill' x1='0' y1='0' x2='0' y2='1'>
-              <stop
-                offset='0%'
-                stopColor='var(--color-primary)'
-                stopOpacity={0.28}
-              />
-              <stop
-                offset='100%'
-                stopColor='var(--color-primary)'
-                stopOpacity={0}
-              />
+            <linearGradient id={fillId} x1='0' y1='0' x2='0' y2='1'>
+              <stop offset='0%' stopColor={LINE} stopOpacity={0.32} />
+              <stop offset='100%' stopColor={LINE} stopOpacity={0} />
             </linearGradient>
           </defs>
           {!isSoft && (
@@ -326,14 +342,14 @@ function TrendLineChart({
             cursor={
               isSoft
                 ? {
-                    stroke: 'var(--color-primary)',
+                    stroke: LINE,
                     strokeOpacity: 0.35,
                     strokeWidth: 2,
                     strokeLinecap: 'round',
                   }
                 : undefined
             }
-            content={isSoft ? renderReadout : undefined}
+            content={onRead ? () => null : isSoft ? renderReadout : undefined}
             contentStyle={{
               background: 'var(--color-popover)',
               color: 'var(--color-popover-foreground)',
@@ -366,9 +382,11 @@ function TrendLineChart({
               type={curve}
               dataKey='y2'
               stroke={
-                isSoft
-                  ? 'var(--color-foreground)'
-                  : 'var(--color-muted-foreground)'
+                isSecondaryAhead
+                  ? LINE
+                  : isSoft
+                    ? 'var(--color-foreground)'
+                    : 'var(--color-muted-foreground)'
               }
               strokeOpacity={isSoft ? 0.85 : 1}
               strokeWidth={isSoft ? 3 : 2}
@@ -383,11 +401,11 @@ function TrendLineChart({
             <Area
               type={curve}
               dataKey='y'
-              stroke='var(--color-primary)'
+              stroke={LINE}
               strokeWidth={3}
               strokeLinecap='round'
               strokeLinejoin='round'
-              fill='url(#trend-soft-fill)'
+              fill={`url(#${fillId})`}
               isAnimationActive={false}
               dot={false}
               activeDot={{ r: 5 }}
@@ -396,9 +414,9 @@ function TrendLineChart({
             <Line
               type={curve}
               dataKey='y'
-              stroke='var(--color-primary)'
+              stroke={LINE}
               strokeWidth={2}
-              dot={hasDots ? { r: 3, fill: 'var(--color-primary)' } : false}
+              dot={hasDots ? { r: 3, fill: LINE } : false}
               activeDot={{ r: 5 }}
             />
           )}
@@ -406,7 +424,7 @@ function TrendLineChart({
             <ReferenceArea
               x1={band.x1}
               x2={band.x2}
-              fill='var(--color-primary)'
+              fill={LINE}
               fillOpacity={0.06}
               stroke='none'
               label={{
@@ -457,7 +475,7 @@ function TrendLineChart({
               x={last.x}
               y={last.y ?? undefined}
               r={6}
-              fill='var(--color-primary)'
+              fill={LINE}
               stroke='var(--color-popover)'
               strokeWidth={3}
             />
