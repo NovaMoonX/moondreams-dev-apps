@@ -103,7 +103,7 @@ function HorizonSheet({
         hasRepeats,
       ),
     outsideCents > 0 && HORIZON_WORDS.outsideTotal(formatCents(outsideCents)),
-    when.replaceAll(' ', '\u00A0'),
+    when,
   ]
     .filter(Boolean)
     .join(' ·\u00A0');

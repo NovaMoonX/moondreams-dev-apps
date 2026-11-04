@@ -111,7 +111,7 @@ export function describeCost(cost: HorizonCost) {
   return {
     line: [
       describeCostTiming(cost.schedule, cost.ending),
-      cost.isOutside && HORIZON_WORDS.outsideTag,
+      cost.isOutside && HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
     ]
       .filter(Boolean)
       .join(' ·\u00A0'),
