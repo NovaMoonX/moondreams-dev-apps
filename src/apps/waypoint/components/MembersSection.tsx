@@ -3,13 +3,13 @@ import { useState } from 'react';
 import {
   Badge,
   Button,
-  Drawer,
   Select,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight } from '@moondreamsdev/dreamer-ui/symbols';
 import { Mail, X } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import Drawer from '@/components/Drawer';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useUserInfo } from '@/hooks/useUserInfo';
 import { useAppDispatch, useAppSelector } from '@/store';

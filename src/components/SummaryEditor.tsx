@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from 'react';
 
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
@@ -14,6 +14,7 @@ import {
   SUMMARY_GROUP_ROUNDING,
   type SummaryGroupPosition,
 } from '@/components/summaryGroup';
+import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import {

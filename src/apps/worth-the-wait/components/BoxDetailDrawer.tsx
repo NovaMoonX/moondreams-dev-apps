@@ -3,11 +3,11 @@ import {
   Badge,
   Button,
   Disclosure,
-  Drawer,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import Drawer from '@/components/Drawer';
 import AppToggle from '@/components/AppToggle';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
@@ -240,7 +240,6 @@ function BoxDetailDrawer({ isOpen, onClose }: BoxDetailDrawerProps) {
       }
       showCloseButton
       className='mx-auto max-w-2xl'
-      enableDragGestures
     >
       {box ? (
         <div className='space-y-5'>

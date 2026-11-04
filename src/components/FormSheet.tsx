@@ -2,14 +2,10 @@ import type { ReactNode } from 'react';
 
 import { X } from 'lucide-react';
 
-import {
-  Button,
-  Drawer,
-  Modal,
-  Panel,
-} from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal, Panel } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -75,7 +71,12 @@ function FormSheet({
       >
         {title}
       </h2>
-      <div className='relative z-10 -my-1 -mr-2 flex shrink-0 items-center gap-1'>
+      <div
+        className={join(
+          'relative z-10 -mr-2 flex shrink-0 items-center gap-1',
+          isPhone && !isShort ? 'h-8' : 'h-7',
+        )}
+      >
         {actions}
         {!isPhone && (
           <Button
@@ -113,7 +114,7 @@ function FormSheet({
             title
           ))
         }
-        showCloseButton
+        showCloseButton={actions === undefined}
         disableCloseOnOverlayClick
         className='max-h-[92dvh] [&>div]:max-h-[92dvh]'
       >

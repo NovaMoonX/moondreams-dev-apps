@@ -1,9 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 
-import { Button, Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -133,7 +134,12 @@ function DetailSheet({
           {title}
         </h2>
         {actions && (
-          <div className='relative z-10 -my-1 -mr-2 flex shrink-0 items-center gap-1'>
+          <div
+            className={join(
+              'relative z-10 -mr-2 flex shrink-0 items-center gap-1',
+              isDrawer && !isCompact ? 'h-8' : 'h-7',
+            )}
+          >
             {actions}
             {!isDrawer && (
               <Button
@@ -161,7 +167,7 @@ function DetailSheet({
         isOpen={isOpen}
         onClose={onDialogClose}
         title={heading}
-        showCloseButton
+        showCloseButton={actions === undefined}
         footer={
           isCompact && footer ? (
             <div className='py-2! [&>div]:px-0! [&>div]:pb-0!'>{footer}</div>
