@@ -304,7 +304,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     restorePick: StartingChoice | null,
   ) => {
     if (!user || handledUndos.current.has(written)) return;
+    if (isApplyingPriority.current) return;
     handledUndos.current.add(written);
+    isApplyingPriority.current = true;
     setIsUndoingPriority(true);
     setPriorityError(null);
     try {
@@ -358,11 +360,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           );
       const description =
         stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
+      const livePayload =
+        selectGroups(store.getState(), today).find(
+          ({ item }) => item.id === groupId,
+        )?.version.payload ?? payload;
       const pickFailure =
         isClean && restorePick !== null
           ? await save(
               {
-                ...payload,
+                ...livePayload,
                 startingPriority: restorePick === 'none' ? null : restorePick,
               },
               true,
@@ -387,6 +393,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       handledUndos.current.delete(written);
       setPriorityRecord({ note: message, undo: written, restorePick });
     } finally {
+      isApplyingPriority.current = false;
       setIsUndoingPriority(false);
     }
   };
@@ -1159,7 +1166,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </p>
               )}
               {priorityRecord && (
-                <div className='flex min-h-7 items-start justify-between gap-2'>
+                <div className='flex min-h-7 items-center gap-2'>
                   <p className='text-muted-foreground text-sm'>
                     {priorityRecord.note}
                   </p>
@@ -1193,7 +1200,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </p>
               )}
               {savedPick !== null && notAtPick.length > 0 && (
-                <div className='flex min-h-7 items-start justify-between gap-2'>
+                <div className='flex min-h-7 items-center gap-2'>
                   <p className='text-muted-foreground text-sm'>
                     {GROUP_WORDS.priorityStale(
                       notAtPick,
@@ -1205,6 +1212,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                     variant='secondary'
                     size='sm'
                     rounded='full'
+                    disabled={isUndoingPriority}
                     className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
                     onClick={() => void setStartingPriority(savedPick)}
                   >
