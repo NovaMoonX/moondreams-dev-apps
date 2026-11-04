@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useId, useRef } from 'react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
@@ -210,6 +210,8 @@ function TrendLineChart({
   isSecondaryAhead = false,
 }: TrendLineChartProps) {
   const fillId = `trend-soft-fill-${useId().replace(/:/g, '')}`;
+  const touchedAt = useRef(0);
+  const isTouching = useRef(false);
   if (data.length < 2) {
     return (
       <p className='text-muted-foreground py-8 text-center text-sm'>
@@ -219,7 +221,9 @@ function TrendLineChart({
   }
 
   const sorted = [...data].sort((left, right) => left.x - right.x);
-  const last = sorted.filter((point) => point.y !== null).at(-1) ?? sorted[sorted.length - 1];
+  const last =
+    sorted.filter((point) => point.y !== null).at(-1) ??
+    sorted[sorted.length - 1];
   const tickStyle = {
     fill: 'var(--color-muted-foreground)',
     fontSize: isSoft ? 11 : 12,
@@ -233,6 +237,21 @@ function TrendLineChart({
         : (sorted[Number(activeTooltipIndex)] ?? null),
     );
   const stopReading = () => onRead?.(null);
+  // The chart reports moves a frame late and a tap ends with emulated mouse moves, either of which would pick a point again after the finger lifted.
+  const readMouse = (state: { activeTooltipIndex?: unknown }) => {
+    if (Date.now() - touchedAt.current > 1000) read(state);
+  };
+  const readTouch = (state: { activeTooltipIndex?: unknown }) => {
+    if (isTouching.current) read(state);
+  };
+  const startTouch = () => {
+    isTouching.current = true;
+  };
+  const stopTouch = () => {
+    isTouching.current = false;
+    touchedAt.current = Date.now();
+    stopReading();
+  };
   const renderReadout = ({
     active,
     payload,
@@ -274,16 +293,31 @@ function TrendLineChart({
         isSoft && 'touch-pan-y touch-pinch-zoom',
         className,
       )}
+      onTouchStartCapture={onRead ? startTouch : undefined}
+      onTouchEndCapture={onRead ? stopTouch : undefined}
+      onTouchCancelCapture={onRead ? stopTouch : undefined}
+      onPointerUpCapture={
+        onRead
+          ? (event) => {
+              if (event.pointerType !== 'mouse') stopTouch();
+            }
+          : undefined
+      }
+      onPointerCancelCapture={onRead ? stopTouch : undefined}
     >
       <ResponsiveContainer width='100%' height='100%'>
         <ComposedChart
           data={sorted}
-          margin={{ top: isReadoutAbove ? 34 : 8, right: isSoft ? 12 : 16, bottom: 0, left: 0 }}
-          onMouseMove={onRead ? read : undefined}
-          onTouchMove={onRead ? read : undefined}
-          onTouchStart={onRead ? read : undefined}
+          margin={{
+            top: isReadoutAbove ? 34 : 8,
+            right: isSoft ? 12 : 16,
+            bottom: 0,
+            left: 0,
+          }}
+          onMouseMove={onRead ? readMouse : undefined}
+          onTouchMove={onRead ? readTouch : undefined}
+          onTouchStart={onRead ? readTouch : undefined}
           onMouseLeave={onRead ? stopReading : undefined}
-          onTouchEnd={onRead ? stopReading : undefined}
         >
           <defs>
             <linearGradient id={fillId} x1='0' y1='0' x2='0' y2='1'>

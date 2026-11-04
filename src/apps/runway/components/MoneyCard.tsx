@@ -92,7 +92,8 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
       : isKnown
         ? formatCents(balances.moneyOnHandCents)
         : HOME_WORDS.notSet;
-  const readCents = reading === null ? null : (reading.y ?? reading.y2 ?? null);
+  const readCents =
+    reading === null || isHidden ? null : (reading.y ?? reading.y2 ?? null);
   const value =
     readCents === null ? restValue : formatFigure(readCents, figure);
 
@@ -127,7 +128,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
   const formatDay = (x: number) =>
     x === today ? MONEY_CHART_WORDS.today : formatDateShortUTC(x);
   const sinceText =
-    series.range === 'all'
+    series.range === 'all' && !series.isPartial
       ? MONEY_CHART_WORDS.sinceStart
       : `${MONEY_CHART_WORDS.since} ${formatDateShortUTC(history[0]?.on ?? today)}`;
   const getNote = () => {
@@ -142,6 +143,9 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
   const help = [
     figure === 'all' ? MONEY_CHART_WORDS.allHelp : null,
     hasChart && ahead.length > 0 ? MONEY_CHART_WORDS.aheadHelp : null,
+    figure === 'free' && hasChart && ahead.length > 0
+      ? MONEY_CHART_WORDS.aheadFreeHelp
+      : null,
     rangeNote,
   ].filter((entry): entry is string => entry !== null);
 
@@ -166,7 +170,13 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         </p>
       );
     }
-    if (!hasChart) return <div className='h-40' aria-hidden='true' />;
+    if (!hasChart)
+      return (
+        <div
+          className='h-32 [@media(max-height:600px)]:h-24'
+          aria-hidden='true'
+        />
+      );
     return (
       <div className='relative z-10 space-y-3'>
         <div
@@ -177,7 +187,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
           <TrendLineChart
             isSoft
             isSecondaryAhead
-            className='h-40'
+            className='h-32 [@media(max-height:600px)]:h-24'
             data={data}
             seriesLabel={label}
             secondaryLabel={
@@ -225,7 +235,10 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
               ariaLabel: RANGE_NAMES[entry],
             }))}
             value={series.range}
-            onChange={setRange}
+            onChange={(next) => {
+              setReading(null);
+              setRange(next);
+            }}
           />
         )}
       </div>
@@ -239,7 +252,10 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
           label={MONEY_CHART_WORDS.figure}
           options={FIGURE_OPTIONS}
           value={figure}
-          onChange={(next) => setIsAll(next === 'all')}
+          onChange={(next) => {
+            setReading(null);
+            setIsAll(next === 'all');
+          }}
           className='w-full sm:max-w-72'
         />
       </div>
@@ -255,7 +271,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
           }
           onClick={onOpen}
         >
-          <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
+          <span className='min-w-0 flex-1 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
             <SensitiveValue>{value}</SensitiveValue>
           </span>
           <ChevronRight

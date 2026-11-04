@@ -105,6 +105,7 @@ export function useMoneySeries(
     [now, lookahead, payments, today, startDate, recentFrom],
   );
 
-  const result = { history, ahead, ranges, range: shown, spanDays };
+  const isPartial = needsClosings && closings.isError;
+  const result = { history, ahead, ranges, range: shown, spanDays, isPartial };
   return result;
 }
