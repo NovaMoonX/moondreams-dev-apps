@@ -12,15 +12,25 @@ const findRow = (itemId: string) =>
 /** Scrolls an item's row to the middle of the screen once it is drawn (a tab that is still mounting, a chunk not yet mounted), giving up after a short wait. */
 export function revealItem(itemId: string) {
   pendingId = itemId;
+  const stop = () => {
+    if (pendingId === itemId) pendingId = null;
+    window.removeEventListener('wheel', stop);
+    window.removeEventListener('touchstart', stop);
+  };
+  window.addEventListener('wheel', stop, { passive: true });
+  window.addEventListener('touchstart', stop, { passive: true });
   const attempt = (frame: number) => {
-    if (pendingId !== itemId) return;
+    if (pendingId !== itemId) {
+      stop();
+      return;
+    }
     const row = findRow(itemId);
     if (row) {
       row.scrollIntoView({ block: 'center' });
       if (frame >= REVEAL_FRAMES / 2) pendingId = null;
     }
     if (frame >= REVEAL_FRAMES) {
-      pendingId = null;
+      stop();
       return;
     }
     requestAnimationFrame(() => attempt(frame + 1));

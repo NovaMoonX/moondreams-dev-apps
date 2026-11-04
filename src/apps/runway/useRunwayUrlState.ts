@@ -300,6 +300,9 @@ export function useRunwayUrlState() {
     section: PlanSection,
     target: { itemId: string; step?: string } | 'undatedBills',
   ) => {
+    if (requestedDay !== null) {
+      await setRequestedDay(null, { history: 'replace' });
+    }
     await showPlanSection(section);
     await showTab('plan');
     if (target === 'undatedBills') {

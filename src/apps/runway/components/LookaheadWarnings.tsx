@@ -61,7 +61,6 @@ const getRowKey = (row: WarningRow) => {
   return `single:${group.on}:${group.problem.kind}:${id}`;
 };
 
-/** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
 /** "Nothing is planned after" the last income day, as a door to the pay that ends (or a new one). */
 function IncomeEndRow({ text }: { text: string }) {
   const { open, hasEndingPay } = useOpenIncomeFix();
@@ -86,6 +85,7 @@ function IncomeEndRow({ text }: { text: string }) {
   );
 }
 
+/** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
 function LookaheadWarnings({
   lookahead,
   dueCards = [],
