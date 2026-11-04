@@ -2697,6 +2697,14 @@ export const ACCOUNT_KIND_LABELS: Record<
 export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] =
   ['investment'];
 
+/** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
+export const BILL_PAY_WORDS = {
+  title: 'How do you pay it?',
+  label: 'Paid with',
+  cardDetail: 'Credit card',
+  fromBank: 'Straight from your bank',
+} as const;
+
 export const ACCOUNT_WORDS = {
   sectionTitle: 'Accounts',
   add: 'Add an account',
@@ -2714,6 +2722,11 @@ export const ACCOUNT_WORDS = {
   chooseHolds: 'Choose what it holds',
   chooseHoldsSub: 'Goals and envelopes kept here',
   chooseHoldsHeldElsewhere: (account: string) => `Now in ${account}`,
+  chooseHoldsTitle: 'Which goals and envelopes does it hold?',
+  chooseHoldsTotal: 'Picked',
+  chooseHoldsOfBalance: 'of its',
+  chooseHoldsSearch: 'Search goals and envelopes',
+  chooseHoldsNoMatch: 'No goal or envelope by that name.',
   updateBalance: 'Update the balance',
   updateBalanceSub: 'What the account holds today',
   balanceTitle: 'What does it hold today?',

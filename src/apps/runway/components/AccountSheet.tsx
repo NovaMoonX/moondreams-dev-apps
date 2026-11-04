@@ -17,6 +17,7 @@ import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SectionDivider from '@/components/SectionDivider';
 import SensitiveValue from '@/components/SensitiveValue';
@@ -31,12 +32,14 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
+import ItemBadge from '@apps/runway/components/ItemBadge';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
   ACCOUNT_WORDS,
   MAX_PURCHASE_CENTS,
+  RUNWAY_SEARCH_THRESHOLD,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -46,11 +49,13 @@ import {
   setAccountBalance,
   setAccountHolds,
 } from '@apps/runway/store/actions/accountActions';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,
   selectEnvelopes,
   selectGoals,
+  selectItemLooks,
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
@@ -78,6 +83,9 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const itemNames = useAppSelector(selectItemNames);
   const goals = useAppSelector((state) => selectGoals(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const looks = useAppSelector(selectItemLooks);
+  const [search, setSearch] = useState('');
   const [view, setView] = useState<'menu' | 'balance' | 'holds'>('menu');
   const [balanceText, setBalanceText] = useState(() =>
     centsToInputValue(account.balanceCents),
@@ -177,25 +185,44 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
     );
   };
 
-  const holdItems = [
-    {
-      heading: ACCOUNT_WORDS.goalsHeading,
-      rows: goals.map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-      })),
-    },
-    {
-      heading: ACCOUNT_WORDS.envelopesHeading,
-      rows: envelopes.map(({ item, version }) => ({
-        id: item.id,
-        name: version.payload.name,
-      })),
-    },
-  ].filter((group) => group.rows.length > 0);
-  const listedIds = new Set(
-    holdItems.flatMap((group) => group.rows.map((row) => row.id)),
+  const toHoldRow = ({
+    item,
+    version,
+  }: {
+    item: { id: string };
+    version: { payload: { name: string } };
+  }) => ({
+    id: item.id,
+    name: version.payload.name,
+    emoji: looks.get(item.id)?.emoji ?? null,
+    cents: assignedByItem[item.id] ?? 0,
+  });
+  const allHoldGroups = [
+    { heading: ACCOUNT_WORDS.goalsHeading, rows: goals.map(toHoldRow) },
+    { heading: ACCOUNT_WORDS.envelopesHeading, rows: envelopes.map(toHoldRow) },
+  ];
+  const holdRowCount = allHoldGroups.reduce(
+    (count, group) => count + group.rows.length,
+    0,
   );
+  const searchKey = search.trim().toLocaleLowerCase();
+  const holdItems = allHoldGroups
+    .map((group) => ({
+      ...group,
+      rows: group.rows.filter((row) =>
+        row.name.toLocaleLowerCase().includes(searchKey),
+      ),
+    }))
+    .filter((group) => group.rows.length > 0);
+  const listedIds = new Set(
+    allHoldGroups.flatMap((group) => group.rows.map((row) => row.id)),
+  );
+  const pickedCents = allHoldGroups
+    .flatMap((group) => group.rows)
+    .filter((row) => picked.has(row.id))
+    .reduce((sum, row) => sum + row.cents, 0);
+  const pickedShortCents =
+    account.balanceCents === null ? 0 : pickedCents - account.balanceCents;
   const heldElsewhere = Object.fromEntries(
     openAccounts
       .filter((other) => other.id !== account.id)
@@ -291,42 +318,92 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
     if (view === 'holds') {
       return (
         <div className='space-y-4'>
-          {viewTitle(ACCOUNT_WORDS.chooseHolds)}
-          {holdItems.length === 0 ? (
+          {viewTitle(ACCOUNT_WORDS.chooseHoldsTitle)}
+          {holdRowCount > 0 && (
+            <p className='flex items-center gap-1.5 text-sm' aria-live='polite'>
+              {!isHidden && pickedShortCents > 0 ? (
+                <span className='flex items-center gap-1.5 text-(--runway-warning-ink)'>
+                  <TriangleAlert
+                    className='h-3.5 w-3.5 shrink-0'
+                    aria-hidden='true'
+                  />
+                  {ACCOUNT_WORDS.shortOfWhatItHolds(
+                    formatCents(pickedShortCents),
+                  )}
+                </span>
+              ) : (
+                <span className='text-muted-foreground'>
+                  {ACCOUNT_WORDS.chooseHoldsTotal}{' '}
+                  <SensitiveValue>{formatCents(pickedCents)}</SensitiveValue>
+                  {account.balanceCents !== null && (
+                    <>
+                      {' '}
+                      {ACCOUNT_WORDS.chooseHoldsOfBalance}{' '}
+                      <SensitiveValue>
+                        {formatCents(account.balanceCents)}
+                      </SensitiveValue>
+                    </>
+                  )}
+                </span>
+              )}
+            </p>
+          )}
+          {holdRowCount >= RUNWAY_SEARCH_THRESHOLD && (
+            <SearchInput
+              value={search}
+              onChange={setSearch}
+              placeholder={ACCOUNT_WORDS.chooseHoldsSearch}
+            />
+          )}
+          {holdRowCount === 0 ? (
             <p className='text-muted-foreground text-sm'>
               {ACCOUNT_WORDS.holdsNothingToPick}
             </p>
+          ) : holdItems.length === 0 ? (
+            <p className='text-muted-foreground text-sm'>
+              {ACCOUNT_WORDS.chooseHoldsNoMatch}
+            </p>
           ) : (
-            holdItems.map((group) => (
-              <div key={group.heading} className='space-y-2'>
-                <SectionDivider label={group.heading} />
-                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                  {group.rows.map((row) => (
-                    <li key={row.id} className='flex min-h-12 items-center'>
-                      <label className='flex min-w-0 flex-1 items-center gap-3 px-3 py-2'>
-                        <Checkbox
-                          className={TICK_HIT_CLASS}
-                          checked={picked.has(row.id)}
-                          onCheckedChange={(next) =>
-                            toggle(row.id, Boolean(next))
-                          }
-                        />
-                        <span className='block min-w-0 flex-1 text-sm break-words'>
-                          <span className='font-medium'>{row.name}</span>
-                          {heldElsewhere[row.id] && !picked.has(row.id) && (
-                            <span className='text-muted-foreground block'>
-                              {ACCOUNT_WORDS.chooseHoldsHeldElsewhere(
-                                heldElsewhere[row.id],
-                              )}
+            <div className='max-h-[max(9rem,calc(92dvh-24rem))] space-y-3 overflow-y-auto [@media(max-height:499px)]:max-h-none'>
+              {holdItems.map((group) => (
+                <div key={group.heading} className='space-y-2'>
+                  <SectionDivider label={group.heading} />
+                  <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                    {group.rows.map((row) => (
+                      <li key={row.id}>
+                        <label className='flex min-h-14 items-center gap-3 px-3 py-2'>
+                          <Checkbox
+                            className={TICK_HIT_CLASS}
+                            checked={picked.has(row.id)}
+                            onCheckedChange={(next) =>
+                              toggle(row.id, Boolean(next))
+                            }
+                          />
+                          <ItemBadge name={row.name} emoji={row.emoji} />
+                          <span className='block min-w-0 flex-1 text-sm'>
+                            <span className='line-clamp-2 font-medium break-words'>
+                              {row.name}
                             </span>
-                          )}
-                        </span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+                            {heldElsewhere[row.id] && !picked.has(row.id) && (
+                              <span className='text-muted-foreground line-clamp-2 break-words'>
+                                {ACCOUNT_WORDS.chooseHoldsHeldElsewhere(
+                                  heldElsewhere[row.id],
+                                )}
+                              </span>
+                            )}
+                          </span>
+                          <span className='shrink-0 text-sm whitespace-nowrap tabular-nums'>
+                            <SensitiveValue>
+                              {formatCents(row.cents)}
+                            </SensitiveValue>
+                          </span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
           {errorNotice}
           <ModalFooterActions
@@ -393,6 +470,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
               </li>
             )}
             {unassigned !== null &&
+              holdLines.length > 0 &&
               (unassigned < 0 ? (
                 <li>
                   {isHidden ? (
@@ -439,6 +517,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
             subtitle={ACCOUNT_WORDS.chooseHoldsSub}
             onClick={() => {
               setPicked(new Set(account.holds));
+              setSearch('');
               goTo('holds');
             }}
           />

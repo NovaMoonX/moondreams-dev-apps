@@ -38,6 +38,7 @@ import {
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
   ACCOUNT_WORDS,
+  BILL_PAY_WORDS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -145,8 +146,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import DateInput from '@/components/DateInput';
 
-const CASH_VALUE = 'cash';
-const NO_ACCOUNT_VALUE = 'none';
+const NO_PAY_WAY_VALUE = 'none';
 
 type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
@@ -253,7 +253,7 @@ export type BillStepId =
   | 'funding'
   | 'priority'
   | 'group'
-  | 'paidBy'
+  | 'paidWith'
   | 'emoji';
 
 const EMPTY_BILL: BillSealed = {
@@ -746,9 +746,23 @@ function BillFormBody({
     openAccounts,
     isAccountsLoaded,
   );
-  const nameOfAccount = (id: string | null) =>
-    accountOptions.find((account) => account.id === id)?.name ??
-    ACCOUNT_WORDS.payFromNone;
+  const shownCards = isTracking ? cardOptions : [];
+  const shownAccounts = accountOptions.length >= 2 ? accountOptions : [];
+  const noPayWayLabel =
+    shownAccounts.length > 0
+      ? ACCOUNT_WORDS.payFromNone
+      : BILL_PAY_WORDS.fromBank;
+  const payWay =
+    shownCards.find((card) => card.id === formData.paidByCardId)?.id ??
+    shownAccounts.find((account) => account.id === accountId)?.id ??
+    NO_PAY_WAY_VALUE;
+  const nameOfPayWay = (id: string) =>
+    id === NO_PAY_WAY_VALUE
+      ? noPayWayLabel
+      : shownCards.some((card) => card.id === id)
+        ? nameOfCard(id)
+        : (shownAccounts.find((account) => account.id === id)?.name ??
+          noPayWayLabel);
 
   const startMin = editing ? undefined : toDateInputValue(today);
   const dayOptions = dueDays.map((day) => ({
@@ -1178,62 +1192,42 @@ function BillFormBody({
         />
       ),
     },
-    ...(isTracking && cardOptions.length > 0
+    ...(shownCards.length > 0 || shownAccounts.length > 0
       ? [
           {
-            id: 'paidBy',
-            title: CARD_WORDS.paidByTitle,
-            summaryLabel: CARD_WORDS.paidBy,
-            summaryValue: nameOfCard(formData.paidByCardId),
+            id: 'paidWith',
+            title: BILL_PAY_WORDS.title,
+            summaryLabel: BILL_PAY_WORDS.label,
+            summaryValue: nameOfPayWay(payWay),
             isAnswered: true,
             isPreAnswered: true,
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
-                label={CARD_WORDS.paidBy}
+                label={BILL_PAY_WORDS.label}
                 options={[
-                  { value: CASH_VALUE, label: CARD_WORDS.cashOrDebit },
-                  ...cardOptions.map((card) => ({
+                  { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
+                  ...shownCards.map((card) => ({
                     value: card.id,
                     label: getCardName(card, allCards),
+                    detail: BILL_PAY_WORDS.cardDetail,
                   })),
-                ]}
-                value={formData.paidByCardId ?? CASH_VALUE}
-                onChange={(value) => {
-                  set({ paidByCardId: value === CASH_VALUE ? null : value });
-                  moveOn();
-                }}
-              />
-            ),
-          },
-        ]
-      : []),
-    ...(accountOptions.length >= 2
-      ? [
-          {
-            id: 'accountId',
-            title: ACCOUNT_WORDS.payFromTitle,
-            summaryLabel: ACCOUNT_WORDS.payFromLabel,
-            summaryValue: nameOfAccount(accountId),
-            isAnswered: true,
-            isPreAnswered: true,
-            render: ({ moveOn }: QuestionControls) => (
-              <PillGroup
-                label={ACCOUNT_WORDS.payFromLabel}
-                options={[
-                  {
-                    value: NO_ACCOUNT_VALUE,
-                    label: ACCOUNT_WORDS.payFromNone,
-                  },
-                  ...accountOptions.map((account) => ({
+                  ...shownAccounts.map((account) => ({
                     value: account.id,
                     label: account.name,
                     detail: describeAccountLine(account),
                   })),
                 ]}
-                value={accountId ?? NO_ACCOUNT_VALUE}
+                value={payWay}
                 onChange={(value) => {
+                  const isCard = shownCards.some((card) => card.id === value);
+                  const isAccount = shownAccounts.some(
+                    (account) => account.id === value,
+                  );
                   set({
-                    accountId: value === NO_ACCOUNT_VALUE ? null : value,
+                    ...(isTracking
+                      ? { paidByCardId: isCard ? value : null }
+                      : {}),
+                    accountId: isAccount ? value : null,
                   });
                   moveOn();
                 }}
