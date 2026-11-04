@@ -254,6 +254,7 @@ import {
   removeCost,
   restoreCost,
   setCostPrice,
+  getPurchaseMarkFigures,
   settleCostPaid,
   getHorizonFigures,
   sumCostPayments,
@@ -12037,6 +12038,21 @@ const version = (
     ...entry('paid_moving_movers_4', 'movers', 60_000, 0, 'purchase'),
     purchaseId: 'p1',
   };
+  const edited = getPurchaseMarkFigures(
+    purchaseMark,
+    { amountCents: 65_000, date: jan15 + DAY_MS },
+    5_000,
+  );
+  assert.deepEqual(
+    [edited.amountCents, edited.paidOn, edited.fromFreeCents],
+    [65_000, jan15 + DAY_MS, 5_000],
+    'an edited purchase shows its own amount, day and the part past what the item held',
+  );
+  assert.equal(
+    getPurchaseMarkFigures(purchaseMark, null, 5_000),
+    purchaseMark,
+    'a purchase that is not loaded leaves the mark as written',
+  );
   const withPurchase = (moves: OpenMove[], purchases: OpenPurchase[]) =>
     deriveBalances({
       startDate: jan1,

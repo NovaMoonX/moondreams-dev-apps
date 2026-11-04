@@ -43,6 +43,7 @@ import {
 import { DAY_MS } from '@apps/runway/engine/dates';
 import {
   getLiveCosts,
+  getPurchaseMarkFigures,
   removeCost,
   restoreCost,
   setCostPrice,
@@ -59,6 +60,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectCostPayments,
   selectHorizonItems,
+  selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
 import { describeCostGivesBack } from '@apps/runway/utils/changeText';
@@ -211,7 +213,23 @@ function CostSheet({
     ({ costId }) => costId === cost.id,
   );
   const next = costPayments.find(({ paid }) => paid === null) ?? null;
-  const paidEntries = costPayments.flatMap(({ paid }) => (paid ? [paid] : []));
+  const purchases = useAppSelector(selectSpendPurchases);
+  const itemFromFreeCents = useAppSelector(
+    (state) => selectBalances(state).costFromFreeByItem[itemId] ?? 0,
+  );
+  const paidEntries = costPayments.flatMap(({ paid }) =>
+    paid
+      ? [
+          paid.mark === 'purchase'
+            ? getPurchaseMarkFigures(
+                paid,
+                purchases.find(({ id }) => id === paid.purchaseId) ?? null,
+                itemFromFreeCents,
+              )
+            : paid,
+        ]
+      : [],
+  );
   const costPaid = useCostPaid({
     itemId,
     itemName: horizon.name,

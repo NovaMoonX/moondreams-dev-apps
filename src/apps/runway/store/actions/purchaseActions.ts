@@ -31,7 +31,11 @@ import {
   type CostPaidNames,
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
-import { openPurchase } from '@apps/runway/store/listeners/openLedger';
+import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
+import {
+  openMove,
+  openPurchase,
+} from '@apps/runway/store/listeners/openLedger';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
 import { describePurchaseRemoval } from '@apps/runway/utils/purchaseText';
 import type {
@@ -93,8 +97,43 @@ export interface AddPurchaseInput {
 
 /** What taking a purchase back needs to take its cost's mark back with it. */
 export interface PurchaseCostMark {
-  paid: WrittenCostPaid;
+  /** Null when the screen has not loaded the mark; the delete then looks for the live one itself. */
+  paid: WrittenCostPaid | null;
   names: CostPaidNames;
+}
+
+const MAX_MARK_LOOKUPS = 12;
+
+/** The live mark a purchase made, found by reading the marks of its payment in turn, for a delete whose screen has not loaded them. */
+async function readLiveCostMark(
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+): Promise<WrittenCostPaid | null> {
+  const ref = previous.costRef ?? null;
+  if (ref === null) return null;
+  const read = createSealedReader(encryption);
+  const lookup = async (index: number): Promise<WrittenCostPaid | null> => {
+    if (index >= MAX_MARK_LOOKUPS) return null;
+    const moveId = getCostPaidMoveId(ref.itemId, ref.costId, ref.dueOn, index);
+    const [move, undo] = await Promise.all([
+      getDoc(doc(db, 'apps', 'runway', 'plans', uid, 'moves', moveId)),
+      getDoc(
+        doc(db, 'apps', 'runway', 'plans', uid, 'moves', getUndoMoveId(moveId)),
+      ),
+    ]);
+    if (!move.exists()) return null;
+    if (undo.exists()) return lookup(index + 1);
+    const opened = await openMove(
+      { ...(move.data() as MoveDoc), id: move.id },
+      read,
+    );
+    return opened.kind === 'costPaid' &&
+      opened.payload.purchaseId === previous.id
+      ? { moveId, itemId: ref.itemId, ...opened.payload }
+      : lookup(index + 1);
+  };
+  return lookup(0);
 }
 
 export interface AddedPurchase {
@@ -449,32 +488,30 @@ export async function deletePurchase(
     { summary, note: null } satisfies ChangeSealed,
     encryption,
   );
-  const [unmarkSealed, unmarkChange] =
+  const paid =
     costMark === null
+      ? null
+      : (costMark.paid ?? (await readLiveCostMark(uid, encryption, previous)));
+  const names = costMark?.names ?? null;
+  const [unmarkSealed, unmarkChange] =
+    paid === null || names === null
       ? [null, null]
       : await Promise.all([
-          sealCostUnmark(encryption, costMark.paid),
-          getCostPaidChange(encryption, costMark.paid, costMark.names, true),
+          sealCostUnmark(encryption, paid),
+          getCostPaidChange(encryption, paid, names, true),
         ]);
   const changeId = generateUuid();
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
     const isUnmarkNeeded =
-      costMark !== null &&
-      !(await isCostUnmarked(transaction, uid, costMark.paid));
+      paid !== null && !(await isCostUnmarked(transaction, uid, paid));
     markLedgerWrite(transaction, uid, plan.data(), [
       previous.date,
-      ...(isUnmarkNeeded && costMark ? [costMark.paid.dueOn] : []),
+      ...(isUnmarkNeeded && paid ? [paid.dueOn] : []),
     ]);
-    if (isUnmarkNeeded && costMark && unmarkSealed && unmarkChange) {
-      setCostUnmark(
-        transaction,
-        uid,
-        costMark.paid,
-        unmarkSealed,
-        unmarkChange,
-      );
+    if (isUnmarkNeeded && paid && unmarkSealed && unmarkChange) {
+      setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange);
     }
     transaction.delete(purchaseRef(uid, previous.id));
     transaction.set(

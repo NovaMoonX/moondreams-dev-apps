@@ -268,6 +268,7 @@ async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
+  isTrack = false,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -304,7 +305,7 @@ async function writeSeedHorizon(
   const feb1 = nextCalendarDay(today, 1, 1);
   const dec20 = nextCalendarDay(today, 11, 20);
 
-  const items: { id: string; payload: HorizonSealed }[] = [
+  const allItems: { id: string; payload: HorizonSealed }[] = [
     {
       id: 'seed-horizon-moving',
       payload: {
@@ -403,6 +404,8 @@ async function writeSeedHorizon(
       },
     },
   ];
+  // Track's plan holds only Moving, whose Movers are paid by a purchase.
+  const items = isTrack ? allItems.slice(0, 1) : allItems;
   const movedOn = today - 2 * DAY_MS;
   const toward: { itemId: string; cents: number; summary: string }[] = [
     {
@@ -415,7 +418,7 @@ async function writeSeedHorizon(
       cents: 120_000,
       summary: "Put $1,200.00 toward Sam's wedding from Free to Spend.",
     },
-  ];
+  ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
 
   const [sealed, addedChanges] = await Promise.all([
     Promise.all(items.map(({ payload }) => sealJson(payload, encryption))),
@@ -458,33 +461,36 @@ async function writeSeedHorizon(
     paidOn: number;
     mark: CostPaidSealed['mark'];
     purchaseId?: string;
-  }[] = [
-    {
-      itemId: 'seed-horizon-surgery',
-      cost: items[1].payload.costs[0],
-      amountCents: 52_000,
-      fromFreeCents: settleCostPaid(52_000, 5_000).fromFreeCents,
-      paidOn: today - 2 * DAY_MS,
-      mark: 'item',
-    },
-    {
-      itemId: 'seed-horizon-moving',
-      cost: items[0].payload.costs[0],
-      amountCents: 12_000,
-      fromFreeCents: 0,
-      paidOn: today - DAY_MS,
-      mark: 'outside',
-    },
-    {
-      itemId: 'seed-horizon-moving',
-      cost: items[0].payload.costs[1],
-      amountCents: 60_000,
-      fromFreeCents: 0,
-      paidOn: today - 4 * DAY_MS,
-      mark: 'purchase',
-      purchaseId: MOVERS_PURCHASE_ID,
-    },
-  ];
+  }[] = isTrack
+    ? [
+        {
+          itemId: 'seed-horizon-moving',
+          cost: items[0].payload.costs[1],
+          amountCents: 60_000,
+          fromFreeCents: 0,
+          paidOn: today - 4 * DAY_MS,
+          mark: 'purchase',
+          purchaseId: MOVERS_PURCHASE_ID,
+        },
+      ]
+    : [
+        {
+          itemId: 'seed-horizon-surgery',
+          cost: items[1].payload.costs[0],
+          amountCents: 52_000,
+          fromFreeCents: settleCostPaid(52_000, 5_000).fromFreeCents,
+          paidOn: today - 2 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-moving',
+          cost: items[0].payload.costs[0],
+          amountCents: 12_000,
+          fromFreeCents: 0,
+          paidOn: today - DAY_MS,
+          mark: 'outside',
+        },
+      ];
   const marks = await Promise.all(
     marked.map(async ({ itemId, cost: paidCost, ...paid }) => {
       const itemName =
@@ -2632,6 +2638,12 @@ async function seedTrackingPlan(
     startBatch,
   );
   await startBatch.commit();
+  const horizonDocuments = await writeSeedHorizon(
+    context,
+    owner.uid,
+    encryption,
+    true,
+  );
   const purchaseDocuments = await writeSeedPurchases(
     context,
     owner.uid,
@@ -2652,6 +2664,7 @@ async function seedTrackingPlan(
     documents +
     startDocuments +
     cardDocuments +
+    horizonDocuments +
     purchaseDocuments
   );
 }

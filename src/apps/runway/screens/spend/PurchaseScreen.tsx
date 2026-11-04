@@ -232,25 +232,22 @@ function PurchaseScreen({
 
   const getCostMark = () => {
     const ref = purchase.costRef ?? null;
+    if (ref === null) return null;
     const paid =
-      ref === null
-        ? null
-        : ((costMarks[ref.itemId] ?? []).find(
-            (entry) => entry.purchaseId === purchase.id,
-          ) ?? null);
-    return ref === null || paid === null
-      ? null
-      : {
-          paid: { ...paid, itemId: ref.itemId },
-          names: {
-            item: nameOf(ref.itemId),
-            cost:
-              horizons
-                .find(({ item }) => item.id === ref.itemId)
-                ?.version.payload.costs.find(({ id }) => id === ref.costId)
-                ?.name ?? paid.costId,
-          },
-        };
+      (costMarks[ref.itemId] ?? []).find(
+        (entry) => entry.purchaseId === purchase.id,
+      ) ?? null;
+    return {
+      paid: paid === null ? null : { ...paid, itemId: ref.itemId },
+      names: {
+        item: nameOf(ref.itemId),
+        cost:
+          horizons
+            .find(({ item }) => item.id === ref.itemId)
+            ?.version.payload.costs.find(({ id }) => id === ref.costId)?.name ??
+          '',
+      },
+    };
   };
 
   const remove = async () => {
