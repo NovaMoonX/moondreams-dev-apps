@@ -297,7 +297,7 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  due: (name: string, date: string) => `${name}\u00A0·\u00A0due\u00A0${date}`,
+  due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => (count === 1 ? 'One cost' : `${count} costs`),
   costsCaption: 'Costs',
