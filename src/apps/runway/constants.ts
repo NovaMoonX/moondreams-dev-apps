@@ -2345,7 +2345,7 @@ export const GROUP_WORDS = {
   priorityConfirmLead: (priority: string) =>
     `New ones you add start at ${priority} too. This replaces the priority set on each of these:`,
   priorityNoneSet: (row: 'all' | 'bill' | 'envelope', group: string) =>
-    `New ${row === 'all' ? 'bills and envelopes' : row === 'bill' ? 'bills' : 'envelopes'} in ${group} start with no priority. Nothing already there changed.`,
+    `New ${row === 'all' ? 'bills and envelopes' : row === 'bill' ? 'bills' : 'envelopes'} in ${group} start at Should, as they do anywhere. Nothing already there changed.`,
   priorityMoves: (name: string, from: string, to: string) =>
     `${name} goes from ${from} to ${to}`,
   priorityFolds: (
