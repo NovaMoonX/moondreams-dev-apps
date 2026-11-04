@@ -70,7 +70,9 @@ const getDueLine = (
   if (!payment) return 'No payment left';
   const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
   if (payment.paid) return `Paid · due\u00a0${date}`;
-  return isSavingUp ? `${BILL_WORDS.savingUp} · due\u00a0${date}` : `Due\u00a0${date}`;
+  return isSavingUp
+    ? `${BILL_WORDS.savingUp} · due\u00a0${date}`
+    : `Due\u00a0${date}`;
 };
 
 /** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
