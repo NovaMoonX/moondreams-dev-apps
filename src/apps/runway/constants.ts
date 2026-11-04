@@ -461,7 +461,7 @@ export const HORIZON_WORDS = {
   takeFromPaysConfirm: 'Take from my pays',
   plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
     `${isUpTo ? (isAfterLead ? 'up\u00A0to\u00A0' : 'Up\u00A0to\u00A0') : ''}${amount}\u00A0planned`,
-  overNextYear: 'Over the next year:',
+  overNextYear: 'Over\u00A0the\u00A0next\u00A0year:',
   setAside: 'Set aside',
   spent: 'Spent',
   left: 'Left',
@@ -2128,7 +2128,7 @@ export const COST_PAID_WORDS = {
     `All ${amount} comes out of Free to Spend. ${item} has nothing left.`,
   markSubRange: 'Say what it came to',
   markSubOutside: (item: string) =>
-    `Paid outside the plan. Nothing comes from ${item}.`,
+    `You pay it yourself, so nothing comes from ${item}.`,
   paidRow: (paidOn: string, amount: string) =>
     `Paid ${paidOn}\u00A0· ${amount}`,
   paidOutsideRow: (paidOn: string) =>

@@ -150,7 +150,7 @@ function HorizonSheet({
       : HORIZON_WORDS.aroundRange(
           formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
-  const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear}\u00A0` : '';
+  const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear} ` : '';
   const fact = [
     yearLead +
       HORIZON_WORDS.plannedTotal(
