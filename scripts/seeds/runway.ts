@@ -744,7 +744,7 @@ const SEED_WEALTHFRONT_GOALS = [
   'seed-goal-phone',
 ];
 
-/** The owner's three accounts: Checking A (not pulled from, $2,140.00), Checking B (cards and bills pull from it, $650.00) and a Wealthfront cash account holding the vacation, cushion and phone goals with $800.00, a little above what they hold. Three documents. */
+/** Three accounts: two Capital One checking accounts (B is pulled from) and a Wealthfront cash account holding three goals. */
 async function writeSeedAccounts(
   context: SeedContext,
   uid: string,

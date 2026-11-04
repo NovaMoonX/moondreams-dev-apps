@@ -12692,7 +12692,7 @@ console.log('runway engine: ok');
   );
 }
 
-// Accounts (Issue 52): which account pays, and what an account holds.
+// Accounts: which account pays, and what an account holds.
 {
   const account = (
     id: string,
