@@ -1,3 +1,5 @@
+import type { ClipboardEvent } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero from '@/components/AmountHero';
@@ -257,7 +259,7 @@ const toStoreName = (url: string, preview: LinkPreview | null) =>
     MAX_BOUGHT_FROM_LENGTH,
   );
 
-/** A link pasted as the store's name: a full address, never a typed "Target.com". */
+/** A pasted store name that is really a full address, never a "Target.com". */
 const readPastedLink = (text: string) =>
   /^(https?:\/\/|www\.)\S+$/i.test(text.trim()) ? toWebLink(text) : null;
 
@@ -289,14 +291,13 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
     answers.boughtFrom.trim() ===
       toStoreName(answers.boughtUrl, answers.boughtUrlPreview);
 
-  const handleName = (text: string) => {
-    const link = readPastedLink(text);
-    if (
-      link === null ||
-      answers.boughtUrl !== '' ||
-      getWebLinkSiteName(link) === null
-    ) {
-      onChange({ boughtFrom: text.slice(0, MAX_BOUGHT_FROM_LENGTH) });
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const link = readPastedLink(event.clipboardData.getData('text'));
+    const name = link === null ? null : getWebLinkSiteName(link);
+    if (link === null || name === null) return;
+    event.preventDefault();
+    if (answers.boughtUrl !== '') {
+      onChange({ boughtFrom: name.slice(0, MAX_BOUGHT_FROM_LENGTH) });
       return;
     }
     onChange(withStoreName({ ...answers, boughtFrom: '' }, link, null));
@@ -310,7 +311,12 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
             variant='outline'
             placeholder='Target'
             value={answers.boughtFrom}
-            onChange={(event) => handleName(event.target.value)}
+            onChange={(event) =>
+              onChange({
+                boughtFrom: event.target.value.slice(0, MAX_BOUGHT_FROM_LENGTH),
+              })
+            }
+            onPaste={handlePaste}
           />
         )}
       </Field>

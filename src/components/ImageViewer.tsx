@@ -473,10 +473,13 @@ function ImageViewer({
         }}
         onPointerCancel={(event) => {
           pointers.current.delete(event.pointerId);
-          if (pinch.current && pointers.current.size < 2) pinch.current = null;
+          if (pinch.current) {
+            pointers.current.clear();
+            pinch.current = null;
+            lastTap.current = null;
+          }
           if (pan.current?.pointerId === event.pointerId) pan.current = null;
           if (drag.current?.pointerId === event.pointerId) drag.current = null;
-          if (pinch.current) return;
           setIsDragging(false);
           setDragX(0);
         }}
