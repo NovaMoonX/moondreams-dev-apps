@@ -147,6 +147,7 @@ function RunwayContent() {
     closeMoreEntry,
     view,
     openView,
+    setStartMethod,
     closeView,
     settingsView,
     closeSettingsView,
@@ -218,7 +219,14 @@ function RunwayContent() {
         </div>
       );
     }
-    return <SignedOutLanding onStart={() => openView('start')} />;
+    return (
+      <SignedOutLanding
+        onStart={(isContinuing) => {
+          if (isContinuing) setStartMethod('continue');
+          openView('start');
+        }}
+      />
+    );
   }
 
   if (isDeletingPlan && keyStatus === 'ready') {

@@ -1105,17 +1105,18 @@ export const selectHasIncome = (state: RootState, today: number) =>
 export const selectHasEverHadIncome = (state: RootState) =>
   state.runway.items.some((item) => item.kind === 'payLine');
 
-/** Where a plan stands before it is usable: `new` has nothing in it, `started` has something but no bill, envelope or goal and no starting day yet, `ready` is the tabs. */
+/** Where a plan stands before its tabs show: new, started (something saved, no bill, envelope or goal) or ready. */
 export const selectSetupState = (
   state: RootState,
 ): 'new' | 'started' | 'ready' => {
   const { items, plan } = state.runway;
   if (items.length === 0 && plan?.startDate == null) return 'new';
+  const hasLive = items.some((item) => item.archivedAt === null);
   const hasPlanned = items.some(
     (item) =>
       item.kind === 'bill' || item.kind === 'envelope' || item.kind === 'goal',
   );
-  if (hasPlanned || plan?.startDate != null) return 'ready';
+  if (hasPlanned || plan?.startDate != null || !hasLive) return 'ready';
   return 'started';
 };
 

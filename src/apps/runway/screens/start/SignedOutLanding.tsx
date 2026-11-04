@@ -7,7 +7,7 @@ import SetupSteps from '@apps/runway/screens/start/SetupSteps';
 import { countDraft, useStartDraft } from '@apps/runway/utils/startDraft';
 
 interface SignedOutLandingProps {
-  onStart: () => void;
+  onStart: (isContinuing: boolean) => void;
 }
 
 /** Everything in Runway needs an account except Starting out, which keeps its answers on this device until sign-in. */
@@ -22,18 +22,18 @@ function SignedOutLanding({ onStart }: SignedOutLandingProps) {
   };
   return (
     <div className='page'>
-      <div className='mx-auto max-w-xl space-y-8 pt-16 pb-6'>
+      <div className='mx-auto max-w-xl space-y-8 pt-10 pb-6'>
         <div className='space-y-1'>
           <h1 className='text-3xl font-semibold text-balance'>
             {isKept ? SETUP_WORDS.outKeptTitle : SETUP_WORDS.outTitle}
           </h1>
-          <p className='text-muted-foreground'>
+          <p className='text-muted-foreground text-pretty'>
             {isKept ? SETUP_WORDS.outKeptBody : SETUP_WORDS.outBody}
           </p>
         </div>
         <SetupSteps progress={progress} />
         <div className='flex flex-col gap-2'>
-          <Button size='lg' onClick={onStart}>
+          <Button size='lg' onClick={() => onStart(isKept)}>
             {isKept ? SETUP_WORDS.outKeptAction : SETUP_WORDS.outAction}
           </Button>
           <Button

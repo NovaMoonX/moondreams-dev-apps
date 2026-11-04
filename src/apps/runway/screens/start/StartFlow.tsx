@@ -205,7 +205,9 @@ function StartFlow({
     goal: rows.goal.length,
   };
   const total = counts.income + counts.bill + counts.envelope + counts.goal;
-  const [isAsking, setIsAsking] = useState(total > 0);
+  const [isAsking, setIsAsking] = useState(
+    total > 0 && startMethod !== 'continue',
+  );
   const [stage, setStage] = useState<'choose' | 'budget' | 'steps'>(
     getFirstStage(total, budget, startMethod),
   );

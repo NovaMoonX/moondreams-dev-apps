@@ -1108,7 +1108,7 @@ export const SETUP_WORDS = {
   ],
   newTitle: "Let's plan your first paycheck",
   newBody: 'Three quick steps.',
-  newAction: 'Add your income',
+  newAction: 'Start your plan',
   startedTitle: 'Income is in',
   startedBody: 'Next, add what you pay.',
   startedAction: 'Add your bills',
@@ -1116,7 +1116,7 @@ export const SETUP_WORDS = {
   outBody: 'Start now. Sign in when you want to save it.',
   outAction: 'Start planning',
   outKeptTitle: 'Welcome back',
-  outKeptBody: 'Kept on this device until you sign in.',
+  outKeptBody: 'Saved on this device. Sign in to keep it.',
   outKeptAction: 'Keep planning',
 } as const;
 
@@ -1450,7 +1450,7 @@ export const BUDGET_LIMITS = {
 } as const;
 
 /** The ways Starting out can begin, kept in the URL as `method` so a choice survives sign-in. */
-export const START_METHODS = ['budget'] as const;
+export const START_METHODS = ['budget', 'continue'] as const;
 
 export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
 export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';

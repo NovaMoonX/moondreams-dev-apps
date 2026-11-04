@@ -16,7 +16,6 @@ const COUNTS: Record<keyof SetupProgress, readonly [string, string]> = {
   spending: ['envelope or goal', 'envelopes and goals'],
 };
 
-/** The three things a plan needs, each done, next or later, so a person always sees where they are. */
 function SetupSteps({ progress }: { progress: SetupProgress }) {
   const keys = SETUP_WORDS.steps.map((step) => step.key);
   const next = keys.find((key) => progress[key] === 0) ?? null;
@@ -28,7 +27,11 @@ function SetupSteps({ progress }: { progress: SetupProgress }) {
         const isDone = count > 0;
         const isNext = step.key === next;
         return (
-          <li key={step.key} className='flex items-center gap-3'>
+          <li
+            key={step.key}
+            aria-current={isNext ? 'step' : undefined}
+            className='flex items-center gap-3'
+          >
             <span
               aria-hidden='true'
               className={join(
@@ -51,6 +54,7 @@ function SetupSteps({ progress }: { progress: SetupProgress }) {
                 )}
               >
                 {step.title}
+                {isDone && <span className='sr-only'> done</span>}
               </span>
               {(isDone || isNext) && (
                 <span className='text-muted-foreground block text-sm'>
