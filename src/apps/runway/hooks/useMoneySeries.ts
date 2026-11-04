@@ -28,7 +28,7 @@ import type { DateOnly } from '@apps/runway/types';
 
 const RANGES = ['1m', '6m', '1y'] as const;
 
-/** Where the money stood over `range` and where the plan takes it over the next year, with the ranges the history is long enough to tell apart. */
+/** Where the money stood over `range` and where the plan takes it over the next year (or to its last income day, when that comes sooner), with the ranges the history is long enough to tell apart. */
 export function useMoneySeries(
   range: MoneyRange,
   today: DateOnly,
@@ -100,6 +100,8 @@ export function useMoneySeries(
   ]);
 
   const now = history?.at(-1) ?? null;
+  const yearOut = addUtcMonths(today, LOOKAHEAD_MONTHS);
+  const until = Math.min(yearOut, lookahead?.incomeEndsOn ?? yearOut);
   const ahead = useMemo(
     () =>
       now === null || lookahead === null
@@ -110,13 +112,31 @@ export function useMoneySeries(
             steps: lookahead.steps,
             payments,
             billsSince: Math.max(startDate ?? 0, recentFrom ?? 0),
-            until: addUtcMonths(today, LOOKAHEAD_MONTHS),
+            until,
             spentItemIds: envelopeIds,
           }),
-    [now, lookahead, payments, today, startDate, recentFrom, envelopeIds],
+    [
+      now,
+      lookahead,
+      payments,
+      today,
+      startDate,
+      recentFrom,
+      envelopeIds,
+      until,
+    ],
   );
 
   const isPartial = needsClosings && closings.isError;
-  const result = { history, ahead, ranges, range: shown, spanDays, isPartial };
+  const endsOn = until < yearOut ? until : null;
+  const result = {
+    history,
+    ahead,
+    endsOn,
+    ranges,
+    range: shown,
+    spanDays,
+    isPartial,
+  };
   return result;
 }

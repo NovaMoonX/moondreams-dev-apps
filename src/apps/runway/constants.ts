@@ -1104,6 +1104,7 @@ export const MONEY_CHART_WORDS = {
   free: 'Free to Spend',
   all: 'All money',
   range: 'How far back',
+  past: 'Past',
   hidden: 'Show amounts to see your history',
   hideChart: 'Hide chart',
   showChart: 'Show chart',
@@ -1122,7 +1123,11 @@ export const MONEY_CHART_WORDS = {
   aheadFreeHelp:
     'A pay you expect is mostly given to your envelopes, bills and goals, so Free to Spend only rises by what a pay leaves over.',
   allHelp:
-    'All money is Free to Spend plus what your envelopes, goals, bills and cards hold.',
+    'Up to today, All money is everything you hold: Free to Spend plus what your envelopes, goals, bills and cards hold.',
+  endsHelp: (on: string) =>
+    `The dotted line stops at your last income day, ${on}, since your plan has no pay after it.`,
+  rangeHelp:
+    'The buttons under the chart choose how far back the solid line goes. All goes back to the day you started.',
 } as const;
 
 /** Days of history before the money chart draws a line, so a near-flat start never shows. */

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChartLine, ChevronRight } from 'lucide-react';
+import { ChartLine, ChevronRight, Eye } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -129,7 +129,12 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
     (low, point) => (low === null || pick(point) < pick(low) ? point : low),
     null,
   );
-  const hasLowest = lowest !== null && now !== null && pick(lowest) < pick(now);
+  const end = ahead.at(-1) ?? null;
+  const hasLowest =
+    lowest !== null &&
+    now !== null &&
+    pick(now) - pick(lowest) >= (axis.domain[1] - axis.domain[0]) / 10 &&
+    lowest.on !== end?.on;
   const formatDay = (x: number) =>
     x === today ? MONEY_CHART_WORDS.today : formatDateShortUTC(x);
   const sinceText =
@@ -151,6 +156,10 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
     figure === 'free' && hasChart && ahead.length > 0
       ? MONEY_CHART_WORDS.aheadFreeHelp
       : null,
+    hasChart && series.endsOn !== null
+      ? MONEY_CHART_WORDS.endsHelp(formatDateShortUTC(series.endsOn))
+      : null,
+    hasChart && series.ranges.length > 1 ? MONEY_CHART_WORDS.rangeHelp : null,
     rangeNote,
   ].filter((entry): entry is string => entry !== null);
 
@@ -161,9 +170,10 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         <Button
           variant='tertiary'
           size='sm'
-          className='-ml-2 h-auto py-1 text-sm font-normal'
+          className='-ml-2 h-auto gap-1.5 py-1 text-sm font-normal'
           onClick={toggle}
         >
+          <Eye className='h-4 w-4' aria-hidden='true' />
           {MONEY_CHART_WORDS.hidden}
         </Button>
       );
@@ -199,7 +209,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
       <div className='space-y-3'>
         <div
           role='img'
-          aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.`}
+          aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.${end === null ? '' : ` ${MONEY_CHART_WORDS.expected} ${formatFigure(pick(end), figure)} on ${formatDateShortUTC(end.on)}.`}`}
           className='-mr-2'
         >
           <TrendLineChart
@@ -223,7 +233,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
                     {
                       x: today,
                       label: MONEY_CHART_WORDS.today,
-                      labelAt: 'bottom',
+                      labelAt: 'top',
                     },
                   ]
                 : undefined
@@ -245,20 +255,25 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
         </div>
         <div className='flex items-center justify-between gap-3'>
           {series.ranges.length > 1 ? (
-            <PillGroup
-              isThin
-              label={MONEY_CHART_WORDS.range}
-              options={series.ranges.map((entry) => ({
-                value: entry,
-                label: RANGE_LABELS[entry],
-                ariaLabel: RANGE_NAMES[entry],
-              }))}
-              value={series.range}
-              onChange={(next) => {
-                setReading(null);
-                setRange(next);
-              }}
-            />
+            <div className='flex min-w-0 items-center gap-2'>
+              <span className='text-muted-foreground text-xs'>
+                {MONEY_CHART_WORDS.past}
+              </span>
+              <PillGroup
+                isThin
+                label={MONEY_CHART_WORDS.range}
+                options={series.ranges.map((entry) => ({
+                  value: entry,
+                  label: RANGE_LABELS[entry],
+                  ariaLabel: RANGE_NAMES[entry],
+                }))}
+                value={series.range}
+                onChange={(next) => {
+                  setReading(null);
+                  setRange(next);
+                }}
+              />
+            </div>
           ) : (
             <span />
           )}
