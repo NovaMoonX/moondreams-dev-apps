@@ -1,6 +1,7 @@
 import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { GROUP_WORDS } from '@apps/runway/constants';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -373,20 +374,29 @@ export interface CreateGoalInput {
   goal: GoalSealed;
   /** The first day this goal is in the plan. */
   startDate: number;
+  /** A group the person named while adding the goal; it is written in the same batch and the goal joins it. */
+  newGroup?: GroupSealed | null;
 }
 
 /**
- * Adds a goal as a header, a first version and one change entry in a single batch. Items and
- * versions are created and never updated; nothing is written to `days`.
+ * Adds a goal as a header, a first version and one change entry in a single batch, with the new
+ * group's three documents beside them when the goal names one. Items and versions are created and
+ * never updated; nothing is written to `days`.
  */
 export async function createGoal(
   uid: string,
   encryption: RunwayEncryption,
-  { goal, startDate }: CreateGoalInput,
+  { goal: draftGoal, startDate, newGroup = null }: CreateGoalInput,
 ): Promise<{ goalId: string }> {
   const now = Date.now();
   const goalId = generateUuid();
   const changeId = generateUuid();
+  const groupDocs = newGroup
+    ? await buildGroupDocs(encryption, { group: newGroup, startDate }, now)
+    : null;
+  const goal: GoalSealed = groupDocs
+    ? { ...draftGoal, groupId: groupDocs.groupId }
+    : draftGoal;
   const dateText =
     goal.targetDate === null
       ? ''
@@ -429,6 +439,14 @@ export async function createGoal(
   };
 
   const batch = writeBatch(db);
+  if (groupDocs) {
+    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
+    batch.set(
+      itemPath(uid, 'versions', groupDocs.version.id),
+      groupDocs.version,
+    );
+    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
+  }
   batch.set(itemPath(uid, 'items', goalId), header);
   batch.set(itemPath(uid, 'versions', version.id), version);
   batch.set(itemPath(uid, 'changes', changeId), change);
@@ -450,7 +468,7 @@ export interface ChangeItemInput {
   changeEffectiveFrom?: number | null;
   /** The first day the change no longer covers, so the version before it returns; null lasts until superseded. */
   effectiveUntil?: number | null;
-  /** A group the person named while changing a bill; it is written in the same batch and the bill joins it. */
+  /** A group the person named while changing a bill, envelope or goal; it is written in the same batch and the bill joins it. */
   newGroup?: GroupSealed | null;
   /** For a change to one field only: the item's stretches from `effectiveFrom` on, each written as its own version so later and temporary versions keep their amounts and dates. */
   stretches?: VersionStretch<ItemPayload>[];
@@ -473,7 +491,10 @@ export async function changeItem(
     note: input.note,
   };
   const groupDocs =
-    input.newGroup && (input.kind === 'bill' || input.kind === 'envelope')
+    input.newGroup &&
+    (input.kind === 'bill' ||
+      input.kind === 'envelope' ||
+      input.kind === 'goal')
       ? await buildGroupDocs(
           encryption,
           { group: input.newGroup, startDate: input.effectiveFrom },
@@ -483,7 +504,7 @@ export async function changeItem(
   const withGroup = (payload: ItemPayload): ItemPayload =>
     groupDocs
       ? {
-          ...(payload as BillSealed | EnvelopeSealed),
+          ...(payload as BillSealed | EnvelopeSealed | GoalSealed),
           groupId: groupDocs.groupId,
         }
       : payload;
@@ -538,7 +559,8 @@ export async function changeItem(
 }
 
 /** A batch holds 500 writes; the change entry takes one and the rest is left for growth. */
-const MAX_REORDER_WRITES = 450;
+/** The most versions one batched plan write may hold, under Firestore's batch limit. */
+export const MAX_REORDER_WRITES = 450;
 
 export interface ReorderItemsInput {
   /** The stretches from today on each keep their own payload; only tiers and ranks change. */
@@ -591,6 +613,92 @@ export async function reorderItems(
       createdAt: now,
       effectiveFrom: segment.effectiveFrom,
       effectiveUntil: segment.effectiveUntil,
+      changeId,
+      sealed: versionsSealed[index],
+    };
+    batch.set(itemPath(uid, 'versions', version.id), version);
+  });
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+}
+
+export interface SetGroupPriorityInput {
+  groupId: string;
+  /** The group's new payload, or null when its pick stays as it is. */
+  group: GroupSealed | null;
+  /** Each member's stretches from today on, as they will read. */
+  members: {
+    itemId: string;
+    kind: 'bill' | 'envelope' | 'goal';
+    stretches: VersionStretch<ItemPayload>[];
+  }[];
+  summary: string;
+  effectiveFrom: number;
+}
+
+/**
+ * Saves a group's priority and what it does to its members as one batch: the group's new version, one
+ * version per stretch of each member and one change entry naming them all, so the group and its items
+ * never disagree half way. Nothing already written is touched.
+ */
+export async function setGroupPriority(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: SetGroupPriorityInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const writes: {
+    itemId: string;
+    kind: PlanVersionDoc['kind'];
+    stretch: VersionStretch<ItemPayload>;
+  }[] = [
+    ...(input.group === null
+      ? []
+      : [
+          {
+            itemId: input.groupId,
+            kind: 'group' as const,
+            stretch: {
+              payload: input.group,
+              effectiveFrom: input.effectiveFrom,
+              effectiveUntil: null,
+            },
+          },
+        ]),
+    ...input.members.flatMap((member) =>
+      member.stretches.map((stretch) => ({
+        itemId: member.itemId,
+        kind: member.kind,
+        stretch,
+      })),
+    ),
+  ];
+  if (writes.length > MAX_REORDER_WRITES)
+    throw new Error(GROUP_WORDS.priorityTooMany);
+  const [changeSealed, ...versionsSealed] = await Promise.all([
+    sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
+    ...writes.map(({ stretch }) => sealJson(stretch.payload, encryption)),
+  ]);
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.effectiveFrom,
+    itemIds: Array.from(
+      new Set([input.groupId, ...writes.map(({ itemId }) => itemId)]),
+    ),
+    sealed: changeSealed,
+  };
+  const batch = writeBatch(db);
+  writes.forEach(({ itemId, kind, stretch }, index) => {
+    const version: PlanVersionDoc = {
+      id: generateUuid(),
+      itemId,
+      kind,
+      createdAt: now,
+      effectiveFrom: stretch.effectiveFrom,
+      effectiveUntil: stretch.effectiveUntil,
       changeId,
       sealed: versionsSealed[index],
     };

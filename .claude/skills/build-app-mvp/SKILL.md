@@ -86,7 +86,7 @@ For each MVP issue, in order:
    - Readers and actions handle legacy documents.
    - Update the seed (`scripts/seeds/<id>.ts`, its document count, `SEEDING.md`) when there's new state worth seeding.
 3. **Issue 1 only:**
-   - **Register the app:** `APP_REGISTRY`, route, logo and banner placeholders, the home-page tile, and the root README's "Current apps" line.
+   - **Register the app:** `APP_REGISTRY`, route, logo and banner (below), its `cloudflare-worker.js` entry, the home-page tile, and the root README's "Current apps" line.
    - **Wire the rest from the New app checklist** (`docs/conventions/new-app.md`): the `useTrackAppUsage` hook in the app's top-level page and its `findFirstActivityAt` finder in `functions/`, the store slice, rules, seed and docs. A finished MVP has every item on that list.
    - **Design the logo icon as SVG**, in two versions, saved as temporary files (scratchpad, not committed):
      - `<id>-icon.svg`: light ticket/glyph on a transparent background, for dark backgrounds.
@@ -99,7 +99,8 @@ For each MVP issue, in order:
      - Make cut-outs real holes via a `<mask>` so the icon works on any background.
      - Use no text in the icon.
      - Give the two files distinct mask ids.
-   - **Use it** as the placeholder logo in the app, and include both SVG sources inline in the polish PR's overview comment. The user builds the final logo and banner assets from them.
+   - **Use it** as the app's logo: commit the light version on a black 1024×1024 square as `public/logos/by-app/logo-<id>.svg` (the other apps' logos are the reference), then run `npm run make:banner -- <id>` for the link banner in the app's colours, and look at it. Include both SVG sources inline in the polish PR's overview comment; the owner may replace the logo and banner later, and `check:apps` fails until both exist.
+   - **Give every route the app adds a worker `pages` entry** (`cloudflare-worker.js`) with generic preview text, in the PR that adds the route.
 4. **Label the PR `minor`** (never edit `SITE_VERSION`; the merge workflow numbers it). Tick this PR's line in PRODUCT.md's Build Plan and the README's Status, and write the PR's status comment (`orchestrate` "The PR status comment").
 5. **Validate** (see "Validation" below) before pushing.
 6. **Commit, push, and open the PR, non-draft:**

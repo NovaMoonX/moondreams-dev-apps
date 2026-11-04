@@ -109,11 +109,15 @@ function FloatingAction({
               {icon}
               <span
                 className={join(
-                  'overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-200 motion-reduce:transition-none',
-                  isCompact ? 'max-w-0 opacity-0' : 'ml-2 max-w-64 opacity-100',
+                  'grid transition-[grid-template-columns,opacity] [transition-duration:300ms,120ms] ease-[cubic-bezier(0.4,0,0.2,1)] motion-reduce:transition-none',
+                  isCompact
+                    ? 'grid-cols-[0fr] opacity-0'
+                    : 'grid-cols-[1fr] opacity-100',
                 )}
               >
-                {label}
+                <span className='min-w-0 overflow-hidden whitespace-nowrap'>
+                  <span className='block pl-2'>{label}</span>
+                </span>
               </span>
             </Button>
           </div>
