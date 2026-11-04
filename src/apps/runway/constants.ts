@@ -2268,7 +2268,7 @@ export const COVERAGE_WORDS = {
   shortLead: 'Your plan comes up short',
   stillShort: (on: string) => `Your plan still comes up short on ${on}.`,
   stillShortOf: (name: string, on: string) =>
-    `Your plan still comes up short for ${name} on ${on}.`,
+    `Your plan already comes up short for ${name} on ${on}, before this change.`,
 };
 
 export const ITEM_SHEET_R2_WORDS = {
