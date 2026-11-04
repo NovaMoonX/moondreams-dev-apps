@@ -40,6 +40,7 @@ interface RepeatFieldsProps {
 function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
   return (
     <div className='space-y-3'>
+      <p className='text-sm font-medium'>{FORM_FLOW_WORDS.repeatsTitle}</p>
       <PillGroup
         label={FORM_FLOW_WORDS.repeats}
         options={frequencyOptions}
@@ -79,6 +80,7 @@ function RepeatFields({ draft, startDate, onChange }: RepeatFieldsProps) {
       )}
       {draft.frequency !== 'once' && (
         <>
+          <p className='text-sm font-medium'>{FORM_FLOW_WORDS.endsTitle}</p>
           <PillGroup
             label={FORM_FLOW_WORDS.ends}
             options={endingOptions}
