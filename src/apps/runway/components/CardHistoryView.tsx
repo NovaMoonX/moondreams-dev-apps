@@ -14,7 +14,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -106,7 +106,7 @@ function CardHistoryView({
       : oldest.owedAfterCents - getEffect(oldest);
   const startRow = owedAtStart > 0 && owedAtStart === owedBeforeOldest && (
     <section className='space-y-2'>
-      <SectionDivider label={formatDateShortUTC(startDate)} />
+      <SectionDivider label={formatDateOrdinalUTC(startDate)} />
       <ul className='border-border bg-card rounded-2xl border'>
         <li className='flex items-start justify-between gap-3 p-3 text-sm'>
           <span className='min-w-0 font-medium'>{CARD_WORDS.historyStart}</span>
@@ -123,7 +123,7 @@ function CardHistoryView({
   const takeBack = async (payment: Payment) => {
     if (!user || takingBack !== null) return;
     const amount = formatCents(payment.cents);
-    const day = formatDateShortUTC(payment.on);
+    const day = formatDateOrdinalUTC(payment.on);
     const isConfirmed = await confirm({
       title: CARD_WORDS.takeBackTitle,
       message: mask(CARD_WORDS.takeBackText(amount, day)),
@@ -155,7 +155,7 @@ function CardHistoryView({
 
   const renderRow = (entry: Entry) => {
     const owes = CARD_WORDS.historyOwes(formatCents(entry.owedAfterCents));
-    const day = formatDateShortUTC(entry.on);
+    const day = formatDateOrdinalUTC(entry.on);
     if (entry.kind === 'purchase') {
       const first = entry.purchase.lines[0]?.envelopeId ?? null;
       const title = getPurchaseTitle(entry.purchase, nameOf, isHidden);
@@ -253,7 +253,7 @@ function CardHistoryView({
             <SheetHead
               label={PAID_WORDS[openPayment.covers]}
               figure={formatCents(openPayment.cents)}
-              fact={formatDateShortUTC(openPayment.on)}
+              fact={formatDateOrdinalUTC(openPayment.on)}
             />
             <ActionGroup>
               <ActionRow

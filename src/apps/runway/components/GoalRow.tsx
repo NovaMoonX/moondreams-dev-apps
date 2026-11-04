@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
@@ -48,11 +48,11 @@ const describePaceShort = (
     return HOW_OFTEN_WORDS.notBeingAdded;
   if (goal.funding.amount.kind === 'rest') return 'Takes what is left';
   const reaches = pace.reachedOn
-    ? `reaches it ${formatDateShortUTC(pace.reachedOn.on)}`
+    ? `reaches it ${formatDateOrdinalUTC(pace.reachedOn.on)}`
     : 'the days ahead do not reach it';
   if (goal.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
-    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateShortUTC(goal.targetDate)}`;
+    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(goal.targetDate)}`;
   }
   if (goal.targetDate === null || pace.state === null || savedCents === 0) {
     return reaches.charAt(0).toUpperCase() + reaches.slice(1);

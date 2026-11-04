@@ -6,7 +6,7 @@ import Subview from '@/components/Subview';
 import { useBackStep } from '@/hooks/useBackHistory';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -32,8 +32,8 @@ const describeGroup = (purchases: readonly OpenPurchase[]) => {
   return [
     purchases.length === 1 ? '1 purchase' : `${purchases.length} purchases`,
     first === last
-      ? formatDateShortUTC(first)
-      : `${formatDateShortUTC(first)} to ${formatDateShortUTC(last)}`,
+      ? formatDateOrdinalUTC(first)
+      : `${formatDateOrdinalUTC(first)} to ${formatDateOrdinalUTC(last)}`,
   ].join(' · ');
 };
 

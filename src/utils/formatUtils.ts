@@ -15,7 +15,11 @@ export function formatList(names: string[]) {
 }
 
 // Intl formatters are slow to build and cheap to reuse, and these run for every row of a long timeline.
-const timeFormatter = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit', hour12: true });
+const timeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+});
 const clockTimes = new Map<string, string>();
 
 export function formatTime(timestamp: number) {
@@ -97,13 +101,59 @@ export function formatDateShortUTC(timestamp: number) {
   return result;
 }
 
-/** A date-only day as "today", "tomorrow" or "yesterday" when it is one, otherwise "Sep 24"; `today` is a date-only value too. */
-export function formatRelativeDayUTC(timestamp: number, today: number) {
+/** A date-only day as "today", "tomorrow" or "yesterday" when it is one, otherwise `formatDay` ("Sep 24" by default); `today` is a date-only value too. */
+export function formatRelativeDayUTC(
+  timestamp: number,
+  today: number,
+  formatDay: (timestamp: number) => string = formatDateShortUTC,
+) {
   const days = Math.round((timestamp - today) / 86_400_000);
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   if (days === -1) return 'yesterday';
-  const result = formatDateShortUTC(timestamp);
+  const result = formatDay(timestamp);
+  return result;
+}
+
+/** A day of the month with its English suffix: 1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st, 22nd, 23rd, 31st. */
+export function toDayOrdinal(day: number) {
+  const lastTwo = day % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${day}th`;
+  const suffixes: Record<number, string> = { 1: 'st', 2: 'nd', 3: 'rd' };
+  const result = `${day}${suffixes[day % 10] ?? 'th'}`;
+  return result;
+}
+
+const SHORT_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+/** "Feb 1st" (with the year when it isn't this one, "Feb 1st, 2027"): a date-only value read from its UTC fields, joined by no-break spaces so it never wraps mid-date. */
+export function formatDateOrdinalUTC(timestamp: number) {
+  const date = new Date(timestamp);
+  const day = `${SHORT_MONTHS[date.getUTCMonth()]}\u00a0${toDayOrdinal(date.getUTCDate())}`;
+  const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getUTCFullYear()}`;
+  return result;
+}
+
+/** "Feb 1st" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
+export function formatDateOrdinal(timestamp: number) {
+  const date = new Date(timestamp);
+  const day = `${SHORT_MONTHS[date.getMonth()]}\u00a0${toDayOrdinal(date.getDate())}`;
+  const isCurrentYear = date.getFullYear() === new Date().getFullYear();
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getFullYear()}`;
   return result;
 }
 
@@ -163,7 +213,7 @@ export function formatDateTime(timestamp: number) {
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
-    hour12: true
+    hour12: true,
   };
 
   return date.toLocaleString(undefined, options);

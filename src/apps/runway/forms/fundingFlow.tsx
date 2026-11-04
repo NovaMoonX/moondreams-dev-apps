@@ -4,7 +4,7 @@ import AmountField, { type AmountMode } from '@/components/AmountField';
 import HelpTip from '@/components/HelpTip';
 import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
 import type { QuestionStep } from '@/hooks/useQuestionFlow';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { parseMoneyToCents, parsePercentToBps } from '@/utils/moneyUtils';
 import {
   CALENDAR_PERIOD_LABELS,
@@ -366,7 +366,7 @@ export function buildFundingSteps({
               label='Which pays'
               options={comingDays.map((day) => ({
                 value: day.dayKey,
-                label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
+                label: `${formatDateOrdinalUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
               }))}
               values={data.dayKeys}
               onChange={(values) =>

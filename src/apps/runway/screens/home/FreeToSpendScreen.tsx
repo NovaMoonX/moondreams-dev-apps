@@ -13,7 +13,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
@@ -194,7 +194,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             </p>
             {startDate !== null && (
               <p className='text-muted-foreground text-sm'>
-                Counted from {formatDateUTC(startDate)}
+                Counted from {formatDateOrdinalUTC(startDate)}
               </p>
             )}
           </div>

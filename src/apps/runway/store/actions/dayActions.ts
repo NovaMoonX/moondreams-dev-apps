@@ -3,7 +3,7 @@ import { doc, runTransaction, setDoc } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   CONFIRM_WORDS,
   CORRECT_WORDS,
@@ -173,7 +173,7 @@ export class BillShareChanged extends Error {
 }
 
 const describePinDays = (pins: readonly BillPin[]) =>
-  pins.map((pin) => formatDateUTC(pin.expectedOn)).join(', ');
+  pins.map((pin) => formatDateOrdinalUTC(pin.expectedOn)).join(', ');
 
 const toDayRef = (pin: BillPin): DayRef => ({
   payLineId: pin.payLineId,

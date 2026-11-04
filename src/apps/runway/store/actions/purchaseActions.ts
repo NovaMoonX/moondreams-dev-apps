@@ -3,7 +3,7 @@ import { doc, runTransaction, type Transaction } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { MAX_PURCHASE_LINES, SPEND_WORDS } from '@apps/runway/constants';
 import {
   getCountedFrom,
@@ -171,7 +171,7 @@ async function checkDayAndEnvelopes(
   const periods = planData?.trackingPeriods ?? [];
   if (!isInTrackingPeriods(periods, date)) {
     throw new Error(
-      `Tracking was not on for ${formatDateUTC(date)}. Pick a day you were tracking.`,
+      `Tracking was not on for ${formatDateOrdinalUTC(date)}. Pick a day you were tracking.`,
     );
   }
   const countedFrom = getCountedFrom(periods);
@@ -180,7 +180,7 @@ async function checkDayAndEnvelopes(
     throw new Error(
       countedFrom === null
         ? 'Tracking is off, probably from another device. Reopen Runway to see where it stands.'
-        : `Tracking started again on ${formatDateUTC(countedFrom)}, and an earlier day is not counted. Pick that day or a later one.`,
+        : `Tracking started again on ${formatDateOrdinalUTC(countedFrom)}, and an earlier day is not counted. Pick that day or a later one.`,
     );
   }
   const isGone = envelopes.some((snapshot) => {

@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   centsToInputValue,
   formatCents,
@@ -180,7 +180,7 @@ async function undoPending(pending: Pending, addToast: AddToast, store: Store) {
     const wasCleared = pending.cleared.some((pin) => pin.dayKey === thisKey);
     const expected = wasCleared ? undefined : wrote;
     if (before === expected) return;
-    const date = formatDateUTC(day.expectedOn);
+    const date = formatDateOrdinalUTC(day.expectedOn);
     await saveBillShare(
       uid,
       encryption,
@@ -419,7 +419,7 @@ function BillShareView({
             : null;
   const billRows = changedView
     ? changedView.rows.map((row) => {
-        const date = formatDateShortUTC(row.on);
+        const date = formatDateOrdinalUTC(row.on);
         return {
           key: row.dayKey,
           name:
@@ -433,7 +433,7 @@ function BillShareView({
   const otherRows = changedView
     ? changedView.others.map((entry) => ({
         key: `${entry.itemId}:${entry.dayKey}`,
-        name: `${entry.name}, ${formatDateShortUTC(entry.on)}`,
+        name: `${entry.name}, ${formatDateOrdinalUTC(entry.on)}`,
         text: `${formatCents(entry.beforeCents)} → ${formatCents(entry.afterCents)}`,
       }))
     : [];
@@ -539,7 +539,7 @@ function BillShareView({
         summary: PAY_SHARE_WORDS.summary(
           bill.name,
           formatCents(share.cents),
-          formatDateUTC(day.on),
+          formatDateOrdinalUTC(day.on),
         ),
         note: null,
       });
@@ -600,7 +600,7 @@ function BillShareView({
             getCardNamer(allCards),
             undefined,
             (picked) => describePayChoice(picked, plan, true),
-          )}, from ${formatDateUTC(today)}.`,
+          )}, from ${formatDateOrdinalUTC(today)}.`,
         });
       };
       const wrote = await writeRule().catch((writeError: unknown) => {
@@ -707,7 +707,7 @@ function BillShareView({
   };
   if (saved) {
     const { rule } = saved;
-    const dayLabel = formatDateShortUTC(day?.on ?? today);
+    const dayLabel = formatDateOrdinalUTC(day?.on ?? today);
     return (
       <div className='flex flex-col gap-3'>
         <BackLink onBack={backToSheet} />
@@ -839,7 +839,7 @@ function BillShareView({
         PAY_SHARE_WORDS.short(
           bill.name,
           formatCents(changedView?.share.shortCents ?? 0),
-          formatDateShortUTC(changedView?.share.dueOn ?? today),
+          formatDateOrdinalUTC(changedView?.share.dueOn ?? today),
         ),
       )
     : null;
@@ -881,7 +881,7 @@ function BillShareView({
             <InlineNotice tone='info'>
               <MaskedText>
                 {PAY_SHARE_WORDS.carriesRest(
-                  formatDateShortUTC(restCarrier.on),
+                  formatDateOrdinalUTC(restCarrier.on),
                   bill.name,
                   formatCents(restCarrier.afterCents),
                   changedView?.share.cents === 0,

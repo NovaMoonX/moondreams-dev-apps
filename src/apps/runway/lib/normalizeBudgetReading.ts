@@ -1,4 +1,4 @@
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { createOptionMatcher, toDisplayCase } from '@/utils/optionMatchUtils';
 import {
   BILL_REPEAT_KINDS,
@@ -737,7 +737,7 @@ export function normalizeBudgetReading(
             file: goal.sourceFile,
             text: BUDGET_WORDS.dateTooFar(
               goal.name,
-              formatDateUTC(goal.targetDate),
+              formatDateOrdinalUTC(goal.targetDate),
               LOOKAHEAD_MONTHS,
             ),
           },

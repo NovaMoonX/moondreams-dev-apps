@@ -40,7 +40,7 @@ import { store, useAppSelector } from '@/store';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -359,8 +359,8 @@ function ItemSheet({
       value: String(on),
       label:
         itemKind === 'bill'
-          ? `After the ${formatDateShortUTC(on)} payment`
-          : `After the ${formatDateShortUTC(on)} payday`,
+          ? `After the ${formatDateOrdinalUTC(on)} payment`
+          : `After the ${formatDateOrdinalUTC(on)} payday`,
     })),
     ...(upcoming.includes(today)
       ? []
@@ -439,13 +439,13 @@ function ItemSheet({
     next &&
     difference !== '' &&
     (endedAt === null || next.effectiveFrom <= endedAt)
-      ? `${CHANGE_WORDS.scheduled} ${formatDateShortUTC(next.effectiveFrom)} · ${difference.replace(/ to /g, ' → ')}`
+      ? `${CHANGE_WORDS.scheduled} ${formatDateOrdinalUTC(next.effectiveFrom)} · ${difference.replace(/ to /g, ' → ')}`
       : null,
     stretchEnd !== null
-      ? `${LIFECYCLE_WORDS.until} ${formatDateShortUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}`
+      ? `${LIFECYCLE_WORDS.until} ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}`
       : null,
     endedAt !== null
-      ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateShortUTC(endedAt)}`
+      ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(endedAt)}`
       : null,
   ].filter((line): line is string => line !== null);
 
@@ -521,7 +521,7 @@ function ItemSheet({
           (id) =>
             groupOptions.find((option) => option.id === id)?.name ??
             pickedGroup.name,
-        )}, from ${formatDateUTC(today)}.`,
+        )}, from ${formatDateOrdinalUTC(today)}.`,
         note: null,
         effectiveFrom: today,
         newGroup: pickedGroup.newGroup,
@@ -610,7 +610,7 @@ function ItemSheet({
         const written = await endItem(user.uid, encryption, {
           itemId,
           endedOn: endOn,
-          summary: `${payload.name}: ended after ${formatDateUTC(endOn)}.`,
+          summary: `${payload.name}: ended after ${formatDateOrdinalUTC(endOn)}.`,
           note: why,
           heldChoice: isAskingHeld ? heldChoice : null,
         });
@@ -925,7 +925,7 @@ function ItemSheet({
             label={HELD_WORDS.release}
             subtitle={
               releaseOn > today
-                ? HELD_WORDS.releaseOn(formatDateShortUTC(releaseOn))
+                ? HELD_WORDS.releaseOn(formatDateOrdinalUTC(releaseOn))
                 : HELD_WORDS.releaseNow
             }
             isDisabled={isReleasing}
@@ -1169,7 +1169,7 @@ function ItemSheet({
             onChange={setHeldChoice}
             freeBody={
               view === 'end' && isEndValid
-                ? HELD_WORDS.freeEnd(formatDateShortUTC(endOn + DAY_MS))
+                ? HELD_WORDS.freeEnd(formatDateOrdinalUTC(endOn + DAY_MS))
                 : HELD_WORDS.freeArchive
             }
             keepBody={HELD_WORDS.keepBody}

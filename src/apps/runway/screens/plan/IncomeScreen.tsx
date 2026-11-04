@@ -8,7 +8,7 @@ import FloatingAction from '@/components/FloatingAction';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import PlanTotal from '@apps/runway/components/PlanTotal';
@@ -53,14 +53,14 @@ const describePattern = (schedule: Schedule) => {
 
 const describeTiming = ({ schedule }: PayLineSealed) =>
   schedule.kind === 'once' && schedule.anchor !== null
-    ? `Arrives ${formatDateShortUTC(schedule.anchor)}`
+    ? `Arrives ${formatDateOrdinalUTC(schedule.anchor)}`
     : describePattern(schedule);
 
 const describeEnding = ({ ending }: PayLineSealed) => {
   if (ending.afterCount !== null)
     return `Ends after ${ending.afterCount} payments`;
   if (ending.onDate !== null)
-    return `Ends ${formatDateShortUTC(ending.onDate)}`;
+    return `Ends ${formatDateOrdinalUTC(ending.onDate)}`;
   return null;
 };
 

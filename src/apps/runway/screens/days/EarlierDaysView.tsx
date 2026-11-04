@@ -3,7 +3,7 @@ import { useState } from 'react';
 import SearchInput from '@/components/SearchInput';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { DAYS_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import { getMonthStart } from '@apps/runway/engine/closings';
@@ -47,7 +47,7 @@ function EarlierDaysView({ month }: EarlierDaysViewProps) {
   const matches = days.filter(
     (day) =>
       needle === '' ||
-      `${day.sourceName ?? ''} ${day.payLineName} ${formatDateUTC(day.on)}`
+      `${day.sourceName ?? ''} ${day.payLineName} ${formatDateOrdinalUTC(day.on)}`
         .toLowerCase()
         .includes(needle),
   );

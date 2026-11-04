@@ -1,7 +1,7 @@
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
@@ -120,8 +120,8 @@ function IncomeDayCard({
       detail={warningLine ? undefined : detail}
       warningLine={warningLine}
       figure={amount}
-      hiddenAriaLabel={`${formatDateUTC(day.on)}, ${title}. Amount hidden.${onOpen ? ' Open this day' : ''}`}
-      ariaLabel={`${formatDateUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}.${onOpen ? ' Open this day' : ''}`}
+      hiddenAriaLabel={`${formatDateOrdinalUTC(day.on)}, ${title}. Amount hidden.${onOpen ? ' Open this day' : ''}`}
+      ariaLabel={`${formatDateOrdinalUTC(day.on)}, ${[title, detail].join(', ')}, ${formatCents(cents)}${isRanged ? ' planned' : ''}.${onOpen ? ' Open this day' : ''}`}
       isPrivate={isPrivate}
       onOpen={onOpen}
     />

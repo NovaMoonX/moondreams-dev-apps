@@ -25,7 +25,7 @@ import {
 } from '@apps/runway/utils/receiptText';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -195,7 +195,7 @@ function PurchaseScreen({
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
   const facts = getPurchaseFacts(purchase, envelopes, isHidden);
   const fact = [
-    formatDateShortUTC(purchase.date),
+    formatDateOrdinalUTC(purchase.date),
     ...(facts.length > 0
       ? facts
       : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
@@ -228,7 +228,7 @@ function PurchaseScreen({
       title: SPEND_WORDS.removeTitle,
       message: mask(
         [
-          `${title}, ${amount} on ${formatDateUTC(purchase.date)}.`,
+          `${title}, ${amount} on ${formatDateOrdinalUTC(purchase.date)}.`,
           getRemovalEffect(names.length, where, amount, refund),
           refunds.length > 0
             ? `Its ${refunds.length === 1 ? 'refund stays' : `${refunds.length} refunds stay`}, and still return${refunds.length === 1 ? 's' : ''} money.`

@@ -11,7 +11,7 @@ import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   BILL_WORDS,
   GROUP_WORDS,
@@ -100,7 +100,7 @@ function BillsScreen() {
   const isNarrowed = isUndatedBillsOnly && undated.length > 0;
   const isShown = ({ payload, payment }: (typeof listed)[number]) =>
     (!isNarrowed || isUndatedBill(payload)) &&
-    `${payload.name} ${payment ? formatDateShortUTC(payment.dueOn) : ''}`
+    `${payload.name} ${payment ? formatDateOrdinalUTC(payment.dueOn) : ''}`
       .toLowerCase()
       .includes(needle);
   const { dial } = usePriorityDial();

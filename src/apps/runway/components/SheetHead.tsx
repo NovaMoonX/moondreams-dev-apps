@@ -79,7 +79,7 @@ function SheetHead({
       )}
       {fact && (
         <p className='text-muted-foreground text-sm break-words'>
-          <span className='line-clamp-2'>
+          <span className='line-clamp-3'>
             <MaskedText>{fact}</MaskedText>
           </span>
         </p>

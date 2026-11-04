@@ -4,7 +4,7 @@ import {
   PACE_WORDS,
 } from '@apps/runway/constants';
 import type { Pace } from '@apps/runway/engine/pace';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type { GoalSealed } from '@apps/runway/types';
 
@@ -18,7 +18,7 @@ export interface PaceWords {
 /** A goal's pace in one line: what it takes to be there by its date and what the plan does about it. */
 export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
   const reached = pace.reachedOn
-    ? `The plan reaches it on ${formatDateUTC(pace.reachedOn.on)}.`
+    ? `The plan reaches it on ${formatDateOrdinalUTC(pace.reachedOn.on)}.`
     : 'The income days ahead do not reach it.';
   if (pace.isComplete) {
     return { stateLabel: PACE_WORDS.completed, line: '' };
@@ -35,7 +35,7 @@ export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
   if (goal.targetDate === null || pace.state === null) {
     return { stateLabel: null, line: reached };
   }
-  const by = formatDateUTC(goal.targetDate);
+  const by = formatDateOrdinalUTC(goal.targetDate);
   if (pace.neededPerDayCents === null) {
     return {
       stateLabel: PACE_STATE_LABELS.behind,

@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -208,7 +208,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
       sourceId: day.sourceId,
       expectedOn: day.on,
     };
-    const date = formatDateUTC(day.on);
+    const date = formatDateOrdinalUTC(day.on);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       await saveBillShare(user.uid, encryption, dayRef, line.itemId, null, {

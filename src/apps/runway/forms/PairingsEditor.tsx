@@ -29,7 +29,7 @@ import {
   PAIRING_STOP_WORDS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import InlineNotice from '@/components/InlineNotice';
 import PairingRowSheet, {
   type PairingRow,
@@ -220,7 +220,7 @@ function PairingsEditor({
     if (header?.archivedAt != null && header.archivedAt <= today)
       return PAIRING_STOP_WORDS.archived;
     if (header?.endedAt != null && header.endedAt < today)
-      return PAIRING_STOP_WORDS.ended(formatDateUTC(header.endedAt));
+      return PAIRING_STOP_WORDS.ended(formatDateOrdinalUTC(header.endedAt));
     const goal = goals.find((entry) => entry.item.id === id);
     if (goal && (goal.version.payload.state ?? 'active') === 'paused')
       return PAIRING_STOP_WORDS.paused;

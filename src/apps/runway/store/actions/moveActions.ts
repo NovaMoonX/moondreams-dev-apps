@@ -9,7 +9,7 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MAX_DONE_LINE_IDS, PAID_HISTORY_WORDS } from '@apps/runway/constants';
 import { getPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
@@ -58,7 +58,7 @@ async function getPaymentChange(
   billName: string,
   isUndo: boolean,
 ) {
-  const due = formatDateShortUTC(paid.dueOn);
+  const due = formatDateOrdinalUTC(paid.dueOn);
   const undoText = PAID_HISTORY_WORDS.undoText(billName, due);
   const id = generateUuid();
   return {
@@ -462,7 +462,7 @@ export async function recordStart(
   const [changeSealed, ...sealedMoves] = await Promise.all([
     sealJson(
       {
-        summary: `Started from ${formatDateUTC(startDate)}.`,
+        summary: `Started from ${formatDateOrdinalUTC(startDate)}.`,
       } satisfies ChangeSealed,
       encryption,
     ),

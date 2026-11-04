@@ -4,7 +4,7 @@ import ActionRow from '@/components/ActionRow';
 import TrendLineChart from '@/components/TrendLineChart';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getNiceMoneyAxis } from '@/utils/chartUtils';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { GOAL_CHART_WORDS } from '@apps/runway/constants';
 import {
@@ -56,7 +56,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
       <div
         role='img'
         className='-mr-3'
-        aria-label={`${goal.name}: ${GOAL_CHART_WORDS.key} Target ${formatCents(goal.targetCents)}${goal.targetDate === null ? '' : ` by ${formatDateShortUTC(goal.targetDate)}`}.`}
+        aria-label={`${goal.name}: ${GOAL_CHART_WORDS.key} Target ${formatCents(goal.targetCents)}${goal.targetDate === null ? '' : ` by ${formatDateOrdinalUTC(goal.targetDate)}`}.`}
       >
         <TrendLineChart
           isSoft
@@ -70,7 +70,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
           readoutLabels={{ main: 'Held', secondary: 'Plan' }}
           curve='linear'
           hasDots={false}
-          formatX={formatDateShortUTC}
+          formatX={formatDateOrdinalUTC}
           formatY={formatCentsShort}
           formatValue={formatCents}
           referenceY={{ value: goal.targetCents, label: 'Target' }}
@@ -84,7 +84,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
                   {
                     x: series.reachedOn,
                     y: goal.targetCents,
-                    label: `${GOAL_CHART_WORDS.reaches} ${formatDateShortUTC(series.reachedOn)}`,
+                    label: `${GOAL_CHART_WORDS.reaches} ${formatDateOrdinalUTC(series.reachedOn)}`,
                     side: 'left',
                   },
                 ]
