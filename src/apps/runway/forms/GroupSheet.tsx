@@ -207,6 +207,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const isApplyingPriority = useRef(false);
   const priorityLinesRef = useRef<HTMLDivElement>(null);
+  const [isUndoArmed, setIsUndoArmed] = useState(true);
   const [reservedLinesHeight, setReservedLinesHeight] = useState(0);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
@@ -484,6 +485,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       (_, index) => results[index].status === 'fulfilled',
     );
     if (saved.length > 0) {
+      setIsUndoArmed(false);
+      setTimeout(() => setIsUndoArmed(true), 700);
       setPriorityRecord({
         note: GROUP_WORDS.priorityDone(saved.length, label),
         undo: saved,
@@ -494,6 +497,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
 
   const setStartingPriority = async (choice: StartingChoice) => {
     if (isApplyingPriority.current) return;
+    if (
+      priorityRecord?.undo &&
+      choice === (getLivePayload().startingPriority ?? 'none')
+    )
+      return;
     isApplyingPriority.current = true;
     setReservedLinesHeight(priorityLinesRef.current?.offsetHeight ?? 0);
     setPriorityError(null);
@@ -1178,16 +1186,18 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                     {priorityError}
                   </p>
                 )}
-                {isApplyingNow && (
-                  <p
-                    className='text-muted-foreground flex min-h-7 items-center text-sm'
-                    style={{ minHeight: reservedLinesHeight || undefined }}
-                  >
-                    {pickedPriority === 'none'
-                      ? null
-                      : GROUP_WORDS.priorityApplying}
-                  </p>
-                )}
+                {isApplyingNow &&
+                  (pickedPriority !== 'none' || reservedLinesHeight > 0) && (
+                    <p
+                      role='status'
+                      className='text-muted-foreground flex min-h-7 items-center text-sm'
+                      style={{ minHeight: Math.max(reservedLinesHeight, 28) }}
+                    >
+                      {pickedPriority === 'none'
+                        ? null
+                        : GROUP_WORDS.priorityApplying}
+                    </p>
+                  )}
                 {priorityRecord && (
                   <div className='flex min-h-7 items-center gap-2'>
                     <p className='text-muted-foreground text-sm'>
@@ -1203,6 +1213,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         disabled={isUndoingPriority}
                         className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
                         onClick={() =>
+                          isUndoArmed &&
                           void undoPriorities(
                             priorityRecord.undo ?? [],
                             priorityRecord.restorePick,
