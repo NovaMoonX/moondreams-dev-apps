@@ -108,19 +108,33 @@ function EnvelopeTile({
   const isLeftOut = atLevel === null && dial !== 'want';
   const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
+  const isPlanRow =
+    isPlan || isPart || (look === 'row' && figureKind === 'monthly');
   const monthly =
-    figureKind === 'monthly' && (isPlan || isPart)
+    figureKind === 'monthly' && isPlanRow
       ? describeEnvelopeMonthly(counted, getIncomeDays(envelope.funding))
       : null;
-  const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
-  const rowDetail =
-    isPlan || isPart
-      ? eachTime
-        ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
-        : funding
-      : isHidden
-        ? funding
-        : `${capitalize(word)} · ${funding}`;
+  const rowFigure = isPlanRow ? (monthly?.figure ?? eachTime) : value;
+  const planDetail = eachTime
+    ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
+    : funding;
+  const heldDetail = `${word === 'over' ? formatCentsShort(-cents) : formatCentsShort(cents)} ${word}`;
+  const getRowDetail = () => {
+    if (isPlan || isPart) return planDetail;
+    if (isPlanRow) {
+      if (isHidden) return planDetail;
+      if (leftOut.length === 0) return `${heldDetail} · ${planDetail}`;
+      const trimmed = leftOut
+        .map(
+          (extra) =>
+            `+${formatCentsShort(extra.cents)} ${PRIORITY_LABELS[extra.tier].toLowerCase()} ${PRIORITY_DIAL_WORDS.notCountedShort}`,
+        )
+        .join(', ');
+      return `${heldDetail} · ${trimmed}`;
+    }
+    return isHidden ? funding : `${capitalize(word)} · ${funding}`;
+  };
+  const rowDetail = getRowDetail();
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 
@@ -173,7 +187,7 @@ function EnvelopeTile({
           detail={rowDetail}
           figure={rowFigure}
           figureWord={monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
+          ariaLabel={`${envelope.name}, ${isPlanRow ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}

@@ -278,6 +278,7 @@ export const PRIORITY_DIAL_WORDS = {
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
   notCounted: 'Not in this total',
+  notCountedShort: 'not counted',
   sheetSuffix: { must: 'Musts only', should: 'without Wants' },
   /** After a goal's finish date counted at the dial: "reaches it May 2027 on Musts". */
   paceSuffix: { must: 'on Musts', should: 'without Wants' },
