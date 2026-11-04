@@ -1,6 +1,7 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 import type {
+  ACCOUNT_KINDS,
   CALENDAR_PERIODS,
   CHANGE_KINDS,
   DAY_RECORD_KINDS,
@@ -29,6 +30,8 @@ export type Stance = (typeof STANCES)[number];
 export type Level = (typeof LEVELS)[number];
 
 export type MoreEntry = (typeof MORE_ENTRIES)[number];
+
+export type AccountKind = (typeof ACCOUNT_KINDS)[number];
 
 /** Ciphertext of a JSON object, the shape `@lib/security` produces. */
 export type Sealed = EncryptedFieldPayload;
@@ -336,6 +339,8 @@ export interface BillSealed {
   groupId: string | null;
   /** The card it is usually charged to, which marking it paid starts from; null (or missing on an older version) when it is paid in cash. */
   paidByCardId?: string | null;
+  /** The account it is paid from; null (or missing) means the plan's one pull account when there is exactly one. */
+  accountId?: string | null;
 }
 
 /** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
@@ -391,6 +396,48 @@ export interface CardSealed {
   name: string | null;
   /** The day of the month a payment is due (1 to 31, the month's last day when shorter); null when none was given. */
   dueDay: number | null;
+  /** The card's last four digits, which tell two cards at one bank apart; missing on a card saved before it existed, read as null. */
+  lastFour?: string | null;
+  /** The account that pays this card; null (or missing) means the plan's one pull account when there is exactly one. */
+  payFromAccountId?: string | null;
+}
+
+/** Where money is really held: a checking or savings account, a cash account, a brokerage. Archived when it is no longer used. */
+export interface AccountDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  /** Set by linking (planned); null for an account typed by hand. */
+  linkId: string | null;
+  sealed: Sealed;
+}
+
+export interface AccountSealed {
+  /** What the person calls it ("Checking A"). */
+  name: string;
+  /** The bank or service that holds it ("Capital One"). */
+  institution: string;
+  kind: AccountKind;
+  /** False for money that is not for spending (a brokerage or retirement account). */
+  countedTowardTotal: boolean;
+  /** Cards and bills pull from it. */
+  isPullAccount: boolean;
+  lastFour: string | null;
+  /** What it held when the person last said; null until they do. */
+  balanceCents: Cents | null;
+  /** The day that balance was given (date-only). */
+  balanceOn: DateOnly | null;
+  /** The goals and envelopes whose money sits in it; an id is held by one account at most. */
+  holds: string[];
+}
+
+export interface OpenAccount extends AccountSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  archivedAt: number | null;
+  linkId: string | null;
 }
 
 export interface OpenCard extends CardSealed {

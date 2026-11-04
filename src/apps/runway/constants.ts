@@ -60,7 +60,12 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
 
 /** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
+export const MORE_ENTRIES = [
+  'priorities',
+  'accounts',
+  'settings',
+  'changeLog',
+] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = [
@@ -74,10 +79,16 @@ export const RUNWAY_VIEWS = [
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
-  { priorities: 'Priorities', settings: 'Settings', changeLog: 'Change log' };
+  {
+    priorities: 'Priorities',
+    accounts: 'Accounts',
+    settings: 'Settings',
+    changeLog: 'Change log',
+  };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
   priorities: 'Which items get their money first when it runs short.',
+  accounts: 'Where your money is held, and what each account holds.',
   settings:
     'How the plan reads a range of pay or a bill, and whether you track spending.',
   changeLog: 'Every change to the plan, with the reason you gave.',
@@ -108,6 +119,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     cardChange: 'Card',
     moveChange: 'Move',
     paymentChange: 'Payment',
+    accountChange: 'Account',
   };
 
 export const RANGE_END_WORDS = {
@@ -200,6 +212,7 @@ export const CHANGE_KINDS = [
   'cardChange',
   'moveChange',
   'paymentChange',
+  'accountChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -2660,6 +2673,96 @@ export const CARD_ISSUERS = [
   'Wells Fargo',
   'Apple Card',
 ] as const;
+
+export const ACCOUNT_KINDS = [
+  'checking',
+  'savings',
+  'cashManagement',
+  'investment',
+  'other',
+] as const;
+
+export const ACCOUNT_KIND_LABELS: Record<(typeof ACCOUNT_KINDS)[number], string> =
+  {
+    checking: 'Checking',
+    savings: 'Savings',
+    cashManagement: 'Cash account',
+    investment: 'Investing',
+    other: 'Other',
+  };
+
+/** Kinds whose money is not for spending, so a new one starts left out of the total. */
+export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] = [
+  'investment',
+];
+
+export const ACCOUNT_WORDS = {
+  sectionTitle: 'Accounts',
+  add: 'Add an account',
+  emptyTitle:
+    'Add the accounts your money sits in, and say which goals and envelopes each one holds.',
+  pullsFrom: 'Cards and bills pull from it',
+  leftOut: 'Not counted in your total',
+  noBalance: 'No balance yet',
+  balanceOn: (day: string) => `As of ${day}`,
+  holdsTitle: 'What it holds',
+  holdsEmpty: 'Nothing is held here yet.',
+  notYetGivenAJob: 'Not yet given a job',
+  overAssigned: (amount: string) => `Over-assigned ${amount}`,
+  chooseHolds: 'Choose what it holds',
+  chooseHoldsSub: 'Goals and envelopes whose money sits here',
+  chooseHoldsHeldElsewhere: (account: string) => `Now in ${account}`,
+  updateBalance: 'Update the balance',
+  updateBalanceSub: 'What the account holds today',
+  balanceTitle: 'What does it hold today?',
+  balanceLabel: 'Balance',
+  change: 'Change the account',
+  changeSub: 'Name, bank, last 4 digits and more',
+  archive: 'Archive',
+  archiveSub: 'It leaves the list; what it held is no longer placed in it.',
+  archiveConfirmTitle: (name: string) => `Archive ${name}`,
+  archiveConfirmText: 'Archive',
+  archived: (name: string) => `${name} archived`,
+  archiveFailed: 'The account was not archived',
+  institutionTitle: 'Which bank holds it?',
+  institutionLabel: 'Bank',
+  institutionPlaceholder: 'Capital One',
+  nameTitle: 'What do you call it?',
+  nameLabel: 'Name',
+  namePlaceholder: 'Checking A',
+  kindTitle: 'What kind of account is it?',
+  kindLabel: 'Kind',
+  lastFourTitle: 'What are its last 4 digits?',
+  lastFourLabel: 'Last 4 digits',
+  lastFourHint: 'Tells two accounts at one bank apart.',
+  lastFourSkip: 'Skip',
+  lastFourNone: 'Not given',
+  needsFourDigits: 'Type 4 digits, or skip.',
+  pullTitle: 'Do your cards and bills pull from it?',
+  pullLabel: 'Cards and bills',
+  pullYes: 'Yes, they pull from it',
+  pullNo: 'No',
+  countedTitle: 'Count it in your total?',
+  countedLabel: 'In your total',
+  countedYes: 'Yes',
+  countedNo: 'No, it is not for spending',
+  needsName: 'Give it a name.',
+  needsInstitution: 'Say which bank holds it.',
+  saveAdd: 'Add account',
+  save: 'Save',
+  added: (name: string) => `${name} added`,
+  saved: (name: string) => `${name} saved`,
+  saveFailed: 'The account was not saved',
+  payFromTitle: 'Which account pays it?',
+  payFromLabel: 'Paid from',
+  payFromDefault: (name: string) => `${name} (where cards and bills pull from)`,
+  changeAdded: (name: string) => `Added the account ${name}`,
+  changeChanged: (name: string) => `Changed the account ${name}`,
+  changeArchived: (name: string) => `Archived the account ${name}`,
+  changeHolds: (name: string) => `Changed what ${name} holds`,
+  changeBalance: (name: string) => `Updated the balance of ${name}`,
+  withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
+} as const;
 
 export const CARD_WORDS = {
   sectionTitle: 'Cards',
