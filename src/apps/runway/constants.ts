@@ -2327,23 +2327,26 @@ export const GROUP_WORDS = {
   nameLabel: 'Name',
   startingPriority: 'Priority',
   startingPriorityHelp:
-    'Everything for this takes the priority you pick, and so does a new bill or envelope you add. None changes nothing now and a new one starts at Should. You can still change one on its own.',
+    'Every bill and envelope in this group takes the priority you pick, and so does a new one you add. None changes nothing now; a new one starts at Should.',
   startingPriorityFailed: 'The priority did not save. Nothing was changed.',
   priorityDone: (count: number, priority: string) =>
-    `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}`,
-  priorityToast: (count: number, priority: string) =>
-    `Set ${count === 1 ? '1 item' : `${count} items`} to ${priority}`,
+    `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}.`,
+  priorityAlready: (priority: string) =>
+    `Everything here is already ${priority}.`,
+  priorityStale: (names: string[], priority: string) =>
+    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority} yet.`,
+  priorityMakeAll: (priority: string) => `Make all ${priority}`,
   priorityPartial: (done: number, total: number, failed: string[]) =>
-    `Set ${done} of ${total} to the new priority. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not save; the others did.`,
+    `Set ${done} of ${total}. ${joinNames(failed)} did not save; the others did.`,
   priorityFailed:
     'The priority is saved for new ones, but the items already here did not change.',
-  prioritySkipped: (names: string[]) =>
-    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} ${names.length === 1 ? 'has' : 'have'} extra money at a level that doesn't fit, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
-  priorityUndone: 'Priorities put back. New ones still start with your pick.',
+  prioritySkipped: (names: string[], priority: string) =>
+    `${joinNames(names)} stay${names.length === 1 ? 's' : ''} as ${names.length === 1 ? 'it is' : 'they are'}: ${names.length === 1 ? 'it also holds' : 'they also hold'} money at ${priority} or above. Change ${names.length === 1 ? 'it' : 'them'} on ${names.length === 1 ? 'the envelope' : 'each envelope'}.`,
+  priorityUndone: 'Priorities put back.',
   priorityUndoPartial: (done: number, total: number, failed: string[]) =>
-    `Put back ${done} of ${total} priorities. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
+    `Put back ${done} of ${total}. ${joinNames(failed)} did not change back.`,
   priorityUndoStale: (names: string[]) =>
-    `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
+    `${joinNames(names)} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
   priorityUndoFailed: 'The priorities did not change back. Nothing was undone.',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,

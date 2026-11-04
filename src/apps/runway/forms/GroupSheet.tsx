@@ -197,12 +197,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     undo: DueWritten[] | null;
   } | null>(null);
   const store = useStore<RootState>();
-  const handledUndos = useRef(
-    new WeakSet<DueWritten[] | PriorityWritten[]>(),
-  );
+  const handledUndos = useRef(new WeakSet<DueWritten[] | PriorityWritten[]>());
   const [isUndoingDue, setIsUndoingDue] = useState(false);
   const [priorityRecord, setPriorityRecord] = useState<{
     note: string;
+    skipped: string | null;
     undo: PriorityWritten[] | null;
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
@@ -357,57 +356,68 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
       setPriorityRecord({
         note: description ? `${title} ${description}` : title,
+        skipped: null,
         undo: null,
       });
-      addToast({ title, description, type: isClean ? 'success' : 'error' });
     } catch (undoError) {
       const message = getErrorMessage(
         undoError,
         GROUP_WORDS.priorityUndoFailed,
       );
       handledUndos.current.delete(written);
-      setPriorityRecord({ note: message, undo: written });
-      addToast({ title: message, type: 'error' });
+      setPriorityRecord({ note: message, skipped: null, undo: written });
     } finally {
       setIsUndoingPriority(false);
     }
   };
 
+  const planPriority = (
+    versions: RootState['runway']['versions'],
+    choice: Priority,
+    firstRank: number,
+  ) =>
+    planGroupPriority(
+      [
+        ...bills.map(({ item, version }) => ({
+          kind: 'bill' as const,
+          itemId: item.id,
+          name: version.payload.name,
+        })),
+        ...envelopes.map(({ item, version }) => ({
+          kind: 'envelope' as const,
+          itemId: item.id,
+          name: version.payload.name,
+        })),
+      ].map((member) => ({
+        ...member,
+        stretches: getMemberStretches(versions, member.kind, member.itemId),
+      })),
+      choice,
+      firstRank,
+    );
+
   const applyPriorityToMembers = async (choice: Priority) => {
     if (!user) return;
     const state = store.getState();
-    const { versions } = state.runway;
     const everyItem = [
       ...selectBills(state, today),
       ...selectEnvelopes(state, today),
       ...selectGoals(state, today),
     ];
-    const members = [
-      ...bills.map(({ item, version }) => ({
-        kind: 'bill' as const,
-        itemId: item.id,
-        name: version.payload.name,
-      })),
-      ...envelopes.map(({ item, version }) => ({
-        kind: 'envelope' as const,
-        itemId: item.id,
-        name: version.payload.name,
-      })),
-    ].map((member) => ({
-      ...member,
-      stretches: getMemberStretches(versions, member.kind, member.itemId),
-    }));
-    const { changes, skipped } = planGroupPriority(
-      members,
+    const { changes, skipped } = planPriority(
+      state.runway.versions,
       choice,
       getNextTierRank(everyItem, choice),
     );
+    const label = PRIORITY_LABELS[choice];
     const skippedNote =
-      skipped.length === 0 ? '' : ` ${GROUP_WORDS.prioritySkipped(skipped)}`;
+      skipped.length === 0 ? null : GROUP_WORDS.prioritySkipped(skipped, label);
     if (changes.length === 0) {
-      setPriorityRecord(
-        skippedNote === '' ? null : { note: skippedNote.trim(), undo: null },
-      );
+      setPriorityRecord({
+        note: skipped.length > 0 ? '' : GROUP_WORDS.priorityAlready(label),
+        skipped: skippedNote,
+        undo: null,
+      });
       return;
     }
     const encryption = await getRunwayEncryption(user.uid);
@@ -439,18 +449,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       .filter((_, index) => results[index].status === 'rejected')
       .map(({ name }) => name);
     if (saved.length > 0) {
-      const label = PRIORITY_LABELS[choice];
       setPriorityRecord({
-        note: `${GROUP_WORDS.priorityDone(saved.length, label)}.${skippedNote}`,
+        note: GROUP_WORDS.priorityDone(saved.length, label),
+        skipped: skippedNote,
         undo: saved,
-      });
-      addToast({
-        title: GROUP_WORDS.priorityToast(saved.length, label),
-        type: 'success',
-        action: {
-          label: ITEM_SHEET_R2_WORDS.undo,
-          onClick: () => void undoPriorities(saved),
-        },
       });
     }
     if (failed.length > 0) {
@@ -521,6 +523,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       setIsSaving(false);
     }
   };
+
+  const savedPick = payload.startingPriority;
+  const notAtPick =
+    savedPick === null || priorityRecord !== null || pickedPriority !== null
+      ? []
+      : planPriority(allVersions, savedPick, 0).changes.map(({ name }) => name);
 
   const dueDate = fromDateInputValue(dueText);
   const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
@@ -1125,8 +1133,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   {priorityError}
                 </p>
               )}
-              {priorityRecord && (
-                <div className='flex items-center justify-between gap-2'>
+              {priorityRecord && priorityRecord.note !== '' && (
+                <div className='flex min-h-7 items-start justify-between gap-2'>
                   <p className='text-muted-foreground text-sm'>
                     {priorityRecord.note}
                   </p>
@@ -1146,6 +1154,31 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                       {ITEM_SHEET_R2_WORDS.undo}
                     </Button>
                   )}
+                </div>
+              )}
+              {priorityRecord?.skipped && (
+                <p className='text-muted-foreground text-sm'>
+                  {priorityRecord.skipped}
+                </p>
+              )}
+              {savedPick !== null && notAtPick.length > 0 && (
+                <div className='flex min-h-7 items-start justify-between gap-2'>
+                  <p className='text-muted-foreground text-sm'>
+                    {GROUP_WORDS.priorityStale(
+                      notAtPick,
+                      PRIORITY_LABELS[savedPick],
+                    )}
+                  </p>
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    rounded='full'
+                    className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
+                    onClick={() => void setStartingPriority(savedPick)}
+                  >
+                    {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[savedPick])}
+                  </Button>
                 </div>
               )}
             </div>
