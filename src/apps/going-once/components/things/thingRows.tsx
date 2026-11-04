@@ -50,6 +50,8 @@ export interface ThingRow {
   icon: string;
   /** The stored fields this row's sheet may write, and no others. */
   fields: (keyof ThingFields)[];
+  /** Fields of another row its question may fill in on the way (a pasted store link names the store). */
+  alsoFills?: (keyof ThingFields)[];
   /** The text its row shows, or '' while nothing is filled in. */
   summary: (answers: ThingAnswers) => string;
   Question: ComponentType<QuestionProps>;
@@ -137,6 +139,7 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
     label: '🔒 Where you got it',
     icon: '🛍️',
     fields: ['boughtFrom', 'boughtOn'],
+    alsoFills: ['boughtUrl', 'boughtUrlPreview'],
     summary: (a) => {
       const day = fromDateInputValue(a.boughtOn);
       const store = clip(a.boughtFrom);
@@ -150,6 +153,7 @@ export const THING_ROWS: Record<RowKey, ThingRow> = {
     label: 'Store link',
     icon: '🔗',
     fields: ['boughtUrl', 'boughtUrlPreview', 'showBoughtUrl'],
+    alsoFills: ['boughtFrom'],
     summary: (a) => {
       if (a.boughtUrl === '') return '';
       const site =

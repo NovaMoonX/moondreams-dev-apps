@@ -1,7 +1,10 @@
 import { useImperativeHandle, useRef, type Ref } from 'react';
 
+import { openFileChooser } from '@/utils/fileUtils';
+
 export interface ReceiptChooser {
-  open: () => void;
+  /** `isCamera` opens the phone's rear camera instead of its chooser. */
+  open: (options?: { isCamera?: boolean }) => void;
 }
 
 interface ReceiptFileInputProps {
@@ -12,7 +15,7 @@ interface ReceiptFileInputProps {
   isMultiple?: boolean;
 }
 
-/** The file chooser behind a control: photos and screenshots, several at once; a phone's chooser offers its camera. */
+/** The file chooser behind a control: photos and screenshots, several at once, or the camera. */
 function ReceiptFileInput({
   chooser,
   onFiles,
@@ -20,7 +23,7 @@ function ReceiptFileInput({
 }: ReceiptFileInputProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(chooser, () => ({
-    open: () => inputRef.current?.click(),
+    open: (options) => openFileChooser(inputRef.current, options),
   }));
 
   return (

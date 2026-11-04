@@ -142,6 +142,8 @@ function PayLineRow({
   today,
 }: PayLineRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { openItem, closeOpenItem } = useRunwayUrlState();
+  const request = openItem?.itemId === itemId ? openItem : null;
   const stance = effectiveStance(planStance, payLine.stanceOverride);
   const amount = formatCents(pick(stance, payLine.amount, 'income'));
   const timing = describeTiming(payLine);
@@ -154,11 +156,13 @@ function PayLineRow({
         figure={amount}
         ariaLabel={`${payLine.name}, ${amount}. ${timing}. Open`}
         onOpen={() => setIsOpen(true)}
+        itemId={itemId}
       />
-      {isOpen && (
+      {(isOpen || request !== null) && (
         <ItemSheet
           itemId={itemId}
           kind='payLine'
+          startsAtStep={request?.step ?? undefined}
           today={today}
           figureLabel='Each pay'
           figure={amount}
@@ -180,7 +184,10 @@ function PayLineRow({
             subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
             step: 'amount',
           }}
-          onClose={() => setIsOpen(false)}
+          onClose={() => {
+            setIsOpen(false);
+            if (request !== null) closeOpenItem();
+          }}
         />
       )}
     </>

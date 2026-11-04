@@ -16,6 +16,7 @@ import {
 import type { Pace } from '@apps/runway/engine/pace';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { getExtras } from '@apps/runway/engine/parts';
+import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { describeFundingShort } from '@apps/runway/utils/fundingText';
 
 interface GoalRowProps {
@@ -34,6 +35,9 @@ interface GoalRowProps {
   isPart?: boolean;
   /** Words put before the pace on the row's line, such as why it is listed on a day. */
   detailLead?: string | null;
+  /** A warning elsewhere asked for this goal: its sheet is open at this step (null for the sheet itself) until `onRequestDone`. */
+  request?: { step: string | null } | null;
+  onRequestDone?: () => void;
 }
 
 /** The pace in a few words: "Ahead, reaches it Oct 29", "Behind, $40.00 short by Nov 25". */
@@ -73,8 +77,11 @@ function GoalRow({
   isFaded = false,
   isPart = false,
   detailLead = null,
+  request = null,
+  onRequestDone,
 }: GoalRowProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const emoji = useItemEmoji(goal.emoji, goal.groupId);
   const savedCents = Math.min(heldCents, goal.targetCents);
   const progress = `${formatCentsShort(savedCents)} of ${formatCentsShort(goal.targetCents)}`;
   const paceLine = `${detailLead === null ? '' : `${detailLead} · `}${describePaceShort(goal, pace, savedCents)}${
@@ -88,7 +95,7 @@ function GoalRow({
     <>
       <ItemRow
         name={goal.name}
-        emoji={goal.emoji}
+        emoji={emoji}
         detail={isPart ? funding : paceLine}
         figure={
           isPart && goal.funding.amount.kind === 'exact'
@@ -101,11 +108,13 @@ function GoalRow({
         reorder={reorder}
         isHighlighted={isHighlighted}
         isFaded={isFaded}
+        itemId={goalId}
       />
-      {isOpen && (
+      {(isOpen || request !== null) && (
         <ItemSheet
           itemId={goalId}
           kind='goal'
+          startsAtStep={request?.step ?? undefined}
           today={today}
           figureLabel='Saved'
           figure={formatCents(savedCents)}
@@ -120,7 +129,10 @@ function GoalRow({
             subtitle: ITEM_SHEET_R2_WORDS.changeTargetSub,
             step: 'target',
           }}
-          onClose={() => setIsOpen(false)}
+          onClose={() => {
+            setIsOpen(false);
+            if (request !== null) onRequestDone?.();
+          }}
         />
       )}
     </>

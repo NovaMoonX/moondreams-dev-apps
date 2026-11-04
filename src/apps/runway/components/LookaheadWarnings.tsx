@@ -4,7 +4,6 @@ import { ChevronRight, TriangleAlert } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-import InlineNotice from '@/components/InlineNotice';
 import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
@@ -37,6 +36,7 @@ import DueCardRow from '@apps/runway/components/DueCardRow';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
+import { useOpenIncomeFix } from '@apps/runway/hooks/useOpenIncomeFix';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 interface LookaheadWarningsProps {
@@ -54,8 +54,37 @@ const getRowKey = (row: WarningRow) => {
   const { group } = row;
   if (group.kind === 'undated') return 'undated';
   if (group.kind === 'day') return `day:${group.on}:${group.dayKey}`;
-  return `single:${group.on}:${group.problem.kind}`;
+  if (group.kind === 'afterIncome') return 'afterIncome';
+  const id =
+    group.problem.kind === 'noIncome'
+      ? group.problem.billId
+      : group.problem.itemId;
+  return `single:${group.on}:${group.problem.kind}:${id}`;
 };
+
+/** "Nothing is planned after" the last income day, as a door to the pay that ends (or a new one). */
+function IncomeEndRow({ text }: { text: string }) {
+  const { open, hasEndingPay } = useOpenIncomeFix();
+  const action = hasEndingPay ? FIX_WORDS.openIncomeEnd : FIX_WORDS.addIncome;
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      className='text-foreground! border-border bg-muted/60 mt-3 h-auto w-full items-start justify-start gap-3 rounded-xl border p-3! text-left font-normal whitespace-normal'
+      aria-label={`${text} ${action}`}
+      onClick={open}
+    >
+      <span className='min-w-0 flex-1'>
+        <span className='block text-sm break-words'>{text}</span>
+        <span className='text-primary block text-sm font-medium'>{action}</span>
+      </span>
+      <ChevronRight
+        className='text-muted-foreground mt-0.5 h-4 w-4 shrink-0'
+        aria-hidden='true'
+      />
+    </Button>
+  );
+}
 
 /** What stops the plan, as one warning row that counts the rest; it opens "Things to fix", one row per problem, soonest first. The open list lives in the URL, so coming back from a row's day lands on it again. */
 function LookaheadWarnings({
@@ -219,11 +248,7 @@ function LookaheadWarnings({
             )}
           </ul>
         )}
-        {isFixesOpen && endsText !== null && (
-          <InlineNotice tone='info' className='mt-3'>
-            {endsText}
-          </InlineNotice>
-        )}
+        {isFixesOpen && endsText !== null && <IncomeEndRow text={endsText} />}
       </DetailSheet>
       <CardSheets cards={allCards} open={paying} onChange={setPaying} />
     </>

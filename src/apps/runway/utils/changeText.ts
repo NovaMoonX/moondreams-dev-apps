@@ -82,9 +82,21 @@ const getParts = (
     return [
       ...base,
       diff(
-        'Starting priority',
+        'Bill priority',
         before.startingPriority,
         after.startingPriority,
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
+      ),
+      diff(
+        'Envelope priority',
+        before.envelopePriority ?? before.startingPriority,
+        after.envelopePriority ?? after.startingPriority,
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
+      ),
+      diff(
+        'Goal priority',
+        before.goalPriority ?? null,
+        after.goalPriority ?? null,
         (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
       ),
       diff(
@@ -215,16 +227,12 @@ const getParts = (
         { funding: goalAfter.funding, extras: getExtras(goalAfter) },
         (value) => describeFunding(value.funding, value.extras),
       ),
-      ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
-        ? [
-            diff(
-              GROUP_WORDS.changeLabel,
-              (goalBefore as EnvelopeSealed).groupId ?? null,
-              (goalAfter as EnvelopeSealed).groupId ?? null,
-              (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
-            ),
-          ]
-        : []),
+      diff(
+        GROUP_WORDS.changeLabel,
+        (goalBefore as EnvelopeSealed | GoalSealed).groupId ?? null,
+        (goalAfter as EnvelopeSealed | GoalSealed).groupId ?? null,
+        (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
+      ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(
