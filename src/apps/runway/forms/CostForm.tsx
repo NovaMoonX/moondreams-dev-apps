@@ -18,6 +18,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { generateUuid } from '@/utils/idUtils';
 import {
+  CHANGE_WORDS,
   FORM_FLOW_WORDS,
   HORIZON_COST_SUGGESTIONS,
   HORIZON_WORDS,
@@ -314,8 +315,12 @@ function CostForm({
     startFolded: cost !== undefined,
   });
 
+  const isDirty = JSON.stringify(formData) !== JSON.stringify(initialData);
+  // A change that goes on to a review has nothing to review until something differs.
+  const isNothingToReview = isAmountFixed && cost !== undefined && !isDirty;
+
   const requestClose = useDiscardGuard({
-    isDirty: JSON.stringify(formData) !== JSON.stringify(initialData),
+    isDirty,
     onClose,
     title: cost
       ? FORM_FLOW_WORDS.discardChange
@@ -357,7 +362,11 @@ function CostForm({
               />
             )
           }
-          note={questions.hasReviewed ? blocker : questions.blocker}
+          note={
+            questions.hasReviewed
+              ? (blocker ?? (isNothingToReview ? CHANGE_WORDS.unchanged : null))
+              : questions.blocker
+          }
           cancelAction={
             <Button type='button' variant='secondary' onClick={requestClose}>
               Cancel
@@ -368,13 +377,15 @@ function CostForm({
               <Button
                 type='button'
                 className='min-w-0'
-                disabled={blocker !== null}
+                disabled={blocker !== null || isNothingToReview}
                 onClick={save}
               >
                 <span className='min-w-0 truncate'>
-                  {cost
-                    ? HORIZON_WORDS.saveCost
-                    : HORIZON_WORDS.addCostNamed(name)}
+                  {isAmountFixed
+                    ? CHANGE_WORDS.review
+                    : cost
+                      ? HORIZON_WORDS.saveCost
+                      : HORIZON_WORDS.addCostNamed(name)}
                 </span>
               </Button>
             ) : (

@@ -105,7 +105,13 @@ export function describeCostInSentence(cost: HorizonCost) {
   if (schedule.kind === 'once') {
     return HORIZON_WORDS.costDueLower(describeCostTiming(schedule, ending));
   }
-  const { figure, per } = describeCost(cost);
+  const { per } = describeCost(cost);
+  const { lowCents, highCents } = cost.amount;
+  // An en dash keeps "to" in a change line meaning only the change.
+  const figure =
+    lowCents === highCents
+      ? formatCentsShort(lowCents)
+      : `${formatCentsShort(lowCents)}–${formatCentsShort(highCents)}`;
   return `${lowerFirst(describeCostTiming(schedule, ending))} · ${[figure, per].filter(Boolean).join(' ')}`;
 }
 

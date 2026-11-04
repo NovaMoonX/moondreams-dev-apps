@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pencil, Tag, Trash2 } from 'lucide-react';
 
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -166,6 +166,7 @@ function CostSheet({
   const mask = useMaskedText();
   const [view, setView] = useState<'menu' | 'price'>('menu');
   const [isRemoving, setIsRemoving] = useState(false);
+  const isRestoring = useRef(false);
 
   const isExact = cost.amount.lowCents === cost.amount.highCents;
   const isLive = cost.endsAfter === null;
@@ -245,9 +246,12 @@ function CostSheet({
         action: {
           label: PAY_SHARE_WORDS.undo,
           onClick: () => {
+            if (isRestoring.current) return;
+            isRestoring.current = true;
             const now = getLive();
             const back = now ? restoreCost(now, gone, index) : null;
             if (!now || !back) {
+              isRestoring.current = false;
               addToast({
                 title: PAY_SHARE_WORDS.undoFailed,
                 description: HORIZON_WORDS.restoreGone,
@@ -258,7 +262,8 @@ function CostSheet({
             void write(
               back,
               HORIZON_WORDS.restoreSummary(now.name, gone.name, timing, from),
-            ).catch((undoError: unknown) =>
+            ).catch((undoError: unknown) => {
+              isRestoring.current = false;
               addToast({
                 title: PAY_SHARE_WORDS.undoFailed,
                 description: getErrorMessage(
@@ -266,8 +271,8 @@ function CostSheet({
                   HORIZON_WORDS.restoreFailed,
                 ),
                 type: 'error',
-              }),
-            );
+              });
+            });
           },
         },
       });

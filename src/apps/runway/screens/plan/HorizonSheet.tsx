@@ -248,7 +248,10 @@ function HorizonSheet({
           cost={openCost}
           today={today}
           stance={stance}
-          onBack={() => setCostId(null)}
+          onBack={() => {
+            setCostId(null);
+            setCostEdit(null);
+          }}
           onChange={() => setCostEdit('form')}
         />
       ) : addState !== null ? (
@@ -381,7 +384,10 @@ function HorizonSheet({
                 <CostRow
                   key={cost.id}
                   cost={cost}
-                  onOpen={() => setCostId(cost.id)}
+                  onOpen={() => {
+                    setCostId(cost.id);
+                    setCostEdit(null);
+                  }}
                 />
               ))}
             </ul>

@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import BackLink from '@/components/BackLink';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
@@ -67,45 +69,66 @@ function HorizonChangeView({
   const assignedCents =
     useAppSelector(selectBalances).assignedByItem[itemId] ?? 0;
   const shownBlocker = flow.getBlocker(blocker);
-  const readCovers = (payload: HorizonSealed) => {
+  const readSide = (payload: HorizonSealed) => {
     const { plan, figures } = getHorizonStatus(
       payload,
       assignedCents,
       flow.today,
       stance,
     );
+    const { shortfall } = plan;
+    const text = shortfall
+      ? HORIZON_WORDS.shortTitle(
+          formatCents(shortfall.shortCents),
+          formatDateOrdinalUTC(shortfall.dueOn),
+          shortfall.totalShortCents > shortfall.shortCents
+            ? formatCents(shortfall.totalShortCents - shortfall.shortCents)
+            : null,
+        )
+      : getCoversText(plan, payload.costs, figures.leftCents, stance);
     return {
       plan,
+      payload,
+      isShort: shortfall !== null,
       heldCents: figures.leftCents,
-      text: getCoversText(plan, payload.costs, figures.leftCents, stance),
+      text,
     };
   };
-  const before = readCovers(current);
-  const after = candidate === null ? before : readCovers(candidate);
+  const before = readSide(current);
+  const after = candidate === null ? before : readSide(candidate);
   const coversLead =
-    candidate !== null && before.text !== after.text ? (
+    candidate !== null &&
+    before.text !== after.text &&
+    before.text !== null &&
+    after.text !== null ? (
       <div className='space-y-2'>
         {[
-          { label: HORIZON_WORDS.effectBefore, side: before, payload: current },
-          {
-            label: HORIZON_WORDS.effectAfter,
-            side: after,
-            payload: candidate,
-          },
-        ]
-          .filter(({ side }) => side.text !== null)
-          .map(({ label, side, payload }) => (
-            <div key={label} className='space-y-0.5'>
-              <p className='text-muted-foreground text-xs'>{label}</p>
+          { label: HORIZON_WORDS.effectBefore, side: before },
+          { label: HORIZON_WORDS.effectAfter, side: after },
+        ].map(({ label, side }) => (
+          <div key={label} className='space-y-0.5'>
+            <p className='text-muted-foreground text-xs'>{label}</p>
+            {side.isShort ? (
+              <p className='text-sm break-words'>
+                <MaskedText>{side.text ?? ''}</MaskedText>
+              </p>
+            ) : (
               <CoversLine
                 plan={side.plan}
-                costs={payload.costs}
+                costs={side.payload.costs}
                 heldCents={side.heldCents}
                 stance={stance}
               />
-            </div>
-          ))}
+            )}
+          </div>
+        ))}
       </div>
+    ) : null;
+  const summaryLine =
+    candidate !== null && !flow.isUnchanged ? (
+      <p className='text-muted-foreground text-sm break-words'>
+        <MaskedText>{flow.summaryText}</MaskedText>
+      </p>
     ) : null;
 
   return (
@@ -124,17 +147,18 @@ function HorizonChangeView({
         <BackLink label={backLabel} onBack={onBack} />
         <ActionTitle>{title}</ActionTitle>
         {children}
-        {candidate !== null && !flow.isUnchanged && (
-          <p className='text-muted-foreground text-sm break-words'>
-            <MaskedText>{flow.summaryText}</MaskedText>
-          </p>
-        )}
+        {flow.isMoneyless && summaryLine}
         {candidate !== null && !flow.isUnchanged && !flow.isMoneyless && (
           <div ref={setWarningBox}>
             <EffectPreview
               changeJson={flow.changeJson}
               holds={flow.holds}
-              lead={coversLead}
+              lead={
+                <>
+                  {summaryLine}
+                  {coversLead}
+                </>
+              }
             />
           </div>
         )}
