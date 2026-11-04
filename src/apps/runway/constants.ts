@@ -2115,6 +2115,7 @@ export const COST_PAID_WORDS = {
   givesBackItem: (item: string, amount: string) =>
     `${item} gets ${amount} back`,
   givesBackFree: (amount: string) => `${amount} goes back to Free to Spend`,
+  purchaseRemoved: 'the purchase is removed from Spend',
   confirmMark: (
     cost: string,
     totalCents: string,
@@ -2163,6 +2164,50 @@ export const COST_PAID_WORDS = {
   alreadyPaid: (cost: string) => `${cost} was already marked paid`,
   alreadyTakenBack: (cost: string) => `${cost} was already taken back`,
   rowHint: 'Varies · tick to say what it came to',
+} as const;
+
+/** Add what you paid: the purchase form pointed at a Horizon cost, and the purchase's own pick of the cost it pays (Track only). */
+export const PURCHASE_COST_WORDS = {
+  addRow: 'Add what you paid',
+  addSub: 'Log it as a purchase',
+  moreWays: 'More ways',
+  addAria: (name: string) => `Add what you paid: ${name}`,
+  whichTitle: 'Which cost does it pay?',
+  whichLabel: 'Pays',
+  pick: (cost: string, due: string) => `${cost}\u00A0· ${due}`,
+  none: 'None of these',
+  added: (cost: string, amount: string, item: string) =>
+    `Added ${cost}, ${amount} from ${item}`,
+  addedFree: (amount: string) => `${amount} came out of Free to Spend`,
+  alreadyPaid: (cost: string) =>
+    `${cost} was already marked paid, so nothing was added.`,
+  undoFailed: (cost: string) => `${cost} was not taken back`,
+  staysOnItem: (item: string) =>
+    `This purchase pays a cost on ${item}, so it stays on ${item}. Take the payment back to move it.`,
+  freeShort: (item: string, left: string, other: string) =>
+    `${item} has ${left} left. The other ${other} comes out of Free to Spend.`,
+  takeBackTitle: (cost: string) => `Take back ${cost}`,
+  takeBackText: (amount: string, date: string, gives: string | null) =>
+    `The ${amount} purchase on ${date} is removed from Spend.${gives === null ? '' : ` ${gives}.`} It stays in History.`,
+  removeAlsoUnpays: (cost: string, item: string) =>
+    cost === ''
+      ? `It paid a cost on ${item}, which goes back to unpaid.`
+      : `It paid ${cost} on ${item}, which goes back to unpaid.`,
+  needsPaidBy: 'Pick how you paid to add this.',
+  noPurchase: 'No purchase',
+  paysSub: 'Paid by this purchase',
+  stays: (item: string) => `It stays on ${item}`,
+  noneHint: (item: string) => `Lowers what ${item} has left; pays no cost`,
+  pickHint: (cost: string) => `Marks ${cost} paid`,
+  paysFact: (cost: string, item: string) => `${cost}\u00A0on ${item}`,
+  paysRow: (cost: string, item: string) => `${cost}\u00A0on ${item}`,
+  lockedEnvelope: (cost: string, item: string) =>
+    `It pays ${cost} on ${item}, so it stays on ${item}. Take the payment back to move it.`,
+  forPayment: (due: string) => `For the ${due} payment`,
+  paidFor: (due: string) => `for ${due}`,
+  boughtIn: (name: string) => `${name}\u00A0· in Spend`,
+  paidWith: (name: string) => `Paid with ${name}`,
+  aPurchase: 'A purchase in Spend',
 } as const;
 
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */

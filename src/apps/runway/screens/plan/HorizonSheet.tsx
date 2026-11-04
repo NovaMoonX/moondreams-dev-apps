@@ -37,6 +37,7 @@ import {
 import {
   changeCost,
   type CostChange,
+  getPurchaseMarkFigures,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
@@ -46,6 +47,7 @@ import {
   selectComingDays,
   selectCostPaid,
   selectCostPayments,
+  selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import CostForm from '@apps/runway/forms/CostForm';
 import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
@@ -60,6 +62,10 @@ interface HorizonSheetProps {
   stance: Stance;
   /** The fronted payment the sheet was opened for, said again inside it. */
   fronted?: Extract<HorizonShort, { kind: 'fronted' }> | null;
+  /** A cost to open on, with Back leading to the event's sheet. */
+  openCostId?: string | null;
+  /** Opened from another record's sheet: the cost's Back returns there, named so. */
+  returnLabel?: string | null;
   onClose: () => void;
 }
 
@@ -70,6 +76,8 @@ function HorizonSheet({
   today,
   stance,
   fronted = null,
+  openCostId = null,
+  returnLabel = null,
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
@@ -77,11 +85,12 @@ function HorizonSheet({
   const costPayments = useAppSelector((state) =>
     selectCostPayments(state, today),
   );
+  const purchases = useAppSelector(selectSpendPurchases);
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [view, setView] = useState<'main' | 'change' | 'history'>('main');
-  const [costId, setCostId] = useState<string | null>(null);
+  const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
   const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
   const [putting, setPutting] = useState<{
@@ -209,19 +218,27 @@ function HorizonSheet({
         null,
       );
     if (!latest) return null;
+    const entry =
+      latest.mark === 'purchase'
+        ? getPurchaseMarkFigures(
+            latest,
+            purchases.find(({ id }) => id === latest.purchaseId) ?? null,
+            balances.costFromFreeByItem[itemId] ?? 0,
+          )
+        : latest;
     const isSettled = !payments.some(
       (payment) => payment.costId === costId && payment.paid === null,
     );
-    const paidOn = formatDateOrdinalUTC(latest.paidOn);
+    const paidOn = formatDateOrdinalUTC(entry.paidOn);
     const getLine = () => {
       if (latest.mark === 'outside')
         return COST_PAID_WORDS.paidOutsideRow(paidOn);
       // A settled row's figure is already what it came to.
       return isSettled
         ? COST_PAID_WORDS.paidHead(paidOn)
-        : COST_PAID_WORDS.paidRow(paidOn, formatCents(latest.amountCents));
+        : COST_PAID_WORDS.paidRow(paidOn, formatCents(entry.amountCents));
     };
-    return { line: getLine(), amountCents: latest.amountCents, isSettled };
+    return { line: getLine(), amountCents: entry.amountCents, isSettled };
   };
   const outsideToMark = horizon.costs.flatMap((cost) => {
     const payment = payments.find(
@@ -306,7 +323,12 @@ function HorizonSheet({
           cost={openCost}
           today={today}
           stance={stance}
+          backLabel={returnLabel}
           onBack={() => {
+            if (returnLabel !== null) {
+              onClose();
+              return;
+            }
             setCostId(null);
             setCostEdit(null);
           }}

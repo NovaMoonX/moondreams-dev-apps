@@ -26,7 +26,9 @@ import {
   HORIZON_WORDS,
   ITEM_SHEET_R2_WORDS,
   PAID_HISTORY_WORDS,
+  PURCHASE_COST_WORDS,
 } from '@apps/runway/constants';
+import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
 import type { CostPayment } from '@apps/runway/engine/horizon';
@@ -253,6 +255,8 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   const stance = useAppSelector(selectStance);
   const [isOpen, setIsOpen] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
+  const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
   const name = HORIZON_WORDS.costLineName(due.costName, due.itemName);
   const paid = useCostPaid({
     itemId: due.itemId,
@@ -302,15 +306,20 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
           variant='secondary'
           size='sm'
           className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
-          aria-label={`${DUE_WORDS.markPaid}: ${name}`}
+          aria-label={
+            isTrack
+              ? PURCHASE_COST_WORDS.addAria(name)
+              : `${DUE_WORDS.markPaid}: ${name}`
+          }
           loading={paid.isBusy}
           disabled={!paid.isReady || paid.isBusy}
           onClick={() => {
-            if (paid.needsAmount) setIsAsking(true);
+            if (isTrack) setIsAddingPurchase(true);
+            else if (paid.needsAmount) setIsAsking(true);
             else void paid.mark();
           }}
         >
-          {DUE_WORDS.markPaid}
+          {isTrack ? PURCHASE_COST_WORDS.addRow : DUE_WORDS.markPaid}
         </Button>
       </span>
       {amountPayment && (
@@ -320,12 +329,24 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
           onClose={() => setIsAsking(false)}
         />
       )}
+      {isAddingPurchase && (
+        <PurchaseForm
+          isOpen
+          presetCost={{
+            itemId: due.itemId,
+            costId: due.costId,
+            dueOn: due.dueOn,
+          }}
+          onClose={() => setIsAddingPurchase(false)}
+        />
+      )}
       {isOpen && horizon && (
         <HorizonSheet
           itemId={due.itemId}
           horizon={horizon}
           today={today}
           stance={stance}
+          openCostId={isTrack ? due.costId : null}
           onClose={() => setIsOpen(false)}
         />
       )}

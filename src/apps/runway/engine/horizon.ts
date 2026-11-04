@@ -300,6 +300,26 @@ export function planHorizon(
   return { covers, coveredUntil: first?.dueOn ?? null, shortfall };
 }
 
+/** What a purchase-made mark reads as once the purchase may have been edited: the purchase's own amount and day, and of it the part the item could not cover (the item's Free to Spend share, capped at the amount). The mark's own figures stand while the purchase isn't loaded. */
+export const getPurchaseMarkFigures = <
+  T extends { amountCents: Cents; fromFreeCents: Cents; paidOn: number },
+>(
+  mark: T,
+  purchase: { amountCents: Cents; date: number } | null,
+  itemFromFreeCents: Cents,
+): T =>
+  purchase === null
+    ? mark
+    : {
+        ...mark,
+        amountCents: purchase.amountCents,
+        paidOn: purchase.date,
+        fromFreeCents: Math.min(
+          purchase.amountCents,
+          Math.max(0, itemFromFreeCents),
+        ),
+      };
+
 /** An item's three figures. Left is what the ledger holds for it; what its payments took from the item is added back to give what was set aside, so the part Free to Spend fronted is not counted as set aside. */
 export const getHorizonFigures = (
   leftCents: Cents,

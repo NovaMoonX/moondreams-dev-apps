@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
+  HandCoins,
   ImagePlus,
   Layers,
   Pencil,
@@ -34,6 +35,7 @@ import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   MAX_RECEIPTS_PER_PURCHASE,
+  PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
@@ -57,12 +59,17 @@ import {
   addReceiptImages,
   removeReceiptImagesOf,
 } from '@apps/runway/store/actions/receiptActions';
+import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  selectCostPaid,
   selectExpenses,
+  selectHorizonItems,
+  selectStance,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -123,6 +130,12 @@ function PurchaseScreen({
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
   const expenses = useAppSelector(selectExpenses);
+  const costMarks = useAppSelector(selectCostPaid);
+  const horizons = useAppSelector((state) =>
+    selectHorizonItems(state, todayAsUtcDate()),
+  );
+  const stance = useAppSelector(selectStance);
+  const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
     purchase: OpenPurchase;
@@ -222,8 +235,38 @@ function PurchaseScreen({
   const link = purchase.link?.trim() || null;
   const linkHost = link === null ? null : getWebLinkHost(link);
 
+  const getCostMark = () => {
+    const ref = purchase.costRef ?? null;
+    if (ref === null) return null;
+    const paid =
+      (costMarks[ref.itemId] ?? []).find(
+        (entry) => entry.purchaseId === purchase.id,
+      ) ?? null;
+    return {
+      paid: paid === null ? null : { ...paid, itemId: ref.itemId },
+      names: {
+        item: nameOf(ref.itemId),
+        cost:
+          horizons
+            .find(({ item }) => item.id === ref.itemId)
+            ?.version.payload.costs.find(({ id }) => id === ref.costId)?.name ??
+          '',
+      },
+    };
+  };
+
+  const paysRef = purchase.costRef ?? null;
+  const paysHorizon =
+    paysRef === null
+      ? null
+      : (horizons.find(({ item }) => item.id === paysRef.itemId)?.version
+          .payload ?? null);
+  const paysCostName =
+    paysHorizon?.costs.find(({ id }) => id === paysRef?.costId)?.name ?? null;
+
   const remove = async () => {
     if (!user || isBusy) return;
+    const costMark = getCostMark();
     const names = purchase.lines.map((line) =>
       line.envelopeId === null
         ? SPEND_WORDS.freeToSpend
@@ -242,6 +285,12 @@ function PurchaseScreen({
           receipts.length > 0
             ? SPEND_WORDS.receiptsRemovedWithPurchase(receipts.length)
             : null,
+          costMark === null
+            ? null
+            : PURCHASE_COST_WORDS.removeAlsoUnpays(
+                costMark.names.cost,
+                costMark.names.item,
+              ),
           'It stays in the change log.',
         ]
           .filter(Boolean)
@@ -260,6 +309,7 @@ function PurchaseScreen({
         encryption,
         purchase,
         describePurchaseRemoval(purchase, nameOf),
+        costMark,
       );
       const hasLeftovers = await removeReceiptImagesOf(
         user.uid,
@@ -404,6 +454,17 @@ function PurchaseScreen({
 
   return (
     <>
+      {isCostOpen && paysRef !== null && paysHorizon !== null && (
+        <HorizonSheet
+          itemId={paysRef.itemId}
+          horizon={paysHorizon}
+          today={todayAsUtcDate()}
+          stance={stance}
+          openCostId={paysRef.costId}
+          returnLabel={title}
+          onClose={() => setIsCostOpen(false)}
+        />
+      )}
       <FormSheet
         isOpen
         isDrawerWhenShort
@@ -545,6 +606,22 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {paysRef !== null &&
+              paysHorizon !== null &&
+              paysCostName !== null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<HandCoins />}
+                  label={PURCHASE_COST_WORDS.paysFact(
+                    paysCostName,
+                    paysHorizon.name,
+                  )}
+                  subtitle={PURCHASE_COST_WORDS.paysSub}
+                  onClick={() => setIsCostOpen(true)}
+                />
+              )}
             {!isCameraFirst && (
               <ActionRow
                 isGrouped
