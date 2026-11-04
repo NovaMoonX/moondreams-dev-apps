@@ -300,6 +300,8 @@ async function writeSeedHorizon(
     isOutside,
     pricedOn,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const feb1 = nextCalendarDay(today, 1, 1);

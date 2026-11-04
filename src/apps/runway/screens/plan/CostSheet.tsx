@@ -4,6 +4,7 @@ import {
   CircleCheck,
   HandCoins,
   Pencil,
+  Receipt,
   ReceiptText,
   Tag,
   Trash2,
@@ -37,6 +38,7 @@ import {
   FORM_FLOW_WORDS,
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
+  MAKE_BILL_WORDS,
   PAY_SHARE_WORDS,
   PURCHASE_COST_WORDS,
 } from '@apps/runway/constants';
@@ -50,10 +52,12 @@ import {
   settleCostPaid,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import BillForm from '@apps/runway/forms/BillForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -204,6 +208,8 @@ function CostSheet({
   const [takingBackId, setTakingBackId] = useState<string | null>(null);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isMakingBill, setIsMakingBill] = useState(false);
+  const { showOnPlan } = useRunwayUrlState();
   const isTrack = useAppSelector(selectLevel) === 'track';
   const isRestoring = useRef(false);
   const payments = useAppSelector((state) => selectCostPayments(state, today))[
@@ -248,7 +254,17 @@ function CostSheet({
   const isLive = cost.endsAfter === null;
   const isRepeat = cost.schedule.kind !== 'once';
   const isPaidOnce = !isRepeat && paidEntries.length > 0;
-  const isRemovable = isLive && !isPaidOnce && getLiveCosts(horizon).length > 1;
+  const isBill = cost.becameBillId !== null;
+  const canMakeBill =
+    isRepeat && isLive && !cost.isOutside && !isBill && next !== null;
+  const hasOtherOpenCost = (payments ?? []).some(
+    ({ costId, paid }) =>
+      costId !== cost.id &&
+      paid === null &&
+      !horizon.costs.find(({ id }) => id === costId)?.isOutside,
+  );
+  const isRemovable =
+    isLive && !isPaidOnce && !isBill && getLiveCosts(horizon).length > 1;
   const settled =
     next === null
       ? paidEntries.reduce<CostPaidEntry | null>(
@@ -546,18 +562,20 @@ function CostSheet({
         }
         suffix={describeCost(cost).per || undefined}
         fact={
-          settled
-            ? COST_PAID_WORDS.paidHead(
-                formatDateOrdinalUTC(settled.paidOn),
-                settled.mark === 'outside',
-              )
-            : HORIZON_WORDS.costFact(
-                when,
-                cost.pricedOn === null
-                  ? null
-                  : formatDateOrdinalUTC(cost.pricedOn),
-                cost.isOutside,
-              )
+          isBill && !settled
+            ? MAKE_BILL_WORDS.nowABill
+            : settled
+              ? COST_PAID_WORDS.paidHead(
+                  formatDateOrdinalUTC(settled.paidOn),
+                  settled.mark === 'outside',
+                )
+              : HORIZON_WORDS.costFact(
+                  when,
+                  cost.pricedOn === null
+                    ? null
+                    : formatDateOrdinalUTC(cost.pricedOn),
+                  cost.isOutside,
+                )
         }
       />
       {!settled && (
@@ -577,7 +595,7 @@ function CostSheet({
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}
-        {!settled && (
+        {!settled && !isBill && (
           <ActionRow
             isGrouped
             isRoomy
@@ -605,6 +623,30 @@ function CostSheet({
           subtitle={HORIZON_WORDS.changeCostSub}
           onClick={onChange}
         />
+        {canMakeBill && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Receipt />}
+            label={MAKE_BILL_WORDS.row}
+            subtitle={MAKE_BILL_WORDS.rowSub}
+            onClick={() => setIsMakingBill(true)}
+          />
+        )}
+        {cost.becameBillId !== null && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Receipt />}
+            label={MAKE_BILL_WORDS.nowABill}
+            subtitle={MAKE_BILL_WORDS.nowABillSub}
+            onClick={() =>
+              showOnPlan('bills', { itemId: cost.becameBillId ?? '' })
+            }
+          />
+        )}
         {isFar && isMoreOpen && addRow}
         {next && isFar && isMoreOpen && markRow}
         {isRemovable && (
@@ -632,7 +674,7 @@ function CostSheet({
           {HORIZON_WORDS.paidStaysInRecord}
         </p>
       )}
-      {isLive && !isPaidOnce && !isRemovable && (
+      {isLive && !isPaidOnce && !isRemovable && !isBill && (
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.changeLastCost}
         </p>
@@ -648,6 +690,21 @@ function CostSheet({
               {PURCHASE_COST_WORDS.addRow}
             </Button>
           }
+        />
+      )}
+      {isMakingBill && next && (
+        <BillForm
+          isOpen
+          title={MAKE_BILL_WORDS.title(cost.name)}
+          fromCost={{
+            itemId,
+            horizon,
+            cost,
+            firstDueOn: next.dueOn,
+            heldCents,
+            hasOtherOpenCost,
+          }}
+          onClose={() => setIsMakingBill(false)}
         />
       )}
       {isAddingPurchase && next && (

@@ -745,6 +745,25 @@ export function planBillPayments(
   }
   const ordered = isInDayOrder(chronological);
   const first = getFirstNeeded(dues, options.firstDayOn);
+  const hasMoved = progress.funded.some((entry) => entry.isMoved);
+  // Money moved into the bill is not tied to one window: what a payment leaves of it is there for the next.
+  const carriedIn = dues.reduce<{ into: Cents[]; spare: Cents }>(
+    (acc, dueOn, index) => {
+      if (!hasMoved) return { into: [...acc.into, 0], spare: 0 };
+      const inWindow = fundedInWindow(
+        progress.funded,
+        index === 0 ? -Infinity : dues[index - 1],
+        dueOn,
+      );
+      const movedCents = sumFunded(inWindow.filter((entry) => entry.isMoved));
+      const over = sumFunded(inWindow) + acc.spare - amountCents;
+      return {
+        into: [...acc.into, acc.spare],
+        spare: Math.min(movedCents + acc.spare, Math.max(0, over)),
+      };
+    },
+    { into: [], spare: 0 },
+  ).into;
   const result = dues.slice(first).map((dueOn, offset): BillPayment => {
     const index = first + offset;
     const previous = index === 0 ? -Infinity : dues[index - 1];
@@ -755,7 +774,7 @@ export function planBillPayments(
         )
       : chronological.filter((day) => day.on > previous && day.on <= dueOn);
     const confirmed = fundedInWindow(progress.funded, previous, dueOn);
-    const fundedCents = sumFunded(confirmed);
+    const fundedCents = sumFunded(confirmed) + carriedIn[index];
     const paid = paidByDue.get(dueOn) ?? null;
     const eligible = getEligibleDays(
       window,

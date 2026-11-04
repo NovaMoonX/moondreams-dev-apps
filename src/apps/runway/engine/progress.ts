@@ -11,6 +11,8 @@ export interface FundedDay {
   dayKey: string;
   on: DateOnly;
   cents: Cents;
+  /** Money moved into the bill rather than set aside by a pay: it is not a funded day, and what one payment leaves over carries to the next. */
+  isMoved?: boolean;
 }
 
 /** A payment the person marked paid and has not undone. */
@@ -230,6 +232,23 @@ export const sumOutsideTransfers = (entries: readonly TransferEntry[]): Cents =>
     0,
   );
 
+/** The money moved into each item, counted as set aside from the day it moved. */
+export function collectMovedIn(
+  entries: readonly TransferEntry[],
+): Record<string, FundedDay[]> {
+  return entries.reduce<Record<string, FundedDay[]>>((acc, entry) => {
+    if (entry.toId !== null && entry.cents > 0) {
+      (acc[entry.toId] ??= []).push({
+        dayKey: `moved_${entry.moveId}`,
+        on: entry.on,
+        cents: entry.cents,
+        isMoved: true,
+      });
+    }
+    return acc;
+  }, {});
+}
+
 /** What transfers added to (positive) or took from (negative) each item. */
 export function sumTransfers(
   entries: readonly TransferEntry[],
@@ -306,7 +325,8 @@ export const fundedInWindow = (
 
 /** The days that really set money aside, not the starting amount. */
 export const countFundedDays = (funded: readonly FundedDay[]) =>
-  funded.filter((entry) => entry.dayKey !== START_DAY_KEY).length;
+  funded.filter((entry) => entry.dayKey !== START_DAY_KEY && !entry.isMoved)
+    .length;
 
 export const sumFunded = (funded: readonly FundedDay[]) =>
   funded.reduce((sum, entry) => sum + entry.cents, 0);

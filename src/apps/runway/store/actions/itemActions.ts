@@ -245,7 +245,7 @@ export interface CreateGroupInput {
 }
 
 /** The three documents that add a group, committed in the batch of the bill that names it. */
-async function buildGroupDocs(
+export async function buildGroupDocs(
   encryption: RunwayEncryption,
   { group, startDate }: CreateGroupInput,
   now: number,

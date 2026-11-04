@@ -4,7 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import SensitiveValue from '@/components/SensitiveValue';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { HORIZON_WORDS } from '@apps/runway/constants';
+import { HORIZON_WORDS, MAKE_BILL_WORDS } from '@apps/runway/constants';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type { HorizonCost } from '@apps/runway/types';
 import { describeCost } from '@apps/runway/utils/horizonText';
@@ -30,7 +30,7 @@ function CostRow({ cost, paid = null, onOpen }: CostRowProps) {
       <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
       {!paid?.isSettled && (
         <span className='text-muted-foreground block text-sm break-words'>
-          {line}
+          {cost.becameBillId !== null ? MAKE_BILL_WORDS.nowABill : line}
         </span>
       )}
       {paid && (
@@ -63,7 +63,11 @@ function CostRow({ cost, paid = null, onOpen }: CostRowProps) {
         type='button'
         variant='tertiary'
         className='hover:bg-muted/60 text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
-        aria-label={HORIZON_WORDS.changeCost(cost.name)}
+        aria-label={
+          cost.becameBillId !== null
+            ? MAKE_BILL_WORDS.openBill(cost.name)
+            : HORIZON_WORDS.changeCost(cost.name)
+        }
         onClick={onOpen}
       >
         {label}

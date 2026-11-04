@@ -558,6 +558,7 @@ export const HORIZON_WORDS = {
   removeGone: 'This cost was already changed. Open it again.',
   changeItemTitle: 'Change it',
   covers: {
+    allPaidOrBill: 'Everything is paid or a bill',
     nothingSet: 'Nothing is set aside yet, so nothing is covered.',
     setAsideUsed: 'What was set aside is spent.',
     none: "What's set aside doesn't cover a whole cost yet.",
@@ -571,6 +572,43 @@ export const HORIZON_WORDS = {
     helpRange: (name: string, low: string, high: string, end: string) =>
       `${name} could be ${low} to ${high}. Runway plans it at ${end}.`,
   },
+} as const;
+
+/** Make it a bill: a repeating cost handed to a bill of its own, with the money it holds. */
+export const MAKE_BILL_WORDS = {
+  row: 'Make it a bill',
+  rowSub: 'Runway funds it from your pays like any bill',
+  title: (cost: string) => `Make ${cost} a bill`,
+  primary: 'Make it a bill',
+  nowABill: 'Now a bill',
+  nowABillSub: 'Open it in Bills',
+  openBill: (cost: string) => `Open ${cost} in Bills`,
+  bringTitle: (item: string, money: string) =>
+    `Bring ${item}'s ${money} with it?`,
+  bringLabel: 'Money from the event',
+  yesCovers: (dates: string) => `Yes, it covers ${dates}`,
+  yesPart: (date: string) => `Yes, it goes toward ${date}`,
+  yesBody: (money: string, bill: string) => `${money} moves to ${bill}`,
+  noLeave: (item: string) => `No, leave it with ${item}`,
+  noLeaveBody: (item: string, money: string) => `${item} keeps ${money}`,
+  noFree: 'No, make it Free to Spend',
+  noFreeBody: (money: string) => `${money} goes to Free to Spend`,
+  pickBring: 'Pick whether the money comes with it.',
+  moreDates: (count: number) => `${count} more`,
+  made: (bill: string, money: string | null) =>
+    money === null
+      ? `${bill} is a bill now`
+      : `${bill} is a bill now, holding ${money}`,
+  madeFree: (bill: string, item: string, money: string) =>
+    `${bill} is a bill now, and ${item}'s ${money} is Free to Spend`,
+  failed: 'This did not save. Nothing was changed.',
+  alreadyDone: 'This cost is already a bill. Open it again.',
+  summary: (item: string, cost: string, amount: string, timing: string) =>
+    `${item}: ${cost} became a bill, ${amount}. ${timing}.`,
+  summaryBrought: (money: string, item: string) =>
+    `Brought ${money} from ${item}.`,
+  summaryFree: (money: string, item: string) =>
+    `Gave ${item}'s ${money} to Free to Spend.`,
 } as const;
 
 export const MAX_NAME_LENGTH = 60;

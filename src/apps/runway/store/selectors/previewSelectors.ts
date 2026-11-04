@@ -79,6 +79,15 @@ export type PreviewChange =
       version: PreviewVersion;
       heldCents: number;
     }
+  | {
+      /** A cost handed to a bill that is not saved yet: the bill's first version and the item's, with the money brought along. */
+      kind: 'makeBill';
+      item: PlanItemDoc;
+      versions: PreviewVersion[];
+      itemId: string;
+      bringCents: number;
+      on: number;
+    }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -185,6 +194,19 @@ const layerPlan = (
       openDays: unpin(openDays, change.unpin),
     };
   }
+  if (change.kind === 'makeBill') {
+    return {
+      items: [...items, change.item],
+      versions: [
+        ...versions,
+        ...change.versions.map((version, index) => ({
+          ...layerVersion<OpenVersion>([], version)[0],
+          id: `${WHAT_IF_VERSION_ID}-${index}`,
+        })),
+      ],
+      openDays,
+    };
+  }
   if (change.kind === 'versions') {
     return {
       items,
@@ -227,6 +249,37 @@ const layerPlan = (
   }
   return { items, versions, openDays: layerDay(openDays, change) };
 };
+
+/** The held money and bill progress as a made bill leaves them: the item holds the money brought less, and the bill counts it as set aside from the day it moved. */
+const withBrought = (
+  inputs: Pick<PreviewInputs, 'heldByItem' | 'billProgress'>,
+  change: PreviewChange,
+) =>
+  change.kind !== 'makeBill' || change.bringCents <= 0
+    ? inputs
+    : {
+        heldByItem: {
+          ...inputs.heldByItem,
+          [change.itemId]: Math.max(
+            0,
+            (inputs.heldByItem[change.itemId] ?? 0) - change.bringCents,
+          ),
+        },
+        billProgress: {
+          ...inputs.billProgress,
+          [change.item.id]: {
+            funded: [
+              {
+                dayKey: `moved_${WHAT_IF_VERSION_ID}`,
+                on: change.on,
+                cents: change.bringCents,
+                isMoved: true,
+              },
+            ],
+            paid: [],
+          },
+        },
+      };
 
 export interface PreviewDay {
   dayKey: string;
@@ -272,10 +325,11 @@ export function previewChange(
     buildComingDays(source.items, source.versions, today).filter(
       (day) => !settled.has(day.dayKey),
     );
+  const brought = withBrought(inputs, change);
   const heldWith =
     change.kind === 'addItem'
       ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
-      : inputs.heldByItem;
+      : brought.heldByItem;
   const draftOf = (source: typeof layered, dayKey: string) =>
     computeDraftView(
       source.items,
@@ -286,7 +340,7 @@ export function previewChange(
       today,
       source === layered ? heldWith : inputs.heldByItem,
       inputs.settledKey,
-      inputs.billProgress,
+      source === layered ? brought.billProgress : inputs.billProgress,
     );
   const real = { items, versions, openDays };
   const union = new Map(
@@ -386,10 +440,11 @@ export function previewItemShorts(
   const settled = new Set(
     inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
   );
+  const brought = withBrought(inputs, change);
   const heldWith =
     change.kind === 'addItem'
       ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
-      : inputs.heldByItem;
+      : brought.heldByItem;
   const allComing = buildComingDays(layered.items, layered.versions, today);
   const coming = allComing.filter((day) => !settled.has(day.dayKey));
   const rows = coming.slice(0, MAX_PREVIEW_DAYS).map((day) => {
@@ -402,7 +457,7 @@ export function previewItemShorts(
       today,
       heldWith,
       inputs.settledKey,
-      inputs.billProgress,
+      brought.billProgress,
     );
     const nextOn =
       allComing.find((next) => next.on > day.on)?.on ??
@@ -450,7 +505,33 @@ export function previewLookahead(
   );
   const layeredState = {
     ...state,
-    runway: { ...state.runway, items, versions, days: openDays },
+    runway: {
+      ...state.runway,
+      items,
+      versions,
+      days: openDays,
+      moves:
+        change.kind === 'makeBill' && change.bringCents > 0
+          ? [
+              ...state.runway.moves,
+              {
+                id: `moved_${WHAT_IF_VERSION_ID}`,
+                kind: 'transfer' as const,
+                date: change.on,
+                refId: change.itemId,
+                reversesMoveId: null,
+                createdAt: Number.MAX_SAFE_INTEGER,
+                payload: {
+                  fromId: change.itemId,
+                  toId: change.item.id,
+                  cents: change.bringCents,
+                  note: null,
+                  isOutside: false,
+                },
+              },
+            ]
+          : state.runway.moves,
+    },
   };
   const result = {
     before: selectLookahead(state, today),

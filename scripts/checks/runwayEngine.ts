@@ -272,7 +272,11 @@ import {
   getPaidMoveId,
   getUndoMoveId,
 } from '../../src/apps/runway/engine/progress.ts';
-import { getHeldForPayment } from '../../src/apps/runway/engine/progress.ts';
+import {
+  collectMovedIn,
+  getHeldForPayment,
+} from '../../src/apps/runway/engine/progress.ts';
+import type { FundedDay } from '../../src/apps/runway/engine/progress.ts';
 import {
   getPace,
   planGoalContributions,
@@ -5476,6 +5480,8 @@ const version = (
             isOutside: false,
             pricedOn: null,
             endsAfter: null,
+            becameBillId: null,
+            becameBillOn: null,
             note: null,
           },
           ...extraCosts.map((extra) => ({
@@ -5491,6 +5497,8 @@ const version = (
             isOutside: false,
             pricedOn: null,
             endsAfter: null,
+            becameBillId: null,
+            becameBillOn: null,
             note: null,
           })),
         ],
@@ -5630,6 +5638,8 @@ const version = (
       isOutside: false,
       pricedOn: null,
       endsAfter: null,
+      becameBillId: null,
+      becameBillOn: null,
       note: null,
     });
     const dec19 = today + 57 * DAY_MS;
@@ -11081,6 +11091,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   };
   const truck = {
@@ -11221,6 +11233,8 @@ const version = (
     isOutside,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const costs = [
@@ -11495,6 +11509,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const movers = cost('movers', range(60_000, 80_000), jan15);
@@ -11762,6 +11778,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   };
   const truck: HorizonCost = {
@@ -12251,6 +12269,96 @@ const version = (
       null,
       'an older purchase reads costRef as null',
     ),
+  );
+}
+
+// Horizon: a repeating cost made a bill.
+{
+  const end = Date.UTC(2027, 11, 31);
+  const storage = {
+    id: 'storage',
+    name: 'Storage unit',
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: Date.UTC(2027, 1, 1),
+      monthDays: [1],
+    },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    note: null,
+  };
+  const made = {
+    ...storage,
+    becameBillId: 'bill-1',
+    becameBillOn: Date.UTC(2027, 3, 1),
+  };
+  assert.deepEqual(
+    listCostPayments(made, end, 'conservative').map(({ dueOn }) => dueOn),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1)],
+    'a cost made a bill asks nothing from the bill first due date on',
+  );
+  assert.equal(
+    listCostPayments(storage, end, 'conservative').length,
+    11,
+    'a cost that is not a bill plans to the horizon',
+  );
+
+  const toDay = (stamp: number) => `pay_${toDayStamp(stamp)}`;
+  const nov10 = utc(2026, 11, 10);
+  const nov17 = utc(2026, 11, 17);
+  const nov24 = utc(2026, 11, 24);
+  const days = [nov10, nov17, nov24].map((on) => ({ dayKey: toDay(on), on }));
+  const bill = (funded: FundedDay[]): DraftBillInput => ({
+    itemId: 'bill-1',
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    amount: { lowCents: 60_000, highCents: 60_000 },
+    schedule: { kind: 'once', anchor: utc(2026, 12, 1), monthDays: [] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded, paid: [] },
+  });
+  const [moved] = Object.values(
+    collectMovedIn([
+      {
+        moveId: 'move-1',
+        on: utc(2026, 11, 1),
+        fromId: 'moving',
+        toId: 'bill-1',
+        cents: 20_000,
+        isOutside: false,
+      },
+    ]),
+  );
+  const plain = planBillPayments(bill([]), days, utc(2027, 3, 1))[0];
+  const withMoved = planBillPayments(bill(moved), days, utc(2027, 3, 1))[0];
+  const asked = (parts: { cents: number }[]) =>
+    parts.reduce((total, part) => total + part.cents, 0);
+  assert.equal(
+    asked(plain.parts),
+    60_000,
+    'a bill with no transfer is unchanged',
+  );
+  assert.equal(
+    asked(withMoved.parts),
+    40_000,
+    'the bill asks $200 less when $200 moved into it',
+  );
+  assert.equal(
+    withMoved.fundedCents,
+    20_000,
+    'and reads the $200 as set aside',
+  );
+  assert.equal(
+    withMoved.fundedDays,
+    0,
+    'money moved in is not a confirmed income day',
   );
 }
 
@@ -14409,6 +14517,8 @@ console.log('runway engine: ok');
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const jan15 = utc(2027, 0, 15);
@@ -14982,6 +15092,96 @@ console.log('runway engine: ok');
       .map((problem) => problem.kind === 'short' && problem.name),
     ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
     "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
+  );
+}
+
+// Horizon: a repeating cost made a bill.
+{
+  const end = Date.UTC(2027, 11, 31);
+  const storage = {
+    id: 'storage',
+    name: 'Storage unit',
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: Date.UTC(2027, 1, 1),
+      monthDays: [1],
+    },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    note: null,
+  };
+  const made = {
+    ...storage,
+    becameBillId: 'bill-1',
+    becameBillOn: Date.UTC(2027, 3, 1),
+  };
+  assert.deepEqual(
+    listCostPayments(made, end, 'conservative').map(({ dueOn }) => dueOn),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1)],
+    'a cost made a bill asks nothing from the bill first due date on',
+  );
+  assert.equal(
+    listCostPayments(storage, end, 'conservative').length,
+    11,
+    'a cost that is not a bill plans to the horizon',
+  );
+
+  const toDay = (stamp: number) => `pay_${toDayStamp(stamp)}`;
+  const nov10 = utc(2026, 11, 10);
+  const nov17 = utc(2026, 11, 17);
+  const nov24 = utc(2026, 11, 24);
+  const days = [nov10, nov17, nov24].map((on) => ({ dayKey: toDay(on), on }));
+  const bill = (funded: FundedDay[]): DraftBillInput => ({
+    itemId: 'bill-1',
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    amount: { lowCents: 60_000, highCents: 60_000 },
+    schedule: { kind: 'once', anchor: utc(2026, 12, 1), monthDays: [] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded, paid: [] },
+  });
+  const [moved] = Object.values(
+    collectMovedIn([
+      {
+        moveId: 'move-1',
+        on: utc(2026, 11, 1),
+        fromId: 'moving',
+        toId: 'bill-1',
+        cents: 20_000,
+        isOutside: false,
+      },
+    ]),
+  );
+  const plain = planBillPayments(bill([]), days, utc(2027, 3, 1))[0];
+  const withMoved = planBillPayments(bill(moved), days, utc(2027, 3, 1))[0];
+  const asked = (parts: { cents: number }[]) =>
+    parts.reduce((total, part) => total + part.cents, 0);
+  assert.equal(
+    asked(plain.parts),
+    60_000,
+    'a bill with no transfer is unchanged',
+  );
+  assert.equal(
+    asked(withMoved.parts),
+    40_000,
+    'the bill asks $200 less when $200 moved into it',
+  );
+  assert.equal(
+    withMoved.fundedCents,
+    20_000,
+    'and reads the $200 as set aside',
+  );
+  assert.equal(
+    withMoved.fundedDays,
+    0,
+    'money moved in is not a confirmed income day',
   );
 }
 

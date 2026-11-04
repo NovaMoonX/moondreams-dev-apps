@@ -10,6 +10,8 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
+import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+
 import { addUtcMonths, DAY_MS } from './dates';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
@@ -52,9 +54,9 @@ export function listCostPayments(
   const result = occurrences(cost.schedule, cost.ending, 0, horizon)
     .filter(
       (dueOn) =>
-        cost.endsAfter === null ||
-        dueOn <= cost.endsAfter ||
-        markOf(dueOn) !== null,
+        markOf(dueOn) !== null ||
+        ((cost.endsAfter === null || dueOn <= cost.endsAfter) &&
+          (cost.becameBillOn === null || dueOn < cost.becameBillOn)),
     )
     .map((dueOn) => {
       const mark = markOf(dueOn);
@@ -139,7 +141,49 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
     ending: cost.ending ?? { onDate: null, afterCount: null },
     pricedOn: cost.pricedOn ?? null,
     endsAfter: cost.endsAfter ?? null,
+    becameBillId: cost.becameBillId ?? null,
+    becameBillOn: cost.becameBillOn ?? null,
   })),
+});
+
+/** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */
+export function listCoveredFrom(
+  schedule: Schedule,
+  amount: MoneyRange,
+  from: DateOnly,
+  heldCents: Cents,
+  stance: Stance,
+): DateOnly[] {
+  const payment = pick(stance, amount, 'expense');
+  if (payment <= 0) return [];
+  const dues = occurrences(
+    schedule,
+    { onDate: null, afterCount: null },
+    from,
+    addUtcMonths(from, LOOKAHEAD_MONTHS),
+  );
+  return dues.reduce<{ left: Cents; covered: DateOnly[] }>(
+    (walk, dueOn) =>
+      walk.left >= payment
+        ? { left: walk.left - payment, covered: [...walk.covered, dueOn] }
+        : walk,
+    { left: Math.max(0, heldCents), covered: [] },
+  ).covered;
+}
+
+/** The item with a cost handed to the bill that now plans its payments from `billOn`. */
+export const setCostBill = (
+  horizon: HorizonSealed,
+  costId: string,
+  billId: string,
+  billOn: DateOnly,
+): HorizonSealed => ({
+  ...horizon,
+  costs: horizon.costs.map((cost) =>
+    cost.id === costId
+      ? { ...cost, becameBillId: billId, becameBillOn: billOn }
+      : cost,
+  ),
 });
 
 /** The item with one cost's amount set and the day it was priced; unchanged when the cost is not in it. */
