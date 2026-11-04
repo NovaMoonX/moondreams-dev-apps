@@ -2596,7 +2596,7 @@ async function writeSeedPurchases(
 /**
  * Writes the closings the app would build for a seeded plan: every month from the starting day's through
  * the last one that may be closed, read back from the emulator and summed by the same code the app runs.
- * Emulators only. Returns how many it wrote.
+ * Closings left by an earlier run go first, since one for a later month would hide the seeded moves. Emulators only. Returns how many it wrote.
  */
 export async function seedClosings(
   context: SeedContext,
@@ -2606,6 +2606,8 @@ export async function seedClosings(
 ): Promise<number> {
   const plan = `apps/runway/plans/${uid}`;
   const target = getLastClosableMonth(startOfUtcDay(context.now));
+  const kept = await context.firestore.collection(`${plan}/closings`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
   if (toMonthKey(startDate) > target) return 0;
   const items = await context.firestore.collection(`${plan}/items`).get();
   const billIds = new Set(
