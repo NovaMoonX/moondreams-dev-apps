@@ -97,7 +97,6 @@ const isAfterIncome = (group: DatedProblemGroup) =>
   group.problem.kind === 'noIncome' &&
   group.problem.reason === 'noIncome';
 
-/** Bills with no income before them share one fix (when the pay ends), so two or more are one row at the first one's place. */
 function foldAfterIncome(groups: DatedProblemGroup[]): DatedProblemGroup[] {
   const after = groups.filter(isAfterIncome);
   if (after.length < 2) return groups;
@@ -177,7 +176,7 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
   const on = formatDateOrdinalUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'afterIncome') {
     return {
-      before: `${group.names.length} bills from ${on} have no income before them`,
+      before: `${group.names[0]} on ${on} and ${group.names.length - 1} more have no income before them`,
       figure: null,
       after: '',
     };
