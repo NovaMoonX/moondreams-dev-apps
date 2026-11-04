@@ -2107,6 +2107,8 @@ export const PROBLEM_WORDS = {
 export const HOME_TILE_COUNT = 4;
 /** How many days ahead Home warns that a card with money waiting is due. */
 export const CARD_DUE_WARN_DAYS = 7;
+/** How many days ahead Home's warning row counts a Horizon shortfall. */
+export const HORIZON_WARN_DAYS = 30;
 
 /** The words of the one-question-at-a-time forms and their hero amounts. */
 export const FORM_FLOW_WORDS = {
@@ -2415,6 +2417,10 @@ export const FIX_WORDS = {
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due\u00a0${date}`,
   runsShortOn: (date: string) => `On ${date}`,
+  frontedShort: (name: string) => `Free to Spend can't cover ${name}`,
+  frontedOn: (date: string, pay: string) => `On ${date}, before the ${pay} pay`,
+  frontedSummary: (name: string, date: string, pay: string) =>
+    `Free to Spend can't cover ${name} on ${date} before the ${pay} pay`,
   openDay: 'Open this income day',
   openUndated: 'See the bills with no due date',
   openPaidFrom: 'Change which pay it comes from',

@@ -5598,6 +5598,191 @@ const version = (
   assert.equal(run([]).problems.length, 0);
   assert.equal(run([]).hasBills, false);
 
+  // Horizon in the lookahead: a `later` shortfall is listed, never a problem; outside costs raise nothing; a fronted payment warns only when Free to Spend falls below zero on its due date.
+  {
+    const once = (id: string, name: string, cents: number, anchor: number) => ({
+      id,
+      name,
+      amount: exact(cents),
+      schedule: { kind: 'once' as const, anchor, monthDays: [] },
+      ending: never,
+      isOutside: false,
+      note: null,
+    });
+    const dec19 = today + 57 * DAY_MS;
+    const wedding = {
+      id: 'wedding',
+      name: "Sam's wedding",
+      rest: { kind: 'later' as const },
+      costs: [once('venue', 'Venue', 143_000, dec19)],
+      heldCents: 120_000,
+    };
+    const weeks = weekly.slice(0, 10);
+    const bare = run(weeks);
+    const withShort = run(weeks, { horizonItems: [wedding] });
+    assert.deepEqual(withShort.horizonShort, [
+      {
+        kind: 'later',
+        itemId: 'wedding',
+        name: "Sam's wedding",
+        dueOn: dec19,
+        shortCents: 23_000,
+      },
+    ]);
+    assert.equal(withShort.holdsThrough, bare.holdsThrough);
+    assert.deepEqual(withShort.problems, bare.problems);
+    assert.deepEqual(bare.horizonShort, []);
+    assert.deepEqual(
+      run(weeks, {
+        horizonItems: [{ ...wedding, heldCents: 143_000 }],
+      }).horizonShort,
+      [],
+      'a covered payment raises nothing',
+    );
+
+    assert.deepEqual(
+      run(weeks, {
+        horizonItems: [
+          { ...wedding, rest: { kind: 'outside' as const } },
+          { ...wedding, id: 'w2', rest: { kind: 'pays' as const } },
+          {
+            ...wedding,
+            id: 'w3',
+            costs: [{ ...wedding.costs[0], isOutside: true }],
+          },
+        ],
+      }).horizonShort,
+      [],
+      'outside items, outside costs and pays items add nothing',
+    );
+
+    const pick = weekly[5];
+    const movers = {
+      id: 'movers',
+      name: 'Movers',
+      rest: { kind: 'onePay' as const, dayKey: pick.dayKey },
+      costs: [once('movers', 'Movers', 60_000, today + 20 * DAY_MS)],
+      heldCents: 0,
+    };
+    const freeEach = (cents: number) => () => ({
+      draft: {
+        ...emptyDraft(),
+        freeToSpend: { cents, bySource: [] },
+      },
+      names: {},
+    });
+    const fronted = (freeNow: number | null, over = {}, each = 10_000) =>
+      run(weekly.slice(0, 10), {
+        horizonItems: [movers],
+        freeToSpendCents: freeNow,
+        draftOf: freeEach(each),
+        ...over,
+      });
+    assert.deepEqual(fronted(25_000).horizonShort, [
+      {
+        kind: 'fronted',
+        itemId: 'movers',
+        name: 'Movers',
+        dueOn: today + 20 * DAY_MS,
+        shortCents: 5_000,
+        payOn: pick.on,
+      },
+    ]);
+    assert.deepEqual(
+      fronted(35_000).horizonShort,
+      [],
+      'three pays by the due date lift Free to Spend to the cost',
+    );
+    assert.deepEqual(
+      fronted(30_000, {}, 10_000).horizonShort,
+      [],
+      'exactly zero left is not below zero',
+    );
+    assert.equal(fronted(-1, {}, 100_000).horizonShort.length, 0);
+    assert.equal(fronted(null).horizonShort.length, 0);
+    assert.equal(
+      fronted(0, { freeToSpendCents: undefined }).horizonShort.length,
+      0,
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          {
+            ...movers,
+            paid: [{ costId: 'movers', dueOn: today + 20 * DAY_MS }],
+          },
+        ],
+      }).horizonShort.length,
+      0,
+      'a payment already marked paid asks nothing',
+    );
+    assert.equal(
+      fronted(0, { horizonItems: [{ ...movers, heldCents: 60_000 }] })
+        .horizonShort.length,
+      0,
+      'a payment its own money covers is not fronted',
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          { ...movers, rest: { kind: 'onePay' as const, dayKey: 'gone' } },
+        ],
+      }).horizonShort.length,
+      0,
+      'a pick that is not coming fronts nothing',
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          { ...movers, costs: [{ ...movers.costs[0], isOutside: true }] },
+        ],
+      }).horizonShort.length,
+      0,
+      'an outside cost is never fronted',
+    );
+    const payShort = fronted(25_000, {
+      draftOf: (onDay: ComingDay) => ({
+        draft: {
+          ...emptyDraft(
+            onDay.dayKey === pick.dayKey
+              ? ([
+                  {
+                    lineId: 'movers',
+                    itemId: 'movers',
+                    cents: 10_000,
+                    shortBy: 50_000,
+                    tier: 'should',
+                    bill: null,
+                    pairing: null,
+                    costId: 'movers',
+                    repaysFree: false,
+                    cost: { costId: 'movers', dueOn: today + 20 * DAY_MS },
+                  },
+                ] as unknown as LookaheadDraft['draft']['lines'])
+              : [],
+          ),
+          freeToSpend: { cents: 10_000, bySource: [] },
+        },
+        names: {},
+      }),
+    });
+    assert.deepEqual(
+      [
+        payShort.horizonShort.length,
+        payShort.problems.filter(
+          (problem) => problem.kind === 'short' && problem.costId === 'movers',
+        ).length,
+      ],
+      [0, 1],
+      'a cost its picked pay is already short on warns once, on that pay',
+    );
+    assert.equal(
+      fronted(0).holdsThrough,
+      run(weekly.slice(0, 10)).holdsThrough,
+      'a fronted warning never moves how far the plan holds',
+    );
+  }
+
   const payment = (dueOn: number, parts: number, fundedCents = 0) =>
     ({
       dueOn,
@@ -8043,6 +8228,7 @@ const version = (
     incomeEndsOn: null,
     due: [],
     undated: [],
+    horizonShort: [],
     steps: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
@@ -10654,6 +10840,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     undated: [],
+    horizonShort: [],
     steps: [],
     due: [],
   });

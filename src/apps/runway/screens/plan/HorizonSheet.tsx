@@ -19,7 +19,12 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
 import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { HORIZON_WORDS, RANGE_END_WORDS } from '@apps/runway/constants';
+import {
+  FIX_WORDS,
+  HORIZON_WORDS,
+  RANGE_END_WORDS,
+} from '@apps/runway/constants';
+import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
@@ -31,6 +36,8 @@ interface HorizonSheetProps {
   horizon: HorizonSealed;
   today: number;
   stance: Stance;
+  /** The fronted payment the sheet was opened for, said again inside it. */
+  fronted?: Extract<HorizonShort, { kind: 'fronted' }> | null;
   onClose: () => void;
 }
 
@@ -40,6 +47,7 @@ function HorizonSheet({
   horizon,
   today,
   stance,
+  fronted = null,
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
@@ -217,6 +225,17 @@ function HorizonSheet({
                   </Button>
                 )}
               </div>
+            </InlineNotice>
+          )}
+          {fronted && !shortfall && (
+            <InlineNotice tone='warning'>
+              <p>
+                {FIX_WORDS.frontedSummary(
+                  fronted.name,
+                  formatDateOrdinalUTC(fronted.dueOn),
+                  formatDateOrdinalUTC(fronted.payOn),
+                )}
+              </p>
             </InlineNotice>
           )}
           {horizon.rest.kind === 'outside' && plan.coveredUntil !== null && (
