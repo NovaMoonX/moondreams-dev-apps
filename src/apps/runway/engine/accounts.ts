@@ -19,6 +19,16 @@ export function resolvePayFromAccountId(
   return pulls.length === 1 ? pulls[0].id : null;
 }
 
+/** Each held id's one holder: when a race left an id in two accounts, the one changed last keeps it. */
+export function getHolderById(
+  accounts: readonly Pick<OpenAccount, 'id' | 'holds' | 'updatedAt'>[],
+): Record<string, string> {
+  const byRecent = [...accounts].sort((a, b) => a.updatedAt - b.updatedAt);
+  return Object.fromEntries(
+    byRecent.flatMap((account) => account.holds.map((id) => [id, account.id])),
+  );
+}
+
 export interface AccountHoldings {
   items: { id: string; cents: Cents }[];
   heldCents: Cents;

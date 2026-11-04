@@ -9,7 +9,10 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getAccountHoldings } from '@apps/runway/engine/accounts';
+import {
+  getAccountHoldings,
+  getHolderById,
+} from '@apps/runway/engine/accounts';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   deriveBillProgress,
@@ -1281,11 +1284,19 @@ export const selectIsAccountsLoaded = (state: RootState) =>
 /** Each open account with what its goals and envelopes hold, keyed by account id. */
 export const selectAccountHoldings = createSelector(
   [selectAccounts, selectBalances],
-  (accounts, balances) =>
-    Object.fromEntries(
+  (accounts, balances) => {
+    const holderById = getHolderById(accounts);
+    return Object.fromEntries(
       accounts.map((account) => [
         account.id,
-        getAccountHoldings(account, { byId: balances.assignedByItem }),
+        getAccountHoldings(
+          {
+            ...account,
+            holds: account.holds.filter((id) => holderById[id] === account.id),
+          },
+          { byId: balances.assignedByItem },
+        ),
       ]),
-    ),
+    );
+  },
 );

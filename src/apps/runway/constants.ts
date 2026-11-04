@@ -2762,7 +2762,10 @@ export const ACCOUNT_WORDS = {
   changeAdded: (name: string) => `Added the account ${name}`,
   changeChanged: (name: string) => `Changed the account ${name}`,
   changeArchived: (name: string) => `Archived the account ${name}`,
-  changeHolds: (name: string) => `Changed what ${name} holds`,
+  changeHolds: (name: string, movedFrom: string[]) =>
+    movedFrom.length === 0
+      ? `Changed what ${name} holds`
+      : `Changed what ${name} holds, moving some from ${movedFrom.join(' and ')}`,
   changeBalance: (name: string) => `Updated the balance of ${name}`,
   withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
   sheetTitle: 'Account',

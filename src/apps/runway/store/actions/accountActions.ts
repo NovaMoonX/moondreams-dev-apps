@@ -22,14 +22,18 @@ const changeRef = (uid: string, changeId: string) =>
   doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId);
 
 /** The change-log entry written in the same transaction as an account action. */
-const getChangeDoc = async (encryption: RunwayEncryption, summary: string) => {
+const getChangeDoc = async (
+  encryption: RunwayEncryption,
+  summary: string,
+  itemIds: string[] = [],
+) => {
   const id = generateUuid();
   return {
     id,
     kind: 'accountChange',
     createdAt: Date.now(),
     effectiveFrom: null,
-    itemIds: [],
+    itemIds,
     sealed: await sealJson(
       { summary, note: null } satisfies ChangeSealed,
       encryption,
@@ -97,7 +101,7 @@ export async function createAccount(
   return id;
 }
 
-/** Changes an account's sealed fields; `summary` is the change-log sentence. */
+/** Changes what the form edits (name, bank, kind, last 4, pull, counted); what it holds and its balance are re-read and kept. */
 export async function updateAccount(
   uid: string,
   encryption: RunwayEncryption,
@@ -105,11 +109,20 @@ export async function updateAccount(
   input: AccountSealed,
   summary: string,
 ): Promise<void> {
-  const [sealed, change] = await Promise.all([
-    sealJson(toSealed(input), encryption),
-    getChangeDoc(encryption, summary),
-  ]);
+  const change = await getChangeDoc(encryption, summary);
   await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(accountRef(uid, accountId));
+    if (!snapshot.exists()) throw new Error('The account is gone.');
+    const current = await openSealed(snapshot.data() as AccountDoc, encryption);
+    const sealed = await sealJson(
+      toSealed({
+        ...input,
+        holds: current.holds,
+        balanceCents: current.balanceCents,
+        balanceOn: current.balanceOn,
+      }),
+      encryption,
+    );
     transaction.update(accountRef(uid, accountId), {
       sealed,
       updatedAt: Date.now(),
@@ -118,7 +131,7 @@ export async function updateAccount(
   });
 }
 
-/** Hides an account from new use; the change log keeps what it was. */
+/** Hides an account from new use and frees what it held; the change log keeps what it was. */
 export async function archiveAccount(
   uid: string,
   encryption: RunwayEncryption,
@@ -126,9 +139,16 @@ export async function archiveAccount(
   summary: string,
 ): Promise<void> {
   const now = Date.now();
-  const change = await getChangeDoc(encryption, summary);
   await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(accountRef(uid, accountId));
+    if (!snapshot.exists()) throw new Error('The account is gone.');
+    const current = await openSealed(snapshot.data() as AccountDoc, encryption);
+    const [sealed, change] = await Promise.all([
+      sealJson({ ...current, holds: [] }, encryption),
+      getChangeDoc(encryption, summary, current.holds),
+    ]);
     transaction.update(accountRef(uid, accountId), {
+      sealed,
       archivedAt: now,
       updatedAt: now,
     });
@@ -144,7 +164,6 @@ export async function setAccountHolds(
   holds: string[],
   openAccounts: OpenAccount[],
 ): Promise<void> {
-  const target = openAccounts.find((account) => account.id === accountId);
   const taken = new Set(holds);
   const others = openAccounts.filter((account) => account.id !== accountId);
   await runTransaction(db, async (transaction) => {
@@ -165,6 +184,7 @@ export async function setAccountHolds(
         if (!current.holds.some((id) => taken.has(id))) return null;
         return {
           id: data.id,
+          name: current.name,
           sealed: await sealJson(
             {
               ...current,
@@ -179,7 +199,11 @@ export async function setAccountHolds(
       sealJson({ ...targetSealed, holds }, encryption),
       getChangeDoc(
         encryption,
-        ACCOUNT_WORDS.changeHolds(target?.name ?? targetSealed.name),
+        ACCOUNT_WORDS.changeHolds(
+          targetSealed.name,
+          writes.flatMap((write) => (write ? [write.name] : [])),
+        ),
+        holds,
       ),
     ]);
     transaction.update(accountRef(uid, accountId), { sealed, updatedAt: now });
