@@ -342,6 +342,9 @@ export const HORIZON_WORDS = {
   needsCostDate: 'Pick a day within the next year that has not passed.',
   addCostNamed: (name: string) => `Add ${name}`,
   costOutside: 'Paid outside the plan',
+  costPaidTitle: "How it's paid",
+  costPaidLabel: "How it's paid",
+  costPaidLike: (name: string) => `Like the rest of ${name}`,
   costOutsideHint:
     'Listed here, but never set aside for and never warned about.',
   outsideTag: 'Outside the plan',
@@ -372,8 +375,19 @@ export const HORIZON_WORDS = {
   leftFact: (setAside: string, spent: string) =>
     `${setAside} set aside, ${spent} spent`,
   shortTitle: (amount: string, date: string) => `${amount} short on ${date}`,
-  shortBody: (name: string) =>
-    `What you have put toward ${name} runs out before its costs do.`,
+  shortBody: (
+    cost: string,
+    planned: string,
+    available: string,
+    isAfterEarlier: boolean,
+    endWords: string | null,
+  ) =>
+    `${cost} is planned at ${endWords ? `${endWords}, ` : ''}${planned}, more than the ${available} ${isAfterEarlier ? 'left for it' : 'set aside'}.`,
+  shortNothing: (name: string) => `Nothing is set aside for ${name} yet.`,
+  outsideTotal: (amount: string) => `${amount} outside the plan`,
+  needsAShortLook: 'Needs a look',
+  putHolds: (name: string, amount: string) => `${name} has ${amount}`,
+  needsPutOrNotNow: 'Pick where it comes from, or Not now.',
   restOutsideNote: 'The rest is on you, outside the plan.',
   putMore: 'Put more toward it',
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',

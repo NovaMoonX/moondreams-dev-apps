@@ -38,6 +38,7 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import CostRow from '@apps/runway/components/CostRow';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import CostForm from '@apps/runway/forms/CostForm';
@@ -99,6 +100,7 @@ const INITIAL_DATA: HorizonFormData = {
 const FROM_OPTIONS = [
   { value: 'free' as const, label: HORIZON_WORDS.putFromFree },
   { value: 'place' as const, label: HORIZON_WORDS.putFromPlace },
+  { value: 'none' as const, label: HORIZON_WORDS.putNotNow },
 ];
 
 const REST_ICONS = {
@@ -367,9 +369,11 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           : '',
       isAnswered: putBlocker === null,
       blocker:
-        formData.putAmount !== '' || formData.putFrom !== null
-          ? putBlocker
-          : null,
+        putBlocker !== null &&
+        formData.putAmount === '' &&
+        formData.putFrom === null
+          ? HORIZON_WORDS.needsPutOrNotNow
+          : putBlocker,
       render: ({ moveOn }) => (
         <div className='space-y-4'>
           <AmountHero
@@ -381,10 +385,20 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           <PillGroup
             label={HORIZON_WORDS.putFrom}
             options={FROM_OPTIONS}
-            value={formData.putFrom}
-            onChange={(putFrom) =>
-              set({ putFrom, isNotNow: false, putPlaceId: null })
-            }
+            value={formData.isNotNow ? 'none' : formData.putFrom}
+            onChange={(putFrom) => {
+              if (putFrom === 'none') {
+                set({
+                  putAmount: '',
+                  putFrom: null,
+                  putPlaceId: null,
+                  isNotNow: true,
+                });
+                moveOn();
+                return;
+              }
+              set({ putFrom, isNotNow: false, putPlaceId: null });
+            }}
           />
           {formData.putFrom === 'place' && (
             <PillGroup
@@ -398,21 +412,13 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
               onChange={(putPlaceId) => set({ putPlaceId, isNotNow: false })}
             />
           )}
-          <div>
-            <RevealChip
-              onClick={() => {
-                set({
-                  putAmount: '',
-                  putFrom: null,
-                  putPlaceId: null,
-                  isNotNow: true,
-                });
-                moveOn();
-              }}
-            >
-              {HORIZON_WORDS.putNotNow}
-            </RevealChip>
-          </div>
+          {putFromName !== undefined && putLeftCents !== Infinity && (
+            <p className='text-muted-foreground text-sm'>
+              <MaskedText>
+                {HORIZON_WORDS.putHolds(putFromName, formatCents(putLeftCents))}
+              </MaskedText>
+            </p>
+          )}
         </div>
       ),
     },

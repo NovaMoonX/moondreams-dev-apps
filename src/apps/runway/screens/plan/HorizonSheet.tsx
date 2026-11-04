@@ -17,19 +17,11 @@ import CoversLine from '@apps/runway/components/CoversLine';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
 import SheetHead from '@apps/runway/components/SheetHead';
-import {
-  HORIZON_WORDS,
-  LOOKAHEAD_MONTHS,
-} from '@apps/runway/constants';
-import { addUtcMonths } from '@apps/runway/engine/dates';
-import {
-  getHorizonFigures,
-  listHorizonPayments,
-  planHorizon,
-  sumCostPayments,
-} from '@apps/runway/engine/horizon';
+import { HORIZON_WORDS, RANGE_END_WORDS } from '@apps/runway/constants';
+import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
+import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 interface HorizonSheetProps {
   itemId: string;
@@ -48,18 +40,33 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
-  const [isPutting, setIsPutting] = useState(false);
-  const payments = listHorizonPayments(
-    horizon.costs,
-    addUtcMonths(today, LOOKAHEAD_MONTHS),
+  const [putting, setPutting] = useState<{
+    initialCents: number | null;
+  } | null>(null);
+  const { figures, plan, plannedCents, outsideCents } = getHorizonStatus(
+    horizon,
+    balances.assignedByItem[itemId] ?? 0,
+    today,
     stance,
   );
-  const plannedCents = sumCostPayments(payments);
-  const figures = getHorizonFigures(
-    Math.max(0, balances.assignedByItem[itemId] ?? 0),
-  );
-  const plan = planHorizon(horizon, figures.leftCents, payments);
   const { shortfall } = plan;
+  const getShortBody = () => {
+    if (!shortfall) return '';
+    if (figures.leftCents <= 0) return HORIZON_WORDS.shortNothing(horizon.name);
+    const cost = horizon.costs.find(({ id }) => id === shortfall.costId);
+    if (!cost) return '';
+    const isRange = cost.amount.lowCents !== cost.amount.highCents;
+    return HORIZON_WORDS.shortBody(
+      cost.name,
+      formatCents(shortfall.paymentCents),
+      formatCents(shortfall.availableCents),
+      plan.covers.findIndex(
+        ({ costId, dueOn }) =>
+          costId === shortfall.costId && dueOn === shortfall.dueOn,
+      ) > 0,
+      isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
+    );
+  };
   const when =
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
@@ -71,6 +78,11 @@ function HorizonSheet({
       ' ',
       '\u00A0',
     ),
+    outsideCents > 0 &&
+      HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
+        ' ',
+        '\u00A0',
+      ),
     HORIZON_WORDS.costCount(horizon.costs.length).replace(' ', '\u00A0'),
     when,
   ]
@@ -91,12 +103,13 @@ function HorizonSheet({
       title={horizon.name}
       actions={<ValuesEyeButton />}
     >
-      {isPutting ? (
+      {putting ? (
         <PutTowardView
           itemId={itemId}
           name={horizon.name}
           today={today}
-          onBack={() => setIsPutting(false)}
+          initialCents={putting.initialCents}
+          onBack={() => setPutting(null)}
         />
       ) : (
         <div className='space-y-4'>
@@ -126,13 +139,17 @@ function HorizonSheet({
                 </MaskedText>
               }
             >
-              <p>{HORIZON_WORDS.shortBody(horizon.name)}</p>
+              <p>
+                <MaskedText>{getShortBody()}</MaskedText>
+              </p>
               <Button
                 type='button'
                 variant='secondary'
                 size='sm'
                 className='mt-2'
-                onClick={() => setIsPutting(true)}
+                onClick={() =>
+                  setPutting({ initialCents: shortfall.shortCents })
+                }
               >
                 {HORIZON_WORDS.putMore}
               </Button>
@@ -143,17 +160,19 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
-          <ActionGroup isRoomy>
-            <ActionRow
-              isGrouped
-              isRoomy
-              hasChevron
-              icon={<HandCoins />}
-              label={HORIZON_WORDS.putMore}
-              subtitle={HORIZON_WORDS.putMoreSub}
-              onClick={() => setIsPutting(true)}
-            />
-          </ActionGroup>
+          {!shortfall && (
+            <ActionGroup isRoomy>
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<HandCoins />}
+                label={HORIZON_WORDS.putMore}
+                subtitle={HORIZON_WORDS.putMoreSub}
+                onClick={() => setPutting({ initialCents: null })}
+              />
+            </ActionGroup>
+          )}
           <p className='text-muted-foreground text-sm'>
             <MaskedText>{fact}</MaskedText>
           </p>

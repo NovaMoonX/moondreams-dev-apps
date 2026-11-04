@@ -42,8 +42,8 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
     );
   const getText = () => {
     if (plan.covers.length === 0) return null;
-    if (heldCents <= 0) return words.nothingSet;
-    if (covered.length === 0) return words.none;
+    if (heldCents <= 0) return plan.shortfall ? null : words.nothingSet;
+    if (covered.length === 0) return plan.shortfall ? null : words.none;
     if (covered.length === plan.covers.length && covered.length > MAX_NAMED) {
       return words.all;
     }
@@ -57,27 +57,32 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
   const text = getText();
   if (text === null) return null;
 
+  const cut = text.lastIndexOf(' ') + 1;
+
   return (
-    <p className='text-sm'>
-      <MaskedText>{text}</MaskedText>
-      {ranged.length > 0 && (
-        <span className='ml-1 inline-block align-middle'>
-          <HelpTip title={words.helpTitle}>
-            <MaskedText>
-              {ranged
-                .map(({ cost }) =>
-                  words.helpRange(
-                    cost.name,
-                    formatCents(cost.amount.lowCents),
-                    formatCents(cost.amount.highCents),
-                    endWords,
-                  ),
-                )
-                .join(' ')}
-            </MaskedText>
-          </HelpTip>
-        </span>
-      )}
+    <p className='text-sm text-pretty'>
+      <MaskedText>{text.slice(0, cut)}</MaskedText>
+      <span className='whitespace-nowrap'>
+        <MaskedText>{text.slice(cut)}</MaskedText>
+        {ranged.length > 0 && (
+          <span className='ml-1 inline-block align-middle'>
+            <HelpTip title={words.helpTitle}>
+              <MaskedText>
+                {ranged
+                  .map(({ cost }) =>
+                    words.helpRange(
+                      cost.name,
+                      formatCents(cost.amount.lowCents),
+                      formatCents(cost.amount.highCents),
+                      endWords,
+                    ),
+                  )
+                  .join(' ')}
+              </MaskedText>
+            </HelpTip>
+          </span>
+        )}
+      </span>
     </p>
   );
 }

@@ -66,6 +66,12 @@ export interface HorizonCover {
 }
 
 export interface HorizonShortfall {
+  /** The cost whose payment is the first the money does not cover. */
+  costId: string;
+  /** What that payment is planned at. */
+  paymentCents: Cents;
+  /** What was left of the money held when that payment's turn came. */
+  availableCents: Cents;
   /** The due date of the first payment the money does not cover. */
   dueOn: DateOnly;
   /** What that payment lacks. */
@@ -112,6 +118,9 @@ export function planHorizon(
   const shortfall: HorizonShortfall | null =
     item.rest.kind === 'later' && first
       ? {
+          costId: first.costId,
+          paymentCents: first.totalCents,
+          availableCents: first.coveredCents,
           dueOn: first.dueOn,
           shortCents: first.totalCents - first.coveredCents,
           totalShortCents: short.reduce(

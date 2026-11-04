@@ -10774,7 +10774,14 @@ const version = (
   );
   assert.deepEqual(
     walk.shortfall,
-    { dueOn: jan15, shortCents: 77_000, totalShortCents: 77_000 },
+    {
+      costId: 'c-movers',
+      paymentCents: 80_000,
+      availableCents: 3_000,
+      dueOn: jan15,
+      shortCents: 77_000,
+      totalShortCents: 77_000,
+    },
     'a later item names the first payment that lacks money and the total lacking',
   );
   assert.equal(

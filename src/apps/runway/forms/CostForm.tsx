@@ -3,11 +3,11 @@ import { useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountField from '@/components/AmountField';
-import AppToggle from '@/components/AppToggle';
 import DateInput from '@/components/DateInput';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import SuggestionChips from '@/components/SuggestionChips';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -202,14 +202,7 @@ function CostForm({
       id: 'date',
       title: HORIZON_WORDS.costWhenTitle,
       summaryLabel: HORIZON_WORDS.costWhen,
-      summaryValue: !isDateValid
-        ? ''
-        : [
-            formatDateOrdinalUTC(date),
-            formData.isOutside && HORIZON_WORDS.outsideTag,
-          ]
-            .filter(Boolean)
-            .join(' · '),
+      summaryValue: isDateValid ? formatDateOrdinalUTC(date) : '',
       isAnswered: isDateValid,
       blocker:
         formData.date !== '' && !isDateValid
@@ -228,22 +221,40 @@ function CostForm({
           <p className='text-muted-foreground text-sm'>
             {HORIZON_WORDS.costDateHint}
           </p>
-          <label className='flex items-start justify-between gap-3 pt-2 text-sm'>
-            <span className='min-w-0'>
-              <span className='block font-medium'>
-                {HORIZON_WORDS.costOutside}
-              </span>
-              <span className='text-muted-foreground block'>
-                {HORIZON_WORDS.costOutsideHint}
-              </span>
-            </span>
-            <AppToggle
-              aria-label={HORIZON_WORDS.costOutside}
-              checked={formData.isOutside}
-              onCheckedChange={(isOutside) => set({ isOutside })}
-              className='mt-0.5 shrink-0'
-            />
-          </label>
+        </div>
+      ),
+    },
+    {
+      id: 'paid',
+      title: HORIZON_WORDS.costPaidTitle,
+      summaryLabel: HORIZON_WORDS.costPaidLabel,
+      summaryValue: formData.isOutside
+        ? HORIZON_WORDS.costOutside
+        : HORIZON_WORDS.costPaidLike(itemName),
+      isAnswered: true,
+      isPreAnswered: true,
+      render: ({ moveOn }) => (
+        <div className='space-y-2'>
+          <PillGroup
+            label={HORIZON_WORDS.costPaidLabel}
+            options={[
+              {
+                value: 'like' as const,
+                label: HORIZON_WORDS.costPaidLike(itemName),
+              },
+              { value: 'outside' as const, label: HORIZON_WORDS.costOutside },
+            ]}
+            value={formData.isOutside ? 'outside' : 'like'}
+            onChange={(value) => {
+              set({ isOutside: value === 'outside' });
+              moveOn();
+            }}
+          />
+          {formData.isOutside && (
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_WORDS.costOutsideHint}
+            </p>
+          )}
         </div>
       ),
     },

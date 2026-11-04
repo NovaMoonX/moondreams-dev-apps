@@ -1,7 +1,51 @@
 import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
-import { HORIZON_WORDS } from '@apps/runway/constants';
-import type { HorizonCost } from '@apps/runway/types';
+import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
+import { addUtcMonths } from '@apps/runway/engine/dates';
+import {
+  getHorizonFigures,
+  listHorizonPayments,
+  planHorizon,
+} from '@apps/runway/engine/horizon';
+import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
+
+/** Everything the event's row and its sheet say about it, worked out once so the two never disagree. */
+export function getHorizonStatus(
+  horizon: HorizonSealed,
+  assignedCents: number,
+  today: number,
+  stance: Stance,
+) {
+  const payments = listHorizonPayments(
+    horizon.costs,
+    addUtcMonths(today, LOOKAHEAD_MONTHS),
+    stance,
+  );
+  const outsideIds = new Set(
+    horizon.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
+  );
+  const planned = payments.filter(({ costId }) => !outsideIds.has(costId));
+  const figures = getHorizonFigures(Math.max(0, assignedCents));
+  const plan = planHorizon(horizon, figures.leftCents, payments);
+  const next = planned.find(({ dueOn }) => dueOn >= today);
+  return {
+    payments,
+    figures,
+    plan,
+    plannedCents: planned.reduce((sum, { totalCents }) => sum + totalCents, 0),
+    outsideCents: payments.reduce(
+      (sum, { costId, totalCents }) =>
+        outsideIds.has(costId) ? sum + totalCents : sum,
+      0,
+    ),
+    next: next
+      ? {
+          dueOn: next.dueOn,
+          name: horizon.costs.find(({ id }) => id === next.costId)?.name ?? '',
+        }
+      : null,
+  };
+}
 
 /** A cost in two plain pieces: the date line ("Jan 15th") and the figure ("$600 to $800" for a range). */
 export function describeCost(cost: HorizonCost) {

@@ -1,16 +1,15 @@
 import { useState } from 'react';
 
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCentsShort } from '@/utils/moneyUtils';
+import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { addUtcMonths } from '@apps/runway/engine/dates';
-import {
-  listHorizonPayments,
-  sumCostPayments,
-} from '@apps/runway/engine/horizon';
+import { HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
+import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 interface HorizonRowProps {
   itemId: string;
@@ -19,21 +18,33 @@ interface HorizonRowProps {
   stance: Stance;
 }
 
-/** An event in the plan: its badge, name, the next cost due and what its costs add up to; it opens the event's sheet. */
+/** An event in the plan: its badge, name, a shortfall or the next cost due, and what is left of the money put toward it; it opens the event's sheet. */
 function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const payments = listHorizonPayments(
-    horizon.costs,
-    addUtcMonths(today, LOOKAHEAD_MONTHS),
+  const { isHidden } = useValuesHidden();
+  const balances = useAppSelector(selectBalances);
+  const { figures, plan, next } = getHorizonStatus(
+    horizon,
+    balances.assignedByItem[itemId] ?? 0,
+    today,
     stance,
   );
-  const next = payments.find(({ dueOn }) => dueOn >= today);
-  const nextCost = horizon.costs.find(({ id }) => id === next?.costId);
-  const detail =
-    next && nextCost
-      ? HORIZON_WORDS.due(nextCost.name, formatDateOrdinalUTC(next.dueOn))
+  const { shortfall } = plan;
+  const getDetail = () => {
+    if (shortfall) {
+      return isHidden
+        ? HORIZON_WORDS.needsAShortLook
+        : HORIZON_WORDS.shortTitle(
+            formatCents(shortfall.shortCents),
+            formatDateOrdinalUTC(shortfall.dueOn),
+          );
+    }
+    return next
+      ? HORIZON_WORDS.due(next.name, formatDateOrdinalUTC(next.dueOn))
       : HORIZON_WORDS.nothingDue;
-  const plannedCents = sumCostPayments(payments);
+  };
+  const detail = getDetail();
+  const left = formatCentsShort(figures.leftCents);
 
   return (
     <>
@@ -41,8 +52,9 @@ function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
         name={horizon.name}
         emoji={horizon.emoji}
         detail={detail}
-        figure={formatCentsShort(plannedCents)}
-        ariaLabel={`${horizon.name}, ${formatCentsShort(plannedCents)} total cost. ${detail}. Open`}
+        isDetailWarning={shortfall !== null}
+        figure={left}
+        ariaLabel={`${horizon.name}, ${left} left. ${detail}. Open`}
         onOpen={() => setIsOpen(true)}
       />
       {isOpen && (

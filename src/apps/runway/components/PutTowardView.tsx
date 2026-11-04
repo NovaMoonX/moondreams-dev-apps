@@ -10,7 +10,12 @@ import { PillGroup, type PillOption } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
+import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   ActionSection,
   ActionTitle,
@@ -42,11 +47,19 @@ interface PutTowardViewProps {
   itemId: string;
   name: string;
   today: number;
+  /** An amount to start the field on; the person can change it. */
+  initialCents?: number | null;
   onBack: () => void;
 }
 
 /** The view a Horizon item's sheet swaps in to put more money toward it from Free to Spend, an envelope or goal, or from outside the plan. */
-function PutTowardView({ itemId, name, today, onBack }: PutTowardViewProps) {
+function PutTowardView({
+  itemId,
+  name,
+  today,
+  initialCents = null,
+  onBack,
+}: PutTowardViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
@@ -56,7 +69,9 @@ function PutTowardView({ itemId, name, today, onBack }: PutTowardViewProps) {
   const goals = useAppSelector((state) => selectGoals(state, today));
   const emojiOf = useLiveEmojiResolver();
   const [moveId] = useState(newTransferMoveId);
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(() =>
+    initialCents === null ? '' : centsToInputValue(initialCents),
+  );
   const [pick, setPick] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -198,6 +213,13 @@ function PutTowardView({ itemId, name, today, onBack }: PutTowardViewProps) {
           value={pick}
           onChange={setPick}
         />
+        {fromName !== null && leftCents !== Infinity && (
+          <p className='text-muted-foreground mt-2 text-sm'>
+            <MaskedText>
+              {HORIZON_WORDS.putHolds(fromName, formatCents(leftCents))}
+            </MaskedText>
+          </p>
+        )}
       </ActionSection>
       <ModalFooterActions
         note={error ?? blocker}
