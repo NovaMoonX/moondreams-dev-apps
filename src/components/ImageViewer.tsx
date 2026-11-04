@@ -178,12 +178,11 @@ function ImageViewer({
           : event.deltaMode === 2
             ? event.deltaY * height
             : event.deltaY;
-      const step = Math.max(
+      const logStep = Math.max(
         -0.5,
         Math.min(0.5, pixels * (event.ctrlKey ? 0.01 : 0.002)),
       );
-      const factor = Math.exp(-step);
-      pan.current = null;
+      const factor = Math.exp(-logStep);
       setZoom((current) => {
         const next = clampZoom(
           zoomAround(
@@ -195,7 +194,18 @@ function ImageViewer({
           width,
           height,
         );
-        return next.scale < 1.01 ? NO_ZOOM : next;
+        const settled = next.scale < 1.01 ? NO_ZOOM : next;
+        // A drag under way carries on from the new zoom instead of snapping back to the old one.
+        const held = pan.current && pointers.current.get(pan.current.pointerId);
+        if (pan.current && held) {
+          pan.current = {
+            ...pan.current,
+            startX: held.x,
+            startY: held.y,
+            start: settled,
+          };
+        }
+        return settled;
       });
     };
     element.addEventListener('wheel', handleWheel, { passive: false });
