@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Drawer, Popover } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Popover } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { AlertCircle, AlertTriangle, BedDouble, Bell, Info } from 'lucide-react';
 import { shallowEqual } from 'react-redux';
 
+import Drawer from '@/components/Drawer';
 import IconBadge from '@/components/IconBadge';
 import { useNow } from '@/hooks/useNow';
 import { useUserInfo } from '@/hooks/useUserInfo';

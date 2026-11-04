@@ -1,7 +1,8 @@
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Star } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import AppLogo from '@/components/AppLogo';
 import type { AppMetadata } from '@lib/types/appCatalog';
 

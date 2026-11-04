@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import Drawer from '@/components/Drawer';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import PosterCover from '@apps/a-list/components/shared/PosterCover';
 import StarRating from '@/components/StarRating';

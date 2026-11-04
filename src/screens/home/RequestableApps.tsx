@@ -1,6 +1,7 @@
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useState } from 'react';
 
+import Drawer from '@/components/Drawer';
 import AppLogo from '@/components/AppLogo';
 import { useMyAccessRequests } from '@/hooks/useMyAccessRequests';
 import { formatDate } from '@/utils/formatUtils';

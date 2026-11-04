@@ -1,9 +1,10 @@
 import { useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 
-import { Button, Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useIsShortScreen } from '@/hooks/useIsShortScreen';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
@@ -133,20 +134,26 @@ function DetailSheet({
           {title}
         </h2>
         {actions && (
-          <div className='relative z-10 -my-1 -mr-2 flex shrink-0 items-center gap-1'>
-            {actions}
-            {!isDrawer && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='icon'
-                aria-label='Close'
-                onClick={onDialogClose}
-                className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
-              >
-                <X className='h-5 w-5' aria-hidden='true' />
-              </Button>
+          <div
+            className={join(
+              'relative z-10 -mr-2 flex shrink-0 items-center gap-1',
+              isDrawer && !isCompact ? 'h-8' : 'h-7',
             )}
+          >
+            {actions}
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label='Close'
+              onClick={onDialogClose}
+              className={join(
+                'text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0',
+                isDrawer && '[@media(pointer:coarse)]:hidden!',
+              )}
+            >
+              <X className='h-5 w-5' aria-hidden='true' />
+            </Button>
           </div>
         )}
       </div>
@@ -161,7 +168,7 @@ function DetailSheet({
         isOpen={isOpen}
         onClose={onDialogClose}
         title={heading}
-        showCloseButton
+        showCloseButton={actions === undefined}
         footer={
           isCompact && footer ? (
             <div className='py-2! [&>div]:px-0! [&>div]:pb-0!'>{footer}</div>

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
 
-import { Button, Drawer } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   ChevronLeft,
@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAListOverlay } from '@apps/a-list/hooks/useAListOverlay';
