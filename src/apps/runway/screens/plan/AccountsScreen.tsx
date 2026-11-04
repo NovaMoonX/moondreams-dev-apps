@@ -6,14 +6,17 @@ import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import AccountRow from '@apps/runway/components/AccountRow';
 import AccountSheets, {
   type OpenedAccount,
 } from '@apps/runway/components/AccountSheets';
 import { ACCOUNT_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import AccountForm from '@apps/runway/forms/AccountForm';
 import {
+  selectAccountHoldings,
   selectAccounts,
   selectIsAccountsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -25,6 +28,10 @@ interface AccountsScreenProps {
 /** Every open account, what it holds and which goals and envelopes sit in it; opened from More at every level. */
 function AccountsScreen({ onClose }: AccountsScreenProps) {
   const accounts = useAppSelector(selectAccounts);
+  const today = todayAsUtcDate(useNow(60_000));
+  const holdings = useAppSelector((state) =>
+    selectAccountHoldings(state, today),
+  );
   const isLoaded = useAppSelector(selectIsAccountsLoaded);
   const [query, setQuery] = useState('');
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -74,6 +81,7 @@ function AccountsScreen({ onClose }: AccountsScreenProps) {
               <AccountRow
                 key={account.id}
                 account={account}
+                unassignedCents={holdings[account.id]?.unassignedCents ?? null}
                 onOpen={() => setOpen({ accountId: account.id, view: 'menu' })}
               />
             ))}

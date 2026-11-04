@@ -10,6 +10,7 @@ import {
   ArrowRightLeft,
   Scale,
   History,
+  Landmark,
   Link2,
   Pause,
   Pencil,
@@ -18,6 +19,7 @@ import {
   Ruler,
   ShoppingBag,
   Undo2,
+  Wallet,
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -61,6 +63,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
+  ACCOUNT_WORDS,
   CARD_WORDS,
   CHANGE_WORDS,
   GOAL_CHART_WORDS,
@@ -86,6 +89,7 @@ import {
   SET_HELD_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
+import { getHolderById } from '@apps/runway/engine/accounts';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import {
@@ -104,7 +108,9 @@ import IncomeForm, { type IncomeStepId } from '@apps/runway/forms/IncomeForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { setAccountHolds } from '@apps/runway/store/actions/accountActions';
 import {
   archiveItem,
   endItem,
@@ -119,10 +125,12 @@ import {
 } from '@apps/runway/engine/endings';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectAccounts,
   selectAllCards,
   selectGroups,
   selectPairedBy,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { describeAccountLine } from '@apps/runway/utils/accountText';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { formatCents } from '@/utils/moneyUtils';
@@ -161,6 +169,7 @@ type View =
   | 'group'
   | 'move'
   | 'setHeld'
+  | 'heldIn'
   | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
@@ -224,6 +233,7 @@ const getSchedule = (payload: PayLineSealed | BillSealed) =>
   'schedule' in payload ? payload.schedule : payload.timing.schedule;
 
 const LAST_DAY_OTHER = 'other';
+const NO_ACCOUNT = 'none';
 
 const getActionTitle = (view: View, kind: ItemKind) => {
   const noun = ITEM_KIND_NOUNS[kind];
@@ -246,6 +256,7 @@ const VIEW_NOTES: Record<View, string> = {
   group: '',
   move: '',
   setHeld: '',
+  heldIn: '',
   dayAction: '',
 };
 
@@ -318,6 +329,9 @@ function ItemSheet({
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
   const [groupText, setGroupText] = useState('');
+  const [accountChoice, setAccountChoice] = useState(NO_ACCOUNT);
+  const openAccounts = useAppSelector(selectAccounts);
+  const toastHoldsSaved = useHoldsUndo();
   const groups = useAppSelector((state) => selectGroups(state, today));
   const [isReleasing, setIsReleasing] = useState(false);
   const { addToast } = useToast();
@@ -554,6 +568,55 @@ function ItemSheet({
       goTo('menu');
     } catch (saveError) {
       setError(getErrorMessage(saveError, GROUP_WORDS.saveFailed));
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
+  const holder =
+    openAccounts.find(
+      (account) => account.id === getHolderById(openAccounts)[itemId],
+    ) ?? null;
+  const chosenAccount =
+    openAccounts.find((account) => account.id === accountChoice) ?? null;
+  const isHeldInUnchanged =
+    (chosenAccount?.id ?? null) === (holder?.id ?? null);
+
+  const openHeldIn = () => {
+    goTo('heldIn');
+    setAccountChoice(holder?.id ?? NO_ACCOUNT);
+  };
+
+  const saveHeldIn = async () => {
+    const target = chosenAccount ?? holder;
+    if (isSavingRef.current || !user || !target || isHeldInUnchanged) return;
+    const toHolds = (current: string[]) =>
+      chosenAccount
+        ? Array.from(new Set([...current, itemId]))
+        : current.filter((id) => id !== itemId);
+    isSavingRef.current = true;
+    setError(null);
+    setIsSaving(true);
+    try {
+      const written = await setAccountHolds(
+        user.uid,
+        await getRunwayEncryption(user.uid),
+        target.id,
+        toHolds,
+        openAccounts,
+        (id) => (id === itemId ? payload.name : ''),
+      );
+      toastHoldsSaved(
+        ACCOUNT_WORDS.holdsSaved(target.name),
+        written,
+        target.name,
+      );
+      goTo('menu');
+    } catch (saveError) {
+      setError(
+        `${ACCOUNT_WORDS.holdsFailed}. ${getErrorMessage(saveError, ACCOUNT_WORDS.failed)}`,
+      );
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -842,6 +905,23 @@ function ItemSheet({
               onClick={() => goTo('setHeld')}
             />
           )}
+        {canChange &&
+          (itemKind === 'envelope' || itemKind === 'goal') &&
+          isArchivable &&
+          openAccounts.length > 0 && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={holder ? <Landmark /> : <Wallet />}
+              label={
+                holder
+                  ? ACCOUNT_WORDS.heldIn(holder.name)
+                  : ACCOUNT_WORDS.notHeld
+              }
+              subtitle={ACCOUNT_WORDS.heldSub}
+              onClick={openHeldIn}
+            />
+          )}
         {hasBillRow && payment && (
           <ActionRow
             isGrouped
@@ -1126,6 +1206,49 @@ function ItemSheet({
     />
   );
 
+  const heldInView = (
+    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>{ACCOUNT_WORDS.whichAccountTitle}</ActionTitle>
+      <PillGroup
+        label={ACCOUNT_WORDS.whichAccountLabel}
+        options={[
+          { value: NO_ACCOUNT, label: ACCOUNT_WORDS.notInAccount },
+          ...openAccounts.map((account) => ({
+            value: account.id,
+            label: account.name,
+            detail: describeAccountLine(account),
+          })),
+        ]}
+        value={accountChoice}
+        onChange={setAccountChoice}
+      />
+      <ModalFooterActions
+        note={error}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => goTo('menu')}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || isHeldInUnchanged}
+            onClick={() => void saveHeldIn()}
+          >
+            {ACCOUNT_WORDS.holdsSave}
+          </Button>
+        }
+      />
+    </div>
+  );
+
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -1261,13 +1384,15 @@ function ItemSheet({
                 ? moveView
                 : view === 'setHeld'
                   ? setHeldView
-                  : view === 'dayAction' && dayAction?.renderView
-                    ? dayAction.renderView({
-                        onBack: () => goTo('menu'),
-                        onClose,
-                        openChange,
-                      })
-                    : action
+                  : view === 'heldIn'
+                    ? heldInView
+                    : view === 'dayAction' && dayAction?.renderView
+                      ? dayAction.renderView({
+                          onBack: () => goTo('menu'),
+                          onClose,
+                          openChange,
+                        })
+                      : action
         }
       >
         {menu}

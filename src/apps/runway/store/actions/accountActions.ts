@@ -157,18 +157,28 @@ export async function archiveAccount(
   });
 }
 
-/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. */
+/** What a holds save wrote to one account, kept so exactly that save can be taken back. */
+export interface WrittenHolds {
+  accountId: string;
+  name: string;
+  before: string[];
+  after: string[];
+}
+
+const isSameSet = (a: string[], b: string[]) =>
+  a.length === b.length && a.every((id) => b.includes(id));
+
+/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. Returns what it wrote to each account, the target first. */
 export async function setAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
   accountId: string,
-  holds: string[],
+  nextHolds: string[] | ((current: string[]) => string[]),
   openAccounts: OpenAccount[],
   nameOf: (itemId: string) => string,
-): Promise<void> {
-  const taken = new Set(holds);
+): Promise<WrittenHolds[]> {
   const others = openAccounts.filter((account) => account.id !== accountId);
-  await runTransaction(db, async (transaction) => {
+  return runTransaction(db, async (transaction) => {
     const [targetSnapshot, ...otherSnapshots] = await Promise.all(
       [accountId, ...others.map((account) => account.id)].map((id) =>
         transaction.get(accountRef(uid, id)),
@@ -177,6 +187,11 @@ export async function setAccountHolds(
     if (!targetSnapshot.exists()) throw new Error('The account is gone.');
     const targetData = targetSnapshot.data() as AccountDoc;
     const targetSealed = await openSealed(targetData, encryption);
+    const holds =
+      typeof nextHolds === 'function'
+        ? nextHolds(targetSealed.holds)
+        : nextHolds;
+    const taken = new Set(holds);
     const now = Date.now();
     const namesOf = (ids: string[]) =>
       ids.map(nameOf).filter((name) => name !== '');
@@ -189,6 +204,8 @@ export async function setAccountHolds(
         return {
           id: data.id,
           name: current.name,
+          before: current.holds,
+          after: current.holds.filter((id) => !taken.has(id)),
           sealed: await sealJson(
             {
               ...current,
@@ -221,6 +238,84 @@ export async function setAccountHolds(
       });
     });
     transaction.set(changeRef(uid, change.id), change);
+    return [
+      {
+        accountId,
+        name: targetSealed.name,
+        before: targetSealed.holds,
+        after: holds,
+      },
+      ...writes.flatMap((write) =>
+        write
+          ? [
+              {
+                accountId: write.id,
+                name: write.name,
+                before: write.before,
+                after: write.after,
+              },
+            ]
+          : [],
+      ),
+    ];
+  });
+}
+
+/** Writes back what a holds save replaced, only when every account it wrote still holds what it left there (a partial undo could leave one item in two accounts). Returns the names changed since, writing nothing when there are any. */
+export async function undoAccountHolds(
+  uid: string,
+  encryption: RunwayEncryption,
+  written: WrittenHolds[],
+  summary: string,
+): Promise<string[]> {
+  return runTransaction(db, async (transaction) => {
+    const snapshots = await Promise.all(
+      written.map((entry) => transaction.get(accountRef(uid, entry.accountId))),
+    );
+    const now = Date.now();
+    const results = await Promise.all(
+      written.map(async (entry, index) => {
+        const snapshot = snapshots[index];
+        if (!snapshot.exists()) return { entry, sealed: null };
+        const current = await openSealed(
+          snapshot.data() as AccountDoc,
+          encryption,
+        );
+        if (!isSameSet(current.holds, entry.after))
+          return { entry, sealed: null };
+        return {
+          entry,
+          sealed: await sealJson(
+            { ...current, holds: entry.before },
+            encryption,
+          ),
+        };
+      }),
+    );
+    const restored = results.flatMap(({ entry, sealed }) =>
+      sealed ? [{ entry, sealed }] : [],
+    );
+    const skipped = results.flatMap(({ entry, sealed }) =>
+      sealed ? [] : [entry.name],
+    );
+    if (skipped.length > 0) return skipped;
+    const change = await getChangeDoc(
+      encryption,
+      summary,
+      Array.from(
+        new Set(
+          restored.flatMap(({ entry }) => [...entry.before, ...entry.after]),
+        ),
+      ),
+    );
+    restored.forEach(({ entry, sealed }) =>
+      transaction.update(accountRef(uid, entry.accountId), {
+        sealed,
+        updatedAt: now,
+      }),
+    );
+    transaction.set(changeRef(uid, change.id), change);
+    return skipped;
   });
 }
 

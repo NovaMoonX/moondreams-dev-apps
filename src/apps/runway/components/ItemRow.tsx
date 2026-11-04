@@ -49,6 +49,8 @@ interface ItemRowProps {
   warningLine?: ReactNode;
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
+  /** With `isDetailWarning`, the detail's words read in warning ink too, not only its icon. */
+  isDetailInked?: boolean;
   figure?: string | null;
   /** A figure is masked while amounts are hidden; a row that shows what the person is typing turns it off. */
   isPrivate?: boolean;
@@ -78,6 +80,7 @@ function ItemRow({
   detail,
   isDetailStrong = false,
   isDetailWarning = false,
+  isDetailInked = false,
   warningLine,
   figure,
   isPrivate = true,
@@ -135,6 +138,7 @@ function ItemRow({
           className={join(
             'block text-sm break-words',
             isDetailStrong ? 'text-foreground' : 'text-muted-foreground',
+            isDetailWarning && isDetailInked && 'text-(--runway-warning-ink)!',
             isDetailWarning && 'flex items-start gap-1.5',
           )}
         >

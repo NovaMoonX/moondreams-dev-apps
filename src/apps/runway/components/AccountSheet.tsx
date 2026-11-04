@@ -36,6 +36,7 @@ import {
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
+import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
   ACCOUNT_WORDS,
@@ -75,6 +76,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const { confirm } = useActionModal();
   const { addToast } = useToast();
   const { isHidden } = useValuesHidden();
+  const toastHoldsSaved = useHoldsUndo();
   const today = todayAsUtcDate(useNow(60_000));
   const openAccounts = useAppSelector(selectAccounts);
   const holdings = useAppSelector((state) =>
@@ -231,17 +233,23 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
 
   const saveHolds = () =>
     void run(
-      async (uid) =>
-        setAccountHolds(
+      async (uid) => {
+        const written = await setAccountHolds(
           uid,
           await getRunwayEncryption(uid),
           account.id,
           [...picked].filter((id) => listedIds.has(id)),
           openAccounts,
           nameOf,
-        ),
+        );
+        toastHoldsSaved(
+          ACCOUNT_WORDS.holdsSaved(account.name),
+          written,
+          account.name,
+        );
+      },
       ACCOUNT_WORDS.holdsFailed,
-      ACCOUNT_WORDS.holdsSaved(account.name),
+      null,
     );
 
   const toggle = (id: string, isOn: boolean) =>
