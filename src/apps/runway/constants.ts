@@ -2408,8 +2408,6 @@ export const FIX_WORDS = {
   frontedOn: (date: string, pay: string) => `On ${date}, before the ${pay} pay`,
   frontedSummary: (name: string, date: string, pay: string) =>
     `Free to Spend can't cover ${name} on ${date} before the ${pay} pay`,
-  frontedBody: (name: string, pay: string) =>
-    `${name} is due before the ${pay} pay that carries it, and Free to Spend doesn't have enough to cover it until then.`,
   openDay: 'Open this income day',
   openBills: 'Open your bills',
   needsDate: (names: readonly string[]) =>

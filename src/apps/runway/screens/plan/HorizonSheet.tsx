@@ -228,17 +228,11 @@ function HorizonSheet({
             </InlineNotice>
           )}
           {fronted && !shortfall && (
-            <InlineNotice
-              tone='warning'
-              title={FIX_WORDS.frontedSummary(
-                fronted.name,
-                formatDateOrdinalUTC(fronted.dueOn),
-                formatDateOrdinalUTC(fronted.payOn),
-              )}
-            >
+            <InlineNotice tone='warning'>
               <p>
-                {FIX_WORDS.frontedBody(
+                {FIX_WORDS.frontedSummary(
                   fronted.name,
+                  formatDateOrdinalUTC(fronted.dueOn),
                   formatDateOrdinalUTC(fronted.payOn),
                 )}
               </p>
