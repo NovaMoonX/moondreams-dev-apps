@@ -39,7 +39,7 @@ function SetupLanding({ isStarted }: { isStarted: boolean }) {
           {isContinuing ? SETUP_WORDS.startedAction : SETUP_WORDS.newAction}
         </Button>
         {isStarted && (
-          <Button variant='tertiary' onClick={() => openMoreEntry('settings')}>
+          <Button variant='secondary' onClick={() => openMoreEntry('settings')}>
             {SETUP_WORDS.settings}
           </Button>
         )}

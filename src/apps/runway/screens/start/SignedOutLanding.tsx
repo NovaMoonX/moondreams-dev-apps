@@ -19,7 +19,9 @@ function SignedOutLanding({ onStart }: SignedOutLandingProps) {
     <div className='page pt-20'>
       <div className='border-border bg-card mx-auto max-w-xl space-y-4 rounded-2xl border p-6'>
         <div className='space-y-1'>
-          <h1 className='text-2xl font-semibold'>{isKept ? START_WORDS.resumeAsk : START_WORDS.landingTitle}</h1>
+          <h1 className='text-2xl font-semibold text-balance'>
+            {isKept ? START_WORDS.resumeAsk : START_WORDS.landingTitle}
+          </h1>
           <p className='text-muted-foreground text-sm text-pretty'>
             {isKept
               ? START_WORDS.resumeSummary(
