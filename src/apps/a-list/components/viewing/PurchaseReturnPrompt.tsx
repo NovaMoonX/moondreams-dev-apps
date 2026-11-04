@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
-import { Button, Drawer, Modal } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 
+import Drawer from '@/components/Drawer';
 import MoneyInput from '@/components/MoneyInput';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 

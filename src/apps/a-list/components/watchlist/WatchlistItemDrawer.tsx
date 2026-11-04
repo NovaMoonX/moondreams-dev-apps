@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Button, Drawer, Input, Label } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Input, Label } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import {
@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 
+import Drawer from '@/components/Drawer';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { generateUuid } from '@/utils';
