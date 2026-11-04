@@ -126,7 +126,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
     3,
   );
   const lowest = ahead.reduce<MoneyPoint | null>(
-    (low, point) => (low === null || pick(point) < pick(low) ? point : low),
+    (low, point) => (low === null || pick(point) <= pick(low) ? point : low),
     null,
   );
   const end = ahead.at(-1) ?? null;

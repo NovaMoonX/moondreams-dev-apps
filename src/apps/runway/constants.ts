@@ -1125,7 +1125,7 @@ export const MONEY_CHART_WORDS = {
   allHelp:
     'Up to today, All money is everything you hold: Free to Spend plus what your envelopes, goals, bills and cards hold.',
   endsHelp: (on: string) =>
-    `The dotted line stops at your last income day, ${on}, since your plan has no pay after it.`,
+    `The dotted line stops at your last income day, ${on}, since your plan has no pay after it. Bills due after it aren't counted.`,
   rangeHelp:
     'The buttons under the chart choose how far back the solid line goes. All goes back to the day you started.',
 } as const;

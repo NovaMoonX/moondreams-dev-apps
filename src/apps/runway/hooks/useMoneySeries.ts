@@ -128,7 +128,7 @@ export function useMoneySeries(
   );
 
   const isPartial = needsClosings && closings.isError;
-  const endsOn = until < yearOut ? until : null;
+  const endsOn = until < yearOut && ahead.length > 0 ? until : null;
   const result = {
     history,
     ahead,
