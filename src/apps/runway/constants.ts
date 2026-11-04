@@ -396,6 +396,7 @@ export const HORIZON_WORDS = {
   putMoreSub: 'Add money from Free to Spend, an envelope or goal, or outside.',
   putMoreTitle: 'Put more toward it',
   putMorePlaces: 'Places',
+  putMoreEmpty: 'Add money',
   putShowToCheck: (from: string) => `Show amounts to check what ${from} has.`,
   putMoreAmount: 'Amount to put toward it',
   putMoreFrom: 'Where it comes from',

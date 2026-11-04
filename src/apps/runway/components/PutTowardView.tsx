@@ -72,7 +72,7 @@ function PutTowardView({
   const emojiOf = useLiveEmojiResolver();
   const [moveId] = useState(newTransferMoveId);
   const [amount, setAmount] = useState(() =>
-    initialCents === null ? '' : centsToInputValue(initialCents),
+    initialCents === null || isHidden ? '' : centsToInputValue(initialCents),
   );
   const [pick, setPick] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -228,7 +228,7 @@ function PutTowardView({
         </p>
       </ActionSection>
       <ModalFooterActions
-        note={error ?? blocker}
+        note={error ?? blocker ?? '\u00A0'}
         cancelAction={
           <Button
             type='button'
@@ -248,7 +248,7 @@ function PutTowardView({
             onClick={() => void put()}
           >
             {cents === null
-              ? HORIZON_WORDS.putMore
+              ? HORIZON_WORDS.putMoreEmpty
               : mask(HORIZON_WORDS.putMoreAction(formatCents(cents)))}
           </Button>
         }
