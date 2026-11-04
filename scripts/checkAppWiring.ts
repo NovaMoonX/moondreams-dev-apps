@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -62,6 +63,100 @@ const themeProblems = listFiles('src/apps')
   });
 
 problems.push(...themeProblems);
+
+// A link preview shows the app's banner, so each app's banner must exist, be its own image (a copied placeholder once
+// put Waypoint's banner on every Going Once link), and be the one the worker names for that app.
+const bannerPath = (id: string) => `public/banners/by-app/banner-${id}.png`;
+const bannerHashes = APP_REGISTRY.filter((app) => existsSync(bannerPath(app.id))).map((app) => ({
+  id: app.id,
+  hash: createHash('sha256').update(readFileSync(bannerPath(app.id))).digest('hex'),
+}));
+type WorkerPage = { prefix: string };
+type WorkerApp = { id: string; name: string; path: string; description: string; image: string; pages?: WorkerPage[] };
+
+// The worker is plain JS with one default export, so its registry is read by running everything above that export.
+const workerSource = readFileSync('cloudflare-worker.js', 'utf8');
+const workerExportAt = workerSource.indexOf('export default');
+const readWorkerApps = (): WorkerApp[] => {
+  try {
+    const apps: unknown = new Function(`${workerSource.slice(0, workerExportAt)}\nreturn APP_REGISTRY;`)();
+    return workerExportAt > 0 && Array.isArray(apps) ? (apps as WorkerApp[]) : [];
+  } catch {
+    return [];
+  }
+};
+const workerApps = readWorkerApps();
+if (workerApps.length === 0) {
+  problems.push(
+    'cloudflare-worker.js could not be read: keep a `const APP_REGISTRY = [...]` above `export default`, with no imports or runtime calls above it',
+  );
+}
+const workerById = new Map(workerApps.map((entry) => [entry.id, entry]));
+
+const bannerProblems = APP_REGISTRY.flatMap((app) => {
+  const own = bannerHashes.find((banner) => banner.id === app.id);
+  const twin = own && bannerHashes.find((banner) => banner.id !== app.id && banner.hash === own.hash);
+  const worker = workerById.get(app.id);
+  return [
+    existsSync(`public/logos/by-app/logo-${app.id}.svg`) ? null : `${app.id}: missing public/logos/by-app/logo-${app.id}.svg`,
+    own ? null : `${app.id}: missing ${bannerPath(app.id)} (make one with npm run make:banner -- ${app.id})`,
+    twin ? `${app.id}: ${bannerPath(app.id)} is the same image as ${bannerPath(twin.id)}` : null,
+    worker === undefined ? `${app.id}: no entry in cloudflare-worker.js APP_REGISTRY` : null,
+    worker && !worker.image.endsWith(`/banners/by-app/banner-${app.id}.png`)
+      ? `${app.id}: cloudflare-worker.js previews it with ${worker.image}`
+      : null,
+    worker && worker.path !== app.path ? `${app.id}: cloudflare-worker.js path is ${worker.path}, the registry's ${app.path}` : null,
+    worker && worker.name !== app.name ? `${app.id}: cloudflare-worker.js name is "${worker.name}", the registry's "${app.name}"` : null,
+    worker && worker.description !== app.description
+      ? `${app.id}: cloudflare-worker.js description differs from the registry's`
+      : null,
+  ].filter((problem): problem is string => problem !== null);
+});
+
+problems.push(...bannerProblems);
+
+// Every page an app has besides its root (a share link, a public page) gets its own link-preview text in the
+// worker, so a preview never falls back to the app's own description for a page that shows something else.
+const routesSource = readFileSync('src/routes/AppRoutes.tsx', 'utf8').replace(/\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, '');
+const routePaths = Array.from(routesSource.matchAll(/\bpath:\s*(['"`])([^'"`]+)\1/g), (match) => match[2]);
+const pagePrefixes = APP_REGISTRY.flatMap((app) =>
+  routePaths
+    .filter((path) => path.startsWith(`${app.id}/`))
+    .map((path) => ({ app, prefix: `/${path.split(/(?=:)/)[0]}` })),
+);
+const sharePrefixes = Array.from(
+  readFileSync('src/ui/Layout.tsx', 'utf8').match(/PUBLIC_SHARE_PREFIXES = \[([^\]]*)\]/)?.[1].matchAll(/'([^']+)'/g) ?? [],
+  (match) => match[1],
+);
+const workerPrefixes = workerApps.flatMap((entry) => (entry.pages ?? []).map(({ prefix }) => ({ id: entry.id, prefix })));
+const readNothing = [
+  routePaths.length === 0 ? 'no `path:` in src/routes/AppRoutes.tsx' : null,
+  (routesSource.match(/\bpath:/g) ?? []).length !== routePaths.length
+    ? 'src/routes/AppRoutes.tsx has a `path:` that is not a plain string; write each route\'s path as a literal so the worker check sees it'
+    : null,
+  sharePrefixes.length === 0 ? 'no PUBLIC_SHARE_PREFIXES array in src/ui/Layout.tsx' : null,
+  (routesSource.match(/children:/g) ?? []).length > 1
+    ? 'src/routes/AppRoutes.tsx nests `children:` below the root; write an app route\'s full path (`app-id/s/:id`) so the worker check sees it'
+    : null,
+].filter((problem): problem is string => problem !== null);
+problems.push(...readNothing.map((problem) => `Route check read nothing: ${problem}`));
+
+const routeProblems = [
+  ...pagePrefixes
+    .filter(({ app, prefix }) => !workerById.get(app.id)?.pages?.some((page) => page.prefix === prefix))
+    .map(({ app, prefix }) => `${app.id}: the route ${prefix}… has no pages entry in cloudflare-worker.js (its link preview and noindex)`),
+  ...workerPrefixes
+    .filter(({ prefix }) => !pagePrefixes.some((page) => page.prefix === prefix))
+    .map(({ id, prefix }) => `${id}: cloudflare-worker.js has a pages entry for ${prefix}, which no route in AppRoutes.tsx serves`),
+  ...workerApps
+    .filter((entry) => !APP_REGISTRY.some((app) => app.id === entry.id))
+    .map((entry) => `cloudflare-worker.js lists ${entry.id}, which is not in APP_REGISTRY`),
+  ...sharePrefixes
+    .filter((prefix) => !workerPrefixes.some((page) => page.prefix === prefix))
+    .map((prefix) => `Layout's PUBLIC_SHARE_PREFIXES has ${prefix}, which cloudflare-worker.js gives no pages entry`),
+];
+
+problems.push(...routeProblems);
 
 // Text on a themed fill must stay readable in light and dark. The top strip (OfflineBanner: offline, slow, "New version ready · Restart")
 // is `primary` with `primary-foreground`, and its button is that pair swapped, so one ratio covers both. A pair the theme sets

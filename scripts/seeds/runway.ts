@@ -629,6 +629,7 @@ async function writeSeedLifecycle(
     targetDate: null,
     funding: funding(10_000),
     state: 'paused',
+    groupId: null,
   };
 
   const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
@@ -1625,7 +1626,7 @@ async function writeSeedEnvelopes(
         emoji: '🛒',
         priority: 'must',
         orderIndex: 1,
-        groupId: null,
+        groupId: 'seed-group-home',
         maxCents: null,
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
         extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],
@@ -2036,15 +2037,50 @@ async function writeSeedBills(
       22,
       'seed-group-subscriptions',
     ),
+    ...(
+      [
+        ['seed-bill-gym', 'Gym', 4_900],
+        ['seed-bill-renters', "Renter's insurance", 1_800],
+      ] as const
+    ).map(([id, name, cents], index) => ({
+      id,
+      payload: {
+        name,
+        emoji: null,
+        priority: 'should' as const,
+        orderIndex: 10 + index,
+        amount: exact(cents),
+        timing: {
+          kind: 'date' as const,
+          schedule: { kind: 'monthly' as const, anchor: null, monthDays: [] },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' as const },
+        stanceOverride: null,
+        groupId: null,
+      },
+    })),
   ];
   const groups: { id: string; payload: GroupSealed }[] = [
     {
       id: 'seed-group-home',
-      payload: { name: 'Home', startingPriority: 'must', emoji: '🏠' },
+      payload: {
+        name: 'Home',
+        startingPriority: 'must',
+        envelopePriority: 'must',
+        goalPriority: 'should',
+        emoji: '🏠',
+      },
     },
     {
       id: 'seed-group-subscriptions',
-      payload: { name: 'Subscriptions', startingPriority: 'want', emoji: null },
+      payload: {
+        name: 'Subscriptions',
+        startingPriority: 'want',
+        envelopePriority: 'want',
+        goalPriority: null,
+        emoji: null,
+      },
     },
   ];
 
@@ -2193,6 +2229,7 @@ async function writeSeedGoals(
         targetCents: 180_000,
         targetDate: today + 50 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(30_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2206,6 +2243,7 @@ async function writeSeedGoals(
         targetCents: 60_000,
         targetDate: null,
         state: 'active',
+        groupId: null,
         funding: {
           amount: exact(15_000),
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -2223,6 +2261,7 @@ async function writeSeedGoals(
         targetCents: 20_000,
         targetDate: today + 30 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(20_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2236,6 +2275,7 @@ async function writeSeedGoals(
         targetCents: 200_000,
         targetDate: null,
         state: 'active',
+        groupId: 'seed-group-home',
         funding: {
           amount: { kind: 'percent', bps: 500, of: 'dayMoney' },
           cadence: { kind: 'everyIncomeDay' },
@@ -2253,6 +2293,7 @@ async function writeSeedGoals(
         targetDate: null,
         funding: { amount: exact(0), cadence: { kind: 'none' } },
         state: 'active',
+        groupId: null,
       },
     },
     {
@@ -2265,6 +2306,7 @@ async function writeSeedGoals(
         targetCents: 60_000,
         targetDate: today + 20 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(10_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },

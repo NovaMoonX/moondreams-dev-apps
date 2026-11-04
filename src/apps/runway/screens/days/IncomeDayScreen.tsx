@@ -13,6 +13,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
 import LeftOutBillRow from '@apps/runway/components/LeftOutBillRow';
 import Subview from '@/components/Subview';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
@@ -98,8 +99,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
   const planStance = useAppSelector(selectStance);
   const changeableIds = useAppSelector(selectChangeableKey);
-  const { openDueBill, openUndatedBills, showPlanSection, showTab } =
-    useRunwayUrlState();
+  const { showOnPlan } = useRunwayUrlState();
 
   if (!view || !isDaysLoaded || !isRecordsReady) {
     return (
@@ -271,13 +271,16 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const title = day.sourceName ?? day.payLineName;
 
   const undated = lookahead?.undated ?? [];
-  const openUndated = () => {
-    onClose();
-    showPlanSection('bills');
-    showTab('plan');
-    if (undated.length === 1) openDueBill(undated[0].billId);
-    else openUndatedBills();
-  };
+  const openUndated = () =>
+    afterBackLayersClose(
+      () =>
+        void showOnPlan(
+          'bills',
+          undated.length === 1
+            ? { itemId: undated[0].billId, step: 'due' }
+            : 'undatedBills',
+        ),
+    );
 
   const renderLine = (line: (typeof draft.lines)[number]) => {
     const isKnown = Object.hasOwn(items, line.itemId);

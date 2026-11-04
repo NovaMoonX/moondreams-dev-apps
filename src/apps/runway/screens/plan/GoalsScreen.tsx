@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { CircleCheck, Target, TriangleAlert } from 'lucide-react';
+import { ChevronRight, CircleCheck, Target, TriangleAlert } from 'lucide-react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import StoppedHoldingList from '@apps/runway/components/StoppedHoldingList';
 import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -17,6 +20,9 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import GoalRow from '@apps/runway/components/GoalRow';
+import GroupHeading from '@apps/runway/components/GroupHeading';
+import GroupSheet from '@apps/runway/forms/GroupSheet';
+import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useGoalPaces } from '@apps/runway/hooks/useGoalPaces';
 import { RangeBasisNote } from '@apps/runway/components/RangeNote';
@@ -38,6 +44,7 @@ import {
 } from '@apps/runway/hooks/usePriorityDial';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { revealItem } from '@apps/runway/utils/revealItem';
 
 function GoalsScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -73,10 +80,13 @@ function GoalsScreen() {
     dial,
     goals.some(({ version }) => version.payload.targetCents > 0),
   );
-  const { addRequest, clearAdd } = useRunwayUrlState();
+  const { addRequest, clearAdd, openItem, openItemAt, closeOpenItem } =
+    useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const figuresByGroup = useGroupFigures(today, dial);
 
   const hasRangedIncome = comingDays.some(
     (day) => day.amount.lowCents !== day.amount.highCents,
@@ -89,6 +99,36 @@ function GoalsScreen() {
     `${payload.name} ${payload.targetDate === null ? '' : formatDateOrdinalUTC(payload.targetDate)}`
       .toLowerCase()
       .includes(needle),
+  );
+
+  const groupIds = new Set(figuresByGroup.map(({ id }) => id));
+  const sections = figuresByGroup
+    .map((figures) => ({
+      figures,
+      rows: visible.filter(({ payload }) => payload.groupId === figures.id),
+    }))
+    .filter(({ rows }) => rows.length > 0);
+  const ungrouped = visible.filter(
+    ({ payload }) => payload.groupId === null || !groupIds.has(payload.groupId),
+  );
+
+  const getList = (rows: typeof visible) => (
+    <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+      {rows.map(({ item, payload, pace, paceDial }) => (
+        <GoalRow
+          key={item.id}
+          goalId={item.id}
+          goal={payload}
+          pace={pace}
+          paceDial={paceDial}
+          heldCents={heldByItem[item.id] ?? 0}
+          request={openItem?.itemId === item.id ? openItem : null}
+          onRequestDone={closeOpenItem}
+          today={today}
+          isFaded={!isCountedAt(payload.priority, dial)}
+        />
+      ))}
+    </ul>
   );
 
   const getBody = () => {
@@ -120,12 +160,27 @@ function GoalsScreen() {
               </p>
             </div>
           ) : (
-            <p className='flex min-h-10 items-center gap-1.5 text-sm font-medium text-(--runway-warning-ink)'>
-              <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden='true' />
-              {GOAL_TRACK_WORDS.behind(
+            <Button
+              type='button'
+              variant='tertiary'
+              className='h-auto min-h-10 w-full items-center justify-start gap-1.5 px-0! py-1 text-left text-sm font-medium whitespace-normal text-(--runway-warning-ink)!'
+              aria-label={`${GOAL_TRACK_WORDS.behind(
                 behindGoals.map(({ payload }) => payload.name),
-              )}
-            </p>
+              )}. ${GOAL_TRACK_WORDS.openBehind}`}
+              onClick={() => {
+                const first = behindGoals[0].item.id;
+                revealItem(first);
+                void openItemAt(first, 'amount');
+              }}
+            >
+              <TriangleAlert className='h-4 w-4 shrink-0' aria-hidden='true' />
+              <span className='min-w-0 flex-1'>
+                {GOAL_TRACK_WORDS.behind(
+                  behindGoals.map(({ payload }) => payload.name),
+                )}
+              </span>
+              <ChevronRight className='h-4 w-4 shrink-0' aria-hidden='true' />
+            </Button>
           ))}
         {hasSearch && (
           <SearchInput
@@ -137,20 +192,35 @@ function GoalsScreen() {
         {visible.length === 0 ? (
           <p className='text-muted-foreground text-sm'>No goal matches that.</p>
         ) : (
-          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {visible.map(({ item, payload, pace, paceDial }) => (
-              <GoalRow
-                key={item.id}
-                goalId={item.id}
-                goal={payload}
-                pace={pace}
-                paceDial={paceDial}
-                heldCents={heldByItem[item.id] ?? 0}
-                today={today}
-                isFaded={!isCountedAt(payload.priority, dial)}
-              />
+          <>
+            {sections.map(({ figures, rows }) => (
+              <div key={figures.id} className='space-y-2'>
+                <GroupHeading
+                  figures={figures}
+                  kind='goals'
+                  saved={rows.reduce(
+                    (sum, { item, payload }) => ({
+                      savedCents:
+                        sum.savedCents +
+                        Math.min(heldByItem[item.id] ?? 0, payload.targetCents),
+                      targetCents: sum.targetCents + payload.targetCents,
+                    }),
+                    { savedCents: 0, targetCents: 0 },
+                  )}
+                  onOpen={() => setOpenGroupId(figures.id)}
+                />
+                {getList(rows)}
+              </div>
             ))}
-          </ul>
+            {ungrouped.length > 0 && (
+              <div className='space-y-2'>
+                {sections.length > 0 && (
+                  <SectionDivider label={GROUP_WORDS.ungroupedGoals} />
+                )}
+                {getList(ungrouped)}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -189,6 +259,14 @@ function GoalsScreen() {
         icon={<Target className='h-5 w-5' aria-hidden='true' />}
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
+      {openGroupId !== null && (
+        <GroupSheet
+          groupId={openGroupId}
+          today={today}
+          dial={dial}
+          onClose={() => setOpenGroupId(null)}
+        />
+      )}
       {(formKey !== null || isRequested) && (
         <GoalForm
           key={formKey ?? 'requested'}

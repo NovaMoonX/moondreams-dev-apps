@@ -2,8 +2,9 @@ import { useState, type DragEvent, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { Upload } from 'lucide-react';
+import { Camera, Upload } from 'lucide-react';
 
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { formatFileSize } from '@/utils/fileUtils';
 
 export interface PickedFile {
@@ -27,6 +28,8 @@ interface FilePickCardProps {
   isFilling?: boolean;
   /** Opens the file picker; the card is a target for it as well as a place to drop onto. */
   onPick: () => void;
+  /** Adds "Take a photo" under the empty slot on a touch screen, for something usually in front of the person (a receipt, a cookbook page); the caller opens its input with `openFileChooser(input, { isCamera: true })`. */
+  onTakePhoto?: () => void;
   onDropFile: (file: File) => void;
 }
 
@@ -40,9 +43,12 @@ function FilePickCard({
   isDisabled = false,
   isFilling = false,
   onPick,
+  onTakePhoto,
   onDropFile,
 }: FilePickCardProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const isTouch = useCanTakePhoto();
+  const isCameraShown = isTouch && onTakePhoto !== undefined && !picked;
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -111,6 +117,20 @@ function FilePickCard({
             <span className='max-sm:hidden'> · or drop it here</span>
           </span>
         </Button>
+      )}
+      {isCameraShown && (
+        <div className='px-3 pb-3'>
+          <Button
+            type='button'
+            variant='tertiary'
+            disabled={isDisabled}
+            onClick={onTakePhoto}
+            className='border-border h-11 w-full gap-2 border'
+          >
+            <Camera className='h-4 w-4 shrink-0' aria-hidden='true' />
+            Take a photo
+          </Button>
+        </div>
       )}
       <div className='border-border border-t px-4 py-2.5'>{status}</div>
     </div>

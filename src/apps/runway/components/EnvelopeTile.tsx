@@ -13,6 +13,7 @@ import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
@@ -92,25 +93,51 @@ function EnvelopeTile({
     envelope.funding.amount.kind === 'exact'
       ? envelope.funding.amount.cents
       : 0;
+  const notCountedWord = PRIORITY_DIAL_WORDS.notCounted.toLowerCase();
   const partsText =
     extras.length === 0
-      ? null
-      : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
+      ? PRIORITY_LABELS[envelope.priority]
+      : [
+          `${PRIORITY_LABELS[envelope.priority]} ${formatCentsShort(ownCents)}`,
+          ...extras.map(
+            (extra) =>
+              `${PRIORITY_LABELS[extra.tier]} +${formatCentsShort(extra.cents)}${isCountedAt(extra.tier, dial) ? '' : ` (${notCountedWord})`}`,
+          ),
+        ].join(' · ');
+  const isTrimmedHere = leftOut.length > 0;
+  const isLeftOut = atLevel === null && dial !== 'want';
   const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
+  const isPlanRow =
+    isPlan || isPart || (look === 'row' && figureKind === 'monthly');
   const monthly =
-    figureKind === 'monthly' && (isPlan || isPart)
+    figureKind === 'monthly' && isPlanRow
       ? describeEnvelopeMonthly(counted, getIncomeDays(envelope.funding))
       : null;
-  const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
-  const rowDetail =
-    isPlan || isPart
-      ? eachTime
-        ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
-        : funding
-      : isHidden
-        ? funding
-        : `${capitalize(word)} · ${funding}`;
+  const rowFigure = isPlanRow ? (monthly?.figure ?? eachTime) : value;
+  const planDetail = eachTime
+    ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
+    : funding;
+  const isHeldShown = isPlanRow && !isPlan && !isPart && !isHidden;
+  const detailLead = isHeldShown
+    ? {
+        text: `${formatCentsShort(Math.abs(cents))} ${word}`,
+        isOver: word === 'over',
+      }
+    : null;
+  const getRowDetail = () => {
+    if (isPlanRow) {
+      if (!isHeldShown || leftOut.length === 0) return planDetail;
+      return leftOut
+        .map(
+          (extra) =>
+            `+${formatCentsShort(extra.cents)} ${PRIORITY_LABELS[extra.tier].toLowerCase()} ${PRIORITY_DIAL_WORDS.notCountedShort}`,
+        )
+        .join(', ');
+    }
+    return isHidden ? funding : `${capitalize(word)} · ${funding}`;
+  };
+  const rowDetail = getRowDetail();
   const isOver = word === 'over';
   const open = () => setIsOpen(true);
 
@@ -161,9 +188,10 @@ function EnvelopeTile({
           name={envelope.name}
           emoji={emoji}
           detail={rowDetail}
+          detailLead={detailLead}
           figure={rowFigure}
           figureWord={monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${funding}` : `${value} ${word}. ${funding}`}. Open`}
+          ariaLabel={`${envelope.name}, ${isPlanRow ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : rowFigure ? `${rowFigure}, ` : ''}${detailLead ? `${detailLead.text}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
@@ -178,26 +206,22 @@ function EnvelopeTile({
           figureLabel={
             isPlan
               ? eachTime
-                ? describeCadenceLine(envelope.funding.cadence)
-                : ITEM_SHEET_R2_WORDS.eachTime
+                ? `${describeCadenceLine(envelope.funding.cadence)}${isLeftOut ? `, ${notCountedWord}` : isTrimmedHere && dial !== 'want' ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}` : ''}`
+                : `${ITEM_SHEET_R2_WORDS.eachTime}${isLeftOut ? `, ${notCountedWord}` : ''}`
               : isHidden
                 ? ITEM_SHEET_R2_WORDS.balance
                 : capitalize(word)
           }
-          figure={
-            isPlan
-              ? whole.amount.kind === 'exact'
-                ? formatCents(whole.amount.cents)
-                : undefined
-              : value
-          }
+          figure={isPlan ? (eachTime ?? undefined) : value}
           fact={[
-            PRIORITY_LABELS[envelope.priority],
-            isPlan && eachTime ? partsText : funding,
+            isPlan && eachTime ? partsText : PRIORITY_LABELS[envelope.priority],
+            isPlan && eachTime ? null : funding,
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
-            isPlan && cents !== 0 ? `${value} ${word}` : null,
+            isPlan && cents !== 0 && extras.length === 0
+              ? `${value} ${word}`
+              : null,
           ]
             .filter(Boolean)
             .join(' · ')}
