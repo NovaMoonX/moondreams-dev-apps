@@ -223,9 +223,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const payload = group.version.payload;
   const hasRange = !isHidden && total.total.lowCents !== total.total.highCents;
 
+  const getLivePayload = () =>
+    selectGroups(store.getState(), today).find(
+      ({ item }) => item.id === groupId,
+    )?.version.payload ?? payload;
+
   const save = async (
     next: GroupSealed,
     isQuiet = false,
+    before: GroupSealed = payload,
   ): Promise<string | null> => {
     if (!user) return null;
     if (!isQuiet) setIsSaving(true);
@@ -235,7 +241,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         itemId: groupId,
         kind: 'group',
         payload: next,
-        summary: `${next.name}: ${describeChange(payload, next, getCardNamer([]))}, from ${formatDateOrdinalUTC(today)}.`,
+        summary: `${next.name}: ${describeChange(before, next, getCardNamer([]))}, from ${formatDateOrdinalUTC(today)}.`,
         note: null,
         effectiveFrom: today,
       });
@@ -360,10 +366,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           );
       const description =
         stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
-      const livePayload =
-        selectGroups(store.getState(), today).find(
-          ({ item }) => item.id === groupId,
-        )?.version.payload ?? payload;
+      const livePayload = getLivePayload();
       const pickFailure =
         isClean && restorePick !== null
           ? await save(
@@ -372,6 +375,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 startingPriority: restorePick === 'none' ? null : restorePick,
               },
               true,
+              livePayload,
             )
           : null;
       setPriorityRecord({
@@ -492,13 +496,18 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     setPriorityError(null);
     setPriorityRecord(null);
     setPickedPriority(choice);
-    const before = payload.startingPriority ?? 'none';
+    const livePayload = getLivePayload();
+    const before = livePayload.startingPriority ?? 'none';
     const isSavedChoice = choice === before;
     const failure = isSavedChoice
       ? null
       : await save(
-          { ...payload, startingPriority: choice === 'none' ? null : choice },
+          {
+            ...livePayload,
+            startingPriority: choice === 'none' ? null : choice,
+          },
           true,
+          livePayload,
         );
     if (failure !== null) setPriorityError(GROUP_WORDS.startingPriorityFailed);
     else if (choice !== 'none') {
@@ -1163,6 +1172,11 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
               {priorityError && (
                 <p className='text-destructive text-sm' role='alert'>
                   {priorityError}
+                </p>
+              )}
+              {isApplyingNow && pickedPriority !== 'none' && (
+                <p className='text-muted-foreground flex min-h-7 items-center text-sm'>
+                  {GROUP_WORDS.priorityApplying}
                 </p>
               )}
               {priorityRecord && (

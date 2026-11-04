@@ -2339,7 +2339,8 @@ export const GROUP_WORDS = {
   priorityFailed:
     'The priority is saved for new ones, but the items already here did not change.',
   prioritySkipped: (names: string[], priority: string) =>
-    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: at ${priority} ${names.length === 1 ? 'its' : 'their'} extra parts would no longer sit below the main amount. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
+    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: at ${priority} ${names.length === 1 ? 'its' : 'their'} extra could not sit below the main amount. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
+  priorityApplying: 'Changing priorities…',
   priorityUndone: 'Priorities put back.',
   priorityUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total}. ${joinNames(failed)} did not change back.`,
