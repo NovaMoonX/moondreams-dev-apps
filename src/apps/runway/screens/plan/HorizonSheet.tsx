@@ -43,7 +43,14 @@ function HorizonSheet({
   const [putting, setPutting] = useState<{
     initialCents: number | null;
   } | null>(null);
-  const { figures, plan, plannedCents, outsideCents } = getHorizonStatus(
+  const {
+    figures,
+    plan,
+    plannedCents,
+    plannedHighCents,
+    isPlannedRange,
+    outsideCents,
+  } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
     today,
@@ -56,14 +63,22 @@ function HorizonSheet({
     const cost = horizon.costs.find(({ id }) => id === shortfall.costId);
     if (!cost) return '';
     const isRange = cost.amount.lowCents !== cost.amount.highCents;
+    const index = plan.covers.findIndex(
+      ({ costId, dueOn }) =>
+        costId === shortfall.costId && dueOn === shortfall.dueOn,
+    );
+    const earlier =
+      index > 0
+        ? horizon.costs.find(({ id }) => id === plan.covers[index - 1].costId)
+        : undefined;
+    if (shortfall.availableCents === 0 && earlier) {
+      return HORIZON_WORDS.shortAfter(cost.name, earlier.name);
+    }
     return HORIZON_WORDS.shortBody(
       cost.name,
       formatCents(shortfall.paymentCents),
       formatCents(shortfall.availableCents),
-      plan.covers.findIndex(
-        ({ costId, dueOn }) =>
-          costId === shortfall.costId && dueOn === shortfall.dueOn,
-      ) > 0,
+      index > 0,
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
@@ -74,10 +89,10 @@ function HorizonSheet({
           formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
         );
   const fact = [
-    HORIZON_WORDS.totalCostIs(formatCents(plannedCents)).replaceAll(
-      ' ',
-      '\u00A0',
-    ),
+    HORIZON_WORDS.plannedTotal(
+      formatCents(isPlannedRange ? plannedHighCents : plannedCents),
+      isPlannedRange,
+    ).replaceAll(' ', '\u00A0'),
     outsideCents > 0 &&
       HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(
         ' ',
@@ -116,10 +131,14 @@ function HorizonSheet({
           <SheetHead
             label={HORIZON_WORDS.left}
             figure={formatCents(figures.leftCents)}
-            fact={HORIZON_WORDS.leftFact(
-              formatCents(figures.setAsideCents),
-              formatCents(figures.spentCents),
-            )}
+            fact={
+              figures.setAsideCents === 0
+                ? null
+                : HORIZON_WORDS.leftFact(
+                    formatCents(figures.setAsideCents),
+                    formatCents(figures.spentCents),
+                  )
+            }
           />
           <CoversLine
             plan={plan}
@@ -144,7 +163,7 @@ function HorizonSheet({
               </p>
               <Button
                 type='button'
-                variant='secondary'
+                variant='primary'
                 size='sm'
                 className='mt-2'
                 onClick={() =>

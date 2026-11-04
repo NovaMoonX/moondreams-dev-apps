@@ -29,10 +29,19 @@ export function getHorizonStatus(
   const plan = planHorizon(horizon, figures.leftCents, payments);
   const next = planned.find(({ dueOn }) => dueOn >= today);
   return {
-    payments,
     figures,
     plan,
     plannedCents: planned.reduce((sum, { totalCents }) => sum + totalCents, 0),
+    plannedHighCents: planned.reduce(
+      (sum, { costId }) =>
+        sum +
+        (horizon.costs.find(({ id }) => id === costId)?.amount.highCents ?? 0),
+      0,
+    ),
+    isPlannedRange: planned.some(({ costId }) => {
+      const amount = horizon.costs.find(({ id }) => id === costId)?.amount;
+      return amount !== undefined && amount.lowCents !== amount.highCents;
+    }),
     outsideCents: payments.reduce(
       (sum, { costId, totalCents }) =>
         outsideIds.has(costId) ? sum + totalCents : sum,

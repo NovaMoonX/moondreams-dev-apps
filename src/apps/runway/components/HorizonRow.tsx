@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
@@ -35,7 +35,7 @@ function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
       return isHidden
         ? HORIZON_WORDS.needsAShortLook
         : HORIZON_WORDS.shortTitle(
-            formatCents(shortfall.shortCents),
+            formatCentsShort(shortfall.shortCents),
             formatDateOrdinalUTC(shortfall.dueOn),
           );
     }
@@ -52,7 +52,7 @@ function HorizonRow({ itemId, horizon, today, stance }: HorizonRowProps) {
         name={horizon.name}
         emoji={horizon.emoji}
         detail={detail}
-        isDetailWarning={shortfall !== null}
+        isDetailWarning={shortfall !== null && !isHidden}
         figure={left}
         ariaLabel={`${horizon.name}, ${left} left. ${detail}. Open`}
         onOpen={() => setIsOpen(true)}

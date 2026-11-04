@@ -8,6 +8,7 @@ import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
@@ -63,6 +64,7 @@ function PutTowardView({
   const { user } = useAuth();
   const { addToast } = useToast();
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const undoMove = useUndoTransfer();
   const balances = useAppSelector(selectBalances);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -125,7 +127,11 @@ function PutTowardView({
   const getBlocker = () => {
     if (cents === null) return HORIZON_WORDS.needsPutAmount;
     if (fromName === null) return HORIZON_WORDS.needsPutMoreFrom;
-    if (cents > leftCents) return HORIZON_WORDS.putTooMuch(fromName);
+    if (cents > leftCents) {
+      return isHidden
+        ? HORIZON_WORDS.putShowToCheck(fromName)
+        : HORIZON_WORDS.putTooMuch(fromName);
+    }
     return null;
   };
   const blocker = getBlocker();
@@ -199,7 +205,7 @@ function PutTowardView({
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
-      <ActionTitle>{HORIZON_WORDS.putMoreTitle(name)}</ActionTitle>
+      <ActionTitle>{HORIZON_WORDS.putMoreTitle}</ActionTitle>
       <AmountHero
         label={HORIZON_WORDS.putMoreAmount}
         value={amount}
@@ -208,18 +214,18 @@ function PutTowardView({
       />
       <ActionSection caption={HORIZON_WORDS.putMoreFrom}>
         <PillGroup
-          label={HORIZON_WORDS.putMoreFrom}
+          label={HORIZON_WORDS.putMorePlaces}
           options={options}
           value={pick}
           onChange={setPick}
         />
-        {fromName !== null && leftCents !== Infinity && (
-          <p className='text-muted-foreground mt-2 text-sm'>
+        <p className='text-muted-foreground mt-2 min-h-5 text-sm'>
+          {fromName !== null && leftCents !== Infinity && (
             <MaskedText>
               {HORIZON_WORDS.putHolds(fromName, formatCents(leftCents))}
             </MaskedText>
-          </p>
-        )}
+          )}
+        </p>
       </ActionSection>
       <ModalFooterActions
         note={error ?? blocker}
