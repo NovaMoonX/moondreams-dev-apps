@@ -11,9 +11,9 @@ import {
   type Versioned,
 } from './resolve';
 
-export type PriorityKind = 'bill' | 'envelope' | 'goal';
+export type PriorityKind = 'bill' | 'envelope' | 'goal' | 'horizon';
 
-/** One bill, envelope or goal as the funding order sees it. */
+/** One bill, envelope, goal or Horizon item as the funding order sees it. */
 export interface PriorityItem {
   itemId: string;
   kind: PriorityKind;

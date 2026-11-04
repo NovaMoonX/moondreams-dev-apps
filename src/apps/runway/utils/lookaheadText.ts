@@ -231,6 +231,12 @@ export interface HoldsBlock {
   figure: string | null;
   /** The text says why a one-time pay leaves the bill short. */
   hasNote?: boolean;
+  /** A shortfall the plan already had, not one this change causes: drawn as a warning, never counted as the change's. */
+  isStanding?: boolean;
+  /** The item a standing shortfall is of, so a note about that same item can stand in for it. */
+  standingItemId?: string | null;
+  /** The day a warning names, so the card that lists the days can keep it in view. */
+  namedOn?: number | null;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -269,7 +275,7 @@ function describeChangeProblem(
 }
 
 const getProblemKey = (problem: LookaheadProblem) =>
-  `${problem.kind}:${problem.kind === 'short' ? problem.itemId : problem.billId}`;
+  `${problem.kind}:${problem.kind === 'short' ? `${problem.itemId}:${problem.costId ?? ''}` : problem.billId}`;
 
 export interface CreatedProblem {
   problem: LookaheadProblem;
@@ -344,8 +350,17 @@ export function describeHoldsBlocks(
     if (first) {
       return {
         tone: 'info',
-        text: COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
+        text:
+          first.kind === 'short'
+            ? COVERAGE_WORDS.stillShortOf(
+                first.name,
+                formatDateOrdinalUTC(first.on),
+              )
+            : COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
         figure: null,
+        isStanding: true,
+        standingItemId: first.kind === 'short' ? first.itemId : null,
+        namedOn: first.on,
       };
     }
     const ends = after.incomeEndsOn;
@@ -394,6 +409,7 @@ export function describeHoldsBlocks(
               : null,
             first.grewBy,
           ),
+          namedOn: first.problem.on,
         },
       ]
     : [];

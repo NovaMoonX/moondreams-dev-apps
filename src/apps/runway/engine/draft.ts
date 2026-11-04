@@ -19,6 +19,7 @@ import {
   compareText,
   type BillPayment,
   type BillShare,
+  type CostShare,
   type DraftAsk,
   type Demand,
   type DraftBillInput,
@@ -26,10 +27,11 @@ import {
   type DraftDayInput,
   type DraftEnvelopeInput,
   type DraftGoalInput,
+  type DraftHorizonInput,
   type DraftTieKey,
 } from './demands';
 import { percentOf } from './money';
-import { getLineId } from './parts';
+import { getCostLineId, getLineId } from './parts';
 import { effectiveStance, pick } from './stance';
 
 export interface DraftOverrides {
@@ -46,6 +48,8 @@ export interface DraftInput {
     envelopes: readonly DraftEnvelopeInput[];
     bills: readonly DraftBillInput[];
     goals: readonly DraftGoalInput[];
+    /** Horizon items, whose costs the pays carry; none when the plan has none. */
+    horizonItems?: readonly DraftHorizonInput[];
     /** The last day schedules are generated for. */
     horizon: number;
     /** Line ids (`dayKey:itemId`) whose stretch just ran out: a funded one says it returns. */
@@ -102,6 +106,11 @@ export interface DraftLine {
   tier: Priority;
   /** Set on a bill's line: the payment this day sets money aside for. */
   bill: BillShare | null;
+  /** Set on a Horizon cost's line: the cost and payment this day sets money aside for. */
+  costId?: string | null;
+  cost?: CostShare | null;
+  /** The line gives back to Free to Spend what a fronted payment took; it adds nothing to the item. */
+  repaysFree?: boolean;
   /** The income source of the day this line is on. */
   sourceId: string | null;
   /** How the line asked: money, a share of the day's money, or the rest. */
@@ -426,6 +435,7 @@ export function buildDraft(input: DraftInput): Draft {
     dayMoneyByKey,
     input.stance,
     input.plan.priorIncomeDays ?? [],
+    input.plan.horizonItems ?? [],
   );
 
   const targets = new Map<string, Target>(
@@ -652,12 +662,22 @@ export function buildDraft(input: DraftInput): Draft {
     const taken = takeFromPool(acc.pool, wanted, isRest ? demand.dayKey : null);
     const cents = wanted - taken.left;
     const line: DraftLine = {
-      lineId: getLineId(demand.dayKey, demand.itemId, demand.part),
+      lineId: demand.costId
+        ? getCostLineId(
+            demand.dayKey,
+            demand.itemId,
+            demand.costId,
+            demand.repaysFree,
+          )
+        : getLineId(demand.dayKey, demand.itemId, demand.part),
       dayKey: demand.dayKey,
       itemId: demand.itemId,
       part: demand.part,
       tier: demand.tier,
       bill: demand.bill,
+      costId: demand.costId ?? null,
+      cost: demand.cost ?? null,
+      repaysFree: demand.repaysFree ?? false,
       sourceId: sourceByDay.get(demand.dayKey) ?? null,
       ask: demand.ask,
       demandCents: wanted,
@@ -696,8 +716,20 @@ export function buildDraft(input: DraftInput): Draft {
       : line,
   );
 
+  const freeChunks = [
+    ...walked.pool,
+    ...ordinaryLines
+      .filter((line) => line.repaysFree)
+      .flatMap((line) =>
+        line.paidBy.map((part): Chunk => ({
+          dayKey: part.dayKey,
+          sourceId: part.sourceId,
+          cents: part.cents,
+        })),
+      ),
+  ];
   const bySource = [
-    ...walked.pool
+    ...freeChunks
       .reduce((acc, chunk) => {
         const key = chunk.sourceId ?? '';
         return acc.set(key, (acc.get(key) ?? 0) + chunk.cents);
@@ -720,7 +752,7 @@ export function buildDraft(input: DraftInput): Draft {
       0,
     ),
     freeToSpend: {
-      cents: walked.pool.reduce((sum, chunk) => sum + chunk.cents, 0),
+      cents: freeChunks.reduce((sum, chunk) => sum + chunk.cents, 0),
       bySource,
     },
   };

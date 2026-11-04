@@ -17,10 +17,12 @@ import CostRow from '@apps/runway/components/CostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
+import TakeFromPaysView from '@apps/runway/components/TakeFromPaysView';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { HORIZON_WORDS, RANGE_END_WORDS } from '@apps/runway/constants';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectComingDays } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
@@ -41,7 +43,9 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
+  const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [putting, setPutting] = useState<{
     initialCents: number | null;
   } | null>(null);
@@ -88,6 +92,16 @@ function HorizonSheet({
       isRange ? RANGE_END_WORDS[getRangeEnd(stance, 'expense')] : null,
     );
   };
+  const getRestFromPaysNote = () => {
+    const { rest } = horizon;
+    const picked =
+      rest.kind === 'onePay'
+        ? comingDays.find(({ dayKey }) => dayKey === rest.dayKey)
+        : undefined;
+    return picked
+      ? HORIZON_WORDS.restOnePayNote(formatDateOrdinalUTC(picked.on))
+      : HORIZON_WORDS.restPaysNote;
+  };
   const when =
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
@@ -119,7 +133,14 @@ function HorizonSheet({
       title={horizon.name}
       actions={<ValuesEyeButton />}
     >
-      {putting ? (
+      {isTakingFromPays ? (
+        <TakeFromPaysView
+          itemId={itemId}
+          horizon={horizon}
+          today={today}
+          onBack={() => setIsTakingFromPays(false)}
+        />
+      ) : putting ? (
         <PutTowardView
           itemId={itemId}
           name={horizon.name}
@@ -146,6 +167,13 @@ function HorizonSheet({
             costs={horizon.costs}
             heldCents={figures.leftCents}
             stance={stance}
+            after={
+              (horizon.rest.kind === 'pays' ||
+                horizon.rest.kind === 'onePay') &&
+              plan.coveredUntil !== null
+                ? getRestFromPaysNote()
+                : null
+            }
           />
           {shortfall && (
             <InlineNotice
@@ -167,17 +195,28 @@ function HorizonSheet({
               <p>
                 <MaskedText>{getShortBody()}</MaskedText>
               </p>
-              <Button
-                type='button'
-                variant='primary'
-                size='sm'
-                className='mt-2'
-                onClick={() =>
-                  setPutting({ initialCents: shortfall.shortCents })
-                }
-              >
-                {HORIZON_WORDS.putMore}
-              </Button>
+              <div className='mt-2 flex flex-wrap gap-2'>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  onClick={() =>
+                    setPutting({ initialCents: shortfall.shortCents })
+                  }
+                >
+                  {HORIZON_WORDS.putMore}
+                </Button>
+                {horizon.rest.kind === 'later' && (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    onClick={() => setIsTakingFromPays(true)}
+                  >
+                    {HORIZON_WORDS.takeFromPays}
+                  </Button>
+                )}
+              </div>
             </InlineNotice>
           )}
           {horizon.rest.kind === 'outside' && plan.coveredUntil !== null && (

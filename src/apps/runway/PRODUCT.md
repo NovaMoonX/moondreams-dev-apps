@@ -235,7 +235,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 **The owner's move, step by step**
 
 1. **Nov 3rd, plan it.** Plan > 🗓️ Horizon > "Add to your horizon": 📦 Moving, around Jan 15th. Three costs: **Truck rental** $120 on Jan 14th, paid outside the plan (work covers it); **Movers** $600 to $800 on Jan 15th; **Storage unit** $100 a month from Feb 1st, no end yet.
-2. **Put money toward it now?** $800 from Free to Spend. **What it doesn't cover comes from:** "My pays before each cost is due". Before adding, the review shows the effect: the pays from Jan 15th on each put $50 toward Storage.
+2. **Put money toward it now?** $800 from Free to Spend. **Where does the rest come from?** "My pays before each cost is due". Before adding, the review shows the effect: the pays from Jan 15th on each put $50 toward Storage.
 3. **See how far it goes.** Moving reads **$800 left · $800 set aside, $0 spent** and "Covers Movers on Jan 15th. From Feb 1st, Storage comes from your pays." The truck asks nothing of anyone.
 4. **Dec 2nd, the quote is $600.** Movers > "Set the price" > "An exact amount" > $600, why "Got a quote". What changes, shown first: four pays (Jan 15th to Feb 28th) put $50 less. Now "Covers Movers, then Storage on Feb 1st and Mar 1st. From Apr 1st, Storage comes from your pays."
 5. **Jan 14th, the truck.** Work pays for it, so Truck rental > "Mark paid" ("Paid outside the plan. Nothing comes from Moving.") marks it at once. Moving's money doesn't move.
@@ -246,7 +246,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 **The brother's surgery, step by step**
 
 1. **Nov 3rd.** Plan > 🗓️ Horizon > "Add to your horizon": 🐱 Miso's surgery. **Surgery** $450 to $600 once on Dec 18th; **Medication** $40 a month from Jan 1st, 3 times.
-2. **How it's paid.** Put money toward it now? "Not now". What it doesn't cover comes from: "My pays before each cost is due". His pays before Dec 18th (Nov 13th, Nov 27th, Dec 11th) each put $200 toward Surgery, planned at $600, and each draft says so ("Surgery · Miso's surgery · due Dec 18th"). The pays after set aside $40 before each Medication date.
+2. **How it's paid.** Put money toward it now? "Not now". Where does the rest come from? "My pays before each cost is due". His pays before Dec 18th (Nov 13th, Nov 27th, Dec 11th) each put $200 toward Surgery, planned at $600, and each draft says so ("Surgery · Miso's surgery · due Dec 18th"). The pays after set aside $40 before each Medication date.
 3. **A short pay.** If the Nov 27th pay can only give $120, the draft says Surgery is $80 short and Cover it offers what gives, lowest priority first, as for any bill.
 4. **Dec 18th, the bill is $520.** On the Dec 11th pay's checklist, or on the item, he ticks or taps "Mark paid": "What did Surgery come to?" starts empty with "It varies, usually $450 to $600" as the hint; he types $520. **$80 left · $600 set aside, $520 paid.** The $80 stays with Miso's surgery and covers Medication on Jan 1st and Feb 1st, so his December and January pays drop their Medication lines; the pays before Mar 1st put in the last $40.
 5. **Medication pays in one tap.** Each $40 is exact, so "Mark paid" marks it at once, with Undo on the toast ("Marked Medication paid · $40.00 from Miso's surgery").
@@ -264,7 +264,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 **How it's paid: two questions, asked once for the item**
 
 - **"Put money toward it now?"** An amount, from Free to Spend or from an envelope or goal, or "Not now". Money moved in is the item's from that moment and is spent first.
-- **"What it doesn't cover comes from"**, four answers, nothing preselected:
+- **"Where does the rest come from?"**, four answers, nothing preselected:
   - **My pays before each cost is due:** each payment the item's money doesn't reach is spread across the pays before it, like a bill's "Spread across my pays" (Storage's first payment on Feb 1st over the Jan 15th and Jan 31st pays). The money they set aside sits inside the item.
   - **One pay I pick** ("The pay on Dec 31st"): that pay carries the one-time costs and a repeating cost's first payment; later payments spread over the pays before them. A cost due before the pay picked for it is paid from Free to Spend on its day and that pay puts the money back when it lands, like a bill paid early. It warns only if Free to Spend can't cover it that day.
   - **Outside the plan:** the rest comes from somewhere Runway doesn't plan (a gift, another account). The costs are listed with their dates; nothing warns.
@@ -300,7 +300,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 **Changing and removing costs**
 
 - **A cost's Change** edits its name, date or repeat, ending, and whether it is paid outside the plan; its amount changes only through Set the price, so the cost has one place for each. Any change that moves a pay shows its effect first and applies from today.
-- **The item's Change** edits its name, emoji, date, priority and the answer to "What it doesn't cover comes from", with the effect on the pays first. "Put more toward it" adds money from Free to Spend, an envelope or a goal, or from outside the plan (a gift toward the move, which counts in set aside and takes nothing from Free to Spend).
+- **The item's Change** edits its name, emoji, date, priority and the answer to "Where does the rest come from?", with the effect on the pays first. "Put more toward it" adds money from Free to Spend, an envelope or a goal, or from outside the plan (a gift toward the move, which counts in set aside and takes nothing from Free to Spend).
 - **Remove this cost** confirms with its name and date ("Remove Movers, Jan 15th?") and drops its lines from every coming pay. A cost with a paid payment can't be removed: a one-time cost is taken back first, and a repeating one is ended instead (its paid payments stay). The last cost can't be removed; the item offers "Call it off" in its place.
 
 **Finishing or calling it off**

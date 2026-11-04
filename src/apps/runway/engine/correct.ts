@@ -7,7 +7,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-import { applyLineEdits, getRemainder } from './differences';
+import { applyLineEdits, getLineTitle, getRemainder } from './differences';
 
 /** The split a day stands on now: the confirmed one, or the latest correction. */
 export interface EffectiveSplit {
@@ -75,7 +75,7 @@ export function getEffectiveSplit(
   return result;
 }
 
-/** The effective split of every day the records cover, so balances read one split per day. */
+/** The effective split of every day the records cover, so balances read one split per day. A line that gives back to Free to Spend adds to no item, so it is left out: the money stays in Free to Spend. */
 export function getEffectiveSplits(
   records: readonly OpenRecord[],
 ): EffectiveSplit[] {
@@ -85,7 +85,9 @@ export function getEffectiveSplits(
   }, new Map());
   const result = [...byDay.values()].flatMap((group) => {
     const split = getEffectiveSplit(group);
-    return split ? [split] : [];
+    return split
+      ? [{ ...split, lines: split.lines.filter((line) => !line.repaysFree) }]
+      : [];
   });
   return result;
 }
@@ -109,7 +111,7 @@ export function getCorrectionChanges(
     .map((line): CorrectionChange => ({
       lineId: line.lineId,
       itemId: line.itemId,
-      name: line.name,
+      name: getLineTitle(line),
       emoji: line.emoji,
       beforeCents: was.get(line.lineId) ?? 0,
       afterCents: line.cents,

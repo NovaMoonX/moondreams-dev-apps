@@ -56,6 +56,7 @@ import {
 import {
   applyLineEdits,
   getCoverable,
+  getLineTitle,
   getRemainder,
   suggestShortfall,
 } from '@apps/runway/engine/differences';
@@ -172,7 +173,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       ({ line, index }) =>
         searchText === '' ||
         line.cents !== lines[index].cents ||
-        (lines[index].name === '' ? 'bill' : lines[index].name)
+        (getLineTitle(lines[index]) || 'bill')
           .toLowerCase()
           .includes(searchText),
     );
@@ -389,7 +390,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
       id={cutsId}
       suggested={suggested.map(({ line, from, to }) => ({
         lineId: line.lineId,
-        name: line.name === '' ? 'Bill' : line.name,
+        name: getLineTitle(line) || 'Bill',
         emoji: emojiOf(line.emoji, line.itemId),
         fromCents: from,
         toCents: to,
@@ -601,7 +602,7 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
               const original = lines[index];
               return {
                 id: line.lineId,
-                name: original.name === '' ? 'Bill' : original.name,
+                name: getLineTitle(original) || 'Bill',
                 emoji: emojiOf(original.emoji, original.itemId),
                 value: Object.hasOwn(lineInputs, line.lineId)
                   ? lineInputs[line.lineId]

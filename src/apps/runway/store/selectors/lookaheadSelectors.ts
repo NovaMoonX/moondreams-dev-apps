@@ -135,6 +135,8 @@ export const selectLookahead = createSelector(
     selectComingDays,
     selectBills,
     selectBillPayments,
+    (_state: RootState, _today?: number, extraHeld?: Record<string, number>) =>
+      extraHeld,
   ],
   (
     items,
@@ -150,13 +152,14 @@ export const selectLookahead = createSelector(
     comingDays,
     bills,
     payments,
+    extraHeld,
   ) =>
     computeLookahead(
       { items, versions, openDays },
       {
         stance,
         today,
-        heldByItem,
+        heldByItem: extraHeld ? { ...heldByItem, ...extraHeld } : heldByItem,
         settledKey,
         billProgress,
         startDate,

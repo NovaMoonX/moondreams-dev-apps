@@ -1,4 +1,8 @@
-import { CUSHION_DAYS, INCOME_END_GAP_DAYS } from '@apps/runway/constants';
+import {
+  CUSHION_DAYS,
+  HORIZON_WORDS,
+  INCOME_END_GAP_DAYS,
+} from '@apps/runway/constants';
 import type {
   Cents,
   DateOnly,
@@ -12,6 +16,7 @@ import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
+import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
 
 /** What the days already walked leave behind for the next one, assuming each was confirmed as drafted and nothing was spent. */
@@ -43,6 +48,8 @@ export type LookaheadProblem =
       on: DateOnly;
       dayKey: string;
       itemId: string;
+      /** The Horizon cost a line saves toward; null elsewhere, so an item's costs are never mistaken for one another. */
+      costId: string | null;
       name: string;
       shortBy: Cents;
       isBill: boolean;
@@ -137,7 +144,9 @@ const nextCarry = (
   draft: Draft,
 ): LookaheadCarry =>
   draft.lines.reduce<LookaheadCarry>((acc, line) => {
-    if (line.cents <= 0) return acc;
+    // A cost's share already spreads what is left over every pay: counting an earlier
+    // pay's money again would shrink the later shares.
+    if (line.cents <= 0 || line.repaysFree || line.costId) return acc;
     if (line.bill !== null) {
       const entry: FundedDay = {
         dayKey: day.dayKey,
@@ -161,7 +170,27 @@ const nextCarry = (
     };
   }, carry);
 
-/** Every Must that goes unfunded, and every bill that falls due before the next income day and is not set aside in full, in the draft's own order. */
+/** A cost is named by itself, joined with its item only when another item's cost on the day shares the name. */
+const getShortName = (
+  line: Draft['lines'][number],
+  lines: Draft['lines'],
+  names: LookaheadDraft['names'],
+) => {
+  const itemName = names[line.itemId]?.name ?? '';
+  const costName = line.costId
+    ? names[getCostNameKey(line.itemId, line.costId)]?.name
+    : undefined;
+  if (costName === undefined) return itemName;
+  const isShared = lines.some(
+    (other) =>
+      other.itemId !== line.itemId &&
+      other.costId &&
+      names[getCostNameKey(other.itemId, other.costId)]?.name === costName,
+  );
+  return isShared ? HORIZON_WORDS.costLineName(costName, itemName) : costName;
+};
+
+/** Every Must that goes unfunded, and every bill or cost payment that falls due before the next income day and is not set aside in full, in the draft's own order. */
 const findShorts = (
   day: ComingDay,
   nextOn: DateOnly,
@@ -172,14 +201,16 @@ const findShorts = (
       (entry) =>
         entry.shortBy > 0 &&
         (entry.tier === 'must' ||
-          (entry.bill !== null && entry.bill.dueOn < nextOn)),
+          (entry.bill !== null && entry.bill.dueOn < nextOn) ||
+          (entry.cost != null && entry.cost.dueOn < nextOn)),
     )
     .map((line) => ({
       kind: 'short',
       on: day.on,
       dayKey: day.dayKey,
       itemId: line.itemId,
-      name: result.names[line.itemId]?.name ?? '',
+      costId: line.costId ?? null,
+      name: getShortName(line, result.draft.lines, result.names),
       shortBy: line.shortBy,
       isBill: line.bill !== null,
       tier: line.tier,

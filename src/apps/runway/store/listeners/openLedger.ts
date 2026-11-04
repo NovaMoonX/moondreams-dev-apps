@@ -16,6 +16,7 @@ import type {
   OpenMove,
   OpenPurchase,
   OpenRecord,
+  RecordLine,
   ProposedSealed,
   PurchaseDoc,
   PurchaseSealed,
@@ -64,17 +65,34 @@ export async function openMove(
   };
 }
 
+/** A line sealed before Horizon costs has no cost and gives nothing back to Free to Spend. */
+export const withLineDefaults = <T extends { lines: RecordLine[] }>(
+  payload: T,
+): T => ({
+  ...payload,
+  lines: payload.lines.map((line) => ({
+    ...line,
+    costId: line.costId ?? null,
+    costName: line.costName ?? null,
+    repaysFree: line.repaysFree ?? false,
+  })),
+});
+
 export async function openRecord(
   entry: DayRecordDoc,
   encryption: RunwayEncryption,
 ): Promise<OpenRecord> {
   const base = { id: entry.id, dayId: entry.dayId, createdAt: entry.createdAt };
   if (entry.kind === 'proposed') {
-    const payload = await openJson<ProposedSealed>(entry.sealed, encryption);
+    const payload = withLineDefaults(
+      await openJson<ProposedSealed>(entry.sealed, encryption),
+    );
     return { ...base, kind: 'proposed', payload };
   }
   if (entry.kind === 'correction') {
-    const payload = await openJson<CorrectionSealed>(entry.sealed, encryption);
+    const payload = withLineDefaults(
+      await openJson<CorrectionSealed>(entry.sealed, encryption),
+    );
     return {
       ...base,
       kind: 'correction',
@@ -82,7 +100,9 @@ export async function openRecord(
       payload,
     };
   }
-  const payload = await openJson<ConfirmedSealed>(entry.sealed, encryption);
+  const payload = withLineDefaults(
+    await openJson<ConfirmedSealed>(entry.sealed, encryption),
+  );
   return { ...base, kind: 'confirmed', payload };
 }
 

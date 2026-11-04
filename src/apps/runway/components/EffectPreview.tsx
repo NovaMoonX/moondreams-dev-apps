@@ -1,6 +1,8 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'react-redux';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
 import InlineNotice from '@/components/InlineNotice';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -26,8 +28,10 @@ import {
 } from '@apps/runway/utils/lookaheadText';
 import {
   previewChange,
+  previewItemShorts,
   previewLookahead,
   previewOverrideCarry,
+  type ItemShortsReading,
   type PreviewChange,
   type PreviewDay,
 } from '@apps/runway/store/selectors/previewSelectors';
@@ -67,6 +71,11 @@ interface EffectPreviewProps {
   warningActions?: ReactNode;
   /** Replaces the section's caption. */
   caption?: string;
+  /** Says when the item's cost lines come up short on the pays once the change is made; null says nothing. */
+  shortNote?: {
+    itemId: string;
+    describe: (reading: ItemShortsReading) => string | null;
+  };
   /** What the change does to how far the plan holds, when the form has already worked it out. */
   holds?: { blocks: HoldsBlock[]; isSame: boolean } | null;
 }
@@ -75,7 +84,7 @@ interface EffectEntry {
   key: string;
   title: string;
   note: string | null;
-  lines: { name: string; text: string }[];
+  lines: { name: string; text: string; isWords?: boolean }[];
   free: string | null;
   detail: string | null;
 }
@@ -90,10 +99,21 @@ const toDayEntry = (
           (a, b) => Number(pinned.has(b.itemId)) - Number(pinned.has(a.itemId)),
         )
       : [];
-  const shown = lines.map((line) => ({
-    name: day.names[line.itemId]?.name ?? 'Something removed',
-    text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
-  }));
+  const shown = [
+    ...lines.map((line) => ({
+      name: day.names[line.key]?.name ?? 'Something removed',
+      text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
+    })),
+    ...(day.kind === 'changed' ? day.effect.shortened : []).map((entry) => ({
+      name: day.names[entry.key]?.name ?? 'Something removed',
+      text: CHANGE_WORDS.putsInOf(
+        formatCents(entry.putInCents),
+        formatCents(entry.putInCents + entry.afterShortCents),
+        entry.putInCents > 0,
+      ),
+      isWords: true,
+    })),
+  ];
   const isFreeMoved =
     day.kind === 'changed' &&
     day.effect.freeBeforeCents !== day.effect.freeAfterCents;
@@ -114,21 +134,37 @@ const toDayEntry = (
   };
 };
 
-/** Days that move the same way, with nothing of their own to say, become one row; the days with lines that change come first, each on its own. */
+/** Days that move the same way, with nothing of their own to say, become one row; the days where money moves, or that a warning names, come first (then the no-room days), each on its own. */
 const toEntries = (
   days: readonly PreviewDay[],
   pinned: ReadonlySet<string>,
+  namedOn: readonly number[],
 ): EffectEntry[] => {
   const kindOf = (day: PreviewDay) =>
     day.kind !== 'changed'
       ? day.kind
       : day.effect.lines.length === 0 &&
+          day.effect.shortened.length === 0 &&
           day.effect.freeBeforeCents === day.effect.freeAfterCents
         ? 'same'
         : 'own';
-  const own = days
-    .filter((day) => kindOf(day) === 'own')
-    .map((day) => toDayEntry(day, pinned));
+  const isMoved = (day: PreviewDay) =>
+    day.kind === 'changed' &&
+    (day.effect.lines.length > 0 ||
+      day.effect.freeBeforeCents !== day.effect.freeAfterCents ||
+      day.effect.shortened.some((entry) => entry.putInCents > 0) ||
+      namedOn.includes(day.on));
+  const ownDays = days.filter((day) => kindOf(day) === 'own');
+  const byDate = (a: PreviewDay, b: PreviewDay) => a.on - b.on;
+  const ranked = [
+    ...ownDays.filter(isMoved),
+    ...ownDays.filter((day) => !isMoved(day)),
+  ];
+  // The days a folded card shows first are the ones where money moved, each part kept in date order.
+  const own = [
+    ...ranked.slice(0, PREVIEW_SHOWN).sort(byDate),
+    ...ranked.slice(PREVIEW_SHOWN).sort(byDate),
+  ].map((day) => toDayEntry(day, pinned));
   const folded = (['removed', 'added', 'same'] as const).flatMap((kind) => {
     const group = days.filter((day) => kindOf(day) === kind);
     if (group.length === 0) return [];
@@ -197,6 +233,7 @@ function EffectPreview({
   warningActions,
   caption,
   holds,
+  shortNote,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -238,6 +275,36 @@ function EffectPreview({
     );
     return result;
   }, [
+    settledVirtual,
+    items,
+    versions,
+    openDays,
+    stance,
+    today,
+    heldByItem,
+    settledKey,
+    billProgress,
+  ]);
+
+  const shortText = useMemo(() => {
+    if (shortNote === undefined || settledVirtual === null) return null;
+    const reading = previewItemShorts(
+      {
+        items,
+        versions,
+        openDays,
+        stance,
+        today,
+        heldByItem,
+        settledKey,
+        billProgress,
+      },
+      settledVirtual,
+      shortNote.itemId,
+    );
+    return shortNote.describe(reading);
+  }, [
+    shortNote,
     settledVirtual,
     items,
     versions,
@@ -335,6 +402,7 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (shortText !== null) return null;
       if (holdsText?.blocks.some((block) => block.tone === 'warning'))
         return null;
       if (describeLead !== undefined && holdsText?.isSame !== true) return null;
@@ -348,7 +416,15 @@ function EffectPreview({
         </p>
       );
     }
-    const entries = toEntries(days, pinnedItemIds ?? NO_PINNED);
+    const entries = toEntries(
+      days,
+      pinnedItemIds ?? NO_PINNED,
+      (holdsText?.blocks ?? []).flatMap((block) =>
+        block.tone !== 'success' && block.namedOn != null
+          ? [block.namedOn]
+          : [],
+      ),
+    );
     const isCapped =
       isCompact && isOpen && !isEvery && entries.length > PREVIEW_SHOWN;
     const shown =
@@ -400,11 +476,19 @@ function EffectPreview({
                 : entry.lines.slice(0, MAX_LINES_SHOWN)
               ).map((line) => (
                 <p
-                  key={line.name}
-                  className='flex items-baseline justify-between gap-3'
+                  key={`${line.name}:${line.text}`}
+                  className={join(
+                    'flex items-baseline justify-between gap-x-3',
+                    line.isWords && 'flex-wrap',
+                  )}
                 >
                   <span className='min-w-0 break-words'>{line.name}</span>
-                  <span className='font-medium whitespace-nowrap tabular-nums'>
+                  <span
+                    className={join(
+                      'font-medium tabular-nums',
+                      line.isWords ? 'ml-auto text-right' : 'whitespace-nowrap',
+                    )}
+                  >
                     <MaskedText>{line.text}</MaskedText>
                   </span>
                 </p>
@@ -469,7 +553,13 @@ function EffectPreview({
   const shownBlocks =
     holdsText && !(isCompact && holdsText.isSame)
       ? holdsText.blocks.filter(
-          (block) => describeLead === undefined || block.tone === 'warning',
+          (block) =>
+            (describeLead === undefined || block.tone === 'warning') &&
+            !(
+              block.isStanding === true &&
+              shortText !== null &&
+              block.standingItemId === shortNote?.itemId
+            ),
         )
       : [];
   const renderFigure = (block: (typeof shownBlocks)[number]) =>
@@ -501,6 +591,7 @@ function EffectPreview({
     body === null &&
     visibleNotes.length === 0 &&
     shownBlocks.length === 0 &&
+    shortText === null &&
     !isLeadShown
   ) {
     return null;
@@ -519,6 +610,13 @@ function EffectPreview({
           {note.text}
         </InlineNotice>
       ))}
+      {shortText !== null && (
+        <div data-change-warning=''>
+          <InlineNotice tone='warning'>
+            <MaskedText>{shortText}</MaskedText>
+          </InlineNotice>
+        </div>
+      )}
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
@@ -530,7 +628,7 @@ function EffectPreview({
               key={block.text}
               data-change-warning={block.tone === 'warning' ? '' : undefined}
             >
-              <InlineNotice tone={block.tone}>
+              <InlineNotice tone={block.isStanding ? 'warning' : block.tone}>
                 {renderFigure(block)}
               </InlineNotice>
             </div>

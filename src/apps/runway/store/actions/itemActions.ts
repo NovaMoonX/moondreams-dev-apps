@@ -28,6 +28,7 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   GroupSealed,
+  HorizonSealed,
   Ending,
   MoneyRange,
   ItemKind,
@@ -563,7 +564,9 @@ export const MAX_REORDER_WRITES = 450;
 
 export interface ReorderItemsInput {
   /** The stretches from today on each keep their own payload; only tiers and ranks change. */
-  moves: PriorityMove<BillSealed | EnvelopeSealed | GoalSealed>[];
+  moves: PriorityMove<
+    BillSealed | EnvelopeSealed | GoalSealed | HorizonSealed
+  >[];
   summary: string;
   effectiveFrom: number;
 }

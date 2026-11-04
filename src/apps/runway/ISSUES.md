@@ -2506,7 +2506,7 @@ A cost can repeat: Storage unit, $100 a month from Feb 1st, no end yet. Its paym
 
 ### Possible Approach
 1. `planHorizon` turns each payment's need into `Demand`s through the bill spread helpers; `buildDemands` adds them after bills.
-2. Line ids are `getCostLineId`; a confirmed record keeps `costId` and "Storage unit · Moving".
+2. Line ids are `getCostLineId`; a confirmed record keeps `costId`, `costName` ("Storage unit") and the item's name ("Moving").
 3. `BillShareView` edits a cost's share for one day through the existing override path.
 4. The effect preview runs on the review before Add when any pay changes.
 5. Priorities lists the item once; `comparePriorityItems` takes kind `horizon`.

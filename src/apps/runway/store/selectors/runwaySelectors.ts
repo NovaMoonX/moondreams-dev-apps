@@ -34,6 +34,7 @@ import {
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
+import { getCostNameKey, getCostShareKey } from '@apps/runway/engine/parts';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
@@ -797,6 +798,11 @@ export function computeDraftView(
     versions.filter(isGoal),
     day.on,
   ).filter(({ version }) => (version.payload.state ?? 'active') === 'active');
+  const resolvedHorizon = resolve(
+    items.filter((item) => item.kind === 'horizon'),
+    versions.filter(isHorizon),
+    day.on,
+  );
   const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const override =
     openDays.find((entry) => entry.id === dayKey)?.override ?? null;
@@ -848,6 +854,10 @@ export function computeDraftView(
           resolvedBills.map(({ version }) => version.id),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+          resolvedHorizon.map(({ item, version }) => [
+            version.id,
+            heldByItem[item.id] ?? 0,
+          ]),
           resolved.map(({ item, version }) =>
             version.payload.maxCents === null ? 0 : (heldByItem[item.id] ?? 0),
           ),
@@ -909,6 +919,21 @@ export function computeDraftView(
     oneTimePayLineIds,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
+  const horizonItems = resolvedHorizon.map(({ item, version }) => ({
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: version.payload.priority,
+    orderIndex: version.payload.orderIndex,
+    rest: version.payload.rest,
+    costs: version.payload.costs,
+    heldCents: heldByItem[item.id] ?? 0,
+    fixed: Object.fromEntries(
+      version.payload.costs.flatMap((cost) => {
+        const pinned = fixedByBill.get(getCostShareKey(item.id, cost.id));
+        return pinned ? [[cost.id, pinned]] : [];
+      }),
+    ),
+  }));
   const goals = resolvedGoals.map(({ item, version }) => {
     const payload = payloadOf(item.id, version.payload);
     return {
@@ -937,6 +962,7 @@ export function computeDraftView(
       envelopes,
       bills,
       goals,
+      horizonItems,
       horizon,
       returns: [...returning].map((itemId) => `${dayKey}:${itemId}`),
       incomeDays: days.map((entry) => ({
@@ -997,14 +1023,24 @@ export function computeDraftView(
       payloads: override?.payloads,
       billCents: override?.billCents,
     }),
-    items: Object.fromEntries(
-      [...resolved, ...resolvedBills, ...resolvedGoals].map(
+    items: Object.fromEntries([
+      ...[...resolved, ...resolvedBills, ...resolvedGoals].map(
         ({ item, version }) => [
           item.id,
           { name: version.payload.name, emoji: version.payload.emoji },
         ],
       ),
-    ),
+      ...resolvedHorizon.flatMap(({ item, version }) => [
+        [item.id, { name: version.payload.name, emoji: version.payload.emoji }],
+        ...version.payload.costs.map((cost) => [
+          getCostNameKey(item.id, cost.id),
+          {
+            name: cost.name,
+            emoji: version.payload.emoji,
+          },
+        ]),
+      ]),
+    ]),
     sourceNames,
     leftOut,
   };
@@ -1027,6 +1063,14 @@ export const selectDraftHeldByItem = createSelector(
           item.heldReleasedOn !== null && item.heldReleasedOn <= today
             ? 0
             : Math.max(0, balances.assignedByItem[item.id] ?? 0),
+        ]),
+    ),
+    ...Object.fromEntries(
+      items
+        .filter((item) => item.kind === 'horizon')
+        .map((item) => [
+          item.id,
+          Math.max(0, balances.assignedByItem[item.id] ?? 0),
         ]),
     ),
   }),

@@ -4,10 +4,12 @@ import type {
   HorizonCost,
   HorizonSealed,
   HorizonStored,
+  Schedule,
   Stance,
 } from '@apps/runway/types';
 
-import { occurrences } from './schedule';
+import { addUtcMonths, DAY_MS } from './dates';
+import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
 
 /** One time a cost asks for money. */
@@ -29,6 +31,16 @@ export function listCostPayments(
     (dueOn) => ({ costId: cost.id, dueOn, totalCents }),
   );
   return result;
+}
+
+/** The day a repeating cost's first payment looks back to for its pays: one beat before it, so a monthly cost due Feb 1st asks the pays since Jan 1st. Null for a cost paid once, whose pays are every one before it. */
+export function getPriorBeat(schedule: Schedule): DateOnly | null {
+  const { anchor } = schedule;
+  if (anchor === null || schedule.kind === 'once') return null;
+  if (schedule.kind === 'weekly') return anchor - 7 * DAY_MS;
+  if (schedule.kind === 'everyOtherWeek') return anchor - 14 * DAY_MS;
+  const months = getIntervalMonths(schedule) ?? 1;
+  return addUtcMonths(anchor, -months);
 }
 
 /** Every cost's payments through `horizon` in date order, ties in the order the costs were listed. */
@@ -90,7 +102,7 @@ export interface HorizonPlan {
 
 /** Walks the money held over the unpaid payments in due order, ties by cost id; the input order changes nothing. */
 export function planHorizon(
-  item: Pick<HorizonSealed, 'rest' | 'costs'>,
+  item: Pick<HorizonSealed, 'rest'> & { costs: readonly HorizonCost[] },
   heldCents: Cents,
   payments: readonly CostPayment[],
 ): HorizonPlan {
