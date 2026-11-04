@@ -310,6 +310,10 @@ export function PillOptions<T extends string>({
           isClamped && 'overflow-hidden',
         )}
         style={isClamped && isThin ? { maxHeight: fit.limit } : undefined}
+        // A focus or a script's scroll-into-view can scroll a clamped box, leaving pills cut in half.
+        onScroll={(event) => {
+          if (isClamped) event.currentTarget.scrollTop = 0;
+        }}
         onFocusCapture={(event) =>
           isClamped &&
           event.target.matches(':focus-visible') &&
