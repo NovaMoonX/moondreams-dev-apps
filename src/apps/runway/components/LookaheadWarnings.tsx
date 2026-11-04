@@ -9,6 +9,7 @@ import DetailSheet from '@/components/DetailSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -20,6 +21,7 @@ import {
 } from '@apps/runway/constants';
 import {
   describeGroupShort,
+  getHomeHorizonShort,
   groupProblems,
   type ProblemGroup,
 } from '@apps/runway/utils/lookaheadText';
@@ -28,6 +30,7 @@ import {
   describeDueNote,
   getCardName,
 } from '@apps/runway/utils/cardText';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import type { DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
@@ -53,6 +56,10 @@ const getRowKey = (row: WarningRow) => {
   if (row.kind === 'card') return `card:${row.due.card.id}`;
   const { group } = row;
   if (group.kind === 'undated') return 'undated';
+  if (group.kind === 'horizon') {
+    const { short } = group;
+    return `horizon:${short.kind}:${short.itemId}:${short.name}:${short.dueOn}`;
+  }
   if (group.kind === 'day') return `day:${group.on}:${group.dayKey}`;
   return `single:${group.on}:${group.problem.kind}`;
 };
@@ -69,11 +76,19 @@ function LookaheadWarnings({
   const [paying, setPaying] = useState<OpenedCard | null>(null);
   const allCards = useAppSelector(selectAllCards);
   const undated = lookahead?.undated ?? [];
+  const today = todayAsUtcDate(useNow(60_000));
   const rows: WarningRow[] = [
     ...[
       ...groupProblems(lookahead?.problems ?? []).map((group) => ({
         on: group.on,
         row: { kind: 'plan', group } satisfies WarningRow,
+      })),
+      ...getHomeHorizonShort(lookahead, today).map((short) => ({
+        on: short.dueOn,
+        row: {
+          kind: 'plan',
+          group: { kind: 'horizon', on: short.dueOn, short },
+        } satisfies WarningRow,
       })),
       ...dueCards.map((due) => ({
         on: due.dueOn,

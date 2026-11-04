@@ -6,6 +6,8 @@ import {
 import type {
   Cents,
   DateOnly,
+  HorizonCost,
+  HorizonRest,
   MoneyRange,
   Priority,
   Stance,
@@ -16,6 +18,7 @@ import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
+import { listHorizonPayments, planHorizon } from './horizon';
 import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
 
@@ -56,6 +59,40 @@ export type LookaheadProblem =
       tier: Priority;
     };
 
+/** A Horizon item as the lookahead reads it: what it holds now and the costs it plans. */
+export interface LookaheadHorizonItem {
+  id: string;
+  name: string;
+  rest: HorizonRest;
+  costs: readonly HorizonCost[];
+  heldCents: Cents;
+  /** Payments already marked paid; they ask nothing and are not warned about. */
+  paid?: readonly { costId: string; dueOn: DateOnly }[];
+}
+
+/** A Horizon warning that is not a gap in the plan: it never moves `holdsThrough` and is not in `problems`. */
+export type HorizonShort =
+  | {
+      /** An item whose rest is decided later runs out of money for a payment. */
+      kind: 'later';
+      itemId: string;
+      name: string;
+      dueOn: DateOnly;
+      shortCents: Cents;
+    }
+  | {
+      /** A cost due before its picked pay is fronted by Free to Spend, which then falls below zero. */
+      kind: 'fronted';
+      itemId: string;
+      /** The cost's own name. */
+      name: string;
+      dueOn: DateOnly;
+      /** How far below zero Free to Spend is on the due date. */
+      shortCents: Cents;
+      /** The picked pay that gives it back. */
+      payOn: DateOnly;
+    };
+
 export interface LookaheadInput {
   today: DateOnly;
   /** The last day the plan is looked at. */
@@ -72,6 +109,12 @@ export interface LookaheadInput {
     isUndated: boolean;
   }[];
   payments: Readonly<Record<string, BillPayment[]>>;
+  /** The Horizon items in the plan; none when the caller has none. */
+  horizonItems?: readonly LookaheadHorizonItem[];
+  /** What the Horizon items' payments are planned at; defaults to the safe end. */
+  stance?: Stance;
+  /** Free to Spend now; null or missing leaves a fronted payment unchecked. */
+  freeToSpendCents?: Cents | null;
   /** The draft for one day given what the days before it left behind; null when the day has none. */
   draftOf: (day: ComingDay, carry: LookaheadCarry) => LookaheadDraft | null;
 }
@@ -102,6 +145,8 @@ export interface Lookahead {
   }[];
   /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
   undated: { billId: string; name: string }[];
+  /** Horizon shortfalls and fronted payments Free to Spend cannot cover, soonest first. They never stop the plan, so they are not in `problems`. */
+  horizonShort: HorizonShort[];
   /** Each walked income day: what it brings in, what its draft leaves free to spend and what it gives each item. */
   steps: {
     on: DateOnly;
@@ -283,6 +328,93 @@ const findNoIncome = (
     ];
   });
 
+/** A `later` item's first uncovered payment, and every cost payment fronted by Free to Spend (due before the pay picked for it) when the simulated Free to Spend, walked pay by pay, is below zero on its due date. Outside costs and items are never read. */
+const findHorizonShort = (
+  input: LookaheadInput,
+  steps: Lookahead['steps'],
+): HorizonShort[] => {
+  const stance = input.stance ?? 'conservative';
+  const items = (input.horizonItems ?? []).map((item) => {
+    const all = listHorizonPayments(item.costs, input.horizon, stance);
+    const open = all.filter(
+      ({ costId, dueOn }) =>
+        !(item.paid ?? []).some(
+          (entry) => entry.costId === costId && entry.dueOn === dueOn,
+        ),
+    );
+    return { item, all, covers: planHorizon(item, item.heldCents, open) };
+  });
+  const later = items.flatMap(({ item, covers }): HorizonShort[] => {
+    const { shortfall } = covers;
+    return shortfall && shortfall.dueOn >= input.today
+      ? [
+          {
+            kind: 'later',
+            itemId: item.id,
+            name: item.name,
+            dueOn: shortfall.dueOn,
+            shortCents: shortfall.shortCents,
+          },
+        ]
+      : [];
+  });
+  const fronted = items.flatMap(({ item, all, covers }) => {
+    const { rest } = item;
+    const picked =
+      rest.kind === 'onePay'
+        ? input.days.find((day) => day.dayKey === rest.dayKey)
+        : undefined;
+    if (!picked) return [];
+    return covers.covers
+      .filter(
+        (cover) =>
+          cover.coveredCents < cover.totalCents &&
+          cover.dueOn >= input.today &&
+          cover.dueOn < picked.on &&
+          all.find((payment) => payment.costId === cover.costId)?.dueOn ===
+            cover.dueOn,
+      )
+      .map((cover) => ({
+        itemId: item.id,
+        name:
+          item.costs.find(({ id }) => id === cover.costId)?.name ?? item.name,
+        dueOn: cover.dueOn,
+        payOn: picked.on,
+        needCents: cover.totalCents - cover.coveredCents,
+      }));
+  });
+  const base = input.freeToSpendCents;
+  const warned = fronted.flatMap((entry): HorizonShort[] => {
+    if (base === null || base === undefined) return [];
+    const free =
+      base +
+      steps
+        .filter((step) => step.on <= entry.dueOn)
+        .reduce((sum, step) => sum + step.freeCents, 0) -
+      fronted
+        .filter(
+          (other) => other.dueOn <= entry.dueOn && other.payOn > entry.dueOn,
+        )
+        .reduce((sum, other) => sum + other.needCents, 0);
+    return free < 0
+      ? [
+          {
+            kind: 'fronted',
+            itemId: entry.itemId,
+            name: entry.name,
+            dueOn: entry.dueOn,
+            shortCents: -free,
+            payOn: entry.payOn,
+          },
+        ]
+      : [];
+  });
+  const result = [...later, ...warned].sort(
+    (a, b) => a.dueOn - b.dueOn || a.name.localeCompare(b.name),
+  );
+  return result;
+};
+
 const getIncomeEnd = (input: LookaheadInput): DateOnly | null => {
   const last = input.days.at(-1);
   if (!last) return null;
@@ -368,6 +500,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     undated: input.bills
       .filter((bill) => bill.isUndated)
       .map((bill) => ({ billId: bill.id, name: bill.name })),
+    horizonShort: findHorizonShort(input, walked.steps),
     steps: walked.steps,
   };
   return result;

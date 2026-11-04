@@ -45,6 +45,7 @@ import {
   selectPairedBy,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { getHomeHorizonShort } from '@apps/runway/utils/lookaheadText';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
@@ -119,7 +120,10 @@ function HomeScreen() {
   const hasWarnings =
     dueCards.length > 0 ||
     (lookahead !== null &&
-      lookahead.problems.length + lookahead.undated.length > 0);
+      lookahead.problems.length +
+        lookahead.undated.length +
+        getHomeHorizonShort(lookahead, today).length >
+        0);
 
   return (
     <div className='space-y-6'>
@@ -134,9 +138,7 @@ function HomeScreen() {
         <MoneyCard
           today={today}
           lookahead={lookahead}
-          rangeNote={
-            hasRanges ? describeRangeBasis(stance, rangeSides) : null
-          }
+          rangeNote={hasRanges ? describeRangeBasis(stance, rangeSides) : null}
           onOpen={() => openView('freeToSpend')}
         />
       </div>

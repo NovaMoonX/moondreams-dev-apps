@@ -3,9 +3,15 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
-import { COVERAGE_WORDS, FIX_WORDS } from '@apps/runway/constants';
+import {
+  COVERAGE_WORDS,
+  FIX_WORDS,
+  HORIZON_WARN_DAYS,
+} from '@apps/runway/constants';
+import { DAY_MS } from '@apps/runway/engine/dates';
 import {
   isSameLookahead,
+  type HorizonShort,
   sortProblems,
   type Lookahead,
   type LookaheadProblem,
@@ -48,18 +54,31 @@ export function describeHoldsChange(before: Lookahead, after: Lookahead) {
   return result;
 }
 
+/** The Horizon warnings Home counts: those due within `HORIZON_WARN_DAYS` of today. */
+export const getHomeHorizonShort = (
+  lookahead: Lookahead | null,
+  today: number,
+) =>
+  (lookahead?.horizonShort ?? []).filter(
+    ({ dueOn }) => dueOn <= today + HORIZON_WARN_DAYS * DAY_MS,
+  );
+
 type ShortProblem = Extract<LookaheadProblem, { kind: 'short' }>;
 
 /** One row of "Things to fix": every short line on one income day together, or one problem that is not tied to a day. */
 export type ProblemGroup =
   | { kind: 'day'; on: number; dayKey: string; shorts: ShortProblem[] }
   | { kind: 'single'; on: number; problem: LookaheadProblem }
+  | { kind: 'horizon'; on: number; short: HorizonShort }
   | {
       kind: 'undated';
       bills: readonly { billId: string; name: string }[];
     };
 
-export type DatedProblemGroup = Exclude<ProblemGroup, { kind: 'undated' }>;
+export type DatedProblemGroup = Exclude<
+  ProblemGroup,
+  { kind: 'undated' | 'horizon' }
+>;
 
 /** The problems soonest first, one group per income day that runs short: the order the summary row and the list it opens both use. */
 export function groupProblems(problems: readonly LookaheadProblem[]) {
@@ -126,6 +145,21 @@ export function describeGroupRow(
     };
   }
   if (group.kind === 'single') return describeProblemRow(group.problem, today);
+  if (group.kind === 'horizon') {
+    const { short } = group;
+    const on = formatDateOrdinalUTC(short.dueOn);
+    return short.kind === 'fronted'
+      ? {
+          title: FIX_WORDS.frontedShort(short.name),
+          detail: FIX_WORDS.frontedOn(on, formatDateOrdinalUTC(short.payOn)),
+        }
+      : {
+          title: isHidden
+            ? `${short.name} short`
+            : FIX_WORDS.short(short.name, formatCentsShort(short.shortCents)),
+          detail: FIX_WORDS.runsShortOn(on),
+        };
+  }
   const result = {
     title: formatDateOrdinalUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
@@ -143,6 +177,27 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
     };
   }
   const on = formatDateOrdinalUTC(group.on).replace(/ /g, '\u00a0');
+  if (group.kind === 'horizon') {
+    const { short } = group;
+    if (short.kind === 'fronted') {
+      return {
+        before: `Free to Spend can't cover ${short.name} on ${on} before the ${formatDateOrdinalUTC(short.payOn).replace(/ /g, '\u00a0')} pay`,
+        figure: null,
+        after: '',
+      };
+    }
+    return isHidden
+      ? {
+          before: `The plan leaves ${short.name} short on ${on}`,
+          figure: null,
+          after: '',
+        }
+      : {
+          before: `The plan leaves ${short.name} `,
+          figure: formatCentsShort(short.shortCents),
+          after: ` short on ${on}`,
+        };
+  }
   if (group.kind === 'single') {
     const problem = group.problem;
     if (problem.kind === 'noIncome' && problem.reason === 'short') {
