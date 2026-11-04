@@ -494,7 +494,16 @@ function PurchaseScreen({
             </p>
           )}
           {receipts.length > 0 && (
-            <ReceiptsBlock images={receipts} onOpen={openReceipt} />
+            <ReceiptsBlock
+              images={receipts}
+              onOpen={openReceipt}
+              onTakePhoto={
+                canTakePhoto && receipts.length < MAX_RECEIPTS_PER_PURCHASE
+                  ? () => receiptChooser.current?.open({ isCamera: true })
+                  : undefined
+              }
+              isAddDisabled={!isReceiptsLoaded || isAddingReceipt}
+            />
           )}
           <ActionGroup isRoomy>
             <ActionRow
@@ -512,7 +521,7 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {canTakePhoto && (
+            {canTakePhoto && receipts.length === 0 && (
               <ActionRow
                 isGrouped
                 isRoomy

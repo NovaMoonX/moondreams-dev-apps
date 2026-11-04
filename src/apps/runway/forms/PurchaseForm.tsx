@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Camera, ImagePlus, Search } from 'lucide-react';
+import { ImagePlus, Search } from 'lucide-react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
+import CameraGridTile from '@/components/forms/CameraGridTile';
+import CameraTile from '@/components/forms/CameraTile';
 import FallbackImage from '@/components/FallbackImage';
 import BackLink from '@/components/BackLink';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
@@ -471,6 +473,24 @@ function PurchaseFormBody({
   const receiptChooser = useRef<ReceiptChooser>(null);
   const readChooser = useRef<ReceiptChooser>(null);
   const canTakePhoto = useCanTakePhoto();
+  const isReceiptsFull =
+    heldReceiptCount + (pickedReceipts?.length ?? 0) >=
+    MAX_RECEIPTS_PER_PURCHASE;
+  const chooseReceiptsButton = (
+    <Button
+      type='button'
+      variant={canTakePhoto ? 'tertiary' : 'secondary'}
+      className={join(
+        'h-11 w-full gap-2 whitespace-nowrap',
+        canTakePhoto && 'border-border border',
+      )}
+      disabled={isReceiptsFull}
+      onClick={() => receiptChooser.current?.open()}
+    >
+      <ImagePlus className='h-4 w-4 shrink-0' aria-hidden='true' />
+      {SPEND_WORDS.chooseReceipts}
+    </Button>
+  );
   const [reading, setReading] = useState<{
     isBusy: boolean;
     message: string | null;
@@ -1616,51 +1636,18 @@ function PurchaseFormBody({
                           <p className='text-muted-foreground text-xs'>
                             {SPEND_WORDS.receiptHelp}
                           </p>
-                          <div
-                            className={join(
-                              'grid gap-2',
-                              canTakePhoto && 'grid-cols-2',
-                            )}
-                          >
-                            {canTakePhoto && (
-                              <Button
-                                type='button'
-                                variant='secondary'
-                                className='h-11 w-full gap-1.5 px-2.5 whitespace-nowrap'
-                                disabled={
-                                  heldReceiptCount + pickedReceipts.length >=
-                                  MAX_RECEIPTS_PER_PURCHASE
-                                }
-                                onClick={() =>
-                                  receiptChooser.current?.open({
-                                    isCamera: true,
-                                  })
-                                }
-                              >
-                                <Camera
-                                  className='h-4 w-4 shrink-0 max-[380px]:hidden'
-                                  aria-hidden='true'
-                                />
-                                {SPEND_WORDS.takePhoto}
-                              </Button>
-                            )}
-                            <Button
-                              type='button'
-                              variant='secondary'
-                              className='h-11 w-full gap-1.5 px-2.5 whitespace-nowrap'
-                              disabled={
-                                heldReceiptCount + pickedReceipts.length >=
-                                MAX_RECEIPTS_PER_PURCHASE
+                          {canTakePhoto && pickedReceipts.length === 0 && (
+                            <CameraTile
+                              title={SPEND_WORDS.takeReceiptPhoto}
+                              isDisabled={isReceiptsFull}
+                              onClick={() =>
+                                receiptChooser.current?.open({
+                                  isCamera: true,
+                                })
                               }
-                              onClick={() => receiptChooser.current?.open()}
-                            >
-                              <ImagePlus
-                                className='h-4 w-4 shrink-0 max-[380px]:hidden'
-                                aria-hidden='true'
-                              />
-                              {SPEND_WORDS.chooseReceipts}
-                            </Button>
-                          </div>
+                            />
+                          )}
+                          {pickedReceipts.length === 0 && chooseReceiptsButton}
                           <ReceiptFileInput
                             chooser={receiptChooser}
                             onFiles={addReceiptFiles}
@@ -1716,8 +1703,22 @@ function PurchaseFormBody({
                                   </Button>
                                 </li>
                               ))}
+                              {canTakePhoto && (
+                                <li>
+                                  <CameraGridTile
+                                    label={SPEND_WORDS.takeAnotherPhoto}
+                                    isDisabled={isReceiptsFull}
+                                    onClick={() =>
+                                      receiptChooser.current?.open({
+                                        isCamera: true,
+                                      })
+                                    }
+                                  />
+                                </li>
+                              )}
                             </ul>
                           )}
+                          {pickedReceipts.length > 0 && chooseReceiptsButton}
                         </div>
                       ),
                     },
@@ -1912,27 +1913,20 @@ function PurchaseFormBody({
             {SPEND_WORDS.readReceiptSends}
           </p>
           {canTakePhoto && (
-            <div className='grid grid-cols-2 gap-2'>
-              <Button
-                type='button'
-                variant='secondary'
-                className='h-11 gap-1.5 px-2 whitespace-nowrap'
-                disabled={reading.isBusy}
+            <div className='space-y-2'>
+              <CameraTile
+                title={SPEND_WORDS.takeReceiptPhoto}
+                isDisabled={reading.isBusy}
                 onClick={() => readChooser.current?.open({ isCamera: true })}
-              >
-                <Camera
-                  className='h-4 w-4 max-[379px]:hidden'
-                  aria-hidden='true'
-                />
-                {SPEND_WORDS.takePhoto}
-              </Button>
+              />
               <Button
                 type='button'
-                variant='secondary'
-                className='h-11 px-2 whitespace-nowrap'
+                variant='tertiary'
+                className='border-border h-11 w-full gap-2 border whitespace-nowrap'
                 disabled={reading.isBusy}
                 onClick={() => readChooser.current?.open()}
               >
+                <ImagePlus className='h-4 w-4 shrink-0' aria-hidden='true' />
                 {reading.message === null
                   ? SPEND_WORDS.readReceiptChoose
                   : SPEND_WORDS.readReceiptChooseAnother}

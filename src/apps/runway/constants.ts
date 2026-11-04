@@ -1242,7 +1242,7 @@ export const SPEND_WORDS = {
   receipts: 'Receipts',
   addReceipt: 'Add a receipt',
   takeReceiptPhoto: 'Take a photo of the receipt',
-  takePhoto: 'Take a photo',
+  takeAnotherPhoto: 'Take another photo',
   chooseReceiptPhoto: 'Choose a receipt photo',
   readReceipt: 'Read a receipt',
   readReceiptSends:
