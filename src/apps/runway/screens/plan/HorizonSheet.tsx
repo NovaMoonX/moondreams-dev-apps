@@ -158,11 +158,15 @@ function HorizonSheet({
         isPlannedRange,
         hasRepeats,
       ),
+    when,
+  ]
+    .filter(Boolean)
+    .join('\u00A0· ');
+  const outsideFact = [
     outsidePaidCents > 0 &&
       HORIZON_WORDS.outsideTotal(formatCents(outsidePaidCents)),
     outsideDueCents > 0 &&
       HORIZON_WORDS.outsideDue(formatCents(outsideDueCents)),
-    when,
   ]
     .filter(Boolean)
     .join('\u00A0· ');
@@ -203,19 +207,19 @@ function HorizonSheet({
         null,
       );
     if (!latest) return null;
-    return {
-      line:
-        latest.mark === 'outside'
-          ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(latest.paidOn))
-          : COST_PAID_WORDS.paidRow(
-              formatDateOrdinalUTC(latest.paidOn),
-              formatCents(latest.amountCents),
-            ),
-      amountCents: latest.amountCents,
-      isSettled: !payments.some(
-        (payment) => payment.costId === costId && payment.paid === null,
-      ),
+    const isSettled = !payments.some(
+      (payment) => payment.costId === costId && payment.paid === null,
+    );
+    const paidOn = formatDateOrdinalUTC(latest.paidOn);
+    const getLine = () => {
+      if (latest.mark === 'outside')
+        return COST_PAID_WORDS.paidOutsideRow(paidOn);
+      // A settled row's figure is already what it came to.
+      return isSettled
+        ? COST_PAID_WORDS.paidHead(paidOn)
+        : COST_PAID_WORDS.paidRow(paidOn, formatCents(latest.amountCents));
     };
+    return { line: getLine(), amountCents: latest.amountCents, isSettled };
   };
   const outsideToMark = horizon.costs.flatMap((cost) => {
     const payment = payments.find(
@@ -428,9 +432,16 @@ function HorizonSheet({
               {HORIZON_WORDS.restOutsideNote}
             </p>
           )}
-          <p className='text-muted-foreground text-sm'>
-            <MaskedText>{fact}</MaskedText>
-          </p>
+          <div className='text-muted-foreground space-y-0.5 text-sm'>
+            <p>
+              <MaskedText>{fact}</MaskedText>
+            </p>
+            {outsideFact && (
+              <p>
+                <MaskedText>{outsideFact}</MaskedText>
+              </p>
+            )}
+          </div>
           <div className='space-y-2'>
             <p className='text-muted-foreground text-sm font-medium'>
               {HORIZON_WORDS.costsCaption}

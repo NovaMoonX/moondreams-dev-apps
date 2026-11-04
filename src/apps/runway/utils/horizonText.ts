@@ -153,14 +153,14 @@ export function describeCost(cost: HorizonCost, isTagged = true) {
   const amount =
     lowCents === highCents
       ? formatCentsShort(lowCents)
-      : `${formatCentsShort(lowCents)} to ${formatCentsShort(highCents)}`;
+      : `${formatCentsShort(lowCents)} to\u00A0${formatCentsShort(highCents)}`;
   const per = describeCostPer(cost.schedule);
   return {
     line: [
       describeCostTiming(cost.schedule, cost.ending),
       isTagged &&
         cost.isOutside &&
-        HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
+        HORIZON_WORDS.outsideTag.toLowerCase().replaceAll(' ', '\u00A0'),
     ]
       .filter(Boolean)
       .join('\u00A0· '),

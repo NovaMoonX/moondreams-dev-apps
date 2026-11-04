@@ -11,7 +11,7 @@ import { describeCost } from '@apps/runway/utils/horizonText';
 
 interface CostRowProps {
   cost: HorizonCost;
-  /** Where its latest payment stands once one is marked paid, e.g. "Paid Jan 15th · $600.00"; `isSettled` when no payment is left to pay, so the row reads as done: the paid line takes the due line's place and the figure is what it came to. */
+  /** Where its latest payment stands once one is marked paid, e.g. "Paid Jan 15th · $600.00" ("Paid Jan 15th" once settled, its figure saying the amount); `isSettled` when no payment is left to pay, so the row reads as done: the paid line takes the due line's place and the figure is what it came to. */
   paid?: { line: string; amountCents: number; isSettled: boolean } | null;
   /** Opens the cost to change it; the row then has a chevron. */
   onOpen?: () => void;

@@ -413,9 +413,7 @@ function CostSheet({
       <SheetHead
         label={cost.name}
         figure={
-          settled
-            ? formatCents(settled.amountCents)
-            : formatRange(cost.amount).replace(' to ', ' to\u00A0')
+          settled ? formatCents(settled.amountCents) : formatRange(cost.amount)
         }
         suffix={describeCost(cost).per || undefined}
         fact={

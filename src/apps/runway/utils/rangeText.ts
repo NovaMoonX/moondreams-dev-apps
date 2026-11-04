@@ -20,11 +20,11 @@ export function describeRange(
   return result;
 }
 
-/** "$140 to $180", the way a range reads in a field's summary. */
+/** "$140 to $180", the way a range reads in a field's summary, never breaking before its second figure. */
 export const formatRange = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)
-    : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
+    : `${formatCents(range.lowCents)} to\u00A0${formatCents(range.highCents)}`;
 
 /** One line for the standing ranges behind a figure: "Any range of pay is planned at the low end and of bills at the high end." */
 export function describeRangeBasis(

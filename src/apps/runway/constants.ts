@@ -316,7 +316,7 @@ export const HORIZON_WORDS = {
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
   costLineName: (cost: string, item: string) => `${cost}\u00A0· ${item}`,
-  costLineDetail: (item: string, tail: string) => `${item} ·\u00A0${tail}`,
+  costLineDetail: (item: string, tail: string) => `${item}\u00A0· ${tail}`,
   costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
@@ -508,7 +508,8 @@ export const HORIZON_WORDS = {
   costFact: (when: string, pricedOn: string | null, isOutside = false) =>
     [
       when,
-      isOutside && HORIZON_WORDS.outsideTag.replaceAll(' ', '\u00A0'),
+      isOutside &&
+        HORIZON_WORDS.outsideTag.toLowerCase().replaceAll(' ', '\u00A0'),
       pricedOn !== null && `priced ${pricedOn}`,
     ]
       .filter(Boolean)
