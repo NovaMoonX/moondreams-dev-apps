@@ -43,6 +43,8 @@ interface ItemRowProps {
   leading?: ReactNode;
   /** The single most useful fact, on one muted line. */
   detail?: string | null;
+  /** A figure before the detail, set off from it ("$120 left · "); an over one reads in the destructive colour. */
+  detailLead?: { text: string; isOver: boolean } | null;
   /** A detail that asks for a decision on this row reads in the normal colour. */
   isDetailStrong?: boolean;
   /** A one-line warning in the detail's place: warning ink, the icon in its own fixed column and the text cut at the line's end. */
@@ -75,6 +77,7 @@ function ItemRow({
   emoji = null,
   leading,
   detail,
+  detailLead = null,
   isDetailStrong = false,
   isDetailWarning = false,
   warningLine,
@@ -144,6 +147,18 @@ function ItemRow({
             />
           )}
           <span className='line-clamp-2 max-[359px]:line-clamp-3'>
+            {detailLead && (
+              <>
+                <span
+                  className={join(
+                    detailLead.isOver && 'text-destructive font-medium',
+                  )}
+                >
+                  {detailLead.text}
+                </span>
+                {' · '}
+              </>
+            )}
             {isPrivate && shownDetail ? (
               <MaskedText>{shownDetail}</MaskedText>
             ) : (

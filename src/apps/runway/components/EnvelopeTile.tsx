@@ -118,19 +118,22 @@ function EnvelopeTile({
   const planDetail = eachTime
     ? `${monthly?.payment ?? describeCadenceLine(envelope.funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`
     : funding;
-  const heldDetail = `${word === 'over' ? formatCentsShort(-cents) : formatCentsShort(cents)} ${word}`;
+  const isHeldShown = isPlanRow && !isPlan && !isPart && !isHidden;
+  const detailLead = isHeldShown
+    ? {
+        text: `${formatCentsShort(Math.abs(cents))} ${word}`,
+        isOver: word === 'over',
+      }
+    : null;
   const getRowDetail = () => {
-    if (isPlan || isPart) return planDetail;
     if (isPlanRow) {
-      if (isHidden) return planDetail;
-      if (leftOut.length === 0) return `${heldDetail} · ${planDetail}`;
-      const trimmed = leftOut
+      if (!isHeldShown || leftOut.length === 0) return planDetail;
+      return leftOut
         .map(
           (extra) =>
             `+${formatCentsShort(extra.cents)} ${PRIORITY_LABELS[extra.tier].toLowerCase()} ${PRIORITY_DIAL_WORDS.notCountedShort}`,
         )
         .join(', ');
-      return `${heldDetail} · ${trimmed}`;
     }
     return isHidden ? funding : `${capitalize(word)} · ${funding}`;
   };
@@ -185,9 +188,10 @@ function EnvelopeTile({
           name={envelope.name}
           emoji={emoji}
           detail={rowDetail}
+          detailLead={detailLead}
           figure={rowFigure}
           figureWord={monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlanRow ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
+          ariaLabel={`${envelope.name}, ${isPlanRow ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : rowFigure ? `${rowFigure}, ` : ''}${detailLead ? `${detailLead.text}, ` : ''}${rowDetail}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
