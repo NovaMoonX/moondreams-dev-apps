@@ -25,6 +25,11 @@ import {
   SETTINGS_VIEWS,
 } from '@apps/runway/constants';
 import { isMonthKey } from '@apps/runway/engine/closings';
+import { revealItem } from '@apps/runway/utils/revealItem';
+import {
+  setOpenItemRequest,
+  useOpenItemRequest,
+} from '@apps/runway/utils/openItemRequest';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
@@ -132,13 +137,13 @@ export function useRunwayUrlState() {
   const openFixes = () => setRequestedFixes(true, { history: 'replace' });
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
-  const [requestedDueBill, setRequestedDueBill] = useQueryState(
-    'dueBill',
-    parseAsString,
-  );
-  const openDueBill = (billId: string) =>
-    setRequestedDueBill(billId, { history: 'replace' });
-  const closeDueBill = () => setRequestedDueBill(null, { history: 'replace' });
+  const requestedOpenItem = useOpenItemRequest();
+  const openItemAt = (itemId: string, step: string | null = null) => {
+    setOpenItemRequest({ itemId, step });
+    return Promise.resolve();
+  };
+  const openDueBill = (billId: string) => openItemAt(billId, 'due');
+  const closeOpenItem = () => setOpenItemRequest(null);
 
   const [requestedUndatedBills, setRequestedUndatedBills] = useQueryState(
     'undatedBills',
@@ -227,7 +232,7 @@ export function useRunwayUrlState() {
     if (tab === activeTab) return;
     if (requestedFixes !== null) closeFixes();
     if (requestedAdd !== null) clearAdd();
-    if (requestedDueBill !== null) closeDueBill();
+    if (requestedOpenItem !== null) closeOpenItem();
     if (requestedUndatedBills !== null) closeUndatedBills();
     if (requestedAllDue !== null) closeAllDue();
     if (tab === DEFAULT_RUNWAY_TAB) {
@@ -276,12 +281,30 @@ export function useRunwayUrlState() {
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) => {
     if (requestedAdd !== null && section !== requestedSection) clearAdd();
-    if (requestedDueBill !== null) closeDueBill();
+    if (requestedOpenItem !== null) closeOpenItem();
     if (requestedAllDue !== null && section !== 'bills') closeAllDue();
     return setRequestedSection(
       section === DEFAULT_PLAN_SECTION ? null : section,
       { history: 'replace' },
     );
+  };
+
+  /** The tab's history entry is written before the item's, so Back closes the sheet before it leaves the tab. */
+  const showOnPlan = async (
+    section: PlanSection,
+    target: { itemId: string; step?: string } | 'undatedBills',
+  ) => {
+    if (requestedDay !== null) {
+      await setRequestedDay(null, { history: 'replace' });
+    }
+    await showPlanSection(section);
+    await showTab('plan');
+    if (target === 'undatedBills') {
+      await setRequestedUndatedBills(true, { history: 'replace' });
+      return;
+    }
+    revealItem(target.itemId);
+    await openItemAt(target.itemId, target.step ?? null);
   };
 
   const openDay = (dayKey: string) =>
@@ -362,9 +385,11 @@ export function useRunwayUrlState() {
     isFixesOpen: requestedFixes === true,
     openFixes,
     closeFixes,
-    dueBillId: requestedDueBill,
+    openItem: requestedOpenItem,
+    openItemAt,
     openDueBill,
-    closeDueBill,
+    closeOpenItem,
+    showOnPlan,
     isUndatedBillsOnly: requestedUndatedBills === true,
     openUndatedBills,
     closeUndatedBills,

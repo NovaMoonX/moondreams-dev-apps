@@ -45,6 +45,7 @@ interface BillRowProps {
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
   isFaded?: boolean;
+  itemId?: string;
   onOpen?: () => void;
 }
 
@@ -105,6 +106,7 @@ function BillRow({
   isHighlighted = false,
   isFaded = false,
   onOpen,
+  itemId,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
@@ -149,6 +151,7 @@ function BillRow({
       reorder={reorder}
       isHighlighted={isHighlighted}
       isFaded={isFaded}
+      itemId={itemId}
     />
   );
 }

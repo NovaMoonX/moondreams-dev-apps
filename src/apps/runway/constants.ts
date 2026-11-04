@@ -369,6 +369,7 @@ export const PRIORITY_DIAL_WORDS = {
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
   counted: { must: 'Musts', should: 'Musts and Shoulds' },
   notCounted: 'Not in this total',
+  notCountedShort: 'not counted',
   sheetSuffix: { must: 'Musts only', should: 'without Wants' },
   /** After a goal's finish date counted at the dial: "reaches it May 2027 on Musts". */
   paceSuffix: { must: 'on Musts', should: 'without Wants' },
@@ -822,6 +823,7 @@ export const GOAL_TRACK_WORDS = {
   allOnTrack: 'Every goal with a date is on track',
   behind: (names: readonly string[]) =>
     `${names.length} ${names.length === 1 ? 'goal is' : 'goals are'} behind: ${joinNames(names)}`,
+  openBehind: 'Change what it gets each time',
 } as const;
 
 export const GOAL_STATES = ['active', 'paused'] as const;
@@ -886,6 +888,9 @@ export const BILL_WORDS = {
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+  undatedOnlyHint: 'Tap one to set its date',
+  showAllBills: 'Show all bills',
+  allDated: 'Every bill has a due date now',
   offPlanTitle: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} has no due date`
@@ -1333,6 +1338,9 @@ export const SPEND_WORDS = {
   receipt: 'Receipt',
   receipts: 'Receipts',
   addReceipt: 'Add a receipt',
+  takeReceiptPhoto: 'Take a photo of the receipt',
+  takeAnotherPhoto: 'Take another',
+  chooseReceiptPhoto: 'Choose a receipt photo',
   readReceipt: 'Read a receipt',
   readReceiptSends:
     "Runway sends this photo to an AI service to read the total, the store, the day and the items. Nothing is saved until you add the purchase. The photo is kept as the purchase's receipt.",
@@ -1914,7 +1922,7 @@ export const FORM_FLOW_WORDS = {
   priority: 'How much it matters',
   groupTitle: "What's it for?",
   groupHelp:
-    "Tie together the bills and envelopes that look after the same thing, like Pets or Home, to see what it costs you each month. It doesn't change how anything is funded.",
+    "Tie together the bills, envelopes and goals that look after the same thing, like Pets or Home, to see what it costs you each month. It doesn't change how anything is funded.",
   group: 'For',
   noGroup: 'Nothing set',
   newGroup: 'Something else',
@@ -2195,13 +2203,21 @@ export const HOW_OFTEN_WORDS = {
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
   noIncome: (name: string) => `${name} has no income before it is due`,
+  noIncomeMany: (names: readonly string[]) =>
+    names.length <= 3
+      ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} have no income before they are due`
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more have no income before they are due`,
+  firstDueOn: (date: string) => `The first is due\u00a0${date}`,
   noPick: (name: string) =>
     `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due\u00a0${date}`,
   runsShortOn: (date: string) => `On ${date}`,
   openDay: 'Open this income day',
-  openBills: 'Open your bills',
+  openUndated: 'See the bills with no due date',
+  openPaidFrom: 'Change which pay it comes from',
+  openIncomeEnd: 'Change when your pay ends',
+  addIncome: 'Add expected money',
   needsDate: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} needs a due date`
@@ -2411,8 +2427,9 @@ export const GROUP_WORDS = {
     `${name}: ${change}, from ${from}.`,
   ungrouped: 'Other bills',
   ungroupedEnvelopes: 'Other envelopes',
+  ungroupedGoals: 'Other goals',
   setTip:
-    'Tip: say what a bill or envelope is for, like Pets, to see what it costs each month.',
+    'Tip: say what a bill, envelope or goal is for, like Pets, to see what it costs each month.',
   perMonth: (amount: string) => `${amount} a month`,
   saved: 'saved',
   goalsHelpTitle: 'What your goals add up to',
@@ -2421,33 +2438,96 @@ export const GROUP_WORDS = {
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,
   nameLabel: 'Name',
-  startingPriority: 'Starting priority',
+  startingPriority: 'Priority',
   startingPriorityHelp:
-    'A new bill or envelope for this starts with this priority; with None, it starts at Should. You can still change it on the bill or envelope.',
-  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+    'Each bill, envelope or goal here takes the priority you pick, with any extra folded into one amount, and so does a new one you add. You see what changes before anything is saved. None changes nothing now; a new one starts at Should.',
+  priorityRowLabel: {
+    all: 'Everything',
+    bill: 'Bills',
+    envelope: 'Envelopes',
+    goal: 'Goals',
+  } as Record<'all' | 'bill' | 'envelope' | 'goal', string>,
+  priorityMixed: 'Mixed',
+  priorityScope: (row: 'all' | 'bill' | 'envelope' | 'goal', group: string) =>
+    row === 'all'
+      ? `everything in ${group}`
+      : row === 'bill'
+        ? `${group}'s bills`
+        : row === 'envelope'
+          ? `${group}'s envelopes`
+          : `${group}'s goals`,
+  priorityConfirmTitle: (scope: string, priority: string) =>
+    `Set ${scope} to ${priority}?`,
+  priorityConfirmLead: (priority: string) =>
+    `New ones you add start at ${priority} too. This replaces the priority set on each of these:`,
+  priorityNoneSet: (
+    row: 'all' | 'bill' | 'envelope' | 'goal',
+    group: string,
+    kinds: readonly ('bill' | 'envelope' | 'goal')[],
+  ) =>
+    `New ${joinNames(
+      (row === 'all' ? kinds : [row]).map((kind) => `${kind}s`),
+    )} in ${group} start at Should, as they do anywhere. Nothing already there changed.`,
+  priorityMoves: (name: string, from: string, to: string) =>
+    `${name} goes from ${from} to ${to}`,
+  priorityFolds: (
+    name: string,
+    priority: string,
+    total: string | null,
+    parts: string[],
+  ) =>
+    `${name} becomes ${priority} for ${total === null ? 'its full amount' : `the full ${total}`} (was ${parts.join(' + ')})`,
+  priorityAlsoMoves: (fold: string, from: string, to: string) =>
+    `${fold}; where it was ${from}, it becomes ${to} too`,
+  priorityConfirmMore: (count: number) => `and ${count} more`,
+  priorityConfirm: (priority: string) => `Set to ${priority}`,
+  prioritySummary: (
+    priority: string,
+    group: string,
+    lines: string[],
+    date: string,
+  ) =>
+    `Set to ${priority} with the ${group} group, from ${date}: ${lines.join('; ')}.`,
+  priorityDone: (count: number, priority: string) =>
+    `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}.`,
+  priorityAlready: (scope: string, priority: string) =>
+    `${scope.charAt(0).toUpperCase()}${scope.slice(1)} ${scope.startsWith('everything') ? 'is' : 'are'} already ${priority}.`,
+  priorityStale: (names: string[], priority: string) =>
+    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not fully ${priority}.`,
+  priorityMakeAll: (priority: string) => `Make all ${priority}`,
+  priorityFailed: 'The priority did not save. Nothing was changed.',
+  priorityMoved:
+    'Something in this group changed while you were deciding, so nothing was saved. Pick the priority again to see the new list.',
+  priorityTooMany:
+    'That changes too many items to save at once. Change one section at a time.',
+  priorityApplying: 'Changing priorities…',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
-  archiveSub: 'Its bills and envelopes stay, with nothing set.',
+  archiveSub: 'Its bills, envelopes and goals stay, with nothing set.',
   archiveTitle: (name: string) => `Stop using ${name}?`,
-  archiveBody: (bills: number, envelopes: number) =>
-    bills + envelopes === 0
+  archiveBody: (bills: number, envelopes: number, goals: number) =>
+    bills + envelopes + goals === 0
       ? 'Nothing is for it right now.'
-      : `Its ${countMembers(bills, envelopes)} stay in your plan, with nothing set.`,
-  archived: (name: string, bills: number, envelopes: number) =>
-    bills + envelopes === 0
+      : `Its ${countMembers(bills, envelopes, goals)} stay in your plan, with nothing set.`,
+  archived: (name: string, bills: number, envelopes: number, goals: number) =>
+    bills + envelopes + goals === 0
       ? `Stopped using ${name}.`
-      : `Stopped using ${name}. Its ${countMembers(bills, envelopes)} now have nothing set.`,
+      : `Stopped using ${name}. Its ${countMembers(bills, envelopes, goals)} now have nothing set.`,
   archivedToast: (name: string) => `Stopped using ${name}`,
   addBill: (name: string) => `Add a bill for ${name}`,
   addEnvelope: (name: string) => `Add an envelope for ${name}`,
+  addGoal: (name: string) => `Add a goal for ${name}`,
   billsHeading: 'Bills',
   envelopesHeading: 'Envelopes',
+  goalsHeading: 'Goals',
   changeLabel: 'For',
   inGroup: 'For',
   none: 'Nothing',
   unset: 'Nothing set',
   oneTimeNote: 'Not in monthly total',
-  noBills: 'No bills or envelopes yet',
+  noBills: 'Nothing here yet',
+  noSetMonthly: 'No set amount a month',
+  savedWord: 'saved',
   nameTaken: (name: string) => `You already have ${name}.`,
   oneTimeDue: (date: string) => `due\u00a0${date}`,
   oneTimeCount: (count: number) => `in ${count} one-time bills`,
@@ -2469,36 +2549,41 @@ export const GROUP_WORDS = {
   ofWord: 'of',
   basisTitle: 'How a month is worked out',
   rangeTotal:
-    'A bill or envelope that varies counts at its low and its high amount, so the total is a range.',
+    'A bill, envelope or goal that varies counts at its low and its high amount, so the total is a range.',
   basis:
-    'A usual month: each repeating bill at what it comes to in an average month, and each envelope at what it gets in one. A one-time bill is not in it.',
+    'A usual month: each repeating bill at what it comes to in an average month, and each envelope or active goal at what it gets in one. A one-time bill is not in it.',
   onlyBills: (name: string, part: string | null, whole: string | null) =>
     part === null || whole === null
-      ? `This counts bills only. Tap ${name} to see both.`
-      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+      ? `This counts bills only. Tap ${name} to see everything in it.`
+      : `Bills come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
   onlyEnvelopes: (name: string, part: string | null, whole: string | null) =>
     part === null || whole === null
-      ? `This counts envelopes only. Tap ${name} to see both.`
-      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see both.`,
+      ? `This counts envelopes only. Tap ${name} to see everything in it.`
+      : `Envelopes come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
+  onlyGoals: (name: string, part: string | null, whole: string | null) =>
+    part === null || whole === null
+      ? `This counts goals only. Tap ${name} to see everything in it.`
+      : `Goals come to ${part} of ${name}'s ${whole} a month. Tap ${name} to see everything in it.`,
   chooseEmoji: (name: string) => `Choose an emoji for ${name}`,
   changeEmoji: (name: string) => `Change the emoji for ${name}`,
   emojiLabel: 'Emoji',
   removeEmoji: 'Remove emoji',
   uncounted: (count: number) =>
     count === 1
-      ? 'One envelope or bill has no regular amount or schedule, so it is not in this total.'
-      : `${count} envelopes or bills have no regular amount or schedule, so they are not in this total.`,
+      ? 'One bill, envelope or goal has no regular amount or schedule, so it is not in this total.'
+      : `${count} bills, envelopes and goals have no regular amount or schedule, so they are not in this total.`,
 } as const;
 
-const countMembers = (bills: number, envelopes: number) =>
-  [
-    bills > 0 ? `${bills} ${bills === 1 ? 'bill' : 'bills'}` : null,
-    envelopes > 0
-      ? `${envelopes} ${envelopes === 1 ? 'envelope' : 'envelopes'}`
-      : null,
-  ]
-    .filter((part): part is string => part !== null)
-    .join(' and ');
+const countMembers = (bills: number, envelopes: number, goals: number) =>
+  joinNames(
+    [
+      bills > 0 ? `${bills} ${bills === 1 ? 'bill' : 'bills'}` : null,
+      envelopes > 0
+        ? `${envelopes} ${envelopes === 1 ? 'envelope' : 'envelopes'}`
+        : null,
+      goals > 0 ? `${goals} ${goals === 1 ? 'goal' : 'goals'}` : null,
+    ].filter((part): part is string => part !== null),
+  );
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {

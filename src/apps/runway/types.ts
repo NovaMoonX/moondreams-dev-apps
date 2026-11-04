@@ -338,12 +338,16 @@ export interface BillSealed {
   paidByCardId?: string | null;
 }
 
-/** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
+/** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
 export interface GroupSealed {
   name: string;
-  /** The priority a new bill in this group starts with; null leaves it to the bill. */
+  /** The priority the group's bills are at, and a new bill starts with; null leaves it to each bill. */
   startingPriority: Priority | null;
-  /** The emoji its bills and envelopes wear unless they have their own; a version written before it existed reads as null. */
+  /** The same for its envelopes; a version written before it existed reads as `startingPriority`, which then covered both. */
+  envelopePriority: Priority | null;
+  /** The same for its goals; a version written before goals could join reads as null. */
+  goalPriority: Priority | null;
+  /** The emoji its bills, envelopes and goals wear unless they have their own; a version written before it existed reads as null. */
   emoji: string | null;
 }
 
@@ -362,6 +366,8 @@ export interface GoalSealed {
   state: GoalState;
   /** Extras at lower priorities, on the same days as its contribution; a version written before they existed has none. */
   extras?: PriorityExtra[] | null;
+  /** The group that lists this goal; a version written before goals had groups reads as null. */
+  groupId: string | null;
 }
 
 /** One event's costs. */

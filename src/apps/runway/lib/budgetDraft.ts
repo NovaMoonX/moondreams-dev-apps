@@ -210,6 +210,7 @@ export function toGoalValue(item: BudgetGoal, today: number): GoalSealed {
     },
     startingCents: item.currentCents,
     state: 'active',
+    groupId: null,
   };
 }
 
@@ -441,6 +442,7 @@ export function moveBudgetValue(
       ...(keepsFunding && extras !== null ? { extras } : {}),
       startingCents: null,
       state: 'active',
+      groupId: null,
     } satisfies GoalSealed;
   }
   const target = from === 'goal' && cents <= 0 ? (value as GoalSealed) : null;

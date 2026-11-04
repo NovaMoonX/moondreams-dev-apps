@@ -13,7 +13,7 @@ interface GroupTotalHelpProps {
   side?: 'income' | 'expense';
   /** What a heading counts when the group has the other kind too; the sheet counts both. */
   only?: {
-    kind: 'bills' | 'envelopes';
+    kind: 'bills' | 'envelopes' | 'goals';
     name: string;
     part: string | null;
     whole: string | null;
@@ -33,9 +33,13 @@ function GroupTotalHelp({
       {only && (
         <p>
           <MaskedText>
-            {(only.kind === 'bills'
-              ? GROUP_WORDS.onlyBills
-              : GROUP_WORDS.onlyEnvelopes)(only.name, only.part, only.whole)}
+            {GROUP_WORDS[
+              only.kind === 'bills'
+                ? 'onlyBills'
+                : only.kind === 'envelopes'
+                  ? 'onlyEnvelopes'
+                  : 'onlyGoals'
+            ](only.name, only.part, only.whole)}
           </MaskedText>
         </p>
       )}

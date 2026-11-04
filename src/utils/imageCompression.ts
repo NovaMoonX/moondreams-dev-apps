@@ -177,3 +177,17 @@ export async function resizeImageToWebp(
     file,
   );
 }
+
+/** Whether a file a reader takes stays under `maxBytes` once it is shrunk the way the reader shrinks it: a camera photo of any size passes, a PDF or an image this browser can't open is judged as it is. */
+export async function fitsReadLimit(file: File, maxBytes: number) {
+  if (file.size <= maxBytes) return true;
+  const sent = await compressIngestionImage(file);
+  return sent.size <= maxBytes;
+}
+
+/** Shrinks a photo of a paper to the `document` size before it is kept; a PDF, or an image this browser can't open, comes back as it is. */
+export async function shrinkDocumentPhoto(file: File) {
+  if (!file.type.startsWith('image/')) return file;
+  const shrunk = await compressImageForUse(file, 'document').catch(() => null);
+  return shrunk ?? file;
+}

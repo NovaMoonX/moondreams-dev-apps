@@ -472,6 +472,7 @@ export async function seedRunwayScale(
           cadence: { kind: 'everyIncomeDay' },
         },
         state: 'active',
+        groupId: null,
       };
       return {
         id: `scale-goal-${pad(index)}`,

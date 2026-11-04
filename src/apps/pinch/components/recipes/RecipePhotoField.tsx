@@ -58,6 +58,7 @@ function RecipePhotoField({
       <div className='space-y-4 [@media(max-height:600px)_and_(min-width:640px)]:grid [@media(max-height:600px)_and_(min-width:640px)]:grid-cols-2 [@media(max-height:600px)_and_(min-width:640px)]:items-start [@media(max-height:600px)_and_(min-width:640px)]:gap-5 [@media(max-height:600px)_and_(min-width:640px)]:space-y-0'>
         <PhotoPicker
           variant='cover'
+          canTakePhoto
           isCompact={canSuggest}
           photoUrl={cover?.url ?? null}
           placeholder={PLACEHOLDER}
