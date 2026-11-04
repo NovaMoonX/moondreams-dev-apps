@@ -66,6 +66,8 @@ interface ItemRowProps {
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** Lets a warning elsewhere scroll this row into view. */
+  itemId?: string;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -87,6 +89,7 @@ function ItemRow({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  itemId,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const baseAriaLabel =
@@ -212,6 +215,7 @@ function ItemRow({
   if (reorder?.isFixed) {
     return (
       <li
+        data-item-id={itemId}
         className='flex min-h-11 items-center gap-2 px-3 py-1'
         title={shownDetail ?? undefined}
       >
@@ -252,6 +256,7 @@ function ItemRow({
     );
     return (
       <li
+        data-item-id={itemId}
         className={join(
           'flex items-center first:rounded-t-2xl last:rounded-b-2xl',
           (reorder.isLifted || reorder.isFlashed) && 'bg-accent',
@@ -286,7 +291,7 @@ function ItemRow({
 
   if (tick) {
     return (
-      <li className='flex items-start'>
+      <li data-item-id={itemId} className='flex items-start'>
         <span className='flex h-16 shrink-0 items-center pl-3'>
           <Checkbox
             className={TICK_HIT_CLASS}
@@ -323,6 +328,7 @@ function ItemRow({
   if (!onOpen) {
     return (
       <li
+        data-item-id={itemId}
         className='flex min-h-16 items-start gap-3 p-3'
         aria-label={ariaLabel}
       >
@@ -334,6 +340,7 @@ function ItemRow({
 
   return (
     <li
+      data-item-id={itemId}
       className={join(
         'first:[&>button]:rounded-t-2xl last:[&>button]:rounded-b-2xl',
         isHighlighted && 'bg-primary/10',

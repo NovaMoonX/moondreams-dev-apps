@@ -11,7 +11,8 @@ import {
   type ProblemGroup,
 } from '@apps/runway/utils/lookaheadText';
 import { FIX_WORDS } from '@apps/runway/constants';
-import { keepEntryFor } from '@/hooks/useBackHistory';
+import { afterBackLayersClose, keepEntryFor } from '@/hooks/useBackHistory';
+import { useOpenIncomeFix } from '@apps/runway/hooks/useOpenIncomeFix';
 
 interface ProblemRowProps {
   group: ProblemGroup;
@@ -19,18 +20,28 @@ interface ProblemRowProps {
 
 /** One day that runs short, or one problem not tied to a day: what is short or missing and when, as a row that opens the income day it runs short on, or the bills. */
 function ProblemRow({ group }: ProblemRowProps) {
-  const {
-    openDay,
-    openDueBill,
-    openUndatedBills,
-    showPlanSection,
-    showTab,
-    closeFixes,
-  } = useRunwayUrlState();
+  const { openDay, showOnPlan } = useRunwayUrlState();
+  const { open: openIncomeFix, hasEndingPay } = useOpenIncomeFix();
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
   const { title, detail } = describeGroupRow(group, today, isHidden);
   const isDay = group.kind === 'day';
+
+  const getDoorLabel = () => {
+    if (group.kind === 'day') return FIX_WORDS.openDay;
+    if (group.kind === 'undated') {
+      return group.bills.length === 1
+        ? FIX_WORDS.openDueBill
+        : FIX_WORDS.openUndated;
+    }
+    if (
+      group.problem.kind === 'noIncome' &&
+      group.problem.reason !== 'noIncome'
+    ) {
+      return FIX_WORDS.openPaidFrom;
+    }
+    return hasEndingPay ? FIX_WORDS.openIncomeEnd : FIX_WORDS.addIncome;
+  };
 
   const open = () => {
     if (group.kind === 'day') {
@@ -38,12 +49,28 @@ function ProblemRow({ group }: ProblemRowProps) {
       openDay(group.dayKey);
       return;
     }
-    closeFixes();
-    showPlanSection('bills');
-    showTab('plan');
+    if (group.kind === 'single' && group.problem.kind === 'noIncome') {
+      if (group.problem.reason === 'noIncome') {
+        openIncomeFix();
+        return;
+      }
+      const { billId } = group.problem;
+      afterBackLayersClose(
+        () => void showOnPlan('bills', { itemId: billId, step: 'funding' }),
+      );
+      return;
+    }
     if (group.kind !== 'undated') return;
-    if (group.bills.length === 1) openDueBill(group.bills[0].billId);
-    else openUndatedBills();
+    const { bills } = group;
+    afterBackLayersClose(
+      () =>
+        void showOnPlan(
+          'bills',
+          bills.length === 1
+            ? { itemId: bills[0].billId, step: 'due' }
+            : 'undatedBills',
+        ),
+    );
   };
 
   return (
@@ -51,7 +78,7 @@ function ProblemRow({ group }: ProblemRowProps) {
       type='button'
       variant='tertiary'
       className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-      aria-label={`${title}, ${detail}. ${group.kind === 'day' ? FIX_WORDS.openDay : group.kind === 'undated' && group.bills.length === 1 ? FIX_WORDS.openDueBill : FIX_WORDS.openBills}`}
+      aria-label={`${title}, ${detail}. ${getDoorLabel()}`}
       onClick={open}
     >
       <span

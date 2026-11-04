@@ -730,6 +730,7 @@ export const GOAL_TRACK_WORDS = {
   allOnTrack: 'Every goal with a date is on track',
   behind: (names: readonly string[]) =>
     `${names.length} ${names.length === 1 ? 'goal is' : 'goals are'} behind: ${joinNames(names)}`,
+  openBehind: 'Change what it gets each time',
 } as const;
 
 export const GOAL_STATES = ['active', 'paused'] as const;
@@ -794,6 +795,9 @@ export const BILL_WORDS = {
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+  undatedOnlyHint: 'Tap one to set its date',
+  showAllBills: 'Show all bills',
+  allDated: 'Every bill has a due date now',
   offPlanTitle: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} has no due date`
@@ -2107,7 +2111,10 @@ export const FIX_WORDS = {
   dueOn: (date: string) => `Due\u00a0${date}`,
   runsShortOn: (date: string) => `On ${date}`,
   openDay: 'Open this income day',
-  openBills: 'Open your bills',
+  openUndated: 'See the bills with no due date',
+  openPaidFrom: 'Change which pay it comes from',
+  openIncomeEnd: 'Change when your pay ends',
+  addIncome: 'Add expected money',
   needsDate: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} needs a due date`
