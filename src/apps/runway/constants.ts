@@ -2868,7 +2868,7 @@ export const ACCOUNT_WORDS = {
   holdsNothingToPick:
     'Add a goal or an envelope first, then say where it sits.',
   holdsSave: 'Save',
-  holdsSaved: (name: string) => `${name} updated`,
+  holdsSaved: (name: string) => `Changed what ${name} holds`,
   holdsFailed: 'What it holds was not saved',
   undo: 'Undo',
   changeHoldsUndone: (name: string) =>
