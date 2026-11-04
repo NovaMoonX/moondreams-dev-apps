@@ -80,7 +80,7 @@ const getParts = (
     return [
       ...base,
       diff(
-        'Starting priority',
+        'Priority',
         before.startingPriority,
         after.startingPriority,
         (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
