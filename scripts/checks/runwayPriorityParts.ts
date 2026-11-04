@@ -15,6 +15,7 @@ import {
   getPartRows,
   orderPriorities,
 } from '../../src/apps/runway/engine/priorities.ts';
+import { planGroupPriority } from '../../src/apps/runway/utils/groupPriority.ts';
 import type { DraftEnvelopeInput } from '../../src/apps/runway/engine/demands.ts';
 import type { FundingRule } from '../../src/apps/runway/types.ts';
 
@@ -345,6 +346,71 @@ assert.deepEqual(
     [{ tier: 'want', cents: 3_000, orderIndex: 1 }],
   ],
   'a later stretch with only a Want extra keeps it',
+);
+
+const member = (
+  itemId: string,
+  kind: 'bill' | 'envelope',
+  priority: 'must' | 'should' | 'want',
+  extras?: { tier: 'should' | 'want'; cents: number; orderIndex: number }[],
+) => ({
+  itemId,
+  name: itemId,
+  kind,
+  stretches: [
+    {
+      effectiveFrom: 1,
+      effectiveUntil: null,
+      payload: {
+        name: itemId,
+        priority,
+        orderIndex: 3,
+        ...(extras ? { extras } : {}),
+      },
+    },
+  ],
+});
+const groupPlan = planGroupPriority(
+  [
+    member('a', 'bill', 'should'),
+    member('b', 'bill', 'want'),
+    member('c', 'envelope', 'should', [
+      { tier: 'want', cents: 500, orderIndex: 1 },
+    ]),
+    member('d', 'bill', 'must'),
+  ] as never,
+  'want',
+  10,
+);
+assert.deepEqual(
+  groupPlan.changes.map(({ itemId, written }) => [
+    itemId,
+    written[0].payload.priority,
+    written[0].payload.orderIndex,
+  ]),
+  [
+    ['a', 'want', 10],
+    ['d', 'want', 11],
+  ],
+  'a group at Want moves the others, ranked after the level, and leaves one already there',
+);
+assert.deepEqual(
+  groupPlan.skipped,
+  ['c'],
+  'an envelope whose Want extra would reach its level is named, not moved',
+);
+assert.equal(
+  planGroupPriority(
+    [
+      member('c', 'envelope', 'must', [
+        { tier: 'want', cents: 500, orderIndex: 1 },
+      ]),
+    ] as never,
+    'should',
+    1,
+  ).changes.length,
+  1,
+  'an extra below the new level still fits',
 );
 
 console.log('runway priority parts: ok');

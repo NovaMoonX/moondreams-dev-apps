@@ -2339,7 +2339,7 @@ export const GROUP_WORDS = {
     'The priority is saved for new ones, but the items already here did not change.',
   prioritySkipped: (names: string[]) =>
     `${names.join(', ').replace(/, ([^,]*)$/, ' and $1')} ${names.length === 1 ? 'has' : 'have'} extra money at a level that doesn't fit, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
-  priorityUndone: 'Priorities put back',
+  priorityUndone: 'Priorities put back. New ones still start with your pick.',
   priorityUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total} priorities. ${failed.join(', ').replace(/, ([^,]*)$/, ' and $1')} did not change back.`,
   priorityUndoStale: (names: string[]) =>

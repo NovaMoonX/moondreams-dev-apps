@@ -24,7 +24,7 @@ const hasExtraAtOrAbove = (payload: MemberPayload, priority: Priority) =>
 
 /**
  * What putting a group's bills and envelopes at `priority` writes: each member that is not there already, in every
- * stretch, ranked after what the level holds (`firstRank`, then one step per member so they keep their order).
+ * stretch, ranked after what the level holds (`firstRank`, then one step per member, bills before envelopes).
  * An envelope whose extras would no longer sit below its level is left alone and named in `skipped`.
  */
 export function planGroupPriority(

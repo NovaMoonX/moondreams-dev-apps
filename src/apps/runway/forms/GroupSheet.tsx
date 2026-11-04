@@ -206,6 +206,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     undo: PriorityWritten[] | null;
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
+  const isApplyingPriority = useRef(false);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -462,13 +463,18 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   };
 
   const setStartingPriority = async (choice: StartingChoice) => {
+    if (isApplyingPriority.current) return;
+    isApplyingPriority.current = true;
     setPriorityError(null);
     setPriorityRecord(null);
     setPickedPriority(choice);
-    const failure = await save(
-      { ...payload, startingPriority: choice === 'none' ? null : choice },
-      true,
-    );
+    const isSavedChoice = choice === (payload.startingPriority ?? 'none');
+    const failure = isSavedChoice
+      ? null
+      : await save(
+          { ...payload, startingPriority: choice === 'none' ? null : choice },
+          true,
+        );
     if (failure !== null) setPriorityError(GROUP_WORDS.startingPriorityFailed);
     else if (choice !== 'none') {
       try {
@@ -477,7 +483,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         setPriorityError(GROUP_WORDS.priorityFailed);
       }
     }
-    setPickedPriority((current) => (current === choice ? null : current));
+    isApplyingPriority.current = false;
+    setPickedPriority(null);
   };
 
   const archive = async () => {
