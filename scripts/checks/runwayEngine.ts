@@ -5423,7 +5423,15 @@ const version = (
     settledKey: '',
     billProgress: {},
   };
-  const surgery = (priority: 'must' | 'should') => ({
+  const surgery = (
+    priority: 'must' | 'should',
+    extraCosts: {
+      id: string;
+      name: string;
+      cents: number;
+      dueOn: number;
+    }[] = [],
+  ) => ({
     kind: 'addItem' as const,
     item: item('surgery', 2, { kind: 'horizon' }),
     version: {
@@ -5451,6 +5459,19 @@ const version = (
             isOutside: false,
             note: null,
           },
+          ...extraCosts.map((extra) => ({
+            id: extra.id,
+            name: extra.name,
+            amount: exactRange(extra.cents),
+            schedule: {
+              kind: 'once' as const,
+              anchor: extra.dueOn,
+              monthDays: [],
+            },
+            ending: never,
+            isOutside: false,
+            note: null,
+          })),
         ],
       },
     },
@@ -5463,10 +5484,10 @@ const version = (
     should.roomCount <= should.payCount,
     'the pays with room are some of the pays asked',
   );
-  assert.equal(
-    should.askedCents - should.carriedCents,
-    should.shorts.reduce((sum, entry) => sum + entry.cents, 0),
-    'what stays short is what the rows say they are short',
+  assert.ok(
+    should.askedCents - should.carriedCents >=
+      should.shorts.reduce((sum, entry) => sum + entry.cents, 0),
+    'what stays short is at least what the rows say they are short',
   );
   const lastPay = previewChange(inputs, surgery('should'))
     .map((day) => day.on)
@@ -5476,6 +5497,25 @@ const version = (
     lastPay !== undefined &&
       should.shorts.every((entry) => entry.on !== lastPay),
     "the short on the last pay before the due date is the lookahead's, so the note leaves it out",
+  );
+  // A second cost due between two pays is flagged by the lookahead on the earlier pay: left out of the shorts, still counted in the totals.
+  const vetDue = today + 10 * DAY_MS;
+  const two = previewItemShorts(
+    inputs,
+    surgery('should', [
+      { id: 'vet', name: 'Vet', cents: 200_000, dueOn: vetDue },
+    ]),
+    'surgery',
+  );
+  assert.equal(
+    two.askedCents,
+    should.askedCents + 200_000,
+    'the flagged cost is still asked of the pays, so the note counts every cost',
+  );
+  assert.ok(
+    two.askedCents - two.carriedCents >
+      two.shorts.reduce((sum, entry) => sum + entry.cents, 0),
+    'and the flagged short is in what stays short but not in the shorts the lookahead already warns about',
   );
   const must = previewItemShorts(inputs, surgery('must'), 'surgery');
   assert.deepEqual(
@@ -8111,6 +8151,12 @@ const version = (
       ?.tone,
     'info',
     'a change that leaves a problem as it was says so without the success colour',
+  );
+  assert.equal(
+    describeHoldsBlocks(look(day, [rentShort]), look(day, [rentShort]))[0]
+      ?.standingItemId,
+    'Rent',
+    'a standing shortfall carries its item, so a note about another item never hides it',
   );
   assert.equal(
     describeCoverage(look(day, [rentShort]), rentShort.on - 86_400_000).text,
@@ -13801,12 +13847,15 @@ console.log('runway engine: ok');
             costLine('repaid', { repaysFree: true }),
             costLine('a', { shortBy: 200 }),
             costLine('b', { shortBy: 300 }),
+            costLine('x', { itemId: 'trip', shortBy: 100 }),
           ],
         } as unknown as Draft,
         names: {
           moving: { name: 'Moving' },
           [getCostNameKey('moving', 'a')]: { name: 'Alpha' },
           [getCostNameKey('moving', 'b')]: { name: 'Beta' },
+          trip: { name: 'Trip' },
+          [getCostNameKey('trip', 'x')]: { name: 'Alpha' },
         },
       };
     },
@@ -13821,8 +13870,8 @@ console.log('runway engine: ok');
     looked.problems
       .filter((problem) => problem.on === jan15)
       .map((problem) => problem.kind === 'short' && problem.name),
-    ['Alpha\u00A0·\u00A0Moving', 'Beta\u00A0·\u00A0Moving'],
-    'a short cost line due before the next pay is flagged by its cost, whatever its tier',
+    ['Alpha\u00A0·\u00A0Moving', 'Alpha\u00A0·\u00A0Trip', 'Beta'],
+    "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
   );
 }
 

@@ -170,17 +170,24 @@ const nextCarry = (
     };
   }, carry);
 
+/** A cost is named by itself, joined with its item only when another item's cost on the day shares the name. */
 const getShortName = (
   line: Draft['lines'][number],
+  lines: Draft['lines'],
   names: LookaheadDraft['names'],
 ) => {
   const itemName = names[line.itemId]?.name ?? '';
   const costName = line.costId
     ? names[getCostNameKey(line.itemId, line.costId)]?.name
     : undefined;
-  return costName === undefined
-    ? itemName
-    : HORIZON_WORDS.costLineName(costName, itemName);
+  if (costName === undefined) return itemName;
+  const isShared = lines.some(
+    (other) =>
+      other.itemId !== line.itemId &&
+      other.costId &&
+      names[getCostNameKey(other.itemId, other.costId)]?.name === costName,
+  );
+  return isShared ? HORIZON_WORDS.costLineName(costName, itemName) : costName;
 };
 
 /** Every Must that goes unfunded, and every bill or cost payment that falls due before the next income day and is not set aside in full, in the draft's own order. */
@@ -203,7 +210,7 @@ const findShorts = (
       dayKey: day.dayKey,
       itemId: line.itemId,
       costId: line.costId ?? null,
-      name: getShortName(line, result.names),
+      name: getShortName(line, result.draft.lines, result.names),
       shortBy: line.shortBy,
       isBill: line.bill !== null,
       tier: line.tier,

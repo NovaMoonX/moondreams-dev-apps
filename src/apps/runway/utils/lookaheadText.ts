@@ -195,6 +195,8 @@ export interface HoldsBlock {
   hasNote?: boolean;
   /** A shortfall the plan already had, not one this change causes: drawn as a warning, never counted as the change's. */
   isStanding?: boolean;
+  /** The item a standing shortfall is of, so a note about that same item can stand in for it. */
+  standingItemId?: string | null;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -311,6 +313,7 @@ export function describeHoldsBlocks(
         text: COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
         figure: null,
         isStanding: true,
+        standingItemId: first.kind === 'short' ? first.itemId : null,
       };
     }
     const ends = after.incomeEndsOn;

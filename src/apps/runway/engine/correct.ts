@@ -7,7 +7,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
-import { applyLineEdits, getRemainder } from './differences';
+import { applyLineEdits, getLineTitle, getRemainder } from './differences';
 
 /** The split a day stands on now: the confirmed one, or the latest correction. */
 export interface EffectiveSplit {
@@ -111,7 +111,7 @@ export function getCorrectionChanges(
     .map((line): CorrectionChange => ({
       lineId: line.lineId,
       itemId: line.itemId,
-      name: line.name,
+      name: getLineTitle(line),
       emoji: line.emoji,
       beforeCents: was.get(line.lineId) ?? 0,
       afterCents: line.cents,

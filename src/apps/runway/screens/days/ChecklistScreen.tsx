@@ -28,6 +28,7 @@ import {
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getLineTitle } from '@apps/runway/engine/differences';
 import { countMarks } from '@apps/runway/engine/progress';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -71,7 +72,7 @@ function ChecklistBillRow({
   const { addToast } = useToast();
   const paid = useBillPaid({
     billId: line.itemId,
-    billName: line.name,
+    billName: getLineTitle(line),
     payment,
     onMarked: () => onDone(true),
     onUndone: () => onDone(false),
@@ -123,10 +124,10 @@ function ChecklistBillRow({
         : null;
     addToast({
       title: !next
-        ? ITEM_SHEET_R2_WORDS.unmarkedPaid(line.name)
+        ? ITEM_SHEET_R2_WORDS.unmarkedPaid(getLineTitle(line))
         : cardName === null
-          ? ITEM_SHEET_R2_WORDS.markedPaid(line.name)
-          : CARD_WORDS.markedPaidWith(line.name, cardName),
+          ? ITEM_SHEET_R2_WORDS.markedPaid(getLineTitle(line))
+          : CARD_WORDS.markedPaidWith(getLineTitle(line), cardName),
       type: 'success',
       action: {
         label: ITEM_SHEET_R2_WORDS.undo,
@@ -140,10 +141,10 @@ function ChecklistBillRow({
   return (
     <>
       <ItemRow
-        name={line.name}
+        name={getLineTitle(line)}
         detail={progress}
         figure={amount}
-        ariaLabel={`${line.name}, ${amount}`}
+        ariaLabel={`${getLineTitle(line)}, ${amount}`}
         tick={{ checked: isChecked, onChange: (next) => void toggle(next) }}
         onOpen={payment ? () => setIsOpen(true) : undefined}
       />
@@ -170,7 +171,7 @@ function ChecklistBillRow({
       {isAsking && payment && (
         <PaidAmountSheet
           billId={line.itemId}
-          billName={line.name}
+          billName={getLineTitle(line)}
           payment={payment}
           onMark={(cents) => toggle(true, cents)}
           onClose={() => setIsAsking(false)}
@@ -270,7 +271,9 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
     const varyingNote =
       varying.length === 0
         ? undefined
-        : PAID_AMOUNT_WORDS.leftForTick(varying.map((row) => row.line.name));
+        : PAID_AMOUNT_WORDS.leftForTick(
+            varying.map((row) => getLineTitle(row.line)),
+          );
     const dayLines = { dayId: day.dayKey, lineIds };
     if (varyingNote && unpaid.length === 0 && lineIds.length === 0) {
       setMarkTries((count) => count + 1);
@@ -450,7 +453,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
             {waiting.map(({ line, payment }) => (
               <ItemRow
                 key={line.lineId}
-                name={line.name}
+                name={getLineTitle(line)}
                 emoji={emojiOf(line.emoji, line.itemId)}
                 detail={
                   (payment ? getChecklistProgress(payment) : null) ??

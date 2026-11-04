@@ -3,6 +3,9 @@ import type { Cents, RecordDifference, RecordLine } from '@apps/runway/types';
 
 import { allocate } from './money';
 
+/** What a line is called: a cost line by its cost, any other by its item. */
+export const getLineTitle = (line: RecordLine) => line.costName ?? line.name;
+
 /** What a day's lines take in all; a line that gives back to Free to Spend takes nothing from it. */
 export function sumLines(lines: readonly RecordLine[]): Cents {
   const result = lines.reduce(
@@ -136,7 +139,7 @@ export function getLineDifferences(
       kind: 'line',
       lineId: line.lineId,
       itemId: line.itemId,
-      name: line.name,
+      name: getLineTitle(line),
       plannedCents: planned.get(line.lineId) ?? 0,
       actualCents: line.cents,
       note: Object.hasOwn(notes, line.lineId) ? notes[line.lineId] : null,

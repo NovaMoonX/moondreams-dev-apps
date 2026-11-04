@@ -106,17 +106,11 @@ const toDayEntry = (
     })),
     ...(day.kind === 'changed' ? day.effect.shortened : []).map((entry) => ({
       name: day.names[entry.key]?.name ?? 'Something removed',
-      text:
-        entry.beforeShortCents > 0
-          ? CHANGE_WORDS.shortMoves(
-              formatCents(entry.beforeShortCents),
-              formatCents(entry.afterShortCents),
-            )
-          : CHANGE_WORDS.putsInOf(
-              formatCents(entry.putInCents),
-              formatCents(entry.putInCents + entry.afterShortCents),
-              entry.putInCents > 0,
-            ),
+      text: CHANGE_WORDS.putsInOf(
+        formatCents(entry.putInCents),
+        formatCents(entry.putInCents + entry.afterShortCents),
+        entry.putInCents > 0,
+      ),
       isWords: true,
     })),
   ];
@@ -140,7 +134,7 @@ const toDayEntry = (
   };
 };
 
-/** Days that move the same way, with nothing of their own to say, become one row; the days with lines that change come first, each on its own. */
+/** Days that move the same way, with nothing of their own to say, become one row; the days where money moves come first (then the no-room days), each on its own. */
 const toEntries = (
   days: readonly PreviewDay[],
   pinned: ReadonlySet<string>,
@@ -153,9 +147,16 @@ const toEntries = (
           day.effect.freeBeforeCents === day.effect.freeAfterCents
         ? 'same'
         : 'own';
-  const own = days
-    .filter((day) => kindOf(day) === 'own')
-    .map((day) => toDayEntry(day, pinned));
+  const isMoved = (day: PreviewDay) =>
+    day.kind === 'changed' &&
+    (day.effect.lines.length > 0 ||
+      day.effect.freeBeforeCents !== day.effect.freeAfterCents ||
+      day.effect.shortened.some((entry) => entry.putInCents > 0));
+  const ownDays = days.filter((day) => kindOf(day) === 'own');
+  const own = [
+    ...ownDays.filter(isMoved),
+    ...ownDays.filter((day) => !isMoved(day)),
+  ].map((day) => toDayEntry(day, pinned));
   const folded = (['removed', 'added', 'same'] as const).flatMap((kind) => {
     const group = days.filter((day) => kindOf(day) === kind);
     if (group.length === 0) return [];
@@ -538,7 +539,11 @@ function EffectPreview({
       ? holdsText.blocks.filter(
           (block) =>
             (describeLead === undefined || block.tone === 'warning') &&
-            !(block.isStanding === true && shortText !== null),
+            !(
+              block.isStanding === true &&
+              shortText !== null &&
+              block.standingItemId === shortNote?.itemId
+            ),
         )
       : [];
   const renderFigure = (block: (typeof shownBlocks)[number]) =>

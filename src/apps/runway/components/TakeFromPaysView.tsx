@@ -148,7 +148,7 @@ function TakeFromPaysView({
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
-      <ActionTitle>{HORIZON_WORDS.takeFromPaysTitle(horizon.name)}</ActionTitle>
+      <ActionTitle>{HORIZON_WORDS.takeFromPaysTitle}</ActionTitle>
       <EffectPreview
         changeJson={changeJson}
         emptyText={HORIZON_WORDS.effectNone}

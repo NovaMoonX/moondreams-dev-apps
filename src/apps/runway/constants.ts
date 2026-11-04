@@ -318,7 +318,7 @@ export const HORIZON_WORDS = {
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
   costLineName: (cost: string, item: string) => `${cost}\u00A0·\u00A0${item}`,
-  costLineDetail: (item: string, tail: string) => `${item}\u00A0·\u00A0${tail}`,
+  costLineDetail: (item: string, tail: string) => `${item} ·\u00A0${tail}`,
   costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
@@ -409,8 +409,8 @@ export const HORIZON_WORDS = {
   needsRest: 'Pick where the rest comes from.',
   onePayTitle: 'Which pay?',
   onePayCapped: "Later pays aren't listed.",
-  effectShortOnePay: (date: string, name: string, short: string) =>
-    `${date} has no room for ${name} yet: ${short} stays short. Higher priorities take that pay first.`,
+  effectShortOnePay: (date: string) =>
+    `Higher priorities take the ${date} pay first.`,
   effectShortPays: (
     name: string,
     short: string,
@@ -462,7 +462,7 @@ export const HORIZON_WORDS = {
     `${item}, ${cost}: this pay goes back to the plan's amount, for ${date} only.`,
   costShareToast: (cost: string) => `Changed what this pay puts toward ${cost}`,
   takeFromPays: 'Take from my pays',
-  takeFromPaysTitle: (name: string) => `Take ${name} from your pays?`,
+  takeFromPaysTitle: 'Take the rest from your pays?',
   takeFromPaysMoved:
     'This changed while you had it open. Open it again to take it from your pays.',
   takeFromPaysUndoMoved: 'It was changed again since, so nothing was undone.',
@@ -839,9 +839,8 @@ export const CHANGE_WORDS = {
   dateLabel: 'Starts on',
   dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
-  shortMoves: (before: string, after: string) => `short ${before} → ${after}`,
   putsInOf: (put: string, asked: string, hasRoom: boolean) =>
-    `${hasRoom ? '' : 'No room: '}puts\u00A0in\u00A0${put}\u00A0of\u00A0${asked}`,
+    `${hasRoom ? 'Puts' : 'No room: puts'}\u00A0in\u00A0${put}\u00A0of\u00A0${asked}`,
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',
@@ -1217,7 +1216,6 @@ export const PAY_SHARE_WORDS = {
     `Saving up · ${cents} of ${total} · due\u00a0${due}`,
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
-  changes: 'What changes',
   carriesRest: (date: string, name: string, cents: string, isAlone: boolean) =>
     isAlone
       ? `The ${date} pay now puts in all of ${name}'s remaining ${cents}.`

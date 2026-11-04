@@ -2,6 +2,7 @@ import BeforeAfterRow from '@/components/BeforeAfterRow';
 import { formatCents } from '@/utils/moneyUtils';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { getLineTitle } from '@apps/runway/engine/differences';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -34,8 +35,7 @@ function RecordLineRow({
   const mask = useMaskedText();
   const emoji = useRecordedEmoji(line.emoji, line.itemId);
   const { isHidden } = useValuesHidden();
-  const name =
-    line.costName ?? (line.name === '' ? DRAFT_WORDS.billFallback : line.name);
+  const name = getLineTitle(line) || DRAFT_WORDS.billFallback;
   const costItem = line.costName === null ? '' : line.name;
   const isChanged = plannedCents !== undefined && plannedCents !== line.cents;
   const shortText =

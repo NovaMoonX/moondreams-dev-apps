@@ -290,11 +290,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       const total = shorts.reduce((sum, entry) => sum + entry.cents, 0);
       if (total === 0) return null;
       return pickedOn !== null && formData.rest === 'onePay'
-        ? HORIZON_WORDS.effectShortOnePay(
-            formatDateOrdinalUTC(pickedOn),
-            name,
-            formatCents(total),
-          )
+        ? HORIZON_WORDS.effectShortOnePay(formatDateOrdinalUTC(pickedOn))
         : HORIZON_WORDS.effectShortPays(
             name,
             formatCents(total),

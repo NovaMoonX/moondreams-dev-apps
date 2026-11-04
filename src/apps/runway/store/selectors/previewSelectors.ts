@@ -375,7 +375,7 @@ export interface ItemShortsReading {
   roomCount: number;
 }
 
-/** What one item's cost lines ask of each coming pay and get from it, leaving out a short the lookahead already warns about so the two never say the same thing twice. */
+/** What one item's cost lines ask of each coming pay and get from it, leaving a short the lookahead already warns about out of `shorts` only, so the two never warn twice while the totals still count every cost. */
 export function previewItemShorts(
   inputs: PreviewInputs,
   change: PreviewChange,
@@ -390,10 +390,9 @@ export function previewItemShorts(
     change.kind === 'addItem'
       ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
       : inputs.heldByItem;
-  const coming = buildComingDays(layered.items, layered.versions, today).filter(
-    (day) => !settled.has(day.dayKey),
-  );
-  const rows = coming.slice(0, MAX_PREVIEW_DAYS).map((day, index) => {
+  const allComing = buildComingDays(layered.items, layered.versions, today);
+  const coming = allComing.filter((day) => !settled.has(day.dayKey));
+  const rows = coming.slice(0, MAX_PREVIEW_DAYS).map((day) => {
     const view = computeDraftView(
       layered.items,
       layered.versions,
@@ -405,20 +404,22 @@ export function previewItemShorts(
       inputs.settledKey,
       inputs.billProgress,
     );
-    const nextOn = coming[index + 1]?.on ?? Number.POSITIVE_INFINITY;
+    const nextOn =
+      allComing.find((next) => next.on > day.on)?.on ??
+      Number.POSITIVE_INFINITY;
     const lines = (view?.draft.lines ?? []).filter(
-      (line) =>
-        line.itemId === itemId &&
-        line.cost &&
-        !line.repaysFree &&
-        !(
-          line.shortBy > 0 &&
-          (line.tier === 'must' || line.cost.dueOn < nextOn)
-        ),
+      (line) => line.itemId === itemId && line.cost && !line.repaysFree,
     );
+    const isFlagged = (line: (typeof lines)[number]) =>
+      line.shortBy > 0 &&
+      (line.tier === 'must' || (line.cost?.dueOn ?? nextOn) < nextOn);
     return {
       on: day.on,
-      short: lines.reduce((sum, line) => sum + line.shortBy, 0),
+      short: lines.reduce(
+        (sum, line) => (isFlagged(line) ? sum : sum + line.shortBy),
+        0,
+      ),
+      asked: lines.reduce((sum, line) => sum + line.cents + line.shortBy, 0),
       carried: lines.reduce((sum, line) => sum + line.cents, 0),
     };
   });
@@ -427,8 +428,8 @@ export function previewItemShorts(
       .filter((row) => row.short > 0)
       .map(({ on, short }) => ({ on, cents: short })),
     carriedCents: rows.reduce((sum, row) => sum + row.carried, 0),
-    askedCents: rows.reduce((sum, row) => sum + row.carried + row.short, 0),
-    payCount: rows.filter((row) => row.carried + row.short > 0).length,
+    askedCents: rows.reduce((sum, row) => sum + row.asked, 0),
+    payCount: rows.filter((row) => row.asked > 0).length,
     roomCount: rows.filter((row) => row.carried > 0).length,
   };
 }
