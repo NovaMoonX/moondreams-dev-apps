@@ -1807,6 +1807,7 @@ A person names their accounts, says where each goal and envelope is held, marks 
 ### Possible Approach
 1. Accounts are counted toward the total or left out (a brokerage), and `balanceCorrection` moves record a corrected balance.
 2. `AccountSealed.isPullAccount`, `BillSealed.accountId` and `CardSealed.payFromAccountId` (TDD "Accounts, what pays what, and money to move").
+3. An optional "Last 4 digits" on the account and card forms (`lastFour`), shown as "Capital One ••4821" wherever two share an institution; Issue 57's match reads it.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Create / Read / Update / Delete:** accounts (archive when used).
@@ -1981,6 +1982,7 @@ Settle, before any Link code is written, what Plaid access will be: production a
 **Target PR Size:** ~600 lines (split the functions from the screens if it runs over)
 **Files:**
 - `functions/src/apps/runway/link/provider.ts`, `providerPlaid.ts`, `normalize.ts`, `createLinkSession.ts`, `attachAccount.ts`
+- `src/apps/runway/engine/linkMatch.ts`, `screens/more/LinkMatchScreen.tsx`, the card sheet and `AccountSheet` ("Link to your bank")
 - `functions/README.md` (rows), `firestore.rules` (`links`, `accountBalances`: owner read, `write: if false`)
 - `src/apps/runway/queries/linkQueries.ts`, `store/listeners/` (`links`), `screens/more/LinkScreen.tsx`
 - `src/apps/runway/screens/plan/WhereIsYourMoneyScreen.tsx`
@@ -1989,7 +1991,7 @@ Settle, before any Link code is written, what Plaid access will be: production a
 **Context:** Read the TDD's "Bank data", Security Rules Design Criteria 3, `LinkDoc`, `AccountBalanceDoc` and the Link-an-account journey in `UX.md`.
 
 ### Description
-A person at the Track level can choose Link, read what it does, sign in at their bank through the provider's window, and attach each provider account to an account they already named. The provider's accounts and balances arrive, and the line-up is shown once.
+A person at the Track level can choose Link, read what it does, sign in at their bank through the provider's window, and attach each provider account to an account they already named. The provider's accounts and balances arrive, and the line-up is shown once. Signing in at a bank brings everything held there; **Is this one of yours?** proposes, for each, one of the person's cards or accounts (kind, institution, last four), Add as new, or Don't bring in, and nothing joins until they confirm. A hand-added card that joins keeps its reserve, history and due day, and a differing balance is offered as a correction. Link opens from Settings, from "Link to your bank" on a card's or account's sheet (that one already picked), and from "Link it from your bank" when adding one. Linking the first one sets the level to Link.
 
 ### Possible Approach
 1. `BankDataProvider` is the only place provider names appear. `createRunwayLinkSession` returns a link token; the public token is exchanged on the server, the access grant is sealed under `HKDF(current master key, 'runway-provider-grant')` with `masterKeyId` beside it, stored in `server/{uid}/grants/{linkId}` and never returned.
@@ -2002,6 +2004,8 @@ A person at the Track level can choose Link, read what it does, sign in at their
 - [ ] **Update / Delete:** unlinking is Issue 58.
 
 ### Success Criteria
+- [ ] A card added by hand, then linked, is the same card afterwards (same id, reserve, history, due day, bills it pays) and is never listed twice; "Add as new" and "Don't bring in" both work, and a card already linked is never offered again.
+- [ ] The match guess picks the right card and account for the owner's setup (two Capital One checking accounts told apart by last four).
 - [ ] Both Plaid secrets exist in production before this PR merges.
 - [ ] A second user cannot read or write the first user's links, balances or grants (emulator, owner and non-owner).
 - [ ] Cancelling the provider window leaves nothing linked and says so.

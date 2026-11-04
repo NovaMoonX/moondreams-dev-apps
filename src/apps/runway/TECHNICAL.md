@@ -418,7 +418,7 @@ interface AccountDoc {
   createdAt: number;
   archivedAt: number | null;
   linkId: string | null;                    // set by the attach callable
-  sealed: Sealed;                           // { name, institution, kind, countedTowardTotal }
+  sealed: Sealed;                           // { name, institution, kind, countedTowardTotal, lastFour }
 }
 ```
 
@@ -566,7 +566,7 @@ interface LinkDoc {                         // functions write; client reads
   status: (typeof LINK_STATUSES)[number];
   lastSyncAt: number | null;
   createdAt: number;
-  sealed: Sealed;                           // { institutionName, providerAccounts: [{ providerAccountId, accountId }] }
+  sealed: Sealed;                           // { institutionName, providerAccounts: [{ providerAccountId, accountId, cardId }] }  one of the two ids set
 }
 
 interface AccountBalanceDoc {               // functions write; client reads
@@ -1249,13 +1249,13 @@ Invariant 13 stops a key id being dropped casually. When one must go (a suspecte
 - Plaid mapping: `createLinkSession` creates a link token; `exchange` swaps the public token for an access token (the sealed grant); `syncTransactions` uses the cursor-based sync endpoint, triggered by Plaid's "updates available" webhook; the webhook is verified with Plaid's signed header, so no separate webhook secret is expected. To confirm in the Link spike, along with whether Plaid covers cash-management accounts such as Wealthfront and whether its investments product makes a second provider unnecessary for the Beyond item.
 - The grant is sealed under `HKDF(current master key, 'runway-provider-grant')`, a different key from the data key's wrapper, with the `masterKeyId` stored beside it, and stored in `server/{uid}/grants/{linkId}`. It is never returned to a client.
 - `syncRunwayAccount` (triggered by the provider's webhook and by a scheduled backstop) fetches with the cursor, builds `dedupeKey = HMAC(HKDF(plan data key, 'runway-dedupe'), linkId + providerTransactionId)` (so master rotation never changes it; a future data key rotation must carry this subkey forward), upserts purchases (`needsHome: true`, `status` from the pending flag, same document when a pending charge posts) sealed with the plan key, writes `accountBalances`, and updates the link status. It logs counts and ids, never merchants or amounts.
-- `attachRunwayAccount({ linkId, providerAccountId, accountId })` binds a provider account to a Runway account the person already named.
+- `attachRunwayAccount({ linkId, providerAccountId, accountId, cardId })` binds a provider account to a Runway account or card the person already has (exactly one id set), or, with both `null`, creates one from the provider's name, kind and mask (a credit account becomes a card). A card joins through `CardDoc.linkId`, beside `AccountDoc.linkId`; cards stay their own collection and keep their reserve, history and engine. The client proposes each row's match on "Is this one of yours?" (`engine/linkMatch.ts`, pure: kind first (credit to cards, depository to accounts), then institution, then `lastFour` against the provider's mask; an already linked one is never offered) and the person confirms; the callable only checks the ids are the caller's and unlinked. A balance that differs from the reserve or held amount is offered as a `balanceCorrection`, never applied on its own. Linking the first account or card sets the level to Link.
 - `unlinkRunwayAccount` revokes at the provider, deletes the grant, sets the link to `revoked`, keeps what already came in.
 - A person who never links has no `links`, no `server/…/grants` and no bank data anywhere.
 
 ### Accounts, what pays what, and money to move (planned)
 
-- `AccountSealed` gains `isPullAccount: boolean` (cards and bills pull from it). `BillSealed.accountId` and a new `CardSealed.payFromAccountId` say which account pays each; a missing key reads `null`, which means the plan's single pull account when there is exactly one.
+- `AccountSealed` gains `isPullAccount: boolean` (cards and bills pull from it) and `lastFour: string | null`; `CardSealed` gains `lastFour` too, and `CardDoc` gains `linkId: string | null` with Link (a missing key reads `null`). `BillSealed.accountId` and a new `CardSealed.payFromAccountId` say which account pays each; a missing key reads `null`, which means the plan's single pull account when there is exactly one.
 - `engine/moves.ts` (pure): `getPullAccountNeed(account, plan, today)` sums the card reserves and funded bills that pull from the account and fall due before the next income day, less its known balance (typed or linked), and returns `{ moveCents, byDay, items }`. The checklist's "Move to accounts" item and Home's warning row read it; the item is ticked by `doneLineIds` or by a paired `transfer` (Matching step 3a).
 - Home's warning row merges it with the card and plan warnings by date; it never sends money and never changes a balance.
 - An account's view lists the goals and envelopes whose `accountId` is that account, and "Not yet given a job" for the rest of its balance.
