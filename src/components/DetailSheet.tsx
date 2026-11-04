@@ -141,18 +141,19 @@ function DetailSheet({
             )}
           >
             {actions}
-            {!isDrawer && (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='icon'
-                aria-label='Close'
-                onClick={onDialogClose}
-                className='text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0'
-              >
-                <X className='h-5 w-5' aria-hidden='true' />
-              </Button>
-            )}
+            <Button
+              type='button'
+              variant='tertiary'
+              size='icon'
+              aria-label='Close'
+              onClick={onDialogClose}
+              className={join(
+                'text-foreground! ml-2 size-10 min-w-10 shrink-0 p-0',
+                isDrawer && '[@media(pointer:coarse)]:hidden!',
+              )}
+            >
+              <X className='h-5 w-5' aria-hidden='true' />
+            </Button>
           </div>
         )}
       </div>

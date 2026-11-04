@@ -18,10 +18,10 @@ const CLOSE_SHARE = 0.3;
 const FLICK_PX_PER_MS = 0.5;
 const FLICK_MIN_PX = 48;
 const SETTLE_MS = 220;
-const STILL_OPEN_CHECK_MS = 320;
+const STILL_OPEN_CHECKS_MS = [60, 320];
 
 const HANDLE =
-  "[&>div]:pt-5 before:pointer-events-none before:absolute before:top-2 before:left-1/2 before:z-10 before:h-1.5 before:w-12 before:-translate-x-1/2 before:rounded-full before:bg-popover-foreground/25 before:content-['']";
+  "[&>div]:pt-5 before:pointer-events-none before:absolute before:top-2 before:left-1/2 before:z-10 before:h-1.5 before:w-12 before:-translate-x-1/2 before:rounded-full before:bg-popover-foreground/35 before:content-['']";
 const QUIET_CLOSE = '[&_[data-drawer-close-button]]:sr-only';
 const QUIET_CLOSE_ON_TOUCH =
   '[@media(pointer:coarse)]:[&_[data-drawer-close-button]]:sr-only';
@@ -61,6 +61,11 @@ const attachSwipe = (surface: HTMLElement, close: () => void) => {
       ? `transform ${SETTLE_MS}ms ease-out`
       : 'none';
     surface.style.transform = y === 0 ? '' : `translateY(${y}px)`;
+    if (y === 0 && isAnimated) {
+      window.setTimeout(() => {
+        if (!surface.style.transform) surface.style.transition = '';
+      }, SETTLE_MS);
+    }
   };
 
   const onStart = (event: TouchEvent) => {
@@ -73,6 +78,7 @@ const attachSwipe = (surface: HTMLElement, close: () => void) => {
       surface.contains(target) &&
       !keepsItsTouch(target) &&
       !isScrolledAway(target, surface);
+    if (state.phase === 'dragging') place(0, true);
     state.phase = isEligible ? 'waiting' : 'ignored';
     if (!isEligible) return;
     state.id = touch.identifier;
@@ -99,11 +105,12 @@ const attachSwipe = (surface: HTMLElement, close: () => void) => {
     const dy = touch.clientY - state.startY;
     if (state.phase === 'waiting') {
       if (Math.abs(dx) < START_SLOP_PX && Math.abs(dy) < START_SLOP_PX) return;
-      state.phase = dy > 0 && dy > Math.abs(dx) ? 'dragging' : 'ignored';
+      const isDown = dy > 0 && dy > Math.abs(dx) && event.cancelable;
+      state.phase = isDown ? 'dragging' : 'ignored';
       if (state.phase === 'ignored') return;
       state.startY = touch.clientY;
     }
-    event.preventDefault();
+    if (event.cancelable) event.preventDefault();
     const gap = event.timeStamp - state.lastAt;
     if (gap > 0) state.speed = (touch.clientY - state.lastY) / gap;
     state.lastY = touch.clientY;
@@ -130,13 +137,14 @@ const attachSwipe = (surface: HTMLElement, close: () => void) => {
     surface.style.transform = 'translateY(100%)';
     close();
     // A close that asks first (unsaved typing) leaves the drawer open, so it comes back up.
-    window.setTimeout(() => {
+    const comeBackIfOpen = () => {
       const root = surface.closest('[role="dialog"]');
       const isStillOpen =
         surface.isConnected &&
         root?.getAttribute('data-drawer-open') === 'true';
-      if (isStillOpen) place(0, true);
-    }, STILL_OPEN_CHECK_MS);
+      if (isStillOpen && surface.style.transform) place(0, true);
+    };
+    STILL_OPEN_CHECKS_MS.forEach((ms) => window.setTimeout(comeBackIfOpen, ms));
   };
 
   const onCancel = () => {
