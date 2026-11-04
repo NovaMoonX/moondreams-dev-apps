@@ -11,7 +11,7 @@ import Subview from '@/components/Subview';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -46,7 +46,7 @@ const monthName = new Intl.DateTimeFormat('en-US', {
 const describeBoundary = (recentFrom: number) =>
   new Date(recentFrom).getUTCDate() === 1
     ? monthName.format(recentFrom)
-    : formatDateShortUTC(recentFrom);
+    : formatDateOrdinalUTC(recentFrom);
 
 interface ConfirmedDayViewProps {
   day: ListedDay;
@@ -173,7 +173,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
             {[
               CONFIRM_WORDS.confirmed,
               day.arrivedOn !== null
-                ? `arrived ${formatDateUTC(day.arrivedOn)}`
+                ? `arrived ${formatDateOrdinalUTC(day.arrivedOn)}`
                 : null,
               record?.kind === 'correction'
                 ? CORRECT_WORDS.corrected.toLowerCase()

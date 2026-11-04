@@ -1147,7 +1147,7 @@ Side effects that talk to a function (attach an account, unlink, delete the plan
 ## UI Conventions Applied
 
 - **Containers.** A form with several sections is a `FormSheet` (drawer on a phone). Confirm, Correct this day, What if and Cover it swap content inside their sheet with `BackLink`; none stacks an overlay on an overlay. Setup, the line-up, Needs a home and History open as `Subview`s.
-- **Dates.** Every income day, due date, effective date and purchase date is date-only: written with `fromDateInputValue`, displayed with `formatDateUTC`, picked with `toDateInputValue`. A confirmed-at time is an instant and shows in local time.
+- **Dates.** Every income day, due date, effective date and purchase date is date-only: written with `fromDateInputValue`, displayed with `formatDateOrdinalUTC` ("Feb 1st"), picked with `toDateInputValue`. A confirmed-at time is an instant and shows in local time.
 - **Money.** `MoneyInput` and `formatCents` only. A range is labeled everywhere it drives a figure.
 - **Forms.** Submit disables until required fields are valid. Titles are plain nouns ("Bill", "Income", "Envelope"). A detail the path depends on (the amount that arrived, which pay line, ends when) is a visible question with pills; truly optional extras (group, emoji, note) are chips.
 - **Deletes and removals.** There are almost none. Ending, pausing and archiving keep history; a purchase delete uses a destructive confirm; removing a row in a form uses the undo snackbar.

@@ -30,7 +30,7 @@ import { useAppSelector, type RootState } from '@/store';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import {
@@ -217,7 +217,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         itemId: groupId,
         kind: 'group',
         payload: next,
-        summary: `${next.name}: ${describeChange(payload, next, getCardNamer([]))}, from ${formatDateUTC(today)}.`,
+        summary: `${next.name}: ${describeChange(payload, next, getCardNamer([]))}, from ${formatDateOrdinalUTC(today)}.`,
         note: null,
         effectiveFrom: today,
       });
@@ -372,8 +372,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         ? joinPaymentAndState(payment, BILL_WORDS.needsDueDate)
         : BILL_WORDS.needsDueDate
       : payment
-        ? joinPaymentAndState(payment, `Due ${formatDateShortUTC(due)}`)
-        : `Due ${formatDateShortUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
+        ? joinPaymentAndState(payment, `Due ${formatDateOrdinalUTC(due)}`)
+        : `Due ${formatDateOrdinalUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;
@@ -417,7 +417,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 entry.original[0].payload,
                 getCardNamer([]),
               ) || 'Updated',
-              formatDateUTC(today),
+              formatDateOrdinalUTC(today),
             ),
             note: null,
             effectiveFrom: today,
@@ -467,9 +467,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
             const current = getCurrentDue(bill);
             return current === null
               ? bill.version.payload.name
-              : `${bill.version.payload.name} (${formatDateShortUTC(current)})`;
+              : `${bill.version.payload.name} (${formatDateOrdinalUTC(current)})`;
           }),
-          formatDateUTC(dueDate),
+          formatDateOrdinalUTC(dueDate),
           describeRepeatsOn(
             replacedBills.map(
               ({ version }) => version.payload.timing.schedule.kind,
@@ -533,7 +533,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 plan.written[0].payload,
                 getCardNamer([]),
               ) || 'Updated',
-              formatDateUTC(today),
+              formatDateOrdinalUTC(today),
             ),
             note: null,
             effectiveFrom: today,
@@ -549,7 +549,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         .map((plan) => plan.name);
       if (saved.length > 0) {
         setDueRecord({
-          note: GROUP_WORDS.dueDone(saved.length, formatDateShortUTC(dueDate)),
+          note: GROUP_WORDS.dueDone(
+            saved.length,
+            formatDateOrdinalUTC(dueDate),
+          ),
           undo: saved,
         });
         addToast({
@@ -785,7 +788,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                     total.oneTime.count,
                     total.oneTime.dueOn === null
                       ? null
-                      : formatDateShortUTC(total.oneTime.dueOn),
+                      : formatDateOrdinalUTC(total.oneTime.dueOn),
                   )}
                 </MaskedText>
               </p>

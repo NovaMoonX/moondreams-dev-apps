@@ -36,7 +36,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { extractReceiptFromFile } from '@/lib/receipts/extractReceiptFromFile';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { generateUuid } from '@/utils/idUtils';
 import { getWebLinkHost, toWebLink } from '@/utils/urlUtils';
@@ -726,10 +726,10 @@ function PurchaseFormBody({
     }
     if (date === null || date > today) return SPEND_WORDS.needsDay;
     if (!isInTrackingPeriods(periods, date)) {
-      return `Tracking was not on for ${formatDateUTC(date)}.`;
+      return `Tracking was not on for ${formatDateOrdinalUTC(date)}.`;
     }
     if (countedFrom !== null && date < countedFrom && date !== editing?.date) {
-      return `Tracking started again on ${formatDateUTC(countedFrom)}. Pick that day or later.`;
+      return `Tracking started again on ${formatDateOrdinalUTC(countedFrom)}. Pick that day or later.`;
     }
     if (linkText !== '' && toHttpsLink(linkText) === null) {
       return SPEND_WORDS.needsWebLink;
@@ -1282,7 +1282,7 @@ function PurchaseFormBody({
           ? 'Today'
           : date === null
             ? ''
-            : formatDateUTC(date),
+            : formatDateOrdinalUTC(date),
       isAnswered: date !== null && date <= today,
       isPreAnswered: true,
       render: () => (
@@ -1856,7 +1856,7 @@ function PurchaseFormBody({
                       {getPurchaseTitle(purchase, nameOf)}
                     </span>
                     <span className='text-muted-foreground block text-sm'>
-                      {formatDateUTC(purchase.date)}
+                      {formatDateOrdinalUTC(purchase.date)}
                     </span>
                   </span>
                   <span className='shrink-0 font-semibold whitespace-nowrap tabular-nums'>

@@ -10,7 +10,7 @@ import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import ChangeRow from '@apps/runway/components/ChangeRow';
 import {
   CHANGE_LOG_PAGE_SIZE,
@@ -106,7 +106,7 @@ function ChangeLogScreen({ onClose }: ChangeLogScreenProps) {
   ];
   const cutoff =
     visible.length - shown <= MIN_HIDDEN_ROWS ? visible.length : shown;
-  const range = `${formatDateUTC(window.firstDay)} to ${formatDateUTC(window.lastDay)}`;
+  const range = `${formatDateOrdinalUTC(window.firstDay)} to ${formatDateOrdinalUTC(window.lastDay)}`;
 
   const getBody = () => {
     if (isFailed) {

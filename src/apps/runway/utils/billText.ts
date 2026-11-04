@@ -26,7 +26,7 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import { describeCadenceLine } from '@apps/runway/utils/fundingText';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
 /** What a group's bills and envelopes come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
@@ -45,7 +45,7 @@ export function describeGroupLead(total: GroupTotal, memberCount: number) {
       amount: describeGroupTotal(oneTime.range),
       rest:
         oneTime.count === 1 && oneTime.dueOn !== null
-          ? GROUP_WORDS.oneTimeDue(formatDateShortUTC(oneTime.dueOn))
+          ? GROUP_WORDS.oneTimeDue(formatDateOrdinalUTC(oneTime.dueOn))
           : GROUP_WORDS.oneTimeCount(oneTime.count),
       isOneTime: true,
     };
@@ -166,7 +166,7 @@ export function describeBillTiming(schedule: Schedule) {
       ? 'Due date later'
       : `${describeBillRepeat(schedule)} · due date later`;
   }
-  const start = formatDateUTC(schedule.anchor);
+  const start = formatDateOrdinalUTC(schedule.anchor);
   if (schedule.kind === 'once') return `Due ${start}`;
   const result = `${describeBillRepeat(schedule)} from ${start}`;
   return result;
@@ -186,7 +186,7 @@ export function describeBillFunding(
   const count = amounts.length;
   const first = formatCents(amounts[0]);
   if (count === 1) {
-    return `${first} from the income on ${formatDateUTC(payment.parts[0].day.on)}`;
+    return `${first} from the income on ${formatDateOrdinalUTC(payment.parts[0].day.on)}`;
   }
   const last = amounts[count - 1];
   const scope =
@@ -207,8 +207,8 @@ export function describeBillProgress(payment: BillPayment) {
   if (paid) {
     const when =
       paid.paidOn < payment.dueOn
-        ? `Paid ahead on ${formatDateUTC(paid.paidOn)}`
-        : `Paid ${formatDateUTC(paid.paidOn)}`;
+        ? `Paid ahead on ${formatDateOrdinalUTC(paid.paidOn)}`
+        : `Paid ${formatDateOrdinalUTC(paid.paidOn)}`;
     return paid.fromFreeCents > 0
       ? `${when} · ${formatCents(paid.fromFreeCents)} came from Free to Spend`
       : when;

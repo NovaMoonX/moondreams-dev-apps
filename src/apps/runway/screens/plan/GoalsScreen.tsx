@@ -8,7 +8,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionHeader from '@/components/SectionHeader';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
@@ -86,7 +86,7 @@ function GoalsScreen() {
   const trackedGoals = paces.filter(({ track }) => track !== null);
   const behindGoals = trackedGoals.filter(({ track }) => track === 'behind');
   const visible = paces.filter(({ payload }) =>
-    `${payload.name} ${payload.targetDate === null ? '' : formatDateShortUTC(payload.targetDate)}`
+    `${payload.name} ${payload.targetDate === null ? '' : formatDateOrdinalUTC(payload.targetDate)}`
       .toLowerCase()
       .includes(needle),
   );

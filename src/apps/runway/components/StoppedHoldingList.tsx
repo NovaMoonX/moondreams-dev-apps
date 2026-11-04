@@ -4,7 +4,7 @@ import { createSelector } from '@reduxjs/toolkit';
 import SectionDivider from '@/components/SectionDivider';
 import type { RootState } from '@/store';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
@@ -59,7 +59,7 @@ const selectStoppedHolding = createSelector(
           fact:
             item.archivedAt !== null
               ? HELD_WORDS.archived
-              : HELD_WORDS.ended(formatDateShortUTC(item.endedAt ?? on)),
+              : HELD_WORDS.ended(formatDateOrdinalUTC(item.endedAt ?? on)),
         };
         return [row];
       })

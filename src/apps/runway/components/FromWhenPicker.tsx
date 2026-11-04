@@ -8,7 +8,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SummaryRow from '@/components/SummaryRow';
 import { toDateInputValue } from '@/utils/dateInputUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { CHANGE_WORDS, MAX_CHANGE_DAYS_AHEAD } from '@apps/runway/constants';
 import type { ComingDay } from '@apps/runway/engine/comingDays';
 import { addUtcDays } from '@apps/runway/engine/dates';
@@ -71,7 +71,7 @@ function FromWhenPicker({
   const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
-    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
+    label: `${formatDateOrdinalUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
 
   const chosen =
@@ -88,12 +88,12 @@ function FromWhenPicker({
       />
       {value.choice === 'fromDay' && preset && (
         <p className='text-muted-foreground text-sm'>
-          {formatDateUTC(preset.on)}
+          {formatDateOrdinalUTC(preset.on)}
         </p>
       )}
       {value.choice === 'dayOnly' && preset && (
         <p className='text-muted-foreground text-sm'>
-          {formatDateUTC(preset.on)}
+          {formatDateOrdinalUTC(preset.on)}
         </p>
       )}
       {value.choice === 'dayOnly' && !preset && (

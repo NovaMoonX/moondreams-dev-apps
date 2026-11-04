@@ -21,7 +21,7 @@ import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   CHANGE_WORDS,
   DEFAULT_PAY_LINE_NAME,
@@ -481,15 +481,15 @@ function IncomeFormBody({
       : formData.frequency === null || startDate === undefined
         ? ''
         : isOnce
-          ? formatDateUTC(startDate)
-          : `${SCHEDULE_LABELS[formData.frequency]} · next ${formatDateUTC(startDate)}`;
+          ? formatDateOrdinalUTC(startDate)
+          : `${SCHEDULE_LABELS[formData.frequency]} · next ${formatDateOrdinalUTC(startDate)}`;
   const endingText =
     formData.endKind === 'never'
       ? INCOME_ENDING_LABELS.never
       : formData.endKind === 'date'
         ? formData.endDate === ''
           ? ''
-          : `After ${formatDateUTC(fromDateInputValue(formData.endDate) ?? 0)}`
+          : `After ${formatDateOrdinalUTC(fromDateInputValue(formData.endDate) ?? 0)}`
         : formData.endCount === ''
           ? ''
           : `After ${formData.endCount} payments`;

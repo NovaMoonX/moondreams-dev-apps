@@ -3,7 +3,7 @@ import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
@@ -61,7 +61,7 @@ const getSummary = ({
   amount,
   startDate,
 }: CreateIncomeInput) =>
-  `Added ${payLineName} from ${sourceName}, ${formatRange(amount)}, from ${formatDateUTC(startDate)}.`;
+  `Added ${payLineName} from ${sourceName}, ${formatRange(amount)}, from ${formatDateOrdinalUTC(startDate)}.`;
 
 /**
  * Adds a pay line, and its source when it is new, as headers, first versions and one change entry in a
@@ -387,7 +387,9 @@ export async function createGoal(
   const goalId = generateUuid();
   const changeId = generateUuid();
   const dateText =
-    goal.targetDate === null ? '' : ` by ${formatDateUTC(goal.targetDate)}`;
+    goal.targetDate === null
+      ? ''
+      : ` by ${formatDateOrdinalUTC(goal.targetDate)}`;
   const changePayload: ChangeSealed = {
     summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}.`,
   };
@@ -762,7 +764,7 @@ export async function setGoalState(
     itemId: input.itemId,
     kind: 'goal',
     payload: { ...input.goal, state: input.state },
-    summary: `${input.goal.name}: ${isPaused ? 'saving paused' : 'saving started again'}, from ${formatDateUTC(input.effectiveFrom)}.`,
+    summary: `${input.goal.name}: ${isPaused ? 'saving paused' : 'saving started again'}, from ${formatDateOrdinalUTC(input.effectiveFrom)}.`,
     note: input.note,
     effectiveFrom: input.effectiveFrom,
   });

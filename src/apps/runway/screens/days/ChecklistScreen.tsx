@@ -9,7 +9,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import { useRecordedEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
-import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
+import {
+  formatDateOrdinalUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -151,7 +154,10 @@ function ChecklistBillRow({
           today={today}
           figureLabel='From this day'
           figure={amount}
-          fact={[`Due ${formatRelativeDayUTC(payment.dueOn, today)}`, progress]
+          fact={[
+            `Due ${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`,
+            progress,
+          ]
             .filter(Boolean)
             .join(' · ')}
           payment={payment}
@@ -182,7 +188,7 @@ const isOffline = (error: unknown) =>
 const getChecklistProgress = (payment: BillPayment) => {
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
-    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateShortUTC(paid.paidOn)}`;
+    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
   }
   if (fundedCents <= 0) return null;
   if (fundedCents >= totalCents) return BILL_WORDS.readyToPay;

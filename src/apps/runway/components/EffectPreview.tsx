@@ -6,7 +6,7 @@ import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector, type RootState } from '@/store';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { formatCents } from '@/utils/moneyUtils';
@@ -99,7 +99,7 @@ const toDayEntry = (
     day.effect.freeBeforeCents !== day.effect.freeAfterCents;
   return {
     key: day.dayKey,
-    title: `${formatDateUTC(day.on)} · ${day.title}`,
+    title: `${formatDateOrdinalUTC(day.on)} · ${day.title}`,
     note:
       day.kind === 'added'
         ? CHANGE_WORDS.added
@@ -134,8 +134,8 @@ const toEntries = (
     if (group.length === 0) return [];
     if (group.length === 1 && kind !== 'same')
       return [toDayEntry(group[0], pinned)];
-    const first = formatDateUTC(group[0].on);
-    const last = formatDateUTC(group[group.length - 1].on);
+    const first = formatDateOrdinalUTC(group[0].on);
+    const last = formatDateOrdinalUTC(group[group.length - 1].on);
     return [
       {
         key: kind,
@@ -170,19 +170,19 @@ const describeUnmoved = (days: readonly PreviewDay[]) => {
   const { removed, added, isMove } = getMoves(days);
   if (isMove && removed.length === 1)
     return COMPACT_MOVE_WORDS.movesTo(
-      formatDateShortUTC(removed[0].on),
-      formatDateShortUTC(added[0].on),
+      formatDateOrdinalUTC(removed[0].on),
+      formatDateOrdinalUTC(added[0].on),
     );
   if (isMove)
     return COMPACT_MOVE_WORDS.manyMove(
       removed.length,
-      formatDateShortUTC(removed[0].on),
+      formatDateOrdinalUTC(removed[0].on),
     );
   if (days.length === 1)
-    return COMPACT_MOVE_WORDS.oneChanges(formatDateShortUTC(days[0].on));
+    return COMPACT_MOVE_WORDS.oneChanges(formatDateOrdinalUTC(days[0].on));
   return COMPACT_MOVE_WORDS.manyChange(
     days.length,
-    formatDateShortUTC(days[0].on),
+    formatDateOrdinalUTC(days[0].on),
   );
 };
 
@@ -263,8 +263,8 @@ function EffectPreview({
               isOneCarried: carried.length === 1,
               text: MOVED_DAY_WORDS.carried(
                 carried.length,
-                formatDateUTC(carried[0].from.expectedOn),
-                formatDateUTC(carried[0].to.on),
+                formatDateOrdinalUTC(carried[0].from.expectedOn),
+                formatDateOrdinalUTC(carried[0].to.on),
               ),
             },
           ]
@@ -276,7 +276,7 @@ function EffectPreview({
               isOneCarried: false,
               text: MOVED_DAY_WORDS.stranded(
                 stranded.length,
-                formatDateUTC(stranded[0].expectedOn),
+                formatDateOrdinalUTC(stranded[0].expectedOn),
               ),
             },
           ]
@@ -372,7 +372,7 @@ function EffectPreview({
             </p>
           ) : (
             <p className='text-sm'>
-              {count} {formatDateUTC(first.on)}:{' '}
+              {count} {formatDateOrdinalUTC(first.on)}:{' '}
               <span className='whitespace-nowrap tabular-nums'>
                 <MaskedText>
                   {`${formatCents(first.effect.freeBeforeCents)} to ${formatCents(first.effect.freeAfterCents)}`}

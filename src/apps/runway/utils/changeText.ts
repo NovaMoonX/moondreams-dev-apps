@@ -1,7 +1,7 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
 import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   GROUP_WORDS,
   PAID_FROM_WORDS,
@@ -119,11 +119,11 @@ const getParts = (
       diff('Repeats', lineBefore.schedule, lineAfter.schedule, (value) =>
         value.anchor === null
           ? SCHEDULE_LABELS[value.kind]
-          : `${SCHEDULE_LABELS[value.kind]} from ${formatDateUTC(value.anchor)}`,
+          : `${SCHEDULE_LABELS[value.kind]} from ${formatDateOrdinalUTC(value.anchor)}`,
       ),
       diff('Ends', lineBefore.ending, lineAfter.ending, (value) =>
         value.onDate !== null
-          ? formatDateUTC(value.onDate)
+          ? formatDateOrdinalUTC(value.onDate)
           : value.afterCount !== null
             ? `after ${value.afterCount}`
             : 'never',
@@ -162,7 +162,7 @@ const getParts = (
       ),
       diff('Ends', billBefore.ending, billAfter.ending, (value) =>
         value.onDate !== null
-          ? formatDateUTC(value.onDate)
+          ? formatDateOrdinalUTC(value.onDate)
           : value.afterCount !== null
             ? `after ${value.afterCount}`
             : 'never',
@@ -242,7 +242,7 @@ const getParts = (
               formatCents,
             ),
             diff('By', goalBefore.targetDate, goalAfter.targetDate, (value) =>
-              value === null ? 'no date' : formatDateUTC(value),
+              value === null ? 'no date' : formatDateOrdinalUTC(value),
             ),
           ]
         : []),
@@ -298,6 +298,6 @@ export function describeReplaced(
   const [first] = replaced;
   if (!first) return null;
   const more = replaced.length - 1;
-  const result = `This replaces your change from ${formatDateUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
+  const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }

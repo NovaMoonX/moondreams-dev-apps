@@ -34,7 +34,7 @@ Built:
 - [x] Check your balance: type what your bank holds and see how it compares with Runway
 Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
-- [ ] Dates that read with an ordinal ("Feb 1st") everywhere in Runway
+- [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway
 - [ ] Start from gross pay with taxes and deductions
 - [ ] Loans and interest on savings
 - [ ] What if: a scratch copy of the plan

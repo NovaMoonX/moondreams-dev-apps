@@ -1,4 +1,4 @@
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { SCHEDULE_LABELS } from '@apps/runway/constants';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
@@ -61,9 +61,9 @@ export function describeSchedule(schedule: Schedule) {
   if (schedule.kind === 'twiceMonthly' && schedule.monthDays.length === 2)
     return `${toOrdinal(schedule.monthDays[0])} and ${toOrdinal(schedule.monthDays[1])}`;
   if (schedule.kind === 'once' && schedule.anchor !== null)
-    return `Once, ${formatDateShortUTC(schedule.anchor)}`;
+    return `Once, ${formatDateOrdinalUTC(schedule.anchor)}`;
   if (schedule.kind === 'monthly' && schedule.anchor !== null)
-    return `Monthly from ${formatDateShortUTC(schedule.anchor)}`;
+    return `Monthly from ${formatDateOrdinalUTC(schedule.anchor)}`;
   const known = (SCHEDULE_LABELS as Record<string, string>)[schedule.kind];
   return known ?? schedule.kind;
 }
@@ -116,7 +116,7 @@ export const toIncomeRow = (
 
 const describeBillLine = (schedule: Schedule) => {
   if (schedule.anchor === null) return describeBillTiming(schedule);
-  const start = formatDateShortUTC(schedule.anchor);
+  const start = formatDateOrdinalUTC(schedule.anchor);
   return schedule.kind === 'once'
     ? `Due ${start}`
     : `${describeBillRepeat(schedule)} from ${start}`;
@@ -150,7 +150,7 @@ export const toGoalRow = (id: string, goal: GoalSealed): StartRow => ({
   line:
     goal.targetDate === null
       ? describeFundingShort(withExtras(goal))
-      : `By ${formatDateShortUTC(goal.targetDate)}`,
+      : `By ${formatDateOrdinalUTC(goal.targetDate)}`,
   amount: formatCentsShort(goal.targetCents),
 });
 

@@ -6,7 +6,7 @@ import InlineNotice from '@/components/InlineNotice';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
@@ -77,7 +77,7 @@ function BillPaidFromNotice({
   )
     return null;
 
-  const dueOn = formatDateShortUTC(payment.dueOn);
+  const dueOn = formatDateOrdinalUTC(payment.dueOn);
   const isUnfunded =
     payment.parts.length === 0 && payment.fundedCents < payment.totalCents;
   const payDays = new Set(payment.parts.map((part) => part.day.dayKey));
@@ -104,7 +104,7 @@ function BillPaidFromNotice({
         PAID_FROM_WORDS.noticeShort(
           bill.name,
           formatCentsShort(shortProblem.shortBy),
-          formatDateShortUTC(shortProblem.on),
+          formatDateOrdinalUTC(shortProblem.on),
         ),
       );
     }
@@ -143,7 +143,7 @@ function BillPaidFromNotice({
           getCardNamer(allCards),
           undefined,
           (picked) => describePayChoice(picked, plan, true),
-        )}, from ${formatDateUTC(today)}.`,
+        )}, from ${formatDateOrdinalUTC(today)}.`,
       });
       const pins = getBillPins(store.getState().runway.days, billId, today);
       const cleared = await clearBillPins(

@@ -11,9 +11,9 @@ import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ActionChips from '@/components/ActionChips';
 import {
-  formatDateShortUTC,
-  formatDateTime,
-  formatDateUTC,
+  formatDateOrdinalUTC,
+  formatDateOrdinal,
+  formatTime,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -58,7 +58,7 @@ function ChangeRow({
         ? mask(
             PAID_HISTORY_WORDS.confirm(
               move.bill.name,
-              formatDateShortUTC(move.bill.dueOn),
+              formatDateOrdinalUTC(move.bill.dueOn),
               move.bill.fromFreeCents > 0
                 ? formatCents(move.bill.fromFreeCents)
                 : null,
@@ -77,7 +77,7 @@ function ChangeRow({
         </span>
       )}
       <span className='text-muted-foreground text-xs'>
-        {formatDateTime(change.createdAt)}
+        {`${formatDateOrdinal(change.createdAt)}, ${formatTime(change.createdAt)}`}
       </span>
       {canUndo && (
         <ChevronRight
@@ -117,7 +117,7 @@ function ChangeRow({
       )}
       {change.effectiveFrom !== null && (
         <p className='text-muted-foreground text-sm'>
-          Covers income days from {formatDateUTC(change.effectiveFrom)}
+          Covers income days from {formatDateOrdinalUTC(change.effectiveFrom)}
         </p>
       )}
       {change.note && (

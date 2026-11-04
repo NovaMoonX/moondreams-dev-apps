@@ -4,7 +4,10 @@ import { ArrowUpToLine, Hourglass, Undo2 } from 'lucide-react';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { formatRelativeDayUTC } from '@/utils/formatUtils';
+import {
+  formatDateOrdinalUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import { describeRange } from '@apps/runway/utils/rangeText';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -134,7 +137,7 @@ function DraftLine({
   const getBillShareShort = () => {
     if (!line.bill) return null;
     const { setAsideCents = 0, totalCents, dueOn } = line.bill;
-    const due = formatRelativeDayUTC(dueOn, today);
+    const due = formatRelativeDayUTC(dueOn, today, formatDateOrdinalUTC);
     if (setAsideCents >= totalCents)
       return PAY_SHARE_WORDS.restSetAside(formatCentsShort(line.cents), due);
     if (setAsideCents > 0 && line.cents + setAsideCents >= totalCents)

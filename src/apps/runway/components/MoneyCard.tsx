@@ -12,7 +12,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getNiceMoneyAxis } from '@/utils/chartUtils';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import {
   HOME_WORDS,
@@ -136,15 +136,15 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
     pick(now) - pick(lowest) >= (axis.domain[1] - axis.domain[0]) / 10 &&
     lowest.on !== end?.on;
   const formatDay = (x: number) =>
-    x === today ? MONEY_CHART_WORDS.today : formatDateShortUTC(x);
+    x === today ? MONEY_CHART_WORDS.today : formatDateOrdinalUTC(x);
   const sinceText =
     series.range === 'all' && !series.isPartial
       ? MONEY_CHART_WORDS.sinceStart
-      : `${MONEY_CHART_WORDS.since} ${formatDateShortUTC(history[0]?.on ?? today)}`;
+      : `${MONEY_CHART_WORDS.since} ${formatDateOrdinalUTC(history[0]?.on ?? today)}`;
   const getNote = () => {
     if (reading !== null) {
       return reading.x > today
-        ? `${MONEY_CHART_WORDS.expected} ${formatDateShortUTC(reading.x)}`
+        ? `${MONEY_CHART_WORDS.expected} ${formatDateOrdinalUTC(reading.x)}`
         : `${MONEY_CHART_WORDS.on} ${formatDay(reading.x)}`;
     }
     if (isHidden || !hasChart || now === null) return MONEY_CHART_WORDS.today;
@@ -157,7 +157,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
       ? MONEY_CHART_WORDS.aheadFreeHelp
       : null,
     hasChart && series.endsOn !== null
-      ? MONEY_CHART_WORDS.endsHelp(formatDateShortUTC(series.endsOn))
+      ? MONEY_CHART_WORDS.endsHelp(formatDateOrdinalUTC(series.endsOn))
       : null,
     hasChart && series.ranges.length > 1 ? MONEY_CHART_WORDS.rangeHelp : null,
     rangeNote,
@@ -209,7 +209,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
       <div className='space-y-3'>
         <div
           role='img'
-          aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.${end === null ? '' : ` ${MONEY_CHART_WORDS.expected} ${formatFigure(pick(end), figure)} on ${formatDateShortUTC(end.on)}.`}`}
+          aria-label={`${label}, ${RANGE_NAMES[series.range].toLowerCase()}: ${getNote()}.${end === null ? '' : ` ${MONEY_CHART_WORDS.expected} ${formatFigure(pick(end), figure)} on ${formatDateOrdinalUTC(end.on)}.`}`}
           className='-mr-3'
         >
           <TrendLineChart
@@ -244,7 +244,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
                     {
                       x: lowest.on,
                       y: pick(lowest),
-                      label: `${MONEY_CHART_WORDS.lowest} ${formatCentsShort(pick(lowest))} · ${formatDateShortUTC(lowest.on)}`,
+                      label: `${MONEY_CHART_WORDS.lowest} ${formatCentsShort(pick(lowest))} · ${formatDateOrdinalUTC(lowest.on)}`,
                       side: 'left',
                     },
                   ]

@@ -46,7 +46,7 @@ import {
   selectIsPlanItemsLoaded,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   setChanges,
   setChangesFailed,
@@ -461,7 +461,7 @@ export function useRunwaySync(uid: string | null, attempt: number) {
             endItem(uid, encryption, {
               itemId,
               endedOn,
-              summary: `${name}: ended after its last payday, ${formatDateUTC(endedOn)}.`,
+              summary: `${name}: ended after its last payday, ${formatDateOrdinalUTC(endedOn)}.`,
               note: null,
               heldChoice: null,
             }),

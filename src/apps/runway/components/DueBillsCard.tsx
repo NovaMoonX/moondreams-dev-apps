@@ -9,7 +9,10 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import { formatDateShortUTC, formatRelativeDayUTC } from '@/utils/formatUtils';
+import {
+  formatDateOrdinalUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -46,11 +49,11 @@ interface DueBillRowProps {
 
 const getDueLine = (due: DueBill, today: number) => {
   if (!due.isOverdue) return DUE_WORDS.today;
-  const when = formatRelativeDayUTC(due.dueOn, today);
+  const when = formatRelativeDayUTC(due.dueOn, today, formatDateOrdinalUTC);
   if (due.laterDueOn.length === 0) return DUE_WORDS.wasDue(when);
   return DUE_WORDS.missed(
     when,
-    due.laterDueOn.filter((on) => on !== today).map(formatDateShortUTC),
+    due.laterDueOn.filter((on) => on !== today).map(formatDateOrdinalUTC),
     due.laterDueOn.includes(today),
   );
 };
@@ -125,8 +128,8 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     const isDueAgainToday = due.laterDueOn.includes(today);
     const missedTitle = DUE_WORDS.paidMissed(
       name,
-      formatDateShortUTC(due.dueOn),
-      laterDates.map(formatDateShortUTC),
+      formatDateOrdinalUTC(due.dueOn),
+      laterDates.map(formatDateOrdinalUTC),
       isDueAgainToday,
     );
     addToast({

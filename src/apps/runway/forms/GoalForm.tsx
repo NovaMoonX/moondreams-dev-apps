@@ -20,7 +20,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import {
   centsToInputValue,
@@ -307,7 +307,10 @@ function GoalFormBody({
     const suggestion = getSuggestion(data);
     return suggestion === null || date === null
       ? null
-      : suggestion.text(formatCents(suggestion.cents), formatDateUTC(date));
+      : suggestion.text(
+          formatCents(suggestion.cents),
+          formatDateOrdinalUTC(date),
+        );
   };
   const fundingSteps = buildFundingSteps({
     data: formData,
@@ -401,7 +404,7 @@ function GoalFormBody({
           ? FORM_FLOW_WORDS.noDate
           : date === null
             ? ''
-            : formatDateUTC(date),
+            : formatDateOrdinalUTC(date),
       isAnswered: isDateAnswered,
       blocker:
         date !== null && date > lastDate
