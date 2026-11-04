@@ -1,14 +1,17 @@
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { APP_REGISTRY } from '../src/lib/app/app.registry';
 
 /** Renders `public/banners/by-app/banner-<id>.png` (2560x1440, the link preview's picture) from the app's logo, name and primary colour. */
 
-const [appId, flag] = process.argv.slice(2);
-const isForced = flag === '--force';
+const args = process.argv.slice(2);
+const appId = args[0];
+const isForced = args.includes('--force');
+const colorArg = args[args.indexOf('--color') + 1];
 const app = APP_REGISTRY.find((entry) => entry.id === appId);
 if (!app) {
-  console.error(`Usage: npm run make:banner -- <app id> [--force]\nApp ids: ${APP_REGISTRY.map((entry) => entry.id).join(', ')}`);
+  console.error(`Usage: npm run make:banner -- <app id> [--color #rrggbb] [--force]\nApp ids: ${APP_REGISTRY.map((entry) => entry.id).join(', ')}`);
   process.exit(1);
 }
 
@@ -24,9 +27,16 @@ if (existsSync(bannerPath) && !isForced) {
 }
 
 const themePath = `src/apps/${app.id}/${app.id}.css`;
-const primary =
-  (existsSync(themePath) ? readFileSync(themePath, 'utf8') : '').match(/--color-primary:\s*(#[0-9a-f]{6})\b/i)?.[1] ??
-  '#1f2937';
+const themePrimary = (existsSync(themePath) ? readFileSync(themePath, 'utf8') : '').match(
+  /--color-primary:\s*(#[0-9a-f]{6})\b/i,
+)?.[1];
+const primary = args.includes('--color') ? colorArg : themePrimary;
+if (!primary || !/^#[0-9a-f]{6}$/i.test(primary)) {
+  console.error(
+    `No #rrggbb --color-primary in ${themePath} (light theme); pass the app's main colour: npm run make:banner -- ${app.id} --color #rrggbb`,
+  );
+  process.exit(1);
+}
 const darker = `#${[1, 3, 5]
   .map((at) => Math.round(parseInt(primary.slice(at, at + 2), 16) * 0.55).toString(16).padStart(2, '0'))
   .join('')}`;
@@ -53,8 +63,21 @@ type Chromium = {
   }>;
 };
 
-// Playwright isn't a dependency: it is the copy installed globally (the sandbox's, or one the owner installs).
-const PLAYWRIGHT_PATHS = ['playwright', '/opt/node22/lib/node_modules/playwright/index.mjs'];
+const readGlobalRoot = () => {
+  try {
+    return execSync('npm root -g', { encoding: 'utf8' }).trim();
+  } catch {
+    return null;
+  }
+};
+const globalRoot = readGlobalRoot();
+// Playwright isn't a dependency: the repo's copy if one is installed, else the global one (ESM never looks there itself).
+const PLAYWRIGHT_PATHS = [
+  'playwright',
+  ...(globalRoot ? [`${globalRoot}/playwright/index.mjs`] : []),
+  '/opt/node22/lib/node_modules/playwright/index.mjs',
+];
+const PLAYWRIGHT_HINT = 'Run `npm i -g playwright && npx playwright install chromium`, then try again.';
 
 const loadChromium = async (): Promise<Chromium> => {
   const loaded = await PLAYWRIGHT_PATHS.reduce<Promise<Chromium | null>>(
@@ -64,12 +87,15 @@ const loadChromium = async (): Promise<Chromium> => {
     Promise.resolve(null),
   );
   if (loaded) return loaded;
-  console.error('Needs Playwright: run `npm i -g playwright && npx playwright install chromium`, then try again.');
+  console.error(`Couldn't load Playwright (looked in: ${PLAYWRIGHT_PATHS.join(', ')}). ${PLAYWRIGHT_HINT}`);
   process.exit(1);
 };
 
 const chromium = await loadChromium();
-const browser = await chromium.launch();
+const browser = await chromium.launch().catch((error: Error) => {
+  console.error(`Playwright couldn't start Chromium: ${error.message.split('\n')[0]}\n${PLAYWRIGHT_HINT}`);
+  process.exit(1);
+});
 const page = await browser.newPage({ viewport: { width: 2560, height: 1440 } });
 await page.setContent(html);
 await page.waitForLoadState('networkidle');

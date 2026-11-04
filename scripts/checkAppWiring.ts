@@ -76,9 +76,21 @@ type WorkerApp = { id: string; name: string; path: string; description: string; 
 
 // The worker is plain JS with one default export, so its registry is read by running everything above that export.
 const workerSource = readFileSync('cloudflare-worker.js', 'utf8');
-const workerApps = new Function(
-  `${workerSource.slice(0, workerSource.indexOf('export default'))}\nreturn APP_REGISTRY;`,
-)() as WorkerApp[];
+const workerExportAt = workerSource.indexOf('export default');
+const readWorkerApps = (): WorkerApp[] => {
+  try {
+    const apps: unknown = new Function(`${workerSource.slice(0, workerExportAt)}\nreturn APP_REGISTRY;`)();
+    return workerExportAt > 0 && Array.isArray(apps) ? (apps as WorkerApp[]) : [];
+  } catch {
+    return [];
+  }
+};
+const workerApps = readWorkerApps();
+if (workerApps.length === 0) {
+  problems.push(
+    'cloudflare-worker.js could not be read: keep a `const APP_REGISTRY = [...]` above `export default`, with no imports or runtime calls above it',
+  );
+}
 const workerById = new Map(workerApps.map((entry) => [entry.id, entry]));
 
 const bannerProblems = APP_REGISTRY.flatMap((app) => {
@@ -119,6 +131,16 @@ const sharePrefixes = Array.from(
   (match) => match[1],
 );
 const workerPrefixes = workerApps.flatMap((entry) => (entry.pages ?? []).map(({ prefix }) => ({ id: entry.id, prefix })));
+const routesSource = readFileSync('src/routes/AppRoutes.tsx', 'utf8');
+const readNothing = [
+  routePaths.length === 0 ? 'no `path:` in src/routes/AppRoutes.tsx' : null,
+  sharePrefixes.length === 0 ? 'no PUBLIC_SHARE_PREFIXES array in src/ui/Layout.tsx' : null,
+  (routesSource.match(/children:/g) ?? []).length > 1
+    ? 'src/routes/AppRoutes.tsx nests `children:` below the root; write an app route\'s full path (`app-id/s/:id`) so the worker check sees it'
+    : null,
+].filter((problem): problem is string => problem !== null);
+problems.push(...readNothing.map((problem) => `Route check read nothing: ${problem}`));
+
 const routeProblems = [
   ...pagePrefixes
     .filter(({ app, prefix }) => !workerById.get(app.id)?.pages?.some((page) => page.prefix === prefix))
