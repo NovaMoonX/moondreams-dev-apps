@@ -245,7 +245,7 @@ const sayBill = (values: BillValues) =>
         sayDays(values.dayOfMonth === null ? [] : [values.dayOfMonth]) ??
           (values.dueOn === null
             ? null
-            : `due ${formatDateOrdinalUTC(values.dueOn)}`),
+            : `due\u00a0${formatDateOrdinalUTC(values.dueOn)}`),
       ]);
 
 const sayEnvelope = (values: EnvelopeValues) =>

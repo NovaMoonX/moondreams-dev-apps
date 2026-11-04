@@ -167,7 +167,7 @@ export function describeBillTiming(schedule: Schedule) {
       : `${describeBillRepeat(schedule)} · due date later`;
   }
   const start = formatDateOrdinalUTC(schedule.anchor);
-  if (schedule.kind === 'once') return `Due ${start}`;
+  if (schedule.kind === 'once') return `Due\u00a0${start}`;
   const result = `${describeBillRepeat(schedule)} from ${start}`;
   return result;
 }

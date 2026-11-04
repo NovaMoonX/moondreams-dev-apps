@@ -117,7 +117,7 @@ function ChangeRow({
       )}
       {change.effectiveFrom !== null && (
         <p className='text-muted-foreground text-sm'>
-          Covers income days from {formatDateOrdinalUTC(change.effectiveFrom)}
+          Covers income days from{'\u00a0'}{formatDateOrdinalUTC(change.effectiveFrom)}
         </p>
       )}
       {change.note && (

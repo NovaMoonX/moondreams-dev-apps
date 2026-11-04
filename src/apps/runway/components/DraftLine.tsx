@@ -148,7 +148,7 @@ function DraftLine({
         formatCentsShort(totalCents),
         due,
       );
-    return `${formatCentsShort(line.cents)} of ${formatCentsShort(totalCents)} · due ${due}`;
+    return `${formatCentsShort(line.cents)} of ${formatCentsShort(totalCents)} · due\u00a0${due}`;
   };
   const billShareShort = getBillShareShort();
   const getDetail = () => {

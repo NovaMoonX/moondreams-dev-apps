@@ -372,8 +372,8 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         ? joinPaymentAndState(payment, BILL_WORDS.needsDueDate)
         : BILL_WORDS.needsDueDate
       : payment
-        ? joinPaymentAndState(payment, `Due ${formatDateOrdinalUTC(due)}`)
-        : `Due ${formatDateOrdinalUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
+        ? joinPaymentAndState(payment, `Due\u00a0${formatDateOrdinalUTC(due)}`)
+        : `Due\u00a0${formatDateOrdinalUTC(due)}\u00a0· ${describeBillRepeat(schedule)}`;
   const getCurrentDue = ({ item, version }: (typeof bills)[number]) =>
     (payments[item.id] ?? []).find((entry) => entry.dueOn >= today)?.dueOn ??
     version.payload.timing.schedule.anchor;

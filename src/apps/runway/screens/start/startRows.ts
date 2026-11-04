@@ -118,7 +118,7 @@ const describeBillLine = (schedule: Schedule) => {
   if (schedule.anchor === null) return describeBillTiming(schedule);
   const start = formatDateOrdinalUTC(schedule.anchor);
   return schedule.kind === 'once'
-    ? `Due ${start}`
+    ? `Due\u00a0${start}`
     : `${describeBillRepeat(schedule)} from ${start}`;
 };
 

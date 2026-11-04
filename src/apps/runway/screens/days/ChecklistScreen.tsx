@@ -155,7 +155,7 @@ function ChecklistBillRow({
           figureLabel='From this day'
           figure={amount}
           fact={[
-            `Due ${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`,
+            `Due\u00a0${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`,
             progress,
           ]
             .filter(Boolean)

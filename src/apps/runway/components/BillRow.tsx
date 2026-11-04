@@ -69,8 +69,8 @@ const getDueLine = (
   if (isUndated) return BILL_WORDS.needsDueDate;
   if (!payment) return 'No payment left';
   const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
-  if (payment.paid) return `Paid · due ${date}`;
-  return isSavingUp ? `${BILL_WORDS.savingUp} · due ${date}` : `Due ${date}`;
+  if (payment.paid) return `Paid · due\u00a0${date}`;
+  return isSavingUp ? `${BILL_WORDS.savingUp} · due\u00a0${date}` : `Due\u00a0${date}`;
 };
 
 /** Where the next payment stands, short: "$1,075 of $1,250 set aside", or "saved" for a bill saved up for. */
@@ -173,7 +173,7 @@ export function BillSheet({
   const getDueFact = () => {
     if (isUndated) return null;
     if (payment)
-      return `due ${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`;
+      return `due\u00a0${formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC)}`;
     return 'No payment left';
   };
   const fact = [
