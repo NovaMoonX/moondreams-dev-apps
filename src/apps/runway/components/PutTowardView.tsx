@@ -213,12 +213,15 @@ function PutTowardView({
         disabled={isSaving}
       />
       <ActionSection caption={HORIZON_WORDS.putMoreFrom}>
-        <PillGroup
-          label={HORIZON_WORDS.putMorePlaces}
-          options={options}
-          value={pick}
-          onChange={setPick}
-        />
+        {/* Holds the search, two rows of places and Show all, so a narrowing search never pulls the sheet under the finger. */}
+        <div className='min-h-45'>
+          <PillGroup
+            label={HORIZON_WORDS.putMorePlaces}
+            options={options}
+            value={pick}
+            onChange={setPick}
+          />
+        </div>
         <p className='text-muted-foreground mt-2 min-h-5 text-sm'>
           {fromName !== null && leftCents !== Infinity && (
             <MaskedText>

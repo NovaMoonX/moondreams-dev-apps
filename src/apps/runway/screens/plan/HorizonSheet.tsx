@@ -8,6 +8,7 @@ import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
@@ -40,6 +41,7 @@ function HorizonSheet({
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
+  const { isHidden } = useValuesHidden();
   const [putting, setPutting] = useState<{
     initialCents: number | null;
   } | null>(null);
@@ -57,9 +59,12 @@ function HorizonSheet({
     stance,
   );
   const { shortfall } = plan;
+  // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
-    if (figures.leftCents <= 0) return HORIZON_WORDS.shortNothing(horizon.name);
+    if (figures.leftCents <= 0 && !isHidden) {
+      return HORIZON_WORDS.shortNothing(horizon.name);
+    }
     const cost = horizon.costs.find(({ id }) => id === shortfall.costId);
     if (!cost) return '';
     const isRange = cost.amount.lowCents !== cost.amount.highCents;
@@ -131,7 +136,7 @@ function HorizonSheet({
             label={HORIZON_WORDS.left}
             figure={formatCents(figures.leftCents)}
             fact={
-              figures.setAsideCents === 0
+              figures.setAsideCents === 0 && !isHidden
                 ? null
                 : HORIZON_WORDS.leftFact(
                     formatCents(figures.setAsideCents),
