@@ -57,6 +57,8 @@ const moveTo = <T,>(list: readonly T[], from: number, to: number) => {
 
 // Wider than the edge fade, so the chosen pill is never drawn under it.
 const SCROLL_PEEK_PX = 32;
+// A side hiding no more than a pill's edge shows whole: a fade there washes out a pill that is all but in view.
+const SCROLL_FADE_MIN_PX = 8;
 const SCROLL_FADE_CLASS = join(
   'data-[fade=end]:[mask-image:linear-gradient(to_right,black_calc(100%-1.5rem),transparent)]',
   'data-[fade=start]:[mask-image:linear-gradient(to_left,black_calc(100%-1.5rem),transparent)]',
@@ -107,8 +109,10 @@ export function PillRow({
     }
     const markEdges = () => {
       const hidden = row.scrollWidth - row.clientWidth;
-      const isStartHidden = row.scrollLeft > 1;
-      const isEndHidden = hidden - row.scrollLeft > 1;
+      const isScroller = getComputedStyle(row).overflowX !== 'visible';
+      const isStartHidden = isScroller && row.scrollLeft > SCROLL_FADE_MIN_PX;
+      const isEndHidden =
+        isScroller && hidden - row.scrollLeft > SCROLL_FADE_MIN_PX;
       const fades = {
         both: isStartHidden && isEndHidden,
         start: isStartHidden,
