@@ -15,6 +15,7 @@ import {
   ITEM_SHEET_R2_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { useIncomeDaysPerMonth } from '@apps/runway/hooks/useGroupFigures';
 import { describeEnvelopeMonthly } from '@apps/runway/utils/billText';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { EnvelopeSealed, Priority } from '@apps/runway/types';
@@ -95,10 +96,14 @@ function EnvelopeTile({
     extras.length === 0
       ? null
       : `${formatCentsShort(ownCents)} ${envelope.priority}${describeExtras(extras, formatCentsShort)}`;
+  const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
   const monthly =
     figureKind === 'monthly' && (isPlan || isPart)
-      ? describeEnvelopeMonthly(counted)
+      ? describeEnvelopeMonthly(
+          counted,
+          getIncomeDays(envelope.funding.sourceId ?? null),
+        )
       : null;
   const rowFigure = isPlan || isPart ? (monthly?.figure ?? eachTime) : value;
   const rowDetail =

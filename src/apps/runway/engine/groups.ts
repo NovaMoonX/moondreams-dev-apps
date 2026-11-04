@@ -67,14 +67,6 @@ const CALENDAR_FACTORS: Record<string, [number, number]> = {
   yearly: [1, 12],
 };
 
-/** An envelope's exact amount for a usual month when its beat is a calendar period; null when the amount is not fixed or it follows income days. */
-export function toMonthlyEnvelopeCents(funding: FundingRule): Cents | null {
-  const { amount, cadence } = funding;
-  if (amount.kind !== 'exact' || cadence.kind !== 'calendar') return null;
-  const factor = CALENDAR_FACTORS[cadence.period];
-  return factor ? Math.round((amount.cents * factor[0]) / factor[1]) : null;
-}
-
 /** How many income days a usual month holds: each live pay line at its monthly beat, a one-off or irregular line at none; only one source's lines when `sourceId` is given. */
 export function getIncomeDaysPerMonth(
   lines: readonly (Pick<GroupMember, 'schedule' | 'startsOn' | 'ending'> & {
@@ -111,6 +103,21 @@ const getEnvelopeWeight = ({
   if (cadence.kind === 'everyNth') return [incomeDaysPerMonth, cadence.n];
   return null;
 };
+
+/** An envelope's exact amount for a usual month, the way `monthlyTotal` counts it; null when its amount or beat is not fixed. */
+export function toMonthlyEnvelopeCents(
+  funding: FundingRule,
+  incomeDaysPerMonth: number,
+): Cents | null {
+  const weight = getEnvelopeWeight({
+    funding,
+    startsOn: 0,
+    incomeDaysPerMonth,
+  });
+  return weight && funding.amount.kind === 'exact'
+    ? Math.round((funding.amount.cents * weight[0]) / weight[1])
+    : null;
+}
 
 /**
  * What a group's bills and envelopes come to in a usual month: each repeating bill at its monthly

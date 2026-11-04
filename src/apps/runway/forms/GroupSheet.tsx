@@ -55,7 +55,10 @@ import { MaskedText } from '@apps/runway/components/MaskedText';
 import BillForm from '@apps/runway/forms/BillForm';
 import EnvelopeForm from '@apps/runway/forms/EnvelopeForm';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { useGroupFigures } from '@apps/runway/hooks/useGroupFigures';
+import {
+  useGroupFigures,
+  useIncomeDaysPerMonth,
+} from '@apps/runway/hooks/useGroupFigures';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -173,6 +176,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   );
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
+  const getIncomeDays = useIncomeDaysPerMonth(today);
   const [adding, setAdding] = useState<'bill' | 'envelope' | null>(null);
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const [isSettingDue, setIsSettingDue] = useState(false);
@@ -851,7 +855,10 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                         : getExtras(version.payload).filter(
                             (extra) => !isCountedAt(extra.tier, dial),
                           );
-                    const monthly = describeEnvelopeMonthly(funding);
+                    const monthly = describeEnvelopeMonthly(
+                      funding,
+                      getIncomeDays(version.payload.funding.sourceId ?? null),
+                    );
                     const eachTime = `${describeCadenceLine(funding.cadence)}${describeExtras(leftOut, formatCentsShort)}`;
                     return (
                       <ItemRow

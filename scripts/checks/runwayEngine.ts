@@ -12078,12 +12078,12 @@ console.log('runway engine: ok');
     cadence: { kind: 'calendar', period, startsOn: null },
   });
   assert.equal(
-    toMonthlyEnvelopeCents(calendarFunding(60_000, 'yearly')),
+    toMonthlyEnvelopeCents(calendarFunding(60_000, 'yearly'), 0),
     5_000,
     'G11: a yearly envelope is a twelfth of itself a month',
   );
   assert.equal(
-    toMonthlyEnvelopeCents(calendarFunding(10_000, 'every2Weeks')),
+    toMonthlyEnvelopeCents(calendarFunding(10_000, 'every2Weeks'), 0),
     monthlyTotal([], nov, [
       {
         funding: calendarFunding(10_000, 'every2Weeks'),
@@ -12094,22 +12094,52 @@ console.log('runway engine: ok');
     'G11: an envelope row and its group total convert a calendar beat the same way',
   );
   assert.deepEqual(
-    describeEnvelopeMonthly(calendarFunding(60_000, 'yearly')),
+    describeEnvelopeMonthly(calendarFunding(60_000, 'yearly'), 0),
     { figure: '$50.00', payment: '$600 yearly' },
     'G11: a yearly envelope leads with its month and names the amount',
   );
   assert.equal(
-    describeEnvelopeMonthly(calendarFunding(60_000, 'monthly')),
+    describeEnvelopeMonthly(calendarFunding(60_000, 'monthly'), 0),
     null,
     'G11: a monthly envelope keeps its amount as the figure',
   );
+  const incomeDay = (cadence: FundingRule['cadence']): FundingRule => ({
+    amount: { kind: 'exact', cents: 10_000 },
+    cadence,
+  });
+  assert.deepEqual(
+    describeEnvelopeMonthly(incomeDay({ kind: 'everyIncomeDay' }), 26 / 12),
+    { figure: '$216.67', payment: '$100 every income day' },
+    'G11: an envelope on every fortnightly pay reads as its month and names what each pay puts in',
+  );
   assert.equal(
-    describeEnvelopeMonthly({
-      amount: { kind: 'exact', cents: 10_000 },
-      cadence: { kind: 'everyIncomeDay' },
-    } as FundingRule),
+    toMonthlyEnvelopeCents(incomeDay({ kind: 'everyIncomeDay' }), 2),
+    monthlyTotal([], nov, [
+      {
+        funding: incomeDay({ kind: 'everyIncomeDay' }),
+        startsOn: 0,
+        incomeDaysPerMonth: 2,
+      },
+    ]).total.highCents,
+    'G11: an income-day envelope row and its group total agree',
+  );
+  assert.equal(
+    toMonthlyEnvelopeCents(
+      incomeDay({ kind: 'everyNth', n: 2, anchorDayKey: 'x' }),
+      4,
+    ),
+    20_000,
+    'G11: an every-other-income-day envelope counts half the income days',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(incomeDay({ kind: 'everyIncomeDay' }), 0),
     null,
-    'G11: an envelope funded on income days stays per pay',
+    'G11: an income-day envelope with no regular pay to count keeps its amount',
+  );
+  assert.equal(
+    describeEnvelopeMonthly(incomeDay({ kind: 'chosen', dayKeys: ['a'] }), 2),
+    null,
+    'G11: an envelope on chosen days has no monthly figure',
   );
   assert.deepEqual(
     monthlyTotal(

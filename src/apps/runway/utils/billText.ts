@@ -136,9 +136,12 @@ export function describeBillMonthly(amount: MoneyRange, schedule: Schedule) {
 export const joinPaymentAndState = (payment: string, state: string) =>
   `${payment}\u00a0· ${state.charAt(0).toLowerCase()}${state.slice(1)}`;
 
-/** A calendar-period envelope's figure for a usual month and its amount; null for income-day or unfixed amounts and monthly beats. */
-export function describeEnvelopeMonthly(funding: FundingRule) {
-  const cents = toMonthlyEnvelopeCents(funding);
+/** An envelope's figure for a usual month and what each time puts in ("$100 every income day"); null when its amount or beat is not fixed or it already comes monthly. */
+export function describeEnvelopeMonthly(
+  funding: FundingRule,
+  incomeDaysPerMonth: number,
+) {
+  const cents = toMonthlyEnvelopeCents(funding, incomeDaysPerMonth);
   if (
     cents === null ||
     funding.amount.kind !== 'exact' ||

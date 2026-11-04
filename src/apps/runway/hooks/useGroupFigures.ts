@@ -68,6 +68,13 @@ const useResolvedPayLines = (today: number) => {
   );
 };
 
+/** Income days a usual month holds for the pay an envelope draws on (any pay when `sourceId` is null), counted as the group totals count them. */
+export function useIncomeDaysPerMonth(today: number) {
+  const payLines = useResolvedPayLines(today);
+  return (sourceId: string | null) =>
+    getIncomeDaysPerMonth(payLines, today, sourceId);
+}
+
 /** What the whole plan's income, bills and envelopes each come to in a usual month, counting only the bills and envelopes at or above `dial`. */
 export function usePlanTotals(
   today: number,
