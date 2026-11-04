@@ -19,6 +19,7 @@ import {
 import {
   getAccountHoldings,
   getPullAccounts,
+  keepPullAccountId,
   resolvePayFromAccountId,
 } from '../../src/apps/runway/engine/accounts.ts';
 import {
@@ -12732,10 +12733,31 @@ console.log('runway engine: ok');
     'b',
     'an archived pull account is not counted',
   );
+  const e = account('e', { isPullAccount: true });
+  assert.equal(
+    resolvePayFromAccountId('e', [a, b, e]),
+    'e',
+    'a named open pull account wins',
+  );
   assert.equal(
     resolvePayFromAccountId('a', [a, b]),
-    'a',
-    'a named open account wins',
+    'b',
+    'a named account that no longer pulls falls back',
+  );
+  assert.equal(
+    resolvePayFromAccountId('a', [a, b, e]),
+    null,
+    'a named account that no longer pulls is not kept between two pull accounts',
+  );
+  assert.equal(
+    keepPullAccountId('a', [a, b]),
+    null,
+    'a saved account that no longer pulls is dropped',
+  );
+  assert.equal(
+    keepPullAccountId('b', [a, b]),
+    'b',
+    'an open pull account is kept',
   );
   assert.equal(
     resolvePayFromAccountId('c', [a, b, oldPull]),

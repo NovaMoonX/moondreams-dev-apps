@@ -6,15 +6,19 @@ export const getPullAccounts = (accounts: readonly OpenAccount[]) =>
     (account) => account.archivedAt === null && account.isPullAccount,
   );
 
-/** The account that pays: the one named when it is open, else the plan's one pull account, else none. */
+/** A saved account id only while that account is open and pulled from; else null, as if never chosen. */
+export const keepPullAccountId = (
+  id: string | null | undefined,
+  accounts: readonly OpenAccount[],
+) => (id && getPullAccounts(accounts).some((a) => a.id === id) ? id : null);
+
+/** The account that pays: the one named when it is an open pull account, else the plan's one pull account, else none. */
 export function resolvePayFromAccountId(
   explicitId: string | null | undefined,
   accounts: readonly OpenAccount[],
 ): string | null {
-  const isExplicitOpen = accounts.some(
-    (account) => account.id === explicitId && account.archivedAt === null,
-  );
-  if (explicitId && isExplicitOpen) return explicitId;
+  const explicit = keepPullAccountId(explicitId, accounts);
+  if (explicit) return explicit;
   const pulls = getPullAccounts(accounts);
   return pulls.length === 1 ? pulls[0].id : null;
 }

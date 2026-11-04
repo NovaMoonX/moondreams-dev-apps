@@ -562,7 +562,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Say what a bill or envelope is for (Subscriptions, Housing, Car), with a monthly total and a starting priority per name
 - [ ] Irregular income with no schedule, and a rough monthly expectation for lookahead
 - [ ] Free to Spend shows how much came from each source, and you can assign a chosen source's money
-- [ ] Name accounts, say where each goal and envelope is held, and see the line-up against each balance (check a balance against all your money: built)
+- [ ] Name accounts, say where each goal and envelope is held, and see the line-up against each balance (built: the accounts, what each holds with "Not yet given a job" or "$X short of what it holds", which account cards and bills come out of, and checking a balance against all your money; later: an account total that counts accounts in or out, and the line-up screen)
 - [ ] After confirming, a checklist of money to move between accounts, with what the account your cards and bills pull from needs on Home's warning row until it is moved
 - [ ] Import purchases from a CSV, with Needs a home and "varies" merchants
 - [ ] Rules made from a purchase: a merchant, a kind of place, a card, or a kind of place on a card, most specific first, listed on a Rules screen

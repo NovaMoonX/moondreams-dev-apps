@@ -29,6 +29,12 @@ export const isNullableOneOf =
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** A kept draft with `defaults` under its own keys, so a draft kept before a key was added to the form still has every key `readDraftFields` checks. */
+export const withDraftDefaults = (
+  stored: unknown,
+  defaults: Record<string, unknown>,
+) => (isRecord(stored) ? { ...defaults, ...stored } : stored);
+
 /** Reads a kept draft back as `T`, or null unless it has exactly the checked keys with values that pass their checks. */
 export function readDraftFields<T extends object>(
   stored: unknown,

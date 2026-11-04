@@ -189,7 +189,7 @@ const getParts = (
         cardNameOf,
       ),
       diff(
-        'Paid from account',
+        ACCOUNT_WORDS.payFromLabel,
         billBefore.accountId ?? null,
         billAfter.accountId ?? null,
         accountNameOf,

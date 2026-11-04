@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Landmark } from 'lucide-react';
-
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Landmark, Plus } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
+import FloatingAction from '@/components/FloatingAction';
 import SearchInput from '@/components/SearchInput';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -93,14 +92,12 @@ function AccountsScreen({ onClose }: AccountsScreenProps) {
       <div className='space-y-4'>
         {getBody()}
         {isLoaded && (
-          <Button
-            type='button'
-            variant='secondary'
-            className='w-full'
+          <FloatingAction
+            isInSubview
+            label={ACCOUNT_WORDS.add}
+            icon={<Plus className='h-5 w-5' aria-hidden='true' />}
             onClick={() => setFormKey((current) => (current ?? 0) + 1)}
-          >
-            {ACCOUNT_WORDS.add}
-          </Button>
+          />
         )}
         {formKey !== null && (
           <AccountForm key={formKey} isOpen onClose={() => setFormKey(null)} />

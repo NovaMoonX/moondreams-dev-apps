@@ -17,6 +17,7 @@ import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import SectionDivider from '@/components/SectionDivider';
 import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -30,7 +31,7 @@ import {
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
-import { MaskedText } from '@apps/runway/components/MaskedText';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import SheetHead from '@apps/runway/components/SheetHead';
 import {
@@ -71,7 +72,9 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate(useNow(60_000));
   const openAccounts = useAppSelector(selectAccounts);
-  const holdings = useAppSelector(selectAccountHoldings)[account.id];
+  const holdings = useAppSelector((state) =>
+    selectAccountHoldings(state, today),
+  )[account.id];
   const itemNames = useAppSelector(selectItemNames);
   const goals = useAppSelector((state) => selectGoals(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -82,6 +85,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(
     () => new Set(account.holds),
   );
+  const [isUnfolded, setIsUnfolded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -92,12 +96,13 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
     balanceCents !== null &&
     balanceCents >= 0 &&
     balanceCents <= MAX_PURCHASE_CENTS;
+  const isBalanceSame =
+    balanceCents === account.balanceCents && account.balanceOn === today;
   const facts = [
     account.balanceOn === null
       ? null
       : ACCOUNT_WORDS.balanceOn(formatDayOrdinalUTC(account.balanceOn)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
-    account.countedTowardTotal ? null : ACCOUNT_WORDS.leftOut,
   ].filter((fact): fact is string => fact !== null);
 
   const goTo = (next: typeof view) => {
@@ -157,7 +162,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   };
 
   const saveBalance = () => {
-    if (balanceCents === null || !isBalanceValid) return;
+    if (balanceCents === null || !isBalanceValid || isBalanceSame) return;
     void run(
       async (uid) =>
         setAccountBalance(
@@ -165,7 +170,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
           await getRunwayEncryption(uid),
           account.id,
           balanceCents,
-          todayAsUtcDate(),
+          today,
         ),
       ACCOUNT_WORDS.balanceFailed,
       ACCOUNT_WORDS.balanceSaved(account.name),
@@ -204,11 +209,9 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
           uid,
           await getRunwayEncryption(uid),
           account.id,
-          [
-            ...account.holds.filter((id) => !listedIds.has(id)),
-            ...[...picked].filter((id) => listedIds.has(id)),
-          ],
+          [...picked].filter((id) => listedIds.has(id)),
           openAccounts,
+          nameOf,
         ),
       ACCOUNT_WORDS.holdsFailed,
       ACCOUNT_WORDS.holdsSaved(account.name),
@@ -233,9 +236,13 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
     <InlineNotice tone='warning'>{error}</InlineNotice>
   );
 
-  const holdLines = holdings?.items ?? [];
+  const holdLines = (holdings?.items ?? []).filter(
+    (line) => nameOf(line.id) !== '',
+  );
   const unassigned = holdings?.unassignedCents ?? null;
-  const shownLines = holdLines.slice(0, MAX_HOLD_LINES);
+  const shownLines = isUnfolded
+    ? holdLines
+    : holdLines.slice(0, MAX_HOLD_LINES);
 
   const getBody = () => {
     if (view === 'balance') {
@@ -250,7 +257,13 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
           />
           {errorNotice}
           <ModalFooterActions
-            note={isBalanceValid ? null : ACCOUNT_WORDS.balanceNeeded}
+            note={
+              !isBalanceValid
+                ? ACCOUNT_WORDS.balanceNeeded
+                : isBalanceSame
+                  ? ACCOUNT_WORDS.balanceSame
+                  : null
+            }
             cancelAction={
               <Button
                 type='button'
@@ -265,7 +278,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
               <Button
                 type='button'
                 loading={isBusy}
-                disabled={isBusy || !isBalanceValid}
+                disabled={isBusy || !isBalanceValid || isBalanceSame}
                 onClick={saveBalance}
               >
                 {ACCOUNT_WORDS.balanceSave}
@@ -353,50 +366,60 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />
         <ActionSection caption={ACCOUNT_WORDS.holdsTitle}>
-          {holdLines.length === 0 ? (
+          {holdLines.length === 0 && (
             <p className='text-muted-foreground text-sm'>
               {ACCOUNT_WORDS.holdsEmpty}
             </p>
-          ) : (
-            <ul className='space-y-1 text-sm'>
-              {shownLines.map((line) => (
-                <li key={line.id} className='flex justify-between gap-3'>
-                  <span className='min-w-0 break-words'>{nameOf(line.id)}</span>
+          )}
+          <ul className='space-y-1 text-sm'>
+            {shownLines.map((line) => (
+              <li key={line.id} className='flex justify-between gap-3'>
+                <span className='min-w-0 break-words'>{nameOf(line.id)}</span>
+                <span className='shrink-0 tabular-nums'>
+                  <SensitiveValue>{formatCents(line.cents)}</SensitiveValue>
+                </span>
+              </li>
+            ))}
+            {holdLines.length > MAX_HOLD_LINES && (
+              <li>
+                <ShowMoreButton
+                  isOpen={isUnfolded}
+                  onClick={() => setIsUnfolded((current) => !current)}
+                >
+                  {isUnfolded
+                    ? ACCOUNT_WORDS.showFewer
+                    : ACCOUNT_WORDS.showMore(holdLines.length - MAX_HOLD_LINES)}
+                </ShowMoreButton>
+              </li>
+            )}
+            {unassigned !== null &&
+              (unassigned < 0 ? (
+                <li>
+                  {isHidden ? (
+                    <NeedsALookRow />
+                  ) : (
+                    <span className='flex items-center gap-1.5 text-(--runway-warning-ink)'>
+                      <TriangleAlert
+                        className='h-3.5 w-3.5 shrink-0'
+                        aria-hidden='true'
+                      />
+                      <span>
+                        {ACCOUNT_WORDS.shortOfWhatItHolds(
+                          formatCents(-unassigned),
+                        )}
+                      </span>
+                    </span>
+                  )}
+                </li>
+              ) : (
+                <li className='text-muted-foreground flex justify-between gap-3'>
+                  <span>{ACCOUNT_WORDS.notYetGivenAJob}</span>
                   <span className='shrink-0 tabular-nums'>
-                    <SensitiveValue>{formatCents(line.cents)}</SensitiveValue>
+                    <SensitiveValue>{formatCents(unassigned)}</SensitiveValue>
                   </span>
                 </li>
               ))}
-              {holdLines.length > shownLines.length && (
-                <li className='text-muted-foreground'>
-                  and {holdLines.length - shownLines.length} more
-                </li>
-              )}
-              {unassigned !== null &&
-                (unassigned < 0 && !isHidden ? (
-                  <li className='flex items-center gap-1.5 text-(--runway-warning-ink)'>
-                    <TriangleAlert
-                      className='h-3.5 w-3.5 shrink-0'
-                      aria-hidden='true'
-                    />
-                    <span>
-                      <MaskedText>
-                        {ACCOUNT_WORDS.overAssigned(formatCents(-unassigned))}
-                      </MaskedText>
-                    </span>
-                  </li>
-                ) : (
-                  <li className='text-muted-foreground flex justify-between gap-3'>
-                    <span>{ACCOUNT_WORDS.notYetGivenAJob}</span>
-                    <span className='shrink-0 tabular-nums'>
-                      <SensitiveValue>
-                        {formatCents(Math.max(0, unassigned))}
-                      </SensitiveValue>
-                    </span>
-                  </li>
-                ))}
-            </ul>
-          )}
+          </ul>
         </ActionSection>
         {errorNotice}
         <ActionGroup>

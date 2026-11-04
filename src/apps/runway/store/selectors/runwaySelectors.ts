@@ -1281,18 +1281,23 @@ export const selectAccounts = createSelector([selectAllAccounts], (accounts) =>
 export const selectIsAccountsLoaded = (state: RootState) =>
   state.runway.isAccountsLoaded;
 
-/** Each open account with what its goals and envelopes hold, keyed by account id. */
+/** Each open account with what its open goals and envelopes hold on `on`, keyed by account id. An archived or ended item holds nothing. */
 export const selectAccountHoldings = createSelector(
-  [selectAccounts, selectBalances],
-  (accounts, balances) => {
+  [selectAccounts, selectBalances, selectGoals, selectEnvelopes],
+  (accounts, balances, goals, envelopes) => {
     const holderById = getHolderById(accounts);
+    const openIds = new Set(
+      [...goals, ...envelopes].map(({ item }) => item.id),
+    );
     return Object.fromEntries(
       accounts.map((account) => [
         account.id,
         getAccountHoldings(
           {
             ...account,
-            holds: account.holds.filter((id) => holderById[id] === account.id),
+            holds: account.holds.filter(
+              (id) => holderById[id] === account.id && openIds.has(id),
+            ),
           },
           { byId: balances.assignedByItem },
         ),

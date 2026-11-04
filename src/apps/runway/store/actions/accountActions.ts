@@ -5,6 +5,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { ACCOUNT_WORDS } from '@apps/runway/constants';
 import { openJson, sealJson } from '@apps/runway/security';
+import { describeAccountBalance } from '@apps/runway/utils/accountText';
 import type {
   AccountDoc,
   AccountSealed,
@@ -156,13 +157,14 @@ export async function archiveAccount(
   });
 }
 
-/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. */
+/** Sets what an account holds and takes those ids from any other account that held them, re-reading every account in the transaction. `nameOf` names an item for the change entry; an item it has no name for is left out of the sentence. */
 export async function setAccountHolds(
   uid: string,
   encryption: RunwayEncryption,
   accountId: string,
   holds: string[],
   openAccounts: OpenAccount[],
+  nameOf: (itemId: string) => string,
 ): Promise<void> {
   const taken = new Set(holds);
   const others = openAccounts.filter((account) => account.id !== accountId);
@@ -176,6 +178,8 @@ export async function setAccountHolds(
     const targetData = targetSnapshot.data() as AccountDoc;
     const targetSealed = await openSealed(targetData, encryption);
     const now = Date.now();
+    const namesOf = (ids: string[]) =>
+      ids.map(nameOf).filter((name) => name !== '');
     const writes = await Promise.all(
       otherSnapshots.map(async (snapshot) => {
         if (!snapshot.exists()) return null;
@@ -201,9 +205,11 @@ export async function setAccountHolds(
         encryption,
         ACCOUNT_WORDS.changeHolds(
           targetSealed.name,
+          namesOf(holds.filter((id) => !targetSealed.holds.includes(id))),
+          namesOf(targetSealed.holds.filter((id) => !holds.includes(id))),
           writes.flatMap((write) => (write ? [write.name] : [])),
         ),
-        holds,
+        Array.from(new Set([...targetSealed.holds, ...holds])),
       ),
     ]);
     transaction.update(accountRef(uid, accountId), { sealed, updatedAt: now });
@@ -218,7 +224,7 @@ export async function setAccountHolds(
   });
 }
 
-/** Records what an account holds on a day. A snapshot on the account: it moves nothing in the ledger. */
+/** Records what an account holds on a day, writing nothing when both are already what is stored. A snapshot on the account: it moves nothing in the ledger. */
 export async function setAccountBalance(
   uid: string,
   encryption: RunwayEncryption,
@@ -230,9 +236,17 @@ export async function setAccountBalance(
     const snapshot = await transaction.get(accountRef(uid, accountId));
     if (!snapshot.exists()) throw new Error('The account is gone.');
     const current = await openSealed(snapshot.data() as AccountDoc, encryption);
+    if (
+      current.balanceCents === balanceCents &&
+      current.balanceOn === balanceOn
+    )
+      return;
     const [sealed, change] = await Promise.all([
       sealJson({ ...current, balanceCents, balanceOn }, encryption),
-      getChangeDoc(encryption, ACCOUNT_WORDS.changeBalance(current.name)),
+      getChangeDoc(
+        encryption,
+        describeAccountBalance(current.name, balanceCents, balanceOn),
+      ),
     ]);
     transaction.update(accountRef(uid, accountId), {
       sealed,

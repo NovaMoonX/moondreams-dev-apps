@@ -2703,13 +2703,14 @@ export const ACCOUNT_WORDS = {
   emptyTitle:
     'Add the accounts your money sits in, and say which goals and envelopes each one holds.',
   pullsFrom: 'Cards and bills pull from it',
-  leftOut: 'Not counted in your total',
   noBalance: 'No balance yet',
   balanceOn: (day: string) => `As of ${day}`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
-  overAssigned: (amount: string) => `Over-assigned ${amount}`,
+  shortOfWhatItHolds: (amount: string) => `${amount} short of what it holds`,
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
   chooseHolds: 'Choose what it holds',
   chooseHoldsSub: 'Goals and envelopes kept here',
   chooseHoldsHeldElsewhere: (account: string) => `Now in ${account}`,
@@ -2743,10 +2744,6 @@ export const ACCOUNT_WORDS = {
   pullLabel: 'Cards and bills',
   pullYes: 'Yes, they pull from it',
   pullNo: 'No',
-  countedTitle: 'Count it in your total?',
-  countedLabel: 'In your total',
-  countedYes: 'Yes',
-  countedNo: 'No, it is not for spending',
   needsName: 'Give it a name.',
   needsInstitution: 'Say which bank holds it.',
   saveAdd: 'Add account',
@@ -2754,19 +2751,45 @@ export const ACCOUNT_WORDS = {
   added: (name: string) => `${name} added`,
   saved: (name: string) => `${name} saved`,
   saveFailed: 'The account was not saved',
-  payFromTitle: 'Which account pays it?',
-  payFromLabel: 'Paid from',
+  payFromTitle: 'Which account does it come out of?',
+  payFromLabel: 'Comes out of',
   payFromNone: 'Not chosen yet',
-  billLabel: 'Paid from account',
-  payFromDefault: (name: string) => `${name} (where cards and bills pull from)`,
   changeAdded: (name: string) => `Added the account ${name}`,
-  changeChanged: (name: string) => `Changed the account ${name}`,
+  changeChanged: (name: string, what: string) =>
+    `Changed the account ${name}: ${what}`,
+  changeName: (from: string, to: string) => `name ${from} to ${to}`,
+  changeBank: (from: string, to: string) => `bank ${from} to ${to}`,
+  changeKind: (from: string, to: string) => `kind ${from} to ${to}`,
+  changeLastFour: (from: string, to: string) =>
+    `last 4 digits ${from} to ${to}`,
+  changeNoLastFour: 'none',
+  changePull: (from: string, to: string) =>
+    `cards and bills pulling from it ${from} to ${to}`,
+  changeYes: 'yes',
+  changeNo: 'no',
   changeArchived: (name: string) => `Archived the account ${name}`,
-  changeHolds: (name: string, movedFrom: string[]) =>
-    movedFrom.length === 0
-      ? `Changed what ${name} holds`
-      : `Changed what ${name} holds, moving some from ${movedFrom.join(' and ')}`,
-  changeBalance: (name: string) => `Updated the balance of ${name}`,
+  changeHolds: (
+    name: string,
+    added: string[],
+    removed: string[],
+    movedFrom: string[],
+  ) =>
+    [
+      `Changed what ${name} holds`,
+      [
+        added.length === 0 ? null : `now holds ${added.join(', ')}`,
+        removed.length === 0 ? null : `no longer holds ${removed.join(', ')}`,
+      ]
+        .filter((part) => part !== null)
+        .join('; '),
+    ]
+      .filter((part) => part !== '')
+      .join(': ') +
+    (movedFrom.length === 0
+      ? ''
+      : `, moving some from ${movedFrom.join(' and ')}`),
+  changeBalance: (name: string, amount: string, day: string) =>
+    `${name} balance ${amount} on ${day}`,
   withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
   sheetTitle: 'Account',
   searchPlaceholder: 'Search accounts',
@@ -2789,9 +2812,9 @@ export const ACCOUNT_WORDS = {
   balanceNotNow: 'Not now',
   balanceHint: 'Leave it empty to add it later.',
   balanceNeeded: 'Type an amount.',
+  balanceSame: 'That is already the balance for today.',
   needsPull: 'Say whether cards and bills pull from it.',
   institutionsUsed: 'Banks you already use',
-  fourDigitsPlaceholder: '1234',
 } as const;
 
 export const CARD_WORDS = {
@@ -2891,8 +2914,8 @@ export const CARD_WORDS = {
   lastFourSkip: 'Skip',
   lastFourNone: 'Not given',
   needsFourDigits: 'Type 4 digits, or skip.',
-  payFromTitle: 'Which account pays it?',
-  payFromLabel: 'Paid from',
+  payFromTitle: 'Which account does it come out of?',
+  payFromLabel: 'Comes out of',
   payFromNone: 'Not chosen yet',
   chargedTo: (card: string) => `Charged to ${card}`,
   comingDueTitle: 'Coming due',
@@ -2942,7 +2965,8 @@ export const CARD_WORDS = {
     `last 4 digits ${from} to ${to}`,
   changeNoLastFour: 'none',
   withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
-  changePayFrom: 'the account that pays it',
+  changePayFrom: (from: string, to: string) =>
+    `the account it comes out of ${from} to ${to}`,
   changeArchived: (name: string) => `Archived ${name}`,
   changePaid: (
     covers: 'full' | 'minimum' | 'part',

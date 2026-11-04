@@ -70,6 +70,7 @@ import {
   isTextList,
   keptChangeChecks,
   readDraftFields,
+  withDraftDefaults,
   type KeptChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
@@ -107,7 +108,11 @@ import {
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import { getCardName } from '@apps/runway/utils/cardText';
-import { getPullAccounts } from '@apps/runway/engine/accounts';
+import { describeAccountLine } from '@apps/runway/utils/accountText';
+import {
+  getPullAccounts,
+  keepPullAccountId,
+} from '@apps/runway/engine/accounts';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
@@ -190,27 +195,30 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
     ...keptChangeChecks,
   });
   const formData = draft
-    ? readDraftFields<BillFormData>(draft.formData, {
-        name: isText,
-        amount: isAmountDraft,
-        priority: isOneOf(PRIORITIES),
-        startDate: isText,
-        frequency: isNullableOneOf(BILL_FREQUENCIES),
-        everyCount: isText,
-        everyUnit: isOneOf(BILL_EVERY_UNITS),
-        endKind: isOneOf(INCOME_ENDINGS),
-        endDate: isText,
-        endCount: isText,
-        funding: isOneOf(BILL_FUNDINGS),
-        dayKeys: isTextList,
-        paidFrom: isOneOf(BILL_PAID_FROMS),
-        payValue: isText,
-        emoji: isNullableText,
-        group: isPickOrCreate,
-        paidByCardId: isNullableText,
-        accountId: isNullableText,
-        isLater: isFlag,
-      })
+    ? readDraftFields<BillFormData>(
+        withDraftDefaults(draft.formData, { accountId: null }),
+        {
+          name: isText,
+          amount: isAmountDraft,
+          priority: isOneOf(PRIORITIES),
+          startDate: isText,
+          frequency: isNullableOneOf(BILL_FREQUENCIES),
+          everyCount: isText,
+          everyUnit: isOneOf(BILL_EVERY_UNITS),
+          endKind: isOneOf(INCOME_ENDINGS),
+          endDate: isText,
+          endCount: isText,
+          funding: isOneOf(BILL_FUNDINGS),
+          dayKeys: isTextList,
+          paidFrom: isOneOf(BILL_PAID_FROMS),
+          payValue: isText,
+          emoji: isNullableText,
+          group: isPickOrCreate,
+          paidByCardId: isNullableText,
+          accountId: isNullableText,
+          isLater: isFlag,
+        },
+      )
     : null;
   return draft && formData ? { ...draft, formData } : null;
 };
@@ -564,6 +572,10 @@ function BillFormBody({
             (editing?.payload ?? draft?.initial) as BillSealed,
             editing === undefined,
           ),
+          accountId: keepPullAccountId(
+            (editing?.payload ?? draft?.initial)?.accountId,
+            openAccounts,
+          ),
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
@@ -726,8 +738,9 @@ function BillFormBody({
   };
 
   const accountOptions = getPullAccounts(openAccounts);
+  const accountId = keepPullAccountId(formData.accountId, openAccounts);
   const nameOfAccount = (id: string | null) =>
-    openAccounts.find((account) => account.id === id)?.name ??
+    accountOptions.find((account) => account.id === id)?.name ??
     ACCOUNT_WORDS.payFromNone;
 
   const startMin = editing ? undefined : toDateInputValue(today);
@@ -1192,13 +1205,13 @@ function BillFormBody({
           {
             id: 'accountId',
             title: ACCOUNT_WORDS.payFromTitle,
-            summaryLabel: ACCOUNT_WORDS.billLabel,
-            summaryValue: nameOfAccount(formData.accountId),
+            summaryLabel: ACCOUNT_WORDS.payFromLabel,
+            summaryValue: nameOfAccount(accountId),
             isAnswered: true,
             isPreAnswered: true,
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
-                label={ACCOUNT_WORDS.billLabel}
+                label={ACCOUNT_WORDS.payFromLabel}
                 options={[
                   {
                     value: NO_ACCOUNT_VALUE,
@@ -1207,9 +1220,10 @@ function BillFormBody({
                   ...accountOptions.map((account) => ({
                     value: account.id,
                     label: account.name,
+                    detail: describeAccountLine(account),
                   })),
                 ]}
-                value={formData.accountId ?? NO_ACCOUNT_VALUE}
+                value={accountId ?? NO_ACCOUNT_VALUE}
                 onChange={(value) => {
                   set({
                     accountId: value === NO_ACCOUNT_VALUE ? null : value,
@@ -1314,7 +1328,7 @@ function BillFormBody({
       stanceOverride: getStanceOverride(data.amount),
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       paidByCardId: data.paidByCardId,
-      accountId: data.accountId,
+      accountId: keepPullAccountId(data.accountId, openAccounts),
     };
     return result;
   };
@@ -1355,7 +1369,7 @@ function BillFormBody({
       ? {
           ...editing.payload,
           paidByCardId: editing.payload.paidByCardId ?? null,
-          accountId: editing.payload.accountId ?? null,
+          accountId: keepPullAccountId(editing.payload.accountId, openAccounts),
         }
       : EMPTY_BILL,
     candidate,

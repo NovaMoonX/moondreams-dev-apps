@@ -214,6 +214,7 @@ export function describeCardChanged(
   name: string,
   before: CardSealed,
   after: CardSealed,
+  accountNameOf: (accountId: string | null) => string,
 ): string | null {
   const parts = [
     before.issuer === after.issuer
@@ -245,7 +246,10 @@ export function describeCardChanged(
         ),
     (before.payFromAccountId ?? null) === (after.payFromAccountId ?? null)
       ? null
-      : CARD_WORDS.changePayFrom,
+      : CARD_WORDS.changePayFrom(
+          accountNameOf(before.payFromAccountId ?? null),
+          accountNameOf(after.payFromAccountId ?? null),
+        ),
   ].filter((part) => part !== null);
   return parts.length === 0
     ? null

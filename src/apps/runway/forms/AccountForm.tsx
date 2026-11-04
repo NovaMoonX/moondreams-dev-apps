@@ -59,7 +59,10 @@ import type {
   AccountSealed,
   OpenAccount,
 } from '@apps/runway/types';
-import { isLastFour } from '@apps/runway/utils/accountText';
+import {
+  describeAccountChanged,
+  isLastFour,
+} from '@apps/runway/utils/accountText';
 import { resolveBank } from '@apps/runway/utils/cardText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 
@@ -71,8 +74,6 @@ interface AccountFormData {
   hasNoLastFour: boolean;
   /** Null until answered; only a checking account is asked. */
   isPull: boolean | null;
-  /** Null follows the kind. */
-  isCounted: boolean | null;
   balance: string;
 }
 
@@ -92,17 +93,23 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-const parseAccountDraft = (stored: unknown) =>
-  readDraftFields<AccountFormData>(stored, {
+const parseAccountDraft = (stored: unknown) => {
+  const fields =
+    typeof stored === 'object' && stored !== null
+      ? Object.fromEntries(
+          Object.entries(stored).filter(([key]) => key !== 'isCounted'),
+        )
+      : stored;
+  return readDraftFields<AccountFormData>(fields, {
     institution: isText,
     name: isText,
     kind: isOneOf(ACCOUNT_KINDS),
     lastFour: isText,
     hasNoLastFour: isFlag,
     isPull: isNullableFlag,
-    isCounted: isNullableFlag,
     balance: isText,
   });
+};
 
 const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
   editing
@@ -113,7 +120,6 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         lastFour: editing.lastFour ?? '',
         hasNoLastFour: editing.lastFour === null,
         isPull: editing.isPullAccount,
-        isCounted: editing.countedTowardTotal,
         balance: '',
       }
     : {
@@ -123,7 +129,6 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         lastFour: '',
         hasNoLastFour: false,
         isPull: null,
-        isCounted: null,
         balance: '',
       };
 
@@ -194,7 +199,9 @@ function AccountFormBody({
   const isCheckingAsked = formData.kind === 'checking';
   const isPull = isCheckingAsked ? formData.isPull : (formData.isPull ?? false);
   const isCounted =
-    formData.isCounted ?? !ACCOUNT_KINDS_LEFT_OUT.includes(formData.kind);
+    editing && formData.kind === editing.kind
+      ? editing.countedTowardTotal
+      : !ACCOUNT_KINDS_LEFT_OUT.includes(formData.kind);
   const lastFour = formData.hasNoLastFour ? null : formData.lastFour;
   const isLastFourAnswered =
     formData.hasNoLastFour || isLastFour(formData.lastFour);
@@ -328,30 +335,6 @@ function AccountFormBody({
         />
       ),
     },
-    {
-      id: 'counted',
-      title: ACCOUNT_WORDS.countedTitle,
-      summaryLabel: ACCOUNT_WORDS.countedLabel,
-      summaryValue: isCounted
-        ? ACCOUNT_WORDS.countedYes
-        : ACCOUNT_WORDS.countedNo,
-      isAnswered: true,
-      isPreAnswered: true,
-      render: ({ moveOn }) => (
-        <PillGroup
-          label={ACCOUNT_WORDS.countedLabel}
-          options={[
-            { value: YES, label: ACCOUNT_WORDS.countedYes },
-            { value: NO, label: ACCOUNT_WORDS.countedNo },
-          ]}
-          value={isCounted ? YES : NO}
-          onChange={(value) => {
-            set({ isCounted: value === YES });
-            moveOn();
-          }}
-        />
-      ),
-    },
     ...(asksBalance
       ? [
           {
@@ -452,20 +435,14 @@ function AccountFormBody({
         holds: editing ? editing.holds : [],
       };
       if (editing) {
-        const isChanged =
-          sealed.name !== editing.name ||
-          sealed.institution !== editing.institution ||
-          sealed.kind !== editing.kind ||
-          sealed.countedTowardTotal !== editing.countedTowardTotal ||
-          sealed.isPullAccount !== editing.isPullAccount ||
-          sealed.lastFour !== editing.lastFour;
-        if (isChanged) {
+        const summary = describeAccountChanged(editing, sealed);
+        if (summary !== null) {
           await updateAccount(
             user.uid,
             encryption,
             editing.id,
             sealed,
-            ACCOUNT_WORDS.changeChanged(name),
+            summary,
           );
           addToast({ title: ACCOUNT_WORDS.saved(name), type: 'success' });
         }

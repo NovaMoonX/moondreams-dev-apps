@@ -39,21 +39,29 @@ import {
   isText,
   isWholeNumber,
   readDraftFields,
+  withDraftDefaults,
 } from '@apps/runway/forms/draftParse';
 import {
   withStartOver,
   type StartOverProps,
 } from '@apps/runway/forms/withStartOver';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { getPullAccounts } from '@apps/runway/engine/accounts';
+import {
+  getPullAccounts,
+  keepPullAccountId,
+} from '@apps/runway/engine/accounts';
 import LastFourField from '@apps/runway/forms/LastFourField';
-import { isLastFour } from '@apps/runway/utils/accountText';
+import {
+  describeAccountLine,
+  isLastFour,
+} from '@apps/runway/utils/accountText';
 import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
 import {
   selectAccounts,
+  selectAllAccounts,
   selectAllCards,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenCard } from '@apps/runway/types';
+import type { OpenAccount, OpenCard } from '@apps/runway/types';
 import {
   describeCardAdded,
   describeCardChanged,
@@ -67,6 +75,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const OTHER_VALUE = 'other';
+const NO_ACCOUNT_VALUE = 'none';
 const DUE_DAYS = Array.from({ length: LAST_DAY }, (_, index) => index + 1);
 
 interface CardFormData {
@@ -98,25 +107,35 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-const parseCardDraft = (stored: unknown) => {
-  const data = readDraftFields<CardFormData>(stored, {
-    issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
-    otherIssuer: isText,
-    name: isText,
-    hasNoName: isFlag,
-    owed: isText,
-    dueDay: (value) =>
-      value === null ||
-      (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
-    hasNoDueDay: isFlag,
-    lastFour: isText,
-    hasNoLastFour: isFlag,
-    payFromAccountId: isNullableText,
-  });
+const parseCardDraft = (stored: unknown, isEditing: boolean) => {
+  const data = readDraftFields<CardFormData>(
+    withDraftDefaults(stored, {
+      lastFour: '',
+      hasNoLastFour: isEditing,
+      payFromAccountId: null,
+    }),
+    {
+      issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
+      otherIssuer: isText,
+      name: isText,
+      hasNoName: isFlag,
+      owed: isText,
+      dueDay: (value) =>
+        value === null ||
+        (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
+      hasNoDueDay: isFlag,
+      lastFour: isText,
+      hasNoLastFour: isFlag,
+      payFromAccountId: isNullableText,
+    },
+  );
   return data;
 };
 
-const getInitialData = (editing: OpenCard | undefined): CardFormData => {
+const getInitialData = (
+  editing: OpenCard | undefined,
+  pullAccounts: readonly OpenAccount[],
+): CardFormData => {
   if (!editing) {
     return {
       issuerPick: null,
@@ -142,7 +161,7 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
     hasNoDueDay: editing.dueDay === null,
     lastFour: editing.lastFour ?? '',
     hasNoLastFour: !editing.lastFour,
-    payFromAccountId: editing.payFromAccountId ?? null,
+    payFromAccountId: keepPullAccountId(editing.payFromAccountId, pullAccounts),
   };
 };
 
@@ -161,18 +180,20 @@ function CardFormBody({
   const maskNote = (note: string | null) => (note ? mask(note) : null);
   const isMounted = useRef(true);
   const cards = useAppSelector(selectAllCards);
-  const pullAccounts = getPullAccounts(useAppSelector(selectAccounts));
+  const openAccounts = useAppSelector(selectAccounts);
+  const allAccounts = useAppSelector(selectAllAccounts);
+  const pullAccounts = getPullAccounts(openAccounts);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
-  const [startData] = useState(() => getInitialData(editing));
+  const [startData] = useState(() => getInitialData(editing, pullAccounts));
   const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
   const draft = useFormDraft({
     key: draftKey,
     base: draftBase,
-    parse: parseCardDraft,
+    parse: (stored) => parseCardDraft(stored, editing !== undefined),
   });
   const [formData, setFormData] = useState<CardFormData>(
     draft.restored ?? startData,
@@ -221,9 +242,13 @@ function CardFormBody({
   const isDueAnswered = formData.dueDay !== null || formData.hasNoDueDay;
   const isLastFourAnswered =
     formData.hasNoLastFour || isLastFour(formData.lastFour);
+  const payFromAccountId = keepPullAccountId(
+    formData.payFromAccountId,
+    pullAccounts,
+  );
   const payFromName =
-    pullAccounts.find((account) => account.id === formData.payFromAccountId)
-      ?.name ?? CARD_WORDS.payFromNone;
+    pullAccounts.find((account) => account.id === payFromAccountId)?.name ??
+    CARD_WORDS.payFromNone;
   const hasOther = hasUnnamedCardFrom(issuer, cards, editing?.id ?? null);
 
   const steps: QuestionStep[] = [
@@ -408,13 +433,19 @@ function CardFormBody({
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
                 label={CARD_WORDS.payFromLabel}
-                options={pullAccounts.map((account) => ({
-                  value: account.id,
-                  label: account.name,
-                }))}
-                value={formData.payFromAccountId}
-                onChange={(payFromAccountId) => {
-                  set({ payFromAccountId });
+                options={[
+                  { value: NO_ACCOUNT_VALUE, label: CARD_WORDS.payFromNone },
+                  ...pullAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    detail: describeAccountLine(account),
+                  })),
+                ]}
+                value={payFromAccountId ?? NO_ACCOUNT_VALUE}
+                onChange={(value) => {
+                  set({
+                    payFromAccountId: value === NO_ACCOUNT_VALUE ? null : value,
+                  });
                   moveOn();
                 }}
               />
@@ -475,7 +506,7 @@ function CardFormBody({
         lastFour: formData.hasNoLastFour ? null : formData.lastFour || null,
         payFromAccountId:
           pullAccounts.length >= 2
-            ? formData.payFromAccountId
+            ? payFromAccountId
             : (editing?.payFromAccountId ?? null),
       };
       if (editing) {
@@ -483,6 +514,9 @@ function CardFormBody({
           getCardName(editing, cards),
           editing,
           sealed,
+          (id) =>
+            allAccounts.find((account) => account.id === id)?.name ??
+            CARD_WORDS.payFromNone,
         );
         if (summary !== null) {
           await updateCard(user.uid, encryption, editing.id, sealed, summary);
