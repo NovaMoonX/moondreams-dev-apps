@@ -2,7 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { Camera } from 'lucide-react';
 
 interface CameraGridTileProps {
-  /** Read by a screen reader ("Take another photo"). */
+  /** Shown under the camera ("Take another"). */
   label: string;
   isDisabled?: boolean;
   onClick: () => void;
@@ -19,11 +19,11 @@ function CameraGridTile({
       type='button'
       variant='tertiary'
       disabled={isDisabled}
-      aria-label={label}
       onClick={onClick}
-      className='border-border text-muted-foreground aspect-square h-auto w-full flex-col rounded-xl border-2 border-dashed p-0!'
+      className='border-border text-muted-foreground aspect-square h-auto w-full flex-col gap-1.5 rounded-xl border-2 border-dashed p-1! text-xs font-normal whitespace-normal'
     >
       <Camera className='size-6' aria-hidden='true' />
+      {label}
     </Button>
   );
 }
