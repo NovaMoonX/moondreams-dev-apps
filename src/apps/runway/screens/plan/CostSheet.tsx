@@ -338,21 +338,6 @@ function CostSheet({
     }
   };
 
-  const getPaidLine = (entry: CostPaidEntry) => {
-    // The head already says when it was paid.
-    if (entry === settled) {
-      return entry.mark === 'outside'
-        ? COST_PAID_WORDS.paidOutsideOnlyRow
-        : COST_PAID_WORDS.cameToRow(formatCents(entry.amountCents));
-    }
-    return entry.mark === 'outside'
-      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
-      : COST_PAID_WORDS.paidRow(
-          formatDateOrdinalUTC(entry.paidOn),
-          formatCents(entry.amountCents),
-        );
-  };
-
   const getPaidSplit = (entry: CostPaidEntry) => {
     if (entry.mark === 'outside') return COST_PAID_WORDS.outsideNote;
     const fromItem = entry.amountCents - entry.fromFreeCents;
@@ -364,6 +349,21 @@ function CostSheet({
     ]
       .filter(Boolean)
       .join(' · ');
+  };
+
+  const getPaidLine = (entry: CostPaidEntry) => {
+    // The head already says what it came to and when, so the row says where it came from.
+    if (entry === settled) {
+      return entry.mark === 'outside'
+        ? COST_PAID_WORDS.nothingFromItem(horizon.name)
+        : getPaidSplit(entry);
+    }
+    return entry.mark === 'outside'
+      ? COST_PAID_WORDS.paidOutsideRow(formatDateOrdinalUTC(entry.paidOn))
+      : COST_PAID_WORDS.paidRow(
+          formatDateOrdinalUTC(entry.paidOn),
+          formatCents(entry.amountCents),
+        );
   };
 
   const getTakeBackSubtitle = (entry: CostPaidEntry) =>
@@ -418,7 +418,10 @@ function CostSheet({
         suffix={describeCost(cost).per || undefined}
         fact={
           settled
-            ? COST_PAID_WORDS.paidHead(formatDateOrdinalUTC(settled.paidOn))
+            ? COST_PAID_WORDS.paidHead(
+                formatDateOrdinalUTC(settled.paidOn),
+                settled.mark === 'outside',
+              )
             : HORIZON_WORDS.costFact(
                 when,
                 cost.pricedOn === null

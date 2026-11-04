@@ -2133,9 +2133,11 @@ export const COST_PAID_WORDS = {
     `Paid ${paidOn}\u00A0· ${amount}`,
   paidOutsideRow: (paidOn: string) =>
     `Paid ${paidOn}\u00A0· outside\u00A0the\u00A0plan`,
-  cameToRow: (amount: string) => `Came to ${amount}`,
-  paidOutsideOnlyRow: 'Paid outside the plan',
-  paidHead: (paidOn: string) => `Paid ${paidOn}`,
+  nothingFromItem: (item: string) => `Nothing came from ${item}`,
+  paidHead: (paidOn: string, isOutside = false) =>
+    isOutside
+      ? `Paid ${paidOn}\u00A0· outside\u00A0the\u00A0plan`
+      : `Paid ${paidOn}`,
   paidSheetTitle: (cost: string) => `${cost} payment`,
   cameTo: 'What it came to',
   fromItem: (item: string, amount: string) => `${amount} from ${item}`,
