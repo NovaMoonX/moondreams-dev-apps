@@ -1,6 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
-  Camera,
   ImagePlus,
   Layers,
   Pencil,
@@ -9,10 +8,12 @@ import {
   Undo2,
 } from 'lucide-react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import CameraTile from '@/components/forms/CameraTile';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -169,6 +170,8 @@ function PurchaseScreen({
   const receipts =
     receiptsResult.status === 'loaded' ? receiptsResult.images : [];
   const isReceiptsLoaded = receiptsResult.status === 'loaded';
+  const isCameraFirst =
+    canTakePhoto && receiptsResult.status !== 'failed' && receipts.length === 0;
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
@@ -505,6 +508,27 @@ function PurchaseScreen({
               isAddDisabled={!isReceiptsLoaded || isAddingReceipt}
             />
           )}
+          {isCameraFirst && (
+            <div className='space-y-2'>
+              <CameraTile
+                title={SPEND_WORDS.takeReceiptPhoto}
+                isDisabled={!isReceiptsLoaded || isAddingReceipt}
+                onClick={() => receiptChooser.current?.open({ isCamera: true })}
+              />
+              <Button
+                type='button'
+                variant='tertiary'
+                className='border-border h-11 w-full gap-2 border whitespace-nowrap'
+                disabled={!isReceiptsLoaded || isAddingReceipt}
+                onClick={() => receiptChooser.current?.open()}
+              >
+                <ImagePlus className='h-4 w-4 shrink-0' aria-hidden='true' />
+                {isAddingReceipt
+                  ? SPEND_WORDS.receiptAdding
+                  : SPEND_WORDS.readReceiptChoose}
+              </Button>
+            </div>
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -521,43 +545,31 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {canTakePhoto && receipts.length === 0 && (
+            {!isCameraFirst && (
               <ActionRow
                 isGrouped
                 isRoomy
-                icon={<Camera />}
-                label={SPEND_WORDS.takeReceiptPhoto}
+                icon={<ImagePlus />}
+                label={
+                  canTakePhoto
+                    ? SPEND_WORDS.chooseReceiptPhoto
+                    : SPEND_WORDS.addReceipt
+                }
+                subtitle={
+                  isAddingReceipt
+                    ? SPEND_WORDS.receiptAdding
+                    : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                      ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
+                      : SPEND_WORDS.addReceiptSub
+                }
                 isDisabled={
                   !isReceiptsLoaded ||
                   isAddingReceipt ||
                   receipts.length >= MAX_RECEIPTS_PER_PURCHASE
                 }
-                onClick={() => receiptChooser.current?.open({ isCamera: true })}
+                onClick={() => receiptChooser.current?.open()}
               />
             )}
-            <ActionRow
-              isGrouped
-              isRoomy
-              icon={<ImagePlus />}
-              label={
-                canTakePhoto
-                  ? SPEND_WORDS.chooseReceiptPhoto
-                  : SPEND_WORDS.addReceipt
-              }
-              subtitle={
-                isAddingReceipt
-                  ? SPEND_WORDS.receiptAdding
-                  : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-                    ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
-                    : SPEND_WORDS.addReceiptSub
-              }
-              isDisabled={
-                !isReceiptsLoaded ||
-                isAddingReceipt ||
-                receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-              }
-              onClick={() => receiptChooser.current?.open()}
-            />
             <ReceiptFileInput
               chooser={receiptChooser}
               onFiles={(files) => void addReceipts(files)}
