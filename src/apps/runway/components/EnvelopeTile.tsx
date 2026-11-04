@@ -93,6 +93,7 @@ function EnvelopeTile({
     envelope.funding.amount.kind === 'exact'
       ? envelope.funding.amount.cents
       : 0;
+  const notCountedWord = PRIORITY_DIAL_WORDS.notCounted.toLowerCase();
   const partsText =
     extras.length === 0
       ? PRIORITY_LABELS[envelope.priority]
@@ -100,10 +101,11 @@ function EnvelopeTile({
           `${PRIORITY_LABELS[envelope.priority]} ${formatCentsShort(ownCents)}`,
           ...extras.map(
             (extra) =>
-              `${PRIORITY_LABELS[extra.tier]} +${formatCentsShort(extra.cents)}${isCountedAt(extra.tier, dial) ? '' : ` (${PRIORITY_DIAL_WORDS.notCounted.toLowerCase()})`}`,
+              `${PRIORITY_LABELS[extra.tier]} +${formatCentsShort(extra.cents)}${isCountedAt(extra.tier, dial) ? '' : ` (${notCountedWord})`}`,
           ),
         ].join(' · ');
   const isTrimmedHere = leftOut.length > 0;
+  const isLeftOut = atLevel === null && dial !== 'want';
   const getIncomeDays = useIncomeDaysPerMonth(today);
   const isPlan = level === 'plan';
   const monthly =
@@ -171,7 +173,7 @@ function EnvelopeTile({
           detail={rowDetail}
           figure={rowFigure}
           figureWord={monthly ? BILL_WORDS.aMonth : null}
-          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${funding}` : `${value} ${word}. ${funding}`}. Open`}
+          ariaLabel={`${envelope.name}, ${isPlan ? `${monthly ? `${monthly.figure} ${BILL_WORDS.aMonth}, ` : ''}${rowDetail}${isLeftOut ? `, ${notCountedWord}` : ''}` : `${value} ${word}. ${funding}`}. Open`}
           onOpen={reorder ? undefined : open}
           reorder={reorder}
           isHighlighted={isHighlighted}
@@ -186,7 +188,7 @@ function EnvelopeTile({
           figureLabel={
             isPlan
               ? eachTime
-                ? `${describeCadenceLine(envelope.funding.cadence)}${isTrimmedHere && dial !== 'want' ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}` : ''}`
+                ? `${describeCadenceLine(envelope.funding.cadence)}${isLeftOut ? `, ${notCountedWord}` : isTrimmedHere && dial !== 'want' ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial]}` : ''}`
                 : ITEM_SHEET_R2_WORDS.eachTime
               : isHidden
                 ? ITEM_SHEET_R2_WORDS.balance
@@ -199,7 +201,7 @@ function EnvelopeTile({
             envelope.maxCents === null
               ? null
               : ITEM_SHEET_R2_WORDS.stopsAt(formatCents(envelope.maxCents)),
-            isPlan && cents !== 0 ? `${value} ${word}` : null,
+            isPlan && cents !== 0 && !isTrimmedHere ? `${value} ${word}` : null,
           ]
             .filter(Boolean)
             .join(' · ')}

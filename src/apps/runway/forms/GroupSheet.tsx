@@ -201,7 +201,6 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const [isUndoingDue, setIsUndoingDue] = useState(false);
   const [priorityRecord, setPriorityRecord] = useState<{
     note: string;
-    skipped: string | null;
     undo: PriorityWritten[] | null;
   } | null>(null);
   const [isUndoingPriority, setIsUndoingPriority] = useState(false);
@@ -356,7 +355,6 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
       setPriorityRecord({
         note: description ? `${title} ${description}` : title,
-        skipped: null,
         undo: null,
       });
     } catch (undoError) {
@@ -365,7 +363,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
         GROUP_WORDS.priorityUndoFailed,
       );
       handledUndos.current.delete(written);
-      setPriorityRecord({ note: message, skipped: null, undo: written });
+      setPriorityRecord({ note: message, undo: written });
     } finally {
       setIsUndoingPriority(false);
     }
@@ -410,14 +408,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       getNextTierRank(everyItem, choice),
     );
     const label = PRIORITY_LABELS[choice];
-    const skippedNote =
-      skipped.length === 0 ? null : GROUP_WORDS.prioritySkipped(skipped, label);
     if (changes.length === 0) {
-      setPriorityRecord({
-        note: skipped.length > 0 ? '' : GROUP_WORDS.priorityAlready(label),
-        skipped: skippedNote,
-        undo: null,
-      });
+      setPriorityRecord(
+        skipped.length > 0
+          ? null
+          : { note: GROUP_WORDS.priorityAlready(label), undo: null },
+      );
       return;
     }
     const encryption = await getRunwayEncryption(user.uid);
@@ -451,7 +447,6 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     if (saved.length > 0) {
       setPriorityRecord({
         note: GROUP_WORDS.priorityDone(saved.length, label),
-        skipped: skippedNote,
         undo: saved,
       });
     }
@@ -525,10 +520,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   };
 
   const savedPick = payload.startingPriority;
-  const notAtPick =
-    savedPick === null || priorityRecord !== null || pickedPriority !== null
-      ? []
-      : planPriority(allVersions, savedPick, 0).changes.map(({ name }) => name);
+  const isApplyingNow = pickedPriority !== null;
+  const hidesNotice =
+    isApplyingNow || (priorityRecord?.undo != null && priorityError === null);
+  const pickPlan =
+    savedPick === null || hidesNotice
+      ? null
+      : planPriority(allVersions, savedPick, 0);
+  const notAtPick = pickPlan?.changes.map(({ name }) => name) ?? [];
+  const keptAsIs = pickPlan?.skipped ?? [];
 
   const dueDate = fromDateInputValue(dueText);
   const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
@@ -1133,7 +1133,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   {priorityError}
                 </p>
               )}
-              {priorityRecord && priorityRecord.note !== '' && (
+              {priorityRecord && (
                 <div className='flex min-h-7 items-start justify-between gap-2'>
                   <p className='text-muted-foreground text-sm'>
                     {priorityRecord.note}
@@ -1156,9 +1156,12 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   )}
                 </div>
               )}
-              {priorityRecord?.skipped && (
+              {savedPick !== null && keptAsIs.length > 0 && (
                 <p className='text-muted-foreground text-sm'>
-                  {priorityRecord.skipped}
+                  {GROUP_WORDS.prioritySkipped(
+                    keptAsIs,
+                    PRIORITY_LABELS[savedPick],
+                  )}
                 </p>
               )}
               {savedPick !== null && notAtPick.length > 0 && (

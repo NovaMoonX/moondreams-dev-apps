@@ -2334,14 +2334,14 @@ export const GROUP_WORDS = {
   priorityAlready: (priority: string) =>
     `Everything here is already ${priority}.`,
   priorityStale: (names: string[], priority: string) =>
-    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority} yet.`,
+    `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority}.`,
   priorityMakeAll: (priority: string) => `Make all ${priority}`,
   priorityPartial: (done: number, total: number, failed: string[]) =>
     `Set ${done} of ${total}. ${joinNames(failed)} did not save; the others did.`,
   priorityFailed:
     'The priority is saved for new ones, but the items already here did not change.',
   prioritySkipped: (names: string[], priority: string) =>
-    `${joinNames(names)} stay${names.length === 1 ? 's' : ''} as ${names.length === 1 ? 'it is' : 'they are'}: ${names.length === 1 ? 'it also holds' : 'they also hold'} money at ${priority} or above. Change ${names.length === 1 ? 'it' : 'them'} on ${names.length === 1 ? 'the envelope' : 'each envelope'}.`,
+    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: ${names.length === 1 ? 'it has' : 'they have'} money at ${priority} too. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
   priorityUndone: 'Priorities put back.',
   priorityUndoPartial: (done: number, total: number, failed: string[]) =>
     `Put back ${done} of ${total}. ${joinNames(failed)} did not change back.`,
