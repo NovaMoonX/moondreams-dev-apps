@@ -1359,6 +1359,10 @@ function PurchaseFormBody({
         : FORM_FLOW_WORDS.purchaseForTitle,
       summaryLabel: isRefund ? SPEND_WORDS.returnsTo : SPEND_WORDS.envelope,
       summaryValue: getEnvelopeSummary(),
+      summaryDetail:
+        isPresetPay && preset !== null
+          ? PURCHASE_COST_WORDS.pickHint(preset.cost.name)
+          : undefined,
       isAnswered: lines !== null,
       blocker: isSplit && !isRefund ? SPEND_WORDS.needsShares : null,
       isPreAnswered:
@@ -2097,7 +2101,9 @@ function PurchaseFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={SPEND_WORDS.sheetTitle}
+      title={
+        preset !== null ? PURCHASE_COST_WORDS.addRow : SPEND_WORDS.sheetTitle
+      }
       actions={<ValuesEyeButton />}
     >
       {view === 'split' && amount !== null && (

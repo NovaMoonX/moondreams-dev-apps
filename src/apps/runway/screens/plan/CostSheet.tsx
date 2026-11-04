@@ -174,8 +174,10 @@ interface CostSheetProps {
   cost: HorizonCost;
   today: number;
   stance: Stance;
-  /** Back to the event's sheet. */
+  /** Back to the event's sheet, or to the record it was opened from. */
   onBack: () => void;
+  /** The record the sheet was opened from, when that isn't the event. */
+  backLabel?: string | null;
   /** Opens the cost's Change form, which replaces the event's sheet. */
   onChange: () => void;
 }
@@ -188,6 +190,7 @@ function CostSheet({
   today,
   stance,
   onBack,
+  backLabel = null,
   onChange,
 }: CostSheetProps) {
   const { user } = useAuth();
@@ -412,6 +415,13 @@ function CostSheet({
       : PURCHASE_COST_WORDS.boughtIn(name);
   };
 
+  const getPaidWith = (entry: CostPaidEntry) => {
+    if (entry.mark !== 'purchase' || !isTrack) return null;
+    const bought = purchases.find(({ id }) => id === entry.purchaseId);
+    const name = bought?.merchant ?? bought?.label ?? null;
+    return name === null ? null : PURCHASE_COST_WORDS.paidWith(name);
+  };
+
   const getTakeBackSubtitle = (entry: CostPaidEntry) =>
     entry.mark === 'outside'
       ? COST_PAID_WORDS.takeBackSubOutside
@@ -455,7 +465,9 @@ function CostSheet({
   const getMarkSubtitle = () => {
     const body = getMarkBody();
     const lead = [
-      dueFor === null ? null : PURCHASE_COST_WORDS.forPayment(dueFor),
+      dueFor === null || (isTrack && !cost.isOutside)
+        ? null
+        : PURCHASE_COST_WORDS.forPayment(dueFor),
       isTrack && !cost.isOutside ? PURCHASE_COST_WORDS.noPurchase : null,
     ].filter(Boolean);
     return [...lead, body].join('. ');
@@ -526,7 +538,7 @@ function CostSheet({
 
   return (
     <div className='space-y-4'>
-      <BackLink label={horizon.name} onBack={onBack} />
+      <BackLink label={backLabel ?? horizon.name} onBack={onBack} />
       <SheetHead
         label={cost.name}
         figure={
@@ -561,6 +573,7 @@ function CostSheet({
             hasChevron
             icon={<CircleCheck />}
             label={mask(getPaidLine(entry))}
+            subtitle={getPaidWith(entry) ?? undefined}
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}

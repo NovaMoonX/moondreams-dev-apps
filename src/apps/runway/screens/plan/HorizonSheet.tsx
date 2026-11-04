@@ -64,6 +64,8 @@ interface HorizonSheetProps {
   fronted?: Extract<HorizonShort, { kind: 'fronted' }> | null;
   /** A cost to open on, with Back leading to the event's sheet. */
   openCostId?: string | null;
+  /** Opened from another record's sheet: the cost's Back returns there, named so. */
+  returnLabel?: string | null;
   onClose: () => void;
 }
 
@@ -75,6 +77,7 @@ function HorizonSheet({
   stance,
   fronted = null,
   openCostId = null,
+  returnLabel = null,
   onClose,
 }: HorizonSheetProps) {
   const balances = useAppSelector(selectBalances);
@@ -320,7 +323,12 @@ function HorizonSheet({
           cost={openCost}
           today={today}
           stance={stance}
+          backLabel={returnLabel}
           onBack={() => {
+            if (returnLabel !== null) {
+              onClose();
+              return;
+            }
             setCostId(null);
             setCostEdit(null);
           }}

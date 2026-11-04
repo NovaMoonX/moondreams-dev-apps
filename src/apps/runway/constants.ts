@@ -2169,7 +2169,7 @@ export const COST_PAID_WORDS = {
 /** Add what you paid: the purchase form pointed at a Horizon cost, and the purchase's own pick of the cost it pays (Track only). */
 export const PURCHASE_COST_WORDS = {
   addRow: 'Add what you paid',
-  addSub: 'Log it as a purchase, with the card it went on',
+  addSub: 'Log it as a purchase',
   moreWays: 'More ways',
   addAria: (name: string) => `Add what you paid: ${name}`,
   whichTitle: 'Which cost does it pay?',
@@ -2194,18 +2194,19 @@ export const PURCHASE_COST_WORDS = {
       ? `It paid a cost on ${item}, which goes back to unpaid.`
       : `It paid ${cost} on ${item}, which goes back to unpaid.`,
   needsPaidBy: 'Pick how you paid to add this.',
-  noPurchase: 'No purchase.',
-  paysSub: 'Open the cost to see its payments',
+  noPurchase: 'No purchase',
+  paysSub: 'Paid by this purchase',
   stays: (item: string) => `It stays on ${item}`,
   noneHint: (item: string) => `Lowers what ${item} has left; pays no cost`,
   pickHint: (cost: string) => `Marks ${cost} paid`,
-  paysFact: (cost: string, item: string) => `Pays ${cost} on ${item}`,
+  paysFact: (cost: string, item: string) => `${cost}\u00A0on ${item}`,
   paysRow: (cost: string, item: string) => `${cost}\u00A0on ${item}`,
   lockedEnvelope: (cost: string, item: string) =>
     `It pays ${cost} on ${item}, so it stays on ${item}. Take the payment back to move it.`,
   forPayment: (due: string) => `For the ${due} payment`,
   paidFor: (due: string) => `for ${due}`,
   boughtIn: (name: string) => `${name}\u00A0· in Spend`,
+  paidWith: (name: string) => `Paid with ${name}`,
   aPurchase: 'A purchase in Spend',
 } as const;
 

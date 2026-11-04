@@ -461,6 +461,7 @@ function PurchaseScreen({
           today={todayAsUtcDate()}
           stance={stance}
           openCostId={paysRef.costId}
+          returnLabel={title}
           onClose={() => setIsCostOpen(false)}
         />
       )}
