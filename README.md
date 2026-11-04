@@ -174,6 +174,19 @@ Problems we've hit before, so we don't hit them again.
 - **Telling it apart:** `scripts/fbDeploySmart.ts` repeats the release update on this 409 and prints the Rules API's own answer under "Repeating its update to read the answer"; a 400 naming a size is this problem, anything else is a different one. `npm run check:rules-size` estimates the size on every PR that touches `firestore.rules` and fails at 250,000 bytes (warns from 240,000); it matched the real 258,529 for the old rules at 258,530.
 - **Verified:** the estimate for the failing rules is 258,530 against the real 258,529. After the change it was 242,656, and the merge deploy of #480 is the real proof. The rules were later cut to the beta tier (about 54,000), which leaves most of the limit free; the strict version is in git history at `c784e89`.
 
+### Pinch-zoom on a full-screen photo works on one phone and not another
+
+- **Symptom:** in a full-screen photo (Going Once's thing photos, the admin's screenshots) two fingers do nothing on a OnePlus 12, while the same page zooms on a Galaxy Fold.
+- **Cause:** the viewer's picture area had `touch-action: pan-y` (for its sideways swipe), which tells the browser that pinching there is not allowed. Chrome follows it. Samsung Internet's "zoom on all pages" setting overrides it, so that phone zoomed the whole page. This is a hypothesis from the two browsers' documented behaviour: neither phone was in reach to confirm which browser or setting each used.
+- **Fix:** `ImageViewer` zooms the picture itself (pinch, double-tap, pan, `+`/`-`/`0`) on an area with `touch-action: none`, so it no longer depends on the browser's page zoom.
+- **Telling it apart:** if a phone still can't zoom, check the computed `touch-action` of the viewer's picture area (`none`) and whether the page in the browser is the current version.
+
+### Every link preview for an app shows another app's banner
+
+- **Symptom:** a shared Going Once link previewed with Waypoint's picture, though `cloudflare-worker.js` named `banner-going-once.png`.
+- **Cause:** the new app's placeholder banner was a byte-for-byte copy of Waypoint's.
+- **Fix:** a real banner (made with `npm run make:banner -- <id>`, which every new app now runs), and `check:apps` (run before every build) now fails when an app's banner is missing, is the same image as another app's, or isn't the one its worker entry names. Chat apps cache a preview, so a link already shared may keep the old picture for a while.
+
 ### Every AI call fails with `401 Firebase App Check token is invalid`
 
 - **Symptom:** on the deployed app, Pinch's recipe reading, Nine Lives' ingestion and any other Firebase AI Logic call fail with `[401 ] Firebase App Check token is invalid. (AI/fetch-error)` on `firebasevertexai.googleapis.com/.../generateContent`. The console also shows `@firebase/vertexai: Unable to obtain a valid App Check token: AppCheck: ReCAPTCHA error. (appCheck/recaptcha-error)`, and Realtime Database logs "Provided AppCheck credentials ... are invalid". There is no `firebaseappcheck.googleapis.com/...:exchangeRecaptchaEnterpriseToken` request. The failing call's `X-Firebase-AppCheck` header is `eyJlcnJvciI6IlVOS05PV05fRVJST1IifQ==`, which decodes to `{"error":"UNKNOWN_ERROR"}`: the SDK's placeholder, sent when no real token could be made.

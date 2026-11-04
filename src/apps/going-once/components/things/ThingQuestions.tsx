@@ -1,3 +1,5 @@
+import type { ClipboardEvent } from 'react';
+
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 
 import AmountHero from '@/components/AmountHero';
@@ -9,7 +11,13 @@ import MoneyInput from '@/components/MoneyInput';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup } from '@/components/PillGroup';
 import SegmentedControl from '@/components/SegmentedControl';
+import type { LinkPreview } from '@/lib/linkMetadata/types';
 import { parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  getWebLinkHost,
+  getWebLinkSiteName,
+  toWebLink,
+} from '@/utils/urlUtils';
 import {
   CONDITION_OPTIONS,
   MAX_BOUGHT_FROM_LENGTH,
@@ -244,7 +252,61 @@ export function OriginalPriceQuestion({ answers, onChange }: QuestionProps) {
   );
 }
 
+/** The store a link is on, from its page's own name when it was read, else from the address. */
+const toStoreName = (url: string, preview: LinkPreview | null) =>
+  (preview?.siteName?.trim() || getWebLinkSiteName(url) || '').slice(
+    0,
+    MAX_BOUGHT_FROM_LENGTH,
+  );
+
+/** A pasted store name that is really a full address, never a "Target.com". */
+const readPastedLink = (text: string) =>
+  /^(https?:\/\/|www\.)\S+$/i.test(text.trim()) ? toWebLink(text) : null;
+
+/** The store's name follows its link while the person hasn't typed one of their own. */
+const withStoreName = (
+  answers: ThingAnswers,
+  boughtUrl: string,
+  boughtUrlPreview: LinkPreview | null,
+): Partial<ThingAnswers> => {
+  const typed = answers.boughtFrom.trim();
+  const isNewLink = boughtUrl !== answers.boughtUrl;
+  const isFromLink =
+    typed !== '' &&
+    answers.boughtUrl !== '' &&
+    typed === toStoreName(answers.boughtUrl, answers.boughtUrlPreview);
+  const name = boughtUrl === '' ? '' : toStoreName(boughtUrl, boughtUrlPreview);
+  const shouldFill = name !== '' && ((isNewLink && typed === '') || isFromLink);
+  return {
+    boughtUrl,
+    boughtUrlPreview,
+    ...(shouldFill ? { boughtFrom: name } : {}),
+  };
+};
+
 export function BoughtQuestion({ answers, onChange }: QuestionProps) {
+  const isNameFromLink =
+    answers.boughtUrl !== '' &&
+    answers.boughtFrom.trim() !== '' &&
+    answers.boughtFrom.trim() ===
+      toStoreName(answers.boughtUrl, answers.boughtUrlPreview);
+
+  const handlePaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const link = readPastedLink(event.clipboardData.getData('text'));
+    if (link === null || getWebLinkSiteName(link) === null) return;
+    if (answers.boughtFrom.trim() !== '' && !isNameFromLink) return;
+    event.preventDefault();
+    const preview =
+      link === answers.boughtUrl ? answers.boughtUrlPreview : null;
+    onChange(
+      withStoreName(
+        { ...answers, boughtFrom: '', boughtUrl: '' },
+        link,
+        preview,
+      ),
+    );
+  };
+
   return (
     <div className='space-y-4'>
       <Field label={hiddenLabel('Where you got it')}>
@@ -252,12 +314,22 @@ export function BoughtQuestion({ answers, onChange }: QuestionProps) {
           <Input
             variant='outline'
             placeholder='Target'
-            maxLength={MAX_BOUGHT_FROM_LENGTH}
             value={answers.boughtFrom}
-            onChange={(event) => onChange({ boughtFrom: event.target.value })}
+            onChange={(event) =>
+              onChange({
+                boughtFrom: event.target.value.slice(0, MAX_BOUGHT_FROM_LENGTH),
+              })
+            }
+            onPaste={handlePaste}
           />
         )}
       </Field>
+      {isNameFromLink && (
+        <p className='text-muted-foreground -mt-2 text-sm'>
+          From the store link ({getWebLinkHost(answers.boughtUrl)}). Change it
+          if that&apos;s not quite right.
+        </p>
+      )}
       <Field label='When'>
         {() => (
           <DateInput
@@ -281,9 +353,17 @@ export function StoreLinkQuestion({ answers, onChange }: QuestionProps) {
         preview={answers.boughtUrlPreview}
         startRevealed
         onChange={(boughtUrl, boughtUrlPreview) =>
-          onChange({ boughtUrl, boughtUrlPreview })
+          onChange(withStoreName(answers, boughtUrl, boughtUrlPreview))
         }
       />
+      {answers.boughtUrl !== '' &&
+        answers.boughtFrom.trim() !== '' &&
+        answers.boughtFrom.trim() ===
+          toStoreName(answers.boughtUrl, answers.boughtUrlPreview) && (
+          <p className='text-muted-foreground text-sm text-pretty'>
+            🔒 Where you got it: {answers.boughtFrom.trim()}, from the link.
+          </p>
+        )}
       {answers.boughtUrl.trim() === '' && (
         <p className='text-muted-foreground text-sm'>
           Only you and your co-sellers see it unless you choose to show it to

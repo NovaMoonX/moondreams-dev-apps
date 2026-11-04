@@ -6,6 +6,7 @@ import { Wallet } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import ClampedText from '@/components/ClampedText';
+import CopyTextButton from '@/components/CopyTextButton';
 import EmptyCard from '@/components/EmptyCard';
 import InlineNotice from '@/components/InlineNotice';
 import LazyMount from '@/components/LazyMount';
@@ -189,9 +190,17 @@ function SaleView({ page, linkId, linkedThingId }: SaleViewProps) {
     <div className='mx-auto max-w-3xl space-y-5 lg:max-w-5xl'>
       {page.isMember && <OwnPageBand />}
       <header className='space-y-1'>
-        <h1 className='text-[26px] leading-tight font-semibold text-balance break-words'>
-          {sale.name}
-        </h1>
+        <div className='flex items-start gap-3'>
+          <h1 className='min-w-0 flex-1 text-[26px] leading-tight font-semibold text-balance break-words'>
+            {sale.name}
+          </h1>
+          <CopyTextButton
+            text={`${window.location.origin}${SALE_PAGE_PATH}${linkId}`}
+            label='Copy link'
+            variant='secondary'
+            className="relative h-9 shrink-0 rounded-full! px-3! whitespace-nowrap after:absolute after:-inset-0.5 after:content-[''] max-[359px]:w-9 max-[359px]:px-0! max-[359px]:[&>span]:sr-only"
+          />
+        </div>
         {summary !== '' && (
           <p className='text-muted-foreground text-sm'>{summary}</p>
         )}
