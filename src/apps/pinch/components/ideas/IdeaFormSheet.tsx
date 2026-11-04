@@ -157,6 +157,7 @@ function IdeaFormSheet({ uid, idea, onClose }: IdeaFormSheetProps) {
                     <PhotoPicker
                       photoUrl={photoUrl}
                       showPreview={false}
+                      canTakePhoto
                       changeLabel='Replace photo'
                       error={photoError}
                       onSelect={(file) => {
