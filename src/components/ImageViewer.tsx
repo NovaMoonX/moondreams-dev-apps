@@ -133,6 +133,7 @@ function ImageViewer({
   const root = useRef<HTMLDivElement | null>(null);
   const { dialogId, onDialogClose } = useSheetHistory(true, onClose);
   const slide = slides[index] ?? slides[0];
+  const hasSlide = slide !== undefined;
   const count = slides.length;
   const step = useCallback(
     (by: number) => {
@@ -171,7 +172,18 @@ function ImageViewer({
     const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
       const { width, height, centerX, centerY } = readArea(element);
-      const factor = Math.exp(-event.deltaY * (event.ctrlKey ? 0.01 : 0.002));
+      const pixels =
+        event.deltaMode === 1
+          ? event.deltaY * 16
+          : event.deltaMode === 2
+            ? event.deltaY * height
+            : event.deltaY;
+      const step = Math.max(
+        -0.5,
+        Math.min(0.5, pixels * (event.ctrlKey ? 0.01 : 0.002)),
+      );
+      const factor = Math.exp(-step);
+      pan.current = null;
       setZoom((current) => {
         const next = clampZoom(
           zoomAround(
@@ -188,7 +200,7 @@ function ImageViewer({
     };
     element.addEventListener('wheel', handleWheel, { passive: false });
     return () => element.removeEventListener('wheel', handleWheel);
-  }, []);
+  }, [hasSlide]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
