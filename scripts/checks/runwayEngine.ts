@@ -7904,7 +7904,7 @@ const version = (
   );
   assert.ok(
     noted[0]?.text.includes(
-      'Phone $296.00 short on Nov 7th: Freelance payment is one-time and brings $120.',
+      'Phone $296.00 short on Nov\u00a07th: Freelance payment is one-time and brings $120.',
     ),
     'a short pay that is one-time says why',
   );
@@ -10617,23 +10617,23 @@ const version = (
   const feb1 = Date.UTC(thisYear, 1, 1);
   assert.equal(
     formatDateOrdinalUTC(feb1),
-    'Feb 1st',
+    'Feb\u00a01st',
     'a date this year has no year',
   );
   assert.equal(
     formatDateOrdinalUTC(Date.UTC(thisYear + 1, 11, 22)),
-    `Dec 22nd, ${thisYear + 1}`,
+    `Dec\u00a022nd,\u00a0${thisYear + 1}`,
     'a date in another year names it',
   );
   assert.equal(
     formatDateOrdinalUTC(Date.UTC(thisYear, 2, 31)),
-    'Mar 31st',
+    'Mar\u00a031st',
     'a date-only value keeps its day for a viewer behind UTC',
   );
   const localNoon = new Date(thisYear, 6, 3, 12).getTime();
   assert.equal(
     formatDateOrdinal(localNoon),
-    'Jul 3rd',
+    'Jul\u00a03rd',
     'an instant reads its local day',
   );
 }
@@ -11046,7 +11046,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     [rentOf(twoMonths, 'job_a'), rentOf(twoMonths, 'job_b')],
     [120_000, 120_000],
-    'F1: the Nov 6th pairing fills the Nov 15th rent and the Nov 20th pairing the Dec 15th rent, each in full',
+    'F1: the Nov\u00a06th pairing fills the Nov\u00a015th rent and the Nov\u00a020th pairing the Dec\u00a015th rent, each in full',
   );
   const oneMonth = draftOver([
     ['job_a', utc(2026, 11, 6)],
@@ -12139,8 +12139,8 @@ console.log('runway engine: ok');
     'G11: a bill paid once keeps its payment as the figure',
   );
   assert.equal(
-    joinPaymentAndState('$150 yearly', 'Due Mar 1st, 2027'),
-    '$150 yearly\u00a0· due Mar 1st, 2027',
+    joinPaymentAndState('$150 yearly', 'Due Mar\u00a01st,\u00a02027'),
+    '$150 yearly\u00a0· due Mar\u00a01st,\u00a02027',
     'G11: a converted row names the payment first and keeps the dot with it',
   );
   const calendarFunding = (
@@ -12804,23 +12804,23 @@ console.log('runway engine: ok');
   const feb1 = Date.UTC(thisYear, 1, 1);
   assert.equal(
     formatDateOrdinalUTC(feb1),
-    'Feb 1st',
+    'Feb\u00a01st',
     'a date this year has no year',
   );
   assert.equal(
     formatDateOrdinalUTC(Date.UTC(thisYear + 1, 11, 22)),
-    `Dec 22nd, ${thisYear + 1}`,
+    `Dec\u00a022nd, ${thisYear + 1}`,
     'a date in another year names it',
   );
   assert.equal(
     formatDateOrdinalUTC(Date.UTC(thisYear, 2, 31)),
-    'Mar 31st',
+    'Mar\u00a031st',
     'a date-only value keeps its day for a viewer behind UTC',
   );
   const localNoon = new Date(thisYear, 6, 3, 12).getTime();
   assert.equal(
     formatDateOrdinal(localNoon),
-    'Jul 3rd',
+    'Jul\u00a03rd',
     'an instant reads its local day',
   );
 }

@@ -139,21 +139,21 @@ const SHORT_MONTHS = [
   'Dec',
 ];
 
-/** "Feb 1st" (with the year when it isn't this one, "Feb 1st, 2027"): a date-only value read from its UTC fields. */
+/** "Feb 1st" (with the year when it isn't this one, "Feb 1st, 2027"): a date-only value read from its UTC fields, joined by no-break spaces so it never wraps mid-date. */
 export function formatDateOrdinalUTC(timestamp: number) {
   const date = new Date(timestamp);
-  const day = `${SHORT_MONTHS[date.getUTCMonth()]} ${toDayOrdinal(date.getUTCDate())}`;
+  const day = `${SHORT_MONTHS[date.getUTCMonth()]}\u00a0${toDayOrdinal(date.getUTCDate())}`;
   const isCurrentYear = date.getUTCFullYear() === new Date().getUTCFullYear();
-  const result = isCurrentYear ? day : `${day}, ${date.getUTCFullYear()}`;
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getUTCFullYear()}`;
   return result;
 }
 
 /** "Feb 1st" (with the year when it isn't this one): the calendar day of an instant in the viewer's timezone. */
 export function formatDateOrdinal(timestamp: number) {
   const date = new Date(timestamp);
-  const day = `${SHORT_MONTHS[date.getMonth()]} ${toDayOrdinal(date.getDate())}`;
+  const day = `${SHORT_MONTHS[date.getMonth()]}\u00a0${toDayOrdinal(date.getDate())}`;
   const isCurrentYear = date.getFullYear() === new Date().getFullYear();
-  const result = isCurrentYear ? day : `${day}, ${date.getFullYear()}`;
+  const result = isCurrentYear ? day : `${day},\u00a0${date.getFullYear()}`;
   return result;
 }
 
