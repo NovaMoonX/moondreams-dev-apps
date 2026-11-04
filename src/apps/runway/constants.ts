@@ -2327,27 +2327,49 @@ export const GROUP_WORDS = {
   nameLabel: 'Name',
   startingPriority: 'Priority',
   startingPriorityHelp:
-    'Every bill and envelope in this group takes the priority you pick, and so does a new one you add. None changes nothing now; a new one starts at Should.',
-  startingPriorityFailed: 'The priority did not save. Nothing was changed.',
+    'Each bill or envelope here takes the priority you pick, with any extra folded into one amount, and so does a new one you add. You see what changes before anything is saved. None changes nothing now; a new one starts at Should.',
+  priorityRowLabel: {
+    all: 'Everything',
+    bill: 'Bills',
+    envelope: 'Envelopes',
+  } as Record<'all' | 'bill' | 'envelope', string>,
+  priorityMixed: 'Mixed',
+  priorityScope: (row: 'all' | 'bill' | 'envelope', group: string) =>
+    row === 'all'
+      ? `everything in ${group}`
+      : row === 'bill'
+        ? `${group}'s bills`
+        : `${group}'s envelopes`,
+  priorityConfirmTitle: (scope: string, priority: string) =>
+    `Set ${scope} to ${priority}?`,
+  priorityConfirmLead: 'This replaces the priority set on each of these:',
+  priorityMoves: (name: string, from: string, to: string) =>
+    `${name} goes from ${from} to ${to}`,
+  priorityFolds: (
+    name: string,
+    priority: string,
+    total: string | null,
+    parts: string[],
+  ) =>
+    `${name} becomes ${priority} for ${total === null ? 'its full amount' : `the full ${total}`} (was ${parts.join(' + ')})`,
+  priorityConfirmMore: (count: number) => `and ${count} more`,
+  priorityConfirm: (priority: string) => `Set to ${priority}`,
+  prioritySummary: (
+    priority: string,
+    group: string,
+    names: string[],
+    date: string,
+  ) =>
+    `Set to ${priority} with the ${group} group (${joinNames(names)}), from ${date}.`,
   priorityDone: (count: number, priority: string) =>
     `${count === 1 ? '1 item is' : `${count} items are`} now ${priority}.`,
-  priorityAlready: (priority: string) =>
-    `Everything here is already ${priority}.`,
+  priorityAlready: (scope: string, priority: string) =>
+    `${scope.charAt(0).toUpperCase()}${scope.slice(1)} ${scope.startsWith('everything') ? 'is' : 'are'} already ${priority}.`,
   priorityStale: (names: string[], priority: string) =>
     `${joinNames(names)} ${names.length === 1 ? 'is' : 'are'} not ${priority}.`,
   priorityMakeAll: (priority: string) => `Make all ${priority}`,
-  priorityFailed:
-    'The priority is saved for new ones, but the items already here did not change.',
-  prioritySkipped: (names: string[], priority: string) =>
-    `${joinNames(names)} ${names.length === 1 ? 'stays' : 'stay'} as ${names.length === 1 ? 'it is' : 'they are'}: at ${priority} ${names.length === 1 ? 'its' : 'their'} extra could not sit below the main amount. Change ${names.length === 1 ? 'it' : 'them'} on the envelope.`,
+  priorityFailed: 'The priority did not save. Nothing was changed.',
   priorityApplying: 'Changing priorities…',
-  priorityUndone: 'Priorities put back.',
-  priorityUndoPartial: (done: number, total: number, failed: string[]) =>
-    `Put back ${done} of ${total}. ${joinNames(failed)} did not change back.`,
-  priorityUndoStale: (names: string[]) =>
-    `${joinNames(names)} changed since, so ${names.length === 1 ? 'it was' : 'they were'} left as is.`,
-  priorityUndoPickFailed: 'The group still holds the new pick.',
-  priorityUndoFailed: 'The priorities did not change back. Nothing was undone.',
   noPriority: 'None',
   archive: (name: string) => `Stop using ${name}`,
   archiveSub: 'Its bills and envelopes stay, with nothing set.',

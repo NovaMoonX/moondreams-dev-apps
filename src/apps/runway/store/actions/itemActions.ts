@@ -597,6 +597,92 @@ export async function reorderItems(
   await batch.commit();
 }
 
+export interface SetGroupPriorityInput {
+  groupId: string;
+  /** The group's new payload, or null when its pick stays as it is. */
+  group: GroupSealed | null;
+  /** Each member's stretches from today on, as they will read. */
+  members: {
+    itemId: string;
+    kind: 'bill' | 'envelope';
+    stretches: VersionStretch<ItemPayload>[];
+  }[];
+  summary: string;
+  effectiveFrom: number;
+}
+
+/**
+ * Saves a group's priority and what it does to its members as one batch: the group's new version, one
+ * version per stretch of each member and one change entry naming them all, so the group and its items
+ * never disagree half way. Nothing already written is touched.
+ */
+export async function setGroupPriority(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: SetGroupPriorityInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const writes: {
+    itemId: string;
+    kind: PlanVersionDoc['kind'];
+    stretch: VersionStretch<ItemPayload>;
+  }[] = [
+    ...(input.group === null
+      ? []
+      : [
+          {
+            itemId: input.groupId,
+            kind: 'group' as const,
+            stretch: {
+              payload: input.group,
+              effectiveFrom: input.effectiveFrom,
+              effectiveUntil: null,
+            },
+          },
+        ]),
+    ...input.members.flatMap((member) =>
+      member.stretches.map((stretch) => ({
+        itemId: member.itemId,
+        kind: member.kind,
+        stretch,
+      })),
+    ),
+  ];
+  if (writes.length > MAX_REORDER_WRITES)
+    throw new Error(
+      'That changes too many items to save at once. Change one section at a time.',
+    );
+  const [changeSealed, ...versionsSealed] = await Promise.all([
+    sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
+    ...writes.map(({ stretch }) => sealJson(stretch.payload, encryption)),
+  ]);
+  const change: ChangeDoc = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.effectiveFrom,
+    itemIds: Array.from(new Set(writes.map(({ itemId }) => itemId))),
+    sealed: changeSealed,
+  };
+  const batch = writeBatch(db);
+  writes.forEach(({ itemId, kind, stretch }, index) => {
+    const version: PlanVersionDoc = {
+      id: generateUuid(),
+      itemId,
+      kind,
+      createdAt: now,
+      effectiveFrom: stretch.effectiveFrom,
+      effectiveUntil: stretch.effectiveUntil,
+      changeId,
+      sealed: versionsSealed[index],
+    };
+    batch.set(itemPath(uid, 'versions', version.id), version);
+  });
+  batch.set(itemPath(uid, 'changes', changeId), change);
+  await batch.commit();
+}
+
 export interface EndItemInput {
   itemId: string;
   /** The last day the item counts; it is gone from the day after. */

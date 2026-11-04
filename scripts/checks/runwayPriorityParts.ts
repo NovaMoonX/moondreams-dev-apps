@@ -365,7 +365,15 @@ const member = (
         name: itemId,
         priority,
         orderIndex: 3,
-        ...(extras ? { extras } : {}),
+        ...(kind === 'envelope'
+          ? {
+              funding: {
+                amount: { kind: 'exact', cents: 2_000 },
+                cadence: { kind: 'everyIncomeDay' },
+              },
+              extras: extras ?? [],
+            }
+          : {}),
       },
     },
   ],
@@ -378,39 +386,54 @@ const groupPlan = planGroupPriority(
       { tier: 'want', cents: 500, orderIndex: 1 },
     ]),
     member('d', 'bill', 'must'),
+    member('e', 'envelope', 'want'),
   ] as never,
   'want',
   10,
 );
 assert.deepEqual(
-  groupPlan.changes.map(({ itemId, written }) => [
+  groupPlan.map(({ itemId, written, wasPriority }) => [
     itemId,
     written[0].payload.priority,
     written[0].payload.orderIndex,
+    wasPriority,
   ]),
   [
-    ['a', 'want', 10],
-    ['d', 'want', 11],
+    ['a', 'want', 10, 'should'],
+    ['c', 'want', 11, 'should'],
+    ['d', 'want', 12, 'must'],
   ],
-  'a group at Want moves the others, ranked after the level, and leaves one already there',
+  'a group at Want moves the others, ranked after the level, and leaves the ones already there with one amount',
+);
+const folded = groupPlan.find(({ itemId }) => itemId === 'c');
+assert.deepEqual(
+  [
+    (folded?.written[0].payload as { funding: { amount: unknown } }).funding
+      .amount,
+    (folded?.written[0].payload as { extras: unknown }).extras,
+    folded?.folded?.totalCents,
+  ],
+  [{ kind: 'exact', cents: 2_500 }, [], 2_500],
+  'an extra folds into the main amount at the new level',
+);
+const atLevel = planGroupPriority(
+  [
+    member('g', 'envelope', 'must', [
+      { tier: 'should', cents: 1_000, orderIndex: 1 },
+    ]),
+  ] as never,
+  'must',
+  50,
 );
 assert.deepEqual(
-  groupPlan.skipped,
-  ['c'],
-  'an envelope whose Want extra would reach its level is named, not moved',
-);
-assert.equal(
-  planGroupPriority(
-    [
-      member('c', 'envelope', 'must', [
-        { tier: 'want', cents: 500, orderIndex: 1 },
-      ]),
-    ] as never,
-    'should',
-    1,
-  ).changes.length,
-  1,
-  'an extra below the new level still fits',
+  atLevel.map(({ written, wasPriority, folded: parts }) => [
+    written[0].payload.orderIndex,
+    wasPriority,
+    parts?.cents,
+    parts?.totalCents,
+  ]),
+  [[3, null, 2_000, 3_000]],
+  'an envelope already at the level keeps its rank and only folds its extra in (Groceries $200 Must + $100 Should is $300 Must)',
 );
 
 console.log('runway priority parts: ok');

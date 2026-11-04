@@ -1,57 +1,125 @@
-import { ENVELOPE_ORDER_STEP, PRIORITIES } from '@apps/runway/constants';
+import { ENVELOPE_ORDER_STEP } from '@apps/runway/constants';
 import type { VersionStretch } from '@apps/runway/engine/resolve';
-import type { BillSealed, EnvelopeSealed, Priority } from '@apps/runway/types';
+import { getExtras, withExtras } from '@apps/runway/engine/parts';
+import type {
+  BillSealed,
+  EnvelopeSealed,
+  GroupSealed,
+  Priority,
+  PriorityExtra,
+} from '@apps/runway/types';
 
 type MemberPayload = BillSealed | EnvelopeSealed;
+export type GroupSection = 'bill' | 'envelope';
 
 export interface GroupPriorityMember {
   itemId: string;
   name: string;
-  kind: 'bill' | 'envelope';
+  kind: GroupSection;
   stretches: VersionStretch<MemberPayload>[];
 }
 
 export interface GroupPriorityChange extends GroupPriorityMember {
   written: VersionStretch<MemberPayload>[];
+  /** Its priority today when that changes, else null. */
+  wasPriority: Priority | null;
+  /** Its amount today when extras fold into it: the main part and each extra. */
+  folded: {
+    priority: Priority;
+    cents: number;
+    extras: PriorityExtra[];
+    totalCents: number;
+  } | null;
 }
 
-/** Whether an envelope's extras sit at or above `priority`; extras only live at levels below the envelope's own. */
-const hasExtraAtOrAbove = (payload: MemberPayload, priority: Priority) =>
-  'extras' in payload &&
-  (payload.extras ?? []).some(
-    (extra) => PRIORITIES.indexOf(extra.tier) <= PRIORITIES.indexOf(priority),
-  );
+/** The priority a group holds for its bills or its envelopes. */
+export const getSectionPick = (group: GroupSealed, section: GroupSection) =>
+  section === 'bill' ? group.startingPriority : group.envelopePriority;
+
+/** The group with one section's pick (or both, for every section) set to `priority`. */
+export const withSectionPick = (
+  group: GroupSealed,
+  sections: readonly GroupSection[],
+  priority: Priority | null,
+): GroupSealed => ({
+  ...group,
+  startingPriority: sections.includes('bill')
+    ? priority
+    : group.startingPriority,
+  envelopePriority: sections.includes('envelope')
+    ? priority
+    : group.envelopePriority,
+});
+
+const getFoldedExtras = (payload: MemberPayload) =>
+  'funding' in payload ? getExtras(payload) : [];
+
+/** A stretch at `priority` with one amount: an envelope's extras fold into its main amount. */
+const toSingleTier = (
+  payload: MemberPayload,
+  priority: Priority,
+  orderIndex: number,
+): MemberPayload =>
+  'funding' in payload
+    ? {
+        ...payload,
+        priority,
+        orderIndex,
+        funding: withExtras(payload),
+        extras: [],
+      }
+    : { ...payload, priority, orderIndex };
 
 /**
- * What putting a group's bills and envelopes at `priority` writes: each member that is not there already, in every
- * stretch, ranked after what the level holds (`firstRank`, then one step per member, bills before envelopes).
- * An envelope whose extras would no longer sit below its level is left alone and named in `skipped`.
+ * What putting members at `priority` writes: each member not already there with one amount, in every
+ * stretch. One that moves tier is ranked after what the level holds (`firstRank`, then one step each, in
+ * the order given); one already at the level keeps its rank and only folds its extras in.
  */
 export function planGroupPriority(
   members: readonly GroupPriorityMember[],
   priority: Priority,
   firstRank: number,
-): { changes: GroupPriorityChange[]; skipped: string[] } {
-  const open = members.filter(
-    ({ stretches }) =>
-      !stretches.every(({ payload }) => payload.priority === priority),
+): GroupPriorityChange[] {
+  const open = members.filter(({ stretches }) =>
+    stretches.some(
+      ({ payload }) =>
+        payload.priority !== priority || getFoldedExtras(payload).length > 0,
+    ),
   );
-  const isBlocked = ({ stretches }: GroupPriorityMember) =>
-    stretches.some(({ payload }) => hasExtraAtOrAbove(payload, priority));
-  return {
-    changes: open
-      .filter((member) => !isBlocked(member))
-      .map((member, index) => ({
-        ...member,
-        written: member.stretches.map((stretch) => ({
-          ...stretch,
-          payload: {
-            ...stretch.payload,
-            priority,
-            orderIndex: firstRank + index * ENVELOPE_ORDER_STEP,
-          },
-        })),
+  const movers = open.filter(({ stretches }) =>
+    stretches.some(({ payload }) => payload.priority !== priority),
+  );
+  return open.map((member) => {
+    const moverIndex = movers.indexOf(member);
+    const today = member.stretches[0].payload;
+    const extras = getFoldedExtras(today);
+    const ownCents =
+      'funding' in today && today.funding.amount.kind === 'exact'
+        ? today.funding.amount.cents
+        : 0;
+    return {
+      ...member,
+      written: member.stretches.map((stretch) => ({
+        ...stretch,
+        payload: toSingleTier(
+          stretch.payload,
+          priority,
+          moverIndex === -1
+            ? stretch.payload.orderIndex
+            : firstRank + moverIndex * ENVELOPE_ORDER_STEP,
+        ),
       })),
-    skipped: open.filter(isBlocked).map(({ name }) => name),
-  };
+      wasPriority: today.priority === priority ? null : today.priority,
+      folded:
+        extras.length === 0
+          ? null
+          : {
+              priority: today.priority,
+              cents: ownCents,
+              extras,
+              totalCents:
+                ownCents + extras.reduce((sum, extra) => sum + extra.cents, 0),
+            },
+    };
+  });
 }

@@ -341,8 +341,10 @@ export interface BillSealed {
 /** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
 export interface GroupSealed {
   name: string;
-  /** The priority a new bill in this group starts with; null leaves it to the bill. */
+  /** The priority the group's bills are at, and a new bill starts with; null leaves it to each bill. */
   startingPriority: Priority | null;
+  /** The same for its envelopes; a version written before it existed reads as `startingPriority`, which then covered both. */
+  envelopePriority: Priority | null;
   /** The emoji its bills and envelopes wear unless they have their own; a version written before it existed reads as null. */
   emoji: string | null;
 }

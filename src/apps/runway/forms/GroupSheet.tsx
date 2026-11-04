@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import {
   Archive,
   CalendarDays,
@@ -64,6 +65,7 @@ import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveItem,
   changeItem,
+  setGroupPriority,
 } from '@apps/runway/store/actions/itemActions';
 import {
   selectBillPayments,
@@ -83,8 +85,11 @@ import {
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import {
+  getSectionPick,
   planGroupPriority,
+  withSectionPick,
   type GroupPriorityChange,
+  type GroupSection,
 } from '@apps/runway/utils/groupPriority';
 import type {
   BillSealed,
@@ -113,7 +118,10 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describeChange } from '@apps/runway/utils/changeText';
 
 type StartingChoice = Priority | 'none';
-type PriorityWritten = GroupPriorityChange;
+type PriorityRow = 'all' | GroupSection;
+
+/** How many changes a priority's confirmation names before it counts the rest. */
+const PRIORITY_CONFIRM_ROWS = 6;
 
 interface DueWritten {
   itemId: string;
@@ -181,10 +189,15 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
   const [name, setName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [priorityError, setPriorityError] = useState<string | null>(null);
-  const [pickedPriority, setPickedPriority] = useState<StartingChoice | null>(
-    null,
-  );
+  const [priorityNote, setPriorityNote] = useState<{
+    row: PriorityRow;
+    text: string;
+    isError: boolean;
+  } | null>(null);
+  const [pendingPriority, setPendingPriority] = useState<{
+    row: PriorityRow;
+    choice: StartingChoice;
+  } | null>(null);
   const allGroups = useAppSelector((state) => selectGroups(state, today));
   const figures = useGroupFigures(today, dial).find(({ id }) => id === groupId);
   const getIncomeDays = useIncomeDaysPerMonth(today);
@@ -197,21 +210,9 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     undo: DueWritten[] | null;
   } | null>(null);
   const store = useStore<RootState>();
-  const handledUndos = useRef(new WeakSet<DueWritten[] | PriorityWritten[]>());
+  const handledUndos = useRef(new WeakSet<DueWritten[]>());
   const [isUndoingDue, setIsUndoingDue] = useState(false);
-  const [priorityRecord, setPriorityRecord] = useState<{
-    note: string;
-    undo: PriorityWritten[] | null;
-    restorePick: StartingChoice | null;
-  } | null>(null);
-  const [isUndoingPriority, setIsUndoingPriority] = useState(false);
   const isApplyingPriority = useRef(false);
-  const undoArmTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  const priorityLinesRef = useRef<HTMLDivElement>(null);
-  const [isUndoArmed, setIsUndoArmed] = useState(true);
-  const [reservedLinesHeight, setReservedLinesHeight] = useState(0);
   const allVersions = useAppSelector((state) => state.runway.versions);
 
   if (!group || !figures) return null;
@@ -311,120 +312,31 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
           from,
         );
 
-  const undoPriorities = async (
-    written: PriorityWritten[],
-    restorePick: StartingChoice | null,
-  ) => {
-    if (!user || handledUndos.current.has(written)) return;
-    if (isApplyingPriority.current) return;
-    handledUndos.current.add(written);
-    isApplyingPriority.current = true;
-    setIsUndoingPriority(true);
-    setPriorityError(null);
-    try {
-      const encryption = await getRunwayEncryption(user.uid);
-      const live = store.getState().runway.versions;
-      const isUntouched = (entry: PriorityWritten) =>
-        isSameValue(
-          getMemberStretches(
-            live,
-            entry.kind,
-            entry.itemId,
-            entry.written[0].effectiveFrom,
-          ),
-          entry.written,
-        );
-      const untouched = written.filter(isUntouched);
-      const stale = written
-        .filter((entry) => !isUntouched(entry))
-        .map((entry) => entry.name);
-      const results = await Promise.allSettled(
-        untouched.map((entry) =>
-          changeItem(user.uid, encryption, {
-            itemId: entry.itemId,
-            kind: entry.kind,
-            payload: entry.stretches[0].payload,
-            summary: GROUP_WORDS.dueSummary(
-              entry.name,
-              describeChange(
-                entry.written[0].payload,
-                entry.stretches[0].payload,
-                getCardNamer([]),
-              ) || 'Updated',
-              formatDateOrdinalUTC(today),
-            ),
-            note: null,
-            effectiveFrom: today,
-            stretches: entry.stretches,
-          }),
-        ),
-      );
-      const failed = untouched.flatMap((entry, index) =>
-        results[index].status === 'rejected' ? [entry.name] : [],
-      );
-      const isClean = failed.length === 0 && stale.length === 0;
-      const title = isClean
-        ? GROUP_WORDS.priorityUndone
-        : GROUP_WORDS.priorityUndoPartial(
-            untouched.length - failed.length,
-            written.length,
-            [...failed, ...stale],
-          );
-      const description =
-        stale.length === 0 ? undefined : GROUP_WORDS.priorityUndoStale(stale);
-      const livePayload = getLivePayload();
-      const pickFailure =
-        isClean && restorePick !== null
-          ? await save(
-              {
-                ...livePayload,
-                startingPriority: restorePick === 'none' ? null : restorePick,
-              },
-              true,
-              livePayload,
-            )
-          : null;
-      setPriorityRecord({
-        note: [
-          title,
-          description,
-          pickFailure === null ? null : GROUP_WORDS.priorityUndoPickFailed,
-        ]
-          .filter(Boolean)
-          .join(' '),
-        undo: null,
-        restorePick: null,
-      });
-    } catch (undoError) {
-      const message = getErrorMessage(
-        undoError,
-        GROUP_WORDS.priorityUndoFailed,
-      );
-      handledUndos.current.delete(written);
-      setPriorityRecord({ note: message, undo: written, restorePick });
-    } finally {
-      isApplyingPriority.current = false;
-      setIsUndoingPriority(false);
-    }
-  };
+  const sectionsOf = (row: PriorityRow): GroupSection[] =>
+    row === 'all' ? ['bill', 'envelope'] : [row];
 
   const planPriority = (
     versions: RootState['runway']['versions'],
+    sections: readonly GroupSection[],
     choice: Priority,
     firstRank: number,
   ) =>
     planGroupPriority(
       [
-        ...bills.map(({ item, version }) => ({
-          kind: 'bill' as const,
-          itemId: item.id,
-          name: version.payload.name,
-        })),
-        ...envelopes.map(({ item, version }) => ({
-          kind: 'envelope' as const,
-          itemId: item.id,
-          name: version.payload.name,
-        })),
+        ...(sections.includes('bill') ? bills : []).map(
+          ({ item, version }) => ({
+            kind: 'bill' as const,
+            itemId: item.id,
+            name: version.payload.name,
+          }),
+        ),
+        ...(sections.includes('envelope') ? envelopes : []).map(
+          ({ item, version }) => ({
+            kind: 'envelope' as const,
+            itemId: item.id,
+            name: version.payload.name,
+          }),
+        ),
       ].map((member) => ({
         ...member,
         stretches: getMemberStretches(versions, member.kind, member.itemId),
@@ -433,102 +345,151 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
       firstRank,
     );
 
-  const applyPriorityToMembers = async (
-    choice: Priority,
-    restorePick: StartingChoice | null,
-  ) => {
-    if (!user) return;
-    const state = store.getState();
-    const everyItem = [
-      ...selectBills(state, today),
-      ...selectEnvelopes(state, today),
-      ...selectGoals(state, today),
-    ];
-    const { changes, skipped } = planPriority(
-      state.runway.versions,
-      choice,
-      getNextTierRank(everyItem, choice),
-    );
-    const label = PRIORITY_LABELS[choice];
-    if (changes.length === 0) {
-      setPriorityRecord(
-        skipped.length > 0
-          ? null
-          : {
-              note: GROUP_WORDS.priorityAlready(label),
-              undo: null,
-              restorePick: null,
-            },
+  /** One line of a priority's confirmation; the dialog sits outside the sheet, so amounts are left out while hidden. */
+  const describePriorityChange = (
+    change: GroupPriorityChange,
+    label: string,
+  ): string => {
+    const { folded } = change;
+    if (folded === null)
+      return GROUP_WORDS.priorityMoves(
+        change.name,
+        PRIORITY_LABELS[change.wasPriority ?? 'should'],
+        label,
       );
-      return;
-    }
-    const encryption = await getRunwayEncryption(user.uid);
-    const results = await Promise.allSettled(
-      changes.map((change) =>
-        changeItem(user.uid, encryption, {
-          itemId: change.itemId,
-          kind: change.kind,
-          payload: change.written[0].payload,
-          summary: GROUP_WORDS.dueSummary(
-            change.name,
-            describeChange(
-              change.stretches[0].payload,
-              change.written[0].payload,
-              getCardNamer([]),
-            ) || 'Updated',
-            formatDateOrdinalUTC(today),
-          ),
-          note: null,
-          effectiveFrom: today,
-          stretches: change.written,
-        }),
-      ),
+    const parts = [
+      { cents: folded.cents, tier: folded.priority },
+      ...folded.extras,
+    ].map(({ cents, tier }) =>
+      isHidden
+        ? PRIORITY_LABELS[tier]
+        : `${formatCents(cents)} ${PRIORITY_LABELS[tier]}`,
     );
-    const saved = changes.filter(
-      (_, index) => results[index].status === 'fulfilled',
+    return GROUP_WORDS.priorityFolds(
+      change.name,
+      label,
+      isHidden ? null : formatCents(folded.totalCents),
+      parts,
     );
-    if (saved.length > 0) {
-      setIsUndoArmed(false);
-      clearTimeout(undoArmTimer.current);
-      undoArmTimer.current = setTimeout(() => setIsUndoArmed(true), 700);
-      setPriorityRecord({
-        note: GROUP_WORDS.priorityDone(saved.length, label),
-        undo: saved,
-        restorePick,
-      });
-    } else setPriorityError(GROUP_WORDS.priorityFailed);
   };
 
-  const setStartingPriority = async (choice: StartingChoice) => {
-    if (isApplyingPriority.current) return;
+  const pickPriority = async (row: PriorityRow, choice: StartingChoice) => {
+    if (!user || isApplyingPriority.current) return;
     isApplyingPriority.current = true;
-    setReservedLinesHeight(priorityLinesRef.current?.offsetHeight ?? 0);
-    setPriorityError(null);
-    setPriorityRecord(null);
-    setPickedPriority(choice);
-    const livePayload = getLivePayload();
-    const before = livePayload.startingPriority ?? 'none';
-    const isSavedChoice = choice === before;
-    const failure = isSavedChoice
-      ? null
-      : await save(
-          {
-            ...livePayload,
-            startingPriority: choice === 'none' ? null : choice,
-          },
-          true,
-          livePayload,
+    try {
+      const sections = sectionsOf(row);
+      const live = getLivePayload();
+      const next = withSectionPick(
+        live,
+        sections,
+        choice === 'none' ? null : choice,
+      );
+      const isPickSame = sections.every(
+        (section) =>
+          getSectionPick(live, section) === getSectionPick(next, section),
+      );
+      const state = store.getState();
+      const everyItem = [
+        ...selectBills(state, today),
+        ...selectEnvelopes(state, today),
+        ...selectGoals(state, today),
+      ];
+      const changes =
+        choice === 'none'
+          ? []
+          : planPriority(
+              state.runway.versions,
+              sections,
+              choice,
+              getNextTierRank(everyItem, choice),
+            );
+      const label =
+        choice === 'none' ? GROUP_WORDS.noPriority : PRIORITY_LABELS[choice];
+      const scope = GROUP_WORDS.priorityScope(row, payload.name);
+      if (changes.length === 0 && isPickSame) {
+        setPriorityNote(
+          choice === 'none'
+            ? null
+            : {
+                row,
+                text: GROUP_WORDS.priorityAlready(scope, label),
+                isError: false,
+              },
         );
-    if (failure !== null) setPriorityError(GROUP_WORDS.startingPriorityFailed);
-    else if (choice !== 'none') {
-      try {
-        await applyPriorityToMembers(choice, isSavedChoice ? null : before);
-      } catch {
-        setPriorityError(GROUP_WORDS.priorityFailed);
+        return;
       }
+      if (changes.length > 0) {
+        const shown = changes.slice(0, PRIORITY_CONFIRM_ROWS);
+        const isConfirmed = await confirm({
+          title: GROUP_WORDS.priorityConfirmTitle(scope, label),
+          message: (
+            <div className='space-y-2 text-left text-sm'>
+              <p>{GROUP_WORDS.priorityConfirmLead}</p>
+              <ul className='list-disc space-y-1 pl-5'>
+                {shown.map((change) => (
+                  <li key={change.itemId}>
+                    {describePriorityChange(change, label)}
+                  </li>
+                ))}
+              </ul>
+              {changes.length > shown.length && (
+                <p className='text-muted-foreground'>
+                  {GROUP_WORDS.priorityConfirmMore(
+                    changes.length - shown.length,
+                  )}
+                </p>
+              )}
+            </div>
+          ),
+          confirmText: GROUP_WORDS.priorityConfirm(label),
+        });
+        if (!isConfirmed) return;
+      }
+      setPriorityNote(null);
+      setPendingPriority({ row, choice });
+      const encryption = await getRunwayEncryption(user.uid);
+      const date = formatDateOrdinalUTC(today);
+      await setGroupPriority(user.uid, encryption, {
+        groupId,
+        group: isPickSame ? null : next,
+        members: changes.map(({ itemId, kind, written }) => ({
+          itemId,
+          kind,
+          stretches: written,
+        })),
+        summary:
+          changes.length === 0
+            ? `${next.name}: ${describeChange(live, next, getCardNamer([])) || 'Updated'}, from ${date}.`
+            : GROUP_WORDS.prioritySummary(
+                label,
+                next.name,
+                changes.map(({ name }) => name),
+                date,
+              ),
+        effectiveFrom: today,
+      });
+      setPriorityNote(
+        choice === 'none'
+          ? null
+          : {
+              row,
+              text:
+                changes.length === 0
+                  ? GROUP_WORDS.priorityAlready(scope, label)
+                  : GROUP_WORDS.priorityDone(changes.length, label),
+              isError: false,
+            },
+      );
+    } catch (pickError) {
+      setPriorityNote({
+        row,
+        text: getErrorMessage(pickError, GROUP_WORDS.priorityFailed),
+        isError: true,
+      });
+    } finally {
+      isApplyingPriority.current = false;
+      setPendingPriority(null);
     }
-    isApplyingPriority.current = false;
-    setPickedPriority(null);
   };
 
   const archive = async () => {
@@ -566,20 +527,32 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
     }
   };
 
-  const savedPick = payload.startingPriority;
-  const isApplyingNow = pickedPriority !== null;
-  const pickPlan =
-    savedPick === null || isApplyingNow
-      ? null
-      : planPriority(allVersions, savedPick, 0);
-  const justWritten = new Set(
-    priorityRecord?.undo?.map(({ itemId }) => itemId),
-  );
-  const notAtPick =
-    pickPlan?.changes
-      .filter(({ itemId }) => !justWritten.has(itemId))
-      .map(({ name }) => name) ?? [];
-  const keptAsIs = pickPlan?.skipped ?? [];
+  const presentSections: GroupSection[] = [
+    ...(billCount > 0 ? (['bill'] as const) : []),
+    ...(envelopeCount > 0 ? (['envelope'] as const) : []),
+  ];
+  const priorityRows: PriorityRow[] =
+    presentSections.length === 1
+      ? presentSections
+      : ['all', ...presentSections];
+  const getRowValue = (row: PriorityRow): StartingChoice | 'mixed' => {
+    if (pendingPriority?.row === row) return pendingPriority.choice;
+    const picks = sectionsOf(row).map(
+      (section) => getSectionPick(payload, section) ?? 'none',
+    );
+    return picks.every((pick) => pick === picks[0]) ? picks[0] : 'mixed';
+  };
+  /** Who in a section is not at its pick, from the live plan; nothing while a pick is being written. */
+  const getOffPick = (row: PriorityRow): string[] => {
+    if (row === 'all' || pendingPriority !== null) return [];
+    const pick = getSectionPick(payload, row);
+    if (pick === null) return [];
+    return planPriority(allVersions, [row], pick, 0)
+      .filter(({ stretches }) =>
+        stretches.some(({ payload: member }) => member.priority !== pick),
+      )
+      .map(({ name }) => name);
+  };
 
   const dueDate = fromDateInputValue(dueText);
   const isPaidOnce = ({ item, version }: (typeof bills)[number]) =>
@@ -1162,7 +1135,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                 </ul>
               </div>
             )}
-            <div className='space-y-1.5'>
+            <div className='space-y-3'>
               <div className='flex items-center gap-1'>
                 <p className='text-muted-foreground text-xs'>
                   {GROUP_WORDS.startingPriority}
@@ -1171,92 +1144,81 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                   <p>{GROUP_WORDS.startingPriorityHelp}</p>
                 </HelpTip>
               </div>
-              <PillGroup
-                label={GROUP_WORDS.startingPriority}
-                options={startingOptions}
-                value={pickedPriority ?? payload.startingPriority ?? 'none'}
-                onChange={(choice: StartingChoice) => {
-                  const isRepeat =
-                    choice === (getLivePayload().startingPriority ?? 'none');
-                  if (priorityRecord?.undo && isRepeat) return;
-                  void setStartingPriority(choice);
-                }}
-              />
-              <div ref={priorityLinesRef} className='space-y-1.5 empty:hidden'>
-                {priorityError && (
-                  <p className='text-destructive text-sm' role='alert'>
-                    {priorityError}
-                  </p>
-                )}
-                {isApplyingNow &&
-                  (pickedPriority !== 'none' || reservedLinesHeight > 0) && (
-                    <p
-                      role='status'
-                      className='text-muted-foreground flex min-h-7 items-center text-sm'
-                      style={{ minHeight: Math.max(reservedLinesHeight, 28) }}
-                    >
-                      {pickedPriority === 'none'
-                        ? null
-                        : GROUP_WORDS.priorityApplying}
-                    </p>
-                  )}
-                {priorityRecord && (
-                  <div className='flex min-h-7 items-center gap-2'>
-                    <p className='text-muted-foreground text-sm'>
-                      {priorityRecord.note}
-                    </p>
-                    {priorityRecord.undo && (
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        size='sm'
-                        rounded='full'
-                        loading={isUndoingPriority}
-                        disabled={isUndoingPriority}
-                        className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
-                        onClick={() =>
-                          isUndoArmed &&
-                          void undoPriorities(
-                            priorityRecord.undo ?? [],
-                            priorityRecord.restorePick,
-                          )
-                        }
+              {priorityRows.map((row) => {
+                const value = getRowValue(row);
+                const offPick = getOffPick(row);
+                const pick =
+                  row === 'all' ? null : getSectionPick(payload, row);
+                const note = priorityNote?.row === row ? priorityNote : null;
+                const rowLabel = GROUP_WORDS.priorityRowLabel[row];
+                return (
+                  <div key={row} className='space-y-1.5'>
+                    {priorityRows.length > 1 && (
+                      <p className='text-sm font-medium'>
+                        {rowLabel}
+                        {value === 'mixed' && (
+                          <span className='text-muted-foreground font-normal'>
+                            {` · ${GROUP_WORDS.priorityMixed}`}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <PillGroup
+                      label={
+                        priorityRows.length > 1
+                          ? `${GROUP_WORDS.startingPriority}: ${rowLabel}`
+                          : GROUP_WORDS.startingPriority
+                      }
+                      options={startingOptions}
+                      value={value === 'mixed' ? null : value}
+                      onChange={(choice: StartingChoice) =>
+                        void pickPriority(row, choice)
+                      }
+                    />
+                    {pendingPriority?.row === row && (
+                      <p
+                        role='status'
+                        className='text-muted-foreground text-sm'
                       >
-                        {ITEM_SHEET_R2_WORDS.undo}
-                      </Button>
+                        {GROUP_WORDS.priorityApplying}
+                      </p>
+                    )}
+                    {note && (
+                      <p
+                        role={note.isError ? 'alert' : 'status'}
+                        className={join(
+                          'text-sm',
+                          note.isError
+                            ? 'text-destructive'
+                            : 'text-muted-foreground',
+                        )}
+                      >
+                        {note.text}
+                      </p>
+                    )}
+                    {pick !== null && offPick.length > 0 && (
+                      <div className='flex min-h-7 items-center gap-2'>
+                        <p className='text-muted-foreground text-sm'>
+                          {GROUP_WORDS.priorityStale(
+                            offPick,
+                            PRIORITY_LABELS[pick],
+                          )}
+                        </p>
+                        <Button
+                          type='button'
+                          variant='secondary'
+                          size='sm'
+                          rounded='full'
+                          className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
+                          onClick={() => void pickPriority(row, pick)}
+                        >
+                          {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[pick])}
+                        </Button>
+                      </div>
                     )}
                   </div>
-                )}
-                {savedPick !== null && keptAsIs.length > 0 && (
-                  <p className='text-muted-foreground text-sm'>
-                    {GROUP_WORDS.prioritySkipped(
-                      keptAsIs,
-                      PRIORITY_LABELS[savedPick],
-                    )}
-                  </p>
-                )}
-                {savedPick !== null && notAtPick.length > 0 && (
-                  <div className='flex min-h-7 items-center gap-2'>
-                    <p className='text-muted-foreground text-sm'>
-                      {GROUP_WORDS.priorityStale(
-                        notAtPick,
-                        PRIORITY_LABELS[savedPick],
-                      )}
-                    </p>
-                    <Button
-                      type='button'
-                      variant='secondary'
-                      size='sm'
-                      rounded='full'
-                      disabled={isUndoingPriority}
-                      className="relative shrink-0 after:absolute after:-inset-1.5 after:content-['']"
-                      onClick={() => void setStartingPriority(savedPick)}
-                    >
-                      {GROUP_WORDS.priorityMakeAll(PRIORITY_LABELS[savedPick])}
-                    </Button>
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
             <ActionGroup>
               <ActionRow
