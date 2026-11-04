@@ -731,6 +731,7 @@ export const GOAL_TRACK_WORDS = {
   allOnTrack: 'Every goal with a date is on track',
   behind: (names: readonly string[]) =>
     `${names.length} ${names.length === 1 ? 'goal is' : 'goals are'} behind: ${joinNames(names)}`,
+  openBehind: 'Change what it gets each time',
 } as const;
 
 export const GOAL_STATES = ['active', 'paused'] as const;
@@ -795,6 +796,9 @@ export const BILL_WORDS = {
   allBills: 'All bills',
   undatedOne: (name: string) => `${name} needs a due date`,
   undatedMany: (count: number) => `${count} bills need a due date`,
+  undatedOnlyHint: 'Tap one to set its date',
+  showAllBills: 'Show all bills',
+  allDated: 'Every bill has a due date now',
   offPlanTitle: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} has no due date`
@@ -2102,13 +2106,21 @@ export const HOW_OFTEN_WORDS = {
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
 export const FIX_WORDS = {
   noIncome: (name: string) => `${name} has no income before it is due`,
+  noIncomeMany: (names: readonly string[]) =>
+    names.length <= 3
+      ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} have no income before they are due`
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more have no income before they are due`,
+  firstDueOn: (date: string) => `The first is due\u00a0${date}`,
   noPick: (name: string) =>
     `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
   dueOn: (date: string) => `Due\u00a0${date}`,
   runsShortOn: (date: string) => `On ${date}`,
   openDay: 'Open this income day',
-  openBills: 'Open your bills',
+  openUndated: 'See the bills with no due date',
+  openPaidFrom: 'Change which pay it comes from',
+  openIncomeEnd: 'Change when your pay ends',
+  addIncome: 'Add expected money',
   needsDate: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} needs a due date`

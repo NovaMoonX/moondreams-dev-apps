@@ -1783,6 +1783,29 @@ async function writeSeedBills(
       22,
       'seed-group-subscriptions',
     ),
+    ...(
+      [
+        ['seed-bill-gym', 'Gym', 4_900],
+        ['seed-bill-renters', "Renter's insurance", 1_800],
+      ] as const
+    ).map(([id, name, cents], index) => ({
+      id,
+      payload: {
+        name,
+        emoji: null,
+        priority: 'should' as const,
+        orderIndex: 10 + index,
+        amount: exact(cents),
+        timing: {
+          kind: 'date' as const,
+          schedule: { kind: 'monthly' as const, anchor: null, monthDays: [] },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' as const },
+        stanceOverride: null,
+        groupId: null,
+      },
+    })),
   ];
   const groups: { id: string; payload: GroupSealed }[] = [
     {
