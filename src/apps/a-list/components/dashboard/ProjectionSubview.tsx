@@ -479,7 +479,11 @@ function ProjectionSubview({ membership, onClose }: ProjectionSubviewProps) {
             </p>
           )}
           {series.length > 1 && (
-            <div className='mt-3' role='img' aria-label={getChartDescription()}>
+            <div
+              className='mt-3 -mr-3'
+              role='img'
+              aria-label={getChartDescription()}
+            >
               <TrendLineChart
                 data={series}
                 seriesLabel='Net savings'

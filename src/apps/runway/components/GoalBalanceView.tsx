@@ -55,6 +55,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
     <div className='space-y-2' data-sensitive=''>
       <div
         role='img'
+        className='-mr-3'
         aria-label={`${goal.name}: ${GOAL_CHART_WORDS.key} Target ${formatCents(goal.targetCents)}${goal.targetDate === null ? '' : ` by ${formatDateShortUTC(goal.targetDate)}`}.`}
       >
         <TrendLineChart
