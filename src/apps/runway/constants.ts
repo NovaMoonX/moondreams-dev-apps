@@ -821,7 +821,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
-  wasDue: (when: string) => `Was due ${when}`,
+  wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
     when: string,
     later: readonly string[],
@@ -899,9 +899,9 @@ export const PAID_FROM_WORDS = {
   logSpread: 'spread across your pays',
   logLastBefore: "the pay right before it's due",
   noticeNoPay: (pay: string, name: string, dueOn: string) =>
-    `${pay} doesn't come before ${name} is due ${dueOn}`,
+    `${pay} doesn't come before ${name} is due\u00a0${dueOn}`,
   noticeNoPayAtAll: (name: string, dueOn: string) =>
-    `No pay comes before ${name} is due ${dueOn}`,
+    `No pay comes before ${name} is due\u00a0${dueOn}`,
   noticeShort: (name: string, short: string, on: string) =>
     `${name} is ${short} short on ${on}`,
   keepSpread: 'Spread across my pays',
@@ -922,7 +922,7 @@ export const PAID_FROM_WORDS = {
 export const PAY_SHARE_WORDS = {
   action: 'Change what this pay puts in',
   savingToward: (cents: string, total: string, due: string) =>
-    `Saving up · ${cents} of ${total} · due ${due}`,
+    `Saving up · ${cents} of ${total} · due\u00a0${due}`,
   title: (name: string) => `How much should this pay put toward ${name}?`,
   amount: 'Amount',
   changes: 'What changes',
@@ -966,9 +966,9 @@ export const PAY_SHARE_WORDS = {
     `${name} stays ${total}; only this pay changes`,
   leftOutDetail: (pay: string) => `Paid from ${pay}`,
   restSetAside: (cents: string, due: string) =>
-    `${cents} · already set aside · due ${due}`,
+    `${cents} · already set aside · due\u00a0${due}`,
   completesIt: (cents: string, due: string) =>
-    `${cents} · this pay completes it · due ${due}`,
+    `${cents} · this pay completes it · due\u00a0${due}`,
   undoPins: 'Put them back',
   theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
@@ -1107,10 +1107,65 @@ export const HOME_WORDS = {
   noIncome:
     'Add an income source to see what your next income day does with the money.',
   getStarted: 'Get started',
-  resume:
-    'Your income source is in. Add what you pay and what you spend on, and this page can say what is free.',
-  resumeAction: 'Continue setting up',
 } as const;
+
+export const SETUP_WORDS = {
+  steps: [
+    { key: 'income', title: 'Income', hint: 'Who pays you, and when' },
+    { key: 'bill', title: 'Bills', hint: 'What you pay each month' },
+    {
+      key: 'spending',
+      title: 'Spending and goals',
+      hint: 'Where the rest goes',
+    },
+  ],
+  newTitle: "Let's plan your first paycheck",
+  newBody: 'Three quick steps.',
+  newAction: 'Start your plan',
+  startedTitle: 'Income is in',
+  startedBody: 'Next, add what you pay.',
+  startedAction: 'Add your bills',
+  outTitle: 'Plan your first paycheck',
+  outBody: 'Start now. Sign in when you want to save it.',
+  outAction: 'Start planning',
+  outKeptTitle: 'Welcome back',
+  outKeptBody: 'Saved on this device. Sign in to keep it.',
+  outKeptAction: 'Keep planning',
+} as const;
+
+export const MONEY_CHART_WORDS = {
+  figure: 'Which figure',
+  free: 'Free to Spend',
+  all: 'All money',
+  range: 'How far back',
+  past: 'Past',
+  hidden: 'Show amounts to see your history',
+  hideChart: 'Hide chart',
+  showChart: 'Show chart',
+  young: 'Your money history shows here after your first two weeks.',
+  today: 'Today',
+  on: 'On',
+  expected: 'Expected',
+  since: 'since',
+  sinceStart: 'since you started',
+  up: 'Up',
+  down: 'Down',
+  same: 'No change',
+  lowest: 'Lowest',
+  aheadHelp:
+    'The solid line is what happened. The dotted line is where your plan takes it over the next year: the pay you expect, the bills due, and what your envelopes get, counted as spent the day they get it.',
+  aheadFreeHelp:
+    'A pay you expect is mostly given to your envelopes, bills and goals, so Free to Spend only rises by what a pay leaves over.',
+  allHelp:
+    'Up to today, All money is everything you hold: Free to Spend plus what your envelopes, goals, bills and cards hold.',
+  endsHelp: (on: string) =>
+    `The dotted line stops at your last income day, ${on}, since your plan has no pay after it. Bills due after it aren't counted.`,
+  rangeHelp:
+    'The buttons under the chart choose how far back the solid line goes. All goes back to the day you started.',
+} as const;
+
+/** Days of history before the money chart draws a line, so a near-flat start never shows. */
+export const MONEY_CHART_MIN_DAYS = 14;
 
 export const HISTORY_WORDS = {
   updating: 'Updating your history',
@@ -1425,10 +1480,6 @@ export const START_WORDS = {
     'Your plan is still opening. Try again in a moment. Nothing was added.',
   handoffUnrecorded: (names: string) =>
     `What is in it now did not record for ${names}. Add it under Where things stand.`,
-  landingTitle: 'Plan before you sign in',
-  landingBody:
-    'Runway plans each paycheck: what goes to bills, envelopes and goals, and what is left to spend. You can go through Starting out now. Your answers stay on this device until you sign in.',
-  landingButton: 'Start planning',
 } as const;
 
 /** What "Start from your budget" takes and keeps from the documents, told to the reader and enforced on its answer. */
@@ -1446,7 +1497,7 @@ export const BUDGET_LIMITS = {
 } as const;
 
 /** The ways Starting out can begin, kept in the URL as `method` so a choice survives sign-in. */
-export const START_METHODS = ['budget'] as const;
+export const START_METHODS = ['budget', 'continue'] as const;
 
 export const BUDGET_TEXT_EXTENSIONS = ['csv', 'tsv', 'txt', 'md'] as const;
 export const BUDGET_ACCEPT = '.csv,.tsv,.txt,.md,.pdf';
@@ -1678,7 +1729,7 @@ export const ITEM_SHEET_WORDS = {
 
 export const PAID_HISTORY_WORDS = {
   summary: (name: string, due: string, amount: string) =>
-    `Marked ${name} paid: ${amount} due ${due}.`,
+    `Marked ${name} paid: ${amount} due\u00a0${due}.`,
   undoText: (name: string, due: string) =>
     `Took back the ${due} payment of ${name}`,
   confirm: (name: string, due: string, freeCents: string | null) =>
@@ -2066,7 +2117,7 @@ export const FIX_WORDS = {
   noPick: (name: string) =>
     `${name} comes from a pay that is not before it is due`,
   short: (name: string, amount: string) => `${name} ${amount} short`,
-  dueOn: (date: string) => `Due ${date}`,
+  dueOn: (date: string) => `Due\u00a0${date}`,
   runsShortOn: (date: string) => `On ${date}`,
   openDay: 'Open this income day',
   openBills: 'Open your bills',
@@ -2266,7 +2317,7 @@ export const GROUP_WORDS = {
         : `${bills.slice(0, 2).join(', ')} and ${bills.length - 2} more`
     } already ${bills.length === 1 ? 'has a due date' : 'have due dates'}. Replace ${bills.length === 1 ? 'it' : 'them'} with ${date}?${repeats ? ` ${repeats}` : ''}`,
   dueDone: (count: number, date: string) =>
-    `Due ${date} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
+    `Due\u00a0${date} on ${count} ${count === 1 ? 'bill' : 'bills'}`,
   dueReplace: 'Replace',
   dueToast: (count: number) =>
     `Set the due date on ${count} ${count === 1 ? 'bill' : 'bills'}`,
@@ -2315,7 +2366,7 @@ export const GROUP_WORDS = {
   oneTimeNote: 'Not in monthly total',
   noBills: 'No bills or envelopes yet',
   nameTaken: (name: string) => `You already have ${name}.`,
-  oneTimeDue: (date: string) => `due ${date}`,
+  oneTimeDue: (date: string) => `due\u00a0${date}`,
   oneTimeCount: (count: number) => `in ${count} one-time bills`,
   oneTimeLabel: 'Together, one-time',
   moved: (item: string, name: string) => `${item} is now for ${name}`,
@@ -2324,7 +2375,7 @@ export const GROUP_WORDS = {
   willBe: (name: string) => `It will be for ${name}.`,
   plusOneTime: (amount: string, count: number, due: string | null) =>
     count === 1 && due !== null
-      ? `Plus ${amount} due ${due}`
+      ? `Plus ${amount} due\u00a0${due}`
       : `Plus ${amount} in ${count} one-time bills`,
   members: (names: readonly string[]) =>
     names.length <= 4
@@ -2949,23 +3000,23 @@ export const CARD_WORDS = {
     day === 31 ? 'the last day' : `the ${ordinal}`,
   noDueDay: 'No due day',
   needsDue: 'Pick a day, or say it has none.',
-  dueOn: (date: string) => `Due ${date}`,
+  dueOn: (date: string) => `Due\u00a0${date}`,
   dueInDays: (days: number) =>
     days === 1 ? 'Due tomorrow' : `Due in ${days} days`,
   dueToday: 'Due today',
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
   dueWarning: (name: string, date: string, amount: string) =>
-    `${name} is due ${date} · ${amount} waiting`,
+    `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>
     `${name} is due today · ${amount} waiting`,
   dueWarningOpen: 'Pay it off',
   dueWarningPast: (name: string, date: string, amount: string) =>
-    `${name} was due ${date} · ${amount} waiting`,
+    `${name} was due\u00a0${date} · ${amount} waiting`,
   notPaidBy: (date: string) => `Not paid by ${date}`,
   pastDueSince: (date: string) => `Past due since ${date}`,
   dueRolled: (due: string, since: string) =>
-    `Due ${due} · not paid by ${since}`,
+    `Due\u00a0${due} · not paid by ${since}`,
   changeAdded: (name: string, owed: string | null) =>
     owed === null ? `Added ${name}` : `Added ${name}, owing ${owed}`,
   changeChanged: (name: string, what: string) => `Changed ${name}: ${what}`,

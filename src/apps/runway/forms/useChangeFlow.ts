@@ -56,7 +56,7 @@ import {
   type ChangeSpan,
   type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import type {
   EnvelopeSealed,
   GoalSealed,
@@ -272,12 +272,12 @@ export function useChangeFlow({
     const words = summaryText || 'Updated';
     if (isMoneyless) return `${name}: ${words}.`;
     if (span?.kind === 'day') {
-      return `${name}: ${words}, for ${formatDateUTC(span.day.on)} only.`;
+      return `${name}: ${words}, for ${formatDateOrdinalUTC(span.day.on)} only.`;
     }
     if (span?.kind === 'version' && span.effectiveUntil !== null) {
-      return `${name}: ${words}, from ${formatDateUTC(span.effectiveFrom)} through ${formatDateUTC(span.effectiveUntil - DAY_MS)}, then it goes back.`;
+      return `${name}: ${words}, from ${formatDateOrdinalUTC(span.effectiveFrom)} through ${formatDateOrdinalUTC(span.effectiveUntil - DAY_MS)}, then it goes back.`;
     }
-    return `${name}: ${words}, from ${formatDateUTC(span?.kind === 'version' ? span.effectiveFrom : today)}.`;
+    return `${name}: ${words}, from ${formatDateOrdinalUTC(span?.kind === 'version' ? span.effectiveFrom : today)}.`;
   };
 
   const save = async (reason: string | null) => {
@@ -352,7 +352,7 @@ export function useChangeFlow({
           }));
           const tellFailed = (failedOn: number[]) => {
             if (failedOn.length === 0) return;
-            const dates = failedOn.map(formatDateShortUTC);
+            const dates = failedOn.map(formatDateOrdinalUTC);
             const named =
               dates.length <= 3
                 ? dates.join(', ').replace(/, ([^,]*)$/, ' and $1')

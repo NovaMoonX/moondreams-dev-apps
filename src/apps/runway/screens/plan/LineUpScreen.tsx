@@ -13,7 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { TRACKING_WORDS } from '@apps/runway/constants';
@@ -169,11 +169,11 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
     startDate === null || startDate > today
       ? 'Pick today or an earlier day.'
       : earliest !== null && startDate < earliest
-        ? `Tracking stopped on ${formatDateUTC(earliest - DAY_MS)}. You can start again from ${formatDateUTC(earliest)}.`
+        ? `Tracking stopped on ${formatDateOrdinalUTC(earliest - DAY_MS)}. You can start again from ${formatDateOrdinalUTC(earliest)}.`
         : planStart !== null && startDate < planStart
-          ? `Your plan's figures begin on ${formatDateUTC(planStart)}. Pick that day or a later one.`
+          ? `Your plan's figures begin on ${formatDateOrdinalUTC(planStart)}. Pick that day or a later one.`
           : summarizedBefore !== null && startDate < summarizedBefore
-            ? `Your earlier months are added up, not listed. Pick ${formatDateUTC(summarizedBefore)} or a later day.`
+            ? `Your earlier months are added up, not listed. Pick ${formatDateOrdinalUTC(summarizedBefore)} or a later day.`
             : moneyCents === null
               ? 'Say how much money you have on hand.'
               : null;

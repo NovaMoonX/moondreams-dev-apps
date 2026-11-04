@@ -25,7 +25,7 @@ import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   BILL_EVERY_UNIT_LABELS,
@@ -421,7 +421,7 @@ const describeEnding = (data: BillFormData) => {
   if (data.endKind === 'never') return INCOME_ENDING_LABELS.never;
   if (data.endKind === 'date') {
     const onDate = fromDateInputValue(data.endDate);
-    return onDate === undefined ? '' : `After ${formatDateUTC(onDate)}`;
+    return onDate === undefined ? '' : `After ${formatDateOrdinalUTC(onDate)}`;
   }
   const count = parseCount(data.endCount);
   return count === null ? '' : `After ${count} payments`;
@@ -670,7 +670,7 @@ function BillFormBody({
   const getPinDates = () =>
     editing
       ? getBillPins(openDays, editing.itemId, flow.effectiveFrom ?? today).map(
-          (pin) => formatDateShortUTC(pin.expectedOn),
+          (pin) => formatDateOrdinalUTC(pin.expectedOn),
         )
       : [];
   const canPickPay = !isOnce && formData.frequency !== null;
@@ -767,7 +767,7 @@ function BillFormBody({
   const startMin = editing ? undefined : toDateInputValue(today);
   const dayOptions = dueDays.map((day) => ({
     value: day.dayKey,
-    label: `${formatDateUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
+    label: `${formatDateOrdinalUTC(day.on)} · ${day.sourceName ?? day.payLineName}`,
   }));
   const isDueValid =
     formData.isLater ||
@@ -864,7 +864,7 @@ function BillFormBody({
         ? FORM_FLOW_WORDS.dueLaterSummary
         : dueDate === undefined
           ? ''
-          : formatDateUTC(dueDate),
+          : formatDateOrdinalUTC(dueDate),
       isAnswered: isDueValid,
       blocker:
         dueDate !== undefined && !isDueValid ? FORM_FLOW_WORDS.pastDay : null,
@@ -967,7 +967,9 @@ function BillFormBody({
                 <MaskedText>
                   {FORM_FLOW_WORDS.savingUpNote(
                     getSavingAmount(formData),
-                    dueDate === undefined ? null : formatDateShortUTC(dueDate),
+                    dueDate === undefined
+                      ? null
+                      : formatDateOrdinalUTC(dueDate),
                   )}
                 </MaskedText>
               </p>

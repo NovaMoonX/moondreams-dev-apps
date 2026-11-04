@@ -1,4 +1,4 @@
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type { Level, OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { getLevelWords } from '@apps/runway/utils/levelText';
@@ -82,7 +82,7 @@ export function describePurchaseRemoval(
   nameOf: (envelopeId: string) => string,
 ): string {
   const kind = isRefund(purchase) ? 'Refund' : 'Purchase';
-  return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateUTC(purchase.date)}.`;
+  return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
 const describeGroupChange = (
@@ -119,7 +119,7 @@ export function describePurchaseEdit(
       ? `envelopes ${shape(before.lines)} to ${shape(after.lines)}`
       : null,
     after.date !== before.date
-      ? `day ${formatDateUTC(before.date)} to ${formatDateUTC(after.date)}`
+      ? `day ${formatDateOrdinalUTC(before.date)} to ${formatDateOrdinalUTC(after.date)}`
       : null,
     (after.paidByCardId ?? null) !== (before.paidByCardId ?? null)
       ? `paid by ${cardNameOf(before.paidByCardId ?? null)} to ${cardNameOf(after.paidByCardId ?? null)}`

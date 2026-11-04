@@ -2347,7 +2347,7 @@ A person can open any older month in Days and Spend, find a purchase or an incom
 **Prerequisites:** None
 **Target PR Size:** ~500 lines
 **Files:**
-- `src/utils/formatUtils.ts` (a general `formatDateOrdinalUTC` for a date-only value and `formatDateOrdinal` for an instant, beside `formatDateShortUTC` and `formatDateShort`; `formatRelativeDayUTC` is left as it is)
+- `src/utils/formatUtils.ts` (a general `formatDateOrdinalUTC` for a date-only value and `formatDateOrdinal` for an instant, beside `formatDateShortUTC` and `formatDateShort`; `formatRelativeDayUTC` takes the ordinal formatter as its day formatter, and keeps its old default for other apps)
 - `src/apps/runway/utils/` (`billText.ts`, `changeText.ts`, `draftText.ts`, `lookaheadText.ts`, `paceText.ts`, `priorityText.ts`, `purchaseText.ts`, `cardText.ts`: their date words)
 - `src/apps/runway/components/`, `screens/` and `store/actions/` wherever a date is shown or sealed into a change-log line (`DueBillsCard`, `IncomeDayCard`, `ChangeRow`, `EffectPreview`, `LookaheadWarnings`, `BillRow`, `GoalRow`, `PurchaseRow`, the plan, days and spend screens)
 - `scripts/checks/runwayEngine.ts`

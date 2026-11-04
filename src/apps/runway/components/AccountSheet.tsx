@@ -27,6 +27,7 @@ import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   centsToInputValue,
   formatCents,
@@ -59,7 +60,6 @@ import {
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
-import { formatDayOrdinalUTC } from '@apps/runway/utils/accountText';
 
 const MAX_HOLD_LINES = 4;
 
@@ -109,7 +109,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const facts = [
     account.balanceOn === null
       ? null
-      : ACCOUNT_WORDS.balanceOn(formatDayOrdinalUTC(account.balanceOn)),
+      : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
   ].filter((fact): fact is string => fact !== null);
 

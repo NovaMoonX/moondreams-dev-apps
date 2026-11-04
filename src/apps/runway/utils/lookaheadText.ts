@@ -1,6 +1,5 @@
 import {
-  formatDateShortUTC,
-  formatDateUTC,
+  formatDateOrdinalUTC,
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
@@ -17,7 +16,7 @@ export { isSameLookahead, sortProblems };
 /** "today", "tomorrow" or "on Nov 18": the day a problem falls on, counted from `today`. */
 const onDay = (on: number, today: number) => {
   if (on <= today) return 'today';
-  const relative = formatRelativeDayUTC(on, today);
+  const relative = formatRelativeDayUTC(on, today, formatDateOrdinalUTC);
   return relative === 'tomorrow' ? relative : `on ${relative}`;
 };
 
@@ -34,7 +33,7 @@ export function describeCoverage(lookahead: Lookahead, today: number) {
     return {
       isClear: true,
       text: COVERAGE_WORDS.untilIncomeEnds(
-        formatDateShortUTC(lookahead.incomeEndsOn),
+        formatDateOrdinalUTC(lookahead.incomeEndsOn),
       ),
     };
   }
@@ -128,7 +127,7 @@ export function describeGroupRow(
   }
   if (group.kind === 'single') return describeProblemRow(group.problem, today);
   const result = {
-    title: formatDateShortUTC(group.on),
+    title: formatDateOrdinalUTC(group.on),
     detail: listShorts(group.shorts, isHidden),
   };
   return result;
@@ -143,7 +142,7 @@ export function describeGroupShort(group: ProblemGroup, isHidden = false) {
       after: '',
     };
   }
-  const on = formatDateShortUTC(group.on).replace(/ /g, '\u00a0');
+  const on = formatDateOrdinalUTC(group.on).replace(/ /g, '\u00a0');
   if (group.kind === 'single') {
     const problem = group.problem;
     if (problem.kind === 'noIncome' && problem.reason === 'short') {
@@ -205,7 +204,7 @@ function describeChangeProblem(
   grewBy: number | null = null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
-  const on = formatDateShortUTC(problem.on);
+  const on = formatDateOrdinalUTC(problem.on);
   const tail =
     more > 0
       ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
@@ -307,7 +306,7 @@ export function describeHoldsBlocks(
     if (first) {
       return {
         tone: 'info',
-        text: COVERAGE_WORDS.stillShort(formatDateUTC(first.on)),
+        text: COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
         figure: null,
       };
     }
@@ -318,13 +317,13 @@ export function describeHoldsBlocks(
     const coverage =
       ends === null
         ? COVERAGE_WORDS.clearTail
-        : COVERAGE_WORDS.untilIncomeEndsTail(formatDateUTC(ends));
+        : COVERAGE_WORDS.untilIncomeEndsTail(formatDateOrdinalUTC(ends));
     const movedFrom =
       ends !== null &&
       before.problems.length === 0 &&
       before.incomeEndsOn !== null &&
       before.incomeEndsOn !== ends
-        ? ` instead of ${formatDateUTC(before.incomeEndsOn)}`
+        ? ` instead of ${formatDateOrdinalUTC(before.incomeEndsOn)}`
         : '';
     return {
       tone: 'success',
@@ -369,7 +368,7 @@ export function describeHoldsBlocks(
 /** One problem in a few words, in the plan's terms: "The plan leaves Rent $30 short on Nov 1". */
 export function describeProblemShort(problem: LookaheadProblem) {
   const name = problem.name === '' ? 'A bill' : problem.name;
-  const on = formatDateShortUTC(problem.on).replace(/ /g, '\u00a0');
+  const on = formatDateOrdinalUTC(problem.on).replace(/ /g, '\u00a0');
   if (problem.kind === 'noIncome' && problem.reason === 'noIncome')
     return `${name} on ${on} has no income before it`;
   if (problem.kind === 'noIncome' && problem.reason === 'noPick')
@@ -381,14 +380,16 @@ export function describeProblemShort(problem: LookaheadProblem) {
 /** One problem as a list row: what is short or missing, and on which day. */
 export function describeProblemRow(problem: LookaheadProblem, today: number) {
   const name = problem.name === '' ? 'A bill' : problem.name;
-  const on = formatDateShortUTC(problem.on);
+  const on = formatDateOrdinalUTC(problem.on);
   if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
       title:
         problem.reason === 'noPick'
           ? FIX_WORDS.noPick(name)
           : FIX_WORDS.noIncome(name),
-      detail: FIX_WORDS.dueOn(formatRelativeDayUTC(problem.on, today)),
+      detail: FIX_WORDS.dueOn(
+        formatRelativeDayUTC(problem.on, today, formatDateOrdinalUTC),
+      ),
     };
   }
   return {

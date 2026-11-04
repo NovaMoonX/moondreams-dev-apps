@@ -7,7 +7,11 @@ import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import Subview from '@/components/Subview';
 import { useAppSelector } from '@/store';
-import { formatDateTime, formatDateUTC } from '@/utils/formatUtils';
+import {
+  formatDateOrdinalUTC,
+  formatDateOrdinal,
+  formatTime,
+} from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -234,7 +238,7 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
               <div key={correction.id} className='space-y-2'>
                 <p className='text-sm'>
                   <span className='font-medium'>
-                    {formatDateTime(correction.createdAt)}
+                    {`${formatDateOrdinal(correction.createdAt)}, ${formatTime(correction.createdAt)}`}
                   </span>
                   {index === corrections.length - 1 && (
                     <span className='text-muted-foreground'>
@@ -305,10 +309,10 @@ function RecordScreen({ dayKey, onClose }: RecordScreenProps) {
       <div className='space-y-4'>
         {day?.arrivedOn != null && (
           <p className='text-muted-foreground text-sm'>
-            Expected {formatDateUTC(day.expectedOn)}
+            Expected {formatDateOrdinalUTC(day.expectedOn)}
             <span className='max-sm:hidden'> · </span>
             <span className='max-sm:block'>
-              Arrived {formatDateUTC(day.arrivedOn)}
+              Arrived {formatDateOrdinalUTC(day.arrivedOn)}
             </span>
           </p>
         )}

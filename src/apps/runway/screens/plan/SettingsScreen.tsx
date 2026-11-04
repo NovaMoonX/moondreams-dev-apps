@@ -11,7 +11,7 @@ import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
   SETTINGS_GROUP_WORDS,
@@ -160,7 +160,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               value={
                 open === null
                   ? 'Plan only'
-                  : `Track, since ${formatDateUTC(open.from)}`
+                  : `Track, since ${formatDateOrdinalUTC(open.from)}`
               }
               onOpen={() => openSettingsView('tracking')}
             />

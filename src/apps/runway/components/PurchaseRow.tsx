@@ -1,4 +1,4 @@
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
@@ -35,7 +35,7 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
       : envelopes;
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
-  const date = formatDateShortUTC(purchase.date);
+  const date = formatDateOrdinalUTC(purchase.date);
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const detail = [
     date,

@@ -8,7 +8,7 @@ import {
   readKeyring,
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
-import { formatDateUTC } from '../../src/utils/formatUtils.ts';
+import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import { DEFAULT_CURRENCY_CODE } from '../../src/apps/runway/constants.ts';
 import {
   DAY_MS,
@@ -443,7 +443,7 @@ async function writeSeedLifecycle(
     sealJson(stretchPayload, encryption),
     sealJson(
       {
-        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateUTC(today)} through ${formatDateUTC(stretchEnd - DAY_MS)}, then it goes back.`,
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(today)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
         note: 'Covering the car registration',
       } satisfies ChangeSealed,
       encryption,
@@ -842,7 +842,7 @@ async function writeSeedStart(
     itemIds: [],
     sealed: await sealJson(
       {
-        summary: `Started from ${formatDateUTC(startDate)}.`,
+        summary: `Started from ${formatDateOrdinalUTC(startDate)}.`,
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -1953,7 +1953,7 @@ async function writeSeedBills(
     new Date(today).getUTCMonth() + 2,
     1,
   );
-  const raiseText = formatDateUTC(raiseFromStart);
+  const raiseText = formatDateOrdinalUTC(raiseFromStart);
   const [raiseSealed, raiseChangeSealed] = await Promise.all([
     sealJson(raise, encryption),
     sealJson(
@@ -2208,7 +2208,7 @@ async function seedTrackingPlan(
     itemIds: [],
     sealed: await sealJson(
       {
-        summary: `Started tracking from ${formatDateUTC(startDate)}.`,
+        summary: `Started tracking from ${formatDateOrdinalUTC(startDate)}.`,
       } satisfies ChangeSealed,
       encryption,
     ),
@@ -2416,7 +2416,7 @@ async function writeSeedPurchases(
     {
       id: 'seed-change-purchase-removed',
       createdAt: removedDate + 14 * 3_600_000,
-      summary: `Purchase removed: Walgreens, $12.40 on ${formatDateUTC(removedDate)}.`,
+      summary: `Purchase removed: Walgreens, $12.40 on ${formatDateOrdinalUTC(removedDate)}.`,
     },
   ];
   await Promise.all(

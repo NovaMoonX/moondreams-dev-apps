@@ -1,27 +1,12 @@
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { ACCOUNT_KIND_LABELS, ACCOUNT_WORDS } from '@apps/runway/constants';
-import { toDayOrdinal } from '@apps/runway/utils/monthDays';
 import type {
   AccountSealed,
   Cents,
   DateOnly,
   OpenAccount,
 } from '@apps/runway/types';
-
-const monthFormatter = new Intl.DateTimeFormat('en-US', {
-  month: 'short',
-  timeZone: 'UTC',
-});
-
-/** A date-only day with an ordinal and a short month: "Nov 4th", with the year when it is not this one. */
-export function formatDayOrdinalUTC(on: DateOnly) {
-  const date = new Date(on);
-  const base = `${monthFormatter.format(date)} ${toDayOrdinal(date.getUTCDate())}`;
-  return date.getUTCFullYear() === new Date().getUTCFullYear()
-    ? base
-    : `${base}, ${date.getUTCFullYear()}`;
-}
 
 export const isLastFour = (text: string) => /^\d{4}$/.test(text);
 
@@ -76,4 +61,9 @@ export const describeAccountBalance = (
   name: string,
   cents: Cents,
   on: DateOnly,
-) => ACCOUNT_WORDS.changeBalance(name, formatCents(cents), formatDateUTC(on));
+) =>
+  ACCOUNT_WORDS.changeBalance(
+    name,
+    formatCents(cents),
+    formatDateOrdinalUTC(on),
+  );

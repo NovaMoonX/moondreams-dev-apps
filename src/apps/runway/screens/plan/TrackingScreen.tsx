@@ -9,7 +9,7 @@ import Subview from '@/components/Subview';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import LevelGate from '@apps/runway/components/LevelGate';
 import { LEVELS, LEVEL_LABELS, TRACKING_WORDS } from '@apps/runway/constants';
@@ -97,7 +97,7 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
             <LevelGate level='track'>
               {open && (
                 <p className='text-sm'>
-                  Tracking since {formatDateUTC(open.from)}.
+                  Tracking since {formatDateOrdinalUTC(open.from)}.
                 </p>
               )}
             </LevelGate>
@@ -119,10 +119,10 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
                     className='flex items-start justify-between gap-3 p-3 text-sm'
                   >
                     <span className='min-w-0'>
-                      {formatDateUTC(period.from)}
+                      {formatDateOrdinalUTC(period.from)}
                       {period.to === null
                         ? ' to now'
-                        : ` to ${formatDateUTC(period.to)}`}
+                        : ` to ${formatDateOrdinalUTC(period.to)}`}
                     </span>
                   </li>
                 ))}

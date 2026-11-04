@@ -3,7 +3,7 @@ import { doc, runTransaction, updateDoc } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { DEFAULT_CURRENCY_CODE } from '@apps/runway/constants';
 import { toDayStamp } from '@apps/runway/engine/dates';
 import {
@@ -79,8 +79,8 @@ async function sealTrackingRecords(
 ) {
   const summary =
     direction === 'up'
-      ? `Started tracking from ${formatDateUTC(date)}.`
-      : `Stopped tracking after ${formatDateUTC(date)}.`;
+      ? `Started tracking from ${formatDateOrdinalUTC(date)}.`
+      : `Stopped tracking after ${formatDateOrdinalUTC(date)}.`;
   const [moveSealed, changeSealed] = await Promise.all([
     sealJson({ direction } satisfies TrackingChangeSealed, encryption),
     sealJson({ summary } satisfies ChangeSealed, encryption),

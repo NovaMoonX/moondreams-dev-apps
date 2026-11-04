@@ -40,7 +40,7 @@ import { useLocalStoragePreference } from '@/hooks/useLocalStoragePreference';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getAiReadFailureMessage } from '@/lib/firebase/aiFailure';
 import { formatFileSize } from '@/utils/fileUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import {
   BILL_FREQUENCY_LABELS,
@@ -231,7 +231,9 @@ const sayIncome = (values: IncomeValues) =>
     sayAmount(values.amountCents, null),
     values.scheduleKind && SCHEDULE_LABELS[values.scheduleKind].toLowerCase(),
     sayDays(values.monthDays) ??
-      (values.nextOn === null ? null : `from ${formatDateUTC(values.nextOn)}`),
+      (values.nextOn === null
+        ? null
+        : `from ${formatDateOrdinalUTC(values.nextOn)}`),
   ]);
 
 const sayBill = (values: BillValues) =>
@@ -241,7 +243,9 @@ const sayBill = (values: BillValues) =>
         sayAmount(values.amountCents, values.highCents),
         values.repeats && BILL_FREQUENCY_LABELS[values.repeats].toLowerCase(),
         sayDays(values.dayOfMonth === null ? [] : [values.dayOfMonth]) ??
-          (values.dueOn === null ? null : `due ${formatDateUTC(values.dueOn)}`),
+          (values.dueOn === null
+            ? null
+            : `due\u00a0${formatDateOrdinalUTC(values.dueOn)}`),
       ]);
 
 const sayEnvelope = (values: EnvelopeValues) =>
@@ -267,7 +271,7 @@ const sayGoal = (values: GoalValues) =>
       : `${formatCents(values.currentCents)} saved`,
     values.targetDate === null
       ? null
-      : `by ${formatDateUTC(values.targetDate)}`,
+      : `by ${formatDateOrdinalUTC(values.targetDate)}`,
   ]);
 
 const getKindReadings = (today: number) => ({

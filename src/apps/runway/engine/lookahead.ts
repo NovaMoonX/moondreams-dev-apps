@@ -95,6 +95,13 @@ export interface Lookahead {
   }[];
   /** Bills with no due date yet, in the order given. They never stop the plan, so they are not in `problems`. */
   undated: { billId: string; name: string }[];
+  /** Each walked income day: what it brings in, what its draft leaves free to spend and what it gives each item. */
+  steps: {
+    on: DateOnly;
+    moneyCents: Cents;
+    freeCents: Cents;
+    lines: { itemId: string; cents: Cents }[];
+  }[];
 }
 
 const EMPTY_CARRY: LookaheadCarry = { funded: {}, added: {} };
@@ -263,6 +270,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     carry: LookaheadCarry;
     shorts: Extract<LookaheadProblem, { kind: 'short' }>[];
     firstShortDay: Lookahead['firstShortDay'];
+    steps: Lookahead['steps'];
   }>(
     (acc, day, index) => {
       const result = input.draftOf(day, acc.carry);
@@ -279,9 +287,21 @@ export function lookahead(input: LookaheadInput): Lookahead {
           (isShort
             ? { dayKey: day.dayKey, on: day.on, draft: result.draft }
             : null),
+        steps: [
+          ...acc.steps,
+          {
+            on: day.on,
+            moneyCents: result.draft.moneyCents,
+            freeCents: result.draft.freeToSpend.cents,
+            lines: result.draft.lines.map(({ itemId, cents }) => ({
+              itemId,
+              cents,
+            })),
+          },
+        ],
       };
     },
-    { carry: EMPTY_CARRY, shorts: [], firstShortDay: null },
+    { carry: EMPTY_CARRY, shorts: [], firstShortDay: null, steps: [] },
   );
   const problems = sortProblems([
     ...findNoIncome(input, walked.carry.funded),
@@ -317,6 +337,7 @@ export function lookahead(input: LookaheadInput): Lookahead {
     undated: input.bills
       .filter((bill) => bill.isUndated)
       .map((bill) => ({ billId: bill.id, name: bill.name })),
+    steps: walked.steps,
   };
   return result;
 }

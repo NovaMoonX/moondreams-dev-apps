@@ -575,7 +575,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Match new purchases and deposits on Runway's servers as they arrive, by the same rules as on the device
 - [ ] Notifications with no amounts or names: money arrived and ready to confirm, a bill was paid
 - [ ] Reminders for income days and bills coming due, which need no linked account
-- [ ] Every date Runway shows reads with an ordinal and a short month ("Feb 1st", "Mar 31st")
+- [x] Every date Runway shows reads with an ordinal and a short month ("Feb 1st", "Mar 31st")
 - [ ] Horizon: an event with one-time and repeating costs, exact or a range, money put toward it now, and the rest from your pays, one pay, outside the plan or decided later, with set aside, spent and left
 - [ ] How far an item's money goes, in a sentence, and a warning where it stops when the rest is undecided
 - [ ] Set a cost's price; pay it in one tap when exact, with its real amount when a range, as a purchase or a paid mark on Track and a paid mark on Plan; mark an outside cost paid

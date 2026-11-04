@@ -258,6 +258,11 @@ import {
 } from '../../src/apps/runway/utils/fundingText.ts';
 import { parsePercentToBps } from '../../src/utils/moneyUtils.ts';
 import {
+  formatDateOrdinal,
+  formatDateOrdinalUTC,
+  toDayOrdinal,
+} from '../../src/utils/formatUtils.ts';
+import {
   allocate,
   percentOf,
   percentShares,
@@ -932,7 +937,7 @@ const version = (
     archivedAt: null,
     heldReleasedOn: null,
   });
-  // Two pay lines, each every other week, a week apart: A on Oct 2, 16, 30 ...; B on Oct 9, 23, Nov 6 ...
+  // Two pay lines, each every other week, a week apart: A on Oct 2nd, 16, 30 ...; B on Oct 9th, 23, Nov 6th ...
   const days = buildComingDays(
     [header('A'), header('B')],
     [
@@ -7845,6 +7850,7 @@ const version = (
     incomeEndsOn: null,
     due: [],
     undated: [],
+    steps: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
     ({
@@ -7905,7 +7911,7 @@ const version = (
   );
   assert.ok(
     noted[0]?.text.includes(
-      'Phone $296.00 short on Nov 7: Freelance payment is one-time and brings $120.',
+      'Phone $296.00 short on Nov\u00a07th: Freelance payment is one-time and brings $120.',
     ),
     'a short pay that is one-time says why',
   );
@@ -8777,7 +8783,7 @@ const version = (
   assert.deepEqual(
     paidDues(utc(2026, 10, 28)),
     [['20261028', 'paid_rent_20261101']],
-    'B1: moving it to the 28th takes the Nov 1 mark to Oct 28, the payment it became, and never marks a payment nobody paid',
+    'B1: moving it to the 28th takes the Nov 1st mark to Oct 28th, the payment it became, and never marks a payment nobody paid',
   );
   assert.deepEqual(
     [
@@ -10445,6 +10451,7 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     undated: [],
+    steps: [],
     due: [],
   });
   assert.equal(
@@ -10569,6 +10576,72 @@ const version = (
     byDay.has(utc(2026, 12, 1)),
     false,
     'a day outside the range is left out',
+  );
+}
+
+{
+  const expected = [
+    '1st',
+    '2nd',
+    '3rd',
+    '4th',
+    '5th',
+    '6th',
+    '7th',
+    '8th',
+    '9th',
+    '10th',
+    '11th',
+    '12th',
+    '13th',
+    '14th',
+    '15th',
+    '16th',
+    '17th',
+    '18th',
+    '19th',
+    '20th',
+    '21st',
+    '22nd',
+    '23rd',
+    '24th',
+    '25th',
+    '26th',
+    '27th',
+    '28th',
+    '29th',
+    '30th',
+    '31st',
+  ];
+  expected.forEach((word, index) =>
+    assert.equal(
+      toDayOrdinal(index + 1),
+      word,
+      `day ${index + 1} reads ${word}`,
+    ),
+  );
+  const thisYear = new Date().getUTCFullYear();
+  const feb1 = Date.UTC(thisYear, 1, 1);
+  assert.equal(
+    formatDateOrdinalUTC(feb1),
+    'Feb\u00a01st',
+    'a date this year has no year',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear + 1, 11, 22)),
+    `Dec\u00a022nd,\u00a0${thisYear + 1}`,
+    'a date in another year names it',
+  );
+  assert.equal(
+    formatDateOrdinalUTC(Date.UTC(thisYear, 2, 31)),
+    'Mar\u00a031st',
+    'a date-only value keeps its day for a viewer behind UTC',
+  );
+  const localNoon = new Date(thisYear, 6, 3, 12).getTime();
+  assert.equal(
+    formatDateOrdinal(localNoon),
+    'Jul\u00a03rd',
+    'an instant reads its local day',
   );
 }
 
@@ -10980,7 +11053,7 @@ console.log('runway engine: ok');
   assert.deepEqual(
     [rentOf(twoMonths, 'job_a'), rentOf(twoMonths, 'job_b')],
     [120_000, 120_000],
-    'F1: the Nov 6 pairing fills the Nov 15 rent and the Nov 20 pairing the Dec 15 rent, each in full',
+    'F1: the Nov\u00a06th pairing fills the Nov\u00a015th rent and the Nov\u00a020th pairing the Dec\u00a015th rent, each in full',
   );
   const oneMonth = draftOver([
     ['job_a', utc(2026, 11, 6)],
@@ -12073,8 +12146,8 @@ console.log('runway engine: ok');
     'G11: a bill paid once keeps its payment as the figure',
   );
   assert.equal(
-    joinPaymentAndState('$150 yearly', 'Due Mar 1, 2027'),
-    '$150 yearly\u00a0· due Mar 1, 2027',
+    joinPaymentAndState('$150 yearly', 'Due Mar\u00a01st,\u00a02027'),
+    '$150 yearly\u00a0· due Mar\u00a01st,\u00a02027',
     'G11: a converted row names the payment first and keeps the dot with it',
   );
   const calendarFunding = (

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import BillShareView from '@apps/runway/components/BillShareView';
 import { BillSheet } from '@apps/runway/components/BillRow';
 import ItemRow from '@apps/runway/components/ItemRow';
@@ -36,9 +36,9 @@ function LeftOutBillRow({
   const [isOpen, setIsOpen] = useState(false);
   const plan = useAppSelector((state) => selectResolvedPlan(state, today));
   const stance = useAppSelector(selectStance);
-  const payments = useAppSelector((state) =>
-    selectBillPayments(state, today),
-  )[billId];
+  const payments = useAppSelector((state) => selectBillPayments(state, today))[
+    billId
+  ];
   const payment =
     payments?.find(
       (entry, index) =>
@@ -62,7 +62,7 @@ function LeftOutBillRow({
       ? payment.parts.find((part) => part.cents > 0)
       : undefined;
   const detail = carrier
-    ? PAY_SHARE_WORDS.leftOutCarrier(formatDateShortUTC(carrier.day.on))
+    ? PAY_SHARE_WORDS.leftOutCarrier(formatDateOrdinalUTC(carrier.day.on))
     : PAY_SHARE_WORDS.leftOutDetail(paidFrom);
   return (
     <>
@@ -91,7 +91,7 @@ function LeftOutBillRow({
                 paidFromText={
                   carrier
                     ? PAY_SHARE_WORDS.theDatePay(
-                        formatDateShortUTC(carrier.day.on),
+                        formatDateOrdinalUTC(carrier.day.on),
                       )
                     : paidFrom
                 }

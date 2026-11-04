@@ -1,5 +1,6 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import { formatDateOrdinal } from '@/utils/formatUtils';
 import { DAYS_CALENDAR_WORDS } from '@apps/runway/constants';
 import type { CalendarEntry } from '@apps/runway/engine/dayCalendar';
 import { Dot } from '@apps/runway/screens/days/CalendarDot';
@@ -27,11 +28,7 @@ function DaysCalendarCell({
 }: DaysCalendarCellProps) {
   const shownCount = entries.length > MAX_DOTS ? MAX_DOTS - 1 : MAX_DOTS;
   const hiddenCount = Math.max(0, entries.length - shownCount);
-  const dateLabel = date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  const dateLabel = `${date.toLocaleDateString(undefined, { weekday: 'long' })}, ${formatDateOrdinal(date.getTime())}`;
 
   return (
     <span

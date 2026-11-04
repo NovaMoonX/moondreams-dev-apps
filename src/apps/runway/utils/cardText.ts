@@ -1,5 +1,5 @@
 import { toOrdinal } from '@apps/runway/utils/monthDays';
-import { formatDateShortUTC, formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CARD_DUE_WARN_DAYS,
@@ -159,7 +159,7 @@ export const getCardDueNow = (
 
 /** The one due fact a card shows: "Due Nov 14", "Due in 3 days" / "Due today" inside the warning window when money waits, "Past due since Oct 14", or "Due Nov 3 · not paid by Oct 14"; null with no due day. `due` is what `getCardDueNow` found. */
 const dayOf = (date: DateOnly) =>
-  formatDateShortUTC(date).replace(/ /g, '\u00a0');
+  formatDateOrdinalUTC(date).replace(/ /g, '\u00a0');
 
 export function describeCardDue(
   card: OpenCard,
@@ -262,11 +262,22 @@ export const describeCardPaid = (
   name: string,
   cents: Cents,
   on: DateOnly,
-) => CARD_WORDS.changePaid(covers, name, formatCents(cents), formatDateUTC(on));
+) =>
+  CARD_WORDS.changePaid(
+    covers,
+    name,
+    formatCents(cents),
+    formatDateOrdinalUTC(on),
+  );
 
 /** The change-log sentence for a payment taken back. */
 export const describeCardTakenBack = (
   name: string,
   cents: Cents,
   on: DateOnly,
-) => CARD_WORDS.changeTakenBack(name, formatCents(cents), formatDateUTC(on));
+) =>
+  CARD_WORDS.changeTakenBack(
+    name,
+    formatCents(cents),
+    formatDateOrdinalUTC(on),
+  );

@@ -3,7 +3,7 @@ import {
   PRIORITIES_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type { PriorityAssignment } from '@apps/runway/engine/priorities';
 import type { PreviewDay } from '@apps/runway/store/selectors/previewSelectors';
@@ -85,7 +85,7 @@ const toDates = (days: readonly number[]) => {
   const firstYear = new Date(ons[0]).getUTCFullYear();
   return ons
     .map((on) => {
-      const text = formatDateShortUTC(on);
+      const text = formatDateOrdinalUTC(on);
       const year = new Date(on).getUTCFullYear();
       return year !== firstYear && !text.includes(String(year))
         ? `${text}, ${year}`
@@ -182,7 +182,7 @@ export function readMove(
     moreTaken: Math.max(0, losers.length - 1),
     soonestSame:
       comingOn.length > 0 && !affected.has(comingOn[0])
-        ? PRIORITIES_WORDS.soonestSame(formatDateShortUTC(comingOn[0]))
+        ? PRIORITIES_WORDS.soonestSame(formatDateOrdinalUTC(comingOn[0]))
         : null,
   };
 }

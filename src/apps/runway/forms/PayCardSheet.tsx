@@ -46,7 +46,7 @@ import {
   selectClosingBase,
   selectRecentFrom,
 } from '@apps/runway/store/selectors/historySelectors';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   describeCardPaid,
   describeCardTakenBack,
@@ -144,7 +144,8 @@ function PayCardSheet({ card, onClose, onCancel }: PayCardSheetProps) {
   const getBlocker = () => {
     if (paidCents === null) return CARD_WORDS.needsAmount;
     if (paidOn === null || paidOn > today) return CARD_WORDS.needsDay;
-    if (paidOn < floor) return CARD_WORDS.beforeTracking(formatDateUTC(floor));
+    if (paidOn < floor)
+      return CARD_WORDS.beforeTracking(formatDateOrdinalUTC(floor));
     return null;
   };
   const blocker = getBlocker();

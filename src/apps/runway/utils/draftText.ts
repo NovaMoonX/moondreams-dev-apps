@@ -3,7 +3,7 @@ import {
   DRAFT_WORDS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { describeAmount } from '@apps/runway/utils/fundingText';
 import type { DraftLine } from '@apps/runway/engine/draft';
@@ -83,9 +83,9 @@ export function describeBillShare(line: DraftLine) {
     return PAY_SHARE_WORDS.savingToward(
       formatCents(line.cents),
       formatCents(line.bill.totalCents),
-      formatDateUTC(line.bill.dueOn),
+      formatDateOrdinalUTC(line.bill.dueOn),
     );
-  const result = `${DRAFT_WORDS.dueOn} ${formatDateUTC(line.bill.dueOn)} · ${formatCents(line.cents)} ${DRAFT_WORDS.setAsideOf} ${formatCents(line.bill.totalCents)}`;
+  const result = `${DRAFT_WORDS.dueOn} ${formatDateOrdinalUTC(line.bill.dueOn)} · ${formatCents(line.cents)} ${DRAFT_WORDS.setAsideOf} ${formatCents(line.bill.totalCents)}`;
   return result;
 }
 

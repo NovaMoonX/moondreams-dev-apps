@@ -1,15 +1,12 @@
 import { useState } from 'react';
-import { ChevronRight, Home, ListChecks, ShoppingBag } from 'lucide-react';
+import { Home, ShoppingBag } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
-import HelpTip from '@/components/HelpTip';
-import SensitiveValue from '@/components/SensitiveValue';
 import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
-import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
@@ -18,13 +15,13 @@ import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
+import MoneyCard from '@apps/runway/components/MoneyCard';
 import {
   CARD_DUE_WARN_DAYS,
   HOME_TILE_COUNT,
   HOME_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
-import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
@@ -38,10 +35,8 @@ import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRangeSides } from '@apps/runway/store/selectors/lookaheadSelectors';
 import {
   selectAllCards,
-  selectBills,
   selectHasIncome,
   selectEnvelopes,
-  selectGoals,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
@@ -50,7 +45,6 @@ import {
   selectPairedBy,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
 import { describePairedBy } from '@apps/runway/utils/fundingText';
 import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
@@ -65,13 +59,6 @@ function HomeScreen() {
   );
   const isLoaded = isItemsLoaded && isDaysLoaded;
   const hasIncome = useAppSelector((state) => selectHasIncome(state, today));
-  const isSetupOpen = useAppSelector(
-    (state) =>
-      selectBills(state, today).length === 0 &&
-      selectEnvelopes(state, today).length === 0 &&
-      selectGoals(state, today).length === 0 &&
-      state.runway.plan?.startDate == null,
-  );
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
@@ -86,7 +73,6 @@ function HomeScreen() {
     (state) => state.runway.plan?.startDate ?? 0,
   );
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
-  const { isHidden } = useValuesHidden();
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
 
   if (!isLoaded) {
@@ -112,7 +98,6 @@ function HomeScreen() {
     );
   }
 
-  const free = describeFreeToSpend(getFreeToSpendFigure(balances));
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
   const hasMoney = ({ item }: (typeof envelopes)[number]) =>
     (balances.assignedByItem[item.id] ?? 0) !== 0;
@@ -146,39 +131,14 @@ function HomeScreen() {
         ) : (
           <div className='min-h-10' aria-hidden='true' />
         )}
-        <div className='border-border bg-accent relative rounded-2xl border px-4 py-2.5'>
-          <div className='flex h-5 items-center gap-1'>
-            <span className='text-muted-foreground text-sm font-medium'>
-              {free.label}
-            </span>
-            {hasRanges && (
-              <span className='relative z-10'>
-                <HelpTip title={HOME_WORDS.freeToSpend}>
-                  {describeRangeBasis(stance, rangeSides)}
-                </HelpTip>
-              </span>
-            )}
-          </div>
-          <Button
-            variant='tertiary'
-            size='stripped'
-            className="text-foreground! static h-auto w-full items-center justify-between gap-3 text-left font-normal after:absolute after:inset-0 after:rounded-2xl after:content-['']"
-            aria-label={
-              isHidden
-                ? `${free.label}, amount hidden. See it in detail`
-                : `${free.label}, ${free.value}. See it in detail`
-            }
-            onClick={() => openView('freeToSpend')}
-          >
-            <span className='min-w-0 text-4xl leading-none font-semibold tracking-tight break-words tabular-nums'>
-              <SensitiveValue>{free.value}</SensitiveValue>
-            </span>
-            <ChevronRight
-              className='text-muted-foreground h-5 w-5 shrink-0'
-              aria-hidden='true'
-            />
-          </Button>
-        </div>
+        <MoneyCard
+          today={today}
+          lookahead={lookahead}
+          rangeNote={
+            hasRanges ? describeRangeBasis(stance, rangeSides) : null
+          }
+          onOpen={() => openView('freeToSpend')}
+        />
       </div>
       <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
       {!isAddingPurchase && (
@@ -193,18 +153,6 @@ function HomeScreen() {
         }
         otherwise={<TrackInviteCard />}
       />
-      {isSetupOpen && (
-        <EmptyCard
-          icon={<ListChecks className='h-5 w-5' />}
-          action={
-            <Button size='sm' onClick={() => openView('start')}>
-              {HOME_WORDS.resumeAction}
-            </Button>
-          }
-        >
-          {HOME_WORDS.resume}
-        </EmptyCard>
-      )}
       <LevelGate level='track'>
         <HomeCards today={today} />
       </LevelGate>

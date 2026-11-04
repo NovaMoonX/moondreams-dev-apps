@@ -11,7 +11,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   CARD_WORDS,
   FIX_ROWS_SHOWN,
@@ -111,7 +111,7 @@ function LookaheadWarnings({
   const endsText =
     incomeEndsOn === null
       ? null
-      : FIX_WORDS.incomeEnds(formatDateUTC(incomeEndsOn));
+      : FIX_WORDS.incomeEnds(formatDateOrdinalUTC(incomeEndsOn));
 
   if (rows.length === 0 && !endsText) return null;
   const label = !first

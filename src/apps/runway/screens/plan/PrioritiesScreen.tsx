@@ -34,7 +34,7 @@ import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
@@ -335,7 +335,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                       dueFirst.cutoffOn === null ||
                         dueFirst.cutoffOn === Infinity
                         ? null
-                        : formatDateShortUTC(dueFirst.cutoffOn),
+                        : formatDateOrdinalUTC(dueFirst.cutoffOn),
                     )
                   : null
               }
@@ -924,7 +924,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     return (
       <p className='text-muted-foreground text-sm'>
         {PRIORITIES_WORDS.shortOn(
-          formatDateShortUTC(lookahead.firstShortDay.on),
+          formatDateOrdinalUTC(lookahead.firstShortDay.on),
         )}
       </p>
     );
@@ -1038,7 +1038,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
                               />
                               {shortOn !== null &&
                                 PRIORITIES_WORDS.cutLine(
-                                  formatDateShortUTC(shortOn),
+                                  formatDateOrdinalUTC(shortOn),
                                 )}
                             </span>
                             <span className='inline-flex items-center gap-1 text-[13px]'>

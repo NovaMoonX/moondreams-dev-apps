@@ -12,7 +12,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import PurchaseRow from '@apps/runway/components/PurchaseRow';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -87,8 +87,8 @@ function ExpenseView({
             ? '1 purchase'
             : `${purchases.length} purchases`,
           first === last
-            ? formatDateShortUTC(first)
-            : `${formatDateShortUTC(first)} to ${formatDateShortUTC(last)}`,
+            ? formatDateOrdinalUTC(first)
+            : `${formatDateOrdinalUTC(first)} to ${formatDateOrdinalUTC(last)}`,
         ].join(' · ');
 
   const rename = async () => {
