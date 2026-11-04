@@ -10,8 +10,6 @@ import type {
 import { occurrences } from './schedule';
 import { pick } from './stance';
 
-const NEVER_ENDS = { onDate: null, afterCount: null } as const;
-
 /** One time a cost asks for money. */
 export interface CostPayment {
   costId: string;
@@ -27,7 +25,7 @@ export function listCostPayments(
   stance: Stance,
 ): CostPayment[] {
   const totalCents = pick(stance, cost.amount, 'expense');
-  const result = occurrences(cost.schedule, NEVER_ENDS, 0, horizon).map(
+  const result = occurrences(cost.schedule, cost.ending, 0, horizon).map(
     (dueOn) => ({ costId: cost.id, dueOn, totalCents }),
   );
   return result;
@@ -54,6 +52,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   costs: stored.costs.map((cost) => ({
     ...cost,
     isOutside: cost.isOutside ?? false,
+    ending: cost.ending ?? { onDate: null, afterCount: null },
   })),
 });
 

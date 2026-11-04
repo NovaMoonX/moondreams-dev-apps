@@ -52,6 +52,8 @@ function HorizonSheet({
     plannedHighCents,
     isPlannedRange,
     outsideCents,
+    through,
+    hasRepeats,
   } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
@@ -97,6 +99,7 @@ function HorizonSheet({
     HORIZON_WORDS.plannedTotal(
       formatCents(isPlannedRange ? plannedHighCents : plannedCents),
       isPlannedRange,
+      hasRepeats ? formatDateOrdinalUTC(through) : null,
     ).replaceAll(' ', '\u00A0'),
     outsideCents > 0 &&
       HORIZON_WORDS.outsideTotal(formatCents(outsideCents)).replaceAll(

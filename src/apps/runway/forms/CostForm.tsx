@@ -25,8 +25,18 @@ import {
   MAX_NAME_LENGTH,
 } from '@apps/runway/constants';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
+import RepeatFields from '@apps/runway/forms/RepeatFields';
 import type { HorizonCost } from '@apps/runway/types';
+import { describeCostTiming } from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
+import {
+  buildEnding,
+  buildSchedule,
+  isRepeatAnswered,
+  ONCE_REPEAT_DRAFT,
+  toRepeatDraft,
+  type RepeatDraft,
+} from '@apps/runway/utils/repeatDraft';
 import {
   describeAmountDraft,
   EMPTY_AMOUNT_DRAFT,
@@ -40,6 +50,7 @@ interface CostFormData {
   amount: AmountDraft;
   name: string;
   date: string;
+  repeat: RepeatDraft;
   isOutside: boolean;
 }
 
@@ -93,6 +104,7 @@ const toDraftData = (
         cost.schedule.anchor === null
           ? ''
           : toDateInputValue(cost.schedule.anchor),
+      repeat: toRepeatDraft(cost.schedule, cost.ending),
       isOutside: cost.isOutside,
     };
   }
@@ -103,6 +115,7 @@ const toDraftData = (
       happensOn >= today && happensOn <= lastDate
         ? toDateInputValue(happensOn)
         : '',
+    repeat: ONCE_REPEAT_DRAFT,
     isOutside: false,
   };
 };
@@ -129,14 +142,23 @@ function CostForm({
   const name = formData.name.trim();
   const date = fromDateInputValue(formData.date);
   const isDateValid = date !== undefined && date >= today && date <= lastDate;
+  const schedule = isDateValid ? buildSchedule(formData.repeat, date) : null;
+  const ending = buildEnding(formData.repeat, date);
+  const isWhenAnswered =
+    isDateValid && isRepeatAnswered(formData.repeat) && ending !== null;
+  const whenBlocker = !isDateValid
+    ? HORIZON_WORDS.needsCostDate
+    : !isRepeatAnswered(formData.repeat)
+      ? FORM_FLOW_WORDS.pickEvery(formData.repeat.everyUnit)
+      : ending === null
+        ? HORIZON_WORDS.needsCostEnding
+        : null;
   const blocker =
     range === null
       ? FORM_FLOW_WORDS.badAmount
       : name === ''
         ? HORIZON_WORDS.needsCostName
-        : !isDateValid
-          ? HORIZON_WORDS.needsCostDate
-          : null;
+        : whenBlocker;
   const suggestions = getSuggestions(itemName);
 
   const steps: QuestionStep[] = [
@@ -202,14 +224,16 @@ function CostForm({
       id: 'date',
       title: HORIZON_WORDS.costWhenTitle,
       summaryLabel: HORIZON_WORDS.costWhen,
-      summaryValue: isDateValid ? formatDateOrdinalUTC(date) : '',
-      isAnswered: isDateValid,
-      blocker:
-        formData.date !== '' && !isDateValid
-          ? HORIZON_WORDS.needsCostDate
-          : null,
+      summaryValue:
+        schedule && ending
+          ? describeCostTiming(schedule, ending, true)
+          : isDateValid
+            ? formatDateOrdinalUTC(date)
+            : '',
+      isAnswered: isWhenAnswered,
+      blocker: formData.date === '' ? null : whenBlocker,
       render: () => (
-        <div className='space-y-2'>
+        <div className='space-y-3'>
           <DateInput
             variant='outline'
             aria-label={HORIZON_WORDS.costWhen}
@@ -221,6 +245,13 @@ function CostForm({
           <p className='text-muted-foreground text-sm'>
             {HORIZON_WORDS.costDateHint}
           </p>
+          <RepeatFields
+            draft={formData.repeat}
+            startDate={formData.date}
+            onChange={(patch) =>
+              set({ repeat: { ...formData.repeat, ...patch } })
+            }
+          />
         </div>
       ),
     },
@@ -274,16 +305,13 @@ function CostForm({
   });
 
   const save = () => {
-    if (range === null || !isDateValid) return;
+    if (range === null || !isDateValid || !schedule || !ending) return;
     onSave({
       id: cost?.id ?? generateUuid(),
       name,
       amount: range,
-      schedule: {
-        kind: 'once',
-        anchor: date,
-        monthDays: [],
-      },
+      schedule,
+      ending,
       isOutside: formData.isOutside,
       note: cost?.note ?? null,
     });

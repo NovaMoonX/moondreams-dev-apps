@@ -251,7 +251,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan and movers (a range) covered by the $800 put toward it, Miso's surgery in December with nothing put toward it, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -270,14 +270,24 @@ async function writeSeedHorizon(
     highCents: number,
     anchor: number,
     isOutside = false,
+    isMonthly = false,
   ) => ({
     id,
     name,
     amount: { lowCents, highCents },
-    schedule: { kind: 'once' as const, anchor, monthDays: [] },
+    schedule: isMonthly
+      ? {
+          kind: 'monthly' as const,
+          anchor,
+          monthDays: [new Date(anchor).getUTCDate()],
+        }
+      : { kind: 'once' as const, anchor, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
     isOutside,
     note: null,
   });
+  const feb1 = nextCalendarDay(today, 1, 1);
+  const dec20 = nextCalendarDay(today, 11, 20);
 
   const items: { id: string; payload: HorizonSealed }[] = [
     {
@@ -309,6 +319,15 @@ async function writeSeedHorizon(
             jan15 - 5 * DAY_MS,
             true,
           ),
+          cost(
+            'seed-cost-storage',
+            'Storage unit',
+            10_000,
+            10_000,
+            feb1,
+            false,
+            true,
+          ),
         ],
       },
     },
@@ -331,6 +350,15 @@ async function writeSeedHorizon(
             12_000,
             12_000,
             dec18 + 14 * DAY_MS,
+          ),
+          cost(
+            'seed-cost-medication',
+            'Medication',
+            3_500,
+            3_500,
+            dec20,
+            false,
+            true,
           ),
         ],
       },

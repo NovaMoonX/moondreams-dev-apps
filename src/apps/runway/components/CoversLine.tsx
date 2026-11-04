@@ -35,11 +35,33 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
     ({ cost }) => cost.amount.lowCents !== cost.amount.highCents,
   );
   const endWords = RANGE_END_WORDS[getRangeEnd(stance, 'expense')];
-  const named = covered
+  const groups = covered.reduce<
+    { cost: HorizonCost; lastDueOn: number; count: number }[]
+  >((list, { cover, cost }) => {
+    const group = list.find((entry) => entry.cost.id === cost.id);
+    return group
+      ? list.map((entry) =>
+          entry === group
+            ? { ...entry, lastDueOn: cover.dueOn, count: entry.count + 1 }
+            : entry,
+        )
+      : [...list, { cost, lastDueOn: cover.dueOn, count: 1 }];
+  }, []);
+  const named = groups
     .slice(0, MAX_NAMED)
-    .map(({ cover, cost }) =>
-      words.on(cost.name, formatDateOrdinalUTC(cover.dueOn)),
+    .map(({ cost, lastDueOn, count }) =>
+      count > 1
+        ? words.through(cost.name, formatDateOrdinalUTC(lastDueOn))
+        : words.on(cost.name, formatDateOrdinalUTC(lastDueOn)),
     );
+  const firstShort = plan.covers.find(
+    ({ coveredCents, totalCents }) => coveredCents < totalCents,
+  );
+  const shortCost = costs.find(({ id }) => id === firstShort?.costId);
+  const needsMoney =
+    firstShort && shortCost && shortCost.schedule.kind !== 'once'
+      ? words.needsMoney(formatDateOrdinalUTC(firstShort.dueOn), shortCost.name)
+      : '';
   const getText = () => {
     if (plan.covers.length === 0) return null;
     if (heldCents <= 0) return plan.shortfall ? null : words.nothingSet;
@@ -48,11 +70,15 @@ function CoversLine({ plan, costs, heldCents, stance }: CoversLineProps) {
       return words.all;
     }
     const list = listFormat.format(
-      covered.length > MAX_NAMED
-        ? [...named, words.more(covered.length - MAX_NAMED)]
+      groups.length > MAX_NAMED
+        ? [...named, words.more(groups.length - MAX_NAMED)]
         : named,
     );
-    return words.listed(list, ranged.length > 0 ? words.atEnd(endWords) : '');
+    return words.listed(
+      list,
+      ranged.length > 0 ? words.atEnd(endWords) : '',
+      needsMoney,
+    );
   };
   const text = getText();
   if (text === null) return null;
