@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarClock, Undo2 } from 'lucide-react';
+import { CalendarClock, DoorOpen, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -20,6 +20,7 @@ import {
 import type { DraftLine } from '@apps/runway/engine/draft';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import {
+  selectComingDays,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -53,6 +54,7 @@ function CostLineSheet({
 }: CostLineSheetProps) {
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const stance = useAppSelector(selectStance);
+  const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const [view, setView] = useState<'menu' | 'change' | 'item'>('menu');
   const found = horizons.find(({ item }) => item.id === line.itemId) ?? null;
   const { cost } = line;
@@ -75,12 +77,18 @@ function CostLineSheet({
   )?.name;
   const cleanName = costName ?? name;
   const date = formatDateOrdinalUTC(cost.dueOn);
+  const rest = found?.version.payload.rest;
+  const isPickComing =
+    rest?.kind === 'onePay' &&
+    comingDays.some((entry) => entry.dayKey === rest.dayKey);
+  const isPickedPay = isPickComing && rest.dayKey === dayKey;
   const getWhy = () => {
     if (line.repaysFree) return HORIZON_WORDS.lineBackSheet(cleanName, date);
     const total = formatCents(cost.totalCents);
-    return found?.version.payload.rest.kind === 'onePay'
-      ? HORIZON_WORDS.lineWhyOnePay(cleanName, total, date)
-      : HORIZON_WORDS.lineWhyPays(cleanName, total, date);
+    if (isPickedPay) return HORIZON_WORDS.lineWhyOnePay(cleanName, total, date);
+    return isPickComing
+      ? HORIZON_WORDS.lineWhyLater(cleanName, total, date)
+      : HORIZON_WORDS.lineWhyPays(cleanName, total, date, cost.payCount);
   };
 
   return (
@@ -125,10 +133,11 @@ function CostLineSheet({
                 hasChevron
                 icon={<CalendarClock />}
                 label={PAY_SHARE_WORDS.action}
-                subtitle={PAY_SHARE_WORDS.actionSub(
-                  cleanName,
-                  formatCents(cost.totalCents),
-                )}
+                subtitle={
+                  isPickedPay
+                    ? HORIZON_WORDS.costActionSubOnePay
+                    : HORIZON_WORDS.costActionSub(date)
+                }
                 onClick={() => setView('change')}
               />
             )}
@@ -150,7 +159,7 @@ function CostLineSheet({
                 isGrouped
                 isRoomy
                 hasChevron
-                icon={<CalendarClock />}
+                icon={<DoorOpen />}
                 label={HORIZON_WORDS.openItem(itemName)}
                 subtitle={HORIZON_WORDS.openItemSub}
                 onClick={() => setView('item')}

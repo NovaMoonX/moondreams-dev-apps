@@ -309,7 +309,9 @@ export const HORIZON_WORDS = {
   searchPlaceholder: 'Search your horizon',
   noMatch: 'Nothing on your horizon matches that.',
   nothingDue: 'Nothing due yet',
-  costLineName: (cost: string, item: string) => `${cost} ·\u00A0${item}`,
+  costLineName: (cost: string, item: string) => `${cost}\u00A0·\u00A0${item}`,
+  costLineDetail: (item: string, tail: string) => `${item}\u00A0·\u00A0${tail}`,
+  costFallback: 'Cost',
   due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => `${count} costs`,
@@ -332,6 +334,7 @@ export const HORIZON_WORDS = {
   noCosts: 'Nothing listed yet.',
   addCost: 'Add a cost',
   changeCost: (name: string) => `Change ${name}`,
+  payMoved: 'This pay has already moved.',
   removeThisCost: 'Remove this cost',
   saveCost: 'Save cost',
   maxCosts: (count: number) => `An item holds up to ${count} costs.`,
@@ -397,10 +400,16 @@ export const HORIZON_WORDS = {
   rest: 'The rest',
   needsRest: 'Pick where the rest comes from.',
   onePayTitle: 'Which pay?',
+  onePayCapped: "Later pays aren't listed.",
+  effectShortOnePay: (date: string, name: string, short: string) =>
+    `${date} has no room for ${name} yet: ${short} stays short. Higher priorities take that pay first.`,
+  effectShortPays: (name: string, short: string) =>
+    `${name} stays ${short} short on your pays. Higher priorities take them first.`,
+  takeFromPaysShort: (carried: string, short: string, left: string) =>
+    `These pays carry ${carried} of the ${short}. ${left} stays short.`,
   onePayLabel: (date: string, name: string) => `${date} ·\u00A0${name}`,
   noPays: 'No pay is coming up to pick.',
   needsPay: 'Pick the pay that carries it.',
-  restPaysSummary: 'My pays before each cost is due',
   restOnePaySummary: (date: string) => `The ${date} pay`,
   effectCaption: 'What changes on your pays',
   effectNone: 'No pay moves.',
@@ -408,14 +417,17 @@ export const HORIZON_WORDS = {
   lineBack: 'Back to Free to Spend',
   lineBackSheet: (cost: string, date: string) =>
     `${cost} came due on ${date} and was paid from Free to Spend. This pay puts it back.`,
-  lineWhyPays: (cost: string, total: string, date: string) =>
-    `${cost} is ${total}, due ${date}. Your pays before it each put in a share, so no one pay carries it.`,
+  lineWhyPays: (cost: string, total: string, date: string, count: number) =>
+    `${cost} is ${total}, due ${date}. ${count > 1 ? `Your ${count} pays before it each put in a share` : 'Your pay before it puts in its share'}; higher priorities are funded first.`,
   lineWhyOnePay: (cost: string, total: string, date: string) =>
     `${cost} is ${total}, due ${date}. You picked this pay to carry it.`,
-  lineWhyLater: (cost: string, date: string) =>
-    `${cost} comes out of the pays after the one you picked, and was due ${date}.`,
+  lineWhyLater: (cost: string, total: string, date: string) =>
+    `${cost} is ${total}, due ${date}. After the pay you picked, your pays before ${date} each put in a share.`,
+  costActionSub: (date: string) =>
+    `Your other pays before ${date} make up the rest`,
+  costActionSubOnePay: 'What it leaves out stays short',
   openItem: (name: string) => `Open ${name}`,
-  openItemSub: 'Its costs, what is held and where the rest comes from',
+  openItemSub: 'Its costs and where the rest comes from',
   costShareTitle: (cost: string) =>
     `How much should this pay put toward ${cost}?`,
   costShareCapped: (cost: string, needs: string) =>
@@ -425,15 +437,17 @@ export const HORIZON_WORDS = {
   costShareResetSummary: (cost: string, item: string, date: string) =>
     `${item}, ${cost}: this pay goes back to the plan's amount, for ${date} only.`,
   costShareToast: (cost: string) => `Changed what this pay puts toward ${cost}`,
-  takeFromPays: 'Take it from my pays',
-  takeFromPaysSub: 'Each pay before a cost is due puts in a share.',
+  takeFromPays: 'Take from my pays',
   takeFromPaysTitle: (name: string) => `Take ${name} from your pays?`,
+  takeFromPaysMoved:
+    'This changed while you had it open. Open it again to take it from your pays.',
+  takeFromPaysUndoMoved: 'It was changed again since, so nothing was undone.',
   takeFromPaysSummary: (name: string) =>
     `${name}: the rest now comes from my pays before each cost is due.`,
   takeFromPaysBackSummary: (name: string) =>
     `${name}: the rest goes back to how it was.`,
   takeFromPaysDone: (name: string) => `${name} now comes from your pays`,
-  takeFromPaysConfirm: 'Take it from my pays',
+  takeFromPaysConfirm: 'Take from my pays',
   plannedTotal: (amount: string, isUpTo: boolean, isAfterLead: boolean) =>
     `${isUpTo ? (isAfterLead ? 'up\u00A0to\u00A0' : 'Up\u00A0to\u00A0') : ''}${amount}\u00A0planned`,
   overNextYear: 'Over the next year:',
@@ -799,6 +813,7 @@ export const CHANGE_WORDS = {
   dateLabel: 'Starts on',
   dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
+  shortMoves: (before: string, after: string) => `short ${before} → ${after}`,
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',

@@ -1,4 +1,8 @@
-import { CUSHION_DAYS, INCOME_END_GAP_DAYS } from '@apps/runway/constants';
+import {
+  CUSHION_DAYS,
+  HORIZON_WORDS,
+  INCOME_END_GAP_DAYS,
+} from '@apps/runway/constants';
 import type {
   Cents,
   DateOnly,
@@ -12,6 +16,7 @@ import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
+import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
 
 /** What the days already walked leave behind for the next one, assuming each was confirmed as drafted and nothing was spent. */
@@ -161,7 +166,20 @@ const nextCarry = (
     };
   }, carry);
 
-/** Every Must that goes unfunded, and every bill that falls due before the next income day and is not set aside in full, in the draft's own order. */
+const getShortName = (
+  line: Draft['lines'][number],
+  names: LookaheadDraft['names'],
+) => {
+  const itemName = names[line.itemId]?.name ?? '';
+  const costName = line.costId
+    ? names[getCostNameKey(line.itemId, line.costId)]?.name
+    : undefined;
+  return costName === undefined
+    ? itemName
+    : HORIZON_WORDS.costLineName(costName, itemName);
+};
+
+/** Every Must that goes unfunded, and every bill or cost payment that falls due before the next income day and is not set aside in full, in the draft's own order. */
 const findShorts = (
   day: ComingDay,
   nextOn: DateOnly,
@@ -172,14 +190,15 @@ const findShorts = (
       (entry) =>
         entry.shortBy > 0 &&
         (entry.tier === 'must' ||
-          (entry.bill !== null && entry.bill.dueOn < nextOn)),
+          (entry.bill !== null && entry.bill.dueOn < nextOn) ||
+          (entry.cost != null && entry.cost.dueOn < nextOn)),
     )
     .map((line) => ({
       kind: 'short',
       on: day.on,
       dayKey: day.dayKey,
       itemId: line.itemId,
-      name: result.names[line.itemId]?.name ?? '',
+      name: getShortName(line, result.names),
       shortBy: line.shortBy,
       isBill: line.bill !== null,
       tier: line.tier,

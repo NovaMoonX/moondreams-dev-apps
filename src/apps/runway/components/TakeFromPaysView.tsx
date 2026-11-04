@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -6,6 +6,8 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
+import { store } from '@/store';
+import { formatCents } from '@/utils/moneyUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import EffectPreview from '@apps/runway/components/EffectPreview';
@@ -13,12 +15,15 @@ import { HORIZON_WORDS, PAY_SHARE_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
+import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
 
 interface TakeFromPaysViewProps {
   itemId: string;
   horizon: HorizonSealed;
   today: number;
+  /** What the item is short of today, all payments counted. */
+  shortCents: number;
   onBack: () => void;
 }
 
@@ -27,6 +32,7 @@ function TakeFromPaysView({
   itemId,
   horizon,
   today,
+  shortCents,
   onBack,
 }: TakeFromPaysViewProps) {
   const { user } = useAuth();
@@ -45,13 +51,18 @@ function TakeFromPaysView({
     },
   } satisfies PreviewChange);
 
-  const write = (rest: HorizonSealed['rest'], summary: string) =>
+  const getLive = () =>
+    selectHorizonItems(store.getState(), today).find(
+      ({ item }) => item.id === itemId,
+    )?.version.payload ?? null;
+
+  const write = (payload: HorizonSealed, summary: string) =>
     user
       ? getRunwayEncryption(user.uid).then((encryption) =>
           changeItem(user.uid, encryption, {
             itemId,
             kind: 'horizon',
-            payload: { ...horizon, rest },
+            payload,
             summary,
             note: null,
             effectiveFrom: today,
@@ -61,29 +72,45 @@ function TakeFromPaysView({
 
   const save = async () => {
     if (isSaving) return;
+    const live = getLive();
+    if (!live || live.rest.kind !== 'later') {
+      setError(HORIZON_WORDS.takeFromPaysMoved);
+      return;
+    }
+    const before = live.rest;
     setError(null);
     setIsSaving(true);
     try {
       await write(
-        { kind: 'pays' },
-        HORIZON_WORDS.takeFromPaysSummary(horizon.name),
+        { ...live, rest: { kind: 'pays' } },
+        HORIZON_WORDS.takeFromPaysSummary(live.name),
       );
       addToast({
-        title: HORIZON_WORDS.takeFromPaysDone(horizon.name),
+        title: HORIZON_WORDS.takeFromPaysDone(live.name),
         type: 'success',
         action: {
           label: PAY_SHARE_WORDS.undo,
-          onClick: () =>
+          onClick: () => {
+            const now = getLive();
+            if (!now || now.rest.kind !== 'pays') {
+              addToast({
+                title: PAY_SHARE_WORDS.undoFailed,
+                description: HORIZON_WORDS.takeFromPaysUndoMoved,
+                type: 'error',
+              });
+              return;
+            }
             void write(
-              horizon.rest,
-              HORIZON_WORDS.takeFromPaysBackSummary(horizon.name),
+              { ...now, rest: before },
+              HORIZON_WORDS.takeFromPaysBackSummary(now.name),
             ).catch((undoError: unknown) =>
               addToast({
                 title: PAY_SHARE_WORDS.undoFailed,
                 description: getErrorMessage(undoError, ''),
                 type: 'error',
               }),
-            ),
+            );
+          },
         },
       });
       onBack();
@@ -94,6 +121,26 @@ function TakeFromPaysView({
     }
   };
 
+  const shortNote = useMemo(
+    () => ({
+      itemId,
+      describe: (
+        shorts: readonly { on: number; cents: number }[],
+        carriedCents: number,
+      ) => {
+        const left = Math.max(0, shortCents - carriedCents);
+        return shorts.length === 0 && left === 0
+          ? null
+          : HORIZON_WORDS.takeFromPaysShort(
+              formatCents(carriedCents),
+              formatCents(shortCents),
+              formatCents(left),
+            );
+      },
+    }),
+    [itemId, shortCents],
+  );
+
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
@@ -102,6 +149,7 @@ function TakeFromPaysView({
         changeJson={changeJson}
         caption={HORIZON_WORDS.effectCaption}
         emptyText={HORIZON_WORDS.effectNone}
+        shortNote={shortNote}
       />
       <ModalFooterActions
         note={error}

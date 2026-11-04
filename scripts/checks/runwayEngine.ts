@@ -225,11 +225,15 @@ import {
 import {
   buildDraft,
   pickPairings,
+  type Draft,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
+import { getCostNameKey } from '../../src/apps/runway/engine/parts.ts';
+import { withLineDefaults } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import {
   getStanceCushion,
   lookahead,
+  type LookaheadCarry,
   type LookaheadDraft,
 } from '../../src/apps/runway/engine/lookahead.ts';
 import {
@@ -13348,7 +13352,12 @@ console.log('runway engine: ok');
     0,
     {
       paid: [
-        { costId: 'movers', dueOn: utc(2027, 0, 10), fromFreeCents: 60_000 },
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
       ],
     },
   );
@@ -13378,7 +13387,7 @@ console.log('runway engine: ok');
   );
   const sealed = toRecordLines(withRepay, {
     moving: { name: 'Moving', emoji: null },
-    'moving:cost:movers': { name: 'Movers · Moving', emoji: null },
+    'moving:cost:movers': { name: 'Movers', emoji: null },
   });
   const sealedLine = sealed.find((line) => line.costId === 'movers');
   assert.equal(
@@ -13386,7 +13395,7 @@ console.log('runway engine: ok');
     true,
     'a record line seals its cost and what it gives back',
   );
-  assert.equal(sealedLine?.name, 'Movers · Moving');
+  assert.equal(sealedLine?.name, 'Movers\u00A0·\u00A0Moving');
   assert.deepEqual(
     sumConfirmedByItem([
       {
@@ -13433,6 +13442,191 @@ console.log('runway engine: ok');
         cover.totalCents - cover.coveredCents,
       ]),
     "the pays' figures are the item sheet's covers line",
+  );
+
+  // A fronted payment is given back by the picked pay when it was paid before it, whenever it fell due.
+  const dueAfterPick = cost('late', 'Late fee', 30_000, utc(2027, 0, 20));
+  const frontedLate = (paidOn: number) =>
+    planCostShares(
+      item({ kind: 'onePay', dayKey: days[0].dayKey }, [dueAfterPick], 0, {
+        paid: [
+          {
+            costId: 'late',
+            dueOn: utc(2027, 0, 20),
+            paidOn,
+            fromFreeCents: 30_000,
+          },
+        ],
+      }),
+      early,
+      utc(2027, 11, 31),
+      'conservative',
+    ).filter((plan) => plan.repays !== null);
+  assert.equal(
+    frontedLate(utc(2027, 0, 5)).length,
+    1,
+    'due after the picked pay but paid before it: the pick repays it',
+  );
+  assert.equal(
+    frontedLate(utc(2027, 0, 16)).length,
+    0,
+    'paid after the picked pay: nothing to give back',
+  );
+
+  // The cost's pays that are not set by the person share what the set ones leave.
+  const surgery = cost('surgery', 'Surgery', 90_000, jan31);
+  const threePays = [early[0], days[0], days[1]];
+  const pinned = (fixed: Record<string, number>) =>
+    planCostShares(
+      item({ kind: 'pays' }, [surgery], 0, { fixed: { surgery: fixed } }),
+      threePays,
+      utc(2027, 11, 31),
+      'conservative',
+    )[0].parts.map((part) => part.cents);
+  assert.deepEqual(
+    pinned({ [days[0].dayKey]: 60_000 }),
+    [15_000, 60_000, 15_000],
+    'the rest of a pinned cost is spread over its other pays, not lumped on one',
+  );
+  assert.deepEqual(
+    pinned({
+      [early[0].dayKey]: 30_000,
+      [days[0].dayKey]: 30_000,
+      [days[1].dayKey]: 10_000,
+    }),
+    [30_000, 30_000, 10_000],
+    'with every pay set, what they leave stays unfunded',
+  );
+
+  // A picked pay that is no longer coming falls back to the pays.
+  assert.deepEqual(
+    planCostShares(
+      item({ kind: 'onePay', dayKey: 'pay:gone' }, [storage]),
+      days,
+      utc(2027, 11, 31),
+      'conservative',
+    ).map((plan) => plan.parts.map((part) => part.cents)),
+    plans.map((plan) => plan.parts.map((part) => part.cents)),
+    'a picked pay that has gone funds like the pays do, not nobody',
+  );
+
+  // One pay carries a repeating cost's payments that both reach it: one line, the figures added.
+  const lateOnePay = costLines(
+    draftOn(
+      utc(2027, 1, 14),
+      item({ kind: 'onePay', dayKey: days[2].dayKey }, [storage]),
+    ),
+  );
+  assert.equal(lateOnePay.length, 1, 'two payments on one pay are one line');
+  assert.equal(lateOnePay[0].cents, 15_000);
+  assert.equal(lateOnePay[0].cost?.totalCents, 20_000);
+
+  // Several costs due on one day give one line each.
+  const twoCosts = costLines(
+    draftOn(
+      jan15,
+      item({ kind: 'pays' }, [
+        cost('a', 'Alpha', 4_000, jan31),
+        cost('b', 'Beta', 6_000, jan31),
+      ]),
+    ),
+  );
+  assert.deepEqual(
+    twoCosts.map((line) => [line.costId, line.cents]),
+    [
+      ['a', 2_000],
+      ['b', 3_000],
+    ],
+    'each cost on a day has its own line',
+  );
+
+  // A record sealed before costs opens with the new keys, and a repays line takes nothing from the money.
+  const oldLine = {
+    lineId: 'l',
+    itemId: 'i',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must',
+    cents: 500,
+    shortBy: 0,
+  } as unknown as RecordLine;
+  const opened = withLineDefaults({ lines: [oldLine] }).lines[0];
+  assert.equal(opened.costId, null);
+  assert.equal(opened.repaysFree, false);
+  assert.equal(
+    sumLines([opened, { ...opened, cents: 900, repaysFree: true }]),
+    500,
+    'sumLines skips a line that gives back to Free to Spend',
+  );
+
+  // The lookahead carries nothing forward from a repays line, and flags a short cost line due before the next pay.
+  const lookDay = (on: number): ComingDay => ({
+    dayKey: `pay:${on}`,
+    payLineId: 'pay',
+    sourceId: 'src',
+    on,
+    sourceName: 'Acme',
+    payLineName: 'Paycheck',
+    amount: exact(200_000),
+    stanceOverride: null,
+  });
+  const costLine = (
+    costId: string,
+    over: Record<string, unknown> = {},
+  ): Draft['lines'][number] =>
+    ({
+      lineId: costId,
+      itemId: 'moving',
+      cents: 1_000,
+      shortBy: 0,
+      tier: 'should',
+      bill: null,
+      pairing: null,
+      costId,
+      repaysFree: false,
+      cost: { costId, dueOn: jan31 },
+      ...over,
+    }) as unknown as Draft['lines'][number];
+  const carries: LookaheadCarry[] = [];
+  const looked = lookahead({
+    today: utc(2027, 0, 1),
+    horizon: utc(2027, 2, 1),
+    days: [lookDay(jan15), lookDay(utc(2027, 1, 14))],
+    bills: [],
+    payments: {},
+    draftOf: (_, carry) => {
+      carries.push(carry);
+      return {
+        draft: {
+          days: [],
+          moneyCents: 0,
+          heldCents: 0,
+          freeToSpend: { cents: 0, bySource: [] },
+          lines: [
+            costLine('repaid', { repaysFree: true }),
+            costLine('a', { shortBy: 200 }),
+            costLine('b', { shortBy: 300 }),
+          ],
+        } as unknown as Draft,
+        names: {
+          moving: { name: 'Moving' },
+          [getCostNameKey('moving', 'a')]: { name: 'Alpha' },
+          [getCostNameKey('moving', 'b')]: { name: 'Beta' },
+        },
+      };
+    },
+  });
+  assert.deepEqual(
+    carries[1].added,
+    { moving: 2_000 },
+    'a repays line adds nothing to the carry',
+  );
+  assert.deepEqual(
+    looked.problems
+      .filter((problem) => problem.on === jan15)
+      .map((problem) => problem.kind === 'short' && problem.name),
+    ['Alpha\u00A0·\u00A0Moving', 'Beta\u00A0·\u00A0Moving'],
+    'a short cost line due before the next pay is flagged by its cost, whatever its tier',
   );
 }
 

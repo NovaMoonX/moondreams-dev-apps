@@ -156,6 +156,8 @@ export interface CostShare {
   /** What the pays carry: the payment less what the item covers; the most one pay can put in. */
   needCents: Cents;
   ranged: BillShare['ranged'];
+  /** How many pays share the payment. */
+  payCount: number;
 }
 
 /** What one day owes one envelope, goal or bill before the money is walked. */
@@ -503,6 +505,34 @@ export const getDayShares = (
   return result;
 };
 
+/** A cost's shares by eligible day: the pays the person set give their figure and the rest is spread over the other eligible pays, so nothing piles onto one pay. With no unpinned pay left the rest stays unfunded. */
+const getCostDayShares = (
+  eligible: readonly IncomeDayRef[],
+  totalCents: Cents,
+  fixed: Readonly<Record<string, Cents>> | undefined,
+) => {
+  const pinned = eligible.filter(
+    (day) => fixed !== undefined && Object.hasOwn(fixed, day.dayKey),
+  );
+  if (pinned.length === 0) return spreadShares(totalCents, eligible.length);
+  const given = pinned.reduce<{ left: Cents; cents: Map<string, Cents> }>(
+    (acc, day) => {
+      const cents = Math.min(Math.max(0, fixed?.[day.dayKey] ?? 0), acc.left);
+      return {
+        left: acc.left - cents,
+        cents: acc.cents.set(day.dayKey, cents),
+      };
+    },
+    { left: totalCents, cents: new Map() },
+  );
+  const open = eligible.filter((day) => !given.cents.has(day.dayKey));
+  const rest = spreadShares(given.left, open.length);
+  const spread = new Map(open.map((day, index) => [day.dayKey, rest[index]]));
+  return eligible.map(
+    (day) => given.cents.get(day.dayKey) ?? spread.get(day.dayKey) ?? 0,
+  );
+};
+
 /** What the pays that pay a bill first take from a payment, in day order and never more than remains once the pays the person set have theirs; the rest is left for the other pays. */
 const getPairedShares = (
   window: readonly IncomeDayRef[],
@@ -846,7 +876,12 @@ export interface DraftHorizonInput {
   /** Cents the person set a pay to put toward one cost, by cost id and then day key. */
   fixed?: Readonly<Record<string, Readonly<Record<string, Cents>>>>;
   /** Payments marked paid, with the part Free to Spend fronted; they ask nothing, and a fronted one is given back by the picked pay. */
-  paid?: readonly { costId: string; dueOn: DateOnly; fromFreeCents: Cents }[];
+  paid?: readonly {
+    costId: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    fromFreeCents: Cents;
+  }[];
 }
 
 export interface CostSharePlan {
@@ -866,7 +901,7 @@ export interface CostSharePlan {
  * Every unpaid payment of an item's costs that the money it holds does not cover, and what each income day sets aside for it:
  * `pays` spreads a payment over the pays since the one before it (a repeating cost's first payment looks back one beat),
  * `onePay` puts a one-time payment and a repeating cost's first payment on the picked pay and spreads later ones as `pays`.
- * A payment marked paid with money from Free to Spend, due before the picked pay, is given back by that pay. `outside` and `later` ask nothing.
+ * A payment marked paid with money from Free to Spend before the picked pay is given back by that pay, whenever it fell due. A picked pay no longer coming is ignored, as if `pays` were chosen. `outside` and `later` ask nothing.
  */
 export function planCostShares(
   item: DraftHorizonInput,
@@ -905,14 +940,12 @@ export function planCostShares(
             : -Infinity;
       const needCents = cover.totalCents - cover.coveredCents;
       const eligible =
-        rest.kind === 'onePay' && index === 0
-          ? picked
-            ? [picked]
-            : []
+        picked && index === 0
+          ? [picked]
           : chronological.filter(
               (day) => day.on > previous && day.on <= cover.dueOn,
             );
-      const shared = getDayShares(
+      const shared = getCostDayShares(
         eligible,
         needCents,
         item.fixed?.[cover.costId],
@@ -937,7 +970,8 @@ export function planCostShares(
   const repaid = picked
     ? paid
         .filter(
-          ({ dueOn, fromFreeCents }) => fromFreeCents > 0 && dueOn < picked.on,
+          ({ paidOn, fromFreeCents }) =>
+            fromFreeCents > 0 && paidOn < picked.on,
         )
         .map((entry): CostSharePlan => ({
           costId: entry.costId,
@@ -1002,6 +1036,7 @@ function buildHorizonDemands(
         coveredCents: plan.coveredCents,
         needCents: plan.needCents,
         ranged: plan.ranged,
+        payCount: plan.parts.length,
       },
     });
     const demands = planCostShares(
@@ -1033,6 +1068,7 @@ function buildHorizonDemands(
               totalCents: known.cost.totalCents + demand.cost.totalCents,
               coveredCents: known.cost.coveredCents + demand.cost.coveredCents,
               needCents: known.cost.needCents + demand.cost.needCents,
+              payCount: Math.max(known.cost.payCount, demand.cost.payCount),
             },
           });
         }, new Map<string, Demand>())

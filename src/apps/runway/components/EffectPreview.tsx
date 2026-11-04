@@ -26,6 +26,7 @@ import {
 } from '@apps/runway/utils/lookaheadText';
 import {
   previewChange,
+  previewItemShorts,
   previewLookahead,
   previewOverrideCarry,
   type PreviewChange,
@@ -67,6 +68,14 @@ interface EffectPreviewProps {
   warningActions?: ReactNode;
   /** Replaces the section's caption. */
   caption?: string;
+  /** Says when the item's cost lines come up short on the pays once the change is made; null says nothing. */
+  shortNote?: {
+    itemId: string;
+    describe: (
+      shorts: readonly { on: number; cents: number }[],
+      carriedCents: number,
+    ) => string | null;
+  };
   /** What the change does to how far the plan holds, when the form has already worked it out. */
   holds?: { blocks: HoldsBlock[]; isSame: boolean } | null;
 }
@@ -90,10 +99,19 @@ const toDayEntry = (
           (a, b) => Number(pinned.has(b.itemId)) - Number(pinned.has(a.itemId)),
         )
       : [];
-  const shown = lines.map((line) => ({
-    name: day.names[line.itemId]?.name ?? 'Something removed',
-    text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
-  }));
+  const shown = [
+    ...lines.map((line) => ({
+      name: day.names[line.itemId]?.name ?? 'Something removed',
+      text: `${formatCents(line.beforeCents)} → ${formatCents(line.afterCents)}`,
+    })),
+    ...(day.kind === 'changed' ? day.effect.shortened : []).map((entry) => ({
+      name: day.names[entry.itemId]?.name ?? 'Something removed',
+      text: CHANGE_WORDS.shortMoves(
+        formatCents(entry.beforeShortCents),
+        formatCents(entry.afterShortCents),
+      ),
+    })),
+  ];
   const isFreeMoved =
     day.kind === 'changed' &&
     day.effect.freeBeforeCents !== day.effect.freeAfterCents;
@@ -123,6 +141,7 @@ const toEntries = (
     day.kind !== 'changed'
       ? day.kind
       : day.effect.lines.length === 0 &&
+          day.effect.shortened.length === 0 &&
           day.effect.freeBeforeCents === day.effect.freeAfterCents
         ? 'same'
         : 'own';
@@ -197,6 +216,7 @@ function EffectPreview({
   warningActions,
   caption,
   holds,
+  shortNote,
 }: EffectPreviewProps) {
   const today = todayAsUtcDate();
   const items = useAppSelector((state) => state.runway.items);
@@ -238,6 +258,36 @@ function EffectPreview({
     );
     return result;
   }, [
+    settledVirtual,
+    items,
+    versions,
+    openDays,
+    stance,
+    today,
+    heldByItem,
+    settledKey,
+    billProgress,
+  ]);
+
+  const shortText = useMemo(() => {
+    if (shortNote === undefined || settledVirtual === null) return null;
+    const { shorts, carriedCents } = previewItemShorts(
+      {
+        items,
+        versions,
+        openDays,
+        stance,
+        today,
+        heldByItem,
+        settledKey,
+        billProgress,
+      },
+      settledVirtual,
+      shortNote.itemId,
+    );
+    return shortNote.describe(shorts, carriedCents);
+  }, [
+    shortNote,
     settledVirtual,
     items,
     versions,
@@ -335,6 +385,7 @@ function EffectPreview({
       );
     }
     if (days.length === 0) {
+      if (shortText !== null) return null;
       if (holdsText?.blocks.some((block) => block.tone === 'warning'))
         return null;
       if (describeLead !== undefined && holdsText?.isSame !== true) return null;
@@ -501,6 +552,7 @@ function EffectPreview({
     body === null &&
     visibleNotes.length === 0 &&
     shownBlocks.length === 0 &&
+    shortText === null &&
     !isLeadShown
   ) {
     return null;
@@ -519,6 +571,13 @@ function EffectPreview({
           {note.text}
         </InlineNotice>
       ))}
+      {shortText !== null && (
+        <div data-change-warning=''>
+          <InlineNotice tone='warning'>
+            <MaskedText>{shortText}</MaskedText>
+          </InlineNotice>
+        </div>
+      )}
       {!isLeadShown &&
         shownBlocks.map((block) =>
           isHidden && block.tone === 'warning' ? (
@@ -530,7 +589,7 @@ function EffectPreview({
               key={block.text}
               data-change-warning={block.tone === 'warning' ? '' : undefined}
             >
-              <InlineNotice tone={block.tone}>
+              <InlineNotice tone={block.isStanding ? 'warning' : block.tone}>
                 {renderFigure(block)}
               </InlineNotice>
             </div>

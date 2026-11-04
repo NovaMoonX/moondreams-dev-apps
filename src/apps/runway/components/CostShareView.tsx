@@ -103,7 +103,9 @@ function CostShareView({
   const blocker = getBlocker();
 
   const save = async () => {
-    if (!user || !day || target === null || blocker !== null || isSaving) {
+    if (!user || target === null || blocker !== null || isSaving) return;
+    if (!day) {
+      setError(HORIZON_WORDS.payMoved);
       return;
     }
     setError(null);

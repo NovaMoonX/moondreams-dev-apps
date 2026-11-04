@@ -1,13 +1,8 @@
 import { useRef, useState } from 'react';
-import {
-  CalendarCheck,
-  CalendarClock,
-  Clock,
-  Plus,
-  Wallet,
-} from 'lucide-react';
+import { CalendarRange, Clock, Pin, Plus, Wallet } from 'lucide-react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -116,8 +111,8 @@ const FROM_OPTIONS = [
 ];
 
 const REST_ICONS = {
-  pays: <CalendarClock />,
-  onePay: <CalendarCheck />,
+  pays: <CalendarRange />,
+  onePay: <Pin />,
   outside: <Wallet />,
   later: <Clock />,
 } as const;
@@ -155,6 +150,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const addCostRef = useRef<HTMLButtonElement>(null);
+  const payPillsRef = useRef<HTMLDivElement>(null);
   const set = (patch: Partial<HorizonFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -213,10 +209,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     (latest, { schedule }) => Math.max(latest, schedule.anchor ?? 0),
     0,
   );
-  const payChoices = comingDays
+  const allPayChoices = comingDays
     .filter((day) => day.on <= lastCostOn)
-    .concat(comingDays.filter((day) => day.on > lastCostOn).slice(0, 1))
-    .slice(0, MAX_PAY_CHOICES);
+    .concat(comingDays.filter((day) => day.on > lastCostOn).slice(0, 1));
+  const payChoices = allPayChoices.slice(0, MAX_PAY_CHOICES);
   const pickedDay = comingDays.find(
     (day) => day.dayKey === formData.restDayKey,
   );
@@ -283,6 +279,22 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           heldCents: formData.isNotNow ? 0 : (putCents ?? 0),
         } satisfies PreviewChange)
       : null;
+
+  const pickedOn = pickedDay?.on ?? null;
+  const shortNote = {
+    itemId: horizonId,
+    describe: (shorts: readonly { on: number; cents: number }[]) => {
+      const total = shorts.reduce((sum, entry) => sum + entry.cents, 0);
+      if (total === 0) return null;
+      return pickedOn !== null && formData.rest === 'onePay'
+        ? HORIZON_WORDS.effectShortOnePay(
+            formatDateOrdinalUTC(pickedOn),
+            name,
+            formatCents(total),
+          )
+        : HORIZON_WORDS.effectShortPays(name, formatCents(total));
+    },
+  };
 
   const steps: QuestionStep[] = [
     {
@@ -522,18 +534,32 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
         <div className='space-y-4'>
           <ActionGroup isRoomy>
             {HORIZON_REST_OPTIONS.map(({ value, label, meaning }) => (
-              <ActionRow
+              <div
                 key={value}
-                isGrouped
-                isRoomy
-                icon={REST_ICONS[value]}
-                label={label}
-                subtitle={meaning}
-                onClick={() => {
-                  set({ rest: value, restDayKey: null });
-                  if (value !== 'onePay') moveOn();
-                }}
-              />
+                className={join(formData.rest === value && 'bg-primary/10')}
+                aria-current={formData.rest === value ? 'true' : undefined}
+              >
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  icon={REST_ICONS[value]}
+                  label={label}
+                  subtitle={meaning}
+                  onClick={() => {
+                    set({ rest: value, restDayKey: null });
+                    if (value !== 'onePay') {
+                      moveOn();
+                      return;
+                    }
+                    requestAnimationFrame(() =>
+                      payPillsRef.current?.scrollIntoView({
+                        block: 'nearest',
+                        behavior: 'smooth',
+                      }),
+                    );
+                  }}
+                />
+              </div>
             ))}
           </ActionGroup>
           {formData.rest === 'onePay' &&
@@ -542,21 +568,31 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
                 {HORIZON_WORDS.noPays}
               </p>
             ) : (
-              <PillGroup
-                label={HORIZON_WORDS.onePayTitle}
-                options={payChoices.map((day) => ({
-                  value: day.dayKey,
-                  label: HORIZON_WORDS.onePayLabel(
-                    formatDateOrdinalUTC(day.on),
-                    day.sourceName ?? day.payLineName,
-                  ),
-                }))}
-                value={formData.restDayKey}
-                onChange={(restDayKey) => {
-                  set({ restDayKey });
-                  moveOn();
-                }}
-              />
+              <div ref={payPillsRef} className='scroll-mb-32 space-y-2'>
+                <p aria-hidden='true' className='text-sm font-medium'>
+                  {HORIZON_WORDS.onePayTitle}
+                </p>
+                <PillGroup
+                  label={HORIZON_WORDS.onePayTitle}
+                  options={payChoices.map((day) => ({
+                    value: day.dayKey,
+                    label: HORIZON_WORDS.onePayLabel(
+                      formatDateOrdinalUTC(day.on),
+                      day.sourceName ?? day.payLineName,
+                    ),
+                  }))}
+                  value={formData.restDayKey}
+                  onChange={(restDayKey) => {
+                    set({ restDayKey });
+                    moveOn();
+                  }}
+                />
+                {allPayChoices.length > payChoices.length && (
+                  <p className='text-muted-foreground text-sm'>
+                    {HORIZON_WORDS.onePayCapped}
+                  </p>
+                )}
+              </div>
             ))}
         </div>
       ),
@@ -654,6 +690,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
             changeJson={previewJson}
             caption={HORIZON_WORDS.effectCaption}
             emptyText={HORIZON_WORDS.effectNone}
+            shortNote={shortNote}
           />
         )}
         <ModalFooterActions

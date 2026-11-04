@@ -126,6 +126,7 @@ function HorizonSheet({
           itemId={itemId}
           horizon={horizon}
           today={today}
+          shortCents={shortfall?.totalShortCents ?? 0}
           onBack={() => setIsTakingFromPays(false)}
         />
       ) : putting ? (
@@ -179,7 +180,7 @@ function HorizonSheet({
               <div className='mt-2 flex flex-wrap gap-2'>
                 <Button
                   type='button'
-                  variant='primary'
+                  variant='secondary'
                   size='sm'
                   onClick={() =>
                     setPutting({ initialCents: shortfall.shortCents })

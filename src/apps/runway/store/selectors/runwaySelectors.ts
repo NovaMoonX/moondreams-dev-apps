@@ -47,7 +47,6 @@ import {
 } from '@apps/runway/engine/resolve';
 import { readStance } from '@apps/runway/engine/stance';
 import {
-  HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
   OVERDUE_DAYS,
   PRIORITIES,
@@ -1036,7 +1035,7 @@ export function computeDraftView(
         ...version.payload.costs.map((cost) => [
           getCostNameKey(item.id, cost.id),
           {
-            name: HORIZON_WORDS.costLineName(cost.name, version.payload.name),
+            name: cost.name,
             emoji: version.payload.emoji,
           },
         ]),

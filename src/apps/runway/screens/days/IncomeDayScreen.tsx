@@ -32,6 +32,7 @@ import {
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
   DRAFT_WORDS,
+  HORIZON_WORDS,
   PAY_SHARE_WORDS,
   ITEM_SHEET_R2_WORDS,
   ITEM_SHEET_WORDS,
@@ -80,12 +81,16 @@ interface IncomeDayScreenProps {
   onClose: () => void;
 }
 
-/** What one coming income day does with its money, worked out each time and never stored. */
 const getNameKey = (line: DraftLineData) =>
   line.costId ? getCostNameKey(line.itemId, line.costId) : line.itemId;
 
 const getShareKey = (line: DraftLineData) =>
   line.costId ? getCostShareKey(line.itemId, line.costId) : line.itemId;
+
+const getFallbackName = (line: DraftLineData) => {
+  if (line.cost) return HORIZON_WORDS.costFallback;
+  return line.bill ? DRAFT_WORDS.billFallback : 'Envelope';
+};
 
 const getKind = (line: DraftLineData, isKnown: boolean): ItemKind | null => {
   if (!isKnown) return null;
@@ -93,6 +98,7 @@ const getKind = (line: DraftLineData, isKnown: boolean): ItemKind | null => {
   return line.bill ? 'bill' : 'envelope';
 };
 
+/** What one coming income day does with its money, worked out each time and never stored. */
 function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -309,7 +315,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
     const envelope = isKnown
       ? items[nameKey]
       : {
-          name: line.bill ? DRAFT_WORDS.billFallback : 'Envelope',
+          name: getFallbackName(line),
           emoji: null,
         };
     return (

@@ -34,6 +34,12 @@ export interface DayEffect {
   moneyBeforeCents: Cents;
   moneyAfterCents: Cents;
   lines: LineEffect[];
+  /** Items whose line holds the same money but comes up shorter or less short: the pay's plan for them moved though its money did not. */
+  shortened: {
+    itemId: string;
+    beforeShortCents: Cents;
+    afterShortCents: Cents;
+  }[];
 }
 
 const sumByItem = (draft: Draft) =>
@@ -42,6 +48,15 @@ const sumByItem = (draft: Draft) =>
       line.repaysFree
         ? acc
         : acc.set(line.itemId, (acc.get(line.itemId) ?? 0) + line.cents),
+    new Map(),
+  );
+
+const shortByItem = (draft: Draft) =>
+  draft.lines.reduce<Map<string, Cents>>(
+    (acc, line) =>
+      line.repaysFree
+        ? acc
+        : acc.set(line.itemId, (acc.get(line.itemId) ?? 0) + line.shortBy),
     new Map(),
   );
 
@@ -56,15 +71,30 @@ export function compareDrafts(before: Draft, after: Draft): DayEffect | null {
       afterCents: now.get(itemId) ?? 0,
     }))
     .filter((line) => line.beforeCents !== line.afterCents);
+  const wasShort = shortByItem(before);
+  const nowShort = shortByItem(after);
+  const shortened = [...new Set([...wasShort.keys(), ...nowShort.keys()])]
+    .map((itemId) => ({
+      itemId,
+      beforeShortCents: wasShort.get(itemId) ?? 0,
+      afterShortCents: nowShort.get(itemId) ?? 0,
+    }))
+    .filter(
+      (entry) =>
+        entry.beforeShortCents !== entry.afterShortCents &&
+        !lines.some((line) => line.itemId === entry.itemId),
+    );
   const effect: DayEffect = {
     freeBeforeCents: before.freeToSpend.cents,
     freeAfterCents: after.freeToSpend.cents,
     moneyBeforeCents: before.moneyCents,
     moneyAfterCents: after.moneyCents,
     lines,
+    shortened,
   };
   const isSame =
     lines.length === 0 &&
+    shortened.length === 0 &&
     effect.freeBeforeCents === effect.freeAfterCents &&
     effect.moneyBeforeCents === effect.moneyAfterCents;
   return isSame ? null : effect;

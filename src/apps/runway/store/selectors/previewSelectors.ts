@@ -249,6 +249,7 @@ const emptyEffect = (
   moneyBeforeCents: side === 'before' ? moneyCents : 0,
   moneyAfterCents: side === 'after' ? moneyCents : 0,
   lines: [],
+  shortened: [],
 });
 
 /**
@@ -362,6 +363,53 @@ export function previewChange(
   };
   const result = collect(0, []);
   return result;
+}
+
+/** What one item's cost lines get from each coming pay once the change is layered over the plan: the days where a line is short, and what its lines set aside in all. */
+export function previewItemShorts(
+  inputs: PreviewInputs,
+  change: PreviewChange,
+  itemId: string,
+): { shorts: { on: number; cents: number }[]; carriedCents: number } {
+  const { stance, today } = inputs;
+  const layered = layerPlan(inputs, change);
+  const settled = new Set(
+    inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
+  );
+  const heldWith =
+    change.kind === 'addItem'
+      ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
+      : inputs.heldByItem;
+  const days = buildComingDays(layered.items, layered.versions, today)
+    .filter((day) => !settled.has(day.dayKey))
+    .slice(0, MAX_PREVIEW_DAYS);
+  const rows = days.map((day) => {
+    const view = computeDraftView(
+      layered.items,
+      layered.versions,
+      stance,
+      layered.openDays,
+      day.dayKey,
+      today,
+      heldWith,
+      inputs.settledKey,
+      inputs.billProgress,
+    );
+    const lines = (view?.draft.lines ?? []).filter(
+      (line) => line.itemId === itemId && line.cost && !line.repaysFree,
+    );
+    return {
+      on: day.on,
+      cents: lines.reduce((sum, line) => sum + line.shortBy, 0),
+      carried: lines.reduce((sum, line) => sum + line.cents, 0),
+    };
+  });
+  return {
+    shorts: rows
+      .filter((row) => row.cents > 0)
+      .map(({ on, cents }) => ({ on, cents })),
+    carriedCents: rows.reduce((sum, row) => sum + row.carried, 0),
+  };
 }
 
 /** How far the plan holds as it stands and with the change layered over it, from the same lookahead Home reads. */

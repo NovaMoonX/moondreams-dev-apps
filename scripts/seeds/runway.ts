@@ -1421,9 +1421,9 @@ async function writeSeedConfirmedDays(
                 ...seedLine(
                   dayId,
                   'seed-horizon-surgery',
-                  "Surgery ·\u00A0Miso's surgery",
+                  "Surgery\u00A0·\u00A0Miso's surgery",
                   '🐱',
-                  'should',
+                  'must',
                   5_000,
                 ),
                 lineId: getCostLineId(

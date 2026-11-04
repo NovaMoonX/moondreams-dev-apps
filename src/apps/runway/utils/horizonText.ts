@@ -17,6 +17,12 @@ import type {
 } from '@apps/runway/types';
 import { describeBillRepeat } from '@apps/runway/utils/billText';
 
+/** A sealed cost line's name ("Surgery · Miso's surgery") as its cost and its item; an older or plain name has no item. */
+export const splitCostLineName = (name: string) => {
+  const found = /^(.+?)\s·\s(.+)$/su.exec(name);
+  return found ? { cost: found[1], item: found[2] } : { cost: name, item: '' };
+};
+
 /** Everything the event's row and its sheet say about it, worked out once so the two never disagree. */
 export function getHorizonStatus(
   horizon: HorizonSealed,

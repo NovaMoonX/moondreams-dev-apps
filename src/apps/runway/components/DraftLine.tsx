@@ -37,6 +37,9 @@ import {
   describeTieBreak,
 } from '@apps/runway/utils/draftText';
 
+const getCostDetail = (item: string | undefined, tail: string) =>
+  item ? HORIZON_WORDS.costLineDetail(item, tail) : tail;
+
 interface DraftLineProps {
   line: DraftLineData;
   name: string;
@@ -170,9 +173,12 @@ function DraftLine({
     if (shortText) return { text: shortText, isStrong: isWarning };
     if (line.cost)
       return {
-        text: line.repaysFree
-          ? HORIZON_WORDS.lineBack
-          : HORIZON_WORDS.lineDue(formatDateOrdinalUTC(line.cost.dueOn)),
+        text: getCostDetail(
+          itemName,
+          line.repaysFree
+            ? HORIZON_WORDS.lineBack
+            : HORIZON_WORDS.lineDue(formatDateOrdinalUTC(line.cost.dueOn)),
+        ),
         isStrong: false,
       };
     if (isDayOnly && line.bill)

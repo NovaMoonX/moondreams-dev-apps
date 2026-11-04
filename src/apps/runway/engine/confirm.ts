@@ -1,3 +1,4 @@
+import { HORIZON_WORDS } from '@apps/runway/constants';
 import type {
   Cents,
   ConfirmedSealed,
@@ -23,19 +24,27 @@ export interface ItemNames {
 const nameKeyOf = (line: { itemId: string; costId?: string | null }) =>
   line.costId ? getCostNameKey(line.itemId, line.costId) : line.itemId;
 
+const nameOf = (
+  line: Draft['lines'][number],
+  draft: Draft,
+  names: ItemNames,
+) => {
+  const itemName = Object.hasOwn(names, line.itemId)
+    ? names[line.itemId].name
+    : '';
+  if (!Object.hasOwn(names, nameKeyOf(line)))
+    return getPartName(itemName, line, draft.lines);
+  const { name } = names[nameKeyOf(line)];
+  return line.costId ? HORIZON_WORDS.costLineName(name, itemName) : name;
+};
+
 /** Lines of a draft as a record keeps them, with the names they had that day. */
 export function toRecordLines(draft: Draft, names: ItemNames): RecordLine[] {
   const result = draft.lines.map((line): RecordLine => ({
     lineId: line.lineId,
     itemId: line.itemId,
     part: line.part,
-    name: Object.hasOwn(names, nameKeyOf(line))
-      ? names[nameKeyOf(line)].name
-      : getPartName(
-          Object.hasOwn(names, line.itemId) ? names[line.itemId].name : '',
-          line,
-          draft.lines,
-        ),
+    name: nameOf(line, draft, names),
     emoji: Object.hasOwn(names, line.itemId) ? names[line.itemId].emoji : null,
     tier: line.tier,
     demandCents: line.demandCents,

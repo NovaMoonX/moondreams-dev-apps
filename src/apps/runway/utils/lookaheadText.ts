@@ -193,6 +193,8 @@ export interface HoldsBlock {
   figure: string | null;
   /** The text says why a one-time pay leaves the bill short. */
   hasNote?: boolean;
+  /** A shortfall the plan already had, not one this change causes: drawn as a warning, never counted as the change's. */
+  isStanding?: boolean;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -308,6 +310,7 @@ export function describeHoldsBlocks(
         tone: 'info',
         text: COVERAGE_WORDS.stillShort(formatDateOrdinalUTC(first.on)),
         figure: null,
+        isStanding: true,
       };
     }
     const ends = after.incomeEndsOn;
