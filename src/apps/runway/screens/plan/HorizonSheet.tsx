@@ -98,7 +98,6 @@ function HorizonSheet({
         ' ',
         '\u00A0',
       ),
-    HORIZON_WORDS.costCount(horizon.costs.length).replace(' ', '\u00A0'),
     when,
   ]
     .filter(Boolean)
