@@ -116,7 +116,7 @@ function OverviewTile({
       aria-current={isCurrent ? 'true' : undefined}
       onClick={onOpen}
       className={join(
-        'bg-card border-border text-foreground! hover:bg-muted flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal',
+        'bg-card! border-border text-foreground! hover:bg-muted! flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal',
         isCurrent && 'border-primary',
         className,
       )}
@@ -190,7 +190,7 @@ const FALLBACK: Measures = {
 const ROW_CLASS =
   'relative flex [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
 const ROW_TILE_CLASS =
-  'w-[calc(50%-0.25rem)] shrink-0 lg:w-[calc((100%-1rem)/3)]';
+  'w-[44%] shrink-0 lg:w-[calc((100%-1rem)/3)]';
 const GRID_CLASS =
   'relative grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2';
 
@@ -381,11 +381,11 @@ function PullFrame({
       role='group'
       aria-label={WORDS.tilesLabel}
       onScroll={(event) => {
-        const scroller = event.currentTarget;
+        const left = event.currentTarget.scrollLeft;
         window.clearTimeout(scrollTimerRef.current);
-        // Kept once the row comes to rest, so a fling never re-renders the frame on every scroll event.
+        // Kept once the row comes to rest, so a fling never re-renders the frame on every scroll event; read now, since a pull can unmount the row first.
         scrollTimerRef.current = window.setTimeout(
-          () => setRowScroll(scroller.scrollLeft),
+          () => setRowScroll(left),
           SCROLL_SETTLE_MS,
         );
       }}
@@ -541,7 +541,8 @@ function PullFrame({
       >
         <div
           className={join(
-            'bg-card border-border flex items-center justify-center rounded-full border shadow-md',
+            'bg-card flex items-center justify-center rounded-full border shadow-md',
+            progress >= 1 || isRefreshing ? 'border-primary' : 'border-border',
             !isPulling && 'transition-transform duration-200',
           )}
           style={{

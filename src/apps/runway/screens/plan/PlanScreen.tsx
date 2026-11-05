@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Settings2 } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
@@ -31,17 +31,13 @@ const isCovered = () =>
     (dialog) => getComputedStyle(dialog).pointerEvents !== 'none',
   );
 
-/** A still copy of the view, without its floating controls, standing where the view is now. */
+/** A still copy of the view, without its floating controls or ids, standing where the view is now. */
 const makeGhost = (body: HTMLElement) => {
-  const floating = Array.from(body.querySelectorAll<HTMLElement>('*')).filter(
-    (element) => getComputedStyle(element).position === 'fixed',
-  );
-  floating.forEach((element) => element.setAttribute('data-ghost-drop', ''));
   const ghost = body.cloneNode(true) as HTMLElement;
-  floating.forEach((element) => element.removeAttribute('data-ghost-drop'));
+  ghost.querySelectorAll('.fixed').forEach((element) => element.remove());
   ghost
-    .querySelectorAll('[data-ghost-drop]')
-    .forEach((element) => element.remove());
+    .querySelectorAll('[id]')
+    .forEach((element) => element.removeAttribute('id'));
   ghost.setAttribute('aria-hidden', 'true');
   ghost.inert = true;
   Object.assign(ghost.style, {
@@ -55,6 +51,16 @@ const makeGhost = (body: HTMLElement) => {
   });
   return ghost;
 };
+
+function SectionView({ section }: { section: PlanSection }) {
+  if (section === 'envelopes') return <EnvelopesScreen />;
+  if (section === 'goals') return <GoalsScreen />;
+  if (section === 'horizon') return <HorizonScreen />;
+  if (section === 'bills') return <BillsScreen />;
+  if (section === 'cards') return <CardsScreen />;
+  if (section === 'income') return <IncomeScreen />;
+  return <MoreScreen />;
+}
 
 function PlanScreen() {
   const { planSection: requestedSection, showPlanSection } =
@@ -74,6 +80,13 @@ function PlanScreen() {
     ghost: HTMLElement;
     timer: number;
   } | null>(null);
+  // The view the finger is pulling in, drawn beside this one while the drag lasts.
+  const [peek, setPeek] = useState<{
+    section: PlanSection;
+    direction: 1 | -1;
+  } | null>(null);
+  const peekRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef(0);
   const sections = isTracking ? trackedSections : untrackedSections;
   const getIndex = (section: PlanSection) =>
     sections.findIndex((value) => value === section);
@@ -93,6 +106,7 @@ function PlanScreen() {
     if (!body) return;
     body.style.transition = 'none';
     body.style.left = '0px';
+    body.style.minHeight = '';
   };
 
   // A copy of the leaving view slides out beside the arriving one, so the two move together like a carousel. The body moves by its own offset (not a transform, which would carry a floating add button with it).
@@ -108,6 +122,9 @@ function PlanScreen() {
     }
     const ghost = makeGhost(body);
     body.before(ghost);
+    // The leaving copy no longer holds the page's height, so the view keeps it until the slide ends.
+    body.style.minHeight = `${body.offsetHeight}px`;
+    setPeek(null);
     slideRef.current = {
       direction,
       ghost,
@@ -157,12 +174,40 @@ function PlanScreen() {
     if (from < 0 || to < 0) showPlanSection(section);
     else slideTo(section, to > from ? 1 : -1);
   };
+  const placePeek = (element: HTMLDivElement | null, transition: string) => {
+    const body = bodyRef.current;
+    if (!element || !body || !peek) return;
+    element.style.transition = transition;
+    element.style.top = `${body.offsetTop}px`;
+    element.style.width = `${body.offsetWidth}px`;
+    element.style.left = `${dragRef.current + peek.direction * body.offsetWidth}px`;
+  };
   const followFinger = (dx: number, isEnd: boolean) => {
     const body = bodyRef.current;
     if (!body || slideRef.current || (!isEnd && isCovered())) return;
-    body.style.transition = isEnd ? `left ${SLIDE_MS}ms ease-out` : 'none';
-    const damping = getNeighbour(dx < 0 ? 1 : -1) ? 1 : END_DAMPING;
-    body.style.left = `${isEnd ? 0 : dx * damping}px`;
+    const transition = isEnd ? `left ${SLIDE_MS}ms ease-out` : 'none';
+    const direction = dx < 0 ? 1 : -1;
+    const next = getNeighbour(direction);
+    const damping = next ? 1 : END_DAMPING;
+    dragRef.current = isEnd ? 0 : dx * damping;
+    body.style.transition = transition;
+    body.style.left = `${dragRef.current}px`;
+    if (isEnd) {
+      placePeek(peekRef.current, transition);
+      window.setTimeout(() => {
+        if (!slideRef.current) setPeek(null);
+      }, SLIDE_MS);
+      return;
+    }
+    const isReduced = window.matchMedia(
+      '(prefers-reduced-motion: reduce)',
+    ).matches;
+    if (!next || isReduced) {
+      if (peek) setPeek(null);
+      return;
+    }
+    if (peek?.section !== next) setPeek({ section: next, direction });
+    else placePeek(peekRef.current, transition);
   };
 
   return (
@@ -177,6 +222,19 @@ function PlanScreen() {
           current={isMore ? 'more' : planSection}
           onSelect={select}
         />
+      )}
+      {peek && (
+        <div
+          ref={(element) => {
+            peekRef.current = element;
+            placePeek(element, 'none');
+          }}
+          className='pointer-events-none absolute space-y-4 [&_.fixed]:hidden!'
+          aria-hidden='true'
+          inert
+        >
+          <SectionView section={peek.section} />
+        </div>
       )}
       <div ref={bodyRef} className='relative space-y-4'>
         {planSection === 'envelopes' && <EnvelopesScreen />}
