@@ -257,6 +257,12 @@ const getParts = (
         (value) => value ?? 'follows the plan',
       ),
       diff(
+        ACCOUNT_WORDS.landsInLabel,
+        lineBefore.accountId ?? null,
+        lineAfter.accountId ?? null,
+        accountNameOf,
+      ),
+      diff(
         'Paid first',
         lineBefore.pairings ?? [],
         lineAfter.pairings ?? [],

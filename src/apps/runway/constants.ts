@@ -1176,6 +1176,46 @@ export const CHECKLIST_WORDS = {
   tickFailed: 'That tick did not save. Try again.',
 } as const;
 
+/** Money to move into the accounts that bills and cards pull from, after an income day. */
+export const ACCOUNT_MOVE_WORDS = {
+  group: 'Move to accounts',
+  summary: (amount: string, to: string, from: string | null, by: string) =>
+    from === null
+      ? `Move ${amount} to ${to} by ${by}`
+      : `Move ${amount} from ${from} to ${to} by ${by}`,
+  by: (date: string, names: string) => `By ${date} · for ${names}`,
+  names: (names: readonly string[]) =>
+    names.length <= 3
+      ? names.length < 2
+        ? (names[0] ?? '')
+        : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+      : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
+  sheetTitle: (to: string) => `Move to ${to}`,
+  short: (amount: string, to: string) => `Move ${amount} to ${to}`,
+  pullsHeading: (to: string) => `What pulls from ${to}`,
+  lead: (amount: string, from: string | null, by: string) =>
+    from === null
+      ? `Move ${amount} here by ${by}.`
+      : `Move ${amount} from ${from} by ${by}.`,
+  freshBalance: (
+    account: string,
+    balance: string,
+    date: string,
+    left: string,
+    pulls: string,
+  ) =>
+    `${account} held ${balance} on ${date}, so ${left} of the ${pulls} is left to move.`,
+  staleBalance: (account: string, date: string) =>
+    `${account}'s balance was last updated ${date}, before this pay, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
+  noBalance: (account: string) =>
+    `${account} has no balance yet, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
+  updateBalance: (account: string) => `Update ${account}'s balance`,
+  updateBalanceSub: 'What it holds today',
+  warnTitle: 'Money to move',
+  warnOne: '1 move to do',
+  warnMany: (count: number) => `${count} moves to do`,
+} as const;
+
 /** Under an amount that turns a range into a record: what it usually is. */
 export const VARIES_HINT = (range: string) => `It varies, usually ${range}`;
 
@@ -3440,6 +3480,9 @@ export const ACCOUNT_WORDS = {
   payFromTitle: 'Which account does it come out of?',
   payFromLabel: 'Comes out of',
   payFromNone: 'Not chosen yet',
+  landsInTitle: 'Which account does it land in?',
+  landsInLabel: 'Lands in',
+  landsInNone: 'Not chosen yet',
   changeAdded: (name: string) => `Added the account ${name}`,
   changeChanged: (name: string, what: string) =>
     `Changed the account ${name}: ${what}`,
