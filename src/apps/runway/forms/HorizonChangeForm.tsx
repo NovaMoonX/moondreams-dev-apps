@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarRange, Clock, Pin, Wallet } from 'lucide-react';
+import { CalendarRange, Clock, Pin, Plus, Wallet } from 'lucide-react';
 
 import { Input } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -7,6 +7,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import DateInput from '@/components/DateInput';
+import EmojiField from '@/components/EmojiField';
 import { PillGroup } from '@/components/PillGroup';
 import QuestionFlow from '@/components/QuestionFlow';
 import RevealChip from '@/components/RevealChip';
@@ -22,6 +23,7 @@ import {
   HORIZON_REST_OPTIONS,
   HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
+  MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
@@ -61,7 +63,7 @@ interface HorizonChangeFormProps {
   onDone: () => void;
 }
 
-/** Change an event: its name, date, how the rest is paid and its priority. Its costs change in their own sheets. */
+/** Change an event: its name, emoji, date, how the rest is paid and its priority. Its costs change in their own sheets. */
 function HorizonChangeForm({
   itemId,
   horizon,
@@ -76,6 +78,7 @@ function HorizonChangeForm({
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const [name, setName] = useState(horizon.name);
+  const [emoji, setEmoji] = useState<string | null>(horizon.emoji);
   const [date, setDate] = useState(toDateInputValue(horizon.happensOn));
   const [isFewDays, setIsFewDays] = useState(horizon.happensUntil !== null);
   const [endDate, setEndDate] = useState(
@@ -134,6 +137,7 @@ function HorizonChangeForm({
       : {
           ...horizon,
           name: trimmed,
+          emoji: emoji?.trim() || null,
           happensOn,
           happensUntil:
             isFewDays && happensUntil !== undefined ? happensUntil : null,
@@ -156,17 +160,37 @@ function HorizonChangeForm({
       id: 'name',
       title: HORIZON_WORDS.nameTitle,
       summaryLabel: HORIZON_WORDS.name,
-      summaryValue: trimmed,
+      summaryValue: `${emoji?.trim() ?? ''} ${trimmed}`.trim(),
       isAnswered: trimmed !== '',
       blocker: HORIZON_WORDS.needsName,
       render: () => (
-        <Input
-          variant='outline'
-          aria-label={HORIZON_WORDS.name}
-          maxLength={MAX_NAME_LENGTH}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-        />
+        <div className='space-y-4'>
+          <Input
+            variant='outline'
+            aria-label={HORIZON_WORDS.name}
+            maxLength={MAX_NAME_LENGTH}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+          />
+          {emoji === null ? (
+            <div>
+              <RevealChip
+                icon={<Plus className='h-4 w-4' aria-hidden='true' />}
+                onClick={() => setEmoji('')}
+              >
+                {HORIZON_WORDS.addEmoji}
+              </RevealChip>
+            </div>
+          ) : (
+            <EmojiField
+              value={emoji}
+              onChange={setEmoji}
+              ariaLabel={FORM_FLOW_WORDS.emoji}
+              placeholder='📦'
+              maxLength={MAX_EMOJI_LENGTH}
+            />
+          )}
+        </div>
       ),
     },
     {

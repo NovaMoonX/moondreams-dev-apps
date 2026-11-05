@@ -520,7 +520,7 @@ export const HORIZON_WORDS = {
   putMoreDone: (amount: string, name: string) => `Put ${amount} toward ${name}`,
   needsPutMoreFrom: 'Pick where it comes from.',
   changeItem: 'Change it',
-  changeItemSub: 'Name, date, how the rest is paid and priority',
+  changeItemSub: 'Name, emoji, date, how the rest is paid and priority',
   costDue: (date: string) => `Due\u00A0${date}`,
   costDueLower: (date: string) => `due\u00A0${date}`,
   costFact: (when: string, pricedOn: string | null, isOutside = false) =>

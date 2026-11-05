@@ -131,6 +131,12 @@ const getHorizonParts = (
 ): Part[] => [
   diff('Name', before.name, after.name, (value) => value),
   diff(
+    'Emoji',
+    before.emoji ?? null,
+    after.emoji ?? null,
+    (value) => value ?? 'none',
+  ),
+  diff(
     'Matters',
     before.priority,
     after.priority,
