@@ -775,6 +775,10 @@ export async function splitBankPurchase(
     ) {
       throw new Error(SPEND_WORDS.changedElsewhere);
     }
+    const kept = await Promise.all(
+      images.map((image) => transaction.get(imageRef(uid, bank.id, image.id))),
+    );
+    const stillThere = images.filter((_, index) => kept[index].exists());
     const now = Math.max(Date.now(), merged.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan.data(), [bank.date, typed.date]);
     transaction.set(purchaseRef(uid, typed.id), {
@@ -796,7 +800,7 @@ export async function splitBankPurchase(
       updatedAt: now,
       sealed: bankSealed,
     });
-    moveImages(transaction, uid, images, bank.id, typed.id);
+    moveImages(transaction, uid, stillThere, bank.id, typed.id);
     transaction.set(
       doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
       {

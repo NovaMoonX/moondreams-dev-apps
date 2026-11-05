@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findPurchaseMatches } from '@apps/runway/engine/matching';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -101,7 +102,10 @@ export function useMergeWithUndo() {
   };
 }
 
-/** Once both lists are read, merges each bank charge waiting in Needs a home with the one purchase typed by hand that it clearly is. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
+/** Older charges are left to the offer on their own sheet, so a first link never merges weeks of purchases at once. */
+const AUTO_MATCH_DAYS = 14;
+
+/** Once both lists are read, merges each recent bank charge waiting in Needs a home with the one purchase typed by hand that it clearly is. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchBankPurchases(uid: string | null) {
   const waiting = useAppSelector((state) => state.runway.needsHome);
   const isWaitingLoaded = useAppSelector(selectIsNeedsHomeLoaded);
@@ -110,12 +114,23 @@ export function useMatchBankPurchases(uid: string | null) {
     (state) => state.runway.purchasesFrom !== null,
   );
   const merge = useMergeWithUndo();
+  const mergeRef = useRef(merge);
   const tried = useRef(new Set<string>());
   const isRunning = useRef(false);
+  const isWaitingToRun = useRef(false);
+  const [runs, setRuns] = useState(0);
+
+  useEffect(() => {
+    mergeRef.current = merge;
+  });
 
   useEffect(() => {
     if (uid === null || !isWaitingLoaded || !isPurchasesLoaded) return;
-    if (isRunning.current) return;
+    if (isRunning.current) {
+      isWaitingToRun.current = true;
+      return;
+    }
+    const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
     const byId = new Map(
       [...waiting, ...purchases].map((purchase) => [purchase.id, purchase]),
     );
@@ -123,7 +138,7 @@ export function useMatchBankPurchases(uid: string | null) {
       ([bankId, typedId]) => {
         const bank = byId.get(bankId);
         const typed = byId.get(typedId);
-        if (!bank || !typed) return [];
+        if (!bank || !typed || bank.date < since) return [];
         const key = `${bank.id}:${bank.updatedAt}:${typed.id}:${typed.updatedAt}`;
         return tried.current.has(key) ? [] : [{ bank, typed, key }];
       },
@@ -133,13 +148,19 @@ export function useMatchBankPurchases(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await merge(uid, pairs);
+        await mergeRef.current(uid, pairs);
       } catch (error) {
+        // The vault or the network failed before any pair was tried, so they may be tried again.
+        pairs.forEach(({ key }) => tried.current.delete(key));
         console.error('Bank purchases were not matched', error);
       } finally {
         isRunning.current = false;
+        if (isWaitingToRun.current) {
+          isWaitingToRun.current = false;
+          setRuns((count) => count + 1);
+        }
       }
     };
     void run();
-  }, [uid, waiting, purchases, isWaitingLoaded, isPurchasesLoaded, merge]);
+  }, [uid, waiting, purchases, isWaitingLoaded, isPurchasesLoaded, runs]);
 }
