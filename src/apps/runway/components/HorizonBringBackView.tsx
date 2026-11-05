@@ -187,14 +187,16 @@ function HorizonBringBackView({
           name: horizon.name,
         },
       );
-      if (isUndone) {
-        addToast({
-          title: mask(
-            HORIZON_END_WORDS.undoneBringBack(horizon.name, priorState),
-          ),
-          type: 'success',
-        });
-      }
+      addToast(
+        isUndone
+          ? {
+              title: mask(
+                HORIZON_END_WORDS.undoneBringBack(horizon.name, priorState),
+              ),
+              type: 'success',
+            }
+          : { title: HORIZON_END_WORDS.changedSince, type: 'error' },
+      );
     } catch (undoError) {
       addToast({
         title: HORIZON_END_WORDS.releaseFailed(horizon.name),

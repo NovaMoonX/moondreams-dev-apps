@@ -249,12 +249,14 @@ function HorizonEndView({
               : (place?.name ?? HORIZON_END_WORDS.anotherPlace),
         },
       );
-      if (isUndone) {
-        addToast({
-          title: mask(HORIZON_END_WORDS.openAgain(horizon.name)),
-          type: 'success',
-        });
-      }
+      addToast(
+        isUndone
+          ? {
+              title: mask(HORIZON_END_WORDS.openAgain(horizon.name)),
+              type: 'success',
+            }
+          : { title: HORIZON_END_WORDS.changedSince, type: 'error' },
+      );
     } catch (undoError) {
       addToast({
         title: HORIZON_END_WORDS.releaseFailed(horizon.name),

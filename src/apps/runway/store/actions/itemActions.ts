@@ -9,6 +9,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
+import { getNextVersionId } from '@apps/runway/engine/horizon';
 import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
@@ -528,9 +529,7 @@ export async function changeItem(
   ]);
   const base = input.kind === 'horizon' ? input.baseVersionId : undefined;
   const getVersionId = (index: number) =>
-    base === undefined
-      ? generateUuid()
-      : `state_${base}${index === 0 ? '' : `_${index}`}`;
+    base === undefined ? generateUuid() : getNextVersionId(base, index);
   const versions = stretches.map((stretch, index): PlanVersionDoc => ({
     id: getVersionId(index),
     itemId: input.itemId,

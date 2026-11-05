@@ -541,3 +541,11 @@ export const listEndlessCosts = (horizon: Pick<HorizonSealed, 'costs'>) =>
       cost.ending.onDate === null &&
       cost.ending.afterCount === null,
   );
+
+/** The id of the version written over `baseVersionId`: the same for every write made from that base, so a second one is refused, and it stays as short as the base's root. `stretch` names the later stretches of one write. */
+export const getNextVersionId = (baseVersionId: string, stretch = 0) => {
+  const match = /^(.*)~(\d+)(?:_\d+)?$/.exec(baseVersionId);
+  const root = match ? match[1] : baseVersionId;
+  const generation = match ? Number(match[2]) + 1 : 1;
+  return `${root}~${generation}${stretch === 0 ? '' : `_${stretch}`}`;
+};

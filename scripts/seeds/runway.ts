@@ -530,7 +530,7 @@ async function writeSeedHorizon(
   ];
   // Track's plan holds only Moving, whose Movers are paid by a purchase.
   const items = isTrack ? allItems.slice(0, 1) : allItems;
-  const movedOn = today - 2 * DAY_MS;
+  const movedOn = today - 7 * DAY_MS;
   const toward: { itemId: string; cents: number; summary: string }[] = [
     {
       itemId: 'seed-horizon-moving',

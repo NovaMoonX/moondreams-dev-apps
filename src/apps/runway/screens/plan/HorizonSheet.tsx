@@ -389,14 +389,16 @@ function HorizonSheet({
               },
             )
               .then((isUndone) => {
-                if (isUndone) {
-                  addToast({
-                    title: mask(
-                      HORIZON_END_WORDS.releaseUndone(money, horizon.name),
-                    ),
-                    type: 'success',
-                  });
-                }
+                addToast(
+                  isUndone
+                    ? {
+                        title: mask(
+                          HORIZON_END_WORDS.releaseUndone(money, horizon.name),
+                        ),
+                        type: 'success',
+                      }
+                    : { title: HORIZON_END_WORDS.changedSince, type: 'error' },
+                );
               })
               .catch((undoError: unknown) =>
                 addToast({

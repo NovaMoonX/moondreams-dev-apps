@@ -11,7 +11,7 @@ import { formatCents } from '@/utils/moneyUtils';
 
 import { HORIZON_END_WORDS, MAKE_BILL_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { setHorizonState } from '@apps/runway/engine/horizon';
+import { getNextVersionId, setHorizonState } from '@apps/runway/engine/horizon';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
@@ -446,7 +446,7 @@ export async function sealReopen(
   ]);
   return {
     version: {
-      id: `state_${versionId}`,
+      id: getNextVersionId(versionId),
       itemId,
       kind: 'horizon',
       createdAt: now,
@@ -602,7 +602,7 @@ export async function makeCostABill(
   const itemVersionId =
     input.baseVersionId === undefined
       ? generateUuid()
-      : `state_${input.baseVersionId}`;
+      : getNextVersionId(input.baseVersionId);
   return runTransaction(db, async (transaction) => {
     const [plan, item, existing, taken] = await Promise.all([
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
@@ -845,7 +845,7 @@ async function endHorizon(
           moveId: move === null ? null : moveId,
         };
   const after = setHorizonState(horizon, state, today, money);
-  const versionId = `state_${input.baseVersionId}`;
+  const versionId = getNextVersionId(input.baseVersionId);
   const summary = HORIZON_END_WORDS.endSummary(
     horizon.name,
     state,
@@ -917,7 +917,7 @@ export async function bringBackHorizon(
         }
       : null;
   const after = setHorizonState(horizon, 'open', today, null);
-  const versionId = `state_${input.baseVersionId}`;
+  const versionId = getNextVersionId(input.baseVersionId);
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.itemId,
@@ -967,7 +967,7 @@ export async function releaseHorizonHeld(
     ...horizon,
     stateMoney: { kind: 'free', toId: null, cents, moveId },
   };
-  const versionId = `state_${input.baseVersionId}`;
+  const versionId = getNextVersionId(input.baseVersionId);
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.itemId,
@@ -995,7 +995,7 @@ export async function undoHorizonState(
     throw new Error(HORIZON_END_WORDS.undoShort(holds.name));
   }
   return setHorizonStateWith(uid, encryption, {
-    versionId: `undo_${written.versionId}`,
+    versionId: getNextVersionId(written.versionId),
     itemId: written.itemId,
     horizon: written.before,
     summary,
