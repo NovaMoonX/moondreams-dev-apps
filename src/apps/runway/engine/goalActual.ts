@@ -1,10 +1,7 @@
 import { shareInterest } from '@apps/runway/engine/interest';
 import type { Cents } from '@apps/runway/types';
 
-/**
- * A goal's planned balance beside its share of what the bank says the account holds. The account's difference
- * (bank minus the plan's balance) is shared by what each goal holds; it is information and moves no plan figure.
- */
+/** A goal's planned balance beside its share of the bank's difference from the account's typed balance; information only. */
 export function getGoalActual(
   goalId: string,
   goals: readonly { id: string; heldCents: Cents }[],

@@ -3838,26 +3838,23 @@ export const ACCOUNT_WORDS = {
     `About ${amount} interest on ${day} (estimate)`,
   interestActual: (amount: string, day: string) =>
     `${amount} interest on ${day}`,
-  goalInterestActual: (amount: string, day: string, account: string) =>
-    `Earned ${amount} on ${day}, its share of the interest in ${account}`,
-  goalActualCaption: 'At the bank',
+  goalInterestActual: (amount: string, day: string) =>
+    `Earned ${amount} on ${day}, its share of the interest`,
   goalActual: (
-    account: string,
     amount: string,
-    difference: string,
-    direction: 'more' | 'less' | 'same' | null,
-    asOf: string | null,
-  ) => {
-    const said = `${account} says about ${amount} for it${asOf === null ? '' : ` as of ${asOf}`}`;
-    if (direction === null) return said;
-    return direction === 'same'
-      ? `${said}, which matches the plan`
-      : `${said}, ${difference} ${direction} than planned`;
-  },
+    compare: {
+      difference: string;
+      direction: 'more' | 'less';
+      saved: string;
+    } | null,
+  ) =>
+    compare === null
+      ? `The bank shows about ${amount} as its share`
+      : `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
-  goalInterest: (amount: string, day: string, account: string) =>
-    `Earns about ${amount} on ${day}, its share of the interest in ${account} (estimate)`,
+  goalInterest: (amount: string, day: string) =>
+    `Earns about ${amount} on ${day}, its share of the interest (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
   changeHolds: (
     name: string,

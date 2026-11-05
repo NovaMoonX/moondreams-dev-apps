@@ -1594,7 +1594,6 @@ const SEED_WEALTHFRONT_GOALS = [
   'seed-goal-phone',
 ];
 
-/** Three accounts: two Capital One checking accounts (B is pulled from) and a Wealthfront cash account holding three goals. Checking A and Wealthfront Cash are linked, each with the bank's balance beside it; Wealthfront's is $24.00 above the plan's, so its goals show a difference. Six documents. */
 async function writeSeedAccounts(
   context: SeedContext,
   uid: string,
