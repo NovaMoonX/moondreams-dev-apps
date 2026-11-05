@@ -127,7 +127,11 @@ function RefreshRing({
   return (
     <svg
       viewBox='0 0 28 28'
-      className={join('size-7 -rotate-90', isSpinning && 'animate-spin')}
+      className={join(
+        'size-7 -rotate-90 transition-transform duration-150',
+        isSpinning && 'animate-spin',
+        progress >= 1 && !isSpinning && 'scale-125',
+      )}
       aria-hidden='true'
     >
       <circle
@@ -305,7 +309,11 @@ function PullFrame({
           <>
             <RefreshRing progress={progress} isSpinning={isRefreshing} />
             <span className='sr-only'>
-              {isRefreshing ? WORDS.refreshing : WORDS.pullHint}
+              {isRefreshing
+                ? WORDS.refreshing
+                : progress >= 1
+                  ? WORDS.releaseHint
+                  : WORDS.pullHint}
             </span>
           </>
         )}

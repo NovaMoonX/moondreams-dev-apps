@@ -2750,6 +2750,7 @@ export const PLAN_OVERVIEW_WORDS = {
   viewAll: 'View all',
   viewLess: 'View less',
   pullHint: 'Keep pulling to refresh Runway',
+  releaseHint: 'Let go to refresh Runway',
   refreshing: 'Refreshing Runway',
   nothingYet: 'Nothing yet',
   monthly: 'a month',
