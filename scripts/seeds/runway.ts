@@ -251,9 +251,13 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       gates: {
         [LINK_BANKS_GATE_ID]: {
           rollout: 'off',
-          alwaysOnUids: [owner.uid, FIXTURE_USERS.partnerTwo.uid],
+          alwaysOnUids: [
+            owner.uid,
+            FIXTURE_USERS.partnerTwo.uid,
+            FIXTURE_USERS.nineLivesCaretaker.uid,
+          ],
           alwaysOffUids: [],
-          reason: 'Seeded: Alex and Jamie test linking',
+          reason: 'Seeded: Alex, Jamie and Taylor test linking',
           updatedAt: context.now,
         },
       },
@@ -268,11 +272,13 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     startOfUtcDay(context.now) - 45 * DAY_MS,
   );
   const trackingDocuments = await seedTrackingPlan(context, keyring);
+  const unlinkedDocuments = await seedUnlinkedPlan(context, keyring);
 
   return {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
       trackingDocuments +
+      unlinkedDocuments +
       closingDocuments +
       3 +
       incomeDocuments +
@@ -3213,6 +3219,246 @@ async function seedTrackingPlan(
     accountDocuments +
     horizonDocuments +
     purchaseDocuments
+  );
+}
+
+/** Taylor's plan is at Track after unlinking Capital One 3 days ago: tracking began 30 days back and was linked from 10 days ago (the `linkedFrom` day is cleared when the last bank is unlinked), income and envelopes, a Checking account whose `linkId` still names the revoked link (no grant exists), three bank purchases that stayed (placed on Free to Spend), and the three records of the story (started, linked, unlinked) in the change log. It has no closings, like a plan written before they existed, so the first open builds them. */
+async function seedUnlinkedPlan(
+  context: SeedContext,
+  keyring: ReturnType<typeof readKeyring>,
+) {
+  const owner = FIXTURE_USERS.nineLivesCaretaker;
+  const data = deriveSeedDataKey(keyring, owner.uid);
+  const today = startOfUtcDay(context.now);
+  const createdAt = context.now - 30 * DAY_MS;
+  const startDate = today - 30 * DAY_MS;
+  const linkedAt = context.now - 10 * DAY_MS;
+  const unlinkedAt = context.now - 3 * DAY_MS;
+  const encryption = {
+    appId: 'runway' as const,
+    keyId: data.keyId,
+    keyVersion: 1,
+    key: data.key.toString('hex'),
+  };
+  const plan = `apps/runway/plans/${owner.uid}`;
+  const linkId = 'seed-link-taylor-capital-one';
+  const accountId = 'seed-account-taylor-checking';
+
+  const batch = context.firestore.batch();
+  batch.set(
+    context.firestore.doc(`apps/runway/server/${owner.uid}/keys/data`),
+    wrapDataKey(keyring, owner.uid, data, createdAt),
+  );
+  batch.set(context.firestore.doc(plan), {
+    uid: owner.uid,
+    createdAt,
+    updatedAt: unlinkedAt,
+    stance: 'conservative',
+    startDate,
+    trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
+    keyId: data.keyId,
+    sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
+  });
+  const moveId = `tracking_${new Date(startDate).toISOString().slice(0, 10).replaceAll('-', '')}_${createdAt}`;
+  batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+    id: moveId,
+    kind: 'trackingChange',
+    date: startDate,
+    refId: null,
+    reversesMoveId: null,
+    createdAt,
+    sealed: await sealJson({ direction: 'up' }, encryption),
+  } satisfies MoveDoc);
+  const envelopeStarts = [
+    ['seed-envelope-groceries', 40_000],
+    ['seed-envelope-gas', 4_000],
+    ['seed-envelope-dining', 2_000],
+    ['seed-envelope-gifts', 5_000],
+  ] as const;
+  await Promise.all(
+    envelopeStarts.map(async ([refId, cents]) => {
+      const id = `start_${refId}_${createdAt}`;
+      batch.set(context.firestore.doc(`${plan}/moves/${id}`), {
+        id,
+        kind: 'start',
+        date: startDate,
+        refId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: await sealJson(
+          { amountCents: cents, holding: 'envelope' } satisfies StartSealed,
+          encryption,
+        ),
+      } satisfies MoveDoc);
+    }),
+  );
+  const changes = [
+    {
+      id: 'seed-change-taylor-started',
+      createdAt,
+      effectiveFrom: startDate,
+      summary: `Started tracking from ${formatDateOrdinalUTC(startDate)}.`,
+    },
+    {
+      id: 'seed-change-taylor-linked',
+      createdAt: linkedAt,
+      effectiveFrom: null,
+      summary: `Linked a bank from ${formatDateOrdinalUTC(startOfUtcDay(linkedAt))}.`,
+    },
+    {
+      id: 'seed-change-taylor-unlinked',
+      createdAt: unlinkedAt,
+      effectiveFrom: null,
+      summary: 'Unlinked Capital One; new purchases stop. What came in stays.',
+    },
+  ];
+  await Promise.all(
+    changes.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/changes/${entry.id}`), {
+        id: entry.id,
+        kind: 'levelMove',
+        createdAt: entry.createdAt,
+        effectiveFrom: entry.effectiveFrom,
+        itemIds: [],
+        sealed: await sealJson(
+          { summary: entry.summary } satisfies ChangeSealed,
+          encryption,
+        ),
+      } satisfies ChangeDoc);
+    }),
+  );
+  batch.set(context.firestore.doc(`${plan}/accounts/${accountId}`), {
+    id: accountId,
+    createdAt: linkedAt,
+    updatedAt: linkedAt,
+    archivedAt: null,
+    linkId,
+    sealed: await sealJson(
+      {
+        name: 'Checking',
+        institution: 'Capital One',
+        kind: 'checking',
+        countedTowardTotal: true,
+        isPullAccount: false,
+        lastFour: '4821',
+        balanceCents: 182_500,
+        balanceOn: startOfUtcDay(unlinkedAt),
+        holds: [],
+      } satisfies AccountSealed,
+      encryption,
+    ),
+  } satisfies AccountDoc);
+  batch.set(context.firestore.doc(`${plan}/links/${linkId}`), {
+    id: linkId,
+    status: 'revoked',
+    lastSyncAt: unlinkedAt,
+    createdAt: linkedAt,
+    sealed: await sealJson(
+      {
+        institutionName: 'Capital One',
+        providerAccounts: [
+          {
+            providerAccountId: 'seed-taylor-provider-checking',
+            name: '360 Checking',
+            kind: 'depository',
+            mask: '4821',
+            balanceCents: 182_500,
+            accountId,
+            cardId: null,
+            isSkipped: false,
+          },
+          {
+            providerAccountId: 'seed-taylor-provider-savings',
+            name: '360 Savings',
+            kind: 'depository',
+            mask: '3302',
+            balanceCents: 900_000,
+            accountId: null,
+            cardId: null,
+            isSkipped: true,
+          },
+        ],
+      } satisfies LinkSealed,
+      encryption,
+    ),
+  } satisfies LinkDoc);
+  const kept = [
+    {
+      id: 'seed-taylor-purchase-market',
+      daysAgo: 8,
+      merchant: 'Corner Market',
+      amountCents: 4_218,
+    },
+    {
+      id: 'seed-taylor-purchase-gas',
+      daysAgo: 6,
+      merchant: 'Shell',
+      amountCents: 3_895,
+    },
+    {
+      id: 'seed-taylor-purchase-pizza',
+      daysAgo: 4,
+      merchant: 'Slice House',
+      amountCents: 2_460,
+    },
+  ];
+  await Promise.all(
+    kept.map(async (entry) => {
+      const date = today - entry.daysAgo * DAY_MS;
+      const stamp = date + 12 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'link',
+        status: 'posted',
+        needsHome: false,
+        accountId,
+        expenseId: null,
+        dedupeKey: `${entry.id}-dedupe`,
+        createdAt: stamp,
+        updatedAt: stamp,
+        sealed: await sealJson(
+          {
+            amountCents: entry.amountCents,
+            merchant: entry.merchant,
+            label: null,
+            note: null,
+            lines: [
+              { envelopeId: null, cents: entry.amountCents, via: 'free' },
+            ],
+            refundOfId: null,
+            paidByCardId: null,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+            category: null,
+            ruleId: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
+  await batch.commit();
+
+  const itemDocuments =
+    (await writeSeedIncome(context, owner.uid, encryption, accountId)) +
+    (await writeSeedEnvelopes(context, owner.uid, encryption, true));
+  return (
+    2 +
+    envelopeStarts.length +
+    changes.length +
+    1 +
+    1 +
+    kept.length +
+    itemDocuments
   );
 }
 

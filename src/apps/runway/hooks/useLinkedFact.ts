@@ -12,6 +12,7 @@ export function useLinkedFact(linkId: string | null) {
       : (state.runway.links.find((entry) => entry.id === linkId) ?? null),
   );
   if (linkId === null) return null;
+  if (link?.status === 'revoked') return LINK_WORDS.unlinkedFact;
   const at = link ? (link.lastSyncAt ?? link.createdAt) : null;
   return at === null
     ? LINK_WORDS.done

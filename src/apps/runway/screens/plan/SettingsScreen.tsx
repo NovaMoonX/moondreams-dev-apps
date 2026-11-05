@@ -17,6 +17,7 @@ import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -32,13 +33,16 @@ import {
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenLink, Stance } from '@apps/runway/types';
 import {
+  countBroughtIn,
   describeUnfinishedLink,
+  formatUpdatedAgo,
   isUnfinishedLink,
 } from '@apps/runway/utils/linkText';
 
@@ -130,6 +134,9 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const canLink = useCanLinkBank();
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);
+  const finished = links.filter((link) => !isUnfinishedLink(link));
+  const now = useNow(60_000);
+  const [openBankId, setOpenBankId] = useState<string | null>(null);
   const [linking, setLinking] = useState<{ resume: OpenLink | null } | null>(
     null,
   );
@@ -205,6 +212,26 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   onOpen={() => setLinking({ resume: link })}
                 />
               ))}
+              {finished.map((link) => (
+                <SettingsRow
+                  key={link.id}
+                  isMiddle
+                  icon={<Landmark />}
+                  label={link.institutionName}
+                  value={
+                    link.status === 'revoked'
+                      ? LINK_WORDS.unlinkedRowValue(countBroughtIn(link))
+                      : LINK_WORDS.linkedRowValue(
+                          countBroughtIn(link),
+                          formatUpdatedAgo(
+                            link.lastSyncAt ?? link.createdAt,
+                            now,
+                          ),
+                        )
+                  }
+                  onOpen={() => setOpenBankId(link.id)}
+                />
+              ))}
               <SettingsRow
                 isMiddle
                 icon={<Landmark />}
@@ -226,6 +253,9 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
         </ActionSection>
         <GatesClosedNote appId='runway' />
       </div>
+      {openBankId && (
+        <BankSheet linkId={openBankId} onClose={() => setOpenBankId(null)} />
+      )}
       {linking && (
         <LinkBankScreen
           resume={linking.resume}

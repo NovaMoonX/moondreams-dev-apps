@@ -35,6 +35,7 @@ Built:
 - [x] Link a bank: sign in at your bank, say which of your cards and accounts each of its accounts is, and bring their balances in, with the bank's figure offered, never applied on its own
 - [x] Purchases from a linked bank wait in Needs a home and are filed in a tap; one you already typed by hand is matched to the bank's, so it counts once
 - [x] Rules: always send a place, a kind of place or a card to an envelope, made from a waiting purchase, changed or removed in Spend > Rules
+- [x] Unlink a bank: new purchases stop and everything that came in stays; unlinking the last bank moves the plan from Link to Track, stopping tracking moves it to Plan, and moving back up restores the same data
 Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
 - [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway

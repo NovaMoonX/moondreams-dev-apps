@@ -16,12 +16,14 @@ import { LEVELS, LEVEL_LABELS, TRACKING_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getOpenPeriod, isTrackingLevel } from '@apps/runway/engine/level';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { unlinkLink } from '@apps/runway/store/actions/linkActions';
 import { moveToPlan } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import LineUpScreen from '@apps/runway/screens/plan/LineUpScreen';
 import type { Level } from '@apps/runway/types';
+import { isLiveLink } from '@apps/runway/utils/linkText';
 
 const PERIODS_PREVIEW = 3;
 
@@ -38,6 +40,9 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
   const periods = useAppSelector(
     (state) => state.runway.plan?.trackingPeriods ?? [],
   );
+  const liveLinks = useAppSelector((state) =>
+    state.runway.links.filter(isLiveLink),
+  );
   const [isLineUp, setIsLineUp] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
   const canLink = useCanLinkBank();
@@ -51,15 +56,24 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
 
   const stop = async () => {
     if (!user || isBusy) return;
+    const banks = liveLinks.map((link) => link.institutionName);
     const isConfirmed = await confirm({
       title: TRACKING_WORDS.stopTitle,
-      message: TRACKING_WORDS.stopMessage,
-      confirmText: TRACKING_WORDS.stopConfirm,
+      message:
+        banks.length > 0
+          ? TRACKING_WORDS.stopFromLinkMessage(banks.join(', '))
+          : TRACKING_WORDS.stopMessage,
+      confirmText:
+        banks.length > 0
+          ? TRACKING_WORDS.stopFromLinkConfirm
+          : TRACKING_WORDS.stopConfirm,
+      destructive: banks.length > 0,
     });
     if (!isConfirmed) return;
     setIsBusy(true);
     setError(null);
     try {
+      await Promise.all(liveLinks.map((link) => unlinkLink(link.id)));
       const encryption = await getRunwayEncryption(user.uid);
       await moveToPlan(user.uid, encryption, today);
     } catch (stopError) {

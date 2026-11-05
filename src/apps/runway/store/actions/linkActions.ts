@@ -65,6 +65,11 @@ const discardCallable = httpsCallable<
   { discarded: boolean }
 >(functions, 'discardRunwayLink');
 
+const unlinkCallable = httpsCallable<
+  { linkId: string },
+  { unlinked: boolean; isRevokedAtBank: boolean }
+>(functions, 'unlinkRunwayAccount');
+
 /** Asks for a one-time token for the bank's window. */
 export async function createLinkSession(): Promise<string> {
   const response = await createSessionCallable({});
@@ -83,6 +88,11 @@ export async function exchangeLink(
 /** Revokes a link nothing was matched on at the bank and removes it; Functions refuse a link that already has accounts in it. */
 export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
+}
+
+/** Stops a finished link at the bank and on the server; what already came in stays. Safe to repeat. */
+export async function unlinkLink(linkId: string): Promise<void> {
+  await unlinkCallable({ linkId });
 }
 
 /** Asks Functions to bring in what is new from every active bank link; safe to repeat. */

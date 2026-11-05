@@ -19,6 +19,7 @@ import {
   linkTrackingPeriod,
   startTrackingPeriod,
   stopTrackingPeriod,
+  unlinkTrackingPeriod,
 } from '../../src/apps/runway/engine/level.ts';
 import {
   deriveBalances,
@@ -6843,6 +6844,28 @@ const version = (
     },
     { day: day(0), periods: [] },
   );
+  {
+    // Link down to Track and up again keeps the one period; unlinking is refused when no bank is linked.
+    const linked = linkTrackingPeriod(up.periods, day(2));
+    assert.ok('periods' in linked);
+    assert.equal(getLevel(linked.periods), 'link');
+    const unlinked = unlinkTrackingPeriod(linked.periods);
+    assert.ok('periods' in unlinked);
+    assert.equal(getLevel(unlinked.periods), 'track');
+    assert.equal(unlinked.periods.length, 1, 'the period is kept');
+    assert.equal(unlinked.periods[0].from, up.periods[0].from);
+    assert.ok(
+      'error' in unlinkTrackingPeriod(unlinked.periods),
+      'a stale second unlink is refused',
+    );
+    assert.ok(
+      'error' in unlinkTrackingPeriod([]),
+      'Plan has nothing to unlink',
+    );
+    const relinked = linkTrackingPeriod(unlinked.periods, day(5));
+    assert.ok('periods' in relinked);
+    assert.equal(getLevel(relinked.periods), 'link', 'a later link works');
+  }
   assert.equal(loop.periods.length, 6, 'one period per stretch');
   assert.ok(
     loop.periods.every(

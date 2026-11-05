@@ -1719,6 +1719,9 @@ export const TRACKING_WORDS = {
   stopMessage:
     'Spending screens and "left" figures go away and envelopes show what they are assigned. Everything you entered stays in your history, and you can start again from any later day.',
   stopConfirm: 'Stop tracking',
+  stopFromLinkMessage: (banks: string) =>
+    `This also unlinks ${banks}: new purchases stop coming in. Spending screens and "left" figures go away and envelopes show what they are assigned. Everything already in Runway stays in your history, and you can start again from any later day.`,
+  stopFromLinkConfirm: 'Unlink and stop tracking',
   freshStart:
     'Starting again begins fresh from this day. Earlier tracking stays in your history.',
   lineUpTotal: 'Assigned',
@@ -4251,6 +4254,29 @@ export const LINK_WORDS = {
   methodManual: 'Add it myself',
   methodManualHelp: 'Type its details',
   newCardSummary: (name: string) => `Added the card ${name} from your bank`,
+  linkedRowValue: (count: number, when: string) =>
+    `Linked \u00b7 ${count === 1 ? '1 account' : `${count} accounts`} \u00b7 updated ${when}`,
+  unlinkedRowValue: (count: number) =>
+    `Unlinked \u00b7 ${count === 1 ? '1 account' : `${count} accounts`} kept`,
+  unlinkedFact: 'Unlinked',
+  sheetAccounts: 'Brought in from this bank',
+  sheetLeftOut: 'Left out',
+  unlink: 'Unlink this bank',
+  unlinkHelp:
+    'New purchases stop coming in. Everything already in Runway stays.',
+  unlinkedNote:
+    'This bank is unlinked. Nothing new comes in, and what already did is still in your history.',
+  relinkHelp: 'To bring it back, link the bank again from Link a bank.',
+  unlinkTitle: (bank: string) => `Unlink ${bank}?`,
+  unlinkMessage: (bank: string) =>
+    `New purchases from ${bank} stop coming in. Its purchases, balances, cards and accounts stay exactly as they are, and you can link it again whenever you like.`,
+  unlinkLevelMessage:
+    'This is your last linked bank, so your plan moves from Link to Track: Runway stops bringing purchases in, and you add them yourself.',
+  unlinkConfirm: 'Unlink',
+  unlinkFailed: 'That bank was not unlinked. Nothing was changed.',
+  unlinkLevelFailed:
+    'Unlinked, but your plan still reads Link. Tap Unlink once more to finish moving it to Track.',
+  unlinkedToast: (bank: string) => `Unlinked ${bank}`,
 } as const;
 
 /** The bank's detailed kinds of place, as people say them; an unknown code reads as its last part (`getCategoryLabel`). */
