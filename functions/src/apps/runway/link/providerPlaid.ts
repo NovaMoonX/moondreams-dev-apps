@@ -271,7 +271,7 @@ export async function getWebhookKey(keyId: string): Promise<WebhookKey | null> {
   const now = Date.now();
   const cached = keyCache.get(keyId);
   if (cached && cached.until > now) return cached.key;
-  // Requests that arrive together for one id wait on one lookup, so the limit below never refuses a real one.
+  // Requests that arrive together for one id wait on one lookup instead of meeting the limit below.
   const pending = inFlight.get(keyId);
   if (pending) return pending;
   // The id comes from an unsigned header, so anyone can send a new one: at most one lookup every two seconds per instance.
