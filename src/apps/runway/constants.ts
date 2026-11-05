@@ -739,12 +739,13 @@ export const HORIZON_END_WORDS = {
   goalsHeading: 'Goals',
   andMore: (count: number) => `and ${count} more`,
   stopped: 'Stopped \u00b7 never paid',
-  wentToFree: (money: string) => `${money} to Free to Spend`,
-  wentToPlace: (money: string, place: string) => `${money} to ${place}`,
+  wentToFree: (money: string, isCalledOff: boolean) =>
+    `${money} went to Free to Spend when it ${isCalledOff ? 'was called off' : 'finished'}`,
+  wentToPlace: (money: string, place: string, isCalledOff: boolean) =>
+    `${money} went to ${place} when it ${isCalledOff ? 'was called off' : 'finished'}`,
   stillHeld: (money: string) => `Still held \u00b7 ${money}`,
   release: (amount: string) => `Release ${amount} to Free to Spend`,
-  releaseSub: (amount: string) =>
-    `Free to Spend goes up by ${amount}. To put it somewhere else, bring it back and finish it again.`,
+  releaseSub: (amount: string) => `Free to Spend goes up by ${amount}.`,
   releasedAmount: (amount: string, name: string) =>
     `${amount} from ${name} went to Free to Spend`,
   releaseUndone: (amount: string, name: string) =>
@@ -767,6 +768,8 @@ export const HORIZON_END_WORDS = {
   releaseFailed: (name: string) => `${name} was not changed`,
   bringBackRow: 'Bring it back',
   bringBackSub: 'Its costs plan again from today',
+  bringBackHeldSub:
+    'Its costs plan again from today. To put what it holds somewhere other than Free to Spend, bring it back and finish it again.',
   bringBackTitle: (name: string) => `Bring ${name} back?`,
   bringBackNote: 'Its unpaid costs plan again from today.',
   whatComesBack: 'What comes back',

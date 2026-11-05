@@ -305,10 +305,11 @@ function HorizonSheet({
     if (sent === null || sent.kind === 'held') return null;
     const money = formatCents(sent.cents);
     return sent.kind === 'free'
-      ? HORIZON_END_WORDS.wentToFree(money)
+      ? HORIZON_END_WORDS.wentToFree(money, horizon.state === 'calledOff')
       : HORIZON_END_WORDS.wentToPlace(
           money,
           sentPlace ?? HORIZON_END_WORDS.anotherPlace,
+          horizon.state === 'calledOff',
         );
   };
   const sentLine = getSentLine();
@@ -628,7 +629,11 @@ function HorizonSheet({
               hasChevron
               icon={<RotateCcw />}
               label={HORIZON_END_WORDS.bringBackRow}
-              subtitle={HORIZON_END_WORDS.bringBackSub}
+              subtitle={
+                figures.leftCents > 0
+                  ? HORIZON_END_WORDS.bringBackHeldSub
+                  : HORIZON_END_WORDS.bringBackSub
+              }
               onClick={() => setView('bringBack')}
             />
             {figures.leftCents > 0 && (
@@ -767,6 +772,14 @@ function HorizonSheet({
                 <MaskedText>{outsideLine}</MaskedText>
               </p>
             )}
+            {stage === 'open' && waitingOn.length > 0 && (
+              <p>
+                {HORIZON_END_WORDS.finishWaits(
+                  waitingOn.slice(0, 2).map(({ name }) => name),
+                  Math.max(0, waitingOn.length - 2),
+                )}
+              </p>
+            )}
           </div>
           <div className='space-y-2'>
             <p className='text-muted-foreground text-sm font-medium'>
@@ -859,14 +872,6 @@ function HorizonSheet({
               onClick={() => setView('history')}
             />
           </ActionGroup>
-          {stage === 'open' && waitingOn.length > 0 && (
-            <p className='text-muted-foreground text-sm'>
-              {HORIZON_END_WORDS.finishWaits(
-                waitingOn.slice(0, 2).map(({ name }) => name),
-                Math.max(0, waitingOn.length - 2),
-              )}
-            </p>
-          )}
           {stage === 'readyToFinish' && (
             <ModalFooterActions
               rightActions={

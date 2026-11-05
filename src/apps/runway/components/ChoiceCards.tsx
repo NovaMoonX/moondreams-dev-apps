@@ -10,14 +10,14 @@ interface ChoiceCardsProps<T extends string> {
   onChange: (value: T) => void;
 }
 
-/** Answers to one question, two side by side (an odd last one across the full width), each with a line saying what it does. */
+/** Answers to one question, two side by side (an odd last one across the full width; one per row below 360px), each with a line saying what it does. */
 function ChoiceCards<T extends string>({
   options,
   value,
   onChange,
 }: ChoiceCardsProps<T>) {
   return (
-    <div className='grid grid-cols-2 gap-2'>
+    <div className='grid grid-cols-2 gap-2 max-[359px]:grid-cols-1'>
       {options.map((option, index) => {
         const isChosen = value === option.value;
         return (
@@ -29,7 +29,7 @@ function ChoiceCards<T extends string>({
             className={join(
               index === options.length - 1 &&
                 options.length % 2 === 1 &&
-                'col-span-2',
+                'col-span-2 max-[359px]:col-span-1',
               'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-3! py-1.5! text-left font-normal whitespace-normal',
               isChosen &&
                 'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
