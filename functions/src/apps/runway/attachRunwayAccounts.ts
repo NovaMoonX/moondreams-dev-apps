@@ -81,6 +81,23 @@ function readChoices(raw: unknown): Choice[] {
   return choices;
 }
 
+function openGrantOrFail(
+  keyring: Parameters<typeof openGrant>[0],
+  uid: string,
+  linkId: string,
+  doc: ProviderGrantDoc,
+) {
+  try {
+    return openGrant(keyring, uid, doc);
+  } catch {
+    logger.error('runway.link.grantUnopened', { linkId });
+    throw new HttpsError(
+      'failed-precondition',
+      'This bank link cannot be opened right now.',
+    );
+  }
+}
+
 const ALREADY_LINKED =
   'One of those accounts or cards is already linked, archived or gone. Pick again.';
 
@@ -120,21 +137,12 @@ export const attachRunwayAccounts = onCall(
     if (!grantSnapshot.exists) {
       throw new HttpsError('not-found', 'That bank link is not there anymore.');
     }
-    const grant = (() => {
-      try {
-        return openGrant(
-          keyring,
-          uid,
-          grantSnapshot.data() as ProviderGrantDoc,
-        );
-      } catch {
-        logger.error('runway.link.grantUnopened', { linkId });
-        throw new HttpsError(
-          'failed-precondition',
-          'This bank link cannot be opened right now.',
-        );
-      }
-    })();
+    const grant = openGrantOrFail(
+      keyring,
+      uid,
+      linkId,
+      grantSnapshot.data() as ProviderGrantDoc,
+    );
 
     const live = await withProvider(() => provider.listAccounts(grant));
     const centsByProvider = new Map(
