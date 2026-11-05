@@ -919,6 +919,7 @@ export async function seedRunwayScale(
             pairedWithId: null,
             pairKind: null,
             cardPaymentMoveId: null,
+            tickedDayKey: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

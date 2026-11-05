@@ -23,6 +23,7 @@ import {
   linkDepositToDay,
   mergeBankPurchase,
   pairAccountPurchases,
+  recordPairTick,
   splitBankPurchase,
   unlinkDeposit,
   unpairAccountPurchases,
@@ -45,6 +46,7 @@ import {
 import type {
   CardPaymentCovers,
   OpenPurchase,
+  RunwayEncryption,
   PurchaseAssignedBy,
   PurchasePairKind,
 } from '@apps/runway/types';
@@ -378,8 +380,6 @@ export interface AccountPairInput {
 interface DonePair extends AccountPairInput {
   paired: PairedPurchases;
   names: { from: string; to: string };
-  /** The "Move to" item this pairing ticked, which only an Undo of it unticks. */
-  tick: { dayKey: string; lineId: string } | null;
 }
 
 /** A payment covers the card in full when it is at least what the card owes now. */
@@ -394,21 +394,33 @@ const getCovers = (pair: AccountPairInput): CardPaymentCovers =>
     ? 'full'
     : 'part';
 
-/** Ticks the income day's "Move to" item that a transfer into a pull account is, unless it was ticked already; a tick that does not save never fails the pairing. */
-async function tickMove(uid: string, into: OpenPurchase) {
+/** Ticks the income day's "Move to" item that a transfer into a pull account is, unless it was ticked already, and records the tick on the money in so every way out of the pair unticks it; resolves with the money in as it now stands. A tick that does not save never fails the pairing. */
+async function tickMove(
+  uid: string,
+  encryption: RunwayEncryption,
+  into: OpenPurchase,
+): Promise<OpenPurchase> {
   const state = store.getState();
   const account = state.runway.accounts.find(
     (entry) => entry.id === into.accountId,
   );
-  if (!account?.isPullAccount) return null;
+  if (!account?.isPullAccount) return into;
   const tick = selectMoveTick(state, todayAsUtcDate(), account.id, into.date);
-  if (tick === null || tick.isDone) return null;
+  if (tick === null || tick.isDone) return into;
   try {
     await setLinesDone(uid, tick.dayKey, [tick.lineId], true, tick.doneIds);
-    return { dayKey: tick.dayKey, lineId: tick.lineId };
   } catch (error) {
     console.error('A move to an account was not ticked', error);
-    return null;
+    return into;
+  }
+  try {
+    return await recordPairTick(uid, encryption, into, tick.dayKey);
+  } catch (error) {
+    console.error('A move to an account was ticked but not recorded', error);
+    await setLinesDone(uid, tick.dayKey, [tick.lineId], false, []).catch(
+      () => undefined,
+    );
+    return into;
   }
 }
 
@@ -438,15 +450,6 @@ export function usePairAccountsWithUndo() {
             true,
           ),
         );
-        if (entry.tick !== null) {
-          await setLinesDone(
-            uid,
-            entry.tick.dayKey,
-            [entry.tick.lineId],
-            false,
-            [],
-          );
-        }
       }, Promise.resolve());
       addToast({ title: PAIR_WORDS.undone, type: 'success' });
     } catch (undoError) {
@@ -490,9 +493,11 @@ export function usePairAccountsWithUndo() {
             describeAccountPair(pair.out, pair.into, pair.kind, names, false),
             getCovers(pair),
           );
-          const tick =
-            pair.kind === 'transfer' ? await tickMove(uid, paired.into) : null;
-          return [...list, { ...pair, paired, names, tick }];
+          const into =
+            pair.kind === 'transfer'
+              ? await tickMove(uid, encryption, paired.into)
+              : paired.into;
+          return [...list, { ...pair, paired: { ...paired, into }, names }];
         } catch (error) {
           if (shouldThrow) throw error;
           console.error('Purchases were not paired', error);
@@ -521,6 +526,48 @@ export function usePairAccountsWithUndo() {
       },
     });
     return done.length;
+  };
+}
+
+/** Sends one pair back to Needs a home, with a toast whose Undo pairs it again. Throws when it did not save, for the caller to show. */
+export function useUnpairAccounts() {
+  const { addToast } = useToast();
+  const accounts = useAppSelector((state) => state.runway.accounts);
+  const cardNameOf = getCardNamer(useAppSelector(selectAllCards));
+  const pairAccounts = usePairAccountsWithUndo();
+
+  return async (uid: string, pair: AccountPairInput) => {
+    const names = {
+      from: getPairSideName(pair.out, accounts, cardNameOf),
+      to: getPairSideName(pair.into, accounts, cardNameOf),
+    };
+    const back = await unpairAccountPurchases(
+      uid,
+      await getRunwayEncryption(uid),
+      pair.out,
+      pair.into,
+      describeAccountPair(pair.out, pair.into, pair.kind, names, true),
+    );
+    addToast({
+      title: PAIR_WORDS.unpaired,
+      type: 'success',
+      action: {
+        label: NEEDS_HOME_WORDS.undo,
+        onClick: () =>
+          void pairAccounts(
+            uid,
+            [{ out: back.out, into: back.into, kind: pair.kind }],
+            'person',
+            true,
+          ).catch((undoError: unknown) =>
+            addToast({
+              title: NEEDS_HOME_WORDS.undoFailed,
+              description: getErrorMessage(undoError, ''),
+              type: 'error',
+            }),
+          ),
+      },
+    });
   };
 }
 

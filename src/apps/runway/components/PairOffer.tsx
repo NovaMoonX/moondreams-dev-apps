@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -20,10 +22,19 @@ import { getPairSideName } from '@apps/runway/utils/purchaseText';
 interface PairOfferProps {
   purchase: OpenPurchase;
   onDone: () => void;
+  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind "Not a move between my accounts". */
+  children: ReactNode;
+  /** The row's subtitle: what the other question picks. */
+  elseSubtitle: string;
 }
 
-/** The purchases a waiting one may be the other side of as a move between the person's own accounts: tapping one pairs them, and neither counts as spending or income. */
-function PairOffer({ purchase, onDone }: PairOfferProps) {
+/** The purchases a waiting one may be the other side of as a move between the person's own accounts: tapping one pairs them, and neither counts as spending or income. While any are offered it is the only question; the usual one waits behind a quiet row. */
+function PairOffer({
+  purchase,
+  onDone,
+  children,
+  elseSubtitle,
+}: PairOfferProps) {
   const { user } = useAuth();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector(selectLostPairs);
@@ -32,6 +43,7 @@ function PairOffer({ purchase, onDone }: PairOfferProps) {
   const pairAccounts = usePairAccountsWithUndo();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isElse, setIsElse] = useState(false);
 
   const waiting = [
     ...waitingList,
@@ -47,7 +59,9 @@ function PairOffer({ purchase, onDone }: PairOfferProps) {
   const self = waiting.find((entry) => entry.id === purchase.id);
   const cardNameOf = getCardNamer(cards);
   const isOut = purchase.amountCents > 0;
-  const offered = (findAccountPairs(waiting).offers.get(purchase.id) ?? [])
+  const offered = (
+    findAccountPairs(waiting, true).offers.get(purchase.id) ?? []
+  )
     .flatMap(({ otherId, kind }) => {
       const other = waiting.find((entry) => entry.id === otherId);
       return other ? [{ other, kind }] : [];
@@ -85,7 +99,7 @@ function PairOffer({ purchase, onDone }: PairOfferProps) {
     }
   };
 
-  if (!self || offered.length === 0) return null;
+  if (!self || offered.length === 0 || isElse) return <>{children}</>;
   return (
     <div className='space-y-2'>
       <div>
@@ -113,6 +127,12 @@ function PairOffer({ purchase, onDone }: PairOfferProps) {
           {error}
         </p>
       )}
+      <ActionRow
+        icon={<X />}
+        label={PAIR_WORDS.unpair}
+        subtitle={elseSubtitle}
+        onClick={() => setIsElse(true)}
+      />
     </div>
   );
 }

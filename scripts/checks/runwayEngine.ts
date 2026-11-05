@@ -7,6 +7,7 @@ import {
 } from '../../src/apps/runway/security.ts';
 import {
   findAccountPairs,
+  findLostPairs,
   findDepositDays,
   findPurchaseMatches,
   type DepositDay,
@@ -6917,6 +6918,7 @@ const version = (
       pairedWithId: null,
       pairKind: null,
       cardPaymentMoveId: null,
+      tickedDayKey: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7291,6 +7293,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7690,6 +7693,7 @@ const version = (
       pairedWithId: null,
       pairKind: null,
       cardPaymentMoveId: null,
+      tickedDayKey: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9610,6 +9614,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10155,6 +10160,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     ...extra,
   });
 
@@ -10309,6 +10315,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     ...extra,
   });
   const payDay = (
@@ -10607,6 +10614,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     ...extra,
   });
   const onCard = { accountId: null, paidByCardId: 'venture' };
@@ -10748,6 +10756,84 @@ const version = (
     ),
     0,
     'a purchase already paired, typed by hand or linked to a pay day never pairs',
+  );
+
+  const answered = [
+    side('out', 25_000, 0, { assignedBy: 'person' }),
+    side('in', -25_000, 1, { assignedBy: 'person' }),
+  ];
+  assert.equal(
+    none(findAccountPairs(answered)),
+    0,
+    'a send-back stops the automatic pass',
+  );
+  const asOffers = findAccountPairs(answered, true);
+  assert.deepEqual(
+    asOffers.offers.get('out'),
+    [{ otherId: 'in', kind: 'transfer' }],
+    'a send-back never stops the offer: the person can pair them again',
+  );
+  assert.deepEqual(
+    asOffers.offers.get('in'),
+    [{ otherId: 'out', kind: 'transfer' }],
+    'the offer goes both ways',
+  );
+  assert.equal(
+    findAccountPairs([side('out', 25_000, 0), side('in', -25_000, 1)], true)
+      .offers.size,
+    2,
+    'a clear pair is offered too when asked for offers',
+  );
+
+  const heldTo = (
+    id: string,
+    other: string,
+    cents: number,
+    extra: Partial<OpenPurchase> = {},
+  ) =>
+    side(id, cents, 0, {
+      needsHome: false,
+      pairedWithId: other,
+      pairKind: 'transfer',
+      ...extra,
+    });
+  const lostIds = (list: OpenPurchase[], readFrom = 0) =>
+    findLostPairs(list, readFrom)
+      .map((purchase) => purchase.id)
+      .sort();
+  assert.deepEqual(
+    lostIds([heldTo('out', 'in', 25_000), heldTo('in', 'out', -25_000)]),
+    [],
+    'a pair that still points at each other and cancels is intact',
+  );
+  assert.deepEqual(
+    lostIds([heldTo('out', 'in', 25_000), heldTo('in', 'out', -24_900)]),
+    ['in', 'out'],
+    'a pair whose amounts no longer cancel (the bank repriced a side) is lost, both sides',
+  );
+  assert.deepEqual(
+    lostIds([heldTo('out', 'in', 25_000), heldTo('in', 'else', -25_000)]),
+    ['in', 'out'],
+    'a side that points elsewhere loses both',
+  );
+  assert.deepEqual(
+    lostIds([
+      heldTo('in', 'out', -48_000, {
+        paidByCardId: 'venture',
+        accountId: null,
+        cardPaymentMoveId: 'pay_venture_1',
+      }),
+    ]),
+    ['in'],
+    'a card side whose partner is gone is lost, carrying the payment move it must reverse',
+  );
+  assert.equal(
+    findLostPairs(
+      [heldTo('in', 'out', -48_000, { cardPaymentMoveId: 'pay_venture_1' })],
+      base + 30 * day,
+    ).length,
+    0,
+    'a partner older than what has been read is not judged gone',
   );
 
   const start = Date.UTC(2026, 9, 1);
@@ -12946,6 +13032,7 @@ const version = (
     pairedWithId: null,
     pairKind: null,
     cardPaymentMoveId: null,
+    tickedDayKey: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,

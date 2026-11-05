@@ -254,17 +254,16 @@ export interface AccountPair {
 export interface AccountPairMatches {
   /** Money-out purchase id → the one money-in purchase it clearly is the other side of. */
   clear: Map<string, AccountPair>;
-  /** Purchase id (either side) → the purchases it may be paired with, nearest day first, for each purchase not in a clear pair. */
+  /** Purchase id (either side) → the purchases it may be paired with, nearest day first, for each purchase not in a clear pair (every purchase when `isOffer`). */
   offers: Map<string, { otherId: string; kind: PurchasePairKind }[]>;
 }
 
-const isPairCandidate = (purchase: OpenPurchase) =>
+const isPairCandidate = (purchase: OpenPurchase, isOffer: boolean) =>
   purchase.source === 'link' &&
   purchase.needsHome &&
   purchase.status === 'posted' &&
-  purchase.assignedBy === null &&
+  (isOffer || purchase.assignedBy === null) &&
   purchase.pairedWithId === null &&
-  purchase.cardPaymentMoveId === null &&
   purchase.incomeDayId === null;
 
 /** Money out of a linked account and the same amount in to another linked account (a transfer) or a linked card (a card payment), never money out of a card. */
@@ -287,12 +286,13 @@ const getPairKind = (
     : null;
 };
 
-/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out; otherwise both sides are offered each other, nearest day first. Pending purchases, ones the person already answered and ones already paired or linked to a pay day never pair. The result does not depend on the order of the input. */
+/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out; otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
 export function findAccountPairs(
   waiting: readonly OpenPurchase[],
+  isOffer = false,
 ): AccountPairMatches {
   const candidates = waiting
-    .filter(isPairCandidate)
+    .filter((purchase) => isPairCandidate(purchase, isOffer))
     .sort((a, b) => compareKeys(a.id, b.id));
   const outs = candidates.filter((purchase) => purchase.amountCents > 0);
   const ins = candidates.filter((purchase) => purchase.amountCents < 0);
@@ -315,7 +315,9 @@ export function findAccountPairs(
     ...[...clear.values()].map(({ inId }) => inId),
   ]);
   const sides = links
-    .filter(({ out, into }) => !taken.has(out.id) && !taken.has(into.id))
+    .filter(
+      ({ out, into }) => isOffer || (!taken.has(out.id) && !taken.has(into.id)),
+    )
     .flatMap(({ out, into, kind }) => {
       const gap = Math.abs(out.date - into.date);
       return [
@@ -336,4 +338,25 @@ export function findAccountPairs(
     ]),
   );
   return { clear, offers };
+}
+
+/** Whether two purchases are the two sides of one pair: each points at the other and the amounts cancel. */
+export const isPairIntact = (a: OpenPurchase, b: OpenPurchase) =>
+  a.pairedWithId === b.id &&
+  b.pairedWithId === a.id &&
+  a.amountCents === -b.amountCents;
+
+/** The purchases whose pair is broken: the other side is gone (only judged when it would fall inside what has been read, `readFrom`), points elsewhere, or no longer cancels it because the bank repriced one. Both sides of a repriced pair are returned. */
+export function findLostPairs(
+  purchases: readonly OpenPurchase[],
+  readFrom: DateOnly,
+): OpenPurchase[] {
+  const all = new Map(purchases.map((purchase) => [purchase.id, purchase]));
+  return [...all.values()].filter((purchase) => {
+    if (purchase.pairedWithId === null) return false;
+    const other = all.get(purchase.pairedWithId);
+    return other === undefined
+      ? purchase.date - PAIR_DAYS * DAY_MS >= readFrom
+      : !isPairIntact(purchase, other);
+  });
 }

@@ -4050,8 +4050,9 @@ export const DEPOSIT_WORDS = {
 
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
-  whichHint:
-    'Tap the other side to pair them. Neither counts as spending or income.',
+  whichHint: 'Tap the other side to pair them.',
+  pickEnvelope: 'Pick an envelope',
+  pickPay: 'Pick the pay it is',
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
   cardPaymentFrom: (account: string) => `Payment from ${account}`,
   transferred: (amount: string, from: string, to: string) =>
@@ -4075,17 +4076,21 @@ export const PAIR_WORDS = {
   tooManyPayments: 'Too many payments were saved to this card that day.',
   lost: 'This was paired with a purchase Runway no longer finds, so it is waiting again. File it or leave it out.',
   doorTitle: 'Moves between your accounts',
+  screenTitle: 'Account moves',
+  doorShort: 'Account moves',
   doorSub: 'Paired by the bank’s dates and amounts',
   screenIntro:
-    'Money you moved between your own accounts, or paid to your card. It counts as neither spending nor income.',
-  empty: 'Nothing has been paired yet.',
+    'Money moved between your own accounts or to a card. Not spending, not income.',
+  empty: 'Nothing is paired. Anything you sent back waits in Needs a home.',
+  paymentMissing:
+    'The card payment this was paired with is gone, so nothing was changed.',
   loading: 'Getting your moves.',
   rowName: (from: string, to: string) => `${from} to ${to}`,
   cardPaymentRow: (card: string) => `Payment to ${card}`,
   sheetTransfer: (from: string, to: string) =>
-    `You moved this from ${from} to ${to}. It counts as neither spending nor income.`,
+    `You moved this from ${from} to ${to}.`,
   sheetCardPayment: (from: string, card: string) =>
-    `You paid ${card} from ${from}. The card shows it as paid.`,
+    `You paid ${card} from ${from}.`,
 } as const;
 
 export const LINK_WORDS = {

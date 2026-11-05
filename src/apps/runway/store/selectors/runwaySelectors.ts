@@ -61,7 +61,7 @@ import {
   PRIORITIES,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
-import { PAIR_DAYS, type DepositDay } from '@apps/runway/engine/matching';
+import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
   BillVersion,
@@ -1547,7 +1547,8 @@ export const selectAccountPairs = createSelector(
         return out.amountCents > 0 &&
           out.pairKind !== null &&
           into !== undefined &&
-          into.pairedWithId === out.id
+          into.pairedWithId === out.id &&
+          into.amountCents === -out.amountCents
           ? [{ out, into, kind: out.pairKind }]
           : [];
       })
@@ -1561,7 +1562,7 @@ export const selectAccountPairs = createSelector(
   },
 );
 
-/** Purchases paired with one that is gone or no longer points back (a sync removed it, or another device paired it elsewhere). They wait in Needs a home again, to be filed or left out; nothing paired is ever left on no screen. */
+/** Purchases paired with one that is gone, no longer points back (a sync removed it, or another device paired it elsewhere) or no longer cancels it (the bank repriced a posted side). They wait in Needs a home again, to be filed or left out; nothing paired is ever left on no screen. */
 export const selectLostPairs = createSelector(
   [
     selectPurchases,
@@ -1569,23 +1570,13 @@ export const selectLostPairs = createSelector(
     selectWaitingList,
     (state: RootState) => state.runway.purchasesFrom,
   ],
-  (purchases, periodPurchases, waiting, purchasesFrom): OpenPurchase[] => {
-    if (purchasesFrom === null) return [];
-    const all = new Map(
-      [...periodPurchases, ...waiting, ...purchases].map((purchase) => [
-        purchase.id,
-        purchase,
-      ]),
-    );
-    const result = [...all.values()].filter((purchase) => {
-      if (purchase.pairedWithId === null) return false;
-      const other = all.get(purchase.pairedWithId);
-      return other === undefined
-        ? purchase.date - PAIR_DAYS * DAY_MS >= purchasesFrom
-        : other.pairedWithId !== purchase.id;
-    });
-    return result;
-  },
+  (purchases, periodPurchases, waiting, purchasesFrom): OpenPurchase[] =>
+    purchasesFrom === null
+      ? []
+      : findLostPairs(
+          [...periodPurchases, ...waiting, ...purchases],
+          purchasesFrom,
+        ),
 );
 
 /** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */

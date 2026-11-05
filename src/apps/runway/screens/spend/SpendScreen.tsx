@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   ArrowLeftRight,
   ChevronRight,
@@ -71,6 +71,36 @@ const groupByMonth = (purchases: readonly OpenPurchase[]) =>
       ? [...groups.slice(0, -1), { label, rows: [...last.rows, row] }]
       : [...groups, { label, rows: [row] }];
   }, []);
+
+interface DoorButtonProps {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  /** Shares its row with the other door: the icon and chevron go so both labels fit at 320px. */
+  isHalf: boolean;
+  onClick: () => void;
+}
+
+/** A thin door above the purchase list: its icon and name, then how many it holds. */
+function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      onClick={onClick}
+      className='border-border text-foreground! h-10 min-w-0 flex-1 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+    >
+      <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
+        {!isHalf && icon}
+        <span className='text-foreground truncate'>{label}</span>
+      </span>
+      <span className='text-muted-foreground flex items-center gap-1'>
+        {count}
+        {!isHalf && <ChevronRight className='h-4 w-4' aria-hidden='true' />}
+      </span>
+    </Button>
+  );
+}
 
 /** The purchases of the period in view, newest first. Search covers that period. */
 function SpendScreen() {
@@ -297,45 +327,29 @@ function SpendScreen() {
             )}
           </FilterBar>
         )}
-        {expenseCount > 0 && (
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={openGroups}
-            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
-          >
-            <span className='flex items-center gap-2'>
-              <Layers
-                className='text-muted-foreground h-4 w-4'
-                aria-hidden='true'
+        {(expenseCount > 0 || pairCount > 0) && (
+          <div className='flex gap-2'>
+            {expenseCount > 0 && (
+              <DoorButton
+                icon={<Layers className='h-4 w-4' aria-hidden='true' />}
+                label={SPEND_WORDS.groups}
+                count={expenseCount}
+                isHalf={pairCount > 0}
+                onClick={openGroups}
               />
-              {SPEND_WORDS.groups}
-            </span>
-            <span className='text-muted-foreground flex items-center gap-1'>
-              {expenseCount}
-              <ChevronRight className='h-4 w-4' aria-hidden='true' />
-            </span>
-          </Button>
-        )}
-        {pairCount > 0 && (
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={() => openView('accountMoves')}
-            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
-          >
-            <span className='flex items-center gap-2'>
-              <ArrowLeftRight
-                className='text-muted-foreground h-4 w-4'
-                aria-hidden='true'
+            )}
+            {pairCount > 0 && (
+              <DoorButton
+                icon={<ArrowLeftRight className='h-4 w-4' aria-hidden='true' />}
+                label={
+                  expenseCount > 0 ? PAIR_WORDS.doorShort : PAIR_WORDS.doorTitle
+                }
+                count={pairCount}
+                isHalf={expenseCount > 0}
+                onClick={() => openView('accountMoves')}
               />
-              {PAIR_WORDS.doorTitle}
-            </span>
-            <span className='text-muted-foreground flex items-center gap-1'>
-              {pairCount}
-              <ChevronRight className='h-4 w-4' aria-hidden='true' />
-            </span>
-          </Button>
+            )}
+          </div>
         )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>

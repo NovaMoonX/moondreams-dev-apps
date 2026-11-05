@@ -74,10 +74,13 @@ function MoneyInSheet({
           <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
         )}
         {purchase.status === 'posted' && (
-          <PairOffer purchase={purchase} onDone={onClose} />
-        )}
-        {purchase.status === 'posted' && (
-          <DepositOffer deposit={purchase} onDone={onClose} />
+          <PairOffer
+            purchase={purchase}
+            onDone={onClose}
+            elseSubtitle={PAIR_WORDS.pickPay}
+          >
+            <DepositOffer deposit={purchase} onDone={onClose} />
+          </PairOffer>
         )}
         <ActionGroup isRoomy>
           <LeaveOutRow purchase={purchase} onDone={onClose} />

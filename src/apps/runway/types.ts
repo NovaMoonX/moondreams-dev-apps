@@ -924,6 +924,8 @@ export interface PurchaseSealed {
   pairKind: PurchasePairKind | null;
   /** On the card's side of a card payment: the `cardPayment` move the pairing wrote; null when none (and read as null on an older purchase). */
   cardPaymentMoveId: string | null;
+  /** On the money-in side of a transfer: the income day whose "Move to" item the pairing ticked; null when it ticked none (and read as null on an older purchase). */
+  tickedDayKey: string | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */

@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { Undo2 } from 'lucide-react';
-
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ArrowLeftRight, CreditCard, Undo2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -13,23 +11,17 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
-import { usePairAccountsWithUndo } from '@apps/runway/hooks/useBankMatch';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { unpairAccountPurchases } from '@apps/runway/store/actions/purchaseActions';
+import { PAIR_WORDS } from '@apps/runway/constants';
+import { useUnpairAccounts } from '@apps/runway/hooks/useBankMatch';
 import {
   selectAccountPairs,
   selectAllCards,
   type AccountPairEntry,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardNamer } from '@apps/runway/utils/cardText';
-import {
-  describeAccountPair,
-  getPairSideName,
-} from '@apps/runway/utils/purchaseText';
+import { getPairSideName } from '@apps/runway/utils/purchaseText';
 
 interface AccountMovesScreenProps {
   onClose: () => void;
@@ -64,47 +56,18 @@ function PairSheet({
   onClose: () => void;
 }) {
   const { user } = useAuth();
-  const { addToast } = useToast();
   const namesOf = useNames();
-  const pairAccounts = usePairAccountsWithUndo();
+  const unpairPair = useUnpairAccounts();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { from, to, title, text } = namesOf(pair);
-  const names = { from, to };
+  const { title, text } = namesOf(pair);
 
   const unpair = async () => {
     if (!user || isBusy) return;
     setIsBusy(true);
     setError(null);
     try {
-      const uid = user.uid;
-      const back = await unpairAccountPurchases(
-        uid,
-        await getRunwayEncryption(uid),
-        pair.out,
-        pair.into,
-        describeAccountPair(pair.out, pair.into, pair.kind, names, true),
-      );
-      addToast({
-        title: PAIR_WORDS.unpaired,
-        type: 'success',
-        action: {
-          label: NEEDS_HOME_WORDS.undo,
-          onClick: () =>
-            void pairAccounts(
-              uid,
-              [{ out: back.out, into: back.into, kind: pair.kind }],
-              'person',
-              true,
-            ).catch((undoError: unknown) =>
-              addToast({
-                title: NEEDS_HOME_WORDS.undoFailed,
-                description: getErrorMessage(undoError, ''),
-                type: 'error',
-              }),
-            ),
-        },
-      });
+      await unpairPair(user.uid, pair);
       onClose();
     } catch (unpairError) {
       setError(getErrorMessage(unpairError, PAIR_WORDS.unpairFailed));
@@ -122,7 +85,7 @@ function PairSheet({
     >
       <div className='space-y-4 pb-4'>
         <SheetHead
-          label={PAIR_WORDS.doorTitle}
+          label={PAIR_WORDS.screenTitle}
           figure={formatCents(pair.out.amountCents)}
           fact={formatDateOrdinalUTC(pair.out.date)}
         />
@@ -152,7 +115,7 @@ function AccountMovesScreen({ onClose }: AccountMovesScreenProps) {
 
   return (
     <Subview
-      title={PAIR_WORDS.doorTitle}
+      title={PAIR_WORDS.screenTitle}
       onClose={onClose}
       headerAction={<ValuesEyeButton />}
     >
@@ -176,7 +139,18 @@ function AccountMovesScreen({ onClose }: AccountMovesScreenProps) {
                   <ItemRow
                     key={pair.out.id}
                     name={title}
-                    leading={<ItemBadge name={title} emoji={null} />}
+                    leading={
+                      <span
+                        className='border-border bg-accent text-muted-foreground grid size-10 shrink-0 place-items-center rounded-xl border'
+                        aria-hidden='true'
+                      >
+                        {pair.kind === 'cardPayment' ? (
+                          <CreditCard className='h-4 w-4' />
+                        ) : (
+                          <ArrowLeftRight className='h-4 w-4' />
+                        )}
+                      </span>
+                    }
                     detail={detail}
                     figure={figure}
                     ariaLabel={`${title}, ${figure}, ${detail}. Open`}

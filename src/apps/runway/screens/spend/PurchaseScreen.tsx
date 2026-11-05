@@ -37,6 +37,7 @@ import {
   HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
   NEEDS_HOME_WORDS,
+  PAIR_WORDS,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
@@ -629,13 +630,14 @@ function PurchaseScreen({
           {purchase.needsHome && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
-          {purchase.needsHome &&
-            purchase.amountCents > 0 &&
-            purchase.status === 'posted' && (
-              <PairOffer purchase={purchase} onDone={onClose} />
-            )}
           {purchase.needsHome && purchase.amountCents > 0 && (
-            <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+            <PairOffer
+              purchase={purchase}
+              onDone={onClose}
+              elseSubtitle={PAIR_WORDS.pickEnvelope}
+            >
+              <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+            </PairOffer>
           )}
           <ActionGroup isRoomy>
             <ActionRow

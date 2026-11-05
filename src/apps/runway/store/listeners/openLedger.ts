@@ -148,6 +148,7 @@ export async function openPurchase(
     pairedWithId: payload.pairedWithId ?? null,
     pairKind: payload.pairKind ?? null,
     cardPaymentMoveId: payload.cardPaymentMoveId ?? null,
+    tickedDayKey: payload.tickedDayKey ?? null,
   };
   return result;
 }
