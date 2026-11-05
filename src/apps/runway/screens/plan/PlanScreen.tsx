@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Settings2 } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
@@ -31,6 +31,31 @@ const isCovered = () =>
     (dialog) => getComputedStyle(dialog).pointerEvents !== 'none',
   );
 
+/** A still copy of the view, without its floating controls, standing where the view is now. */
+const makeGhost = (body: HTMLElement) => {
+  const floating = Array.from(body.querySelectorAll<HTMLElement>('*')).filter(
+    (element) => getComputedStyle(element).position === 'fixed',
+  );
+  floating.forEach((element) => element.setAttribute('data-ghost-drop', ''));
+  const ghost = body.cloneNode(true) as HTMLElement;
+  floating.forEach((element) => element.removeAttribute('data-ghost-drop'));
+  ghost
+    .querySelectorAll('[data-ghost-drop]')
+    .forEach((element) => element.remove());
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.inert = true;
+  Object.assign(ghost.style, {
+    position: 'absolute',
+    top: `${body.offsetTop}px`,
+    left: body.style.left || '0px',
+    width: `${body.offsetWidth}px`,
+    margin: '0',
+    pointerEvents: 'none',
+    transition: 'none',
+  });
+  return ghost;
+};
+
 function PlanScreen() {
   const { planSection: requestedSection, showPlanSection } =
     useRunwayUrlState();
@@ -44,9 +69,11 @@ function PlanScreen() {
   const isMore = planSection === 'more';
 
   const bodyRef = useRef<HTMLDivElement>(null);
-  const slideRef = useRef<{ direction: 1 | -1; isEntering: boolean } | null>(
-    null,
-  );
+  const slideRef = useRef<{
+    direction: 1 | -1;
+    ghost: HTMLElement;
+    timer: number;
+  } | null>(null);
   const sections = isTracking ? trackedSections : untrackedSections;
   const getIndex = (section: PlanSection) =>
     sections.findIndex((value) => value === section);
@@ -55,38 +82,69 @@ function PlanScreen() {
     return index >= 0 ? sections[index + direction] : undefined;
   };
 
-  // The body moves by its own offset (not a transform, which would carry a floating add button with it): out to one side, then the next view in from the other.
+  const endSlide = () => {
+    const slide = slideRef.current;
+    const body = bodyRef.current;
+    if (slide) {
+      window.clearTimeout(slide.timer);
+      slide.ghost.remove();
+    }
+    slideRef.current = null;
+    if (!body) return;
+    body.style.transition = 'none';
+    body.style.left = '0px';
+  };
+
+  // A copy of the leaving view slides out beside the arriving one, so the two move together like a carousel. The body moves by its own offset (not a transform, which would carry a floating add button with it).
   const slideTo = (next: PlanSection, direction: 1 | -1) => {
     const body = bodyRef.current;
     const isReduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
+    if (slideRef.current) endSlide();
     if (!body || isReduced) {
       showPlanSection(next);
       return;
     }
-    slideRef.current = { direction, isEntering: false };
-    body.style.transition = `left ${SLIDE_MS}ms ease-in`;
-    body.style.left = `${-direction * body.offsetWidth}px`;
-    window.setTimeout(() => {
-      if (slideRef.current) slideRef.current.isEntering = true;
-      showPlanSection(next);
-    }, SLIDE_MS);
+    const ghost = makeGhost(body);
+    body.before(ghost);
+    slideRef.current = {
+      direction,
+      ghost,
+      // A request that lands on the same view never runs the entry below, so the copy is cleared here.
+      timer: window.setTimeout(endSlide, SLIDE_MS * 3),
+    };
+    showPlanSection(next);
   };
 
   useLayoutEffect(() => {
     const body = bodyRef.current;
     const slide = slideRef.current;
-    if (!body || !slide?.isEntering) return;
-    slideRef.current = null;
+    if (!body || !slide) return;
+    const width = body.offsetWidth;
     body.style.transition = 'none';
-    body.style.left = `${slide.direction * body.offsetWidth}px`;
+    body.style.left = `${slide.direction * width + slide.ghost.offsetLeft}px`;
     const frame = requestAnimationFrame(() => {
-      body.style.transition = `left ${SLIDE_MS}ms ease-out`;
+      const easing = `left ${SLIDE_MS}ms ease-out`;
+      body.style.transition = easing;
       body.style.left = '0px';
+      slide.ghost.style.transition = easing;
+      slide.ghost.style.left = `${-slide.direction * width}px`;
     });
+    window.clearTimeout(slide.timer);
+    slide.timer = window.setTimeout(endSlide, SLIDE_MS + 50);
     return () => cancelAnimationFrame(frame);
   }, [planSection]);
+
+  useEffect(
+    () => () => {
+      const slide = slideRef.current;
+      if (!slide) return;
+      window.clearTimeout(slide.timer);
+      slide.ghost.remove();
+    },
+    [],
+  );
 
   const showNeighbour = (direction: 1 | -1) => {
     const next = getNeighbour(direction);
@@ -109,7 +167,7 @@ function PlanScreen() {
 
   return (
     <SwipeArea
-      className='space-y-4 overflow-x-clip'
+      className='relative space-y-4 overflow-x-clip'
       onSwipe={showNeighbour}
       onDrag={followFinger}
     >

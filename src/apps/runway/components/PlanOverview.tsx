@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -41,6 +42,7 @@ const CIRCLE_PX = 40;
 const CIRCLE_REST_PX = 64;
 const MOTION_MIN_MS = 180;
 const MOTION_MAX_MS = 360;
+const SCROLL_SETTLE_MS = 120;
 const REFRESH_RESET_MS = 1500;
 const RING_RADIUS = 11;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
@@ -253,6 +255,7 @@ function PullFrame({
     gridBox: HTMLDivElement | null;
   }>({ closed: null, row: null, grid: null, rowBox: null, gridBox: null });
   const [rowScroll, setRowScroll] = useState(0);
+  const scrollTimerRef = useRef(0);
   const pendingShiftRef = useRef(0);
 
   const rowAt = measures.row - measures.closed;
@@ -268,11 +271,11 @@ function PullFrame({
   };
 
   const { distance, isPulling } = usePullDown({
-    isEnabled: true,
+    isEnabled: motion === null,
     canPullUp: settled > 0,
     refreshAt: refreshAt - positions[settled],
     onRefresh: () => {
-      onSettle(2, gridAt);
+      onSettle(2, positionRef.current);
       onRefresh();
     },
     onRelease: (travelled) => {
@@ -364,18 +367,27 @@ function PullFrame({
     return () => window.removeEventListener('scroll', fold);
   }, [settled, measures.closed, onSettle]);
 
-  const row = (isLive: boolean) => (
+  const restoreRowScroll = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node && node.scrollLeft !== rowScroll) node.scrollLeft = rowScroll;
+    },
+    [rowScroll],
+  );
+  const row = (
     <div
-      ref={(node) => {
-        if (node && isLive && node.scrollLeft !== rowScroll)
-          node.scrollLeft = rowScroll;
-      }}
+      ref={restoreRowScroll}
       data-no-swipe
       className={ROW_CLASS}
       role='group'
       aria-label={WORDS.tilesLabel}
       onScroll={(event) => {
-        setRowScroll(event.currentTarget.scrollLeft);
+        const scroller = event.currentTarget;
+        window.clearTimeout(scrollTimerRef.current);
+        // Kept once the row comes to rest, so a fling never re-renders the frame on every scroll event.
+        scrollTimerRef.current = window.setTimeout(
+          () => setRowScroll(scroller.scrollLeft),
+          SCROLL_SETTLE_MS,
+        );
       }}
     >
       {tiles.map(({ key, node }) => (
@@ -421,6 +433,65 @@ function PullFrame({
       })}
     </div>
   );
+  // The hidden copies are measured, never shown, so a tween's frames leave them alone.
+  const measuring = useMemo(
+    () => (
+      <div
+        aria-hidden='true'
+        inert
+        className='pointer-events-none invisible absolute inset-x-0 top-0'
+      >
+        <div
+          ref={(node) => {
+            measureRefs.current.closed = node;
+          }}
+          className='absolute inset-x-0 top-0'
+        >
+          {closed}
+        </div>
+        <div
+          ref={(node) => {
+            measureRefs.current.row = node;
+          }}
+          className='absolute inset-x-0 top-0 space-y-3'
+        >
+          {header}
+          <div
+            ref={(node) => {
+              measureRefs.current.rowBox = node;
+            }}
+            className={ROW_CLASS}
+          >
+            {tiles.map(({ key, node }) => (
+              <div key={key} className={ROW_TILE_CLASS}>
+                {node}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div
+          ref={(node) => {
+            measureRefs.current.grid = node;
+          }}
+          className='absolute inset-x-0 top-0 space-y-3'
+        >
+          {header}
+          <div
+            ref={(node) => {
+              measureRefs.current.gridBox = node;
+            }}
+            className={GRID_CLASS}
+          >
+            {tiles.map(({ key, node }) => (
+              <div key={key}>{node}</div>
+            ))}
+          </div>
+        </div>
+      </div>
+    ),
+    [closed, header, tiles],
+  );
+
   const opened = (body: ReactNode) => (
     <div className='space-y-3'>
       {header}
@@ -431,9 +502,9 @@ function PullFrame({
   const content = () => {
     if (!isMoving) {
       if (settled === 0) return closed;
-      return opened(settled === 1 ? row(true) : grid);
+      return opened(settled === 1 ? row : grid);
     }
-    if (position <= rowAt) return opened(row(true));
+    if (position <= rowAt) return opened(row);
     if (position < gridAt)
       return opened(morph((position - rowAt) / (gridAt - rowAt)));
     return opened(grid);
@@ -491,58 +562,7 @@ function PullFrame({
           </span>
         )}
       </div>
-      <div
-        aria-hidden='true'
-        inert
-        className='pointer-events-none invisible absolute inset-x-0 top-0'
-      >
-        <div
-          ref={(node) => {
-            measureRefs.current.closed = node;
-          }}
-          className='absolute inset-x-0 top-0'
-        >
-          {closed}
-        </div>
-        <div
-          ref={(node) => {
-            measureRefs.current.row = node;
-          }}
-          className='absolute inset-x-0 top-0 space-y-3'
-        >
-          {header}
-          <div
-            ref={(node) => {
-              measureRefs.current.rowBox = node;
-            }}
-            className={ROW_CLASS}
-          >
-            {tiles.map(({ key, node }) => (
-              <div key={key} className={ROW_TILE_CLASS}>
-                {node}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div
-          ref={(node) => {
-            measureRefs.current.grid = node;
-          }}
-          className='absolute inset-x-0 top-0 space-y-3'
-        >
-          {header}
-          <div
-            ref={(node) => {
-              measureRefs.current.gridBox = node;
-            }}
-            className={GRID_CLASS}
-          >
-            {tiles.map(({ key, node }) => (
-              <div key={key}>{node}</div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {measuring}
     </div>
   );
 }
