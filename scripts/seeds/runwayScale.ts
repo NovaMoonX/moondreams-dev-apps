@@ -913,6 +913,7 @@ export async function seedRunwayScale(
             refundOfId: null,
             link: null,
             receiptText: null,
+            notSameAs: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

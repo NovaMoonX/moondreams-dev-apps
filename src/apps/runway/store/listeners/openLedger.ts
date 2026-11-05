@@ -142,6 +142,7 @@ export async function openPurchase(
     link: payload.link ?? null,
     receiptText: payload.receiptText ?? null,
     costRef: payload.costRef ?? null,
+    notSameAs: payload.notSameAs ?? null,
   };
   return result;
 }

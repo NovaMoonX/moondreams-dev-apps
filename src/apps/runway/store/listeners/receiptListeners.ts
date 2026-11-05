@@ -48,6 +48,7 @@ export function startReceiptImagesListener(
               ...payload,
               id: entry.id,
               purchaseId: data.purchaseId,
+              ownerId: purchaseId,
               createdAt: data.createdAt,
               bytes: data.bytes,
             } satisfies OpenReceiptImage;

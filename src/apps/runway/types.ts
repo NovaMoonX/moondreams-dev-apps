@@ -643,6 +643,7 @@ export interface OpenExpense extends ExpenseSealed {
 /** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
 export interface ReceiptImageDoc {
   id: string;
+  /** The purchase its bytes were stored under; it stays the same when a match moves the document to the bank's purchase. */
   purchaseId: string;
   createdAt: number;
   bytes: number;
@@ -658,7 +659,10 @@ export interface ReceiptImageSealed {
 
 export interface OpenReceiptImage extends ReceiptImageSealed {
   id: string;
+  /** Where its sealed bytes are stored. */
   purchaseId: string;
+  /** The purchase it belongs to now; a purchase typed by hand and matched to the bank's hands its photos over and keeps `purchaseId`. */
+  ownerId: string;
   createdAt: number;
   bytes: number;
 }
@@ -905,6 +909,8 @@ export interface PurchaseSealed {
   receiptText: string | null;
   /** The cost payment this purchase marks paid; null (or missing on an older purchase) when it pays none. */
   costRef?: CostRef | null;
+  /** On a purchase typed by hand: the bank purchases the person said it is not, so it is never matched to them again; null when none (and on a purchase saved before matching, read as null). */
+  notSameAs: string[] | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */

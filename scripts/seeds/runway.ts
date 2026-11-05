@@ -3198,7 +3198,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, nine rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Four more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A and a deposit. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Five more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, a deposit and a Sweetgreen lunch on the Venture X. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3308,6 +3308,21 @@ async function writeSeedPurchases(
       },
     },
     {
+      id: 'seed-purchase-cvs',
+      daysAgo: 3,
+      merchant: 'CVS',
+      note: 'Allergy pills',
+      lines: [line('seed-envelope-everyday', 2_350)],
+    },
+    {
+      id: 'seed-purchase-lunch',
+      daysAgo: 1,
+      merchant: 'Sweetgreen',
+      note: null,
+      lines: [line('seed-envelope-dining', 1_425)],
+      paidByCardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-purchase-market',
       daysAgo: 24,
       merchant: 'Farmers market',
@@ -3345,6 +3360,7 @@ async function writeSeedPurchases(
             link: entry.link ?? null,
             receiptText: entry.receiptText ?? null,
             costRef: entry.costRef ?? null,
+            notSameAs: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -3388,6 +3404,15 @@ async function writeSeedPurchases(
       cardId: null,
     },
     {
+      id: 'seed-link-purchase-lunch',
+      daysAgo: 1,
+      merchant: 'Sweetgreen',
+      amountCents: 1_640,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-link-deposit-refund',
       daysAgo: 3,
       merchant: 'Venmo cash out',
@@ -3427,6 +3452,7 @@ async function writeSeedPurchases(
             link: null,
             receiptText: null,
             costRef: null,
+            notSameAs: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
