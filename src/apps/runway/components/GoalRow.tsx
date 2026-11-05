@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
+import GoalInterestNote from '@apps/runway/components/GoalInterestNote';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   HOW_OFTEN_WORDS,
@@ -121,6 +122,7 @@ function GoalRow({
               ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
               : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
+          extra={<GoalInterestNote goalId={goalId} />}
           quickChange={{
             label: ITEM_SHEET_R2_WORDS.change,
             subtitle: ITEM_SHEET_R2_WORDS.changeTargetSub,

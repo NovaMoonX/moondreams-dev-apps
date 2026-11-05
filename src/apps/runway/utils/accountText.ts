@@ -1,5 +1,5 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents } from '@/utils/moneyUtils';
+import { formatBps, formatCents } from '@/utils/moneyUtils';
 import { ACCOUNT_KIND_LABELS, ACCOUNT_WORDS } from '@apps/runway/constants';
 import type {
   AccountSealed,
@@ -20,6 +20,10 @@ export const describeAccountLine = (
 
 const lastFourOf = (account: Pick<AccountSealed, 'lastFour'>) =>
   account.lastFour ? `••${account.lastFour}` : ACCOUNT_WORDS.changeNoLastFour;
+const describeApy = (bps: number | null) =>
+  bps === null ? ACCOUNT_WORDS.changeNoApy : `${formatBps(bps)}%`;
+const describeInterestDay = (day: number | null) =>
+  day === null ? ACCOUNT_WORDS.interestLastDay : `day ${day}`;
 const yesNo = (value: boolean) =>
   value ? ACCOUNT_WORDS.changeYes : ACCOUNT_WORDS.changeNo;
 
@@ -49,6 +53,18 @@ export function describeAccountChanged(
       : ACCOUNT_WORDS.changePull(
           yesNo(before.isPullAccount),
           yesNo(after.isPullAccount),
+        ),
+    (before.apyBps ?? null) === (after.apyBps ?? null)
+      ? null
+      : ACCOUNT_WORDS.changeApy(
+          describeApy(before.apyBps ?? null),
+          describeApy(after.apyBps ?? null),
+        ),
+    (before.interestDay ?? null) === (after.interestDay ?? null)
+      ? null
+      : ACCOUNT_WORDS.changeInterestDay(
+          describeInterestDay(before.interestDay ?? null),
+          describeInterestDay(after.interestDay ?? null),
         ),
   ].filter((part) => part !== null);
   return parts.length === 0

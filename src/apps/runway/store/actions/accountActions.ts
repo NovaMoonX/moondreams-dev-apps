@@ -52,6 +52,8 @@ const toSealed = (input: AccountSealed): AccountSealed => ({
   balanceCents: input.balanceCents,
   balanceOn: input.balanceOn,
   holds: input.holds,
+  apyBps: input.apyBps,
+  interestDay: input.interestDay,
 });
 
 /** Opens an account's sealed fields, filling what an older document lacks. */
@@ -73,6 +75,8 @@ const openSealed = async (
     balanceCents: payload.balanceCents ?? null,
     balanceOn: payload.balanceOn ?? null,
     holds: payload.holds ?? [],
+    apyBps: payload.apyBps ?? null,
+    interestDay: payload.interestDay ?? null,
   });
 };
 

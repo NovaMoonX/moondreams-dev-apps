@@ -30,6 +30,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   centsToInputValue,
+  formatBps,
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
@@ -49,6 +50,8 @@ import {
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveAccount,
@@ -124,10 +127,30 @@ function AccountSheet({
   const isBalanceSame =
     balanceCents === account.balanceCents && account.balanceOn === today;
   const linkedFact = useLinkedFact(account.linkId);
+  const { interest, shown } = useAccountInterest(account, today);
+  const interestLine =
+    interest === null
+      ? null
+      : shown.includesInterestCents > 0
+        ? ACCOUNT_WORDS.balanceWithInterest(
+            formatCents(shown.includesInterestCents),
+          )
+        : interest.isActual
+          ? ACCOUNT_WORDS.interestActual(
+              formatCents(interest.cents),
+              formatDateOrdinalUTC(interest.on),
+            )
+          : ACCOUNT_WORDS.interestEstimate(
+              formatCents(interest.cents),
+              formatDateOrdinalUTC(interest.on),
+            );
   const facts = [
     account.balanceOn === null
       ? null
       : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
+    account.apyBps === null
+      ? null
+      : ACCOUNT_WORDS.apyFact(formatBps(account.apyBps)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
     linkedFact,
   ].filter((fact): fact is string => fact !== null);
@@ -457,12 +480,17 @@ function AccountSheet({
         <SheetHead
           label={ACCOUNT_WORDS.balanceLabel}
           figure={
-            account.balanceCents === null
+            shown.cents === null
               ? ACCOUNT_WORDS.noBalance
-              : formatCents(account.balanceCents)
+              : formatCents(shown.cents)
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />
+        {interestLine !== null && (
+          <p className='text-muted-foreground text-sm'>
+            <MaskedText>{interestLine}</MaskedText>
+          </p>
+        )}
         <ActionSection caption={ACCOUNT_WORDS.holdsTitle}>
           {holdLines.length === 0 && (
             <p className='text-muted-foreground text-sm'>

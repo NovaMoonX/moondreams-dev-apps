@@ -3717,6 +3717,10 @@ export const ACCOUNT_KIND_LABELS: Record<
 export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] =
   ['investment'];
 
+/** The kinds of account that can earn interest. */
+export const INTEREST_ACCOUNT_KINDS: readonly (typeof ACCOUNT_KINDS)[number][] =
+  ['checking', 'savings', 'cashManagement'];
+
 /** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
 export const BILL_PAY_WORDS = {
   title: 'How do you pay it?',
@@ -3809,6 +3813,34 @@ export const ACCOUNT_WORDS = {
     `cards and bills pulling from it ${from} to ${to}`,
   changeYes: 'yes',
   changeNo: 'no',
+  changeApy: (from: string, to: string) => `APY ${from} to ${to}`,
+  changeNoApy: 'none',
+  changeInterestDay: (from: string, to: string) =>
+    `interest day ${from} to ${to}`,
+  apyTitle: 'Does it earn interest?',
+  apyLabel: 'APY',
+  apyPlaceholder: '4.10',
+  apyHint: 'The yearly rate, as a percent. Leave it empty for none.',
+  apyNone: 'No interest',
+  apyNeeded: 'Type a rate like 4.10, or leave it empty.',
+  interestDayTitle: 'Which day does the interest arrive?',
+  interestDayLabel: 'Interest day',
+  interestDayPlaceholder: 'Last day',
+  interestDayHint: 'A day from 1 to 31. A short month uses its last day.',
+  interestLastDay: 'Last day of the month',
+  interestDayNeeded: 'Type a day from 1 to 31, or pick the last day.',
+  interestDayValue: (day: number) => `Day ${day}`,
+  apyFact: (percent: string) => `${percent}% APY`,
+  interestEstimate: (amount: string, day: string) =>
+    `About ${amount} interest on ${day} (estimate)`,
+  interestActual: (amount: string, day: string) =>
+    `${amount} interest on ${day}`,
+  goalInterestActual: (amount: string, day: string) =>
+    `${amount} of its account's interest on ${day}`,
+  balanceWithInterest: (amount: string) =>
+    `Includes about ${amount} interest (estimate)`,
+  goalInterest: (amount: string, day: string) =>
+    `About ${amount} of its account's interest on ${day} (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
   changeHolds: (
     name: string,

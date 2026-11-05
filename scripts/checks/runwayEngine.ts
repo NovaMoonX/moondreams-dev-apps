@@ -40,6 +40,13 @@ import {
   RULE_VARIES,
 } from '../../src/apps/runway/engine/rules.ts';
 import type { OpenRule } from '../../src/apps/runway/types.ts';
+import {
+  estimateMonthlyInterest,
+  getInterestDay,
+  getMonthInterest,
+  getShownBalance,
+  shareInterest,
+} from '../../src/apps/runway/engine/interest.ts';
 import { matchLinkRows } from '../../src/apps/runway/engine/linkMatch.ts';
 import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
@@ -14312,6 +14319,204 @@ const version = (
   );
 }
 
+// Interest on an account, shared across the goals it holds.
+{
+  const day = (y: number, m: number, d: number) => Date.UTC(y, m, d);
+  assert.equal(
+    estimateMonthlyInterest(1_200_000, 410),
+    4_100,
+    '4.10% of $12,000 a month',
+  );
+  assert.equal(
+    estimateMonthlyInterest(1_200_000, null),
+    0,
+    'no APY, no interest',
+  );
+  assert.equal(
+    estimateMonthlyInterest(-5_000, 410),
+    0,
+    'a balance at or below zero earns none',
+  );
+  assert.equal(
+    estimateMonthlyInterest(10_000, 50),
+    4,
+    'half up: 4.17 rounds down',
+  );
+  assert.equal(
+    estimateMonthlyInterest(15_000, 100),
+    13,
+    'half up: 12.5 rounds up',
+  );
+
+  assert.equal(
+    getInterestDay(2026, 10, null),
+    day(2026, 10, 30),
+    'no day is the last day',
+  );
+  assert.equal(getInterestDay(2026, 10, 15), day(2026, 10, 15));
+  assert.equal(
+    getInterestDay(2026, 1, 31),
+    day(2026, 1, 28),
+    'day 31 in February is the 28th',
+  );
+  assert.equal(
+    getInterestDay(2028, 1, 31),
+    day(2028, 1, 29),
+    'and the 29th in a leap year',
+  );
+  assert.equal(
+    getInterestDay(2026, 3, 31),
+    day(2026, 3, 30),
+    'and the 30th in April',
+  );
+
+  const base = {
+    balanceCents: 1_200_000,
+    apyBps: 410,
+    interestDay: null,
+    isLinked: true,
+    year: 2026,
+    month: 10,
+  };
+  const estimate = getMonthInterest({ ...base, readings: [] });
+  assert.deepEqual(estimate, {
+    cents: 4_100,
+    isActual: false,
+    on: day(2026, 10, 30),
+  });
+  const reconciled = getMonthInterest({
+    ...base,
+    readings: [
+      { on: day(2026, 10, 28), cents: 1_195_000 },
+      { on: day(2026, 10, 30), cents: 1_199_250 },
+    ],
+  });
+  assert.deepEqual(
+    reconciled,
+    { cents: 4_250, isActual: true, on: day(2026, 10, 30) },
+    'a linked month with readings around the day replaces the estimate',
+  );
+  assert.equal(
+    getMonthInterest({
+      ...base,
+      isLinked: false,
+      readings: [
+        { on: day(2026, 10, 28), cents: 1_195_000 },
+        { on: day(2026, 10, 30), cents: 1_199_250 },
+      ],
+    }).isActual,
+    false,
+    'an account that is not linked keeps the estimate',
+  );
+  assert.equal(
+    getMonthInterest({
+      ...base,
+      readings: [{ on: day(2026, 10, 30), cents: 1_199_250 }],
+    }).isActual,
+    false,
+    'one reading is not enough',
+  );
+  assert.equal(
+    getMonthInterest({
+      ...base,
+      readings: [
+        { on: day(2026, 10, 28), cents: 1_200_000 },
+        { on: day(2026, 10, 30), cents: 1_100_000 },
+      ],
+    }).cents,
+    0,
+    'a fall between readings floors at zero',
+  );
+  assert.equal(
+    getMonthInterest({ ...base, apyBps: null, readings: [] }).cents,
+    0,
+  );
+
+  const goals = [
+    { id: 'a', heldCents: 100_000 },
+    { id: 'b', heldCents: 100_000 },
+    { id: 'c', heldCents: 100_000 },
+  ];
+  const sum = (shared: ReturnType<typeof shareInterest>) =>
+    Object.values(shared.byId).reduce((total, cents) => total + cents, 0) +
+    shared.restCents;
+  [0, 1, 2, 3, 4_100, 4_250, 99_999].forEach((total) => {
+    [300_000, 400_000, 250_000, null].forEach((balance) => {
+      assert.equal(
+        sum(shareInterest(total, goals, balance)),
+        total,
+        `shares add up: ${total} over ${balance}`,
+      );
+    });
+  });
+  const tie = shareInterest(100, goals, 300_000);
+  assert.deepEqual(
+    tie.byId,
+    { a: 34, b: 33, c: 33 },
+    'an odd remainder goes to the lowest id on a tie',
+  );
+  assert.equal(tie.restCents, 0);
+  const withRest = shareInterest(1_000, goals, 400_000);
+  assert.deepEqual(withRest.byId, { a: 250, b: 250, c: 250 });
+  assert.equal(
+    withRest.restCents,
+    250,
+    'the rest of the account takes its share',
+  );
+  assert.equal(
+    shareInterest(500, [], 1_000).restCents,
+    500,
+    'no goals: all of it is the rest',
+  );
+  assert.equal(
+    sum(shareInterest(500, [{ id: 'a', heldCents: 0 }], null)),
+    500,
+    'nothing held anywhere still adds up',
+  );
+  const followed = shareInterest(reconciled.cents, goals, 1_200_000);
+  assert.equal(sum(followed), 4_250, 'the shares follow the reconciled figure');
+  assert.notEqual(
+    followed.byId.a,
+    shareInterest(estimate.cents, goals, 1_200_000).byId.a,
+  );
+
+  const shownBase = {
+    balanceCents: 1_200_000,
+    balanceOn: day(2026, 10, 10),
+    apyBps: 410,
+    interestDay: null,
+    isLinked: false,
+  };
+  assert.deepEqual(
+    getShownBalance({ ...shownBase, today: day(2026, 10, 30) }),
+    { cents: 1_204_100, includesInterestCents: 4_100 },
+    'an unlinked balance includes the estimate once the day has passed',
+  );
+  assert.equal(
+    getShownBalance({ ...shownBase, today: day(2026, 10, 29) }).cents,
+    1_200_000,
+  );
+  assert.equal(
+    getShownBalance({
+      ...shownBase,
+      balanceOn: day(2026, 10, 30),
+      today: day(2026, 10, 30),
+    }).cents,
+    1_200_000,
+    'a reading on the interest day already holds it',
+  );
+  assert.equal(
+    getShownBalance({ ...shownBase, isLinked: true, today: day(2026, 10, 30) })
+      .cents,
+    1_200_000,
+  );
+  assert.equal(
+    getShownBalance({ ...shownBase, apyBps: null, today: day(2026, 10, 30) })
+      .cents,
+    1_200_000,
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -16462,6 +16667,8 @@ console.log('runway engine: ok');
     balanceCents: null,
     balanceOn: null,
     holds: [],
+    apyBps: null,
+    interestDay: null,
     ...changes,
   });
   const a = account('a');
@@ -16569,6 +16776,8 @@ console.log('runway engine: ok');
     balanceCents: null,
     balanceOn: null,
     holds: [],
+    apyBps: null,
+    interestDay: null,
     ...changes,
   });
   const a = account('a');
@@ -17868,6 +18077,8 @@ console.log('runway engine: ok');
     balanceCents: null,
     balanceOn: null,
     holds: [],
+    apyBps: null,
+    interestDay: null,
     ...changes,
   });
   const balances = {

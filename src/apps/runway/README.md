@@ -40,7 +40,8 @@ Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
 - [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway
 - [ ] Start from gross pay with taxes and deductions
-- [ ] Loans and interest on savings
+- [x] Interest (APY) on savings, checking and cash accounts, shared across the goals an account holds
+- [ ] Loans
 - [ ] What if: a scratch copy of the plan
 - [ ] Import purchases from a CSV
 - [ ] Reminders for bills and income days
