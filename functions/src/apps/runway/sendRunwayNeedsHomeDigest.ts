@@ -5,8 +5,7 @@ import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { isGateOpenForUid } from '../../gates/assertGateOpen.js';
-import { sendBudgetedPush } from '../../notifications/sendBudgetedPush.js';
-import { toAppUrl } from '../../notifications/sendPush.js';
+import { sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   claimPath,
@@ -30,6 +29,7 @@ if (getApps().length === 0) {
 }
 
 const ALREADY_EXISTS = 6;
+const BATCH_SIZE = 20;
 
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
@@ -60,9 +60,6 @@ async function digestForPlan(
   sealed: unknown,
   now: number,
 ): Promise<Outcome> {
-  if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
-    return 'closed';
-  }
   const planKey = await unwrapPlanKey(firestore, keyring, uid);
   const settings = readDigestSettings(
     isSealed(sealed) ? openWithKey(planKey.key, sealed) : {},
@@ -77,17 +74,19 @@ async function digestForPlan(
       .get()
   ).data().count;
   if (waiting === 0) return 'empty';
+  if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
+    return 'closed';
+  }
   if (!(await claimDay(firestore, uid, date, now))) return 'claimed';
   const url = toAppUrl(NEEDS_HOME_PATH);
   if (!url) return 'dropped';
-  const result = await sendBudgetedPush(firestore, getMessaging(), {
-    appId: 'runway',
-    uids: [uid],
-    content: { title: RUNWAY_PUSH_TITLE, body: needsHomeBody(waiting), url },
-    zone: settings.zone,
-    now,
+  // The person chose this hour, so the budget for pushes nobody asked for does not apply.
+  const devices = await sendPushToUsers(firestore, getMessaging(), [uid], {
+    title: RUNWAY_PUSH_TITLE,
+    body: needsHomeBody(waiting),
+    url,
   });
-  return result.devices > 0 ? 'sent' : 'dropped';
+  return devices > 0 ? 'sent' : 'dropped';
 }
 
 export const sendRunwayNeedsHomeDigest = onSchedule(
@@ -106,19 +105,33 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
       .collection('apps/runway/plans')
       .where('notify.needsHome', '==', true)
       .get();
-    const outcomes = await Promise.all(
-      plans.docs.map((plan) =>
-        digestForPlan(
-          firestore,
-          keyring,
-          plan.id,
-          plan.data().sealed,
-          now,
-        ).catch((): Outcome => {
-          logger.warn('runway.needsHomeDigest.failed', { uid: plan.id });
-          return 'failed';
-        }),
-      ),
+    const batches = Array.from(
+      { length: Math.ceil(plans.size / BATCH_SIZE) },
+      (_, index) =>
+        plans.docs.slice(index * BATCH_SIZE, (index + 1) * BATCH_SIZE),
+    );
+    const outcomes = await batches.reduce<Promise<Outcome[]>>(
+      async (done, batch) => [
+        ...(await done),
+        ...(await Promise.all(
+          batch.map((plan) =>
+            digestForPlan(
+              firestore,
+              keyring,
+              plan.id,
+              plan.data().sealed,
+              now,
+            ).catch((error: { code?: unknown }): Outcome => {
+              logger.warn('runway.needsHomeDigest.failed', {
+                uid: plan.id,
+                code: typeof error?.code === 'string' ? error.code : null,
+              });
+              return 'failed';
+            }),
+          ),
+        )),
+      ],
+      Promise.resolve([]),
     );
     logger.info('runway.needsHomeDigest.done', {
       plans: plans.size,

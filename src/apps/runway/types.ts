@@ -41,6 +41,15 @@ export type RunwayEncryption = AppEncryption<'runway'>;
 
 export interface PlanSealedFields {
   currencyCode: string;
+  /** Local hour (0-23) of the daily "Purchases waiting for a home" push; null reads as 7 pm. A plan sealed before it existed lacks the key. */
+  notifyHour: number | null;
+  /** IANA zone the hour is in; null until the person saves an hour. */
+  notifyTimeZone: string | null;
+}
+
+/** Which pushes the person turned on; readable on purpose, since the sending Function needs it and it holds no amount. */
+export interface PlanNotify {
+  needsHome: boolean;
 }
 
 /** A stretch of tracking: Track is on while the last period has `to` null. A period is closed by the day tracking stopped. */
@@ -62,6 +71,8 @@ export interface PlanDoc {
   trackingPeriods: TrackingPeriod[];
   /** 'yyyy-mm' of the earliest month a ledger write has touched since its closing was built: closings from that month on are stale. Null when none is; a plan written before closings existed has none. */
   dirtyFrom: string | null;
+  /** Null on a plan made before pushes existed. */
+  notify: PlanNotify | null;
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -74,6 +85,7 @@ export interface OpenPlan extends PlanSealedFields {
   startDate: DateOnly | null;
   trackingPeriods: TrackingPeriod[];
   dirtyFrom: string | null;
+  notify: PlanNotify | null;
   keyId: string | null;
 }
 

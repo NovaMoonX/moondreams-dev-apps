@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import InlineNotice from '@/components/InlineNotice';
 import {
   Activity,
+  Bell,
   ChevronRight,
   Gauge,
   Landmark,
@@ -24,6 +25,8 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
   LINK_WORDS,
+  NOTIFY_WORDS,
+  DEFAULT_NOTIFY_HOUR,
   SETTINGS_GROUP_WORDS,
   STANCE_HELP,
   STANCE_LABELS,
@@ -35,6 +38,7 @@ import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
+import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
@@ -132,6 +136,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
+  const plan = useAppSelector((state) => state.runway.plan);
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);
   const finished = links.filter((link) => !isUnfinishedLink(link));
@@ -240,6 +245,22 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 onOpen={() => setLinking({ resume: null })}
               />
             </div>
+          </ActionSection>
+        )}
+        {canLink && (
+          <ActionSection caption={NOTIFY_WORDS.sectionCaption}>
+            <SettingsRow
+              icon={<Bell />}
+              label={NOTIFY_WORDS.rowLabel}
+              value={
+                plan?.notify?.needsHome
+                  ? NOTIFY_WORDS.rowOn(
+                      formatNotifyHour(plan.notifyHour ?? DEFAULT_NOTIFY_HOUR),
+                    )
+                  : NOTIFY_WORDS.rowOff
+              }
+              onOpen={() => openSettingsView('notifications')}
+            />
           </ActionSection>
         )}
         <ActionSection caption={SETTINGS_GROUP_WORDS.plan}>
