@@ -436,6 +436,7 @@ export function useRunwayUrlState() {
     spendEnvelope: null,
     purchaseId: null,
     checkEnvelope: null,
+    isCheckFromFreeToSpend: false,
     openDayKey: null,
     settingsView: null,
     moreEntry: null,
