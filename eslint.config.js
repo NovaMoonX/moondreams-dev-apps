@@ -62,4 +62,8 @@ export default defineConfig([
       globals: globals.node,
     },
   },
+  {
+    files: ['scripts/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
+  },
 ]);

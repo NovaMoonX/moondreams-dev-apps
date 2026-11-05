@@ -1,0 +1,54 @@
+name: Browser checks
+# Checks that drive a real browser, each run only when the PR touches what it guards.
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/checks/backHistory.ts'
+      - 'scripts/checks/backHistory/**'
+      - 'scripts/checks/staleChunk.ts'
+      - 'vite.config.ts'
+      - 'firebase.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/browser-checks.yml'
+jobs:
+  browser_checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the checks this PR needs
+        id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          history=false
+          if echo "$changed" | grep -qE '^(src/hooks/useBackHistory\.ts|scripts/checks/backHistory|\.github/workflows/browser-checks\.yml)'; then history=true; fi
+          # A changed file that calls the history helpers or writes a kept mark, or a line that adds or removes such a call, can break a door.
+          # Listed first so a failing diff stops the step; only grep's "no match" is let through.
+          git diff -z --name-only --diff-filter=d "$BASE"...HEAD -- '*.ts' '*.tsx' > "$RUNNER_TEMP/changed-code"
+          callers=$(xargs -0 -r grep -lE 'afterBackLayersClose|keepEntryFor|keptFor' < "$RUNNER_TEMP/changed-code" || true)
+          if [ -n "$callers" ] || git diff "$BASE"...HEAD -- '*.ts' '*.tsx' | grep -qE '^[-+].*(afterBackLayersClose|keepEntryFor|keptFor)'; then history=true; fi
+          stale=false
+          if echo "$changed" | grep -qE '^(src/screens/ErrorBoundary\.tsx|src/lib/app/|src/main\.tsx|src/App\.tsx|src/routes/|vite\.config\.ts|firebase\.json|package(-lock)?\.json|scripts/checks/staleChunk\.ts|\.github/workflows/browser-checks\.yml)'; then stale=true; fi
+          echo "history=$history" >> "$GITHUB_OUTPUT"
+          echo "stale=$stale" >> "$GITHUB_OUTPUT"
+          echo "back-history: $history, stale-chunk: $stale" | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-node@v4
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies and Chromium
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        run: |
+          npm ci
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - run: npm run check:back-history
+        if: steps.pick.outputs.history == 'true'
+      - run: npm run check:stale-chunk
+        if: steps.pick.outputs.stale == 'true'

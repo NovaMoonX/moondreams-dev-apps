@@ -52,3 +52,54 @@ export function watchForAppUpdates() {
     });
   });
 }
+
+const STALE_CHUNK_RELOAD_KEY = 'staleChunkReloadAt';
+const STALE_CHUNK_RELOAD_WINDOW_MS = 30 * 1000;
+// Chrome, Firefox and Safari word a failed `import()` differently; a CSS preload failing is the same cause.
+const STALE_CHUNK_MESSAGE =
+  /dynamically imported module|Importing a module script failed|Unable to preload CSS/i;
+
+/** Whether an error is a lazy screen's file failing to load, which after a deploy means this page runs an older version. */
+export function isStaleChunkError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  const result = STALE_CHUNK_MESSAGE.test(message);
+  return result;
+}
+
+const readLastReload = () => {
+  try {
+    return Number(window.sessionStorage.getItem(STALE_CHUNK_RELOAD_KEY) ?? 0);
+  } catch {
+    return Number.POSITIVE_INFINITY;
+  }
+};
+
+// A store that reads but refuses writes (full) would leave the screen on Loading, since the reload never happens.
+const canWriteStamp = () => {
+  try {
+    window.sessionStorage.setItem(`${STALE_CHUNK_RELOAD_KEY}:probe`, '1');
+    window.sessionStorage.removeItem(`${STALE_CHUNK_RELOAD_KEY}:probe`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Whether a missing lazy file may reload the page into the new version: online, and not already tried in the last half minute (then it is a real fault). */
+export function canReloadForStaleChunk() {
+  const result =
+    navigator.onLine &&
+    Date.now() - readLastReload() >= STALE_CHUNK_RELOAD_WINDOW_MS &&
+    canWriteStamp();
+  return result;
+}
+
+/** Reloads into the new version, noting when so a page that still can't load its files is not reloaded again. */
+export function reloadForStaleChunk() {
+  try {
+    window.sessionStorage.setItem(STALE_CHUNK_RELOAD_KEY, String(Date.now()));
+  } catch {
+    return;
+  }
+  window.location.reload();
+}

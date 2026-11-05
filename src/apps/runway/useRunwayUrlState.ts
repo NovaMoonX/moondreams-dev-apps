@@ -8,6 +8,8 @@ import {
 import { createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { keepEntryFor } from '@/hooks/useBackHistory';
+
 import {
   CHANGE_LOG_SPANS,
   DAYS_VIEWS,
@@ -276,11 +278,7 @@ export function useRunwayUrlState() {
     // and it steps itself away once the form closes, leaving the tab's entry clean for a later Back.
     const address = new URL(window.location.href);
     address.searchParams.set('add', kind);
-    window.history.pushState(
-      { ...window.history.state, keptFor: 'add' },
-      '',
-      address,
-    );
+    keepEntryFor('add', address);
     await setRequestedAdd(kind, { history: 'replace' });
   };
 
@@ -309,9 +307,8 @@ export function useRunwayUrlState() {
       | { itemId: string; step?: string; returnTo?: PlanSection }
       | 'undatedBills',
   ) => {
-    if (requestedDay !== null) {
-      await setRequestedDay(null, { history: 'replace' });
-    }
+    // Unconditional: run after a sheet's back steps, this render's `requestedDay` can predate the address.
+    await setRequestedDay(null, { history: 'replace' });
     await showPlanSection(section);
     await showTab('plan');
     if (target === 'undatedBills') {

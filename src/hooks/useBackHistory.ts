@@ -22,6 +22,8 @@ let lastSeq = 0;
 let steppedAt = 0;
 let isFlushQueued = false;
 let adoptUrl: string | null = null;
+// Marks the entries this page load kept, so one kept before a reload (an update's restart) never counts as dead.
+const LOAD_ID = generateUuid();
 
 const readEntry = () => {
   const state: unknown = window.history.state;
@@ -57,10 +59,17 @@ const nextSeq = () => {
 
 const isStepping = () => Date.now() - steppedAt < STEP_TIMEOUT_MS;
 
+const readKeptFor = () => {
+  const { keptFor, keptLoad } = window.history.state ?? {};
+  const result =
+    typeof keptFor === 'string' && keptLoad === LOAD_ID ? keptFor : null;
+  return result;
+};
+
 // An entry pushed to keep a closing layer's place (`keepEntryFor`) is dead once its param is gone.
 const isKeptEntryDone = () => {
-  const keptFor: unknown = window.history.state?.keptFor;
-  if (typeof keptFor !== 'string') return false;
+  const keptFor = readKeptFor();
+  if (keptFor === null) return false;
   const result = !new URLSearchParams(window.location.search).has(keptFor);
   return result;
 };
@@ -232,13 +241,18 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
-/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL carries `param`. */
-export function keepEntryFor(param: string) {
-  if (!new URLSearchParams(window.location.search).has(param)) return;
+/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL (or `address`, pushed with it) carries `param`; every kept entry is written here, so it carries this load's stamp. */
+export function keepEntryFor(param: string, address?: URL) {
+  const search = address?.search ?? window.location.search;
+  if (!new URLSearchParams(search).has(param)) return;
   const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
   void backLayerKey;
   void backLayerSeq;
-  window.history.pushState({ ...entry, keptFor: param }, '');
+  window.history.pushState(
+    { ...entry, keptFor: param, keptLoad: LOAD_ID },
+    '',
+    address,
+  );
 }
 
 const MAX_BACK_STEPS = 6;
@@ -249,7 +263,10 @@ let isSteppingBack = false;
 export function afterBackLayersClose(action: () => void) {
   if (isSteppingBack) return;
   const step = (stepsLeft: number) => {
-    if (readEntry().key === null || stepsLeft === 0) {
+    // A kept entry only holds a closing layer's place, and a dead-entry step already under way lands on its own.
+    const isLeavingDead = isStepping();
+    const isLayerEntry = readEntry().key !== null || readKeptFor() !== null;
+    if ((!isLeavingDead && !isLayerEntry) || stepsLeft === 0) {
       isSteppingBack = false;
       action();
       return;
@@ -261,8 +278,11 @@ export function afterBackLayersClose(action: () => void) {
     const timer = window.setTimeout(() => {
       window.removeEventListener('popstate', onPop);
       isSteppingBack = false;
+      // A dead-entry step with nothing under it never lands; the sheets are closed all the same.
+      if (isLeavingDead) action();
     }, BACK_STEP_TIMEOUT_MS);
     window.addEventListener('popstate', onPop, { once: true });
+    if (isLeavingDead) return;
     window.history.back();
   };
   isSteppingBack = true;

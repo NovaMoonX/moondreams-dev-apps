@@ -69,6 +69,8 @@
     "check:board": "node scripts/checks/board.ts",
     "check:app-people": "node scripts/checks/appPeople.ts",
     "inbox:build": "node scripts/ownerInbox/run.ts",
+    "check:back-history": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/backHistory.ts",
+    "check:stale-chunk": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/staleChunk.ts",
     "check:option-match": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/optionMatch.ts",
     "check:runway-engine": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayEngine.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayStartCorrection.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayGoalSeries.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayMoneyHistory.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayPriorityParts.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwayBudgetReading.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/runwaySync.ts && TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/sealedBytes.ts",
     "check:runway-notify-text": "tsx scripts/checks/runwayNotifyText.ts",
