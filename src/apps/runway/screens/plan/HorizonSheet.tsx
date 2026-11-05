@@ -27,7 +27,10 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
-import { NOTICE_MAIN_BUTTON, NOTICE_QUIET_BUTTON } from '@apps/runway/components/noticeButtonClasses';
+import {
+  NOTICE_MAIN_BUTTON,
+  NOTICE_QUIET_BUTTON,
+} from '@apps/runway/components/noticeButtonClasses';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
