@@ -236,14 +236,33 @@ function RuleSheet({
     });
 
   const sendThisOne = async (made: OpenRule) => {
-    if (!user || !purchase?.needsHome || made.target === RULE_VARIES) return;
+    if (!user || !purchase || made.target === RULE_VARIES) return;
+    const encryption = await getRunwayEncryption(user.uid);
+    const toastStored = async (sendError: unknown) => {
+      // The rule pass may have placed it first; what is stored now decides.
+      const fresh = await readPurchaseNow(
+        user.uid,
+        encryption,
+        purchase.id,
+      ).catch(() => null);
+      const home = fresh?.lines.find((line) => line.via === 'chosen');
+      if (!fresh || fresh.ruleId === null || fresh.needsHome || !home) {
+        throw sendError;
+      }
+      toastPlaced(user.uid, encryption, fresh, home.envelopeId ?? made.target);
+    };
+    if (!purchase.needsHome) {
+      await toastStored(new Error(SPEND_WORDS.changedElsewhere)).catch(() =>
+        addToast({ title: RULE_WORDS.made, type: 'success' }),
+      );
+      return;
+    }
     const lines = getSpilledLines(
       store.getState(),
       [{ envelopeId: made.target, cents: purchase.amountCents, via: 'chosen' }],
       null,
       purchase.date,
     );
-    const encryption = await getRunwayEncryption(user.uid);
     try {
       const updatedAt = await assignPurchase(
         user.uid,
@@ -275,17 +294,7 @@ function RuleSheet({
       ) {
         throw sendError;
       }
-      // The rule pass may have placed it first; what is stored now decides.
-      const fresh = await readPurchaseNow(
-        user.uid,
-        encryption,
-        purchase.id,
-      ).catch(() => null);
-      const home = fresh?.lines.find((line) => line.via === 'chosen');
-      if (!fresh || fresh.ruleId === null || fresh.needsHome || !home) {
-        throw sendError;
-      }
-      toastPlaced(user.uid, encryption, fresh, home.envelopeId ?? made.target);
+      await toastStored(sendError);
     }
   };
 
@@ -316,17 +325,16 @@ function RuleSheet({
         input,
         RULE_WORDS.changeMade(entry),
       );
-      try {
-        await sendThisOne(made);
-      } catch {
-        addToast({
-          title: RULE_WORDS.made,
-          description: RULE_WORDS.madeNotSent,
-          type: 'warning',
-        });
-      }
-      if (made.target === RULE_VARIES || !purchase?.needsHome) {
+      if (made.target === RULE_VARIES || !willSend) {
         addToast({ title: RULE_WORDS.made, type: 'success' });
+      } else {
+        await sendThisOne(made).catch(() =>
+          addToast({
+            title: RULE_WORDS.made,
+            description: RULE_WORDS.madeNotSent,
+            type: 'warning',
+          }),
+        );
       }
       onClose();
     } catch (saveError) {
