@@ -10,19 +10,15 @@ import {
   loadKeyringOrFail,
   planDocPath,
   requireLinkCaller,
-  type LinkSealed,
 } from './link/linkShared.js';
-import { discardLink, isUnfinishedLink } from './link/unfinishedLinks.js';
-import { openWithKey, unwrapPlanKey, type SealedPayload } from './planKey.js';
+import { discardLink } from './link/unfinishedLinks.js';
+import { unwrapPlanKey } from './planKey.js';
 
 if (getApps().length === 0) {
   initializeApp();
 }
 
-/**
- * `{ linkId }` → `{ discarded }`: revokes the grant of a link the person never finished and deletes the link and its
- * grant. A link with any account already bound or left out is refused.
- */
+/** `{ linkId }` → `{ discarded }`: removes a link the person never finished and revokes its grant; a finished one is refused. */
 export const discardRunwayLink = onCall(
   {
     region: 'us-central1',
@@ -60,18 +56,19 @@ export const discardRunwayLink = onCall(
       const gone = { discarded: false };
       return gone;
     }
-    const link = openWithKey(
+    const isDiscarded = await discardLink(
+      firestore,
+      keyring,
       planKey.key,
-      linkSnapshot.data()?.sealed as SealedPayload,
-    ) as unknown as LinkSealed;
-    if (!isUnfinishedLink(link)) {
+      uid,
+      linkId,
+    );
+    if (!isDiscarded) {
       throw new HttpsError(
         'failed-precondition',
         'That bank link already has accounts in it, so it cannot be discarded.',
       );
     }
-
-    await discardLink(firestore, keyring, uid, linkId);
     logger.info('runway.link.discarded', { linkId });
     const result = { discarded: true };
     return result;

@@ -79,10 +79,7 @@ const toAccountKind = (subtype: string | null): AccountKind => {
   return 'checking';
 };
 
-/**
- * Makes a card or account for each "Add as new" row from the bank's name, kind and mask (the bank's name is the
- * issuer or institution), then binds every picked row in one call. A row left out is sent with both ids null.
- */
+/** Makes each "Add as new" card or account from the bank's row, then binds every picked row (a left-out one with both ids null) in one call. */
 export async function linkChosenAccounts(
   uid: string,
   encryption: RunwayEncryption,

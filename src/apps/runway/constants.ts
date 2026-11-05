@@ -3974,6 +3974,8 @@ export const LINK_WORDS = {
   nothingPicked: 'Pick at least one to bring in.',
   attachFailed:
     'Those did not link. Try again; anything already added stays and is linked then.',
+  linkReplaced:
+    'This link was replaced by a newer sign-in at the same bank, so nothing was added. Close it and finish the newer one.',
   levelNotMoved:
     'Linked. Your plan is still at Track; you can move it to Link in Settings, under Tracking.',
   kindDepository: 'Account',

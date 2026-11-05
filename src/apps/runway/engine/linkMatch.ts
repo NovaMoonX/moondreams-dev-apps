@@ -47,12 +47,7 @@ export function getTargetKind(
 export const isLinkable = (target: MatchTarget) =>
   target.linkId === null && target.archivedAt === null;
 
-/**
- * Presets each row the bank sent: credit goes to cards, depository to accounts and `other` is left out;
- * within a kind a row takes the open, unlinked one at the same bank whose last four match its mask. Failing
- * that it takes one at the same bank only when that one has no last four, or is the only one of its kind there;
- * otherwise it becomes a new one. A target is never preset on two rows.
- */
+/** Presets each bank row by kind, then the unlinked one at that bank with its last four, else an unambiguous one there, else new. */
 export function matchLinkRows(input: MatchInput): LinkChoice[] {
   const bankKey = toBankKey(input.institutionName);
   const offered = (target: MatchTargetKind) =>

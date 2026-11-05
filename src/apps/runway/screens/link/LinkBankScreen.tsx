@@ -68,7 +68,7 @@ const toResumedSession = (link: OpenLink): LinkSession => ({
     kind: entry.kind,
     subtype: null,
     mask: entry.mask,
-    balanceCents: null,
+    balanceCents: entry.balanceCents,
   })),
 });
 
@@ -205,6 +205,13 @@ function LinkBankScreen({
       confirmText: LINK_WORDS.confirmText(picked),
     });
     if (!isConfirmed) return;
+    const isLinkGone =
+      resume !== null &&
+      !store.getState().runway.links.some((link) => link.id === session.linkId);
+    if (isLinkGone) {
+      setMessage(LINK_WORDS.linkReplaced);
+      return;
+    }
     setIsBusy(true);
     setMessage(null);
     try {

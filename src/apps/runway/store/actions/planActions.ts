@@ -222,10 +222,7 @@ export async function moveToPlan(
   });
 }
 
-/**
- * Moves Track up to Link from `linkDate`: the open period gets its link day and a `levelMove` change says so,
- * in one transaction that reads the plan fresh. A plan already at Link is left alone and says nothing.
- */
+/** Moves Track up to Link from `linkDate` in one transaction, writing the period's link day and a `levelMove` change; a plan already at Link is left alone. */
 export async function moveToLink(
   uid: string,
   encryption: RunwayEncryption,

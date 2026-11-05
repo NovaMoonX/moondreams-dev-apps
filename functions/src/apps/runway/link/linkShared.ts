@@ -46,6 +46,8 @@ export interface ProviderAccountSealed {
   name: string;
   kind: NormalizedAccount['kind'];
   mask: string | null;
+  /** What the bank said at sign-in, so a link finished later still starts a new account or card from it. */
+  balanceCents: number | null;
   accountId: string | null;
   cardId: string | null;
   isSkipped: boolean;

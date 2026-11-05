@@ -105,11 +105,7 @@ function openGrantOrFail(
 const ALREADY_LINKED =
   'One of those accounts or cards is already linked, archived or gone. Pick again.';
 
-/**
- * `{ linkId, choices }` → `{ attached, balances }`: binds each bank account to an account or card the person already
- * has (both ids null leaves it out), sets `linkId` on those, and writes the bank's balance for each. It never applies
- * a balance to the plan: the app offers it as a correction.
- */
+/** `{ linkId, choices }` → `{ attached, balances }`: binds each bank account to one of the person's (or leaves it out) and stores the bank's balance, never applying it. */
 export const attachRunwayAccounts = onCall(
   {
     region: 'us-central1',

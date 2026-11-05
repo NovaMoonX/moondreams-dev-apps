@@ -578,6 +578,8 @@ export interface LinkProviderAccount {
   name: string;
   kind: ProviderAccountKind;
   mask: string | null;
+  /** The bank's figure at sign-in; null on links sealed before it was kept. */
+  balanceCents: Cents | null;
   accountId: string | null;
   cardId: string | null;
   isSkipped: boolean;

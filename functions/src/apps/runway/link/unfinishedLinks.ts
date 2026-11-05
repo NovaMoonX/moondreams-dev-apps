@@ -14,48 +14,67 @@ export const isUnfinishedLink = (link: LinkSealed) =>
 
 const toBankKey = (value: string) => value.toLowerCase().replace(/\s+/g, '');
 
-/** Revokes the grant at the provider (best effort) and deletes the link and grant documents. */
+const openLink = (planKey: Buffer, sealed: unknown) =>
+  openWithKey(planKey, sealed as SealedPayload) as unknown as LinkSealed;
+
+/** Deletes an unfinished link and its grant in a transaction (an attach that lands first wins), then revokes the grant; false when it was gone or finished. */
 export async function discardLink(
   firestore: Firestore,
   keyring: Keyring,
+  planKey: Buffer,
   uid: string,
   linkId: string,
 ) {
+  const linkRef = firestore.doc(planDocPath(uid, 'links', linkId));
   const grantRef = firestore.doc(`${grantsPath(uid)}/${linkId}`);
-  const grantSnapshot = await grantRef.get();
-  if (grantSnapshot.exists) {
-    await provider
-      .revoke(openGrant(keyring, uid, grantSnapshot.data() as ProviderGrantDoc))
-      .catch(() => {
-        logger.warn('runway.link.revokeFailed');
-      });
+  const grantDoc = await firestore.runTransaction(async (transaction) => {
+    const [linkSnapshot, grantSnapshot] = await transaction.getAll(
+      linkRef,
+      grantRef,
+    );
+    if (
+      !linkSnapshot.exists ||
+      !isUnfinishedLink(openLink(planKey, linkSnapshot.data()?.sealed))
+    ) {
+      return null;
+    }
+    transaction.delete(linkRef);
+    transaction.delete(grantRef);
+    return grantSnapshot.exists
+      ? (grantSnapshot.data() as ProviderGrantDoc)
+      : { isMissing: true as const };
+  });
+  if (grantDoc === null) return false;
+  if (!('isMissing' in grantDoc)) {
+    await provider.revoke(openGrant(keyring, uid, grantDoc)).catch(() => {
+      logger.warn('runway.link.revokeFailed');
+    });
   }
-  const batch = firestore.batch();
-  batch.delete(grantRef);
-  batch.delete(firestore.doc(planDocPath(uid, 'links', linkId)));
-  await batch.commit();
+  return true;
 }
 
-/** Discards the person's older unfinished links at one bank, so one unfinished link per bank remains. */
+/** Discards the person's unfinished links at one bank made before this one, so one unfinished link per bank remains. */
 export async function discardSupersededLinks(
   firestore: Firestore,
   keyring: Keyring,
   planKey: Buffer,
   uid: string,
-  keep: { linkId: string; institutionName: string },
+  keep: { linkId: string; institutionName: string; createdAt: number },
 ) {
   const snapshots = await firestore
     .collection(`apps/runway/plans/${uid}/links`)
     .get();
   const older = snapshots.docs.filter((snapshot) => {
-    if (snapshot.id === keep.linkId || snapshot.data().status === 'revoked') {
+    const data = snapshot.data();
+    if (
+      snapshot.id === keep.linkId ||
+      data.status === 'revoked' ||
+      !(data.createdAt < keep.createdAt)
+    ) {
       return false;
     }
     try {
-      const link = openWithKey(
-        planKey,
-        snapshot.data().sealed as SealedPayload,
-      ) as unknown as LinkSealed;
+      const link = openLink(planKey, data.sealed);
       return (
         toBankKey(link.institutionName) === toBankKey(keep.institutionName) &&
         isUnfinishedLink(link)
@@ -64,14 +83,14 @@ export async function discardSupersededLinks(
       return false;
     }
   });
-  await Promise.all(
+  const discarded = await Promise.all(
     older.map((snapshot) =>
-      discardLink(firestore, keyring, uid, snapshot.id).catch(() => {
+      discardLink(firestore, keyring, planKey, uid, snapshot.id).catch(() => {
         logger.warn('runway.link.supersedeFailed');
+        return false;
       }),
     ),
   );
-  if (older.length > 0) {
-    logger.info('runway.link.superseded', { count: older.length });
-  }
+  const count = discarded.filter(Boolean).length;
+  if (count > 0) logger.info('runway.link.superseded', { count });
 }

@@ -40,11 +40,7 @@ const revokeQuietly = (grant: ProviderGrant) =>
     logger.warn('runway.link.revokeFailed');
   });
 
-/**
- * `{ publicToken, institutionName }` → `{ linkId, institutionName, accounts }`: swaps the bank window's token for a
- * grant sealed on the server, stores the link and returns the accounts with live balances. The grant is never returned.
- * The person's older unfinished links at the same bank are revoked and removed, so one unfinished link per bank remains.
- */
+/** `{ publicToken, institutionName }` → `{ linkId, institutionName, accounts }`: seals the grant server-side and replaces older unfinished links at the bank. */
 export const exchangeRunwayLink = onCall(
   {
     region: 'us-central1',
@@ -90,6 +86,7 @@ export const exchangeRunwayLink = onCall(
           name: account.name,
           kind: account.kind,
           mask: account.mask,
+          balanceCents: account.balanceCents,
           accountId: null,
           cardId: null,
           isSkipped: false,
@@ -112,6 +109,7 @@ export const exchangeRunwayLink = onCall(
       await discardSupersededLinks(firestore, keyring, planKey.key, uid, {
         linkId,
         institutionName,
+        createdAt: now,
       }).catch(() => {
         logger.warn('runway.link.supersedeFailed');
       });

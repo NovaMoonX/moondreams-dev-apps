@@ -76,6 +76,7 @@ export function startLinksListener(
         providerAccounts: (payload.providerAccounts ?? []).map((entry) => ({
           ...entry,
           mask: entry.mask ?? null,
+          balanceCents: entry.balanceCents ?? null,
           accountId: entry.accountId ?? null,
           cardId: entry.cardId ?? null,
           isSkipped: entry.isSkipped ?? false,

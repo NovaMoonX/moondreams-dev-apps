@@ -335,7 +335,7 @@ service cloud.firestore {
     }
 
     match /apps/runway/plans/{uid} {
-      allow update: if isUser(uid);
+      allow create, update: if isUser(uid);
     }
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
