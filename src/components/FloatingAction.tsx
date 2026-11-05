@@ -31,11 +31,11 @@ interface FloatingActionProps {
   onClick: () => void;
   /** Column the pill lines up with from `sm` up. */
   columnClassName?: string;
-  /** The action belongs to the open subview: an open subview does not hide it (a sheet or drawer still does), and it lines up inside the subview's card instead of the column. */
+  /** The action belongs to the open subview: an open subview does not hide it (a sheet or drawer still does), and it lines up inside the subview's card instead of the column; it draws nothing outside a `.subview-card`. */
   isInSubview?: boolean;
 }
 
-/** The screen's one add action: a filled pill above the bottom bar, hidden under a sheet, drawer or subview. Leaves a spacer so the last row scrolls clear of it. */
+/** The screen's one add action: a filled pill above the bottom bar, hidden under a sheet or drawer, and under a subview unless `isInSubview`. Leaves a spacer so the last row scrolls clear of it. */
 function FloatingAction({
   label,
   icon,
