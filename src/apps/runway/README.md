@@ -1,6 +1,6 @@
 # Runway 🛫
 
-Runway is an income-first budget planner for money that does not arrive or leave on a tidy schedule. Most budgets start from a month and a bank balance, but money arrives in pieces from several places, bills land between paychecks, and a balance includes money already spoken for. Runway starts from the money as it arrives, drafts where it should go, and keeps what is spoken for apart from what you can spend. It never needs a bank login to get started. One person owns each plan, and sensitive details are encrypted.
+Runway is an income-first budget planner for money that does not arrive or leave on a tidy schedule. Most budgets start from a month and a bank balance, but money arrives in pieces from several places, bills land between paychecks, and a balance includes money already spoken for. Runway starts from the money as it arrives, drafts where it should go, and keeps what is spoken for apart from what you can spend. It never needs a bank login to get started, and linking a bank later never gives Runway your sign-in: you sign in on your bank's own site where it offers that, otherwise in Plaid's window. One person owns each plan, and sensitive details are encrypted.
 
 ## How it works
 
