@@ -6274,6 +6274,7 @@ const version = (
       changeId: 'c',
       payload: {
         name: 'Paycheck',
+        accountId: null,
         schedule: { kind: 'weekly', anchor: today, monthDays: [] },
         amount: exact(100_000),
         ending: never,
@@ -12577,6 +12578,7 @@ const version = (
       changeId: 'c',
       payload: {
         name: 'Paycheck',
+        accountId: null,
         schedule: { kind: 'weekly', anchor: today, monthDays: [] },
         amount: exactRange(10_000),
         ending: never,
