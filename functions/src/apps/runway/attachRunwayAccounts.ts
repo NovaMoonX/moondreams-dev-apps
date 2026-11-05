@@ -36,7 +36,11 @@ interface Choice {
 }
 
 const isId = (value: unknown): value is string =>
-  typeof value === 'string' && value !== '' && !value.includes('/');
+  typeof value === 'string' &&
+  value !== '' &&
+  value !== '.' &&
+  value !== '..' &&
+  !value.includes('/');
 
 const asNullableId = (value: unknown) => (value == null ? null : value);
 

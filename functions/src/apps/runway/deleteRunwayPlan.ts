@@ -82,17 +82,24 @@ async function deleteDocumentTree(
 
 /** Best effort: a grant that cannot be opened or revoked is logged by count and never stops the delete. */
 async function revokeGrants(firestore: Firestore, uid: string) {
-  if (!hasProviderSecrets()) return;
   const snapshots = await firestore.collection(grantsPath(uid)).get();
   if (snapshots.empty) return;
+  if (!hasProviderSecrets()) {
+    logger.warn('runway.plan.revokeSkipped', { skipped: snapshots.size });
+    return;
+  }
   const keyring = loadKeyring();
   const outcomes = await Promise.all(
-    snapshots.docs.map((snapshot) =>
-      provider
-        .revoke(openGrant(keyring, uid, snapshot.data() as ProviderGrantDoc))
-        .then(() => true)
-        .catch(() => false),
-    ),
+    snapshots.docs.map(async (snapshot) => {
+      try {
+        await provider.revoke(
+          openGrant(keyring, uid, snapshot.data() as ProviderGrantDoc),
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    }),
   );
   logger.info('runway.plan.grantsRevoked', {
     revoked: outcomes.filter(Boolean).length,
