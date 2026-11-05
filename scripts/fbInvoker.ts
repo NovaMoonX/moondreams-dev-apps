@@ -29,6 +29,25 @@ const callables = exported
   )
   .map(({ name }) => name);
 
+// An HTTPS endpoint a provider calls with no Google identity. Each one checks the provider's signature itself and answers 401 to anything else.
+const PUBLIC_WEBHOOKS = ['runwayPlaidWebhook'];
+const webhooks = PUBLIC_WEBHOOKS.map((name) => {
+  const source = exported.find((entry) => entry.name === name);
+  const isRequest =
+    source !== undefined &&
+    /\bonRequest\s*\(/.test(
+      readFileSync(`functions/src/${source.path}.ts`, 'utf8'),
+    );
+  if (!isRequest) {
+    console.error(
+      `${name} is listed as a public webhook but is not an exported onRequest function.`,
+    );
+    process.exit(1);
+  }
+  return name;
+});
+const openable = [...callables, ...webhooks];
+
 if (callables.length === 0) {
   console.error('No callable functions found in functions/src/index.ts.');
   process.exit(1);
@@ -42,7 +61,7 @@ const unknownFlags = args.filter(
 );
 const requested = args.filter((arg) => !arg.startsWith('--'));
 const findCallable = (arg: string) =>
-  callables.find((name) => name.toLowerCase() === arg.toLowerCase());
+  openable.find((name) => name.toLowerCase() === arg.toLowerCase());
 const unknown = requested.filter((arg) => findCallable(arg) === undefined);
 const problems = [
   ...unknownFlags.map((flag) => `Unknown option: ${flag}.`),
@@ -51,7 +70,7 @@ const problems = [
     : []),
   ...(unknown.length > 0
     ? [
-        `Not a callable function: ${unknown.join(', ')}. A scheduled or trigger function keeps its IAM check.`,
+        `Not a callable function or a public webhook: ${unknown.join(', ')}. A scheduled or trigger function keeps its IAM check.`,
       ]
     : []),
 ];
@@ -59,7 +78,7 @@ const problems = [
 if (problems.length > 0 || (requested.length === 0 && !isAll)) {
   problems.forEach((problem) => console.error(problem));
   console.log(
-    `Usage: npm run fb:invoker -- <function> [<function> …] | --all [--dry]\nCallable functions: ${callables.join(', ')}`,
+    `Usage: npm run fb:invoker -- <function> [<function> …] | --all [--dry]\nCallable functions: ${callables.join(', ')}\nPublic webhooks: ${webhooks.join(', ')}`,
   );
   process.exit(problems.length > 0 ? 1 : 0);
 }
@@ -93,7 +112,7 @@ const allow = (name: string) => {
 };
 
 const names = isAll
-  ? callables
+  ? openable
   : Array.from(new Set(requested.flatMap((arg) => findCallable(arg) ?? [])));
 const failed = names.filter((name) => !allow(name));
 
