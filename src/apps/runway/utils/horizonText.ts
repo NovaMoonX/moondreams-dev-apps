@@ -49,10 +49,11 @@ export function getHorizonStatus(
   );
   const plan = planHorizon(horizon, figures.leftCents, payments);
   const next =
-    planned.find(({ dueOn, paid: mark }) => mark === null && dueOn >= today) ??
-    (horizon.state === 'open'
+    horizon.state === 'open'
       ? getNextUnpaidPayment(horizon.costs, today, stance, paid)
-      : null);
+      : planned.find(
+          ({ dueOn, paid: mark }) => mark === null && dueOn >= today,
+        );
   return {
     figures,
     plan,

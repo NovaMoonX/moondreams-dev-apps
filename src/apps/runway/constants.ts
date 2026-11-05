@@ -604,7 +604,7 @@ export const MAKE_BILL_WORDS = {
   bringLabel: 'Money from the event',
   yesCovers: (dates: string) => `Yes, it covers ${dates}`,
   yesPart: (date: string) => `Yes, it goes toward ${date}`,
-  madeFrom: (item: string, cost: string) => `Made from ${item}'s ${cost}`,
+  madeFrom: (item: string, cost: string) => `Made from ${cost} in ${item}`,
   covers: (item: string, money: string, dates: string) =>
     `${item}'s ${money} covers ${dates}`,
   yesBody: (money: string, bill: string) => `${money} moves to ${bill}`,
