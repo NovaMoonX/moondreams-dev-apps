@@ -304,6 +304,7 @@ function CostSheet({
           null,
         )
       : null;
+  const isStopped = isDone && !isBill && !settled;
   const when = isRepeat
     ? describeCostTiming(cost.schedule, cost.ending)
     : HORIZON_WORDS.costDue(
@@ -472,9 +473,6 @@ function CostSheet({
   };
 
   const getTakeBackSubtitle = (entry: CostPaidEntry) => {
-    if (horizon.state === 'calledOff') {
-      return HORIZON_END_WORDS.calledOffTakeBack(horizon.name);
-    }
     const gives =
       entry.mark === 'outside'
         ? COST_PAID_WORDS.takeBackSubOutside
@@ -613,6 +611,7 @@ function CostSheet({
           settled ? formatCents(settled.amountCents) : formatRange(cost.amount)
         }
         suffix={describeCost(cost).per || undefined}
+        isFigureMuted={isStopped}
         fact={
           isBill && !settled
             ? cost.becameBillOn === null
@@ -862,17 +861,19 @@ function CostSheet({
                 </p>
               )}
             </div>
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                isDestructive
-                icon={<Undo2 />}
-                label={COST_PAID_WORDS.takeBack}
-                subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
-                isDisabled={costPaid.isBusy || horizon.state === 'calledOff'}
-                onClick={() => void takeBackEntry(takingBack)}
-              />
-            </ActionGroup>
+            {horizon.state !== 'calledOff' && (
+              <ActionGroup>
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Undo2 />}
+                  label={COST_PAID_WORDS.takeBack}
+                  subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
+                  isDisabled={costPaid.isBusy}
+                  onClick={() => void takeBackEntry(takingBack)}
+                />
+              </ActionGroup>
+            )}
           </div>
         </FormSheet>
       )}

@@ -110,6 +110,8 @@ function HorizonBringBackView({
   });
   comes.sort((a, b) => a.dueOn - b.dueOn);
 
+  const heldCents = Math.max(0, balances.assignedByItem[itemId] ?? 0);
+  const isNothingToPlan = comes.length === 0;
   const placeWords = placeName ?? HORIZON_END_WORDS.anotherPlace;
   const getFreeLine = () => {
     if (bringCents <= 0) return HORIZON_END_WORDS.freeSame;
@@ -238,8 +240,31 @@ function HorizonBringBackView({
         setError(HORIZON_END_WORDS.alreadyDone);
         return;
       }
+      const getBackWords = () => {
+        if (bringCents > 0) {
+          const money = formatCents(bringCents);
+          return {
+            title: HORIZON_END_WORDS.backIn(live.name),
+            description:
+              sent?.kind === 'place'
+                ? HORIZON_END_WORDS.cameBackPlace(money, placeWords)
+                : HORIZON_END_WORDS.cameBackFree(money),
+          };
+        }
+        return {
+          title: isSentAway
+            ? HORIZON_END_WORDS.backAtZero(live.name)
+            : HORIZON_END_WORDS.backIn(live.name),
+          description: undefined,
+        };
+      };
+      const backWords = getBackWords();
       addToast({
-        title: mask(HORIZON_END_WORDS.backIn(live.name)),
+        title: mask(backWords.title),
+        description:
+          backWords.description === undefined
+            ? undefined
+            : mask(backWords.description),
         type: 'success',
         action: {
           label: HORIZON_END_WORDS.undo,
@@ -270,12 +295,16 @@ function HorizonBringBackView({
           {HORIZON_END_WORDS.bringBackNote}
         </p>
       </div>
-      <ActionSection caption={HORIZON_END_WORDS.whatComesBack}>
-        {comes.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>
-            {HORIZON_END_WORDS.nothingComesBack}
-          </p>
-        ) : (
+      {isNothingToPlan ? (
+        <p className='text-muted-foreground text-sm'>
+          <MaskedText>
+            {HORIZON_END_WORDS.nothingToPlan(
+              heldCents > 0 ? formatCents(heldCents) : null,
+            )}
+          </MaskedText>
+        </p>
+      ) : (
+        <ActionSection caption={HORIZON_END_WORDS.whatComesBack}>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {comes.map(({ cost, isDue }) => (
               <li
@@ -301,8 +330,8 @@ function HorizonBringBackView({
               </li>
             ))}
           </ul>
-        )}
-      </ActionSection>
+        </ActionSection>
+      )}
       {isSentAway && bringableCents === 0 && (
         <p className='text-muted-foreground text-sm'>
           <MaskedText>
@@ -317,16 +346,34 @@ function HorizonBringBackView({
       {isAsked && (
         <ActionSection
           caption={mask(
-            HORIZON_END_WORDS.bringQuestion(
-              formatCents(bringableCents),
-              horizon.name,
-            ),
+            HORIZON_END_WORDS.bringQuestion(formatCents(sent.cents)),
           )}
         >
+          {bringableCents < sent.cents && (
+            <p className='text-muted-foreground text-sm'>
+              <MaskedText>
+                {HORIZON_END_WORDS.bringPartial(
+                  formatCents(sent.cents),
+                  sent.kind === 'place' ? placeWords : 'Free to Spend',
+                  formatCents(bringableCents),
+                )}
+              </MaskedText>
+            </p>
+          )}
           <ChoiceCards options={options} value={answer} onChange={setAnswer} />
         </ActionSection>
       )}
-      {changeJson !== null && (
+      {answer === 'start' && !isNothingToPlan && (
+        <p className='text-muted-foreground text-sm'>
+          <MaskedText>
+            {HORIZON_END_WORDS.startFromPays(
+              comes.slice(0, 2).map(({ cost }) => cost.name),
+              comes.length - 2,
+            )}
+          </MaskedText>
+        </p>
+      )}
+      {changeJson !== null && (!isNothingToPlan || bringCents > 0) && (
         <EffectPreview
           changeJson={changeJson}
           emptyText=''

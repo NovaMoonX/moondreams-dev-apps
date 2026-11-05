@@ -631,6 +631,9 @@ export const MAKE_BILL_WORDS = {
     `Gave ${item}'s ${money} to Free to Spend.`,
 } as const;
 
+const listNamesAndMore = (names: readonly string[], more: number) =>
+  more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
+
 /** Issue 88: finishing an event, calling it off and bringing it back. */
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
@@ -642,6 +645,11 @@ export const HORIZON_END_WORDS = {
   freeBody: 'From today.',
   placeRow: 'Move it to an envelope or goal',
   placeRowSub: 'Pick where it goes',
+  placeSearch: 'Search',
+  placeNoMatch: 'No envelope or goal matches',
+  finishConfirm: 'Finish',
+  finishWaits: (names: readonly string[], more: number) =>
+    `Finish once the ${listNamesAndMore(names, more)} ${names.length + more === 1 ? 'is' : 'are'} paid or made a bill.`,
   placeCaption: 'Move it to',
   placePicked: (place: string) => `It moves to ${place}`,
   placeNone: 'There is no envelope or goal to move it to yet.',
@@ -656,8 +664,7 @@ export const HORIZON_END_WORDS = {
   staysBill: (cost: string) => `Stays a bill \u00b7 ${cost}`,
   stopsRow: (cost: string, when: string, figure: string | null) =>
     [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
-  noOpenCosts: 'Every cost is already paid, ended or a bill.',
-  callOffConfirm: 'Call it off',
+  callOffConfirm: 'Call off',
   calledOff: (name: string) => `${name} is called off`,
   undo: 'Undo',
   needsChoice: 'Choose what happens to the money it holds.',
@@ -728,18 +735,16 @@ export const HORIZON_END_WORDS = {
   nothingPaid: 'Nothing paid',
   nothingPaidFrom: (name: string) => `Nothing paid from ${name}`,
   paidBeforeCallOff: 'Paid before calling off',
-  placeSearch: 'Search envelopes and goals',
   envelopesHeading: 'Envelopes',
   goalsHeading: 'Goals',
   andMore: (count: number) => `and ${count} more`,
   stopped: 'Stopped \u00b7 never paid',
-  wentToFree: (money: string, date: string) =>
-    `${money} to Free to Spend, ${date}`,
-  wentToPlace: (money: string, place: string, date: string) =>
-    `${money} to ${place}, ${date}`,
+  wentToFree: (money: string) => `${money} to Free to Spend`,
+  wentToPlace: (money: string, place: string) => `${money} to ${place}`,
   stillHeld: (money: string) => `Still held \u00b7 ${money}`,
   release: (amount: string) => `Release ${amount} to Free to Spend`,
-  releaseSub: (amount: string) => `Free to Spend goes up by ${amount}.`,
+  releaseSub: (amount: string) =>
+    `Free to Spend goes up by ${amount}. To put it somewhere else, bring it back and finish it again.`,
   releasedAmount: (amount: string, name: string) =>
     `${amount} from ${name} went to Free to Spend`,
   releaseUndone: (amount: string, name: string) =>
@@ -766,9 +771,15 @@ export const HORIZON_END_WORDS = {
   bringBackNote: 'Its unpaid costs plan again from today.',
   whatComesBack: 'What comes back',
   dueNow: 'Due now',
-  nothingComesBack: 'It has no unpaid costs to plan again.',
-  bringQuestion: (amount: string, name: string) =>
-    `Bring the ${amount} back to ${name}?`,
+  nothingToPlan: (held: string | null) =>
+    held === null
+      ? 'Nothing to plan again.'
+      : `Nothing to plan again. The ${held} stays held.`,
+  bringQuestion: (amount: string) => `What happens to the ${amount}?`,
+  bringPartial: (sent: string, place: string, left: string) =>
+    `${sent} went to ${place}. Only ${left} is still there to bring back.`,
+  startFromPays: (names: readonly string[], more: number) =>
+    `${listNamesAndMore(names, more)} ${names.length + more === 1 ? 'comes' : 'come'} from your pays again.`,
   bringYes: (amount: string) => `Bring the ${amount} back`,
   bringYesFree: 'It comes back from Free to Spend.',
   bringYesPlace: (place: string) => `It comes back from ${place}.`,
@@ -780,6 +791,10 @@ export const HORIZON_END_WORDS = {
   needsAnswer: 'Choose what happens to the money first.',
   effectNone: 'No pay changes.',
   backIn: (name: string) => `${name} is back`,
+  backAtZero: (name: string) => `${name} is back at $0`,
+  cameBackFree: (amount: string) => `${amount} came back from Free to Spend.`,
+  cameBackPlace: (amount: string, place: string) =>
+    `${amount} came back from ${place}.`,
   bringBackConfirm: 'Bring it back',
 } as const;
 

@@ -17,6 +17,8 @@ interface SheetHeadProps {
   /** A caveat about the figure (which end of a range it is planned at), behind a help icon. */
   help?: ReactNode;
   helpTitle?: string;
+  /** Draws the figure in the muted colour, for a figure that is not money in play. */
+  isFigureMuted?: boolean;
   /** Drops the label on a screen 500px tall or less, where a sheet has little room. */
   isLabelDroppedWhenShort?: boolean;
 }
@@ -30,6 +32,7 @@ function SheetHead({
   help,
   helpTitle,
   isLabelDroppedWhenShort = false,
+  isFigureMuted = false,
 }: SheetHeadProps) {
   return (
     <div className='border-border bg-accent rounded-2xl border p-4 [@media(max-height:599px)]:p-3'>
@@ -63,7 +66,12 @@ function SheetHead({
       </div>
       {figure && (
         <p className='break-words'>
-          <span className='text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl'>
+          <span
+            className={join(
+              'text-4xl font-semibold tracking-tight tabular-nums [@media(max-height:599px)]:text-3xl',
+              isFigureMuted && 'text-muted-foreground',
+            )}
+          >
             {typeof figure === 'string' ? (
               <MaskedText>{figure}</MaskedText>
             ) : (

@@ -9,7 +9,6 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
-import { PillGroup, type PillOption } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import RevealChip from '@/components/RevealChip';
@@ -32,7 +31,6 @@ import {
   HORIZON_END_WORDS,
   LIFECYCLE_WORDS,
   MAX_NOTE_LENGTH,
-  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -143,13 +141,9 @@ function HorizonEndView({
     value: item.id,
     name: version.payload.name,
     group,
-    label: version.payload.name,
     emoji: emojiOf(version.payload.emoji, version.payload.groupId) ?? undefined,
   });
-  const places: (PillOption<string> & {
-    name: string;
-    group: 'envelope' | 'goal';
-  })[] = [
+  const places = [
     ...envelopes.map((entry) => toPlace(entry, 'envelope')),
     ...goals
       .filter(({ version }) => version.payload.state !== 'paused')
@@ -345,7 +339,74 @@ function HorizonEndView({
     : HORIZON_END_WORDS.finishTitle(horizon.name);
   const primary = isCallOff
     ? HORIZON_END_WORDS.callOffConfirm
-    : HORIZON_END_WORDS.finishLabel(horizon.name);
+    : HORIZON_END_WORDS.finishConfirm;
+
+  if (isPickerOpen) {
+    return (
+      <div className='flex flex-1 flex-col gap-4'>
+        <BackLink
+          onBack={() => {
+            setIsPickerOpen(false);
+            setQuery('');
+            if (place === null) setPick(null);
+          }}
+        />
+        <ActionTitle>{HORIZON_END_WORDS.placeCaption}</ActionTitle>
+        {places.length === 0 ? (
+          <p className='text-muted-foreground text-sm'>
+            {HORIZON_END_WORDS.placeNone}
+          </p>
+        ) : (
+          <>
+            <SearchInput
+              value={query}
+              onChange={setQuery}
+              placeholder={HORIZON_END_WORDS.placeSearch}
+            />
+            {shown.length === 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {HORIZON_END_WORDS.placeNoMatch}
+              </p>
+            )}
+            {(
+              [
+                ['envelope', HORIZON_END_WORDS.envelopesHeading],
+                ['goal', HORIZON_END_WORDS.goalsHeading],
+              ] as const
+            ).map(([group, heading]) => {
+              const options = shown.filter((entry) => entry.group === group);
+              return options.length === 0 ? null : (
+                <div key={group} className='space-y-2'>
+                  <SectionDivider label={heading} />
+                  <ActionGroup>
+                    {options.map((option) => (
+                      <ActionRow
+                        key={option.value}
+                        isGrouped
+                        icon={
+                          option.value === placeId ? (
+                            <Check />
+                          ) : (
+                            (option.emoji ?? <ArrowRightLeft />)
+                          )
+                        }
+                        label={option.name}
+                        onClick={() => {
+                          setPlaceId(option.value);
+                          setIsPickerOpen(false);
+                          setQuery('');
+                        }}
+                      />
+                    ))}
+                  </ActionGroup>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
@@ -376,81 +437,22 @@ function HorizonEndView({
                 title: HELD_WORDS.keepTitle,
                 body: HELD_WORDS.keepBody,
               },
+              {
+                value: 'place' as const,
+                title: HORIZON_END_WORDS.placeRow,
+                body:
+                  pick === 'place' && place
+                    ? HORIZON_END_WORDS.placePicked(place.name)
+                    : HORIZON_END_WORDS.placeRowSub,
+              },
             ]}
-            value={pick === 'free' || pick === 'keep' ? pick : null}
+            value={pick}
             onChange={(choice) => {
               setPick(choice);
-              setIsPickerOpen(false);
+              setIsPickerOpen(choice === 'place');
               setError(null);
             }}
           />
-          <ActionGroup>
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={pick === 'place' && place ? <Check /> : <ArrowRightLeft />}
-              label={HORIZON_END_WORDS.placeRow}
-              subtitle={
-                pick === 'place' && place
-                  ? HORIZON_END_WORDS.placePicked(place.name)
-                  : HORIZON_END_WORDS.placeRowSub
-              }
-              onClick={() => {
-                setPick('place');
-                setIsPickerOpen(true);
-                setError(null);
-              }}
-            />
-          </ActionGroup>
-          {pick === 'place' && isPickerOpen && (
-            <div className='space-y-3'>
-              {places.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {HORIZON_END_WORDS.placeNone}
-                </p>
-              ) : (
-                <>
-                  {places.length >= RUNWAY_SEARCH_THRESHOLD && (
-                    <SearchInput
-                      value={query}
-                      onChange={setQuery}
-                      placeholder={HORIZON_END_WORDS.placeSearch}
-                    />
-                  )}
-                  {(
-                    [
-                      ['envelope', HORIZON_END_WORDS.envelopesHeading],
-                      ['goal', HORIZON_END_WORDS.goalsHeading],
-                    ] as const
-                  ).map(([group, heading]) => {
-                    const options = shown.filter(
-                      (entry) => entry.group === group,
-                    );
-                    return options.length === 0 ? null : (
-                      <div key={group} className='space-y-2'>
-                        <SectionDivider label={heading} />
-                        <PillGroup
-                          label={heading}
-                          options={options}
-                          value={placeId}
-                          onChange={(id) => {
-                            setPlaceId(id);
-                            setIsPickerOpen(false);
-                            setQuery('');
-                          }}
-                        />
-                      </div>
-                    );
-                  })}
-                  {shown.length === 0 && (
-                    <p className='text-muted-foreground text-sm'>
-                      {HORIZON_END_WORDS.placeNone}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
         </ActionSection>
       )}
       {changeJson !== null && (
@@ -467,43 +469,37 @@ function HorizonEndView({
           }
         />
       )}
-      {isCallOff && (
+      {isCallOff && rows.length > 0 && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
-          {rows.length === 0 ? (
-            <p className='text-muted-foreground text-sm'>
-              {HORIZON_END_WORDS.noOpenCosts}
-            </p>
-          ) : (
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
-                isBill ? (
-                  <li
-                    key={cost.id}
-                    className='text-muted-foreground px-3 py-2 text-sm break-words'
-                  >
-                    {HORIZON_END_WORDS.staysBill(cost.name)}
-                  </li>
-                ) : (
-                  <li key={cost.id} className='px-3 py-2 text-sm break-words'>
-                    <MaskedText>
-                      {HORIZON_END_WORDS.stopsRow(
-                        cost.name,
-                        describeCostWhen(cost.schedule, cost.ending),
-                        cost.schedule.kind === 'once'
-                          ? describeCost(cost).figure
-                          : null,
-                      )}
-                    </MaskedText>
-                  </li>
-                ),
-              )}
-              {rows.length > MAX_STOPS_SHOWN && (
-                <li className='text-muted-foreground px-3 py-2 text-sm'>
-                  {HORIZON_END_WORDS.andMore(rows.length - MAX_STOPS_SHOWN)}
+          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
+              isBill ? (
+                <li
+                  key={cost.id}
+                  className='text-muted-foreground px-3 py-2 text-sm break-words'
+                >
+                  {HORIZON_END_WORDS.staysBill(cost.name)}
                 </li>
-              )}
-            </ul>
-          )}
+              ) : (
+                <li key={cost.id} className='px-3 py-2 text-sm break-words'>
+                  <MaskedText>
+                    {HORIZON_END_WORDS.stopsRow(
+                      cost.name,
+                      describeCostWhen(cost.schedule, cost.ending),
+                      cost.schedule.kind === 'once'
+                        ? describeCost(cost).figure
+                        : null,
+                    )}
+                  </MaskedText>
+                </li>
+              ),
+            )}
+            {rows.length > MAX_STOPS_SHOWN && (
+              <li className='text-muted-foreground px-3 py-2 text-sm'>
+                {HORIZON_END_WORDS.andMore(rows.length - MAX_STOPS_SHOWN)}
+              </li>
+            )}
+          </ul>
         </ActionSection>
       )}
       {isCallOff && isReasonOpen && (

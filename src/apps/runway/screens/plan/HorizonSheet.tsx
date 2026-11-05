@@ -305,11 +305,10 @@ function HorizonSheet({
     if (sent === null || sent.kind === 'held') return null;
     const money = formatCents(sent.cents);
     return sent.kind === 'free'
-      ? HORIZON_END_WORDS.wentToFree(money, doneOn)
+      ? HORIZON_END_WORDS.wentToFree(money)
       : HORIZON_END_WORDS.wentToPlace(
           money,
           sentPlace ?? HORIZON_END_WORDS.anotherPlace,
-          doneOn,
         );
   };
   const sentLine = getSentLine();
@@ -326,6 +325,7 @@ function HorizonSheet({
   };
   const endlessIds = new Set(listEndlessCosts(horizon).map(({ id }) => id));
   const stillOpen = listOpenCosts(horizon, today, stance, paid);
+  const waitingOn = stillOpen.filter(({ id }) => !endlessIds.has(id));
   const endlessBlock =
     stage === 'open' &&
     stillOpen.length > 0 &&
@@ -477,7 +477,10 @@ function HorizonSheet({
           today={today}
           stance={stance}
           onBack={() => setView('main')}
-          onClose={() => setView('main')}
+          onClose={() => {
+            setCostId(null);
+            setView('main');
+          }}
         />
       ) : view === 'change' ? (
         <HorizonChangeForm
@@ -530,10 +533,7 @@ function HorizonSheet({
             setCostId(null);
             setView('callOff');
           }}
-          onBringBack={() => {
-            setCostId(null);
-            setView('bringBack');
-          }}
+          onBringBack={() => setView('bringBack')}
         />
       ) : addState !== null ? (
         <HorizonChangeView
@@ -859,6 +859,14 @@ function HorizonSheet({
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          {stage === 'open' && waitingOn.length > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_END_WORDS.finishWaits(
+                waitingOn.slice(0, 2).map(({ name }) => name),
+                Math.max(0, waitingOn.length - 2),
+              )}
+            </p>
+          )}
           {stage === 'readyToFinish' && (
             <ModalFooterActions
               rightActions={
