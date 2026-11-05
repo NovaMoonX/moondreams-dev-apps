@@ -35,13 +35,15 @@ function PriorityDial() {
 
   if (!hasIncome || count === 0) return null;
   return (
-    <NotchedSlider
-      label={PRIORITY_DIAL_WORDS.label}
-      options={OPTIONS}
-      value={dial}
-      onChange={setDial}
-      knobClassName={join(isTrimmed && 'ring-primary/30 ring-4')}
-    />
+    <div data-no-swipe>
+      <NotchedSlider
+        label={PRIORITY_DIAL_WORDS.label}
+        options={OPTIONS}
+        value={dial}
+        onChange={setDial}
+        knobClassName={join(isTrimmed && 'ring-primary/30 ring-4')}
+      />
+    </div>
   );
 }
 

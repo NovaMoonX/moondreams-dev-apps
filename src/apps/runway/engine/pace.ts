@@ -8,6 +8,7 @@ import type {
   PriorityExtra,
 } from '@apps/runway/types';
 
+import { DAY_MS } from './dates';
 import { percentOf } from './money';
 import { getCalendarCents } from './calendar';
 import { selectRuleDays } from './schedule';
@@ -195,4 +196,18 @@ export function getGoalTrack(
 ): GoalTrack | null {
   if (goal.state === 'paused' || pace.state === null) return null;
   return pace.state === 'behind' ? 'behind' : 'onTrack';
+}
+
+const MONTH_MS = (365.25 / 12) * DAY_MS;
+
+/** What a goal needs each month, from `today`, to reach its target by its date; null with no date, a date already past, or nothing left. A date less than a month away asks for what is left. */
+export function getMonthlyPaceCents(
+  goal: Pick<PaceGoal, 'targetCents' | 'targetDate' | 'heldCents'>,
+  today: DateOnly,
+): Cents | null {
+  const remaining = goal.targetCents - goal.heldCents;
+  if (goal.targetDate === null || goal.targetDate < today || remaining <= 0)
+    return null;
+  const months = Math.max(1, (goal.targetDate - today) / MONTH_MS);
+  return Math.ceil(remaining / months);
 }
