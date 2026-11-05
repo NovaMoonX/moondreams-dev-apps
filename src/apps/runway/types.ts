@@ -320,6 +320,8 @@ export interface EnvelopeSealed {
   maxCents: Cents | null;
   /** The group that lists this envelope; a version written before envelopes had groups reads as null. */
   groupId: string | null;
+  /** The envelopes that pay, in order, when a purchase runs this one out; a version written before it reads as none. */
+  spillTo: string[];
   /** What it held when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
   startingCents?: Cents | null;
   /** Extras at lower priorities ("+$250 want"); a version written before they existed has none. */

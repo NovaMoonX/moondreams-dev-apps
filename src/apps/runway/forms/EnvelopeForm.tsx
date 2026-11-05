@@ -168,6 +168,7 @@ const EMPTY_ENVELOPE: EnvelopeSealed = {
   orderIndex: 0,
   groupId: null,
   maxCents: null,
+  spillTo: [],
   funding: {
     amount: { kind: 'exact', cents: 0 },
     cadence: { kind: 'everyIncomeDay' },
@@ -482,6 +483,7 @@ function EnvelopeFormBody({
       orderIndex,
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       maxCents: parseMoneyToCents(data.max) || null,
+      spillTo: editing?.payload.spillTo ?? [],
       funding,
       ...(extras === null && editing?.payload.extras === undefined
         ? {}

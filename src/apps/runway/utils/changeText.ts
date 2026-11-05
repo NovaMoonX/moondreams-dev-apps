@@ -394,6 +394,7 @@ const MONEYLESS_KEYS = [
   'groupId',
   'paidByCardId',
   'accountId',
+  'spillTo',
 ];
 
 const isIdleGoal = (payload: ItemPayload) =>

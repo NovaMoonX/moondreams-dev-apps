@@ -104,6 +104,21 @@ function PurchaseEffectNotice({
   );
 }
 
+/** Which envelope ran out and where the rest of the purchase would come from. */
+export function SpillNotice({ lines }: { lines: readonly string[] }) {
+  return (
+    <div role='status'>
+      <InlineNotice tone='info'>
+        {lines.map((line) => (
+          <p key={line} className='mt-1 first:mt-0'>
+            <MaskedText>{line}</MaskedText>
+          </p>
+        ))}
+      </InlineNotice>
+    </div>
+  );
+}
+
 /** What a purchase does to a card's balance, in a box of its own beside the envelope notice so each says one thing. */
 export function CardChargeNotice({ line }: { line: string }) {
   return (

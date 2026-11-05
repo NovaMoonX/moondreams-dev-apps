@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState } from 'react';
 import {
   HandCoins,
   ImagePlus,
@@ -42,9 +42,10 @@ import {
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
+  SPILL_WORDS,
 } from '@apps/runway/constants';
 import { keepEntryFor } from '@/hooks/useBackHistory';
-import type { OpenPurchase } from '@apps/runway/types';
+import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
@@ -203,6 +204,25 @@ function PurchaseScreen({
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const getLineName = (line: PurchaseLine) =>
+    line.envelopeId === null
+      ? SPEND_WORDS.freeToSpend
+      : nameOf(line.envelopeId);
+  const lineGroups = (purchase?.lines ?? []).reduce<
+    { line: PurchaseLine; spills: PurchaseLine[] }[]
+  >(
+    (acc, line) =>
+      line.via === 'spill' && acc.length > 0
+        ? [
+            ...acc.slice(0, -1),
+            {
+              ...acc[acc.length - 1],
+              spills: [...acc[acc.length - 1].spills, line],
+            },
+          ]
+        : [...acc, { line, spills: [] }],
+    [],
+  );
   const sourceName = purchase
     ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
       accounts.find((account) => account.id === purchase.accountId)?.name ??
@@ -306,11 +326,15 @@ function PurchaseScreen({
       });
       return;
     }
-    const names = purchase.lines.map((line) =>
-      line.envelopeId === null
-        ? SPEND_WORDS.freeToSpend
-        : nameOf(line.envelopeId),
-    );
+    const names = [
+      ...new Set(
+        purchase.lines.map((line) =>
+          line.envelopeId === null
+            ? SPEND_WORDS.freeToSpend
+            : nameOf(line.envelopeId),
+        ),
+      ),
+    ];
     const where = names.join(', ').replace(/, ([^,]*)$/, ' and $1');
     const isConfirmed = await confirm({
       title: SPEND_WORDS.removeTitle,
@@ -577,20 +601,45 @@ function PurchaseScreen({
                 </div>
               )}
               {purchase.lines.length > 1 &&
-                purchase.lines.map((line, index) => (
-                  <div
-                    key={`${line.envelopeId ?? 'free'}-${index}`}
-                    className='flex items-start justify-between gap-3 p-3'
-                  >
-                    <dt className='text-muted-foreground min-w-0 break-words'>
-                      {line.envelopeId === null
-                        ? SPEND_WORDS.freeToSpend
-                        : nameOf(line.envelopeId)}
-                    </dt>
-                    <dd className='font-medium whitespace-nowrap tabular-nums'>
-                      {mask(formatCents(Math.abs(line.cents)))}
-                    </dd>
-                  </div>
+                lineGroups.map(({ line, spills }, index) => (
+                  <Fragment key={`${line.envelopeId ?? 'free'}-${index}`}>
+                    {line.cents !== 0 && (
+                      <div className='flex items-start justify-between gap-3 p-3'>
+                        <dt className='text-muted-foreground min-w-0 break-words'>
+                          {getLineName(line)}
+                        </dt>
+                        <dd className='font-medium whitespace-nowrap tabular-nums'>
+                          {mask(formatCents(Math.abs(line.cents)))}
+                        </dd>
+                      </div>
+                    )}
+                    {spills.length > 0 && (
+                      <div className='p-3'>
+                        <dt className='text-muted-foreground text-xs'>
+                          {isHidden
+                            ? SPILL_WORDS.sheetCaptionHidden
+                            : SPILL_WORDS.sheetCaption(getLineName(line))}
+                        </dt>
+                        <dd>
+                          <ul className='mt-2 space-y-2'>
+                            {spills.map((spill, at) => (
+                              <li
+                                key={`${spill.envelopeId ?? 'free'}-${at}`}
+                                className='flex items-start justify-between gap-3'
+                              >
+                                <span className='min-w-0 break-words'>
+                                  {getLineName(spill)}
+                                </span>
+                                <span className='font-medium whitespace-nowrap tabular-nums'>
+                                  {mask(formatCents(Math.abs(spill.cents)))}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </dd>
+                      </div>
+                    )}
+                  </Fragment>
                 ))}
             </dl>
           )}
