@@ -61,6 +61,7 @@ import {
   PRIORITIES,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
+import type { DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
   BillVersion,
@@ -74,6 +75,8 @@ import type {
   FundingAmount,
   FundingRule,
   GoalSealed,
+  MoneyRange,
+  OpenPurchase,
   GoalVersion,
   GroupVersion,
   HorizonVersion,
@@ -1422,7 +1425,11 @@ export const selectSpendPurchases = createSelector(
       ...purchases,
       ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
     ]
-      .filter((purchase) => !(purchase.needsHome && purchase.amountCents < 0))
+      .filter(
+        (purchase) =>
+          purchase.incomeDayId === null &&
+          !(purchase.needsHome && purchase.amountCents < 0),
+      )
       .sort(
         (a, b) =>
           b.date - a.date ||
@@ -1433,12 +1440,98 @@ export const selectSpendPurchases = createSelector(
   },
 );
 
+/** The deposit linked to each income day, by the day's key; when two devices linked two, the lower id holds the day. */
+const selectDepositsByDay = createSelector([selectPurchases], (purchases) => {
+  const result = purchases.reduce((byDay, purchase) => {
+    if (purchase.incomeDayId === null) return byDay;
+    const held = byDay.get(purchase.incomeDayId);
+    return held !== undefined && held.id < purchase.id
+      ? byDay
+      : byDay.set(purchase.incomeDayId, purchase);
+  }, new Map<string, OpenPurchase>());
+  return result;
+});
+
+export const selectLinkedDeposit = (state: RootState, dayKey: string) =>
+  selectDepositsByDay(state).get(dayKey) ?? null;
+
+/** The income days a deposit may be: those still to settle and the confirmed ones whose records are read, the latter at the amount they stand on now. */
+export const selectDepositDays = createSelector(
+  [selectListedDays, selectSplitsByDay],
+  (listed, splits): DepositDay[] => {
+    const toDay = (day: ListedDay, amount: MoneyRange): DepositDay => ({
+      dayKey: day.dayKey,
+      expectedOn: day.on,
+      arrivedOn: day.arrivedOn,
+      amount,
+    });
+    return [
+      ...listed.open.flatMap((day) =>
+        day.status === 'notArrived' ? [] : [toDay(day, day.amount)],
+      ),
+      ...listed.confirmed.flatMap((day) => {
+        const split = splits.get(day.dayKey);
+        return split === undefined
+          ? []
+          : [
+              toDay(day, {
+                lowCents: split.arrivedCents,
+                highCents: split.arrivedCents,
+              }),
+            ];
+      }),
+    ];
+  },
+);
+
+/** Deposits linked to a pay day no screen shows: its payday moved, it went unconfirmed past the overdue window, or another deposit holds the day. They wait in Needs a home again, to be linked to the right day or left out. */
+export const selectLostDeposits = createSelector(
+  [
+    selectPurchases,
+    selectListedDays,
+    selectDepositsByDay,
+    (state: RootState) => state.runway.days,
+    (state: RootState) => state.runway.daysFrom,
+    selectIsDaysLoaded,
+    selectIsPlanItemsLoaded,
+  ],
+  (
+    purchases,
+    listed,
+    byDay,
+    days,
+    daysFrom,
+    isDaysLoaded,
+    isPlanLoaded,
+  ): OpenPurchase[] => {
+    if (!isDaysLoaded || !isPlanLoaded || daysFrom === null) return [];
+    const known = new Set([
+      ...listed.open.map((day) => day.dayKey),
+      ...listed.confirmed.map((day) => day.dayKey),
+      ...days.map((day) => day.id),
+    ]);
+    const result = purchases.filter(
+      ({ id, incomeDayId }) =>
+        incomeDayId !== null &&
+        (byDay.get(incomeDayId)?.id !== id ||
+          (!known.has(incomeDayId) && getDayKeyDate(incomeDayId) >= daysFrom)),
+    );
+    return result;
+  },
+);
+
 const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading. */
+/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */
 export const selectNeedsHome = createSelector(
-  [selectWaitingList],
-  (waiting) => {
+  [selectWaitingList, selectLostDeposits],
+  (waitingList, lost) => {
+    const waiting = [
+      ...waitingList,
+      ...lost.filter(
+        (deposit) => !waitingList.some((entry) => entry.id === deposit.id),
+      ),
+    ];
     const sorted = [...waiting].sort(
       (a, b) =>
         b.date - a.date ||

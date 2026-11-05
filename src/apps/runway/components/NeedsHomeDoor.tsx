@@ -2,15 +2,17 @@ import { useAppSelector } from '@/store';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { selectNeedsHome } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
-/** Home's way into Needs a home; drawn only while a charge waits (money in waits inside), so a plan with no bank link never sees it. */
+/** Home's way into Needs a home, counting every charge and deposit it holds; drawn only while something waits, so a plan with no bank link never sees it. */
 function NeedsHomeDoor() {
-  const count = useAppSelector(
-    (state) =>
-      state.runway.needsHome.filter((purchase) => purchase.amountCents >= 0)
-        .length,
-  );
+  const today = todayAsUtcDate();
+  const count = useAppSelector((state) => {
+    const { spending, moneyIn } = selectNeedsHome(state, today);
+    return spending.length + moneyIn.length;
+  });
   const { openView } = useRunwayUrlState();
   if (count === 0) return null;
   return (

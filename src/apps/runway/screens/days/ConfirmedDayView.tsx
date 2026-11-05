@@ -4,6 +4,10 @@ import { ChevronRight, FileText, Pencil } from 'lucide-react';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 
+import {
+  DepositFound,
+  UnlinkDepositRow,
+} from '@apps/runway/components/DepositFound';
 import EmptyCard from '@/components/EmptyCard';
 import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
@@ -148,6 +152,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               onClick={() => setIsCorrecting(true)}
             />
           )}
+          <UnlinkDepositRow dayKey={day.dayKey} dayOn={day.on} />
         </ActionGroup>
       </div>
     );
@@ -183,6 +188,14 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
               .join(', ')}
           </p>
         </div>
+        <DepositFound
+          dayKey={day.dayKey}
+          confirmedCents={record?.arrivedCents ?? null}
+          plannedCents={null}
+          onCorrect={
+            isCorrectable && record ? () => setIsCorrecting(true) : null
+          }
+        />
         {!isCorrectable && recentFrom !== null && (
           <InlineNotice tone='info'>
             <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>

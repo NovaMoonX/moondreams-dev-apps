@@ -50,7 +50,10 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
-import { useMatchBankPurchases } from '@apps/runway/hooks/useBankMatch';
+import {
+  useMatchBankPurchases,
+  useMatchDeposits,
+} from '@apps/runway/hooks/useBankMatch';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
@@ -215,6 +218,7 @@ function RunwayContent() {
   useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   useMatchBankPurchases(user?.uid ?? null);
+  useMatchDeposits(user?.uid ?? null);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),

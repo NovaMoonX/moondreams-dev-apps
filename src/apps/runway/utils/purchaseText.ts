@@ -108,6 +108,22 @@ export function describePurchaseReturned(
   return `Purchase put back in Needs a home: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
+/** What a deposit linked to an income day is called in a sentence: the day's pay, by its date. */
+export const describePayDay = (on: number) =>
+  `${formatDateOrdinalUTC(on)}’s pay`;
+
+/** The change-log sentence for a deposit linked to an income day, or sent back to Needs a home. */
+export function describeDepositLinked(
+  deposit: OpenPurchase,
+  dayOn: number,
+  isUnlinked: boolean,
+): string {
+  const deposited = `deposit of ${money(deposit.amountCents)} on ${formatDateOrdinalUTC(deposit.date)}`;
+  return isUnlinked
+    ? `Money in put back in Needs a home: ${deposited}, no longer linked to ${describePayDay(dayOn)}.`
+    : `Money in linked to pay: ${deposited} is ${describePayDay(dayOn)}.`;
+}
+
 /** The change-log sentence for a bank purchase matched to the one typed by hand, or for an Undo that splits them again. */
 export function describePurchaseMatch(
   bank: OpenPurchase,

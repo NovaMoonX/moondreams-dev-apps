@@ -914,6 +914,8 @@ export async function seedRunwayScale(
             link: null,
             receiptText: null,
             notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

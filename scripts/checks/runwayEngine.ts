@@ -5,7 +5,11 @@ import {
   createSealedReader,
   sealJson,
 } from '../../src/apps/runway/security.ts';
-import { findPurchaseMatches } from '../../src/apps/runway/engine/matching.ts';
+import {
+  findDepositDays,
+  findPurchaseMatches,
+  type DepositDay,
+} from '../../src/apps/runway/engine/matching.ts';
 import {
   getEarliestTrackingStart,
   getLevel,
@@ -6907,6 +6911,8 @@ const version = (
       status: null,
       accountId: null,
       notSameAs: null,
+      incomeDayId: null,
+      assignedBy: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7276,6 +7282,8 @@ const version = (
     status: null,
     accountId: null,
     notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7670,6 +7678,8 @@ const version = (
       status: null,
       accountId: null,
       notSameAs: null,
+      incomeDayId: null,
+      assignedBy: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9585,6 +9595,8 @@ const version = (
     status: null,
     accountId: null,
     notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10124,6 +10136,8 @@ const version = (
     receiptText: null,
     costRef: null,
     notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
     ...extra,
   });
 
@@ -10240,6 +10254,301 @@ const version = (
     filed.clear.size + filed.offers.size,
     0,
     'only charges still waiting in Needs a home are matched',
+  );
+}
+
+// A posted deposit and the income day it is: the candidate, amount and choice rules, and when the deposit asks.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const deposit = (
+    id: string,
+    cents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ): OpenPurchase => ({
+    id,
+    date: base + dayOffset * day,
+    source: 'link',
+    status: 'posted',
+    accountId: 'checking',
+    needsHome: true,
+    expenseId: null,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: -cents,
+    merchant: 'Payroll',
+    label: null,
+    note: null,
+    lines: [],
+    refundOfId: null,
+    paidByCardId: null,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
+    ...extra,
+  });
+  const payDay = (
+    dayKey: string,
+    expectedOffset: number,
+    lowCents: number,
+    highCents = lowCents,
+    arrivedOffset: number | null = null,
+  ): DepositDay => ({
+    dayKey,
+    expectedOn: base + expectedOffset * day,
+    arrivedOn: arrivedOffset === null ? null : base + arrivedOffset * day,
+    amount: { lowCents, highCents },
+  });
+
+  const one = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('pay_a', 1, 100_000)],
+    [],
+  );
+  assert.deepEqual(
+    [...one.clear],
+    [['d1', 'pay_a']],
+    'a deposit at the expected amount, a day away, links to that day',
+  );
+
+  const share = (cents: number) =>
+    findDepositDays(
+      [deposit('d1', cents, 0)],
+      [payDay('pay_a', 0, 100_000)],
+      [],
+    );
+  assert.equal(share(115_000).clear.size, 1, 'exactly 15% over still matches');
+  assert.equal(share(85_000).clear.size, 1, 'exactly 15% under still matches');
+  assert.equal(share(115_001).clear.size, 0, 'past 15% over asks');
+  assert.equal(share(84_999).clear.size, 0, 'past 15% under asks');
+  assert.deepEqual(
+    share(130_000).offers.get('d1'),
+    ['pay_a'],
+    'a deposit past 15% is still offered the day to pick by hand',
+  );
+  assert.equal(
+    share(150_000).offers.get('d1')?.length,
+    1,
+    'a deposit half the pay away is still offered',
+  );
+  assert.equal(
+    share(150_001).offers.size,
+    0,
+    'a deposit more than half the pay away is never offered that day',
+  );
+  const fitFirst = findDepositDays(
+    [deposit('d1', 15_000, 5)],
+    [payDay('pay_near', 4, 25_000), payDay('pay_range', 9, 12_000, 18_000)],
+    [],
+  );
+  assert.deepEqual(
+    fitFirst.offers.get('d1'),
+    ['pay_range', 'pay_near'],
+    'a day the amount fits is offered before a nearer one it does not',
+  );
+
+  const ranged = (cents: number) =>
+    findDepositDays(
+      [deposit('d1', cents, 0)],
+      [payDay('pay_a', 0, 90_000, 110_000)],
+      [],
+    );
+  assert.equal(ranged(110_000).clear.size, 1, 'the top of a range matches');
+  assert.equal(ranged(90_000).clear.size, 1, 'the bottom of a range matches');
+  assert.equal(
+    ranged(111_000).clear.size,
+    0,
+    'a range takes no 15% slack: just above it asks',
+  );
+
+  const nearer = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('far', 3, 100_000), payDay('near', -1, 100_000)],
+    [],
+  );
+  assert.deepEqual(
+    [...nearer.clear],
+    [['d1', 'near']],
+    'the nearest date wins',
+  );
+  const closer = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('off', 1, 105_000), payDay('exact', 1, 100_000)],
+    [],
+  );
+  assert.deepEqual(
+    [...closer.clear],
+    [['d1', 'exact']],
+    'on the same date the closest amount wins',
+  );
+  const earlier = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('late', 2, 100_000, 100_000, 1), payDay('early', 1, 100_000)],
+    [],
+  );
+  assert.deepEqual(
+    [...earlier.clear],
+    [['d1', 'early']],
+    'the date a day arrived on is the one compared, then the earliest expected day wins',
+  );
+  const arrived = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('late', 3, 100_000, 100_000, 0)],
+    [],
+  );
+  assert.equal(
+    arrived.clear.size,
+    1,
+    'a day that arrived on the deposit’s date matches though it was expected later',
+  );
+
+  const tie = findDepositDays(
+    [deposit('d1', 100_000, 0)],
+    [payDay('pay_a', -1, 100_000), payDay('pay_b', -1, 100_000)],
+    [],
+  );
+  assert.equal(tie.clear.size, 0, 'two equal candidates ask');
+  assert.deepEqual(
+    tie.offers.get('d1'),
+    ['pay_a', 'pay_b'],
+    'and are both offered, nearest first',
+  );
+
+  const apart = findDepositDays(
+    [deposit('d1', 100_000, 14)],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.equal(apart.clear.size, 0, 'a deposit two weeks from its day asks');
+  assert.deepEqual(
+    apart.offers.get('d1'),
+    ['pay_a'],
+    'and is offered the day within two weeks',
+  );
+  const lost = findDepositDays(
+    [deposit('d1', 100_000, 30)],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.equal(
+    lost.clear.size + lost.offers.size,
+    0,
+    'a deposit a month from any day is neither linked nor offered one',
+  );
+
+  const pending = findDepositDays(
+    [deposit('d1', 100_000, 0, { status: 'pending' })],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.equal(
+    pending.clear.size + pending.offers.size,
+    0,
+    'a pending deposit never matches',
+  );
+
+  const confirmed = findDepositDays(
+    [deposit('d1', 103_000, 1)],
+    [payDay('pay_a', 0, 100_000, 100_000, 0)],
+    [],
+  );
+  assert.deepEqual(
+    [...confirmed.clear],
+    [['d1', 'pay_a']],
+    'a deposit that posts after its day was confirmed links to it, compared with what was confirmed',
+  );
+
+  const contested = findDepositDays(
+    [deposit('d1', 100_000, 0), deposit('d2', 100_000, 0)],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.equal(
+    contested.clear.size,
+    0,
+    'two deposits never take one day: neither does, and each is offered it',
+  );
+  assert.deepEqual(
+    [contested.offers.get('d1'), contested.offers.get('d2')],
+    [['pay_a'], ['pay_a']],
+    'each asking deposit sees the contested day',
+  );
+  const split = findDepositDays(
+    [deposit('d1', 100_000, 0), deposit('d2', 200_000, 0)],
+    [payDay('pay_a', 0, 100_000), payDay('pay_b', 0, 200_000)],
+    [],
+  );
+  assert.deepEqual(
+    [...split.clear].sort(),
+    [
+      ['d1', 'pay_a'],
+      ['d2', 'pay_b'],
+    ],
+    'two deposits that each fit their own day both link',
+  );
+
+  const linked = findDepositDays(
+    [deposit('d2', 100_000, 0)],
+    [payDay('pay_a', 0, 100_000)],
+    [deposit('d1', 100_000, 0, { needsHome: false, incomeDayId: 'pay_a' })],
+  );
+  assert.equal(
+    linked.clear.size + linked.offers.size,
+    0,
+    'a day another purchase is linked to is not a candidate',
+  );
+
+  const declined = findDepositDays(
+    [deposit('d1', 100_000, 0, { assignedBy: 'person' })],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.deepEqual(
+    [declined.clear.size, declined.offers.get('d1')],
+    [0, ['pay_a']],
+    'a deposit the person sent back is never linked by a pass, only offered',
+  );
+
+  const unfit = findDepositDays(
+    [
+      deposit('out', -100_000, 0),
+      deposit('manual', 100_000, 0, { source: 'manual', accountId: null }),
+      deposit('home', 100_000, 0, { needsHome: false }),
+    ],
+    [payDay('pay_a', 0, 100_000)],
+    [],
+  );
+  assert.equal(
+    unfit.clear.size + unfit.offers.size,
+    0,
+    'only posted money in from a linked account waiting in Needs a home is matched',
+  );
+
+  const days = [
+    payDay('pay_a', -1, 100_000),
+    payDay('pay_b', 1, 100_000),
+    payDay('pay_c', 2, 95_000),
+    payDay('pay_d', 20, 100_000),
+  ];
+  const deposits = [
+    deposit('d1', 100_000, 0),
+    deposit('d2', 95_000, 2),
+    deposit('d3', 100_000, 21),
+  ];
+  const forward = findDepositDays(deposits, days, []);
+  const backward = findDepositDays(
+    [...deposits].reverse(),
+    [...days].reverse(),
+    [],
+  );
+  assert.deepEqual(
+    [[...forward.clear].sort(), [...forward.offers].sort()],
+    [[...backward.clear].sort(), [...backward.offers].sort()],
+    'the same deposits and days in any order give the same links and offers',
   );
 }
 
@@ -12364,6 +12673,8 @@ const version = (
     status: null,
     accountId: null,
     notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,

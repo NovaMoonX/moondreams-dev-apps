@@ -69,6 +69,7 @@ import {
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectComingDays,
+  selectLinkedDeposit,
   type DraftView,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, Stance } from '@apps/runway/types';
@@ -118,9 +119,17 @@ function ConfirmSheet({ view, stance, onClose }: ConfirmSheetProps) {
   const balances = useAppSelector(selectBalances);
   const emojiOf = useRecordedEmojiResolver();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
+  const deposit = useAppSelector((state) =>
+    selectLinkedDeposit(state, day.dayKey),
+  );
   const isVarying = day.amount.lowCents !== day.amount.highCents;
   const initialData: ConfirmFormData = {
-    amount: isVarying ? '' : centsToInputValue(draft.moneyCents),
+    amount:
+      deposit !== null
+        ? centsToInputValue(-deposit.amountCents)
+        : isVarying
+          ? ''
+          : centsToInputValue(draft.moneyCents),
     arrivedOn: toDateInputValue(today),
     note: '',
   };

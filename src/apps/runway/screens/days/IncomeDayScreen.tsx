@@ -11,6 +11,10 @@ import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import {
+  DepositFound,
+  UnlinkDepositRow,
+} from '@apps/runway/components/DepositFound';
 import LeftOutBillRow from '@apps/runway/components/LeftOutBillRow';
 import Subview from '@/components/Subview';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -32,6 +36,7 @@ import {
   CONFIRM_WORDS,
   CHECKLIST_R3_WORDS,
   DAYS_WORDS,
+  DEPOSIT_WORDS,
   DRAFT_WORDS,
   HORIZON_WORDS,
   PAY_SHARE_WORDS,
@@ -64,6 +69,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectChangeableKey,
   selectDraft,
+  selectLinkedDeposit,
   selectHistoryListedDays,
   selectIsDayOlderThanRecent,
   selectIsDaysLoaded,
@@ -119,6 +125,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   const isLoaded = isPlanLoaded && isDaysLoaded && isRecordsReady;
   const lookahead = useDeferredLookahead(today, isLoaded);
   const view = useAppSelector((state) => selectDraft(state, dayKey, today));
+  const deposit = useAppSelector((state) => selectLinkedDeposit(state, dayKey));
   const planStance = useAppSelector(selectStance);
   const changeableIds = useAppSelector(selectChangeableKey);
   const { showOnPlan } = useRunwayUrlState();
@@ -358,8 +365,14 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
   };
   const stance = effectiveStance(planStance, day.stanceOverride);
   const statusLine =
-    describeRange(day.amount, stance, 'income', Boolean(day.stanceOverride)) ??
-    ITEM_SHEET_WORDS.draftStatus;
+    deposit !== null
+      ? DEPOSIT_WORDS.foundStatus
+      : (describeRange(
+          day.amount,
+          stance,
+          'income',
+          Boolean(day.stanceOverride),
+        ) ?? ITEM_SHEET_WORDS.draftStatus);
   const dayLeft = <CoverageHeadline freeCents={draft.freeToSpend.cents} />;
   const fundsNames = effectivePairings.flatMap((pairing) =>
     Object.hasOwn(items, pairing.targetItemId)
@@ -385,6 +398,16 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             <MaskedText>{statusLine}</MaskedText>
           </p>
         </div>
+        <DepositFound
+          dayKey={dayKey}
+          confirmedCents={null}
+          plannedCents={
+            day.amount.lowCents === day.amount.highCents
+              ? draft.moneyCents
+              : null
+          }
+          onCorrect={null}
+        />
         {undated.length > 0 && (
           <UndatedBillsRow
             names={undated.map(({ name }) => name)}
@@ -470,6 +493,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
               onClick={() => void save(() => EMPTY_OVERRIDE)}
             />
           )}
+          <UnlinkDepositRow dayKey={dayKey} dayOn={day.on} />
           <ActionRow
             isGrouped
             isRoomy
