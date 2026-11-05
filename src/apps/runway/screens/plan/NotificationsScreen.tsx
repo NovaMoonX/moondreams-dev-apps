@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import ActionRow from '@/components/ActionRow';
 import AppToggle from '@/components/AppToggle';
+import InlineNotice from '@/components/InlineNotice';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import Subview from '@/components/Subview';
@@ -98,13 +99,9 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   };
 
   const handleSwitch = async (isChecked: boolean) => {
-    if (isSwitching) return;
+    if (isSwitching || (isChecked && stuckState !== null)) return;
     setIsSwitching(true);
     setMessage(null);
-    if (isChecked && stuckState !== null) {
-      setMessage(getDeviceNotificationsText(stuckState));
-      return;
-    }
     try {
       if (isChecked && device !== 'on' && !(await askDevice())) return;
       await save({
@@ -122,12 +119,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
   return (
     <Subview overlay title={NOTIFY_WORDS.rowLabel} onClose={onClose}>
       <div className='space-y-4'>
-        <SettingsGroup
-          title={NOTIFY_WORDS.group}
-          description={
-            stuckState !== null && getDeviceNotificationsText(stuckState)
-          }
-        >
+        <SettingsGroup title={NOTIFY_WORDS.group}>
           <SettingsRow
             icon={<Bell className='size-5' />}
             title={NOTIFY_WORDS.switchLabel}
@@ -145,56 +137,64 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
               <AppToggle
                 aria-label={NOTIFY_WORDS.switchLabel}
                 checked={isOn}
-                disabled={isSwitching}
                 onCheckedChange={(isChecked) => void handleSwitch(isChecked)}
               />
             }
           >
-            {isOn && (
-              <div className='space-y-2'>
-                <p className='text-muted-foreground text-xs'>
-                  {NOTIFY_WORDS.hourLabel}
-                </p>
-                <Select
-                  className='sm:max-w-60'
-                  options={HOUR_OPTIONS}
-                  value={String(hour)}
-                  onChange={(next) =>
-                    void save({
-                      hour: Number(next),
-                      timeZone: getDeviceTimeZone(),
-                    })
-                  }
-                />
-                {isZoneElsewhere ? (
-                  <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
-                    <p className='text-muted-foreground text-xs'>
-                      {NOTIFY_WORDS.zoneSaved(zoneName || zone || '')}
-                    </p>
-                    <Button
-                      variant='tertiary'
-                      size='sm'
-                      onClick={() => void save({ timeZone: deviceZone })}
-                    >
-                      {NOTIFY_WORDS.switchZone(deviceZoneName)}
-                    </Button>
-                  </div>
-                ) : (
-                  zoneName !== '' && (
-                    <p className='text-muted-foreground text-xs'>
-                      {NOTIFY_WORDS.zone(zoneName)}
-                    </p>
-                  )
+            {(stuckState !== null || isOn) && (
+              <>
+                {stuckState !== null && (
+                  <InlineNotice tone='warning'>
+                    {getDeviceNotificationsText(stuckState)}
+                  </InlineNotice>
                 )}
-              </div>
+                {isOn && (
+                  <div className='space-y-2'>
+                    <p className='text-muted-foreground text-xs'>
+                      {NOTIFY_WORDS.hourLabel}
+                    </p>
+                    <Select
+                      className='max-w-40'
+                      options={HOUR_OPTIONS}
+                      value={String(hour)}
+                      onChange={(next) =>
+                        void save({
+                          hour: Number(next),
+                          timeZone: getDeviceTimeZone(),
+                        })
+                      }
+                    />
+                    {isZoneElsewhere ? (
+                      <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                        <p className='text-muted-foreground text-xs'>
+                          {NOTIFY_WORDS.zoneSaved(zoneName || zone || '')}
+                        </p>
+                        <Button
+                          variant='tertiary'
+                          size='sm'
+                          onClick={() => void save({ timeZone: deviceZone })}
+                        >
+                          {NOTIFY_WORDS.switchZone(deviceZoneName)}
+                        </Button>
+                      </div>
+                    ) : (
+                      zoneName !== '' && (
+                        <p className='text-muted-foreground text-xs'>
+                          {NOTIFY_WORDS.zone(zoneName)}
+                        </p>
+                      )
+                    )}
+                  </div>
+                )}
+              </>
             )}
           </SettingsRow>
         </SettingsGroup>
         {isOn && device === 'off' && (
           <ActionRow
             icon={<Smartphone />}
-            label={NOTIFY_WORDS.deviceOff}
-            subtitle={NOTIFY_WORDS.deviceOffSub}
+            label={NOTIFY_WORDS.deviceOffSub}
+            subtitle={NOTIFY_WORDS.deviceOff}
             onClick={() => {
               setMessage(null);
               void askDevice();

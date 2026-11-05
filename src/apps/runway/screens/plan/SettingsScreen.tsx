@@ -138,11 +138,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
-  const isDeviceOn =
-    useQuery({
-      ...devicePushQueryOptions(user?.uid ?? ''),
-      enabled: canLink && user !== null,
-    }).data !== 'off';
+  const deviceState = useQuery({
+    ...devicePushQueryOptions(user?.uid ?? ''),
+    enabled: canLink && user !== null,
+  }).data;
+  const isDeviceOn = deviceState === undefined || deviceState === 'on';
   const plan = useAppSelector((state) => state.runway.plan);
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);

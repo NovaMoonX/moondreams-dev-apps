@@ -2370,7 +2370,7 @@ export const NOTIFY_WORDS = {
     'Nothing changed. Allow notifications when your browser asks, then switch this on again.',
   saveFailed: 'That did not save. Nothing was changed.',
   deviceOff: 'Not on this device yet',
-  deviceOffSub: 'Get the daily reminder here too',
+  deviceOffSub: 'Turn on for this device',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';
