@@ -611,7 +611,10 @@ function HorizonSheet({
                     }
                     onOpen={() => {
                       if (cost.becameBillId !== null) {
-                        void showOnPlan('bills', { itemId: cost.becameBillId });
+                        void showOnPlan('bills', {
+                          itemId: cost.becameBillId,
+                          returnTo: 'horizon',
+                        });
                         return;
                       }
                       setCostId(cost.id);
@@ -793,7 +796,10 @@ function HorizonSheet({
                   paid={getPaid(cost.id)}
                   onOpen={() => {
                     if (cost.becameBillId !== null) {
-                      void showOnPlan('bills', { itemId: cost.becameBillId });
+                      void showOnPlan('bills', {
+                        itemId: cost.becameBillId,
+                        returnTo: 'horizon',
+                      });
                       return;
                     }
                     setCostId(cost.id);

@@ -1,10 +1,16 @@
-import { Check } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 interface ChoiceCardsProps<T extends string> {
-  options: readonly { value: T; title: string; body: string }[];
+  options: readonly {
+    value: T;
+    title: string;
+    body: string;
+    /** The card opens something (a picker) rather than only choosing. */
+    hasChevron?: boolean;
+  }[];
   /** Null until the person taps one; nothing is chosen for them. */
   value: T | null;
   onChange: (value: T) => void;
@@ -40,16 +46,24 @@ function ChoiceCards<T extends string>({
               <span className='text-[15px] leading-[1.125rem] font-medium'>
                 {option.title}
               </span>
-              <span
-                aria-hidden='true'
-                className={join(
-                  'grid size-5 shrink-0 place-items-center rounded-full border',
-                  isChosen
-                    ? 'border-primary bg-primary text-primary-foreground'
-                    : 'border-border',
+              <span className='flex shrink-0 items-center gap-1'>
+                <span
+                  aria-hidden='true'
+                  className={join(
+                    'grid size-5 shrink-0 place-items-center rounded-full border',
+                    isChosen
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-border',
+                  )}
+                >
+                  {isChosen && <Check className='size-3.5' />}
+                </span>
+                {option.hasChevron && (
+                  <ChevronRight
+                    className='text-muted-foreground size-4'
+                    aria-hidden='true'
+                  />
                 )}
-              >
-                {isChosen && <Check className='size-3.5' />}
               </span>
             </span>
             <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>

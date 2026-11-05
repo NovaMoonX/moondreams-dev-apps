@@ -591,6 +591,8 @@ export interface ReorderItemsInput {
   >[];
   summary: string;
   effectiveFrom: number;
+  /** For each moved event (`horizon`), the id of the version in force it was read from. Its new versions are named after it and the save is refused when one is taken, so a second device's edit of the same version is not overwritten. */
+  baseVersionIds?: Record<string, string>;
 }
 
 /**
@@ -626,10 +628,14 @@ export async function reorderItems(
     itemIds: input.moves.map((move) => move.itemId),
     sealed: changeSealed,
   };
-  const batch = writeBatch(db);
-  writes.forEach(({ move, segment }, index) => {
-    const version: PlanVersionDoc = {
-      id: generateUuid(),
+  const versions = writes.map(({ move, segment }, index): PlanVersionDoc => {
+    const base = input.baseVersionIds?.[move.itemId];
+    const stretch = move.segments.indexOf(segment);
+    return {
+      id:
+        move.kind === 'horizon' && base !== undefined
+          ? getNextVersionId(base, stretch)
+          : generateUuid(),
       itemId: move.itemId,
       kind: move.kind,
       createdAt: now,
@@ -638,10 +644,22 @@ export async function reorderItems(
       changeId,
       sealed: versionsSealed[index],
     };
-    batch.set(itemPath(uid, 'versions', version.id), version);
   });
-  batch.set(itemPath(uid, 'changes', changeId), change);
-  await batch.commit();
+  const guarded = versions.filter(
+    ({ kind, itemId }) =>
+      kind === 'horizon' && input.baseVersionIds?.[itemId] !== undefined,
+  );
+  await runTransaction(db, async (transaction) => {
+    const taken = await Promise.all(
+      guarded.map(({ id }) => transaction.get(itemPath(uid, 'versions', id))),
+    );
+    if (taken.some((snapshot) => snapshot.exists()))
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
+    versions.forEach((version) =>
+      transaction.set(itemPath(uid, 'versions', version.id), version),
+    );
+    transaction.set(itemPath(uid, 'changes', changeId), change);
+  });
 }
 
 export interface SetGroupPriorityInput {

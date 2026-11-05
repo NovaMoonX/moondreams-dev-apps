@@ -720,7 +720,10 @@ function CostSheet({
             label={MAKE_BILL_WORDS.openBill(cost.name)}
             subtitle={MAKE_BILL_WORDS.nowABillSub}
             onClick={() =>
-              showOnPlan('bills', { itemId: cost.becameBillId ?? '' })
+              showOnPlan('bills', {
+                itemId: cost.becameBillId ?? '',
+                returnTo: 'horizon',
+              })
             }
           />
         )}
@@ -760,7 +763,7 @@ function CostSheet({
       {paidEntries.length > 0 && horizon.state === 'calledOff' && (
         <div className='space-y-2'>
           <p className='text-muted-foreground text-sm'>
-            {HORIZON_END_WORDS.calledOffTakeBack(horizon.name)}
+            {HORIZON_END_WORDS.calledOffHere}
           </p>
           <Button type='button' variant='secondary' onClick={onBringBack}>
             {HORIZON_END_WORDS.bringBackRow}

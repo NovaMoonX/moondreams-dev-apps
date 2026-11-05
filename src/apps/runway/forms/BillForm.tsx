@@ -596,6 +596,26 @@ const formatBringDates = (dates: readonly DateOnly[]) => {
   );
 };
 
+const CoversLine = ({
+  item,
+  cents,
+  dates,
+}: {
+  item: string;
+  cents: number;
+  dates: readonly DateOnly[];
+}) => (
+  <p className='text-sm'>
+    <MaskedText>
+      {MAKE_BILL_WORDS.covers(
+        item,
+        formatCents(cents),
+        formatBringDates(dates),
+      )}
+    </MaskedText>
+  </p>
+);
+
 function BillFormBody({
   onStartOver,
   isOpen,
@@ -1846,7 +1866,18 @@ function BillFormBody({
               </>
             )}
             {fromCost && !isAsking && previewJson !== null && (
-              <EffectPreview changeJson={previewJson} />
+              <EffectPreview
+                changeJson={previewJson}
+                lead={
+                  bringChoice === 'yes' && bringDates.length > 0 ? (
+                    <CoversLine
+                      item={itemName}
+                      cents={heldCents}
+                      dates={bringDates}
+                    />
+                  ) : null
+                }
+              />
             )}
             {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
