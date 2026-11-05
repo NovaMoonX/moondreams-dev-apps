@@ -1,0 +1,51 @@
+name: Browser checks
+# Checks that drive a real browser, each run only when the PR touches what it guards.
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/checks/backHistory.ts'
+      - 'scripts/checks/backHistory/**'
+      - 'scripts/checks/staleChunk.ts'
+      - 'vite.config.ts'
+      - 'firebase.json'
+      - 'package-lock.json'
+      - '.github/workflows/browser-checks.yml'
+jobs:
+  browser_checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Pick the checks this PR needs
+        id: pick
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          existing=$(echo "$changed" | while read -r f; do [ -f "$f" ] && echo "$f"; done)
+          history=false
+          if echo "$changed" | grep -qE '^(src/hooks/useBackHistory\.ts|scripts/checks/backHistory|\.github/workflows/browser-checks\.yml)'; then history=true; fi
+          # A file that calls the history helpers or writes a kept mark can break a door.
+          if [ -n "$existing" ] && echo "$existing" | grep -E '\.(ts|tsx)$' | xargs -r grep -lE 'afterBackLayersClose|keepEntryFor|keptFor' >/dev/null; then history=true; fi
+          stale=false
+          if echo "$changed" | grep -qE '^(src/screens/ErrorBoundary\.tsx|src/lib/app/appUpdate\.ts|src/main\.tsx|src/App\.tsx|src/routes/|vite\.config\.ts|firebase\.json|package-lock\.json|scripts/checks/staleChunk\.ts|\.github/workflows/browser-checks\.yml)'; then stale=true; fi
+          echo "history=$history" >> "$GITHUB_OUTPUT"
+          echo "stale=$stale" >> "$GITHUB_OUTPUT"
+          echo "back-history: $history, stale-chunk: $stale"
+      - uses: actions/setup-node@v4
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies and Chromium
+        if: steps.pick.outputs.history == 'true' || steps.pick.outputs.stale == 'true'
+        run: |
+          npm ci
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+      - run: npm run check:back-history
+        if: steps.pick.outputs.history == 'true'
+      - run: npm run check:stale-chunk
+        if: steps.pick.outputs.stale == 'true'
