@@ -4,6 +4,7 @@ import { Landmark, RefreshCw } from 'lucide-react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
+import { useAppSelector } from '@/store';
 import { LINK_WORDS } from '@apps/runway/constants';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
 import { syncLinks } from '@apps/runway/store/actions/linkActions';
@@ -19,9 +20,14 @@ function LinkToBankRow({ linkId, onOpen }: LinkToBankRowProps) {
   const { addToast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const canLink = useCanLinkBank();
+  const isUnlinked = useAppSelector(
+    (state) =>
+      state.runway.links.find((entry) => entry.id === linkId)?.status ===
+      'revoked',
+  );
   if (!canLink) return null;
 
-  if (linkId === null) {
+  if (linkId === null || isUnlinked) {
     return (
       <ActionRow
         isGrouped

@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
@@ -9,6 +10,7 @@ import {
   loadKeyringOrFail,
   requireLinkCaller,
 } from './link/linkShared.js';
+import { finishRevokedLinks } from './link/revokeGrant.js';
 import { syncRunwayLink, type LinkSyncResult } from './link/syncRunwayLink.js';
 
 if (getApps().length === 0) {
@@ -16,8 +18,7 @@ if (getApps().length === 0) {
 }
 
 /**
- * `{}` → `{ results: [{ linkId, state, created, updated, removed }] }`: brings in what is new from every active link of
- * the caller. Safe to call again at any time; a repeat changes nothing.
+ * `{}` → `{ results: [{ linkId, state, created, updated, removed }] }`: every active link of the caller, plus a retry of any revoke the bank refused. Safe to repeat.
  */
 export const syncRunwayLinks = onCall(
   {
@@ -35,11 +36,17 @@ export const syncRunwayLinks = onCall(
       .collection(`apps/runway/plans/${uid}/links`)
       .where('status', '==', 'active')
       .get();
-    const results: LinkSyncResult[] = await Promise.all(
-      links.docs.map((link) =>
-        syncRunwayLink(firestore, keyring, uid, link.id),
-      ),
-    );
+    const [results] = await Promise.all([
+      Promise.all(
+        links.docs.map((link) =>
+          syncRunwayLink(firestore, keyring, uid, link.id),
+        ),
+      ) as Promise<LinkSyncResult[]>,
+      finishRevokedLinks(firestore, keyring, uid).catch(() => {
+        logger.warn('runway.link.revokeRetryFailed');
+        return 0;
+      }),
+    ]);
     return { results };
   },
 );

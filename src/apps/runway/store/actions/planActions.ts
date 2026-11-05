@@ -11,6 +11,7 @@ import {
   linkTrackingPeriod,
   startTrackingPeriod,
   stopTrackingPeriod,
+  unlinkTrackingPeriod,
 } from '@apps/runway/engine/level';
 import { sealJson } from '@apps/runway/security';
 import { getLedgerMark } from '@apps/runway/store/actions/closingActions';
@@ -249,6 +250,46 @@ export async function moveToLink(
     transaction.set(subPath(uid, 'changes', changeId), {
       id: changeId,
       kind: 'levelMove',
+      createdAt: now,
+      effectiveFrom: null,
+      itemIds: [],
+      sealed: changeSealed,
+    } satisfies ChangeDoc);
+  });
+}
+
+/** Records an unlink in the change log; when it was the last bank and the plan is at Link, also moves it down to Track in the same transaction (a `levelMove`). */
+export async function recordUnlink(
+  uid: string,
+  encryption: RunwayEncryption,
+  institutionNames: string,
+  isLastBank: boolean,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const changeSealed = await sealJson(
+    {
+      summary: `Unlinked ${institutionNames}; new purchases stop. What came in stays.`,
+    } satisfies ChangeSealed,
+    encryption,
+  );
+  const ref = planPath(uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
+    const isMovingDown = isLastBank && getLevel(periods) === 'link';
+    if (isMovingDown) {
+      const next = unlinkTrackingPeriod(periods);
+      if ('error' in next) throw new Error(next.error);
+      transaction.update(ref, {
+        trackingPeriods: next.periods,
+        updatedAt: now,
+      });
+    }
+    transaction.set(subPath(uid, 'changes', changeId), {
+      id: changeId,
+      kind: isMovingDown ? 'levelMove' : 'accountChange',
       createdAt: now,
       effectiveFrom: null,
       itemIds: [],

@@ -100,3 +100,25 @@ export function linkTrackingPeriod(
     ],
   };
 }
+
+/** Takes the open period back from Link to Track, or says why not (not tracking, or no bank is linked). The closed day it was linked from is kept in the change log, not here. */
+export function unlinkTrackingPeriod(
+  periods: readonly TrackingPeriod[],
+): { periods: TrackingPeriod[] } | { error: string } {
+  const open = getOpenPeriod(periods);
+  if (open === null) {
+    return {
+      error:
+        'Tracking is off, probably from another device. Reopen Settings to see where it stands.',
+    };
+  }
+  if ((open.linkedFrom ?? null) === null) {
+    return {
+      error:
+        'No bank is linked any more, probably from another device. Reopen Settings to see where it stands.',
+    };
+  }
+  return {
+    periods: [...periods.slice(0, -1), { ...open, linkedFrom: null }],
+  };
+}

@@ -35,7 +35,7 @@ export const FIXTURE_USERS = {
     email: 'taylor@example.test',
     displayName: 'Taylor Brooks',
     label: 'Taylor',
-    apps: ['Nine Lives', 'Waypoint'],
+    apps: ['Nine Lives', 'Waypoint', 'Runway'],
   },
   goingOnceSeller: {
     uid: 'seed-going-once-seller',
