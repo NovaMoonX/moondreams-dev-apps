@@ -597,8 +597,9 @@ export interface ReorderItemsInput {
 
 /**
  * Saves a new funding order as one whole-payload version per stretch of each moved item (one for an
- * item with one version in force) and one change entry for the whole save, in a single batch of at most
- * 450 versions. Nothing already written is touched, and no amount or date changes.
+ * item with one version in force) and one change entry for the whole save, at most 450 versions. A save
+ * that moves an event is a transaction refused when its version changed elsewhere; any other save stays a
+ * batch so it still queues offline. Nothing already written is touched, and no amount or date changes.
  */
 export async function reorderItems(
   uid: string,
@@ -649,6 +650,15 @@ export async function reorderItems(
     ({ kind, itemId }) =>
       kind === 'horizon' && input.baseVersionIds?.[itemId] !== undefined,
   );
+  if (guarded.length === 0) {
+    const batch = writeBatch(db);
+    versions.forEach((version) =>
+      batch.set(itemPath(uid, 'versions', version.id), version),
+    );
+    batch.set(itemPath(uid, 'changes', changeId), change);
+    await batch.commit();
+    return;
+  }
   await runTransaction(db, async (transaction) => {
     const taken = await Promise.all(
       guarded.map(({ id }) => transaction.get(itemPath(uid, 'versions', id))),
