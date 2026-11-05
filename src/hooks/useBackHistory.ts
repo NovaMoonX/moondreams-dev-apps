@@ -274,7 +274,7 @@ export function afterBackLayersClose(action: () => void) {
       window.removeEventListener('popstate', onPop);
       isSteppingBack = false;
       // A dead-entry step with nothing under it never lands; the sheets are closed all the same.
-      if (isLeavingDead && readEntry().key === null) action();
+      if (isLeavingDead) action();
     }, BACK_STEP_TIMEOUT_MS);
     window.addEventListener('popstate', onPop, { once: true });
     if (isLeavingDead) return;

@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 
 import { build } from 'esbuild';
 
-// A door in a sheet (`afterBackLayersClose`) lands where it points, inside the app, after every way a phone reaches it; it needs Playwright's Chromium, which cloud sessions have.
+// A door in a sheet (`afterBackLayersClose`) lands where it points, inside the app, in a stand-in app on the real hook (not Runway or its URL library) after Back, a reload and an update's restart; it needs Playwright's Chromium, which cloud sessions have.
 interface Page {
   goto: (url: string) => Promise<unknown>;
   reload: () => Promise<unknown>;
@@ -17,9 +17,7 @@ interface Page {
     options: { name: string },
   ) => { click: () => Promise<void> };
   context: () => {
-    newCDPSession: (
-      page: Page,
-    ) => Promise<{
+    newCDPSession: (page: Page) => Promise<{
       send: (method: string, params: object) => Promise<unknown>;
     }>;
   };
