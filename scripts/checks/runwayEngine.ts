@@ -7197,7 +7197,7 @@ const version = (
         cents,
         spilled,
         everyone,
-        [spilled].concat(
+        ([spilled] as OpenPurchase[]).concat(
           earlier.map((lines, at) => ({
             ...purchase(`r${at}`, day(2), [], 'sp'),
             lines,
