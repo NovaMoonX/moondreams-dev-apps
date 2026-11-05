@@ -35,8 +35,17 @@ const fromChoiceValue = (value: string): LinkChoice => {
   };
 };
 
-const toBankAndDigits = (bank: string, lastFour: string | null | undefined) =>
-  [bank, lastFour ? `••${lastFour}` : null].filter(Boolean).join(' ');
+const toBankAndDigits = (
+  label: string,
+  bank: string,
+  lastFour: string | null | undefined,
+) =>
+  [
+    label.toLowerCase().startsWith(bank.toLowerCase()) ? null : bank,
+    lastFour ? `••${lastFour}` : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
 interface LinkMatchViewProps {
   rows: readonly NormalizedAccount[];
@@ -89,7 +98,11 @@ function LinkMatchView({
         .map((account) => ({
           value: `account:${account.id}`,
           label: account.name,
-          detail: toBankAndDigits(account.institution, account.lastFour),
+          detail: toBankAndDigits(
+            account.name,
+            account.institution,
+            account.lastFour,
+          ),
         })),
       ...(kind === 'account' || kind === null ? [] : cards)
         .filter(
@@ -100,7 +113,11 @@ function LinkMatchView({
         .map((card) => ({
           value: `card:${card.id}`,
           label: getCardName(card, cards),
-          detail: toBankAndDigits(card.issuer, card.lastFour),
+          detail: toBankAndDigits(
+            getCardName(card, cards),
+            card.issuer,
+            card.lastFour,
+          ),
         })),
     ];
     const first = startedFrom

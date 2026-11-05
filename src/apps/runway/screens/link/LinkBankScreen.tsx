@@ -174,7 +174,8 @@ function LinkBankScreen({
     const { cards, accounts } = store.getState().runway;
     return linking.accounts.map((row, index) => {
       const choice = choices[index] ?? { kind: 'skip' };
-      if (choice.kind === 'skip') return LINK_WORDS.confirmSkip(row.name);
+      if (choice.kind === 'skip')
+        return LINK_WORDS.confirmSkip(toRowLabel(row));
       if (choice.kind === 'new') {
         return LINK_WORDS.confirmNew(toRowLabel(row), row.kind === 'credit');
       }
@@ -303,7 +304,7 @@ function LinkBankScreen({
   const getBody = () => {
     if (step.kind === 'explain') {
       return (
-        <>
+        <div className='flex flex-1 flex-col'>
           <div className='space-y-4'>
             {startedName && (
               <p className='text-2xl font-semibold break-words'>
@@ -336,12 +337,12 @@ function LinkBankScreen({
               </Button>
             }
           />
-        </>
+        </div>
       );
     }
     if (step.kind === 'match' && session) {
       return (
-        <>
+        <div className='flex flex-1 flex-col'>
           <div className='space-y-4'>
             <div className='space-y-1'>
               <h2 className='text-2xl font-semibold'>
@@ -389,12 +390,12 @@ function LinkBankScreen({
               </Button>
             }
           />
-        </>
+        </div>
       );
     }
     if (step.kind === 'offers') {
       return (
-        <>
+        <div className='flex flex-1 flex-col'>
           <div className='space-y-4'>
             <div className='space-y-1'>
               <h2 className='text-2xl font-semibold'>
@@ -446,12 +447,12 @@ function LinkBankScreen({
               </Button>
             }
           />
-        </>
+        </div>
       );
     }
     if (step.kind === 'done') {
       return (
-        <>
+        <div className='flex flex-1 flex-col'>
           <div className='space-y-4 text-center'>
             <Landmark
               className='text-primary mx-auto mt-6 size-10'
@@ -474,7 +475,7 @@ function LinkBankScreen({
               </Button>
             }
           />
-        </>
+        </div>
       );
     }
     return null;

@@ -18,14 +18,11 @@ export function formatUpdatedAgo(at: number, now: number) {
   return formatter.format(-Math.floor(elapsed / unit[1]), unit[0]);
 }
 
-/** "Started Nov 5th · Sapphire ••6604, Total Checking ••2290": what tells one unfinished link from another at the same bank. */
+/** "Started Nov 5th · 2 accounts": one line under a Finish linking row (a newer sign-in at the bank replaces it). */
 export function describeUnfinishedLink(link: OpenLink) {
-  const accounts = link.providerAccounts
-    .map((entry) => (entry.mask ? `${entry.name} ••${entry.mask}` : entry.name))
-    .join(', ');
   return LINK_WORDS.unfinishedStarted(
     formatDateOrdinal(link.createdAt),
-    accounts,
+    link.providerAccounts.length,
   );
 }
 

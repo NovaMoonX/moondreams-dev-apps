@@ -42,6 +42,7 @@ function BankBalanceChoice({
           type='button'
           size='sm'
           variant='secondary'
+          className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           disabled={isBusy}
           onClick={onUseBanks}
         >
@@ -51,6 +52,7 @@ function BankBalanceChoice({
           type='button'
           size='sm'
           variant='secondary'
+          className="relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
           disabled={isBusy}
           onClick={onKeepMine}
         >

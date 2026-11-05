@@ -15,5 +15,5 @@ export function useLinkedFact(linkId: string | null) {
   const at = link ? (link.lastSyncAt ?? link.createdAt) : null;
   return at === null
     ? LINK_WORDS.done
-    : LINK_WORDS.rowLinked(formatUpdatedAgo(at, now));
+    : LINK_WORDS.rowLinked(formatUpdatedAgo(at, now).replace(/ /g, '\u00a0'));
 }

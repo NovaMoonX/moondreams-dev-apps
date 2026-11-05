@@ -3934,8 +3934,8 @@ export const LINK_WORDS = {
   settingsRow: 'Link a bank',
   settingsRowHelp: 'Bring in your accounts and balances',
   unfinishedRow: (bank: string) => `Finish linking ${bank}`,
-  unfinishedStarted: (date: string, accounts: string) =>
-    accounts === '' ? `Started ${date}` : `Started ${date} \u00b7 ${accounts}`,
+  unfinishedStarted: (date: string, count: number) =>
+    `Started ${date} \u00b7 ${count === 1 ? '1 account' : `${count} accounts`}`,
   discard: 'Discard this link',
   discardTitle: (bank: string) => `Discard this ${bank} link?`,
   discardMessage:
@@ -3983,7 +3983,7 @@ export const LINK_WORDS = {
   kindOther: 'Other',
   useBankTitle: 'Use the bank\u2019s balance?',
   useBankHelp: 'These differ from what Runway has.',
-  useBankLater: 'Not sure yet? You can choose later from the account or card.',
+  useBankLater: 'Not sure yet? You can choose later from the account.',
   yours: 'Yours',
   bank: 'Bank',
   useBanks: 'Use the bank\u2019s',
