@@ -1,13 +1,6 @@
 /**
- * Throwaway spike for the bank-data provider. Never deployed and never imported by the app.
- *
- *   tsx scripts/runway/plaidSandbox.ts institutions
- *   tsx scripts/runway/plaidSandbox.ts flow [--webhook-url <https url>]
- *   tsx scripts/runway/plaidSandbox.ts verify <jwt from the Plaid-Verification header> <file holding the raw body>
- *
- * Reads RUNWAY_PLAID_CLIENT_ID, RUNWAY_PLAID_SECRET and RUNWAY_PLAID_ENV (sandbox unless set to production)
- * from the environment. `institutions` creates nothing, so it is safe with Trial keys; `flow` refuses to run
- * outside sandbox, since a Trial Item is never given back. Nothing prints a key, a secret or an access token.
+ * Throwaway bank-data spike, never deployed: `institutions`, `flow [--webhook-url <https url>]` (sandbox only)
+ * and `verify <jwt> <raw body file>`, with keys from the environment; it never prints a key or token.
  */
 import {
   createHash,
@@ -150,15 +143,72 @@ async function syncAll(
   };
 }
 
+const isNotReady = (error: unknown) =>
+  error instanceof Error && error.message.includes('PRODUCT_NOT_READY');
+
 async function syncUntilReady(
   credentials: Credentials,
   accessToken: string,
   triesLeft: number,
 ): Promise<SyncPage> {
-  const page = await syncAll(credentials, accessToken, null);
-  if (page.added.length > 0 || triesLeft <= 1) return page;
+  const page = await syncAll(credentials, accessToken, null).catch(
+    (error: unknown) => {
+      if (isNotReady(error) && triesLeft > 1) return null;
+      throw error;
+    },
+  );
+  if (page && (page.added.length > 0 || triesLeft <= 1)) return page;
   await wait(SYNC_WAIT_MS);
   return syncUntilReady(credentials, accessToken, triesLeft - 1);
+}
+
+async function readItem(
+  credentials: Credentials,
+  accessToken: string,
+  webhookUrl: string | null,
+) {
+  const { accounts } = await call<{ accounts: Account[] }>(
+    credentials,
+    '/accounts/get',
+    { access_token: accessToken },
+  );
+  console.log(`3. Accounts: ${accounts.length}`);
+  accounts.forEach((account) =>
+    console.log(
+      `   ${account.name} ••${account.mask ?? '----'} ${account.type}/${account.subtype ?? '-'}`,
+    ),
+  );
+  const { accounts: balances } = await call<{ accounts: Account[] }>(
+    credentials,
+    '/accounts/balance/get',
+    { access_token: accessToken },
+  );
+  console.log('4. Balances read live:');
+  balances.forEach((account) =>
+    console.log(
+      `   ••${account.mask ?? '----'} current=${account.balances.current} available=${account.balances.available}`,
+    ),
+  );
+  const firstSync = await syncUntilReady(credentials, accessToken, SYNC_TRIES);
+  console.log(
+    `5. Cursor sync: added=${firstSync.added.length} modified=${firstSync.modified.length} removed=${firstSync.removed.length}`,
+  );
+  const nextSync = await syncAll(
+    credentials,
+    accessToken,
+    firstSync.next_cursor,
+  );
+  console.log(
+    `   Again from the saved cursor: added=${nextSync.added.length} (expect 0)`,
+  );
+  if (!webhookUrl) return;
+  await call(credentials, '/sandbox/item/fire_webhook', {
+    access_token: accessToken,
+    webhook_code: 'SYNC_UPDATES_AVAILABLE',
+  });
+  console.log(
+    `6. Fired SYNC_UPDATES_AVAILABLE to ${webhookUrl}; check it with the verify command`,
+  );
 }
 
 async function runFlow(credentials: Credentials, webhookUrl: string | null) {
@@ -180,55 +230,12 @@ async function runFlow(credentials: Credentials, webhookUrl: string | null) {
     { public_token: publicToken },
   );
   console.log('2. Exchanged for an access token (not printed)');
-  const { accounts } = await call<{ accounts: Account[] }>(
-    credentials,
-    '/accounts/get',
-    {
-      access_token: accessToken,
-    },
-  );
-  console.log(`3. Accounts: ${accounts.length}`);
-  accounts.forEach((account) =>
-    console.log(
-      `   ${account.name} ••${account.mask ?? '----'} ${account.type}/${account.subtype ?? '-'}`,
-    ),
-  );
-  const { accounts: balances } = await call<{ accounts: Account[] }>(
-    credentials,
-    '/accounts/balance/get',
-    {
-      access_token: accessToken,
-    },
-  );
-  console.log('4. Balances read live:');
-  balances.forEach((account) =>
-    console.log(
-      `   ••${account.mask ?? '----'} current=${account.balances.current} available=${account.balances.available}`,
-    ),
-  );
-  const firstSync = await syncUntilReady(credentials, accessToken, SYNC_TRIES);
-  console.log(
-    `5. Cursor sync: added=${firstSync.added.length} modified=${firstSync.modified.length} removed=${firstSync.removed.length}`,
-  );
-  const nextSync = await syncAll(
-    credentials,
-    accessToken,
-    firstSync.next_cursor,
-  );
-  console.log(
-    `   Again from the saved cursor: added=${nextSync.added.length} (expect 0)`,
-  );
-  if (webhookUrl) {
-    await call(credentials, '/sandbox/item/fire_webhook', {
-      access_token: accessToken,
-      webhook_code: 'SYNC_UPDATES_AVAILABLE',
-    });
-    console.log(
-      `6. Fired SYNC_UPDATES_AVAILABLE to ${webhookUrl}; verify it with the verify command`,
-    );
+  try {
+    await readItem(credentials, accessToken, webhookUrl);
+  } finally {
+    await call(credentials, '/item/remove', { access_token: accessToken });
+    console.log('Removed the sandbox Item.');
   }
-  await call(credentials, '/item/remove', { access_token: accessToken });
-  console.log('Removed the sandbox Item.');
 }
 
 function decodePart(part: string): Record<string, unknown> {
@@ -238,55 +245,68 @@ function decodePart(part: string): Record<string, unknown> {
   >;
 }
 
+interface PlaidKey extends JsonWebKey {
+  expired_at?: number | null;
+}
+
 async function verifyWebhook(
   credentials: Credentials,
   jwt: string,
   bodyPath: string,
 ) {
-  const [headerPart, payloadPart, signaturePart] = jwt.split('.');
+  const parts = jwt.split('.');
+  if (parts.length !== 3) throw new Error('Refused: not a three-part JWT.');
+  const [headerPart, payloadPart, signaturePart] = parts;
   const header = decodePart(headerPart);
   if (header.alg !== 'ES256')
     throw new Error(`Refused: alg is ${String(header.alg)}, not ES256.`);
-  const { key } = await call<{ key: JsonWebKey }>(
+  const { key } = await call<{ key: PlaidKey }>(
     credentials,
     '/webhook_verification_key/get',
-    {
-      key_id: header.kid,
-    },
+    { key_id: header.kid },
   );
+  if (key.expired_at) throw new Error('Refused: the signing key has expired.');
   const isSigned = verifySignature(
     'sha256',
     Buffer.from(`${headerPart}.${payloadPart}`),
     { key: createPublicKey({ key, format: 'jwk' }), dsaEncoding: 'ieee-p1363' },
     Buffer.from(signaturePart, 'base64url'),
   );
+  if (!isSigned) throw new Error('Refused: the signature does not verify.');
   const payload = decodePart(payloadPart);
   const ageSeconds = Math.floor(Date.now() / 1000) - Number(payload.iat);
+  if (!(ageSeconds <= WEBHOOK_MAX_AGE_S))
+    throw new Error(`Refused: issued ${ageSeconds}s ago.`);
   const bodyHash = createHash('sha256')
     .update(readFileSync(bodyPath))
     .digest('hex');
-  console.log(`signature valid: ${isSigned}`);
-  console.log(`age: ${ageSeconds}s (refuse over ${WEBHOOK_MAX_AGE_S}s)`);
+  if (bodyHash !== payload.request_body_sha256)
+    throw new Error(
+      'Refused: the body hash does not match request_body_sha256 (the file must hold the exact raw body).',
+    );
   console.log(
-    `body hash matches request_body_sha256: ${bodyHash === payload.request_body_sha256}`,
+    `Verified: ES256 signature, ${ageSeconds}s old, body hash matches.`,
   );
+}
+
+function readWebhookUrl(args: string[]): string | null {
+  const urlIndex = args.indexOf('--webhook-url');
+  if (urlIndex < 0) return null;
+  const url = args[urlIndex + 1] ?? '';
+  if (!url.startsWith('https://'))
+    throw new Error('--webhook-url needs an https URL after it.');
+  return url;
 }
 
 async function main() {
   const [command, ...rest] = process.argv.slice(2);
   const credentials = readCredentials();
   if (command === 'institutions') return listInstitutions(credentials);
-  if (command === 'flow') {
-    const urlIndex = rest.indexOf('--webhook-url');
-    return runFlow(
-      credentials,
-      urlIndex >= 0 ? (rest[urlIndex + 1] ?? null) : null,
-    );
-  }
+  if (command === 'flow') return runFlow(credentials, readWebhookUrl(rest));
   if (command === 'verify' && rest.length === 2)
     return verifyWebhook(credentials, rest[0], rest[1]);
   throw new Error(
-    'Usage: plaidSandbox.ts institutions | flow [--webhook-url <url>] | verify <jwt> <bodyFile>',
+    'Usage: plaidSandbox.ts institutions | flow [--webhook-url <https url>] | verify <jwt> <raw body file>',
   );
 }
 
