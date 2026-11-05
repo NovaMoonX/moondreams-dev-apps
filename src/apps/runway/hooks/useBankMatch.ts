@@ -86,7 +86,9 @@ export function useMergeWithUndo() {
     addToast({
       title:
         merged.length === 1
-          ? NEEDS_HOME_WORDS.matchedOne(getPurchaseTitle(merged[0].typed, nameOf))
+          ? NEEDS_HOME_WORDS.matchedOne(
+              getPurchaseTitle(merged[0].typed, nameOf),
+            )
           : NEEDS_HOME_WORDS.matchedMany(merged.length),
       description: NEEDS_HOME_WORDS.matchedSub,
       type: 'success',
