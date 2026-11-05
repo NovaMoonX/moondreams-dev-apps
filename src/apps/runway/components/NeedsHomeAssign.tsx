@@ -122,6 +122,7 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
             detail={NEEDS_HOME_WORDS.sendHere}
             isPrivate={false}
             ariaLabel={`${nameOf(id)}, ${NEEDS_HOME_WORDS.sendHere}`}
+            isAction
             onOpen={() => void send(id)}
           />
         ))}

@@ -8,9 +8,15 @@ import { useAuth } from '@/hooks/useAuth';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
+import {
+  assignPurchase,
+  returnPurchaseToWaiting,
+} from '@apps/runway/store/actions/purchaseActions';
 import type { OpenPurchase } from '@apps/runway/types';
-import { describePurchaseAssigned } from '@apps/runway/utils/purchaseText';
+import {
+  describePurchaseAssigned,
+  describePurchaseReturned,
+} from '@apps/runway/utils/purchaseText';
 
 interface LeaveOutRowProps {
   purchase: OpenPurchase;
@@ -29,14 +35,39 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
     setIsBusy(true);
     setError(null);
     try {
-      await assignPurchase(
-        user.uid,
-        await getRunwayEncryption(user.uid),
+      const uid = user.uid;
+      const updatedAt = await assignPurchase(
+        uid,
+        await getRunwayEncryption(uid),
         purchase,
         [],
         describePurchaseAssigned(purchase, [], () => ''),
       );
-      addToast({ title: NEEDS_HOME_WORDS.leftOut, type: 'success' });
+      const leftOut = { ...purchase, lines: [], needsHome: false, updatedAt };
+      addToast({
+        title: NEEDS_HOME_WORDS.leftOut,
+        type: 'success',
+        action: {
+          label: NEEDS_HOME_WORDS.undo,
+          onClick: () =>
+            void getRunwayEncryption(uid)
+              .then((encryption) =>
+                returnPurchaseToWaiting(
+                  uid,
+                  encryption,
+                  leftOut,
+                  describePurchaseReturned(leftOut, () => ''),
+                ),
+              )
+              .catch((undoError: unknown) =>
+                addToast({
+                  title: NEEDS_HOME_WORDS.undoFailed,
+                  description: getErrorMessage(undoError, ''),
+                  type: 'error',
+                }),
+              ),
+        },
+      });
       onDone();
     } catch (leaveError) {
       setError(getErrorMessage(leaveError, NEEDS_HOME_WORDS.failed));
@@ -50,7 +81,12 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
       isRoomy
       icon={<Ban />}
       label={NEEDS_HOME_WORDS.leaveOut}
-      subtitle={error ?? NEEDS_HOME_WORDS.leaveOutSub}
+      subtitle={
+        error ??
+        (purchase.amountCents > 0
+          ? NEEDS_HOME_WORDS.leaveOutSub
+          : NEEDS_HOME_WORDS.leaveOutMoneyInSub)
+      }
       isDisabled={isBusy}
       onClick={() => void leaveOut()}
     />

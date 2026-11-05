@@ -60,6 +60,8 @@ interface ItemRowProps {
   figureWord?: string | null;
   /** Opens the row's sheet; a row without it has nothing behind it and no chevron. */
   onOpen?: () => void;
+  /** A row whose tap does the thing itself (files a purchase) opens nothing, so it draws no chevron. */
+  isAction?: boolean;
   ariaLabel?: string;
   /** What a screen reader hears while private amounts are hidden; defaults to the name alone. */
   hiddenAriaLabel?: string;
@@ -90,6 +92,7 @@ function ItemRow({
   isPrivate = true,
   figureWord,
   onOpen,
+  isAction = false,
   ariaLabel: givenAriaLabel,
   hiddenAriaLabel,
   tick,
@@ -378,7 +381,7 @@ function ItemRow({
       >
         {badge}
         {text}
-        {chevron}
+        {!isAction && chevron}
       </Button>
     </li>
   );

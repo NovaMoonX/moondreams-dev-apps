@@ -564,7 +564,7 @@ export async function assignPurchase(
   return now;
 }
 
-/** Puts a purchase sent from Needs a home back to waiting, on its one Free to Spend line; resolves with the new `updatedAt`. */
+/** Puts a purchase sent or left out from Needs a home back to waiting as the bank brought it in: a charge on its one Free to Spend line, money in on none. */
 export const returnPurchaseToWaiting = (
   uid: string,
   encryption: RunwayEncryption,
@@ -575,7 +575,9 @@ export const returnPurchaseToWaiting = (
     uid,
     encryption,
     previous,
-    [{ envelopeId: null, cents: previous.amountCents, via: 'free' }],
+    previous.amountCents > 0
+      ? [{ envelopeId: null, cents: previous.amountCents, via: 'free' }]
+      : [],
     summary,
     true,
   );
