@@ -1280,6 +1280,7 @@ async function writeSeedAccounts(
         lastFour: '1177',
         isPullAccount: true,
         balanceCents: 65_000,
+        balanceOn: balanceOn - 14 * DAY_MS,
       },
     },
     {
@@ -1402,6 +1403,7 @@ async function writeSeedIncome(
   context: SeedContext,
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
+  payAccountId: string | null = null,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -1417,6 +1419,7 @@ async function writeSeedIncome(
     amount: { lowCents: 214_000, highCents: 214_000 },
     ending: { onDate: null, afterCount: 6 },
     stanceOverride: null,
+    accountId: payAccountId,
     pairings: [
       {
         targetItemId: 'seed-envelope-groceries',
@@ -1431,6 +1434,7 @@ async function writeSeedIncome(
     amount: { lowCents: 90_000, highCents: 90_000 },
     ending: { onDate: null, afterCount: null },
     stanceOverride: null,
+    accountId: null,
     pairings: [
       {
         targetItemId: 'seed-envelope-savings',
@@ -1450,6 +1454,7 @@ async function writeSeedIncome(
     amount: { lowCents: 12_000, highCents: 18_000 },
     ending: { onDate: null, afterCount: null },
     stanceOverride: null,
+    accountId: null,
     pairings: [
       {
         targetItemId: 'seed-bill-rent',
@@ -2783,7 +2788,12 @@ async function seedTrackingPlan(
   await batch.commit();
 
   const documents = [
-    await writeSeedIncome(context, owner.uid, encryption),
+    await writeSeedIncome(
+      context,
+      owner.uid,
+      encryption,
+      'seed-account-checking-a',
+    ),
     await writeSeedEnvelopes(context, owner.uid, encryption, true),
     await writeSeedBills(context, owner.uid, encryption),
     await writeSeedGoals(context, owner.uid, encryption),

@@ -123,6 +123,7 @@ export function toIncomeValue(
         : DEFAULT_PAY_LINE_NAME,
     amount: toRange(item.amountCents, null),
     stanceOverride: null,
+    accountId: null,
     schedule,
     ending: { onDate: null, afterCount: null },
     startDate: anchor ?? today,

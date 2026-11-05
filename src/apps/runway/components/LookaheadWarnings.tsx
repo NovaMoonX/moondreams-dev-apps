@@ -13,6 +13,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  ACCOUNT_MOVE_WORDS,
   CARD_WORDS,
   FIX_ROWS_SHOWN,
   FIX_WORDS,
@@ -30,13 +31,20 @@ import {
   getCardName,
 } from '@apps/runway/utils/cardText';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import type { AccountMove } from '@apps/runway/engine/moves';
 import type { DueCard } from '@apps/runway/engine/cards';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
 import CardSheets, {
   type OpenedCard,
 } from '@apps/runway/components/CardSheets';
 import DueCardRow from '@apps/runway/components/DueCardRow';
-import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import MoveWarningRow from '@apps/runway/components/MoveWarningRow';
+import {
+  selectAccounts,
+  selectAllCards,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import type { HomeMoves } from '@apps/runway/store/selectors/moveSelectors';
+import { describeMoveSummary } from '@apps/runway/utils/moveText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { useOpenIncomeFix } from '@apps/runway/hooks/useOpenIncomeFix';
@@ -47,13 +55,18 @@ interface LookaheadWarningsProps {
   lookahead: Lookahead | null;
   /** Cards coming due with money waiting; each is its own row beside the plan's problems. */
   dueCards?: readonly DueCard[];
+  /** The latest confirmed day's moves still to do. */
+  moves?: HomeMoves | null;
 }
 
 type WarningRow =
-  { kind: 'plan'; group: ProblemGroup } | { kind: 'card'; due: DueCard };
+  | { kind: 'plan'; group: ProblemGroup }
+  | { kind: 'card'; due: DueCard }
+  | { kind: 'move'; dayKey: string; move: AccountMove };
 
 const getRowKey = (row: WarningRow) => {
   if (row.kind === 'card') return `card:${row.due.card.id}`;
+  if (row.kind === 'move') return `move:${row.dayKey}:${row.move.accountId}`;
   const { group } = row;
   if (group.kind === 'undated') return 'undated';
   if (group.kind === 'horizon') {
@@ -97,6 +110,7 @@ function IncomeEndRow({ text }: { text: string }) {
 function LookaheadWarnings({
   lookahead,
   dueCards = [],
+  moves = null,
 }: LookaheadWarningsProps) {
   const { isFixesOpen, openFixes, closeFixes } = useRunwayUrlState();
   const { isHidden } = useValuesHidden();
@@ -104,6 +118,7 @@ function LookaheadWarnings({
   const [isAllShown, setIsAllShown] = useState(false);
   const [paying, setPaying] = useState<OpenedCard | null>(null);
   const allCards = useAppSelector(selectAllCards);
+  const accounts = useAppSelector(selectAccounts);
   const undated = lookahead?.undated ?? [];
   const today = todayAsUtcDate(useNow(60_000));
   const rows: WarningRow[] = [
@@ -123,6 +138,14 @@ function LookaheadWarnings({
         on: due.dueOn,
         row: { kind: 'card', due } satisfies WarningRow,
       })),
+      ...(moves?.moves ?? []).map((move) => ({
+        on: move.byOn,
+        row: {
+          kind: 'move',
+          dayKey: moves?.dayKey ?? '',
+          move,
+        } satisfies WarningRow,
+      })),
     ]
       .sort((a, b) => a.on - b.on)
       .map(({ row }) => row),
@@ -139,13 +162,21 @@ function LookaheadWarnings({
   // A card coming due is not a gap in the plan, so a list of only cards is not "things to fix".
   const isCardsOnly =
     rows.length > 0 && rows.every((row) => row.kind === 'card');
+  const isMovesOnly =
+    rows.length > 0 && rows.every((row) => row.kind === 'move');
   const words = isCardsOnly
     ? {
         title: CARD_WORDS.comingDueTitle,
         one: CARD_WORDS.comingDueOne,
         many: CARD_WORDS.comingDueMany,
       }
-    : PROBLEM_WORDS;
+    : isMovesOnly
+      ? {
+          title: ACCOUNT_MOVE_WORDS.warnTitle,
+          one: ACCOUNT_MOVE_WORDS.warnOne,
+          many: ACCOUNT_MOVE_WORDS.warnMany,
+        }
+      : PROBLEM_WORDS;
   const describeDue = (due: DueCard) =>
     describeDueCard(getCardName(due.card, allCards), due);
   const openPay = (due: DueCard) => {
@@ -162,7 +193,13 @@ function LookaheadWarnings({
     ? { before: endsText ?? '', figure: null, after: '' }
     : first.kind === 'plan'
       ? describeGroupShort(first.group, isHidden)
-      : { before: describeDue(first.due), figure: null, after: '' };
+      : first.kind === 'move'
+        ? {
+            before: describeMoveSummary(first.move, accounts),
+            figure: null,
+            after: '',
+          }
+        : { before: describeDue(first.due), figure: null, after: '' };
   const more = rows.length - 1;
   const moreText = rows.every(
     (row) => row.kind === 'plan' && row.group.kind === 'day',
@@ -243,6 +280,11 @@ function LookaheadWarnings({
                     sentence={describeDue(row.due)}
                     note={describeDueNote(row.due)}
                     onOpen={() => openPay(row.due)}
+                  />
+                ) : row.kind === 'move' ? (
+                  <MoveWarningRow
+                    sentence={describeMoveSummary(row.move, accounts)}
+                    dayKey={row.dayKey}
                   />
                 ) : (
                   <ProblemRow group={row.group} />

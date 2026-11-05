@@ -23,6 +23,7 @@ import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  ACCOUNT_WORDS,
   CHANGE_WORDS,
   DEFAULT_PAY_LINE_NAME,
   FORM_DRAFT_PREFIX,
@@ -47,8 +48,10 @@ import {
   isNullableOneOf,
   isOneOf,
   isPickOrCreate,
+  isNullableText,
   isText,
   readDraftFields,
+  withDraftDefaults,
   readKeptWithChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
@@ -75,6 +78,8 @@ import {
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import {
+  selectAccounts,
+  selectIsAccountsLoaded,
   selectResolvedPlan,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -84,6 +89,8 @@ import type {
   Schedule,
   SourceSealed,
 } from '@apps/runway/types';
+import { describeAccountLine } from '@apps/runway/utils/accountText';
+import { keepOpenAccountId } from '@apps/runway/engine/accounts';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -103,21 +110,26 @@ interface IncomeFormData {
   endKind: EndKind;
   endDate: string;
   endCount: string;
+  accountId: string | null;
 }
 
 const parseIncomeDraftFields = (stored: unknown) =>
-  readDraftFields<IncomeFormData>(stored, {
-    source: isPickOrCreate,
-    payName: isText,
-    amount: isAmountDraft,
-    frequency: isNullableOneOf(INCOME_FREQUENCIES),
-    startDate: isText,
-    firstDay: isText,
-    secondDay: isText,
-    endKind: isOneOf(INCOME_ENDINGS),
-    endDate: isText,
-    endCount: isText,
-  });
+  readDraftFields<IncomeFormData>(
+    withDraftDefaults(stored, { accountId: null }),
+    {
+      source: isPickOrCreate,
+      payName: isText,
+      amount: isAmountDraft,
+      frequency: isNullableOneOf(INCOME_FREQUENCIES),
+      startDate: isText,
+      firstDay: isText,
+      secondDay: isText,
+      endKind: isOneOf(INCOME_ENDINGS),
+      endDate: isText,
+      endCount: isText,
+      accountId: isNullableText,
+    },
+  );
 
 const parseIncomeDraft = (stored: unknown) =>
   readKeptWithChange(stored, parseIncomeDraftFields);
@@ -145,6 +157,7 @@ export type IncomeStepId =
   | 'schedule'
   | 'ends'
   | 'payName'
+  | 'account'
   | 'sourceName';
 
 export type EditingIncome =
@@ -203,6 +216,7 @@ const EMPTY_PAY_LINE: PayLineSealed = {
   amount: { lowCents: 0, highCents: 0 },
   ending: { onDate: null, afterCount: null },
   stanceOverride: null,
+  accountId: null,
   pairings: [],
 };
 
@@ -283,6 +297,7 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
     endKind: 'never',
     endDate: '',
     endCount: '',
+    accountId: null,
   };
   if (editing.kind === 'source') return blank;
   const { payload } = editing;
@@ -292,6 +307,7 @@ const getEditingData = (editing: EditingIncome): IncomeFormData => {
   return {
     ...blank,
     amount: toAmountDraft(payload.amount, payload.stanceOverride),
+    accountId: payload.accountId ?? null,
     frequency: frequency ?? null,
     startDate:
       payload.schedule.anchor === null
@@ -350,6 +366,7 @@ const getDraftData = (input: CreateIncomeInput): IncomeFormData => {
           : 'never',
     endDate: ending.onDate === null ? '' : toDateInputValue(ending.onDate),
     endCount: ending.afterCount === null ? '' : String(ending.afterCount),
+    accountId: input.accountId,
   };
 };
 
@@ -368,6 +385,8 @@ function IncomeFormBody({
   const today = todayAsUtcDate();
   const resolved = useAppSelector((state) => selectResolvedPlan(state, today));
   const planStance = useAppSelector(selectStance);
+  const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const [startData] = useState<IncomeFormData>(() =>
     editing
       ? getEditingData(editing)
@@ -390,6 +409,7 @@ function IncomeFormBody({
             endKind: 'never',
             endDate: '',
             endCount: '',
+            accountId: null,
           },
   );
   const draftKey = draft
@@ -493,6 +513,46 @@ function IncomeFormBody({
         : formData.endCount === ''
           ? ''
           : `After ${formData.endCount} payments`;
+
+  const accountId = keepOpenAccountId(
+    formData.accountId,
+    openAccounts,
+    isAccountsLoaded,
+  );
+  const accountName =
+    openAccounts.find((account) => account.id === accountId)?.name ??
+    ACCOUNT_WORDS.landsInNone;
+  const accountSteps: QuestionStep[] =
+    openAccounts.length === 0
+      ? []
+      : [
+          {
+            id: 'account',
+            title: ACCOUNT_WORDS.landsInTitle,
+            summaryLabel: ACCOUNT_WORDS.landsInLabel,
+            summaryValue: accountName,
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <PillGroup
+                label={ACCOUNT_WORDS.landsInLabel}
+                options={[
+                  { value: '', label: ACCOUNT_WORDS.landsInNone },
+                  ...openAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    detail: describeAccountLine(account),
+                  })),
+                ]}
+                value={accountId ?? ''}
+                onChange={(value) => {
+                  set({ accountId: value === '' ? null : value });
+                  moveOn();
+                }}
+              />
+            ),
+          },
+        ];
 
   const sourceNameStep: QuestionStep = {
     id: 'sourceName',
@@ -686,6 +746,7 @@ function IncomeFormBody({
             ),
           },
         ]),
+    ...accountSteps,
     {
       id: 'payName',
       title: FORM_FLOW_WORDS.payNameTitle,
@@ -733,6 +794,11 @@ function IncomeFormBody({
       amount,
       ending,
       stanceOverride: getStanceOverride(data.amount),
+      accountId: keepOpenAccountId(
+        data.accountId,
+        openAccounts,
+        isAccountsLoaded,
+      ),
     };
     return result;
   };
@@ -743,10 +809,17 @@ function IncomeFormBody({
       : editing.kind === 'source'
         ? { ...editing.payload, name: formData.payName.trim() }
         : buildPayLine(formData);
+  const current =
+    editing?.kind === 'payLine'
+      ? {
+          ...editing.payload,
+          accountId: editing.payload.accountId ?? null,
+        }
+      : (editing?.payload ?? EMPTY_PAY_LINE);
   const flow = useChangeFlow({
     itemId: editing?.itemId ?? '',
     kind: editing?.kind ?? 'payLine',
-    current: editing?.payload ?? EMPTY_PAY_LINE,
+    current,
     candidate,
     onDone: onClose,
     initialNote: kept.restored?.note,
@@ -815,6 +888,11 @@ function IncomeFormBody({
       payLineName: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
       amount,
       stanceOverride: getStanceOverride(data.amount),
+      accountId: keepOpenAccountId(
+        data.accountId,
+        openAccounts,
+        isAccountsLoaded,
+      ),
       schedule,
       ending,
       startDate,

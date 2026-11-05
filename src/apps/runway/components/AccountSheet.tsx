@@ -66,12 +66,19 @@ const MAX_HOLD_LINES = 4;
 
 interface AccountSheetProps {
   account: OpenAccount;
+  /** Opens on the balance question instead of the menu. */
+  startView?: 'menu' | 'balance';
   onClose: () => void;
   onChange: () => void;
 }
 
 /** What an account row opens: what it holds as the figure, then updating the balance, choosing what it holds, changing it and archiving it. */
-function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
+function AccountSheet({
+  account,
+  startView = 'menu',
+  onClose,
+  onChange,
+}: AccountSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -88,7 +95,7 @@ function AccountSheet({ account, onClose, onChange }: AccountSheetProps) {
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const looks = useAppSelector(selectItemLooks);
   const [search, setSearch] = useState('');
-  const [view, setView] = useState<'menu' | 'balance' | 'holds'>('menu');
+  const [view, setView] = useState<'menu' | 'balance' | 'holds'>(startView);
   const [balanceText, setBalanceText] = useState(() =>
     centsToInputValue(account.balanceCents),
   );

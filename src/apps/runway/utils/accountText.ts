@@ -67,3 +67,19 @@ export const describeAccountBalance = (
     formatCents(cents),
     formatDateOrdinalUTC(on),
   );
+
+/** The name an account goes by in a sentence: its name, with the last 4 digits when another open account shares its bank. */
+export const getAccountMoveName = (
+  account: Pick<OpenAccount, 'id' | 'name' | 'institution' | 'lastFour'>,
+  accounts: readonly Pick<OpenAccount, 'id' | 'institution'>[],
+) => {
+  const isShared = accounts.some(
+    (other) =>
+      other.id !== account.id &&
+      other.institution.trim().toLowerCase() ===
+        account.institution.trim().toLowerCase(),
+  );
+  return isShared && account.lastFour
+    ? `${account.name} ••${account.lastFour}`
+    : account.name;
+};

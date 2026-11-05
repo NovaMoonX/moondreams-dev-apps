@@ -294,6 +294,7 @@ export async function seedRunwayScale(
       amount: { lowCents: low, highCents: high },
       ending: never,
       stanceOverride: null,
+      accountId: null,
       pairings: [],
     } satisfies PayLineSealed,
   });
