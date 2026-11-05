@@ -3840,7 +3840,8 @@ export const ACCOUNT_WORDS = {
   goalInterestActual: (amount: string, day: string) =>
     `Earned ${amount} on ${day}, its share of the interest`,
   interestTitle: (account: string) => `Interest in ${account}`,
-  interestUncountedChip: (amount: string) => `Interest ~${amount} · update the balance`,
+  interestUncountedChip: (amount: string) =>
+    `Interest ~${amount} · update the balance`,
   interestChip: (amount: string, day: string, isActual: boolean) =>
     `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
   goalBankTitle: (account: string) => `What ${account} shows`,
@@ -4117,6 +4118,7 @@ export const NEEDS_HOME_WORDS = {
   sameTitle: 'Did you already add this?',
   sameRow: (difference: string | null) =>
     difference === null ? 'Same amount' : `The bank’s is ${difference}`,
+  sameVerb: 'It’s this one',
   notSame: 'None of these',
   notSameSub: 'Keep them apart and don’t ask again',
   notSameDone: 'They stay apart. You won’t be asked about these again.',
@@ -4163,6 +4165,7 @@ export const DEPOSIT_WORDS = {
 
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
+  pairVerb: 'Pair them',
   pickEnvelope: 'Then choose where it goes',
   pickPay: 'Pick the pay it is',
   cardPaymentTo: (card: string) => `Card payment to ${card}`,

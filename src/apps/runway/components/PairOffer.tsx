@@ -105,7 +105,7 @@ function PairOffer({
       <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map(({ other, kind, name }) => {
-          const detail = formatDateOrdinalUTC(other.date);
+          const detail = `${PAIR_WORDS.pairVerb} · ${formatDateOrdinalUTC(other.date)}`;
           return (
             <ItemRow
               key={other.id}
