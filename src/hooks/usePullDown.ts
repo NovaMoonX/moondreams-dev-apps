@@ -67,6 +67,8 @@ export function usePullDown(options: PullDownOptions) {
     };
 
     const onStart = (event: TouchEvent) => {
+      // A pull whose lift never arrived (the browser took the touch) ends when the next one starts.
+      if (state.gesture?.isPulling) onCancel();
       const touch = event.touches[0];
       const isIgnored =
         event.target instanceof Element &&

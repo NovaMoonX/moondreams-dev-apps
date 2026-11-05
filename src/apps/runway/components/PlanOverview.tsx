@@ -39,6 +39,9 @@ const STEP_GAP_PX = 16;
 const REFRESH_EXTRA_MIN_PX = 72;
 const CIRCLE_PX = 40;
 const CIRCLE_REST_PX = 8;
+const TILE_REVEAL_PX = 16;
+// The page under a dropped circle is a little taller than the circle, so the tiles clear it.
+const SPACER_SCALE = 1.2;
 const NOTE_GAP_PX = 12;
 const MOTION_MIN_MS = 180;
 const MOTION_MAX_MS = 360;
@@ -48,7 +51,6 @@ const RING_RADIUS = 11;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
 const BUTTON_ROW_CLASS = 'flex min-h-8 items-center gap-2';
-/** At rest the pills stand alone on a touch screen, where a pull opens them; a mouse gets View all under them. */
 
 const MODE_OPTIONS = WORDS.modes.map(({ value, label }) => ({ value, label }));
 
@@ -72,11 +74,18 @@ function Figure({
   isWhole?: boolean;
   isProminent?: boolean;
 }) {
+  const last = segments.length - 1;
   return (
     <>
       {segments.map((segment, index) =>
         typeof segment === 'string' ? (
-          segment
+          isProminent && index === last ? (
+            <span key={index} className='block whitespace-nowrap'>
+              {segment.trim()}
+            </span>
+          ) : (
+            segment
+          )
         ) : (
           <SensitiveValue
             key={index}
@@ -178,6 +187,7 @@ interface Box {
 interface PillLook extends Box {
   background: string;
   ring: string;
+  radius: number;
   paddingLeft: number;
   color: string;
   hasEmoji: boolean;
@@ -251,6 +261,10 @@ const readPills = (node: HTMLElement | null): PillLook[] => {
         height: box.height,
         background: style.backgroundColor,
         ring: style.boxShadow,
+        radius: Math.min(
+          parseFloat(style.borderTopLeftRadius) || 0,
+          box.height / 2,
+        ),
         paddingLeft: parseFloat(style.paddingLeft) || 0,
         color: style.color,
         hasEmoji: (emoji?.offsetWidth ?? 0) > 0,
@@ -334,6 +348,7 @@ function PullFrame({
     note: null,
   });
   const [rowScroll, setRowScroll] = useState(0);
+  const liveRowRef = useRef<HTMLDivElement | null>(null);
   const [pillScroll, setPillScroll] = useState(0);
   const pillTimerRef = useRef(0);
   const scrollTimerRef = useRef(0);
@@ -468,10 +483,41 @@ function PullFrame({
 
   const restoreRowScroll = useCallback(
     (node: HTMLDivElement | null) => {
+      liveRowRef.current = node;
       if (node && node.scrollLeft !== rowScroll) node.scrollLeft = rowScroll;
     },
     [rowScroll],
   );
+
+  // A swipe to another view brings its pill and its tile into view, in the row as drawn and as kept for the next pull.
+  const currentIndex = items.findIndex((item) => item.isCurrent);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const clip = clipRef.current;
+      const pill = clip?.querySelector<HTMLElement>(
+        '[data-pill][aria-pressed="true"]',
+      );
+      pill?.scrollIntoView({
+        behavior: isMotionReduced() ? 'auto' : 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+      const tile = measures.rowTiles[currentIndex];
+      const width = clip?.clientWidth ?? 0;
+      if (!tile || width === 0) return;
+      const left = Math.max(0, tile.left - TILE_REVEAL_PX);
+      const right = tile.left + tile.width + TILE_REVEAL_PX - width;
+      setRowScroll((scroll) => {
+        const next = Math.min(Math.max(scroll, right), left);
+        liveRowRef.current?.scrollTo({
+          left: next,
+          behavior: isMotionReduced() ? 'auto' : 'smooth',
+        });
+        return next;
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lookKey, currentIndex, measures.rowTiles]);
   const restorePillScroll = useCallback(
     (node: HTMLDivElement | null) => {
       const scroller = Array.from(node?.querySelectorAll('*') ?? []).find(
@@ -528,8 +574,9 @@ function PullFrame({
       ))}
     </div>
   );
-  // Tiles further left are drawn over the ones after them wherever two cross.
-  const stackAt = (index: number) => items.length - index;
+  // The open view's tile is never covered while tiles travel; of the rest, the one further left is on top.
+  const stackAt = (index: number) =>
+    items[index]?.isCurrent ? items.length + 1 : items.length - index;
   // Each pill grows in place into its tile: its box, corners, colours and words move from the pill's to the tile's.
   const grow = (progress: number) => (
     <div
@@ -554,7 +601,7 @@ function PullFrame({
               top: mix(from.top, to.top, progress),
               width: mix(from.width, to.width, progress),
               height: mix(from.height, to.height, progress),
-              borderRadius: mix(from.height / 2, 8, progress),
+              borderRadius: mix(from.radius, 8, progress),
               background: blend(from.background, 'var(--color-card)', progress),
               padding: `${mix((from.height - 16) / 2, 9, progress)}px ${mix(from.paddingLeft, 13, progress)}px`,
             }}
@@ -784,6 +831,7 @@ function PullFrame({
   const circleY = isRefreshing
     ? CIRCLE_REST_PX
     : mix(-CIRCLE_PX, CIRCLE_REST_PX, progress);
+  const circleTop = isCircleShown ? circleY : -CIRCLE_PX - 8;
 
   return (
     <div className='border-border relative border-b pb-4'>
@@ -791,8 +839,9 @@ function PullFrame({
         <div
           aria-hidden='true'
           style={{
-            height: isCircleShown ? Math.max(0, circleY + CIRCLE_PX + 8) : 0,
+            height: Math.max(0, (circleTop + CIRCLE_PX) * SPACER_SCALE),
           }}
+          className={join(!isPulling && 'transition-[height] duration-200')}
         />
         {content()}
       </div>
@@ -812,7 +861,7 @@ function PullFrame({
           style={{
             width: CIRCLE_PX,
             height: CIRCLE_PX,
-            transform: `translateY(${isCircleShown ? circleY : -CIRCLE_PX - 8}px)`,
+            transform: `translateY(${circleTop}px)`,
           }}
         >
           <RefreshRing
@@ -902,7 +951,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
             emoji={PLAN_VIEW_EMOJI[section]}
             isThin
             isSelected={current === section}
-            className='max-[359px]:px-1! max-sm:px-2 max-sm:[&_[data-pill-emoji]]:hidden'
+            className='max-[359px]:px-1! max-sm:px-2'
             onClick={() => onSelect(section)}
           >
             {PLAN_SECTION_LABELS[section]}
@@ -920,7 +969,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
         size='sm'
         rounded='full'
         className='gap-1.5'
-        onClick={() => goTo(settled === 2 ? 1 : 2)}
+        onClick={() => goTo(isGrid ? 0 : 2)}
       >
         {isGrid ? WORDS.viewLess : WORDS.viewAll}
         {isGrid ? (

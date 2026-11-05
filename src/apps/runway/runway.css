@@ -133,11 +133,9 @@ html.runway-theme .min-h-screen.items-center.justify-center.p-4 > .rounded-lg.sh
   }
 }
 
-/* The four views drop their emoji below 360px so they stay on one line. */
-@media (max-width: 359px) {
-  html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill-emoji] {
-    display: none;
-  }
+/* The views are square-cornered like the tiles a pull grows them into. */
+html.runway-theme [role='group'][aria-label='Plan sections'] [data-pill] {
+  border-radius: 0.5rem;
 }
 
 /* A warning: the warning hue for the tint and edge, a deeper amber for ink so an icon reads on the tint in light and dark. */
