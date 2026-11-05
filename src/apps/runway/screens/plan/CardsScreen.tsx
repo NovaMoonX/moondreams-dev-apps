@@ -78,6 +78,7 @@ function CardsScreen() {
       />
       {addStep === 'pick' && (
         <AddMethodSheet
+          kind='card'
           onClose={() => setAddStep(null)}
           onLink={() => setAddStep('link')}
           onManual={() => {

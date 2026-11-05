@@ -32,6 +32,7 @@ Built:
 - [x] Move what is left in an envelope to another envelope, a goal or Free to Spend, with an Undo
 
 - [x] Check your balance: type what your bank holds and see how it compares with Runway
+- [x] Link a bank: sign in at your bank, say which of your cards and accounts each of its accounts is, and bring their balances in, with the bank's figure offered, never applied on its own
 Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
 - [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway

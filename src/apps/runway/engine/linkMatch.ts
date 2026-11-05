@@ -49,8 +49,9 @@ export const isLinkable = (target: MatchTarget) =>
 
 /**
  * Presets each row the bank sent: credit goes to cards, depository to accounts and `other` is left out;
- * within a kind a row takes the open, unlinked one at the same bank whose last four match its mask, and
- * otherwise becomes a new one. A target is never preset on two rows.
+ * within a kind a row takes the open, unlinked one at the same bank whose last four match its mask. Failing
+ * that it takes one at the same bank only when that one has no last four, or is the only one of its kind there;
+ * otherwise it becomes a new one. A target is never preset on two rows.
  */
 export function matchLinkRows(input: MatchInput): LinkChoice[] {
   const bankKey = toBankKey(input.institutionName);
@@ -75,15 +76,14 @@ export function matchLinkRows(input: MatchInput): LinkChoice[] {
         startedRows[0] ??
         null);
 
-  const result = input.rows.reduce<{
-    choices: LinkChoice[];
+  const isSameBank = (entry: MatchTarget) => toBankKey(entry.bank) === bankKey;
+  const exact = input.rows.reduce<{
+    ids: (string | null)[];
     used: ReadonlySet<string>;
   }>(
     (state, row) => {
       const kind = getTargetKind(row.kind);
-      if (kind === null) {
-        return { ...state, choices: [...state.choices, { kind: 'skip' }] };
-      }
+      if (kind === null) return { ...state, ids: [...state.ids, null] };
       const id =
         startedTarget !== null && row === startedRow
           ? startedTarget.id
@@ -93,8 +93,36 @@ export function matchLinkRows(input: MatchInput): LinkChoice[] {
                 !state.used.has(`${kind}:${entry.id}`) &&
                 row.mask !== null &&
                 entry.lastFour === row.mask &&
-                toBankKey(entry.bank) === bankKey,
+                isSameBank(entry),
             )?.id ?? null);
+      return {
+        ids: [...state.ids, id],
+        used:
+          id === null ? state.used : new Set([...state.used, `${kind}:${id}`]),
+      };
+    },
+    { ids: [], used: new Set<string>() },
+  );
+
+  const result = input.rows.reduce<{
+    choices: LinkChoice[];
+    used: ReadonlySet<string>;
+  }>(
+    (state, row, index) => {
+      const kind = getTargetKind(row.kind);
+      if (kind === null) {
+        return { ...state, choices: [...state.choices, { kind: 'skip' }] };
+      }
+      const atBank = offered(kind).filter(isSameBank);
+      const id =
+        exact.ids[index] ??
+        atBank.find(
+          (entry) =>
+            entry.id !== startedTarget?.id &&
+            !state.used.has(`${kind}:${entry.id}`) &&
+            (!entry.lastFour || atBank.length === 1),
+        )?.id ??
+        null;
       if (id === null) {
         return { ...state, choices: [...state.choices, { kind: 'new' }] };
       }
@@ -103,7 +131,7 @@ export function matchLinkRows(input: MatchInput): LinkChoice[] {
         used: new Set([...state.used, `${kind}:${id}`]),
       };
     },
-    { choices: [], used: new Set<string>() },
+    { choices: [], used: exact.used },
   );
   return result.choices;
 }

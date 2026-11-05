@@ -118,6 +118,7 @@ function AccountsScreen({ onClose }: AccountsScreenProps) {
         )}
         {addStep === 'pick' && (
           <AddMethodSheet
+            kind='account'
             onClose={() => setAddStep(null)}
             onLink={() => setAddStep('link')}
             onManual={() => {

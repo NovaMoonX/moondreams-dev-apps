@@ -19,6 +19,7 @@ import {
   type LinkSealed,
 } from './link/linkShared.js';
 import type { ProviderGrant } from './link/provider.js';
+import { discardSupersededLinks } from './link/unfinishedLinks.js';
 import { sealWithKey, unwrapPlanKey } from './planKey.js';
 
 if (getApps().length === 0) {
@@ -42,6 +43,7 @@ const revokeQuietly = (grant: ProviderGrant) =>
 /**
  * `{ publicToken, institutionName }` → `{ linkId, institutionName, accounts }`: swaps the bank window's token for a
  * grant sealed on the server, stores the link and returns the accounts with live balances. The grant is never returned.
+ * The person's older unfinished links at the same bank are revoked and removed, so one unfinished link per bank remains.
  */
 export const exchangeRunwayLink = onCall(
   {
@@ -106,6 +108,13 @@ export const exchangeRunwayLink = onCall(
         sealed: sealWithKey(planKey, { ...linkSealed }, SEALED_SCHEMA_VERSION),
       });
       await batch.commit();
+
+      await discardSupersededLinks(firestore, keyring, planKey.key, uid, {
+        linkId,
+        institutionName,
+      }).catch(() => {
+        logger.warn('runway.link.supersedeFailed');
+      });
 
       logger.info('runway.link.exchanged', {
         linkId,

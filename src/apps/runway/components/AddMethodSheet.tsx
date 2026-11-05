@@ -5,15 +5,30 @@ import MethodPicker from '@/components/MethodPicker';
 import { LINK_WORDS } from '@apps/runway/constants';
 
 interface AddMethodSheetProps {
+  kind: 'card' | 'account';
   onLink: () => void;
   onManual: () => void;
   onClose: () => void;
 }
 
 /** At Track and Link, adding a card or account first asks whether to bring it in from the bank. */
-function AddMethodSheet({ onLink, onManual, onClose }: AddMethodSheetProps) {
+function AddMethodSheet({
+  kind,
+  onLink,
+  onManual,
+  onClose,
+}: AddMethodSheetProps) {
   return (
-    <FormSheet isOpen onClose={onClose} title={LINK_WORDS.methodTitle}>
+    <FormSheet
+      isOpen
+      onClose={onClose}
+      title={
+        kind === 'card'
+          ? LINK_WORDS.methodCardTitle
+          : LINK_WORDS.methodAccountTitle
+      }
+      actions={<></>}
+    >
       <MethodPicker
         methods={[
           {

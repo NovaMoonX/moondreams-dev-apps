@@ -4,7 +4,11 @@ import { functions } from '@lib/firebase/config';
 
 import { LINK_WORDS } from '@apps/runway/constants';
 import type { LinkChoice } from '@apps/runway/engine/linkMatch';
-import { createAccount } from '@apps/runway/store/actions/accountActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  createAccount,
+  setAccountBalance,
+} from '@apps/runway/store/actions/accountActions';
 import { createCard } from '@apps/runway/store/actions/cardActions';
 import type {
   AccountKind,
@@ -43,6 +47,11 @@ const attachCallable = httpsCallable<
   AttachResult
 >(functions, 'attachRunwayAccounts');
 
+const discardCallable = httpsCallable<
+  { linkId: string },
+  { discarded: boolean }
+>(functions, 'discardRunwayLink');
+
 /** Asks for a one-time token for the bank's window. */
 export async function createLinkSession(): Promise<string> {
   const response = await createSessionCallable({});
@@ -56,6 +65,11 @@ export async function exchangeLink(
 ): Promise<LinkSession> {
   const response = await exchangeCallable({ publicToken, institutionName });
   return response.data;
+}
+
+/** Revokes a link nothing was matched on at the bank and removes it; Functions refuse a link that already has accounts in it. */
+export async function discardLink(linkId: string): Promise<void> {
+  await discardCallable({ linkId });
 }
 
 const toAccountKind = (subtype: string | null): AccountKind => {
@@ -75,7 +89,8 @@ export async function linkChosenAccounts(
   session: LinkSession,
   choices: readonly LinkChoice[],
   onCreated: (index: number, choice: LinkChoice) => void,
-): Promise<AttachResult & { sent: AttachChoice[] }> {
+): Promise<AttachResult & { sent: AttachChoice[]; created: string[] }> {
+  const created: string[] = [];
   const toSent = async (
     entry: LinkSession['accounts'][number],
     index: number,
@@ -102,10 +117,11 @@ export async function linkChosenAccounts(
           dueDay: null,
           lastFour: entry.mask,
           payFromAccountId: null,
-          owedCents: 0,
+          owedCents: Math.max(0, entry.balanceCents ?? 0),
         },
         LINK_WORDS.newCardSummary(entry.name),
       );
+      created.push(cardId);
       onCreated(index, { kind: 'existing', target: 'card', id: cardId });
       return { ...base, cardId };
     }
@@ -116,10 +132,11 @@ export async function linkChosenAccounts(
       countedTowardTotal: true,
       isPullAccount: false,
       lastFour: entry.mask,
-      balanceCents: null,
-      balanceOn: null,
+      balanceCents: entry.balanceCents,
+      balanceOn: entry.balanceCents === null ? null : todayAsUtcDate(),
       holds: [],
     });
+    created.push(accountId);
     onCreated(index, { kind: 'existing', target: 'account', id: accountId });
     return { ...base, accountId };
   };
@@ -136,5 +153,21 @@ export async function linkChosenAccounts(
     linkId: session.linkId,
     choices: sent,
   });
-  return { ...response.data, sent };
+  return { ...response.data, sent, created };
+}
+
+/** Makes a linked account's balance the bank's figure, as of today. */
+export async function applyBankBalance(
+  uid: string,
+  encryption: RunwayEncryption,
+  accountId: string,
+  bankCents: Cents,
+): Promise<void> {
+  await setAccountBalance(
+    uid,
+    encryption,
+    accountId,
+    bankCents,
+    todayAsUtcDate(),
+  );
 }

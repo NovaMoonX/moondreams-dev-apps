@@ -7171,7 +7171,10 @@ const version = (
     day(20),
     'figures count from the open stretch',
   );
-  assert.equal(getCountedFrom([{ from: day(0), to: day(9), linkedFrom: null }]), null);
+  assert.equal(
+    getCountedFrom([{ from: day(0), to: day(9), linkedFrom: null }]),
+    null,
+  );
   assert.equal(isInTrackingPeriods(periods, day(9)), true);
   assert.equal(isInTrackingPeriods(periods, day(10)), false);
   assert.equal(isInTrackingPeriods(periods, day(40)), true);
@@ -13008,6 +13011,70 @@ const version = (
     }),
     [{ kind: 'existing', target: 'account', id: 'a' }],
     'the starting account is preset on the first row of its kind when no last four matches',
+  );
+  const oneRow = [
+    { providerAccountId: 'p1', kind: 'depository' as const, mask: '2290' },
+  ];
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: oneRow,
+      cards: [],
+      accounts: [bank('a', 'Chase', null)],
+      startedFrom: null,
+    }),
+    [{ kind: 'existing', target: 'account', id: 'a' }],
+    'an account at the bank with no last four is preset when no last four matches',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: oneRow,
+      cards: [],
+      accounts: [bank('a', 'Chase', '1111')],
+      startedFrom: null,
+    }),
+    [{ kind: 'existing', target: 'account', id: 'a' }],
+    'the only unlinked account of its kind at the bank is preset despite another last four',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: oneRow,
+      cards: [],
+      accounts: [bank('a', 'Chase', '1111'), bank('b', 'Chase', '3333')],
+      startedFrom: null,
+    }),
+    [{ kind: 'new' }],
+    'two accounts with other last fours at the bank are not guessed between',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: [
+        { providerAccountId: 'p1', kind: 'depository', mask: '2290' },
+        { providerAccountId: 'p2', kind: 'depository', mask: '6604' },
+      ],
+      cards: [],
+      accounts: [bank('a', 'Chase', null), bank('b', 'Chase', '6604')],
+      startedFrom: null,
+    }),
+    [
+      { kind: 'existing', target: 'account', id: 'a' },
+      { kind: 'existing', target: 'account', id: 'b' },
+    ],
+    'a later row with a last four match keeps its account from an earlier fallback',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: [{ providerAccountId: 'p1', kind: 'credit', mask: '6604' }],
+      cards: [bank('c', 'Chase', '8841'), bank('d', 'Chase', null)],
+      accounts: [bank('a', 'Chase', null)],
+      startedFrom: null,
+    }),
+    [{ kind: 'existing', target: 'card', id: 'd' }],
+    'a card row takes a card without a last four, never an account',
   );
 }
 

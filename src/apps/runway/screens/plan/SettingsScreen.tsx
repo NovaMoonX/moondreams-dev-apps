@@ -1,6 +1,13 @@
 import { useState, type ReactNode } from 'react';
 import InlineNotice from '@/components/InlineNotice';
-import { Activity, ChevronRight, Gauge, Landmark, Trash2 } from 'lucide-react';
+import {
+  Activity,
+  ChevronRight,
+  Gauge,
+  Landmark,
+  Link2,
+  Trash2,
+} from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -30,6 +37,10 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenLink, Stance } from '@apps/runway/types';
+import {
+  describeUnfinishedLink,
+  isUnfinishedLink,
+} from '@apps/runway/utils/linkText';
 
 const stanceOptions = STANCES.map((value) => ({
   value,
@@ -117,14 +128,8 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
-  const unfinished = useAppSelector((state) =>
-    state.runway.links.filter((link) =>
-      link.providerAccounts.every(
-        (entry) =>
-          entry.accountId === null && entry.cardId === null && !entry.isSkipped,
-      ),
-    ),
-  );
+  const links = useAppSelector((state) => state.runway.links);
+  const unfinished = links.filter(isUnfinishedLink);
   const [linking, setLinking] = useState<{ resume: OpenLink | null } | null>(
     null,
   );
@@ -175,8 +180,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               )}
             </SummaryEditor>
             <SettingsRow
-              isGrouped={!canLink}
-              isMiddle={canLink}
+              isGrouped
               icon={<Activity />}
               label={TRACKING_WORDS.rowLabel}
               value={
@@ -186,28 +190,31 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               }
               onOpen={() => openSettingsView('tracking')}
             />
-            {canLink &&
-              unfinished.map((link) => (
+          </div>
+        </ActionSection>
+        {canLink && (
+          <ActionSection caption={LINK_WORDS.yourBank}>
+            <div className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
+              {unfinished.map((link) => (
                 <SettingsRow
                   key={link.id}
                   isMiddle
-                  icon={<Landmark />}
+                  icon={<Link2 />}
                   label={LINK_WORDS.unfinishedRow(link.institutionName)}
-                  value={LINK_WORDS.unfinishedHelp}
+                  value={describeUnfinishedLink(link)}
                   onOpen={() => setLinking({ resume: link })}
                 />
               ))}
-            {canLink && (
               <SettingsRow
-                isGrouped
+                isMiddle
                 icon={<Landmark />}
                 label={LINK_WORDS.settingsRow}
                 value={LINK_WORDS.settingsRowHelp}
                 onOpen={() => setLinking({ resume: null })}
               />
-            )}
-          </div>
-        </ActionSection>
+            </div>
+          </ActionSection>
+        )}
         <ActionSection caption={SETTINGS_GROUP_WORDS.plan}>
           <SettingsRow
             icon={<Trash2 />}

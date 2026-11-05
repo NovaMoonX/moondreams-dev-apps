@@ -37,7 +37,9 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
+import BankBalanceRow from '@apps/runway/components/BankBalanceRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
@@ -121,11 +123,13 @@ function AccountSheet({
     balanceCents <= MAX_PURCHASE_CENTS;
   const isBalanceSame =
     balanceCents === account.balanceCents && account.balanceOn === today;
+  const linkedFact = useLinkedFact(account.linkId);
   const facts = [
     account.balanceOn === null
       ? null
       : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
+    linkedFact,
   ].filter((fact): fact is string => fact !== null);
 
   const goTo = (next: typeof view) => {
@@ -542,6 +546,7 @@ function AccountSheet({
             linkId={account.linkId}
             onOpen={() => setIsLinking(true)}
           />
+          <BankBalanceRow target={{ kind: 'account', id: account.id }} />
           <ActionRow
             isGrouped
             hasChevron

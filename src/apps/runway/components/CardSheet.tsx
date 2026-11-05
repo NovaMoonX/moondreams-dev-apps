@@ -14,6 +14,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { CARD_WORDS } from '@apps/runway/constants';
@@ -66,6 +67,8 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     today,
     startDate,
   );
+
+  const linkedFact = useLinkedFact(card.linkId);
 
   const handleArchive = async () => {
     if (!user || isArchiving) return;
@@ -150,11 +153,14 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
             }
             figure={formatCents(Math.max(0, reserveCents))}
-            fact={
+            fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, today, due)
-            }
+                : describeCardDue(card, today, due),
+              linkedFact,
+            ]
+              .filter(Boolean)
+              .join(' \u00b7 ')}
           />
           <Button
             type='button'

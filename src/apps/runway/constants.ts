@@ -1656,8 +1656,8 @@ export const PAY_SHARE_WORDS = {
 export const LEVELS = ['plan', 'track', 'link'] as const;
 
 export const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
-  plan: 'Plan only',
-  track: 'Plan and track spending',
+  plan: 'Plan',
+  track: 'Track',
   link: 'Link',
 };
 
@@ -3930,16 +3930,24 @@ export const CARD_WORDS = {
 export const LINK_BANKS_GATE_ID = 'link-banks';
 
 export const LINK_WORDS = {
+  yourBank: 'Your bank',
   settingsRow: 'Link a bank',
   settingsRowHelp: 'Bring in your accounts and balances',
   unfinishedRow: (bank: string) => `Finish linking ${bank}`,
-  unfinishedHelp: 'Say which of your accounts each one is',
+  unfinishedStarted: (date: string, accounts: string) =>
+    accounts === '' ? `Started ${date}` : `Started ${date} \u00b7 ${accounts}`,
+  discard: 'Discard this link',
+  discardTitle: (bank: string) => `Discard this ${bank} link?`,
+  discardMessage:
+    'Nothing from it has been added. You can sign in at the bank again whenever you like.',
+  discardConfirm: 'Discard link',
+  discardFailed: 'That link was not discarded. Nothing was changed.',
   title: 'Link a bank',
   intro: 'Sign in at your bank, and Runway can bring your accounts in.',
+  introFor: (name: string) => `Link ${name} to your bank`,
   points: [
     'You sign in in your bank\u2019s own window. Runway never sees your password.',
     'Your accounts and their balances come in now.',
-    'Purchases follow soon.',
   ],
   signIn: 'Sign in at your bank',
   notLinked: 'Nothing was linked.',
@@ -3948,9 +3956,21 @@ export const LINK_WORDS = {
   matchTitle: 'Is this one of yours?',
   matchHelp: (bank: string) =>
     `${bank} sent these. Say which of yours each one is.`,
+  pickTitle: (name: string) => `Which one is ${name}?`,
+  pickedNew: 'Added as new',
+  pickedSkip: 'Left out',
+  pickedExisting: (name: string) => `Your ${name}`,
   addAsNew: 'Add as new',
-  skip: 'Don\u2019t bring in',
+  skip: 'Leave it out',
   linkThese: 'Link these',
+  confirmTitle: (bank: string) => `Link these to ${bank}?`,
+  confirmJoins: (bankName: string, ours: string) =>
+    `${bankName} joins your ${ours}`,
+  confirmNew: (bankName: string, isCard: boolean) =>
+    `${bankName} is added as a new ${isCard ? 'card' : 'account'}`,
+  confirmSkip: (bankName: string) => `${bankName} is left out`,
+  confirmText: (count: number) =>
+    count === 1 ? 'Link 1 account' : `Link ${count} accounts`,
   nothingPicked: 'Pick at least one to bring in.',
   attachFailed:
     'Those did not link. Try again; anything already added stays and is linked then.',
@@ -3959,16 +3979,20 @@ export const LINK_WORDS = {
   kindDepository: 'Account',
   kindCredit: 'Card',
   kindOther: 'Other',
-  noBalance: 'No balance',
-  useBankTitle: 'Use the bank\u2019s?',
-  useBankHelp: 'These balances differ from what you typed.',
+  useBankTitle: 'Use the bank\u2019s balance?',
+  useBankHelp: 'These differ from what Runway has.',
+  useBankLater: 'Not sure yet? You can choose later from the account or card.',
   yours: 'Yours',
   bank: 'Bank',
   useBanks: 'Use the bank\u2019s',
   keepMine: 'Keep mine',
   noneTyped: 'Nothing typed',
   updated: (name: string) => `${name} now matches the bank.`,
+  kept: (name: string) => `Kept your figure for ${name}.`,
   updateFailed: 'That balance did not save. Nothing was changed.',
+  useBankRow: 'Use the bank\u2019s balance',
+  bankSays: (amount: string, date: string) =>
+    `Bank says ${amount}, as of ${date}`,
   done: 'Linked',
   doneCount: (count: number) =>
     count === 1 ? '1 account is linked.' : `${count} accounts are linked.`,
@@ -3976,7 +4000,8 @@ export const LINK_WORDS = {
   rowLabel: 'Link to your bank',
   rowHelp: 'Bring its balance in from your bank',
   rowLinked: (when: string) => `Linked \u00b7 updated ${when}`,
-  methodTitle: 'How do you want to add it?',
+  methodCardTitle: 'How do you want to add the card?',
+  methodAccountTitle: 'How do you want to add the account?',
   methodLink: 'Link it from your bank',
   methodLinkHelp: 'Sign in at your bank and pick it from your accounts',
   methodManual: 'Add it myself',
