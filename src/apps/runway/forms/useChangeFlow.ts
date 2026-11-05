@@ -7,6 +7,7 @@ import { useStore } from 'react-redux';
 
 import { useAppSelector, type RootState } from '@/store';
 import {
+  ACCOUNT_WORDS,
   CARRY_WORDS,
   CHANGE_WORDS,
   PAY_SHARE_WORDS,
@@ -34,6 +35,7 @@ import {
   type PreviewVersion,
 } from '@apps/runway/store/selectors/previewSelectors';
 import {
+  selectAllAccounts,
   selectAllCards,
   selectComingDays,
   selectGroups,
@@ -177,6 +179,7 @@ export function useChangeFlow({
   const days = useAppSelector((state) => selectComingDays(state, today));
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const allAccounts = useAppSelector(selectAllAccounts);
   const resolvedPlan = useAppSelector((state) =>
     selectResolvedPlan(state, today),
   );
@@ -220,6 +223,9 @@ export function useChangeFlow({
             newGroup?.name ??
             'a group',
           (fundedBy) => describePayChoice(fundedBy, resolvedPlan, true),
+          (accountId) =>
+            allAccounts.find((account) => account.id === accountId)?.name ??
+            ACCOUNT_WORDS.payFromNone,
         );
 
   const setStep = (next: 'form' | 'reason') => {

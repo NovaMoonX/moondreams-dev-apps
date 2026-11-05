@@ -1802,7 +1802,7 @@ A bank CSV becomes purchases that wait in Needs a home, where each is sent to an
 ### Description
 A person names their accounts, says where each goal and envelope is held, marks the account cards and bills pull from, says which account pays each card and bill, sees the line-up against each balance and can check a balance. Over-assigned money is shown. Each account opens a view of what it holds with its goals inside it ("Wealthfront Cash · $8,400: Emergency, Japan trip, Car, not yet given a job"), so the owner can collapse Wealthfront's own buckets into one cash account.
 
-**Built so far:** the check of a balance against all the money on hand (`CheckBalanceBody`, no data, nothing saved). Accounts, where each pot is held, the line-up and a stored correction remain.
+**Built so far:** the check of a balance against all the money on hand (`CheckBalanceBody`, no data, nothing saved); the accounts (Plan > More > Accounts: add, change, archive, last 4 digits, whether cards and bills pull from it, a dated balance), what each holds with "Not yet given a job" or "$X short of what it holds", "Comes out of" on cards when two or more accounts are pulled from, and one "How do you pay it?" on bills holding the cards and those accounts. Remaining: the account total that counts accounts in or out (`countedTowardTotal` is written from the kind, nothing reads it yet), the line-up screen, the pull-before-next-income need, a stored correction and Link.
 
 ### Possible Approach
 1. Accounts are counted toward the total or left out (a brokerage), and `balanceCorrection` moves record a corrected balance.
@@ -1813,7 +1813,7 @@ A person names their accounts, says where each goal and envelope is held, marks 
 - [ ] **Create / Read / Update / Delete:** accounts (archive when used).
 
 ### Success Criteria
-- [ ] Over-assigned reads "Over-assigned $X" and never blocks anything.
+- [ ] Money held beyond an account's balance reads "$X short of what it holds" and never blocks anything.
 - [ ] `firestore.rules` gained only the clauses this issue uses, verified on the emulator as the owner and as a second user with at least one allowed and one denied write per clause, plus a legacy-shaped document (newer keys removed); the PR says whether `firestore.indexes.json` changed.
 - [ ] `scripts/seeds/runway.ts` gained this issue's documents, sealed the way the app seals them, and the app's document count is updated.
 - [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.

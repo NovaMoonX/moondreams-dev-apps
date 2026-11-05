@@ -51,6 +51,8 @@ interface ItemRowProps {
   warningLine?: ReactNode;
   /** The detail says the plan falls short: warning ink and icon. */
   isDetailWarning?: boolean;
+  /** With `isDetailWarning`, the detail's words read in warning ink too, not only its icon. */
+  isDetailInked?: boolean;
   figure?: string | null;
   /** A figure is masked while amounts are hidden; a row that shows what the person is typing turns it off. */
   isPrivate?: boolean;
@@ -68,6 +70,8 @@ interface ItemRowProps {
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
   isHighlighted?: boolean;
   isFaded?: boolean;
+  /** The figure is a quiet word, not an amount (a balance not given yet). */
+  isFigureMuted?: boolean;
   itemId?: string;
 }
 
@@ -80,6 +84,7 @@ function ItemRow({
   detailLead = null,
   isDetailStrong = false,
   isDetailWarning = false,
+  isDetailInked = false,
   warningLine,
   figure,
   isPrivate = true,
@@ -91,6 +96,7 @@ function ItemRow({
   reorder,
   isHighlighted = false,
   isFaded = false,
+  isFigureMuted = false,
   itemId,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
@@ -137,6 +143,7 @@ function ItemRow({
           className={join(
             'block text-sm break-words',
             isDetailStrong ? 'text-foreground' : 'text-muted-foreground',
+            isDetailWarning && isDetailInked && 'text-(--runway-warning-ink)!',
             isDetailWarning && 'flex items-start gap-1.5',
           )}
         >
@@ -192,7 +199,9 @@ function ItemRow({
             <span
               className={join(
                 'block tabular-nums',
-                isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
+                isFaded || isFigureMuted
+                  ? 'text-muted-foreground font-medium'
+                  : 'font-semibold',
               )}
             >
               {hide(figureNode, isPrivate)}

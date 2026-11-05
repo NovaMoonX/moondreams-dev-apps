@@ -9,8 +9,9 @@ const GAP_PX = 12;
 const SHRINK_AFTER_PX = 96;
 const SCROLL_STEP_PX = 6;
 
-const isCoveredNow = () =>
-  document.documentElement.hasAttribute('data-subview-open') ||
+const isCoveredNow = (isInSubview: boolean) =>
+  (!isInSubview &&
+    document.documentElement.hasAttribute('data-subview-open')) ||
   hasDialogOnTop();
 
 const getBarHeight = () =>
@@ -23,6 +24,8 @@ interface FloatingActionProps {
   onClick: () => void;
   /** Column the pill lines up with from `sm` up. */
   columnClassName?: string;
+  /** The action belongs to the open subview, so an open subview does not hide it (a sheet or drawer still does). */
+  isInSubview?: boolean;
 }
 
 /** The screen's one add action: a filled pill above the bottom bar, hidden under a sheet, drawer or subview. Leaves a spacer so the last row scrolls clear of it. */
@@ -31,14 +34,15 @@ function FloatingAction({
   icon,
   onClick,
   columnClassName = 'max-w-4xl',
+  isInSubview = false,
 }: FloatingActionProps) {
-  const [isCovered, setIsCovered] = useState(isCoveredNow);
+  const [isCovered, setIsCovered] = useState(() => isCoveredNow(isInSubview));
   const [isCompact, setIsCompact] = useState(false);
   const [barHeight, setBarHeight] = useState(getBarHeight);
 
   useEffect(() => {
     const update = () => {
-      setIsCovered(isCoveredNow());
+      setIsCovered(isCoveredNow(isInSubview));
       setBarHeight(getBarHeight());
     };
     // A busy page mutates often; the check reads layout, so it runs at most once a frame.
@@ -68,7 +72,7 @@ function FloatingAction({
       observer.disconnect();
       window.removeEventListener('resize', queueUpdate);
     };
-  }, []);
+  }, [isInSubview]);
 
   useEffect(() => {
     const state = { last: window.scrollY };
@@ -96,9 +100,7 @@ function FloatingAction({
                 : 'calc(1rem + env(safe-area-inset-bottom))',
           }}
         >
-          <div
-            className={join('mx-auto flex justify-end', columnClassName)}
-          >
+          <div className={join('mx-auto flex justify-end', columnClassName)}>
             <Button
               type='button'
               rounded='full'
