@@ -6,11 +6,13 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import { NEEDS_HOME_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { findPlacementRun, toMerchantKey } from '@apps/runway/engine/rules';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
+  readPurchaseNow,
   returnPurchaseToWaiting,
 } from '@apps/runway/store/actions/purchaseActions';
 import {
@@ -20,6 +22,7 @@ import {
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
+import { isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import {
   describePurchaseAssigned,
   describePurchaseReturned,
@@ -30,10 +33,16 @@ const LIKELY_SHOWN = 3;
 interface NeedsHomeAssignProps {
   purchase: OpenPurchase;
   onDone: () => void;
+  /** Called with the purchase as sent when the sheet should stay open to offer a rule for it (the third time in a row); then `onDone` is not called. */
+  onSuggestRule?: (placed: OpenPurchase) => void;
 }
 
 /** The likeliest envelopes for a waiting purchase, each one tap away; anything else goes through the purchase's own edit. */
-function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
+function NeedsHomeAssign({
+  purchase,
+  onDone,
+  onSuggestRule,
+}: NeedsHomeAssignProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const today = todayAsUtcDate();
@@ -59,6 +68,7 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
         await getRunwayEncryption(uid),
         sent,
         describePurchaseReturned(sent, nameOf),
+        { ruleId: null, assignedBy: 'person' },
       );
     } catch (undoError) {
       addToast({
@@ -87,22 +97,61 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
         lines,
         describePurchaseAssigned(purchase, lines, nameOf),
       );
+      const placed = { ...purchase, lines, needsHome: false, updatedAt };
       addToast({
         title: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
         action: {
           label: NEEDS_HOME_WORDS.undo,
-          onClick: () =>
-            void putBack(user.uid, {
-              ...purchase,
-              lines,
-              needsHome: false,
-              updatedAt,
-            }),
+          onClick: () => void putBack(user.uid, placed),
         },
       });
-      onDone();
+      const run = findPlacementRun(
+        toMerchantKey(purchase.merchant),
+        [...history.filter((entry) => entry.id !== purchase.id), placed],
+        store.getState().runway.rules,
+      );
+      const merchantKey = toMerchantKey(purchase.merchant);
+      if (
+        onSuggestRule &&
+        run?.envelopeId === envelopeId &&
+        merchantKey !== null &&
+        !isRuleDeclined(user.uid, merchantKey)
+      ) {
+        onSuggestRule(placed);
+      } else {
+        onDone();
+      }
     } catch (sendError) {
+      const message = sendError instanceof Error ? sendError.message : '';
+      if (
+        message === SPEND_WORDS.changedElsewhere ||
+        message === SPEND_WORDS.notFound
+      ) {
+        const fresh = await getRunwayEncryption(user.uid)
+          .then((encryption) =>
+            readPurchaseNow(user.uid, encryption, purchase.id),
+          )
+          .catch(() => null);
+        const home = fresh?.lines.find((line) => line.via === 'chosen');
+        if (
+          fresh &&
+          !fresh.needsHome &&
+          fresh.ruleId !== null &&
+          home?.envelopeId
+        ) {
+          addToast({
+            title: NEEDS_HOME_WORDS.alreadySent(nameOf(home.envelopeId)),
+            type: 'success',
+            action: {
+              label: NEEDS_HOME_WORDS.undo,
+              onClick: () => void putBack(user.uid, fresh),
+            },
+          });
+          onDone();
+          return;
+        }
+      }
       setError(getErrorMessage(sendError, NEEDS_HOME_WORDS.failed));
       setBusyId(null);
     }

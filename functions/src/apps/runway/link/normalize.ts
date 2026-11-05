@@ -44,6 +44,7 @@ export interface RawTransaction {
   amount: number;
   merchantName: string | null;
   name: string | null;
+  category?: string | null;
   isPending: boolean;
 }
 
@@ -75,6 +76,7 @@ export function normalizeTransaction(
     date,
     amountCents: toTransactionCents(raw.amount),
     merchant: raw.merchantName?.trim() || raw.name?.trim() || null,
+    category: raw.category?.trim().toUpperCase() || null,
     isPending: raw.isPending,
   };
   return result;

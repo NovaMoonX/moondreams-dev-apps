@@ -150,6 +150,8 @@ function upsert(
       payload: {
         amountCents: tx.amountCents,
         merchant: tx.merchant,
+        category: tx.category,
+        ruleId: null,
         label: null,
         note: null,
         lines: waitingLines(tx.amountCents),
@@ -172,6 +174,7 @@ function upsert(
       ...current.payload,
       amountCents: tx.amountCents,
       merchant: current.needsHome ? tx.merchant : current.payload.merchant,
+      category: tx.category ?? current.payload.category ?? null,
       lines: current.needsHome
         ? waitingLines(tx.amountCents)
         : repriceLines(
@@ -185,7 +188,10 @@ function upsert(
     next.date !== current.date ||
     next.status !== current.status ||
     next.payload.amountCents !== current.payload.amountCents ||
-    next.payload.merchant !== current.payload.merchant;
+    next.payload.merchant !== current.payload.merchant ||
+    next.payload.category !== current.payload.category ||
+    JSON.stringify(next.payload.lines) !==
+      JSON.stringify(current.payload.lines);
   return {
     state: { ...next, isChanged: current.isChanged || isChanged },
     before: current,

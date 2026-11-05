@@ -5,6 +5,7 @@ import {
   Layers,
   Pencil,
   ReceiptText,
+  Repeat,
   Trash2,
   Undo2,
 } from 'lucide-react';
@@ -41,12 +42,23 @@ import {
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
+  RULE_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
 } from '@apps/runway/constants';
 import { keepEntryFor } from '@/hooks/useBackHistory';
 import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import RuleSheet from '@apps/runway/forms/RuleSheet';
+import {
+  findPlacementRun,
+  isHeldByOffer,
+  toMerchantKey,
+  wouldRulePlace,
+} from '@apps/runway/engine/rules';
+import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
+import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
   type ReceiptChooser,
@@ -82,6 +94,8 @@ import {
   selectItemLooks,
   selectSpendPurchases,
   selectLostPairs,
+  selectEnvelopes,
+  selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeEnvelopes,
@@ -117,6 +131,8 @@ interface PurchaseScreenProps {
   fallback?: OpenPurchase | null;
   /** False when it was opened from its own group, which is already under it. */
   hasGroupLink?: boolean;
+  /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
+  onSuggestRule?: (placed: OpenPurchase) => void;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
@@ -126,6 +142,7 @@ function PurchaseScreen({
   onClose,
   fallback = null,
   hasGroupLink = true,
+  onSuggestRule,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -147,6 +164,19 @@ function PurchaseScreen({
     selectAllHorizonItems(state, todayAsUtcDate()),
   );
   const stance = useAppSelector(selectStance);
+  const level = useAppSelector(selectLevel);
+  const rules = useAppSelector(selectRules);
+  const liveEnvelopes = useAppSelector((state) =>
+    selectEnvelopes(state, todayAsUtcDate()),
+  );
+  const recentPurchases = useAppSelector((state) => state.runway.purchases);
+  const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
+  const { describe: describeRuleSentence } = useRuleNames();
+  const [ruleStep, setRuleStep] = useState<{
+    view: 'make' | 'suggest' | 'edit';
+    ruleId: string | null;
+    wasWaiting: boolean;
+  } | null>(null);
   const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
@@ -240,6 +270,52 @@ function PurchaseScreen({
   }
 
   const refund = isRefund(purchase);
+  const placedRule =
+    purchase.ruleId === null
+      ? null
+      : (rules.find((entry) => entry.id === purchase.ruleId) ?? null);
+  const run =
+    level === 'link' && !isWaiting && purchase.source === 'link'
+      ? findPlacementRun(
+          toMerchantKey(purchase.merchant),
+          recentPurchases,
+          rules,
+        )
+      : null;
+  const merchantKey = toMerchantKey(purchase.merchant);
+  const suggestion =
+    run !== null &&
+    run.purchaseIds.includes(purchase.id) &&
+    !(user && merchantKey !== null && isRuleDeclined(user.uid, merchantKey))
+      ? run
+      : null;
+  const canMakeRule =
+    isWaiting &&
+    level === 'link' &&
+    lostPair === null &&
+    purchase.source === 'link' &&
+    purchase.amountCents > 0;
+  const merchantRule =
+    canMakeRule && merchantKey !== null
+      ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
+      : null;
+  const heldRule =
+    canMakeRule && isHeldByOffer(purchase.id, waitingPurchases, recentPurchases)
+      ? wouldRulePlace(
+          purchase,
+          rules,
+          new Set(liveEnvelopes.map(({ item }) => item.id)),
+          new Set(),
+        )
+      : null;
+  const stepRule =
+    ruleStep?.view === 'edit'
+      ? (rules.find((entry) => entry.id === ruleStep.ruleId) ?? null)
+      : null;
+  const openRuleStep = (
+    view: 'make' | 'suggest' | 'edit',
+    ruleId: string | null,
+  ) => setRuleStep({ view, ruleId, wasWaiting: isWaiting });
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
@@ -505,6 +581,27 @@ function PurchaseScreen({
     );
   }
 
+  if (ruleStep !== null && (ruleStep.view !== 'edit' || stepRule !== null)) {
+    return (
+      <RuleSheet
+        key={ruleStep.view}
+        purchase={ruleStep.view === 'edit' ? null : purchase}
+        rule={stepRule}
+        stayName={ruleStep.wasWaiting ? null : envelopes}
+        onBack={() => setRuleStep(null)}
+        onClose={() => setRuleStep(null)}
+        onDecline={
+          ruleStep.view === 'suggest' && user && merchantKey !== null
+            ? () => {
+                declineRule(user.uid, merchantKey);
+                setRuleStep(null);
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
   if (editTarget !== null) {
     return (
       <PurchaseForm
@@ -693,8 +790,17 @@ function PurchaseScreen({
               onDone={onClose}
               elseSubtitle={PAIR_WORDS.pickEnvelope}
             >
-              <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+              <NeedsHomeAssign
+                purchase={purchase}
+                onDone={onClose}
+                onSuggestRule={onSuggestRule}
+              />
             </PairOffer>
+          )}
+          {heldRule !== null && (
+            <p className='text-muted-foreground text-sm'>
+              {RULE_WORDS.heldByOffer(describeRuleSentence(heldRule))}
+            </p>
           )}
           <ActionGroup isRoomy>
             <ActionRow
@@ -715,7 +821,59 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {canMakeRule && (merchantRule !== null || heldRule === null) && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={
+                  merchantRule === null
+                    ? RULE_WORDS.alwaysDo
+                    : RULE_WORDS.yourRule
+                }
+                subtitle={
+                  merchantRule === null
+                    ? RULE_WORDS.alwaysDoSub
+                    : describeRuleSentence(merchantRule)
+                }
+                onClick={() =>
+                  merchantRule === null
+                    ? openRuleStep('make', null)
+                    : openRuleStep('edit', merchantRule.id)
+                }
+              />
+            )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
+            {placedRule !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={RULE_WORDS.placedBy(
+                  nameOf(
+                    purchase.lines.find((line) => line.via !== 'spill')
+                      ?.envelopeId ?? placedRule.target,
+                  ),
+                )}
+                subtitle={RULE_WORDS.placedBySub(
+                  describeRuleSentence(placedRule),
+                )}
+                onClick={() => openRuleStep('edit', placedRule.id)}
+              />
+            )}
+            {suggestion !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={RULE_WORDS.suggest(purchase.merchant?.trim() ?? '')}
+                subtitle={RULE_WORDS.suggestSub(nameOf(suggestion.envelopeId))}
+                onClick={() => openRuleStep('suggest', null)}
+              />
+            )}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (

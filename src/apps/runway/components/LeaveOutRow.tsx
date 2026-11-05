@@ -67,6 +67,7 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
                   encryption,
                   leftOut,
                   describePurchaseReturned(leftOut, () => ''),
+                  { ruleId: null, assignedBy: 'person' },
                 ),
               )
               .catch((undoError: unknown) =>

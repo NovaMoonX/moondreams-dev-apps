@@ -34,6 +34,7 @@ COLLECTIONS = {
     'cards': {'update'},
     'accounts': {'update'},
     'expenses': {'update', 'delete'},
+    'rules': {'update', 'delete'},
 }
 
 
@@ -134,6 +135,16 @@ def main():
             check(f'{c} delete [{a}]', commit(tok, [rm(path)]), a == 'o' and 'delete' in ops)
             admin([put(path, doc)])
             check(f'{c} write twice by id [{a}]', commit(tok, [put(path, doc)]), a == 'o' and 'update' in ops)
+
+    # A rule written before conditions and `updatedAt` existed is only `{ id, createdAt, sealed }`; it reads, rewrites and goes like a new one.
+    old = f'{base}/rules/rule-old'
+    odoc = dict(id='rule-old', createdAt=NOW, sealed=SEAL)
+    for a, tok in actors.items():
+        admin([put(old, odoc)])
+        check(f'legacy rule read [{a}]', get(old, tok), a == 'o')
+        check(f'legacy rule rewritten with updatedAt [{a}]', commit(tok, [put(old, dict(odoc, updatedAt=NOW))]), a == 'o')
+        admin([put(old, odoc)])
+        check(f'legacy rule delete [{a}]', commit(tok, [rm(old)]), a == 'o')
 
     # A paid cost is a move with a deterministic id: one create, never a second on that id, never an update.
     paid = f'{base}/moves/paid_item-1_cost-1_{time.strftime("%Y%m%d", time.gmtime(TODAY / 1000))}'
