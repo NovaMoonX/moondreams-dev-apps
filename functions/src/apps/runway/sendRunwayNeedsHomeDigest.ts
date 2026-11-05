@@ -5,7 +5,7 @@ import { logger } from 'firebase-functions';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { isGateOpenForUid } from '../../gates/assertGateOpen.js';
-import { sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
+import { sendPushReport, toAppUrl } from '../../notifications/sendPush.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   claimPath,
@@ -66,6 +66,8 @@ async function digestForPlan(
   );
   const date = getDigestDay(now, settings);
   if (!date) return 'notHour';
+  const claim = firestore.doc(claimPath(uid, date));
+  if ((await claim.get()).exists) return 'claimed';
   const waiting = (
     await firestore
       .collection(`apps/runway/plans/${uid}/purchases`)
@@ -77,16 +79,23 @@ async function digestForPlan(
   if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
     return 'closed';
   }
-  if (!(await claimDay(firestore, uid, date, now))) return 'claimed';
   const url = toAppUrl(NEEDS_HOME_PATH);
   if (!url) return 'dropped';
+  if (!(await claimDay(firestore, uid, date, now))) return 'claimed';
   // The person chose this hour, so the budget for pushes nobody asked for does not apply.
-  const devices = await sendPushToUsers(firestore, getMessaging(), [uid], {
+  const report = await sendPushReport(firestore, getMessaging(), [uid], {
     title: RUNWAY_PUSH_TITLE,
     body: needsHomeBody(waiting),
     url,
+  }).catch(async (error: unknown) => {
+    await claim.delete();
+    throw error;
   });
-  return devices > 0 ? 'sent' : 'dropped';
+  if (report.isFailure) {
+    await claim.delete();
+    return 'failed';
+  }
+  return report.devices > 0 ? 'sent' : 'dropped';
 }
 
 export const sendRunwayNeedsHomeDigest = onSchedule(
@@ -104,6 +113,7 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
     const plans = await firestore
       .collection('apps/runway/plans')
       .where('notify.needsHome', '==', true)
+      .select('sealed')
       .get();
     const batches = Array.from(
       { length: Math.ceil(plans.size / BATCH_SIZE) },
