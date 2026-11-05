@@ -2,7 +2,12 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import { openWithKey, type Keyring, type SealedPayload } from '../planKey.js';
-import { grantsPath, openGrant, type ProviderGrantDoc } from './grant.js';
+import {
+  grantsPath,
+  itemIndexPath,
+  openGrant,
+  type ProviderGrantDoc,
+} from './grant.js';
 import { planDocPath, provider, type LinkSealed } from './linkShared.js';
 
 /** A link is unfinished while none of the bank's accounts has been bound to one of the person's or left out. */
@@ -17,7 +22,7 @@ const toBankKey = (value: string) => value.toLowerCase().replace(/\s+/g, '');
 const openLink = (planKey: Buffer, sealed: unknown) =>
   openWithKey(planKey, sealed as SealedPayload) as unknown as LinkSealed;
 
-/** Deletes an unfinished link and its grant in a transaction (an attach that lands first wins), then revokes the grant; false when it was gone or finished. */
+/** Deletes an unfinished link, its grant and its item index entry in a transaction (an attach that lands first wins), then revokes the grant; false when it was gone or finished. */
 export async function discardLink(
   firestore: Firestore,
   keyring: Keyring,
@@ -40,9 +45,10 @@ export async function discardLink(
     }
     transaction.delete(linkRef);
     transaction.delete(grantRef);
-    return grantSnapshot.exists
-      ? (grantSnapshot.data() as ProviderGrantDoc)
-      : { isMissing: true as const };
+    if (!grantSnapshot.exists) return { isMissing: true as const };
+    const grant = grantSnapshot.data() as ProviderGrantDoc;
+    transaction.delete(firestore.doc(itemIndexPath(grant.providerItemId)));
+    return grant;
   });
   if (grantDoc === null) return false;
   if (!('isMissing' in grantDoc)) {

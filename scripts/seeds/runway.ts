@@ -3198,7 +3198,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, nine rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, nine rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Four more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A and a deposit. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3348,6 +3348,88 @@ async function writeSeedPurchases(
       } satisfies PurchaseDoc);
     }),
   );
+  const waiting: {
+    id: string;
+    daysAgo: number;
+    merchant: string;
+    amountCents: number;
+    status: 'pending' | 'posted';
+    accountId: string | null;
+    cardId: string | null;
+  }[] = [
+    {
+      id: 'seed-link-purchase-coffee',
+      daysAgo: 1,
+      merchant: 'Blue Bottle Coffee',
+      amountCents: 675,
+      status: 'pending',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
+      id: 'seed-link-purchase-gas',
+      daysAgo: 2,
+      merchant: 'Shell',
+      amountCents: 4_110,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-purchase-pharmacy',
+      daysAgo: 4,
+      merchant: 'CVS Pharmacy',
+      amountCents: 2_350,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-deposit-refund',
+      daysAgo: 3,
+      merchant: 'Venmo cash out',
+      amountCents: -12_500,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+  ];
+  await Promise.all(
+    waiting.map(async (entry) => {
+      const date = today - entry.daysAgo * DAY_MS;
+      const createdAt = date + 12 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'link',
+        status: entry.status,
+        needsHome: true,
+        accountId: entry.accountId,
+        expenseId: null,
+        dedupeKey: `${entry.id}-dedupe`,
+        createdAt,
+        updatedAt: createdAt,
+        sealed: await sealJson(
+          {
+            amountCents: entry.amountCents,
+            merchant: entry.merchant,
+            label: null,
+            note: null,
+            lines:
+              entry.amountCents > 0
+                ? [{ envelopeId: null, cents: entry.amountCents, via: 'free' }]
+                : [],
+            refundOfId: null,
+            paidByCardId: entry.cardId,
+            link: null,
+            receiptText: null,
+            costRef: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
   const safewayDate = today - 3 * DAY_MS;
   const removedDate = today - 8 * DAY_MS;
   const changes = [
@@ -3391,7 +3473,7 @@ async function writeSeedPurchases(
     } satisfies ExpenseDoc,
   );
   await batch.commit();
-  return purchases.length + changes.length + 1;
+  return purchases.length + waiting.length + changes.length + 1;
 }
 
 /**

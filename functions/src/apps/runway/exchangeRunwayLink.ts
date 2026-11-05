@@ -6,7 +6,12 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
-import { grantsPath, sealGrant } from './link/grant.js';
+import {
+  grantsPath,
+  itemIndexPath,
+  sealGrant,
+  type ItemIndexDoc,
+} from './link/grant.js';
 import {
   LINK_CORS,
   LINK_SECRETS,
@@ -97,6 +102,10 @@ export const exchangeRunwayLink = onCall(
         firestore.doc(`${grantsPath(uid)}/${linkId}`),
         sealGrant(keyring, uid, linkId, grant, now),
       );
+      batch.create(firestore.doc(itemIndexPath(grant.providerItemId)), {
+        uid,
+        linkId,
+      } satisfies ItemIndexDoc);
       batch.create(firestore.doc(planDocPath(uid, 'links', linkId)), {
         id: linkId,
         status: 'active',

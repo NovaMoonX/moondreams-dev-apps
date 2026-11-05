@@ -86,6 +86,20 @@ export function describePurchaseRemoval(
   return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
+/** The change-log sentence for sending a waiting purchase to its envelopes, or leaving it out of spending. */
+export function describePurchaseAssigned(
+  purchase: OpenPurchase,
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+): string {
+  const kind = isRefund(purchase) ? 'Money in' : 'Purchase';
+  const where =
+    lines.length === 0
+      ? 'left out of spending'
+      : `sent to ${describeEnvelopes(lines, nameOf)}`;
+  return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+}
+
 const describeGroupChange = (
   before: string | null,
   after: string | null,

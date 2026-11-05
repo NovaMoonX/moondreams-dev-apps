@@ -37,7 +37,10 @@ import {
   getHistoryRange,
 } from '@apps/runway/utils/historyWindow';
 import { getMonthStart } from '@apps/runway/engine/closings';
-import { startPurchasesListener } from '@apps/runway/store/listeners/purchaseListeners';
+import {
+  startNeedsHomeListener,
+  startPurchasesListener,
+} from '@apps/runway/store/listeners/purchaseListeners';
 import { startClosingListener } from '@apps/runway/store/listeners/closingListeners';
 import { startPlanListener } from '@apps/runway/store/listeners/planListener';
 import { endItem } from '@apps/runway/store/actions/itemActions';
@@ -57,6 +60,7 @@ import {
   setChangesFailed,
   setCards,
   setLinks,
+  setNeedsHome,
   setAccountBalances,
   setAccounts,
   setExpenses,
@@ -175,6 +179,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (expenses) => dispatch(setExpenses(expenses)),
+          fail,
+        ),
+        startNeedsHomeListener(
+          uid,
+          encryption,
+          (purchases) => dispatch(setNeedsHome(purchases)),
           fail,
         ),
       ];

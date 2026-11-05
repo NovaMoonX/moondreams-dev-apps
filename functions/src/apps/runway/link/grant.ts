@@ -18,6 +18,17 @@ export interface ProviderGrantDoc {
 
 export const grantsPath = (uid: string) => `apps/runway/server/${uid}/grants`;
 
+/** Finds whose link an item belongs to when the provider's webhook names only the item. Server-only, like the grants. */
+export interface ItemIndexDoc {
+  uid: string;
+  linkId: string;
+}
+
+export const ITEM_INDEX_PATH = 'apps/runway/server/_items/items';
+
+export const itemIndexPath = (providerItemId: string) =>
+  `${ITEM_INDEX_PATH}/${providerItemId}`;
+
 const grantKey = (keyring: Keyring, masterKeyId: string) => {
   if (!Object.hasOwn(keyring.keys, masterKeyId)) {
     throw new Error('The master key this grant was sealed with is missing.');

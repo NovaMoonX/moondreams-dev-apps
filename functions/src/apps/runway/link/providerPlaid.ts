@@ -1,10 +1,16 @@
 import { defineSecret } from 'firebase-functions/params';
 
-import { normalizeAccount, type RawAccount } from './normalize.js';
+import {
+  normalizeAccount,
+  normalizeTransaction,
+  type RawAccount,
+} from './normalize.js';
 import {
   ProviderError,
   type BankDataProvider,
+  type NormalizedTransaction,
   type ProviderGrant,
+  type TransactionSync,
 } from './provider.js';
 
 export const PLAID_CLIENT_ID = defineSecret('RUNWAY_PLAID_CLIENT_ID');
@@ -14,6 +20,14 @@ export const PROVIDER_SECRETS = [PLAID_CLIENT_ID, PLAID_SECRET];
 const isEmulator = () => process.env.FUNCTIONS_EMULATOR === 'true';
 const host = () =>
   isEmulator() ? 'https://sandbox.plaid.com' : 'https://production.plaid.com';
+
+/** How far back the first sync reaches. */
+const LINK_DAYS_REQUESTED = 30;
+const SYNC_PAGE_SIZE = 500;
+const MAX_PAGES_PER_CALL = 10;
+
+const webhookUrl = () =>
+  `https://us-central1-${process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps'}.cloudfunctions.net/runwayPlaidWebhook`;
 
 const readSecret = (secret: { value(): string }) => {
   try {
@@ -69,7 +83,7 @@ function toProviderError(code: string): ProviderError {
   );
 }
 
-async function call<T>(path: string, body: Record<string, unknown>) {
+export async function call<T>(path: string, body: Record<string, unknown>) {
   const clientId = readSecret(PLAID_CLIENT_ID);
   const secret = readSecret(PLAID_SECRET);
   if (!clientId || !secret) {
@@ -108,6 +122,40 @@ const toRaw = (account: PlaidAccount): RawAccount => ({
   currentBalance: account.balances.current,
 });
 
+interface PlaidTransaction {
+  transaction_id: string;
+  pending_transaction_id: string | null;
+  account_id: string;
+  date: string;
+  amount: number;
+  merchant_name: string | null;
+  name: string | null;
+  pending: boolean;
+}
+
+interface PlaidSyncPage {
+  added: PlaidTransaction[];
+  modified: PlaidTransaction[];
+  removed: { transaction_id: string }[];
+  next_cursor: string;
+  has_more: boolean;
+}
+
+const toTransactions = (list: PlaidTransaction[]) =>
+  list.flatMap((entry): NormalizedTransaction[] => {
+    const normalized = normalizeTransaction({
+      id: entry.transaction_id,
+      pendingId: entry.pending_transaction_id,
+      accountId: entry.account_id,
+      date: entry.date,
+      amount: entry.amount,
+      merchantName: entry.merchant_name,
+      name: entry.name,
+      isPending: entry.pending,
+    });
+    return normalized ? [normalized] : [];
+  });
+
 export const plaidProvider: BankDataProvider = {
   async createLinkSession(uid) {
     const { link_token } = await call<{ link_token: string }>(
@@ -118,6 +166,8 @@ export const plaidProvider: BankDataProvider = {
         products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
+        transactions: { days_requested: LINK_DAYS_REQUESTED },
+        ...(isEmulator() ? {} : { webhook: webhookUrl() }),
       },
     );
     return { linkToken: link_token };
@@ -159,4 +209,57 @@ export const plaidProvider: BankDataProvider = {
   async revoke(grant) {
     await call('/item/remove', { access_token: grant.credential });
   },
+
+  async syncTransactions(grant, cursor) {
+    const read = async (
+      from: string | null,
+      pages: number,
+      carried: TransactionSync,
+    ): Promise<TransactionSync> => {
+      const page = await call<PlaidSyncPage>('/transactions/sync', {
+        access_token: grant.credential,
+        count: SYNC_PAGE_SIZE,
+        ...(from === null ? {} : { cursor: from }),
+      });
+      const merged: TransactionSync = {
+        added: [...carried.added, ...toTransactions(page.added)],
+        modified: [...carried.modified, ...toTransactions(page.modified)],
+        removed: [
+          ...carried.removed,
+          ...page.removed.map((entry) => entry.transaction_id),
+        ],
+        nextCursor: page.next_cursor,
+        hasMore: page.has_more,
+      };
+      return page.has_more && pages + 1 < MAX_PAGES_PER_CALL
+        ? read(page.next_cursor, pages + 1, merged)
+        : merged;
+    };
+    return read(cursor, 0, {
+      added: [],
+      modified: [],
+      removed: [],
+      nextCursor: cursor ?? '',
+      hasMore: false,
+    });
+  },
 };
+
+export interface WebhookKey {
+  kty: string;
+  crv: string;
+  x: string;
+  y: string;
+  alg?: string;
+  kid?: string;
+  expired_at?: number | null;
+}
+
+/** The public key Plaid signed a webhook with; null when Plaid does not know the id. */
+export async function getWebhookKey(keyId: string): Promise<WebhookKey | null> {
+  const response = await call<{ key: WebhookKey }>(
+    '/webhook_verification_key/get',
+    { key_id: keyId },
+  ).catch(() => null);
+  return response?.key ?? null;
+}

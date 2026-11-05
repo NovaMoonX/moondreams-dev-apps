@@ -16,6 +16,7 @@ import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
+import NeedsHomeScreen from '@apps/runway/screens/spend/NeedsHomeScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
 import SignedOutLanding from '@apps/runway/screens/start/SignedOutLanding';
@@ -335,6 +336,14 @@ function RunwayContent() {
     return (
       <div>
         <StartingOutScreen />
+      </div>
+    );
+  }
+
+  if (view === 'needsHome' && isTrackingLevel(level)) {
+    return (
+      <div>
+        <NeedsHomeScreen onClose={closeView} />
       </div>
     );
   }

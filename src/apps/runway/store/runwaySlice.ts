@@ -47,6 +47,9 @@ export interface RunwayState {
   expenses: OpenExpense[];
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
+  /** Every purchase waiting for a home, whatever its date, and whether they have been read once. */
+  needsHome: OpenPurchase[];
+  isNeedsHomeLoaded: boolean;
   /** Where the recent window began when the days, moves and purchases were read; they are the ledger since the closing only while it matches `selectHistory`. */
   daysFrom: DateOnly | null;
   movesFrom: DateOnly | null;
@@ -97,6 +100,8 @@ const initialState: RunwayState = {
   accountBalances: [],
   expenses: [],
   purchases: [],
+  needsHome: [],
+  isNeedsHomeLoaded: false,
   daysFrom: null,
   movesFrom: null,
   purchasesFrom: null,
@@ -197,6 +202,10 @@ export const runwaySlice = createSlice({
       state.purchases = action.payload.purchases;
       state.purchasesFrom = action.payload.from;
     },
+    setNeedsHome: (state, action: PayloadAction<OpenPurchase[]>) => {
+      state.needsHome = action.payload;
+      state.isNeedsHomeLoaded = true;
+    },
     setPeriodPurchases: (
       state,
       action: PayloadAction<{ key: string; purchases: OpenPurchase[] }>,
@@ -273,6 +282,7 @@ export const {
   setExpenses,
   setPurchases,
   setPeriodPurchases,
+  setNeedsHome,
   clearPeriodPurchases,
   setPeriodFailed,
   setHistoryDays,

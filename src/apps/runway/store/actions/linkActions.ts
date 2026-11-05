@@ -34,6 +34,19 @@ interface AttachResult {
   balances: { targetId: string; cents: Cents }[];
 }
 
+export interface LinkSyncResult {
+  linkId: string;
+  state: 'ok' | 'needsAttention' | 'failed' | 'skipped';
+  created: number;
+  updated: number;
+  removed: number;
+}
+
+const syncCallable = httpsCallable<
+  Record<string, never>,
+  { results: LinkSyncResult[] }
+>(functions, 'syncRunwayLinks');
+
 const createSessionCallable = httpsCallable<
   Record<string, never>,
   { linkToken: string }
@@ -70,6 +83,12 @@ export async function exchangeLink(
 /** Revokes a link nothing was matched on at the bank and removes it; Functions refuse a link that already has accounts in it. */
 export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
+}
+
+/** Asks Functions to bring in what is new from every active bank link; safe to repeat. */
+export async function syncLinks(): Promise<LinkSyncResult[]> {
+  const response = await syncCallable({});
+  return response.data.results;
 }
 
 const toAccountKind = (subtype: string | null): AccountKind => {

@@ -36,6 +36,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
+  NEEDS_HOME_WORDS,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
@@ -48,6 +49,7 @@ import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
+import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
 import { forgetReceiptImage } from '@apps/runway/hooks/useReceiptImageUrl';
@@ -216,6 +218,7 @@ function PurchaseScreen({
   const facts = getPurchaseFacts(purchase, envelopes, isHidden);
   const fact = [
     formatDateOrdinalUTC(purchase.date),
+    ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
     ...(facts.length > 0
       ? facts
       : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
@@ -611,13 +614,20 @@ function PurchaseScreen({
               </Button>
             </div>
           )}
+          {purchase.needsHome && purchase.amountCents > 0 && (
+            <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
               isRoomy
               hasChevron
               icon={<Pencil />}
-              label={SPEND_WORDS.edit}
+              label={
+                purchase.needsHome
+                  ? NEEDS_HOME_WORDS.moreOptions
+                  : SPEND_WORDS.edit
+              }
               isDisabled={isBusy}
               onClick={() => {
                 keepEntryFor('purchase');

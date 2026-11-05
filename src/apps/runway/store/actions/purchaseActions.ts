@@ -332,6 +332,7 @@ async function checkDayAndEnvelopes(
   lines: readonly PurchaseLine[],
   known: ReadonlySet<string>,
   keptDate: DateOnly | null,
+  isDayExempt = false,
 ): Promise<Partial<PlanDoc> | undefined> {
   const envelopeIds = [
     ...new Set(
@@ -352,6 +353,7 @@ async function checkDayAndEnvelopes(
   ]);
   const planData = plan.data() as Partial<PlanDoc> | undefined;
   const periods = planData?.trackingPeriods ?? [];
+  if (isDayExempt) return planData;
   if (!isInTrackingPeriods(periods, date)) {
     throw new Error(
       `Tracking was not on for ${formatDateOrdinalUTC(date)}. Pick a day you were tracking.`,
@@ -466,6 +468,7 @@ export async function editPurchase(
     transaction.update(purchaseRef(uid, previous.id), {
       date: input.date,
       expenseId: input.expenseId,
+      needsHome: false,
       updatedAt: now,
       sealed,
     });
@@ -477,6 +480,71 @@ export async function editPurchase(
         createdAt: now,
         effectiveFrom: null,
         itemIds: getChangeItemIds(previous.lines, input.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+}
+
+/** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it. */
+export async function assignPurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  lines: PurchaseLine[],
+  summary: string,
+): Promise<void> {
+  if (lines.length > MAX_PURCHASE_LINES)
+    throw new Error('Pick where it comes from.');
+  if (lines.length > 0 && sumLines(lines) !== previous.amountCents) {
+    throw new Error('The parts do not add up to the amount.');
+  }
+  const [sealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        amountCents: previous.amountCents,
+        merchant: previous.merchant,
+        label: previous.label,
+        note: previous.note,
+        lines,
+        refundOfId: previous.refundOfId,
+        paidByCardId: previous.paidByCardId ?? null,
+        link: previous.link,
+        receiptText: previous.receiptText,
+        costRef: previous.costRef ?? null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+
+  await runTransaction(db, async (transaction) => {
+    await readUnchanged(transaction, uid, previous);
+    const plan = await checkDayAndEnvelopes(
+      transaction,
+      uid,
+      previous.date,
+      lines,
+      new Set(),
+      previous.date,
+      lines.length === 0,
+    );
+    const now = Math.max(Date.now(), previous.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan, [previous.date]);
+    transaction.update(purchaseRef(uid, previous.id), {
+      needsHome: false,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(lines),
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );

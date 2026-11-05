@@ -11,6 +11,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
+import NeedsHomeDoor from '@apps/runway/components/NeedsHomeDoor';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
@@ -154,6 +155,9 @@ function HomeScreen() {
           onOpen={() => openView('freeToSpend')}
         />
       </div>
+      <LevelGate level='track'>
+        <NeedsHomeDoor />
+      </LevelGate>
       <DueBillsCard lookahead={lookahead} today={today} overflow='door' />
       {!isAddingPurchase && (
         <DraftPickUpRow

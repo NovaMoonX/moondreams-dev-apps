@@ -907,12 +907,21 @@ export interface PurchaseSealed {
   costRef?: CostRef | null;
 }
 
+/** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */
+export type PurchaseStatus = 'pending' | 'posted';
+
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
 export interface PurchaseDoc {
   id: string;
   date: DateOnly;
   source: PurchaseSource;
+  /** Only a purchase from a linked bank has one; null or missing on one typed by hand. */
+  status?: PurchaseStatus | null;
   needsHome: boolean;
+  /** The account a linked purchase came from; a card's is `paidByCardId` in the sealed payload. */
+  accountId?: string | null;
+  /** Written by Functions to find a bank charge again; a client never sets or changes it. */
+  dedupeKey?: string | null;
   /** The expense group it belongs to; null (or missing on an older purchase) when none. */
   expenseId: string | null;
   createdAt: number;
@@ -924,6 +933,8 @@ export interface OpenPurchase extends PurchaseSealed {
   id: string;
   date: DateOnly;
   source: PurchaseSource;
+  status?: PurchaseStatus | null;
+  accountId?: string | null;
   needsHome: boolean;
   expenseId: string | null;
   createdAt: number;
