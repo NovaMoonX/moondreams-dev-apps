@@ -33,6 +33,7 @@ Built:
 
 - [x] Check your balance: type what your bank holds and see how it compares with Runway
 - [x] Link a bank: sign in at your bank, say which of your cards and accounts each of its accounts is, and bring their balances in, with the bank's figure offered, never applied on its own
+- [x] Purchases from a linked bank wait in Needs a home and are filed in a tap; one you already typed by hand is matched to the bank's, so it counts once
 Next:
 - [ ] Horizon: plan an event's costs, set money aside for it, see how far it goes, set each price, then pay it, make it a bill, finish it, or call the event off and bring it back later
 - [x] Dates that read with an ordinal ("Feb 1st") everywhere in Runway

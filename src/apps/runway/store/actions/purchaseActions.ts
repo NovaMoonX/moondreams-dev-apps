@@ -1,6 +1,8 @@
 import {
+  collection,
   doc,
   getDoc,
+  getDocs,
   runTransaction,
   type Transaction,
 } from 'firebase/firestore';
@@ -59,6 +61,7 @@ import type {
   PurchaseSealed,
   ExpenseDoc,
   ExpenseSealed,
+  ReceiptImageDoc,
   RunwayEncryption,
   Sealed,
 } from '@apps/runway/types';
@@ -208,6 +211,7 @@ export async function addPurchase(
     link: input.link,
     receiptText: input.receiptText,
     costRef,
+    notSameAs: null,
   } satisfies PurchaseSealed;
   const sealed = await sealJson(payload, encryption);
   const markPayload: CostPaidSealed | null =
@@ -449,6 +453,7 @@ export async function editPurchase(
         link: input.link,
         receiptText: input.receiptText,
         costRef: previous.costRef ?? null,
+        notSameAs: previous.notSameAs,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -525,6 +530,7 @@ export async function assignPurchase(
         link: previous.link,
         receiptText: previous.receiptText,
         costRef: previous.costRef ?? null,
+        notSameAs: previous.notSameAs,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -583,6 +589,250 @@ export const returnPurchaseToWaiting = (
     summary,
     true,
   );
+
+const imageRef = (uid: string, purchaseId: string, imageId: string) =>
+  doc(
+    db,
+    'apps',
+    'runway',
+    'plans',
+    uid,
+    'purchases',
+    purchaseId,
+    'receiptImages',
+    imageId,
+  );
+
+/** Moves receipt photos' documents to another purchase; each keeps the `purchaseId` its stored bytes sit under. */
+function moveImages(
+  transaction: Transaction,
+  uid: string,
+  images: readonly ReceiptImageDoc[],
+  from: string,
+  to: string,
+) {
+  images.forEach((image) => {
+    transaction.set(imageRef(uid, to, image.id), image);
+    transaction.delete(imageRef(uid, from, image.id));
+  });
+}
+
+const readImages = async (uid: string, purchaseId: string) => {
+  const found = await getDocs(
+    collection(
+      db,
+      'apps',
+      'runway',
+      'plans',
+      uid,
+      'purchases',
+      purchaseId,
+      'receiptImages',
+    ),
+  );
+  return found.docs.map((entry) => entry.data() as ReceiptImageDoc);
+};
+
+const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
+  amountCents: purchase.amountCents,
+  merchant: purchase.merchant,
+  label: purchase.label,
+  note: purchase.note,
+  lines: purchase.lines,
+  refundOfId: purchase.refundOfId,
+  paidByCardId: purchase.paidByCardId ?? null,
+  link: purchase.link,
+  receiptText: purchase.receiptText,
+  costRef: purchase.costRef ?? null,
+  notSameAs: purchase.notSameAs,
+});
+
+/** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part. */
+function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
+  const difference = amountCents - typed.amountCents;
+  const lines = typed.lines.map((line, index) =>
+    index === typed.lines.length - 1
+      ? { ...line, cents: line.cents + difference }
+      : line,
+  );
+  if (lines.some((line) => line.cents <= 0)) {
+    throw new Error(
+      'The bank’s amount is too far below one of its parts. Change the parts on the one you added first.',
+    );
+  }
+  return lines;
+}
+
+export interface MergedPurchase {
+  bank: OpenPurchase;
+  typed: OpenPurchase;
+  images: ReceiptImageDoc[];
+  /** The merged purchase's `updatedAt`, which an Undo checks nothing has changed since. */
+  updatedAt: number;
+}
+
+/** Makes a bank purchase and the one typed by hand for it one purchase: the bank's keeps its day, amount, status and id and takes the typed one's envelopes, name, note, receipt and photos, and the typed one is removed. Refused when another device changed either first. */
+export async function mergeBankPurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  bank: OpenPurchase,
+  typed: OpenPurchase,
+  summary: string,
+): Promise<MergedPurchase> {
+  const lines = repriceTyped(typed, bank.amountCents);
+  const typedMerchant = typed.merchant?.trim() || null;
+  const [sealed, changeSealed, images] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(typed),
+        amountCents: bank.amountCents,
+        merchant: bank.merchant ?? typedMerchant,
+        label:
+          typed.label ??
+          (typedMerchant !== null && typedMerchant !== bank.merchant
+            ? typedMerchant
+            : null),
+        lines,
+        paidByCardId: bank.paidByCardId ?? null,
+        notSameAs: null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+    readImages(uid, typed.id),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), bank.updatedAt + 1);
+
+  await runTransaction(db, async (transaction) => {
+    await readUnchanged(transaction, uid, bank);
+    await readUnchanged(transaction, uid, typed);
+    const plan = await checkDayAndEnvelopes(
+      transaction,
+      uid,
+      bank.date,
+      lines,
+      new Set(),
+      bank.date,
+      false,
+      true,
+    );
+    markLedgerWrite(transaction, uid, plan, [bank.date, typed.date]);
+    transaction.update(purchaseRef(uid, bank.id), {
+      needsHome: false,
+      expenseId: typed.expenseId,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.delete(purchaseRef(uid, typed.id));
+    moveImages(transaction, uid, images, typed.id, bank.id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return { bank, typed, images, updatedAt: now };
+}
+
+/** Undoes a merge: the typed purchase comes back as it was, marked as not this bank purchase so it is never matched to it again, and the bank's waits in Needs a home again. Refused when the merged purchase changed since. */
+export async function splitBankPurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  merged: MergedPurchase,
+  summary: string,
+): Promise<void> {
+  const { bank, typed, images } = merged;
+  const [typedSealed, bankSealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(typed),
+        notSameAs: [...(typed.notSameAs ?? []), bank.id],
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson(toSealedPayload(bank), encryption),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+
+  await runTransaction(db, async (transaction) => {
+    const [stored, typedStored, plan] = await Promise.all([
+      transaction.get(purchaseRef(uid, bank.id)),
+      transaction.get(purchaseRef(uid, typed.id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
+    if (
+      !stored.exists() ||
+      typedStored.exists() ||
+      (stored.data() as PurchaseDoc).updatedAt !== merged.updatedAt
+    ) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    const now = Math.max(Date.now(), merged.updatedAt + 1);
+    markLedgerWrite(transaction, uid, plan.data(), [bank.date, typed.date]);
+    transaction.set(purchaseRef(uid, typed.id), {
+      id: typed.id,
+      date: typed.date,
+      source: typed.source,
+      status: null,
+      needsHome: false,
+      accountId: null,
+      dedupeKey: null,
+      expenseId: typed.expenseId,
+      createdAt: typed.createdAt,
+      updatedAt: now,
+      sealed: typedSealed,
+    } satisfies PurchaseDoc);
+    transaction.update(purchaseRef(uid, bank.id), {
+      needsHome: true,
+      expenseId: bank.expenseId,
+      updatedAt: now,
+      sealed: bankSealed,
+    });
+    moveImages(transaction, uid, images, bank.id, typed.id);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(bank.lines, typed.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+}
+
+/** Says a typed purchase is not these bank purchases, so they are never offered as the same again. Money does not move, so no change-log entry is written. */
+export async function markNotSamePurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  typed: OpenPurchase,
+  bankIds: readonly string[],
+): Promise<void> {
+  const sealed = await sealJson(
+    {
+      ...toSealedPayload(typed),
+      notSameAs: [...new Set([...(typed.notSameAs ?? []), ...bankIds])],
+    } satisfies PurchaseSealed,
+    encryption,
+  );
+  await runTransaction(db, async (transaction) => {
+    await readUnchanged(transaction, uid, typed);
+    transaction.update(purchaseRef(uid, typed.id), {
+      updatedAt: Math.max(Date.now(), typed.updatedAt + 1),
+      sealed,
+    });
+  });
+}
 
 /** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. A purchase that pays a cost takes that cost's mark back in the same transaction (`costMark`), unless it was already taken back. */
 export async function deletePurchase(

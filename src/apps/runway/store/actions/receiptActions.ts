@@ -118,10 +118,10 @@ export function addReceiptImages(
 /** Removes the sealed bytes, then the document that names them, so a failure never leaves a document without its bytes; a missing object is not an error. */
 export async function removeReceiptImage(
   uid: string,
-  image: { id: string; purchaseId: string },
+  image: { id: string; purchaseId: string; ownerId: string },
 ): Promise<void> {
   await deleteFile(getReceiptObjectPath(uid, image.purchaseId, image.id));
-  await deleteDoc(doc(imagesRef(uid, image.purchaseId), image.id));
+  await deleteDoc(doc(imagesRef(uid, image.ownerId), image.id));
 }
 
 /** Removes every receipt a purchase has; used after the purchase itself is gone. */
@@ -132,7 +132,11 @@ export async function removeReceiptImagesOf(
   const found = await getDocs(imagesRef(uid, purchaseId));
   await Promise.all(
     found.docs.map((entry) =>
-      removeReceiptImage(uid, { id: entry.id, purchaseId }),
+      removeReceiptImage(uid, {
+        id: entry.id,
+        purchaseId: (entry.data() as ReceiptImageDoc).purchaseId,
+        ownerId: purchaseId,
+      }),
     ),
   );
 }

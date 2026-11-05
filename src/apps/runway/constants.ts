@@ -3958,6 +3958,16 @@ export const NEEDS_HOME_WORDS = {
   undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,
   failed: 'That did not save. Nothing was changed.',
+  sameTitle: 'Did you already add this?',
+  sameHint: 'Tap the one you added, so it is counted once',
+  sameRow: 'This is the one',
+  notSame: 'None of these',
+  notSameSub: 'They stay as separate purchases',
+  matchedOne: (name: string) => `${name} matched the one you added`,
+  matchedMany: (count: number) =>
+    `${count} purchases from your bank matched ones you added`,
+  matchedSub: 'Each is counted once, in the envelopes you picked.',
+  matchUndone: 'Match undone',
 } as const;
 
 export const LINK_WORDS = {

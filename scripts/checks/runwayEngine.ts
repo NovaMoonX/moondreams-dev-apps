@@ -5,6 +5,7 @@ import {
   createSealedReader,
   sealJson,
 } from '../../src/apps/runway/security.ts';
+import { findPurchaseMatches } from '../../src/apps/runway/engine/matching.ts';
 import {
   getEarliestTrackingStart,
   getLevel,
@@ -6904,6 +6905,7 @@ const version = (
       source: 'manual',
       status: null,
       accountId: null,
+      notSameAs: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7272,6 +7274,7 @@ const version = (
     source: 'manual' as const,
     status: null,
     accountId: null,
+    notSameAs: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7665,6 +7668,7 @@ const version = (
       source: 'manual',
       status: null,
       accountId: null,
+      notSameAs: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9579,6 +9583,7 @@ const version = (
     source: 'manual',
     status: null,
     accountId: null,
+    notSameAs: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10078,6 +10083,162 @@ const version = (
     ),
     [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
     'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
+  );
+}
+
+// A bank charge and a purchase typed by hand for it are one purchase: one clear match merges, anything less clear asks.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const make = (
+    id: string,
+    isBank: boolean,
+    amountCents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ): OpenPurchase => ({
+    id,
+    date: base + dayOffset * day,
+    source: isBank ? 'link' : 'manual',
+    status: isBank ? 'posted' : null,
+    accountId: isBank ? 'checking' : null,
+    needsHome: isBank,
+    expenseId: null,
+    createdAt: base + dayOffset * day,
+    updatedAt: base + dayOffset * day,
+    amountCents,
+    merchant: 'Shell',
+    label: null,
+    note: null,
+    lines: [
+      {
+        envelopeId: isBank ? null : 'gas',
+        cents: amountCents,
+        via: isBank ? 'free' : 'chosen',
+      },
+    ],
+    refundOfId: null,
+    paidByCardId: null,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    ...extra,
+  });
+
+  const single = findPurchaseMatches(
+    [make('b1', true, 4_000, 0)],
+    [make('t1', false, 4_000, -2)],
+  );
+  assert.deepEqual(
+    [...single.clear],
+    [['b1', 't1']],
+    'one typed purchase at the same amount within three days merges',
+  );
+  assert.equal(single.offers.size, 0, 'a clear match is not also offered');
+
+  const equal = findPurchaseMatches(
+    [make('b1', true, 4_000, 0)],
+    [make('t1', false, 4_000, -1), make('t2', false, 4_000, 1)],
+  );
+  assert.equal(
+    equal.clear.size,
+    0,
+    'two equal candidates never merge on their own',
+  );
+  assert.deepEqual(
+    equal.offers.get('b1'),
+    ['t1', 't2'],
+    'both equal candidates are offered, nearest first',
+  );
+  const reversed = findPurchaseMatches(
+    [make('b1', true, 4_000, 0)],
+    [make('t2', false, 4_000, 1), make('t1', false, 4_000, -1)],
+  );
+  assert.deepEqual(
+    reversed.offers.get('b1'),
+    equal.offers.get('b1'),
+    'the same input in any order gives the same offer',
+  );
+
+  const twoBanks = findPurchaseMatches(
+    [make('b1', true, 4_000, 0), make('b2', true, 4_000, 1)],
+    [make('t1', false, 4_000, 0)],
+  );
+  assert.equal(
+    twoBanks.clear.size,
+    0,
+    'one typed purchase two bank charges could be merges with neither',
+  );
+  assert.deepEqual(
+    [twoBanks.offers.get('b1'), twoBanks.offers.get('b2')],
+    [['t1'], ['t1']],
+    'and is offered on both',
+  );
+
+  const tipped = findPurchaseMatches(
+    [make('b1', true, 4_800, 0)],
+    [make('t1', false, 4_000, 0)],
+  );
+  assert.equal(
+    tipped.clear.size,
+    0,
+    'a different amount never merges on its own',
+  );
+  assert.deepEqual(tipped.offers.get('b1'), ['t1'], 'a near amount is offered');
+
+  const apart = findPurchaseMatches(
+    [make('b1', true, 4_000, 0)],
+    [
+      make('far', false, 4_000, -4),
+      make('card', false, 4_000, 0, { paidByCardId: 'venture' }),
+      make('declined', false, 4_000, 0, { notSameAs: ['b1'] }),
+      make('cost', false, 4_000, 0, {
+        costRef: { itemId: 'h', costId: 'c', dueOn: base },
+      }),
+      make('wide', false, 9_000, 0),
+    ],
+  );
+  assert.equal(
+    apart.clear.size + apart.offers.size,
+    0,
+    'four days apart, another card, a declined pair, a cost payment and a far amount are never matched',
+  );
+
+  const onCard = findPurchaseMatches(
+    [make('b1', true, 4_000, 0, { paidByCardId: 'venture', accountId: null })],
+    [make('t1', false, 4_000, 0, { paidByCardId: 'venture' })],
+  );
+  assert.deepEqual(
+    [...onCard.clear],
+    [['b1', 't1']],
+    'a card charge matches a purchase typed on that card',
+  );
+
+  const refunded = findPurchaseMatches(
+    [make('b1', true, 4_000, 0)],
+    [
+      make('t1', false, 4_000, 0),
+      make('r1', false, -1_000, 1, { refundOfId: 't1' }),
+    ],
+  );
+  assert.equal(
+    refunded.clear.size + refunded.offers.size,
+    0,
+    'a purchase something refunds stays as it is',
+  );
+
+  const filed = findPurchaseMatches(
+    [
+      make('b1', true, 4_000, 0, { needsHome: false }),
+      make('in', true, -4_000, 0),
+    ],
+    [make('t1', false, 4_000, 0)],
+  );
+  assert.equal(
+    filed.clear.size + filed.offers.size,
+    0,
+    'only charges still waiting in Needs a home are matched',
   );
 }
 
@@ -12201,6 +12362,7 @@ const version = (
     source: 'manual',
     status: null,
     accountId: null,
+    notSameAs: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,

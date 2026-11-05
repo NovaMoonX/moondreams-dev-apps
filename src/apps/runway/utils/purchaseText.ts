@@ -108,6 +108,20 @@ export function describePurchaseReturned(
   return `Purchase put back in Needs a home: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
+/** The change-log sentence for a bank purchase matched to the one typed by hand, or for an Undo that splits them again. */
+export function describePurchaseMatch(
+  bank: OpenPurchase,
+  typed: OpenPurchase,
+  nameOf: (envelopeId: string) => string,
+  isSplit: boolean,
+): string {
+  const typedPart = `${getPurchaseTitle(typed, nameOf)}, ${money(typed.amountCents)} on ${formatDateOrdinalUTC(typed.date)}`;
+  const bankPart = `${getPurchaseTitle(bank, nameOf)}, ${money(bank.amountCents)} on ${formatDateOrdinalUTC(bank.date)}`;
+  return isSplit
+    ? `Match undone: ${typedPart} is its own purchase again, and ${bankPart} waits in Needs a home.`
+    : `Matched to your bank: ${typedPart} is ${bankPart}.`;
+}
+
 const describeGroupChange = (
   before: string | null,
   after: string | null,
