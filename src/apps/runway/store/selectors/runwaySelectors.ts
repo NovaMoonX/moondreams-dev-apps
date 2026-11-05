@@ -1484,17 +1484,7 @@ export const selectDepositDays = createSelector(
   },
 );
 
-const stampToDate = (dayKey: string) => {
-  const stamp = dayKey.slice(dayKey.lastIndexOf('_') + 1);
-  const result = Date.UTC(
-    Number(stamp.slice(0, 4)),
-    Number(stamp.slice(4, 6)) - 1,
-    Number(stamp.slice(6, 8)),
-  );
-  return result;
-};
-
-/** Deposits linked to a pay day no screen shows: its payday moved, or another deposit holds the day. They wait in Needs a home again, to be linked to the right day or left out. */
+/** Deposits linked to a pay day no screen shows: its payday moved, it went unconfirmed past the overdue window, or another deposit holds the day. They wait in Needs a home again, to be linked to the right day or left out. */
 export const selectLostDeposits = createSelector(
   [
     selectPurchases,
@@ -1503,9 +1493,18 @@ export const selectLostDeposits = createSelector(
     (state: RootState) => state.runway.days,
     (state: RootState) => state.runway.daysFrom,
     selectIsDaysLoaded,
+    selectIsPlanItemsLoaded,
   ],
-  (purchases, listed, byDay, days, daysFrom, isDaysLoaded): OpenPurchase[] => {
-    if (!isDaysLoaded || daysFrom === null) return [];
+  (
+    purchases,
+    listed,
+    byDay,
+    days,
+    daysFrom,
+    isDaysLoaded,
+    isPlanLoaded,
+  ): OpenPurchase[] => {
+    if (!isDaysLoaded || !isPlanLoaded || daysFrom === null) return [];
     const known = new Set([
       ...listed.open.map((day) => day.dayKey),
       ...listed.confirmed.map((day) => day.dayKey),
@@ -1515,7 +1514,7 @@ export const selectLostDeposits = createSelector(
       ({ id, incomeDayId }) =>
         incomeDayId !== null &&
         (byDay.get(incomeDayId)?.id !== id ||
-          (!known.has(incomeDayId) && stampToDate(incomeDayId) >= daysFrom)),
+          (!known.has(incomeDayId) && getDayKeyDate(incomeDayId) >= daysFrom)),
     );
     return result;
   },

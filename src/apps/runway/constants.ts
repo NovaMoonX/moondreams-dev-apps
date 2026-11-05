@@ -4044,7 +4044,7 @@ export const DEPOSIT_WORDS = {
   notWaiting: 'This deposit is not waiting in Needs a home anymore.',
   notLinked: 'This deposit is not linked to a pay anymore.',
   dayNotArrived: 'That pay was marked as not arrived. Pick another one.',
-  lost: 'This was linked to a pay that moved or already has its deposit. Pick the pay it is, or leave it out.',
+  lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or leave it out.',
 } as const;
 
 export const LINK_WORDS = {
