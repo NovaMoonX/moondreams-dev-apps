@@ -1,38 +1,33 @@
 import { useState } from 'react';
-import { Unlink } from 'lucide-react';
+import { Landmark, Unlink } from 'lucide-react';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { LINK_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { unlinkLink } from '@apps/runway/store/actions/linkActions';
-import { moveDownFromLink } from '@apps/runway/store/actions/planActions';
+import { recordUnlink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
-import {
-  formatUpdatedAgo,
-  isLiveLink,
-  isUnlinkedLink,
-} from '@apps/runway/utils/linkText';
+import { isLiveLink, isUnlinkedLink } from '@apps/runway/utils/linkText';
 
 interface BankSheetProps {
   linkId: string;
   onClose: () => void;
+  onLinkAgain: () => void;
 }
 
 const toRowLabel = (row: { name: string; mask: string | null }) =>
   `${row.name}${row.mask ? ` ••${row.mask}` : ''}`;
 
 /** One linked bank: what it brought in and, while it is linked, Unlink. Unlinking the last bank moves the plan from Link to Track. */
-function BankSheet({ linkId, onClose }: BankSheetProps) {
+function BankSheet({ linkId, onClose, onLinkAgain }: BankSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
-  const now = useNow(60_000);
   const link = useAppSelector(
     (state) => state.runway.links.find((entry) => entry.id === linkId) ?? null,
   );
@@ -44,6 +39,7 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
   );
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isBankPending, setIsBankPending] = useState(false);
   if (!link) return null;
 
   const isUnlinked = isUnlinkedLink(link);
@@ -61,11 +57,6 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
           message: (
             <div className='space-y-3 text-left'>
               <p>{LINK_WORDS.unlinkMessage(link.institutionName)}</p>
-              <ul className='list-disc space-y-1 pl-5'>
-                {broughtIn.map((row) => (
-                  <li key={row.providerAccountId}>{toRowLabel(row)}</li>
-                ))}
-              </ul>
               {isLastBank && <p>{LINK_WORDS.unlinkLevelMessage}</p>}
             </div>
           ),
@@ -76,7 +67,7 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
     setIsBusy(true);
     setError(null);
     try {
-      await unlinkLink(link.id);
+      setIsBankPending(!(await unlinkLink(link.id)));
     } catch (unlinkError) {
       setError(getErrorMessage(unlinkError, LINK_WORDS.unlinkFailed));
       setIsBusy(false);
@@ -88,9 +79,16 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
         .runway.links.some(
           (entry) => entry.id !== link.id && isLiveLink(entry),
         );
-      if (!stillLinked && selectLevel(store.getState()) === 'link') {
+      const isMovingDown =
+        !stillLinked && selectLevel(store.getState()) === 'link';
+      if (!isUnlinked || isMovingDown) {
         const encryption = await getRunwayEncryption(user.uid);
-        await moveDownFromLink(user.uid, encryption, link.institutionName);
+        await recordUnlink(
+          user.uid,
+          encryption,
+          link.institutionName,
+          isMovingDown,
+        );
       }
     } catch {
       setError(LINK_WORDS.unlinkLevelFailed);
@@ -102,14 +100,11 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
   return (
     <DetailSheet isOpen onClose={onClose} title={link.institutionName}>
       <div className='space-y-4'>
-        <p className='text-muted-foreground text-sm'>
-          {isUnlinked
-            ? LINK_WORDS.unlinkedNote
-            : LINK_WORDS.linkedRowValue(
-                broughtIn.length,
-                formatUpdatedAgo(link.lastSyncAt ?? link.createdAt, now),
-              )}
-        </p>
+        {isUnlinked && (
+          <p className='text-muted-foreground text-sm'>
+            {LINK_WORDS.unlinkedNote}
+          </p>
+        )}
         <section className='space-y-2'>
           <h3 className='text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase'>
             {LINK_WORDS.sheetAccounts}
@@ -144,8 +139,17 @@ function BankSheet({ linkId, onClose }: BankSheetProps) {
           </div>
         )}
         {isUnlinked && !isLevelStuck && (
+          <ActionRow
+            isRoomy
+            icon={<Landmark />}
+            label={LINK_WORDS.relink}
+            subtitle={LINK_WORDS.relinkHelp}
+            onClick={onLinkAgain}
+          />
+        )}
+        {isBankPending && (
           <p className='text-muted-foreground text-sm'>
-            {LINK_WORDS.relinkHelp}
+            {LINK_WORDS.unlinkBankPending}
           </p>
         )}
         {error && (

@@ -258,17 +258,18 @@ export async function moveToLink(
   });
 }
 
-/** Moves Link down to Track in one transaction when the last bank is unlinked, writing a `levelMove` change that names the bank; a plan already at Track is left alone. Purchases and every other record stay. */
-export async function moveDownFromLink(
+/** Records an unlink in the change log; when it was the last bank and the plan is at Link, also moves it down to Track in the same transaction (a `levelMove`). */
+export async function recordUnlink(
   uid: string,
   encryption: RunwayEncryption,
-  institutionName: string,
+  institutionNames: string,
+  isLastBank: boolean,
 ): Promise<void> {
   const now = Date.now();
   const changeId = generateUuid();
   const changeSealed = await sealJson(
     {
-      summary: `Unlinked ${institutionName}; new purchases stop. What came in stays.`,
+      summary: `Unlinked ${institutionNames}; new purchases stop. What came in stays.`,
     } satisfies ChangeSealed,
     encryption,
   );
@@ -277,14 +278,18 @@ export async function moveDownFromLink(
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
     const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
-    if (getLevel(periods) !== 'link') return;
-    const next = unlinkTrackingPeriod(periods);
-    if ('error' in next) throw new Error(next.error);
-
-    transaction.update(ref, { trackingPeriods: next.periods, updatedAt: now });
+    const isMovingDown = isLastBank && getLevel(periods) === 'link';
+    if (isMovingDown) {
+      const next = unlinkTrackingPeriod(periods);
+      if ('error' in next) throw new Error(next.error);
+      transaction.update(ref, {
+        trackingPeriods: next.periods,
+        updatedAt: now,
+      });
+    }
     transaction.set(subPath(uid, 'changes', changeId), {
       id: changeId,
-      kind: 'levelMove',
+      kind: isMovingDown ? 'levelMove' : 'accountChange',
       createdAt: now,
       effectiveFrom: null,
       itemIds: [],

@@ -90,9 +90,10 @@ export async function discardLink(linkId: string): Promise<void> {
   await discardCallable({ linkId });
 }
 
-/** Stops a finished link at the bank and on the server; what already came in stays. Safe to repeat. */
-export async function unlinkLink(linkId: string): Promise<void> {
-  await unlinkCallable({ linkId });
+/** Stops a finished link on the server and at the bank; what already came in stays. Whether the bank confirmed (a refresh retries it when not). Safe to repeat. */
+export async function unlinkLink(linkId: string): Promise<boolean> {
+  const response = await unlinkCallable({ linkId });
+  return response.data.isRevokedAtBank;
 }
 
 /** Asks Functions to bring in what is new from every active bank link; safe to repeat. */

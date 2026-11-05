@@ -1720,8 +1720,12 @@ export const TRACKING_WORDS = {
     'Spending screens and "left" figures go away and envelopes show what they are assigned. Everything you entered stays in your history, and you can start again from any later day.',
   stopConfirm: 'Stop tracking',
   stopFromLinkMessage: (banks: string) =>
-    `This also unlinks ${banks}: new purchases stop coming in. Spending screens and "left" figures go away and envelopes show what they are assigned. Everything already in Runway stays in your history, and you can start again from any later day.`,
+    `This also unlinks ${banks}, so new purchases stop coming in. Spending screens go away and envelopes show what they are assigned.`,
+  stopFromLinkKept:
+    'Everything already in Runway stays in your history, and you can start again from any later day.',
   stopFromLinkConfirm: 'Unlink and stop tracking',
+  stopLinksLoading:
+    'Your linked banks are still loading. Try again in a moment so they are unlinked too.',
   freshStart:
     'Starting again begins fresh from this day. Earlier tracking stays in your history.',
   lineUpTotal: 'Assigned',
@@ -4262,20 +4266,22 @@ export const LINK_WORDS = {
   sheetAccounts: 'Brought in from this bank',
   sheetLeftOut: 'Left out',
   unlink: 'Unlink this bank',
-  unlinkHelp:
-    'New purchases stop coming in. Everything already in Runway stays.',
+  unlinkHelp: 'New purchases stop coming in.',
   unlinkedNote:
     'This bank is unlinked. Nothing new comes in, and what already did is still in your history.',
-  relinkHelp: 'To bring it back, link the bank again from Link a bank.',
+  relink: 'Link it again',
+  relinkHelp: 'Purchases start coming in again.',
   unlinkTitle: (bank: string) => `Unlink ${bank}?`,
   unlinkMessage: (bank: string) =>
-    `New purchases from ${bank} stop coming in. Its purchases, balances, cards and accounts stay exactly as they are, and you can link it again whenever you like.`,
+    `New purchases from ${bank} stop coming in. What it already brought in stays, and you can link it again from Link a bank.`,
   unlinkLevelMessage:
     'This is your last linked bank, so your plan moves from Link to Track: Runway stops bringing purchases in, and you add them yourself.',
   unlinkConfirm: 'Unlink',
   unlinkFailed: 'That bank was not unlinked. Nothing was changed.',
   unlinkLevelFailed:
-    'Unlinked, but your plan still reads Link. Tap Unlink once more to finish moving it to Track.',
+    'Unlinked, but your plan still reads Link. Tap Unlink once more, here or from this bank in Settings, to finish moving it to Track.',
+  unlinkBankPending:
+    'Nothing new comes in from here on. Your bank has not confirmed yet, so Runway asks it again the next time it refreshes.',
   unlinkedToast: (bank: string) => `Unlinked ${bank}`,
 } as const;
 

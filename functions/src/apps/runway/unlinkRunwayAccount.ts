@@ -1,5 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type DocumentReference } from 'firebase-admin/firestore';
+import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
@@ -7,7 +7,6 @@ import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   grantsPath,
   itemIndexPath,
-  openGrant,
   type ProviderGrantDoc,
 } from './link/grant.js';
 import {
@@ -15,37 +14,16 @@ import {
   LINK_SECRETS,
   loadKeyringOrFail,
   planDocPath,
-  provider,
 } from './link/linkShared.js';
-import type { Keyring } from './planKey.js';
+import { revokeAndDelete } from './link/revokeGrant.js';
 
 if (getApps().length === 0) {
   initializeApp();
 }
 
-/** Revokes the grant at the provider and deletes it; false (grant kept for a repeat call) when the provider or the key says no. */
-async function revokeAndDelete(
-  keyring: Keyring,
-  uid: string,
-  grantDoc: ProviderGrantDoc,
-  grantRef: DocumentReference,
-) {
-  try {
-    await provider.revoke(openGrant(keyring, uid, grantDoc));
-    await grantRef.delete();
-    return true;
-  } catch {
-    logger.warn('runway.link.unlinkRevokeFailed', {
-      linkId: grantDoc.linkId,
-    });
-    return false;
-  }
-}
-
 /**
- * `{ linkId }` → `{ unlinked, isRevokedAtBank }`: stops a finished link for good. The link is marked `revoked` and its item index entry removed in one
- * transaction (so the webhook, the backstop and a refresh skip it from then on), then the grant is revoked at the provider and deleted. Purchases, cards
- * and accounts that came from the link are left as they are. A repeat on a revoked link only finishes what an earlier call left undone.
+ * `{ linkId }` → `{ unlinked, isRevokedAtBank }`: stops a finished link for good, keeping everything it brought in.
+ * A repeat on a revoked link only finishes what an earlier call left undone.
  */
 export const unlinkRunwayAccount = onCall(
   {

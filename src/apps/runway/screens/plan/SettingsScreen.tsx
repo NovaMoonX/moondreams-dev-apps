@@ -254,7 +254,14 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
         <GatesClosedNote appId='runway' />
       </div>
       {openBankId && (
-        <BankSheet linkId={openBankId} onClose={() => setOpenBankId(null)} />
+        <BankSheet
+          linkId={openBankId}
+          onClose={() => setOpenBankId(null)}
+          onLinkAgain={() => {
+            setOpenBankId(null);
+            setLinking({ resume: null });
+          }}
+        />
       )}
       {linking && (
         <LinkBankScreen

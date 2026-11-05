@@ -3222,7 +3222,7 @@ async function seedTrackingPlan(
   );
 }
 
-/** Taylor's plan is at Track after unlinking Capital One 3 days ago: tracking began 30 days back and was linked from 10 days ago (the `linkedFrom` day is cleared when the last bank is unlinked), income and envelopes, a Checking account whose `linkId` still names the revoked link (no grant exists), three bank purchases that stayed (placed on Free to Spend), and the three records of the story (started, linked, unlinked) in the change log. It has no closings, like a plan written before they existed, so the first open builds them. */
+/** Taylor's Runway plan: at Track after unlinking a bank (see SEEDING.md). */
 async function seedUnlinkedPlan(
   context: SeedContext,
   keyring: ReturnType<typeof readKeyring>,

@@ -2,6 +2,7 @@ import {
   type DocumentReference,
   type Firestore,
   type Timestamp,
+  type Transaction,
   type WriteBatch,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
@@ -352,6 +353,21 @@ async function writeBalances(
  * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
  * counts and the link id only.
  */
+/* An unlink can land while a sync runs, so every write that marks the link live re-reads it in the
+   same transaction and stands down once it reads revoked. */
+async function writeUnlessRevoked(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  write: (transaction: Transaction) => void,
+): Promise<boolean> {
+  return firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(linkRef);
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return false;
+    write(transaction);
+    return true;
+  });
+}
+
 export async function syncRunwayLink(
   firestore: Firestore,
   keyring: Keyring,
@@ -379,7 +395,13 @@ export async function syncRunwayLink(
   try {
     const grantDoc = grantSnapshot.data() as ProviderGrantDoc;
     const index: ItemIndexDoc = { uid, linkId };
-    await firestore.doc(itemIndexPath(grantDoc.providerItemId)).set(index);
+    const indexRef = firestore.doc(itemIndexPath(grantDoc.providerItemId));
+    const isStillLinked = await writeUnlessRevoked(
+      firestore,
+      linkRef,
+      (transaction) => transaction.set(indexRef, index),
+    );
+    if (!isStillLinked) return { ...empty, state: 'skipped' };
     const grant = openGrant(keyring, uid, grantDoc);
     const planKey = await unwrapPlanKey(firestore, keyring, uid);
     const link = openWithKey(
@@ -407,7 +429,9 @@ export async function syncRunwayLink(
         logger.warn('runway.sync.balancesFailed', { linkId });
       },
     );
-    await linkRef.update({ lastSyncAt: Date.now(), status: 'active' });
+    await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+      transaction.update(linkRef, { lastSyncAt: Date.now(), status: 'active' }),
+    );
     logger.info('runway.sync.done', {
       linkId,
       created: totals.created,
@@ -425,7 +449,9 @@ export async function syncRunwayLink(
     };
   } catch (error) {
     if (error instanceof ProviderError && error.kind === 'needsAttention') {
-      await linkRef.update({ status: 'needsAttention' });
+      await writeUnlessRevoked(firestore, linkRef, (transaction) =>
+        transaction.update(linkRef, { status: 'needsAttention' }),
+      );
       logger.warn('runway.sync.needsAttention', { linkId });
       return { ...empty, state: 'needsAttention' };
     }

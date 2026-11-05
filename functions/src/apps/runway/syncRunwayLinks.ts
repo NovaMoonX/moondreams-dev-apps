@@ -9,6 +9,7 @@ import {
   loadKeyringOrFail,
   requireLinkCaller,
 } from './link/linkShared.js';
+import { finishRevokedLinks } from './link/revokeGrant.js';
 import { syncRunwayLink, type LinkSyncResult } from './link/syncRunwayLink.js';
 
 if (getApps().length === 0) {
@@ -17,7 +18,8 @@ if (getApps().length === 0) {
 
 /**
  * `{}` → `{ results: [{ linkId, state, created, updated, removed }] }`: brings in what is new from every active link of
- * the caller. Safe to call again at any time; a repeat changes nothing.
+ * the caller, and retries the bank's revoke for an unlinked link whose grant was kept. Safe to call again at any time; a repeat
+ * changes nothing.
  */
 export const syncRunwayLinks = onCall(
   {
@@ -35,11 +37,14 @@ export const syncRunwayLinks = onCall(
       .collection(`apps/runway/plans/${uid}/links`)
       .where('status', '==', 'active')
       .get();
-    const results: LinkSyncResult[] = await Promise.all(
-      links.docs.map((link) =>
-        syncRunwayLink(firestore, keyring, uid, link.id),
-      ),
-    );
+    const [results] = await Promise.all([
+      Promise.all(
+        links.docs.map((link) =>
+          syncRunwayLink(firestore, keyring, uid, link.id),
+        ),
+      ) as Promise<LinkSyncResult[]>,
+      finishRevokedLinks(firestore, keyring, uid),
+    ]);
     return { results };
   },
 );
