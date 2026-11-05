@@ -9,9 +9,26 @@ import {
   type BankDataProvider,
   type NormalizedAccount,
 } from './provider.js';
-import { plaidProvider, PROVIDER_SECRETS } from './providerPlaid.js';
+import {
+  hasProviderSecrets,
+  plaidProvider,
+  PROVIDER_SECRETS,
+} from './providerPlaid.js';
+import { standInProvider } from './providerStandIn.js';
 
-export const provider: BankDataProvider = plaidProvider;
+const pickProvider = () =>
+  process.env.FUNCTIONS_EMULATOR === 'true' && !hasProviderSecrets()
+    ? standInProvider
+    : plaidProvider;
+
+/** The bank data provider; the Functions emulator without keys gets a stand-in bank so linking can be walked locally. */
+export const provider: BankDataProvider = {
+  createLinkSession: (uid) => pickProvider().createLinkSession(uid),
+  exchange: (publicToken) => pickProvider().exchange(publicToken),
+  getInstitutionName: (grant) => pickProvider().getInstitutionName(grant),
+  listAccounts: (grant) => pickProvider().listAccounts(grant),
+  revoke: (grant) => pickProvider().revoke(grant),
+};
 export const LINK_SECRETS = PROVIDER_SECRETS;
 
 export const LINK_CORS = [

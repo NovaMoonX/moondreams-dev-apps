@@ -84,7 +84,7 @@ async function deleteDocumentTree(
 async function revokeGrants(firestore: Firestore, uid: string) {
   const snapshots = await firestore.collection(grantsPath(uid)).get();
   if (snapshots.empty) return;
-  if (!hasProviderSecrets()) {
+  if (!hasProviderSecrets() && process.env.FUNCTIONS_EMULATOR !== 'true') {
     logger.warn('runway.plan.revokeSkipped', { skipped: snapshots.size });
     return;
   }
