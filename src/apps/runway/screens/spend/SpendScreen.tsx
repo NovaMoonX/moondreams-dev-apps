@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -88,7 +89,10 @@ function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
       type='button'
       variant='tertiary'
       onClick={onClick}
-      className='border-border text-foreground! h-10 min-w-0 flex-1 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+      className={join(
+        'border-border text-foreground! h-10 min-w-0 flex-1 justify-between! rounded-xl border text-sm font-normal',
+        isHalf ? 'gap-1.5 px-2.5!' : 'gap-2 px-3!',
+      )}
     >
       <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
         {!isHalf && icon}
