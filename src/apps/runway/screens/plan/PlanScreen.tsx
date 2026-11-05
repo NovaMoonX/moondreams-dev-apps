@@ -34,6 +34,8 @@ const untrackedSections = viewSections.filter((value) => value !== 'cards');
 
 const END_DAMPING = 0.15;
 const SLIDE_MS = 200;
+/** The page shows between two views while they move, so their edges never touch. */
+const VIEW_GAP_PX = 24;
 
 const isCovered = () =>
   Array.from(document.querySelectorAll('[role="dialog"]')).some(
@@ -71,7 +73,7 @@ const placeBeside = (
   element.style.transition = transition;
   element.style.top = `${body.offsetTop}px`;
   element.style.width = `${body.offsetWidth}px`;
-  element.style.left = `${offset + direction * body.offsetWidth}px`;
+  element.style.left = `${offset + direction * (body.offsetWidth + VIEW_GAP_PX)}px`;
 };
 
 function SectionView({ section }: { section: PlanSection }) {
@@ -171,7 +173,7 @@ function PlanScreen() {
     const body = bodyRef.current;
     const slide = slideRef.current;
     if (!body || !slide) return;
-    const width = body.offsetWidth;
+    const width = body.offsetWidth + VIEW_GAP_PX;
     body.style.transition = 'none';
     body.style.left = `${slide.direction * width + slide.ghost.offsetLeft}px`;
     const frame = requestAnimationFrame(() => {

@@ -2,7 +2,6 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -39,13 +38,18 @@ type Level = 0 | 1 | 2;
 const STEP_GAP_PX = 16;
 const REFRESH_EXTRA_MIN_PX = 72;
 const CIRCLE_PX = 40;
-const CIRCLE_REST_PX = 64;
+const CIRCLE_REST_PX = 8;
+// The page under a dropped circle is a little taller than the circle, so the tiles clear it.
+const SPACER_SCALE = 1.2;
+const NOTE_GAP_PX = 12;
 const MOTION_MIN_MS = 180;
 const MOTION_MAX_MS = 360;
 const SCROLL_SETTLE_MS = 120;
 const REFRESH_RESET_MS = 1500;
 const RING_RADIUS = 11;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
+
+const BUTTON_ROW_CLASS = 'flex min-h-8 items-center gap-2';
 
 const MODE_OPTIONS = WORDS.modes.map(({ value, label }) => ({ value, label }));
 
@@ -63,21 +67,31 @@ const toText = (segments: FigureSegment[], isHidden: boolean) =>
 function Figure({
   segments,
   isWhole = false,
+  isProminent = false,
 }: {
   segments: FigureSegment[];
   isWhole?: boolean;
+  isProminent?: boolean;
 }) {
+  const last = segments.length - 1;
   return (
     <>
       {segments.map((segment, index) =>
         typeof segment === 'string' ? (
-          segment
+          isProminent && index === last ? (
+            <span key={index} className='block whitespace-nowrap'>
+              {segment.trim()}
+            </span>
+          ) : (
+            segment
+          )
         ) : (
           <SensitiveValue
             key={index}
             className={join(
               'text-foreground font-semibold',
               isWhole && 'whitespace-nowrap',
+              isProminent && 'text-lg leading-6',
             )}
           >
             {segment.private}
@@ -116,7 +130,7 @@ function OverviewTile({
       aria-current={isCurrent ? 'true' : undefined}
       onClick={onOpen}
       className={join(
-        'bg-card! border-border text-foreground! hover:bg-muted! flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal',
+        'border-border text-foreground! hover:bg-muted! flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border bg-(--color-card)! px-3 py-2 text-left font-normal whitespace-normal',
         isCurrent && 'border-primary',
         className,
       )}
@@ -126,7 +140,7 @@ function OverviewTile({
         <span className='truncate'>{name}</span>
       </span>
       <span className='text-muted-foreground line-clamp-3 text-xs'>
-        <Figure segments={segments} />
+        <Figure segments={segments} isProminent />
       </span>
     </Button>
   );
@@ -169,12 +183,26 @@ interface Box {
   height: number;
 }
 
+interface PillLook extends Box {
+  background: string;
+  ring: string;
+  radius: number;
+  paddingLeft: number;
+  color: string;
+  hasEmoji: boolean;
+}
+
 interface Measures {
   closed: number;
   row: number;
   grid: number;
+  pillsBox: number;
+  controlsClosed: number;
+  controlsOpen: number;
   rowBox: number;
   gridBox: number;
+  note: number;
+  pills: PillLook[];
   rowTiles: Box[];
   gridTiles: Box[];
 }
@@ -183,15 +211,20 @@ const FALLBACK: Measures = {
   closed: 72,
   row: 170,
   grid: 330,
+  pillsBox: 24,
+  controlsClosed: 0,
+  controlsOpen: 44,
   rowBox: 80,
   gridBox: 240,
+  note: 0,
+  pills: [],
   rowTiles: [],
   gridTiles: [],
 };
 
 const ROW_CLASS =
-  'relative flex [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
-const ROW_TILE_CLASS = 'w-[44%] shrink-0 lg:w-[calc((100%-1rem)/3)]';
+  'relative flex snap-x snap-mandatory [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
+const ROW_TILE_CLASS = 'w-[44%] shrink-0 snap-start lg:w-[calc((100%-1rem)/3)]';
 const GRID_CLASS =
   'relative grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2';
 
@@ -211,16 +244,60 @@ const readBoxes = (node: HTMLElement | null) =>
     };
   });
 
+/** Each pill's box within the pill row (unscrolled) and the colours it is drawn in, so a pill can grow into its tile. */
+const readPills = (node: HTMLElement | null): PillLook[] => {
+  if (!node) return [];
+  const origin = node.getBoundingClientRect();
+  return Array.from(node.querySelectorAll<HTMLElement>('[data-pill]')).map(
+    (pill) => {
+      const box = pill.getBoundingClientRect();
+      const style = getComputedStyle(pill);
+      const emoji = pill.querySelector<HTMLElement>('[data-pill-emoji]');
+      return {
+        left: box.left - origin.left,
+        top: box.top - origin.top,
+        width: box.width,
+        height: box.height,
+        background: style.backgroundColor,
+        ring: style.boxShadow,
+        radius: Math.min(
+          parseFloat(style.borderTopLeftRadius) || 0,
+          box.height / 2,
+        ),
+        paddingLeft: parseFloat(style.paddingLeft) || 0,
+        color: style.color,
+        hasEmoji: (emoji?.offsetWidth ?? 0) > 0,
+      };
+    },
+  );
+};
+
+const blend = (from: string, to: string, t: number) =>
+  `color-mix(in oklab, ${from} ${Math.round((1 - t) * 100)}%, ${to})`;
+
 interface Motion {
   /** Where the top starts moving from, on the finger's line; null when the step is shown at rest. */
   from: number;
   key: number;
 }
 
+interface OverviewItem {
+  key: string;
+  emoji: string;
+  name: string;
+  figure: ReactNode;
+  isCurrent: boolean;
+  node: ReactNode;
+}
+
 interface PullFrameProps {
-  closed: ReactNode;
-  header: ReactNode;
-  tiles: { key: string; node: ReactNode }[];
+  /** The line over the pills and tiles; `reveal` runs from 0 (pills) to 1 (tiles shown). */
+  controls: (reveal: number, isGrid: boolean) => ReactNode;
+  /** Changes when the pills' look does (another one selected). */
+  lookKey: string;
+  pills: ReactNode;
+  items: OverviewItem[];
+  note: ReactNode;
   settled: Level;
   motion: Motion | null;
   isRefreshing: boolean;
@@ -230,11 +307,13 @@ interface PullFrameProps {
   onRefresh: () => void;
 }
 
-/** The pull and its steps: the pills, then a sideways row of tiles, then the tiles moving one by one into their grid places, then a refresh circle over the page. Every step and tile is measured up front, so the finger and a tap move them along one line. */
+/** The pull and its steps: the pills, which grow into a sideways row of tiles, then the tiles moving one by one into their grid places, then a refresh circle over the page. Every step and tile is measured up front, so the finger and a tap move them along one line. */
 function PullFrame({
-  closed,
-  header,
-  tiles,
+  controls,
+  pills,
+  items,
+  note,
+  lookKey,
   settled,
   motion,
   isRefreshing,
@@ -250,10 +329,27 @@ function PullFrame({
     closed: HTMLDivElement | null;
     row: HTMLDivElement | null;
     grid: HTMLDivElement | null;
+    pillsBox: HTMLDivElement | null;
+    controlsClosed: HTMLDivElement | null;
+    controlsOpen: HTMLDivElement | null;
     rowBox: HTMLDivElement | null;
     gridBox: HTMLDivElement | null;
-  }>({ closed: null, row: null, grid: null, rowBox: null, gridBox: null });
+    note: HTMLDivElement | null;
+  }>({
+    closed: null,
+    row: null,
+    grid: null,
+    pillsBox: null,
+    controlsClosed: null,
+    controlsOpen: null,
+    rowBox: null,
+    gridBox: null,
+    note: null,
+  });
   const [rowScroll, setRowScroll] = useState(0);
+  const liveRowRef = useRef<HTMLDivElement | null>(null);
+  const [pillScroll, setPillScroll] = useState(0);
+  const pillTimerRef = useRef(0);
   const scrollTimerRef = useRef(0);
   const pendingShiftRef = useRef(0);
 
@@ -338,8 +434,14 @@ function PullFrame({
           closed: nodes.closed?.offsetHeight ?? previous.closed,
           row: nodes.row?.offsetHeight ?? previous.row,
           grid: nodes.grid?.offsetHeight ?? previous.grid,
+          pillsBox: nodes.pillsBox?.offsetHeight ?? previous.pillsBox,
+          controlsClosed: nodes.controlsClosed?.offsetHeight ?? 0,
+          controlsOpen:
+            nodes.controlsOpen?.offsetHeight ?? previous.controlsOpen,
           rowBox: nodes.rowBox?.offsetHeight ?? previous.rowBox,
           gridBox: nodes.gridBox?.offsetHeight ?? previous.gridBox,
+          note: nodes.note?.offsetHeight ?? 0,
+          pills: readPills(nodes.pillsBox),
           rowTiles: readBoxes(nodes.rowBox),
           gridTiles: readBoxes(nodes.gridBox),
         };
@@ -347,12 +449,21 @@ function PullFrame({
           ? previous
           : next;
       });
+    // A newly selected pill or a theme change repaints the pills without resizing them, so their look is read again.
     const observer = new ResizeObserver(measure);
     Object.values(measureRefs.current).forEach((node) => {
       if (node) observer.observe(node);
     });
-    return () => observer.disconnect();
-  }, []);
+    const themeObserver = new MutationObserver(measure);
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+    return () => {
+      observer.disconnect();
+      themeObserver.disconnect();
+    };
+  }, [lookKey]);
 
   useEffect(() => {
     if (settled === 0) return;
@@ -371,9 +482,69 @@ function PullFrame({
 
   const restoreRowScroll = useCallback(
     (node: HTMLDivElement | null) => {
+      liveRowRef.current = node;
       if (node && node.scrollLeft !== rowScroll) node.scrollLeft = rowScroll;
     },
     [rowScroll],
+  );
+
+  // A swipe to another view brings its pill and its tile into view, in the row as drawn and as kept for the next pull.
+  const currentIndex = items.findIndex((item) => item.isCurrent);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const clip = clipRef.current;
+      const pill = clip?.querySelector<HTMLElement>(
+        '[data-pill][aria-pressed="true"]',
+      );
+      pill?.scrollIntoView({
+        behavior: isMotionReduced() ? 'auto' : 'smooth',
+        block: 'nearest',
+        inline: 'nearest',
+      });
+      const tile = measures.rowTiles[currentIndex];
+      const width = clip?.clientWidth ?? 0;
+      if (!tile || width === 0) return;
+      const last = measures.rowTiles[measures.rowTiles.length - 1];
+      const end = last ? Math.max(0, last.left + last.width - width) : 0;
+      const row = liveRowRef.current;
+      const liveTile = row?.children[currentIndex];
+      // The row snaps tile by tile, so the open view's tile slides to the start, or as near it as the row's end allows. A drawn row keeps its scroll through its own scroll handler: setting it here as well threw the smooth slide off the snap.
+      const next =
+        row && liveTile instanceof HTMLElement
+          ? Math.min(liveTile.offsetLeft, row.scrollWidth - row.clientWidth)
+          : Math.min(tile.left, end);
+      if (!row) setRowScroll(next);
+      liveRowRef.current?.scrollTo({
+        left: next,
+        behavior: isMotionReduced() ? 'auto' : 'smooth',
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [lookKey, currentIndex, measures.rowTiles]);
+  const restorePillScroll = useCallback(
+    (node: HTMLDivElement | null) => {
+      const scroller = Array.from(node?.querySelectorAll('*') ?? []).find(
+        (element) => element.scrollWidth > element.clientWidth,
+      );
+      if (scroller && scroller.scrollLeft !== pillScroll)
+        scroller.scrollLeft = pillScroll;
+    },
+    [pillScroll],
+  );
+  const livePills = (
+    <div
+      ref={restorePillScroll}
+      onScrollCapture={(event) => {
+        const left = (event.target as HTMLElement).scrollLeft;
+        window.clearTimeout(pillTimerRef.current);
+        pillTimerRef.current = window.setTimeout(
+          () => setPillScroll(left),
+          SCROLL_SETTLE_MS,
+        );
+      }}
+    >
+      {pills}
+    </div>
   );
   const row = (
     <div
@@ -392,7 +563,7 @@ function PullFrame({
         );
       }}
     >
-      {tiles.map(({ key, node }) => (
+      {items.map(({ key, node }) => (
         <div key={key} className={ROW_TILE_CLASS}>
           {node}
         </div>
@@ -401,9 +572,83 @@ function PullFrame({
   );
   const grid = (
     <div className={GRID_CLASS} role='group' aria-label={WORDS.tilesLabel}>
-      {tiles.map(({ key, node }) => (
+      {items.map(({ key, node }) => (
         <div key={key}>{node}</div>
       ))}
+    </div>
+  );
+  // The open view's tile is never covered while tiles travel; of the rest, the one further left is on top.
+  const stackAt = (index: number) =>
+    items[index]?.isCurrent ? items.length + 1 : items.length - index;
+  // Each pill grows in place into its tile: its box, corners, colours and words move from the pill's to the tile's.
+  const grow = (progress: number) => (
+    <div
+      className='relative overflow-hidden'
+      style={{ height: mix(measures.pillsBox, measures.rowBox, progress) }}
+      aria-hidden='true'
+    >
+      {items.map(({ key, emoji, name, figure, isCurrent }, index) => {
+        const from = measures.pills[index];
+        const to = measures.rowTiles[index];
+        if (!from || !to) return null;
+        const tileBorder = isCurrent
+          ? 'var(--color-primary)'
+          : 'var(--color-border)';
+        return (
+          <div
+            key={key}
+            className='absolute overflow-hidden'
+            style={{
+              zIndex: stackAt(index),
+              left: mix(from.left - pillScroll, to.left - rowScroll, progress),
+              top: mix(from.top, to.top, progress),
+              width: mix(from.width, to.width, progress),
+              height: mix(from.height, to.height, progress),
+              borderRadius: mix(from.radius, 8, progress),
+              background: blend(from.background, 'var(--color-card)', progress),
+              padding: `${mix((from.height - 16) / 2, 9, progress)}px ${mix(from.paddingLeft, 13, progress)}px`,
+            }}
+          >
+            <span
+              className='absolute inset-0 rounded-[inherit]'
+              style={{ boxShadow: from.ring, opacity: 1 - progress }}
+            />
+            <span
+              className='absolute inset-0 rounded-[inherit]'
+              style={{
+                boxShadow: `inset 0 0 0 1px ${tileBorder}`,
+                opacity: progress,
+              }}
+            />
+            <span
+              className='flex items-center font-medium whitespace-nowrap'
+              style={{
+                fontSize: mix(12, 14, progress),
+                lineHeight: `${mix(16, 20, progress)}px`,
+                color: blend(from.color, 'var(--color-foreground)', progress),
+              }}
+            >
+              <span
+                className='inline-block overflow-hidden'
+                style={{
+                  maxWidth: from.hasEmoji ? 20 : mix(0, 20, progress),
+                  marginRight: from.hasEmoji ? 6 : mix(0, 6, progress),
+                  opacity: from.hasEmoji ? 1 : progress,
+                }}
+              >
+                {emoji}
+              </span>
+              <span className='truncate'>{name}</span>
+            </span>
+            <span
+              className='text-muted-foreground mt-1 line-clamp-3 text-xs'
+              style={{ opacity: Math.max(0, (progress - 0.4) / 0.6) }}
+            >
+              {figure}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
   // Between the row and the grid each tile is placed by hand, from where it sits in the row (as scrolled) to its grid cell.
@@ -414,7 +659,7 @@ function PullFrame({
       role='group'
       aria-label={WORDS.tilesLabel}
     >
-      {tiles.map(({ key, node }, index) => {
+      {items.map(({ key, node }, index) => {
         const from = measures.rowTiles[index];
         const to = measures.gridTiles[index];
         if (!from || !to) return null;
@@ -423,6 +668,7 @@ function PullFrame({
             key={key}
             className='absolute'
             style={{
+              zIndex: stackAt(index),
               left: mix(from.left - rowScroll, to.left, progress),
               top: mix(from.top, to.top, progress),
               width: mix(from.width, to.width, progress),
@@ -435,81 +681,148 @@ function PullFrame({
       })}
     </div>
   );
-  // The hidden copies are measured, never shown, so a tween's frames leave them alone.
-  const measuring = useMemo(
-    () => (
+  const noteAt = (progress: number) =>
+    note ? (
       <div
-        aria-hidden='true'
-        inert
-        className='pointer-events-none invisible absolute inset-x-0 top-0'
+        className='overflow-hidden'
+        style={{
+          marginTop: mix(0, NOTE_GAP_PX, progress),
+          height: progress < 1 ? mix(0, measures.note, progress) : undefined,
+          opacity: progress,
+        }}
+      >
+        {note}
+      </div>
+    ) : null;
+  // The hidden copies are measured, never shown, so a tween's frames leave them alone.
+  const measuring = (
+    <div
+      aria-hidden='true'
+      inert
+      className='pointer-events-none invisible absolute inset-x-0 top-0'
+    >
+      <div
+        ref={(node) => {
+          measureRefs.current.closed = node;
+        }}
+        className='absolute inset-x-0 top-0'
       >
         <div
           ref={(node) => {
-            measureRefs.current.closed = node;
+            measureRefs.current.pillsBox = node;
           }}
-          className='absolute inset-x-0 top-0'
         >
-          {closed}
+          {pills}
         </div>
         <div
           ref={(node) => {
-            measureRefs.current.row = node;
+            measureRefs.current.controlsClosed = node;
           }}
-          className='absolute inset-x-0 top-0 space-y-3'
+          className='pt-3'
         >
-          {header}
-          <div
-            ref={(node) => {
-              measureRefs.current.rowBox = node;
-            }}
-            className={ROW_CLASS}
-          >
-            {tiles.map(({ key, node }) => (
-              <div key={key} className={ROW_TILE_CLASS}>
-                {node}
-              </div>
-            ))}
-          </div>
-        </div>
-        <div
-          ref={(node) => {
-            measureRefs.current.grid = node;
-          }}
-          className='absolute inset-x-0 top-0 space-y-3'
-        >
-          {header}
-          <div
-            ref={(node) => {
-              measureRefs.current.gridBox = node;
-            }}
-            className={GRID_CLASS}
-          >
-            {tiles.map(({ key, node }) => (
-              <div key={key}>{node}</div>
-            ))}
-          </div>
+          {controls(0, false)}
         </div>
       </div>
-    ),
-    [closed, header, tiles],
+      <div
+        ref={(node) => {
+          measureRefs.current.row = node;
+        }}
+        className='absolute inset-x-0 top-0'
+      >
+        <div
+          ref={(node) => {
+            measureRefs.current.rowBox = node;
+          }}
+          className={ROW_CLASS}
+        >
+          {items.map(({ key, node }) => (
+            <div key={key} className={ROW_TILE_CLASS}>
+              {node}
+            </div>
+          ))}
+        </div>
+        <div
+          ref={(node) => {
+            measureRefs.current.controlsOpen = node;
+          }}
+          className='pt-3'
+        >
+          {controls(1, false)}
+        </div>
+        {note && (
+          <div
+            ref={(node) => {
+              measureRefs.current.note = node;
+            }}
+            style={{ marginTop: NOTE_GAP_PX }}
+          >
+            {note}
+          </div>
+        )}
+      </div>
+      <div
+        ref={(node) => {
+          measureRefs.current.grid = node;
+        }}
+        className='absolute inset-x-0 top-0'
+      >
+        <div
+          ref={(node) => {
+            measureRefs.current.gridBox = node;
+          }}
+          className={GRID_CLASS}
+        >
+          {items.map(({ key, node }) => (
+            <div key={key}>{node}</div>
+          ))}
+        </div>
+        <div className='pt-3'>{controls(1, false)}</div>
+        {note && <div style={{ marginTop: NOTE_GAP_PX }}>{note}</div>}
+      </div>
+    </div>
   );
 
-  const opened = (body: ReactNode) => (
-    <div className='space-y-3'>
-      {header}
+  const controlsAt = (reveal: number, isGrid: boolean) => {
+    if (reveal === 0) return <div className='pt-3'>{controls(0, isGrid)}</div>;
+    if (reveal === 1) return <div className='pt-3'>{controls(1, isGrid)}</div>;
+    return (
+      <div
+        className='overflow-hidden pt-3'
+        style={{
+          height: mix(measures.controlsClosed, measures.controlsOpen, reveal),
+        }}
+      >
+        {controls(reveal, isGrid)}
+      </div>
+    );
+  };
+  const frame = (
+    reveal: number,
+    body: ReactNode,
+    noteProgress: number,
+    isGrid = false,
+  ) => (
+    <div>
       {body}
+      {controlsAt(reveal, isGrid)}
+      {noteAt(noteProgress)}
     </div>
   );
 
   const content = () => {
     if (!isMoving) {
-      if (settled === 0) return closed;
-      return opened(settled === 1 ? row : grid);
+      if (settled === 0) return frame(0, livePills, 0);
+      return settled === 1 ? frame(1, row, 1) : frame(1, grid, 1, true);
     }
-    if (position <= rowAt) return opened(row);
+    if (position <= 0) return frame(0, livePills, 0);
+    if (position < rowAt) {
+      const progress = position / rowAt;
+      return frame(progress, grow(progress), progress);
+    }
+    if (position === rowAt) return frame(1, row, 1);
     if (position < gridAt)
-      return opened(morph((position - rowAt) / (gridAt - rowAt)));
-    return opened(grid);
+      return frame(1, morph((position - rowAt) / (gridAt - rowAt)), 1);
+    return frame(1, grid, 1, true);
   };
 
   const refreshTravel = isPulling ? position - gridAt : 0;
@@ -521,19 +834,18 @@ function PullFrame({
   const circleY = isRefreshing
     ? CIRCLE_REST_PX
     : mix(-CIRCLE_PX, CIRCLE_REST_PX, progress);
+  const circleTop = isCircleShown ? circleY : -CIRCLE_PX - 8;
 
   return (
-    <div className='relative'>
-      <div
-        ref={clipRef}
-        className='overflow-hidden'
-        style={{
-          maxHeight:
-            isMoving && position < rowAt
-              ? measures.closed + position
-              : undefined,
-        }}
-      >
+    <div className='border-border relative border-b pb-4'>
+      <div ref={clipRef} className='overflow-hidden'>
+        <div
+          aria-hidden='true'
+          style={{
+            height: Math.max(0, (circleTop + CIRCLE_PX) * SPACER_SCALE),
+          }}
+          className={join(!isPulling && 'transition-[height] duration-200')}
+        />
         {content()}
       </div>
       <div
@@ -552,7 +864,7 @@ function PullFrame({
           style={{
             width: CIRCLE_PX,
             height: CIRCLE_PX,
-            transform: `translateY(${isCircleShown ? circleY : -CIRCLE_PX - 8}px)`,
+            transform: `translateY(${circleTop}px)`,
           }}
         >
           <RefreshRing
@@ -613,8 +925,12 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
   const goTo = (level: Level) => settle(level, positionRef.current);
   const endMotion = useCallback(() => setMotion(null), []);
 
-  const tiles = sections.map((section) => ({
+  const items = sections.map((section) => ({
     key: section,
+    emoji: PLAN_VIEW_EMOJI[section],
+    name: PLAN_SECTION_LABELS[section],
+    figure: <Figure segments={figures[section]} isProminent />,
+    isCurrent: current === section,
     node: (
       <OverviewTile
         name={PLAN_SECTION_LABELS[section]}
@@ -638,7 +954,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
             emoji={PLAN_VIEW_EMOJI[section]}
             isThin
             isSelected={current === section}
-            className='max-[359px]:px-1! max-sm:px-2 max-sm:[&_[data-pill-emoji]]:hidden'
+            className='max-[359px]:px-1! max-sm:px-2'
             onClick={() => onSelect(section)}
           >
             {PLAN_SECTION_LABELS[section]}
@@ -648,11 +964,31 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
     </div>
   );
 
-  const isGrid = settled === 2;
-  const header = (
-    <>
-      {pills}
-      <div className='flex items-center justify-between gap-2'>
+  const controls = (reveal: number, isGrid: boolean) => (
+    <div className={BUTTON_ROW_CLASS}>
+      <Button
+        type='button'
+        variant='secondary'
+        size='sm'
+        rounded='full'
+        className='gap-1.5'
+        onClick={() => goTo(isGrid ? 0 : 2)}
+      >
+        {isGrid ? WORDS.viewLess : WORDS.viewAll}
+        {isGrid ? (
+          <ChevronUp className='h-4 w-4' aria-hidden='true' />
+        ) : (
+          <ChevronDown className='h-4 w-4' aria-hidden='true' />
+        )}
+      </Button>
+      <div
+        className={join(
+          reveal < 1 && 'pointer-events-none',
+          reveal === 0 && 'invisible',
+        )}
+        style={{ opacity: reveal }}
+        aria-hidden={reveal < 1 ? true : undefined}
+      >
         <SegmentedControl
           isCompact
           label={WORDS.modeLabel}
@@ -660,52 +996,25 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
           value={mode}
           onChange={setMode}
         />
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          onClick={() => goTo(isGrid ? 1 : 2)}
-        >
-          {isGrid ? WORDS.viewLess : WORDS.viewAll}
-          {isGrid ? (
-            <ChevronUp className='h-4 w-4' aria-hidden='true' />
-          ) : (
-            <ChevronDown className='h-4 w-4' aria-hidden='true' />
-          )}
-        </Button>
-      </div>
-      {priority && (
-        <p className='text-muted-foreground text-sm text-balance'>
-          {WORDS.priorityTotal(priority.counted)}
-          <Figure segments={[priority.total]} isWhole />
-          {WORDS.priorityRest}
-        </p>
-      )}
-    </>
-  );
-
-  const closed = (
-    <div className='space-y-3'>
-      {pills}
-      <div className='flex justify-end'>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          onClick={() => goTo(2)}
-        >
-          {WORDS.viewAll}
-          <ChevronDown className='h-4 w-4' aria-hidden='true' />
-        </Button>
       </div>
     </div>
   );
 
+  const note = priority ? (
+    <p className='text-muted-foreground text-sm text-balance'>
+      {WORDS.priorityTotal(priority.counted)}
+      <Figure segments={[priority.total]} isWhole />
+      {WORDS.priorityRest}
+    </p>
+  ) : null;
+
   return (
     <PullFrame
-      closed={closed}
-      header={header}
-      tiles={tiles}
+      controls={controls}
+      pills={pills}
+      items={items}
+      note={note}
+      lookKey={current}
       settled={settled}
       motion={motion}
       isRefreshing={isRefreshing}
