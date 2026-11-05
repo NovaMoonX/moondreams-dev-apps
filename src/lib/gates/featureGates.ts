@@ -15,8 +15,14 @@ export type GateExceptionList = 'alwaysOnUids' | 'alwaysOffUids';
 /** What the admin chose for one switch, before it is saved. */
 export type GateDraft = Pick<
   FeatureGateSetting,
-  'rollout' | 'alwaysOnUids' | 'alwaysOffUids'
+  'rollout' | 'alwaysOnUids' | 'alwaysOffUids' | 'reason'
 >;
+
+/** The reason as it is stored: trimmed, null when blank. */
+export function toGateReason(value: string | null) {
+  const trimmed = value?.trim() ?? '';
+  return trimmed === '' ? null : trimmed;
+}
 
 function applyListChange(
   current: string[],
@@ -74,6 +80,10 @@ export async function saveGateDraft(
                 : after.rollout,
             alwaysOnUids,
             alwaysOffUids,
+            reason:
+              toGateReason(after.reason) === toGateReason(before.reason)
+                ? current.reason
+                : toGateReason(after.reason),
             updatedAt: Date.now(),
           },
         },
