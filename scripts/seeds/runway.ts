@@ -326,6 +326,9 @@ async function writeSeedHorizon(
         orderIndex: 20,
         rest: { kind: 'outside' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost(
             'seed-cost-truck',
@@ -368,6 +371,9 @@ async function writeSeedHorizon(
         orderIndex: 21,
         rest: { kind: 'pays' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
           cost(
@@ -400,6 +406,9 @@ async function writeSeedHorizon(
         orderIndex: 22,
         rest: { kind: 'later' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
           cost(
@@ -409,6 +418,56 @@ async function writeSeedHorizon(
             80_000,
             dec19 + 42 * DAY_MS,
           ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-couch',
+      payload: {
+        name: 'New couch',
+        emoji: '🛋️',
+        happensOn: today - 6 * DAY_MS,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 23,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'finished' as const,
+        stateOn: today - 3 * DAY_MS,
+        stateMoney: null,
+        costs: [
+          cost('seed-cost-couch', 'Couch', 90_000, 90_000, today - 5 * DAY_MS),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-ski',
+      payload: {
+        name: 'Ski weekend',
+        emoji: '⛷️',
+        happensOn: feb1 + 30 * DAY_MS,
+        happensUntil: null,
+        priority: 'want',
+        orderIndex: 24,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'calledOff' as const,
+        stateOn: today - 2 * DAY_MS,
+        stateMoney: {
+          kind: 'free' as const,
+          toId: null,
+          cents: 40_000,
+          moveId: null,
+        },
+        costs: [
+          cost(
+            'seed-cost-lift',
+            'Lift tickets',
+            40_000,
+            40_000,
+            feb1 + 30 * DAY_MS,
+          ),
+          cost('seed-cost-cabin', 'Cabin', 60_000, 60_000, feb1 + 28 * DAY_MS),
         ],
       },
     },
@@ -426,6 +485,11 @@ async function writeSeedHorizon(
       itemId: 'seed-horizon-wedding',
       cents: 120_000,
       summary: "Put $1,200.00 toward Sam's wedding from Free to Spend.",
+    },
+    {
+      itemId: 'seed-horizon-couch',
+      cents: 90_000,
+      summary: 'Put $900.00 toward New couch from Free to Spend.',
     },
   ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
 
@@ -498,6 +562,14 @@ async function writeSeedHorizon(
           fromFreeCents: 0,
           paidOn: today - DAY_MS,
           mark: 'outside',
+        },
+        {
+          itemId: 'seed-horizon-couch',
+          cost: items[3].payload.costs[0],
+          amountCents: 90_000,
+          fromFreeCents: 0,
+          paidOn: today - 4 * DAY_MS,
+          mark: 'item',
         },
       ];
   const marks = await Promise.all(

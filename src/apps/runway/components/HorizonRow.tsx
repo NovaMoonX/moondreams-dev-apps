@@ -5,7 +5,7 @@ import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
-import { HORIZON_WORDS } from '@apps/runway/constants';
+import { HORIZON_END_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectCostPaid } from '@apps/runway/store/selectors/runwaySelectors';
@@ -45,7 +45,14 @@ function HorizonRow({
     balances.costFromFreeByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
+  const isDone = horizon.state !== 'open';
   const getDetail = () => {
+    if (isDone) {
+      const on = formatDateOrdinalUTC(horizon.stateOn ?? horizon.happensOn);
+      return horizon.state === 'calledOff'
+        ? HORIZON_END_WORDS.calledOffOn(on)
+        : HORIZON_END_WORDS.doneOn(on);
+    }
     if (shortfall) {
       return isHidden
         ? HORIZON_WORDS.needsAShortLook
@@ -64,7 +71,9 @@ function HorizonRow({
       : HORIZON_WORDS.nothingDue;
   };
   const detail = getDetail();
-  const left = formatCentsShort(figures.leftCents);
+  const left = formatCentsShort(
+    isDone ? figures.spentCents : figures.leftCents,
+  );
 
   return (
     <>
@@ -74,7 +83,14 @@ function HorizonRow({
         detail={detail}
         isDetailWarning={shortfall !== null && !isHidden}
         figure={left}
-        ariaLabel={`${horizon.name}, ${left} left. ${detail}. Open`}
+        figureWord={
+          isDone
+            ? horizon.state === 'calledOff'
+              ? HORIZON_END_WORDS.paid
+              : HORIZON_END_WORDS.spent
+            : null
+        }
+        ariaLabel={`${horizon.name}, ${left} ${isDone ? 'spent' : 'left'}. ${detail}. Open`}
         onOpen={reorder ? undefined : () => setIsOpen(true)}
         reorder={reorder}
         isHighlighted={isHighlighted}

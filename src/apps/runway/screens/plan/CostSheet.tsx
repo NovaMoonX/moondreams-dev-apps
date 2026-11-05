@@ -3,6 +3,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
+  Ban,
   Lock,
   Pencil,
   Receipt,
@@ -38,6 +39,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import {
   COST_PAID_WORDS,
   FORM_FLOW_WORDS,
+  HORIZON_END_WORDS,
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
   MAKE_BILL_WORDS,
@@ -190,6 +192,8 @@ interface CostSheetProps {
   backLabel?: string | null;
   /** Opens the cost's Change form, which replaces the event's sheet. */
   onChange: () => void;
+  /** Calls the whole event off, offered where Remove would leave an event with no cost. */
+  onCallOff: () => void;
 }
 
 /** One cost of an event, swapped into the event's sheet: set its price, change it, or remove it. */
@@ -202,6 +206,7 @@ function CostSheet({
   onBack,
   backLabel = null,
   onChange,
+  onCallOff,
 }: CostSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -255,7 +260,8 @@ function CostSheet({
     payment: next,
   });
 
-  const canAddPurchase = isTrack && next !== null && !cost.isOutside;
+  const isDone = horizon.state !== 'open';
+  const canAddPurchase = !isDone && isTrack && next !== null && !cost.isOutside;
   const isNear = next !== null && next.dueOn - 7 * DAY_MS <= today;
   const isFar = canAddPurchase && !isNear;
   const isMarkShown = !canAddPurchase || isNear || isMoreOpen;
@@ -267,7 +273,12 @@ function CostSheet({
   const itemPaid = useAppSelector(selectCostPaid)[itemId];
   const makeBillBlock = getMakeBillBlock(costPayments, today);
   const canMakeBill =
-    isRepeat && isLive && !cost.isOutside && !isBill && next !== null;
+    !isDone &&
+    isRepeat &&
+    isLive &&
+    !cost.isOutside &&
+    !isBill &&
+    next !== null;
   const hasOtherOpen = hasOtherOpenCost(
     horizon,
     cost.id,
@@ -277,7 +288,12 @@ function CostSheet({
   );
   const shareCents = getCostShare(horizon, cost.id, heldCents, payments ?? []);
   const isRemovable =
-    isLive && !isPaidOnce && !isBill && getLiveCosts(horizon).length > 1;
+    !isDone &&
+    isLive &&
+    !isPaidOnce &&
+    !isBill &&
+    getLiveCosts(horizon).length > 1;
+  const isLast = !isDone && isLive && !isPaidOnce && !isRemovable && !isBill;
   const settled =
     next === null
       ? paidEntries.reduce<CostPaidEntry | null>(
@@ -612,7 +628,7 @@ function CostSheet({
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}
-        {!settled && !isBill && (
+        {!isDone && !settled && !isBill && (
           <ActionRow
             isGrouped
             isRoomy
@@ -631,15 +647,17 @@ function CostSheet({
             onClick={() => setView('price')}
           />
         )}
-        <ActionRow
-          isGrouped
-          isRoomy
-          hasChevron
-          icon={<Pencil />}
-          label={HORIZON_WORDS.changeCostRow}
-          subtitle={HORIZON_WORDS.changeCostSub}
-          onClick={onChange}
-        />
+        {!isDone && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Pencil />}
+            label={HORIZON_WORDS.changeCostRow}
+            subtitle={HORIZON_WORDS.changeCostSub}
+            onClick={onChange}
+          />
+        )}
         {canMakeBill && makeBillBlock === null && (
           <ActionRow
             isGrouped
@@ -684,6 +702,17 @@ function CostSheet({
         )}
         {isFar && isMoreOpen && addRow}
         {next && isFar && isMoreOpen && markRow}
+        {isLast && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Ban />}
+            label={HORIZON_END_WORDS.callOffLabel(horizon.name)}
+            subtitle={HORIZON_END_WORDS.callOffRowSub}
+            onClick={onCallOff}
+          />
+        )}
         {isRemovable && (
           <ActionRow
             isGrouped
@@ -707,11 +736,6 @@ function CostSheet({
       {isPaidOnce && (
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.paidStaysInRecord}
-        </p>
-      )}
-      {isLive && !isPaidOnce && !isRemovable && !isBill && (
-        <p className='text-muted-foreground text-sm'>
-          {HORIZON_WORDS.changeLastCost}
         </p>
       )}
       {canAddPurchase && isNear && (

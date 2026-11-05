@@ -543,7 +543,6 @@ export const HORIZON_WORDS = {
   samePrice: "That's the price already.",
   effectBefore: 'Now',
   effectAfter: 'After this change',
-  changeLastCost: "It's the only cost left.",
   paidStaysInRecord: "It's paid, so it stays in the record.",
   changeCostRow: 'Change',
   changeCostSub: "Name, date and how it's paid",
@@ -631,6 +630,114 @@ export const MAKE_BILL_WORDS = {
     `Brought ${money} from ${item}.`,
   summaryFree: (money: string, item: string) =>
     `Gave ${item}'s ${money} to Free to Spend.`,
+} as const;
+
+/** Issue 88: finishing an event, calling it off and bringing it back. */
+export const HORIZON_END_WORDS = {
+  readyTitle: 'Everything is paid or a bill',
+  readySub: 'Nothing is left to pay, so it is ready to finish.',
+  finishLabel: (name: string) => `Finish ${name}`,
+  finishTitle: (name: string) => `Finish ${name}?`,
+  finishNote: 'Everything is paid or a bill.',
+  moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
+  freeBody: 'From today.',
+  placeRow: 'Move it to an envelope or goal',
+  placeRowSub: 'Pick where it goes',
+  placeCaption: 'Move it to',
+  placePicked: (place: string) => `It moves to ${place}`,
+  placeNone: 'There is no envelope or goal to move it to yet.',
+  finished: (name: string) => `${name} is done`,
+  callOffRow: 'Call it off',
+  callOffRowSub: "Unpaid costs stop. What's paid stays.",
+  callOffLabel: (name: string) => `Call off ${name}`,
+  callOffTitle: (name: string) => `Call off ${name}?`,
+  callOffNote:
+    "Unpaid costs stop asking for money. What's paid stays in its history.",
+  whatStops: 'What stops',
+  staysBill: (cost: string) => `Stays a bill \u00b7 ${cost}`,
+  stopsRow: (cost: string, when: string, figure: string | null) =>
+    [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
+  noOpenCosts: 'Every cost is already paid, ended or a bill.',
+  callOffConfirm: 'Call it off',
+  calledOff: (name: string) => `${name} is called off`,
+  undo: 'Undo',
+  needsChoice: 'Choose what happens to the money it holds.',
+  needsPlace: 'Pick the envelope or goal it moves to.',
+  failed: 'This did not save. Nothing was changed.',
+  gone: 'This event is gone. Open it again.',
+  badMove: 'There is no money to move that way.',
+  notEnough: 'That is more than it has left.',
+  changedSince: 'It was changed since, so nothing was undone.',
+  offline: 'You are offline, so nothing was changed.',
+  alreadyDone: 'It was already changed on another device. Open it again.',
+  endSummary: (
+    name: string,
+    state: 'finished' | 'calledOff',
+    money: {
+      kind: 'free' | 'place' | 'held';
+      cents: string;
+      place: string | null;
+    } | null,
+  ) => {
+    const lead =
+      state === 'finished' ? `Finished ${name}.` : `Called off ${name}.`;
+    if (money === null) return lead;
+    if (money.kind === 'held')
+      return `${lead} ${money.cents} stays held for ${name}.`;
+    return `${lead} ${money.cents} went to ${money.kind === 'free' ? 'Free to Spend' : (money.place ?? 'another place')}.`;
+  },
+  undoEndSummary: (name: string, state: 'finished' | 'calledOff') =>
+    state === 'finished'
+      ? `Took back finishing ${name}.`
+      : `Took back calling off ${name}.`,
+  bringBackSummary: (name: string, money: string | null) =>
+    money === null
+      ? `Brought ${name} back.`
+      : `Brought ${name} back, with ${money}.`,
+  undoBringBackSummary: (name: string) => `Called ${name} off again.`,
+  releaseSummary: (name: string, money: string) =>
+    `${name}'s ${money} is Free to Spend.`,
+  undoReleaseSummary: (name: string, money: string) =>
+    `${money} is held for ${name} again.`,
+  reopenSummary: (name: string, cost: string) =>
+    `${name} is open again: ${cost} was taken back.`,
+  doneCaption: (count: number) => `Done \u00b7 ${count}`,
+  doneOn: (date: string) => `Done ${date}`,
+  calledOffOn: (date: string) => `Called off ${date}`,
+  spent: 'Spent',
+  paid: 'Paid',
+  anotherPlace: 'another place',
+  stopped: 'Stopped \u00b7 never paid',
+  wentToFree: (money: string, date: string) =>
+    `${money} to Free to Spend, ${date}`,
+  wentToPlace: (money: string, place: string, date: string) =>
+    `${money} to ${place}, ${date}`,
+  stillHeld: (money: string) => `Still held \u00b7 ${money}`,
+  release: 'Release what it holds',
+  releaseSub: 'It becomes Free to Spend.',
+  released: (name: string) => `What ${name} held is Free to Spend`,
+  releaseFailed: (name: string) => `${name} was not changed`,
+  bringBackRow: 'Bring it back',
+  bringBackSub: 'Its costs plan again from today',
+  bringBackTitle: (name: string) => `Bring ${name} back?`,
+  bringBackNote: 'Its unpaid costs plan again from today.',
+  whatComesBack: 'What comes back',
+  dueNow: 'Due now',
+  nothingComesBack: 'It has no unpaid costs to plan again.',
+  bringQuestion: (amount: string, name: string) =>
+    `Bring the ${amount} back to ${name}?`,
+  bringYes: (amount: string) => `Bring the ${amount} back`,
+  bringYesFree: 'It comes back from Free to Spend.',
+  bringYesPlace: (place: string) => `It comes back from ${place}.`,
+  bringNo: (name: string) => `Start ${name} at $0`,
+  bringNoFree: 'What went to Free to Spend stays there.',
+  bringNoPlace: (place: string) => `What went to ${place} stays there.`,
+  moneyGone: (amount: string, place: string, name: string) =>
+    `The ${amount} that went to ${place} is no longer there, so ${name} starts at $0.`,
+  needsAnswer: 'Choose what happens to the money first.',
+  effectNone: 'No pay changes.',
+  backIn: (name: string) => `${name} is back`,
+  bringBackConfirm: 'Bring it back',
 } as const;
 
 export const MAX_NAME_LENGTH = 60;

@@ -26,11 +26,13 @@ import {
   getCostPaidChange,
   isCostUnmarked,
   sealCostUnmark,
+  sealReopen,
   setCostUnmark,
   undoCostPaid,
   type CostPaidNames,
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
   openMove,
@@ -43,6 +45,7 @@ import type {
   CostPaidSealed,
   CostRef,
   DateOnly,
+  HorizonSealed,
   OpenPurchase,
   ChangeDoc,
   ChangeSealed,
@@ -100,6 +103,8 @@ export interface PurchaseCostMark {
   /** Null when the screen has not loaded the mark; the delete then looks for the live one itself. */
   paid: WrittenCostPaid | null;
   names: CostPaidNames;
+  /** The event as it stands when it is finished: taking the mark back reopens it in the same transaction. */
+  finished?: HorizonSealed | null;
 }
 
 const MAX_MARK_LOOKUPS = 12;
@@ -493,12 +498,21 @@ export async function deletePurchase(
       ? null
       : (costMark.paid ?? (await readLiveCostMark(uid, encryption, previous)));
   const names = costMark?.names ?? null;
-  const [unmarkSealed, unmarkChange] =
+  const [unmarkSealed, unmarkChange, reopen] =
     paid === null || names === null
-      ? [null, null]
+      ? [null, null, null]
       : await Promise.all([
           sealCostUnmark(encryption, paid),
           getCostPaidChange(encryption, paid, names, true),
+          costMark?.finished
+            ? sealReopen(
+                encryption,
+                costMark.finished,
+                paid.itemId,
+                names.cost,
+                todayAsUtcDate(),
+              )
+            : Promise.resolve(null),
         ]);
   const changeId = generateUuid();
   await runTransaction(db, async (transaction) => {
@@ -511,7 +525,7 @@ export async function deletePurchase(
       ...(isUnmarkNeeded && paid ? [paid.dueOn] : []),
     ]);
     if (isUnmarkNeeded && paid && unmarkSealed && unmarkChange) {
-      setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange);
+      setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange, reopen);
     }
     transaction.delete(purchaseRef(uid, previous.id));
     transaction.set(
@@ -534,13 +548,14 @@ export async function removePurchaseOfCost(
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
   names: CostPaidNames,
+  finished: HorizonSealed | null = null,
 ): Promise<boolean> {
   const snapshot =
     paid.purchaseId === null
       ? null
       : await getDoc(purchaseRef(uid, paid.purchaseId));
   if (snapshot === null || !snapshot.exists()) {
-    return undoCostPaid(uid, encryption, paid, names);
+    return undoCostPaid(uid, encryption, paid, names, finished);
   }
   const previous = await openPurchase(
     { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
@@ -551,7 +566,7 @@ export async function removePurchaseOfCost(
     encryption,
     previous,
     describePurchaseRemoval(previous, () => names.item),
-    { paid, names },
+    { paid, names, finished },
   );
   await removeReceiptImagesOf(uid, previous.id).catch((cleanupError) => {
     console.error('A removed purchase left receipts behind', cleanupError);

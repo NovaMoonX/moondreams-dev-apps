@@ -241,6 +241,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     rest: restValue,
     note: null,
     costs: formData.costs,
+    state: 'open',
+    stateOn: null,
+    stateMoney: null,
   });
   const blocker =
     name === ''

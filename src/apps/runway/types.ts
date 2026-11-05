@@ -388,6 +388,19 @@ export type HorizonRest =
   | { kind: 'outside' }
   | { kind: 'later' };
 
+/** Where an event stands: open, done with every cost settled, or called off before it happened. */
+export type HorizonState = 'open' | 'finished' | 'calledOff';
+
+/** Where the money an event held went when it was finished or called off. */
+export interface HorizonMoneyLeft {
+  /** Free to Spend, an envelope or goal (`toId`), or kept by the event until it is released. */
+  kind: 'free' | 'place' | 'held';
+  toId: string | null;
+  cents: Cents;
+  /** The id of the transfer that moved it; null when nothing moved. */
+  moveId: string | null;
+}
+
 /** One event's costs. */
 export interface HorizonSealed {
   name: string;
@@ -403,11 +416,23 @@ export interface HorizonSealed {
   rest: HorizonRest;
   note: string | null;
   costs: HorizonCost[];
+  /** A version from `stateOn` changes it; a version sealed before it read as open. */
+  state: HorizonState;
+  /** The day it was finished or called off; null while open. */
+  stateOn: DateOnly | null;
+  /** Where its money went when `state` changed; null while open or when it held none. */
+  stateMoney: HorizonMoneyLeft | null;
 }
 
 /** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
-export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
+export type HorizonStored = Omit<
+  HorizonSealed,
+  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney'
+> & {
   rest?: HorizonRest | null;
+  state?: HorizonState;
+  stateOn?: DateOnly | null;
+  stateMoney?: HorizonMoneyLeft | null;
   costs: (Omit<
     HorizonCost,
     | 'isOutside'

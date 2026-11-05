@@ -3,7 +3,9 @@ import type {
   CostPaidMark,
   DateOnly,
   HorizonCost,
+  HorizonMoneyLeft,
   HorizonSealed,
+  HorizonState,
   HorizonStored,
   MoneyRange,
   Schedule,
@@ -80,15 +82,17 @@ export function getPriorBeat(schedule: Schedule): DateOnly | null {
   return addUtcMonths(anchor, -months);
 }
 
-/** Every cost's payments through `horizon` in date order, ties in the order the costs were listed. */
+/** Every cost's payments through `horizon` in date order, ties in the order the costs were listed. An event that is finished or called off plans none: only the payments marked paid stay. */
 export const listHorizonPayments = (
   costs: readonly HorizonCost[],
   horizon: DateOnly,
   stance: Stance,
   paid: readonly CostPaidEntry[] = [],
+  state: HorizonState = 'open',
 ): CostPayment[] =>
   costs
     .flatMap((cost) => listCostPayments(cost, horizon, stance, paid))
+    .filter((payment) => state === 'open' || payment.paid !== null)
     .sort((a, b) => a.dueOn - b.dueOn);
 
 /** What the payments through `horizon` add up to. */
@@ -144,6 +148,9 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
     becameBillId: cost.becameBillId ?? null,
     becameBillOn: cost.becameBillOn ?? null,
   })),
+  state: stored.state ?? 'open',
+  stateOn: stored.stateOn ?? null,
+  stateMoney: stored.stateMoney ?? null,
 });
 
 /** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */
@@ -441,3 +448,87 @@ export const getHorizonFigures = (
   fromFreeCents,
   leftCents,
 });
+
+/** How far ahead "every payment is settled" looks, so a cost far off still keeps an event from being ready. */
+const SETTLED_MONTHS = 120;
+
+/** Where an event stands: its stored state, and for an open one whether every cost is settled (paid, ended or a bill), which makes it ready to finish. Derived, never stored. */
+export type HorizonStage = 'open' | 'readyToFinish' | 'finished' | 'calledOff';
+
+const isCostSettled = (
+  cost: HorizonCost,
+  today: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[],
+) => {
+  if (cost.becameBillId !== null || cost.endsAfter !== null) return true;
+  if (cost.schedule.anchor === null) return false;
+  if (
+    cost.schedule.kind !== 'once' &&
+    cost.ending.onDate === null &&
+    cost.ending.afterCount === null
+  ) {
+    return false;
+  }
+  return listCostPayments(
+    cost,
+    addUtcMonths(today, SETTLED_MONTHS),
+    stance,
+    paid,
+  ).every((payment) => payment.paid !== null);
+};
+
+export function getHorizonStage(
+  horizon: Pick<HorizonSealed, 'costs' | 'state'>,
+  today: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+): HorizonStage {
+  if (horizon.state !== 'open') return horizon.state;
+  return horizon.costs.length > 0 &&
+    horizon.costs.every((cost) => isCostSettled(cost, today, stance, paid))
+    ? 'readyToFinish'
+    : 'open';
+}
+
+/** The costs that still ask for money: not ended, not a bill, with a payment unpaid or none that ever ends. Finishing has none; calling an event off stops these. */
+export const listOpenCosts = (
+  horizon: Pick<HorizonSealed, 'costs'>,
+  today: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+) =>
+  horizon.costs.filter(
+    (cost) =>
+      cost.endsAfter === null &&
+      cost.becameBillId === null &&
+      !isCostSettled(cost, today, stance, paid),
+  );
+
+/** The bills an event's costs became; they stay when it is called off. */
+export const listMadeBills = (horizon: Pick<HorizonSealed, 'costs'>) =>
+  horizon.costs.filter((cost) => cost.becameBillId !== null);
+
+/** The event in a new state from `on`, with where its money went; reopening clears both. */
+export const setHorizonState = (
+  horizon: HorizonSealed,
+  state: HorizonState,
+  on: DateOnly,
+  money: HorizonMoneyLeft | null,
+): HorizonSealed => ({
+  ...horizon,
+  state,
+  stateOn: state === 'open' ? null : on,
+  stateMoney: state === 'open' ? null : money,
+});
+
+/** What can come back into a reopened event: the money it sent away, less what the place it went to no longer has. Money kept held, or never moved, comes back by itself and asks nothing. */
+export function getBringableCents(
+  money: HorizonMoneyLeft | null,
+  placeLeftCents: Cents,
+): Cents {
+  if (money === null || money.kind === 'held' || money.cents <= 0) return 0;
+  return money.kind === 'free'
+    ? money.cents
+    : Math.min(money.cents, Math.max(0, placeLeftCents));
+}

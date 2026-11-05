@@ -33,10 +33,21 @@ import {
 import { removePurchaseOfCost } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  selectAllHorizonItems,
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, HorizonCost } from '@apps/runway/types';
+
+/** The event when it is finished, so taking one of its paid marks back reopens it. */
+export const getFinishedHorizon = (itemId: string) => {
+  const found = selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
+    ({ item }) => item.id === itemId,
+  );
+  return found?.version.payload.state === 'finished'
+    ? found.version.payload
+    : null;
+};
 
 const getHeldNow = (itemId: string) =>
   selectBalances(store.getState()).assignedByItem[itemId] ?? 0;
@@ -52,8 +63,20 @@ export async function undoCostPayment(
   const written: WrittenCostPaid = { ...paid, itemId };
   return inTurn(() =>
     paid.mark === 'purchase'
-      ? removePurchaseOfCost(uid, encryption, written, names)
-      : undoCostPaid(uid, encryption, written, names),
+      ? removePurchaseOfCost(
+          uid,
+          encryption,
+          written,
+          names,
+          getFinishedHorizon(itemId),
+        )
+      : undoCostPaid(
+          uid,
+          encryption,
+          written,
+          names,
+          getFinishedHorizon(itemId),
+        ),
   );
 }
 

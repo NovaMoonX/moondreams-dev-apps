@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { HandCoins, History, Pencil } from 'lucide-react';
+import {
+  Ban,
+  HandCoins,
+  History,
+  Pencil,
+  RotateCcw,
+  Unlock,
+} from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -9,15 +17,20 @@ import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { useAppSelector } from '@/store';
+import { useAuth } from '@/hooks/useAuth';
+import { store, useAppSelector } from '@/store';
+import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
+import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
+import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { MaskedText } from '@apps/runway/components/MaskedText';
@@ -28,6 +41,7 @@ import {
   CHANGE_REASON_CHIPS,
   COST_PAID_WORDS,
   FIX_WORDS,
+  HORIZON_END_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
   ITEM_VIEW_WORDS,
@@ -42,9 +56,19 @@ import {
 } from '@apps/runway/engine/horizon';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  releaseHorizonHeld,
+  undoHorizonState,
+  type HorizonStateWritten,
+} from '@apps/runway/store/actions/horizonActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  selectAllHorizonItems,
   selectComingDays,
+  selectEnvelopes,
+  selectGoals,
   selectCostPaid,
   selectCostPayments,
   selectSpendPurchases,
@@ -91,7 +115,12 @@ function HorizonSheet({
   const { isHidden } = useValuesHidden();
   const { showOnPlan } = useRunwayUrlState();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
-  const [view, setView] = useState<'main' | 'change' | 'history'>('main');
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const [isReleasing, setIsReleasing] = useState(false);
+  const [view, setView] = useState<
+    'main' | 'change' | 'history' | 'finish' | 'callOff' | 'bringBack'
+  >('main');
   const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
   const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
@@ -107,6 +136,7 @@ function HorizonSheet({
     outsidePaidCents,
     outsideDueCents,
     hasRepeats,
+    stage,
   } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
@@ -117,6 +147,9 @@ function HorizonSheet({
     balances.costFromFreeByItem[itemId] ?? 0,
   );
   const { shortfall } = plan;
+  const isDone = horizon.state !== 'open';
+  const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const goals = useAppSelector((state) => selectGoals(state, today));
   // While hidden every item keeps the same lines, so a missing line never tells an empty balance.
   const getShortBody = () => {
     if (!shortfall) return '';
@@ -252,6 +285,86 @@ function HorizonSheet({
     (a, b) => (a.schedule.anchor ?? 0) - (b.schedule.anchor ?? 0),
   );
 
+  const doneOn = formatDateOrdinalUTC(horizon.stateOn ?? horizon.happensOn);
+  const sent = horizon.stateMoney;
+  const sentPlace =
+    sent?.kind === 'place'
+      ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
+          ?.version.payload.name ?? HORIZON_END_WORDS.anotherPlace)
+      : null;
+  const getSentLine = () => {
+    if (sent === null || sent.kind === 'held') return null;
+    const money = formatCents(sent.cents);
+    return sent.kind === 'free'
+      ? HORIZON_END_WORDS.wentToFree(money, doneOn)
+      : HORIZON_END_WORDS.wentToPlace(
+          money,
+          sentPlace ?? HORIZON_END_WORDS.anotherPlace,
+          doneOn,
+        );
+  };
+  const sentLine = getSentLine();
+
+  const release = async () => {
+    if (!user || isReleasing) return;
+    setIsReleasing(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const live = selectAllHorizonItems(
+        store.getState(),
+        todayAsUtcDate(),
+      ).find(({ item }) => item.id === itemId)?.version.payload;
+      const written = live
+        ? await releaseHorizonHeld(user.uid, encryption, {
+            itemId,
+            horizon: live,
+            today: todayAsUtcDate(),
+            leftCents: Math.max(
+              0,
+              selectBalances(store.getState()).assignedByItem[itemId] ?? 0,
+            ),
+          })
+        : null;
+      if (written === null) {
+        addToast({ title: HORIZON_END_WORDS.alreadyDone, type: 'error' });
+        return;
+      }
+      const money = formatCents(written.move?.cents ?? 0);
+      addToast({
+        title: HORIZON_END_WORDS.released(horizon.name),
+        type: 'success',
+        action: {
+          label: HORIZON_END_WORDS.undo,
+          onClick: () =>
+            void undoHorizonState(
+              user.uid,
+              encryption,
+              written as HorizonStateWritten,
+              HORIZON_END_WORDS.undoReleaseSummary(horizon.name, money),
+              todayAsUtcDate(),
+            ).catch((undoError: unknown) =>
+              addToast({
+                title: HORIZON_END_WORDS.releaseFailed(horizon.name),
+                description: getErrorMessage(
+                  undoError,
+                  HORIZON_END_WORDS.failed,
+                ),
+                type: 'error',
+              }),
+            ),
+        },
+      });
+    } catch (releaseError) {
+      addToast({
+        title: HORIZON_END_WORDS.releaseFailed(horizon.name),
+        description: getErrorMessage(releaseError, HORIZON_END_WORDS.failed),
+        type: 'error',
+      });
+    } finally {
+      setIsReleasing(false);
+    }
+  };
+
   if (addState === 'form') {
     return (
       <CostForm
@@ -288,7 +401,26 @@ function HorizonSheet({
       actions={<ValuesEyeButton />}
     >
       <div ref={bodyRef} className='contents' />
-      {view === 'change' ? (
+      {view === 'finish' || view === 'callOff' ? (
+        <HorizonEndView
+          itemId={itemId}
+          horizon={horizon}
+          mode={view}
+          today={today}
+          stance={stance}
+          onBack={() => setView('main')}
+          onClose={onClose}
+        />
+      ) : view === 'bringBack' ? (
+        <HorizonBringBackView
+          itemId={itemId}
+          horizon={horizon}
+          today={today}
+          stance={stance}
+          onBack={() => setView('main')}
+          onClose={onClose}
+        />
+      ) : view === 'change' ? (
         <HorizonChangeForm
           itemId={itemId}
           horizon={horizon}
@@ -335,6 +467,10 @@ function HorizonSheet({
             setCostEdit(null);
           }}
           onChange={() => setCostEdit('form')}
+          onCallOff={() => {
+            setCostId(null);
+            setView('callOff');
+          }}
         />
       ) : addState !== null ? (
         <HorizonChangeView
@@ -367,8 +503,106 @@ function HorizonSheet({
           initialCents={putting.initialCents}
           onBack={() => setPutting(null)}
         />
+      ) : isDone ? (
+        <div className='flex flex-1 flex-col gap-4'>
+          <SheetHead
+            label={
+              horizon.state === 'calledOff'
+                ? HORIZON_END_WORDS.paid
+                : HORIZON_END_WORDS.spent
+            }
+            figure={formatCents(figures.spentCents)}
+            fact={
+              horizon.state === 'calledOff'
+                ? HORIZON_END_WORDS.calledOffOn(doneOn)
+                : HORIZON_END_WORDS.doneOn(doneOn)
+            }
+          />
+          <div className='text-muted-foreground space-y-0.5 text-sm'>
+            {sentLine && (
+              <p>
+                <MaskedText>{sentLine}</MaskedText>
+              </p>
+            )}
+            {figures.leftCents > 0 && (
+              <p>
+                <MaskedText>
+                  {HORIZON_END_WORDS.stillHeld(formatCents(figures.leftCents))}
+                </MaskedText>
+              </p>
+            )}
+          </div>
+          <div className='space-y-2'>
+            <p className='text-muted-foreground text-sm font-medium'>
+              {HORIZON_WORDS.costsCaption}
+            </p>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {costs.map((cost) => {
+                const costPaid = getPaid(cost.id);
+                return (
+                  <CostRow
+                    key={cost.id}
+                    cost={cost}
+                    paid={costPaid}
+                    stoppedNote={
+                      costPaid === null && cost.becameBillId === null
+                        ? HORIZON_END_WORDS.stopped
+                        : null
+                    }
+                    onOpen={() => {
+                      if (cost.becameBillId !== null) {
+                        void showOnPlan('bills', { itemId: cost.becameBillId });
+                        return;
+                      }
+                      setCostId(cost.id);
+                      setCostEdit(null);
+                    }}
+                  />
+                );
+              })}
+            </ul>
+          </div>
+          <ActionGroup isRoomy>
+            {horizon.state === 'calledOff' && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<RotateCcw />}
+                label={HORIZON_END_WORDS.bringBackRow}
+                subtitle={HORIZON_END_WORDS.bringBackSub}
+                onClick={() => setView('bringBack')}
+              />
+            )}
+            {figures.leftCents > 0 && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Unlock />}
+                label={HORIZON_END_WORDS.release}
+                subtitle={HORIZON_END_WORDS.releaseSub}
+                isDisabled={isReleasing}
+                onClick={() => void release()}
+              />
+            )}
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<History />}
+              label={ITEM_SHEET_WORDS.history}
+              subtitle={ITEM_SHEET_WORDS.historySub}
+              onClick={() => setView('history')}
+            />
+          </ActionGroup>
+        </div>
       ) : (
-        <div className='space-y-4'>
+        <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+          {stage === 'readyToFinish' && (
+            <InlineNotice tone='success' title={HORIZON_END_WORDS.readyTitle}>
+              <p>{HORIZON_END_WORDS.readySub}</p>
+            </InlineNotice>
+          )}
           <SheetHead
             label={HORIZON_WORDS.left}
             figure={formatCents(figures.leftCents)}
@@ -544,12 +778,30 @@ function HorizonSheet({
               isGrouped
               isRoomy
               hasChevron
+              icon={<Ban />}
+              label={HORIZON_END_WORDS.callOffRow}
+              subtitle={HORIZON_END_WORDS.callOffRowSub}
+              onClick={() => setView('callOff')}
+            />
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
               icon={<History />}
               label={ITEM_SHEET_WORDS.history}
               subtitle={ITEM_SHEET_WORDS.historySub}
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          {stage === 'readyToFinish' && (
+            <ModalFooterActions
+              rightActions={
+                <Button type='button' onClick={() => setView('finish')}>
+                  {HORIZON_END_WORDS.finishLabel(horizon.name)}
+                </Button>
+              }
+            />
+          )}
         </div>
       )}
     </FormSheet>

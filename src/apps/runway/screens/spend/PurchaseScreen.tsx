@@ -68,7 +68,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectCostPaid,
   selectExpenses,
-  selectHorizonItems,
+  selectAllHorizonItems,
   selectStance,
   selectIsMovesLoaded,
   selectItemLooks,
@@ -132,7 +132,7 @@ function PurchaseScreen({
   const expenses = useAppSelector(selectExpenses);
   const costMarks = useAppSelector(selectCostPaid);
   const horizons = useAppSelector((state) =>
-    selectHorizonItems(state, todayAsUtcDate()),
+    selectAllHorizonItems(state, todayAsUtcDate()),
   );
   const stance = useAppSelector(selectStance);
   const [isCostOpen, setIsCostOpen] = useState(false);
@@ -242,8 +242,12 @@ function PurchaseScreen({
       (costMarks[ref.itemId] ?? []).find(
         (entry) => entry.purchaseId === purchase.id,
       ) ?? null;
+    const payload =
+      horizons.find(({ item }) => item.id === ref.itemId)?.version.payload ??
+      null;
     return {
       paid: paid === null ? null : { ...paid, itemId: ref.itemId },
+      finished: payload?.state === 'finished' ? payload : null,
       names: {
         item: nameOf(ref.itemId),
         cost:
