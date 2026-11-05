@@ -407,7 +407,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
       </div>
     ) : (
       <div
-        className='grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3'
+        className='grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2'
         role='group'
         aria-label={WORDS.tilesLabel}
       >
