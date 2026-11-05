@@ -1,4 +1,6 @@
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import {
   CARD_WORDS,
@@ -22,7 +24,6 @@ import {
 import {
   selectBills,
   selectEnvelopes,
-  selectGoals,
   selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { MoneyRange } from '@apps/runway/types';
@@ -42,24 +43,17 @@ const range = ({ lowCents, highCents }: MoneyRange): FigureSegment => ({
       : `${formatCentsShort(lowCents)} to ${formatCentsShort(highCents)}`,
 });
 
-const monthlyFigure = (
-  total: MoneyRange,
-  hasItems: boolean,
-  isTrimmed: boolean,
-  rest: string,
-): FigureSegment[] =>
-  total.highCents === 0 && !(hasItems && isTrimmed)
-    ? [WORDS.nothingYet]
-    : [range(total), ` ${rest}`];
+const monthlyFigure = (total: MoneyRange, rest: string): FigureSegment[] =>
+  total.highCents === 0 ? [WORDS.nothingYet] : [range(total), ` ${rest}`];
 
 /** The headline each Plan view's tile shows in either mode, every figure from the selectors that view's own screen reads. */
 export function usePlanOverview(today: number, mode: OverviewMode) {
-  const { dial, isTrimmed } = usePriorityDial();
+  const { dial } = usePriorityDial();
+  const { isHidden } = useValuesHidden();
   const totals = usePlanTotals(today, dial);
   const balances = useAppSelector(selectBalances);
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
-  const goals = useAppSelector((state) => selectGoals(state, today));
   const horizonItems = useAppSelector((state) =>
     selectHorizonItems(state, today),
   );
@@ -71,7 +65,8 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
   );
   const goalsMonthly = useGoalsMonthly(today, dial);
   const saved = useGoalsSaved(today);
-  const monthRest = PRIORITY_DIAL_WORDS.monthRest[dial];
+  // The line above the tiles already names the priority, so a tile only says "a month".
+  const monthRest = WORDS.monthly;
   const isMonthly = mode === 'monthly';
 
   const inEnvelopesCents = envelopes
@@ -83,52 +78,35 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
     );
 
   const getBills = (): FigureSegment[] => {
-    const monthly = monthlyFigure(
-      totals.bills.total,
-      bills.length > 0,
-      isTrimmed,
-      monthRest,
-    );
+    const monthly = monthlyFigure(totals.bills.total, monthRest);
     if (isMonthly || dueBeforePay === null || bills.length === 0)
       return monthly;
-    return dueBeforePay === 0
-      ? [WORDS.nothingBeforePay]
-      : [money(dueBeforePay), ` ${WORDS.dueBeforePay}`];
+    const payDay = formatDateOrdinalUTC(dueBeforePay.payOn);
+    return dueBeforePay.cents === 0
+      ? [WORDS.nothingBeforePay(payDay)]
+      : [money(dueBeforePay.cents), ` ${WORDS.dueBeforePay(payDay)}`];
   };
-  const getEnvelopes = (): FigureSegment[] => {
-    if (isMonthly || envelopes.length === 0)
-      return monthlyFigure(
-        totals.envelopes.total,
-        envelopes.length > 0,
-        isTrimmed,
-        monthRest,
-      );
-    return [
-      money(inEnvelopesCents),
-      ` ${WORDS.inEnvelopes}${isTrimmed ? `, ${PRIORITY_DIAL_WORDS.sheetSuffix[dial as 'must' | 'should']}` : ''}`,
-    ];
-  };
-  const getGoals = (): FigureSegment[] => {
-    if (isMonthly || !saved.hasTargets)
-      return monthlyFigure(
-        goalsMonthly,
-        goals.length > 0,
-        isTrimmed,
-        monthRest,
-      );
-    return [
-      money(saved.savedCents),
-      WORDS.savedOf,
-      money(saved.targetCents),
-      ` ${PRIORITY_DIAL_WORDS.savedRest[dial]}`,
-    ];
-  };
+  const getEnvelopes = (): FigureSegment[] =>
+    isMonthly || envelopes.length === 0
+      ? monthlyFigure(totals.envelopes.total, monthRest)
+      : [money(inEnvelopesCents), ` ${WORDS.inEnvelopes}`];
+  const getGoals = (): FigureSegment[] =>
+    isMonthly || saved.targetCents === 0
+      ? monthlyFigure(goalsMonthly, monthRest)
+      : [
+          money(saved.savedCents),
+          WORDS.savedOf,
+          money(saved.targetCents),
+          ` ${PRIORITY_DIAL_WORDS.savedRest.want}`,
+        ];
   const getHorizon = (): FigureSegment[] => {
     if (horizonItems.length === 0) return [WORDS.nothingYet];
-    if (!isMonthly)
-      return [money(balances.assignedToHorizonCents), ` ${WORDS.setAside}`];
-    return horizonShort > 0
-      ? [money(horizonShort), ` ${WORDS.short}`]
+    const cents = isMonthly ? horizonShort : balances.assignedToHorizonCents;
+    // A direction word beside a masked amount would still say whether anything is short.
+    if (isHidden) return [money(cents), ` ${WORDS.onHorizon}`];
+    if (!isMonthly) return [money(cents), ` ${WORDS.setAside}`];
+    return cents > 0
+      ? [money(cents), ` ${WORDS.shortInTotal}`]
       : [WORDS.nothingShort];
   };
   const getCards = (): FigureSegment[] =>
@@ -152,7 +130,7 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
 
   return {
     figures: {
-      income: monthlyFigure(totals.income.total, true, false, WORDS.monthly),
+      income: monthlyFigure(totals.income.total, WORDS.monthly),
       bills: getBills(),
       envelopes: getEnvelopes(),
       goals: getGoals(),

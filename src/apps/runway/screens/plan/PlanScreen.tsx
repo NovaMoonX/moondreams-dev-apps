@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Settings2 } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
@@ -21,6 +22,13 @@ const viewSections = PLAN_SECTIONS.filter((value) => value !== 'more');
 const trackedSections = viewSections;
 const untrackedSections = viewSections.filter((value) => value !== 'cards');
 
+const DRAG_DAMPING = 0.4;
+
+const isCovered = () =>
+  Array.from(document.querySelectorAll('[role="dialog"]')).some(
+    (dialog) => getComputedStyle(dialog).pointerEvents !== 'none',
+  );
+
 function PlanScreen() {
   const { planSection: requestedSection, showPlanSection } =
     useRunwayUrlState();
@@ -33,18 +41,27 @@ function PlanScreen() {
       : requestedSection;
   const isMore = planSection === 'more';
 
+  const bodyRef = useRef<HTMLDivElement>(null);
   const sections = isTracking ? trackedSections : untrackedSections;
   const showNeighbour = (direction: 1 | -1) => {
     const index = sections.findIndex((value) => value === planSection);
     const next = sections[index + direction];
-    const isCovered = Array.from(
-      document.querySelectorAll('[role="dialog"]'),
-    ).some((dialog) => getComputedStyle(dialog).pointerEvents !== 'none');
-    if (index >= 0 && next && !isCovered) showPlanSection(next);
+    if (index >= 0 && next && !isCovered()) showPlanSection(next);
+  };
+  // The body follows the finger by its own offset (not a transform, which would carry a floating add button with it) and eases back to rest.
+  const followFinger = (dx: number, isEnd: boolean) => {
+    const body = bodyRef.current;
+    if (!body || (!isEnd && isCovered())) return;
+    body.style.transition = isEnd ? 'left 200ms ease-out' : 'none';
+    body.style.left = `${isEnd ? 0 : dx * DRAG_DAMPING}px`;
   };
 
   return (
-    <SwipeArea className='space-y-4' onSwipe={showNeighbour}>
+    <SwipeArea
+      className='space-y-4 overflow-x-clip'
+      onSwipe={showNeighbour}
+      onDrag={followFinger}
+    >
       {hasIncome && (
         <PlanOverview
           sections={sections}
@@ -52,22 +69,24 @@ function PlanScreen() {
           onSelect={showPlanSection}
         />
       )}
-      {planSection === 'envelopes' && <EnvelopesScreen />}
-      {isMore && <MoreScreen />}
-      {planSection === 'goals' && <GoalsScreen />}
-      {planSection === 'horizon' && <HorizonScreen />}
-      {planSection === 'bills' && <BillsScreen />}
-      {planSection === 'cards' && <CardsScreen />}
-      {planSection === 'income' && <IncomeScreen />}
-      {hasIncome && !isMore && (
-        <div className='grid'>
-          <EntryTile
-            icon={<Settings2 className='h-4 w-4' />}
-            label={PLAN_MORE_LABEL}
-            onClick={() => showPlanSection('more')}
-          />
-        </div>
-      )}
+      <div ref={bodyRef} className='relative space-y-4'>
+        {planSection === 'envelopes' && <EnvelopesScreen />}
+        {isMore && <MoreScreen />}
+        {planSection === 'goals' && <GoalsScreen />}
+        {planSection === 'horizon' && <HorizonScreen />}
+        {planSection === 'bills' && <BillsScreen />}
+        {planSection === 'cards' && <CardsScreen />}
+        {planSection === 'income' && <IncomeScreen />}
+        {hasIncome && !isMore && (
+          <div className='grid'>
+            <EntryTile
+              icon={<Settings2 className='h-4 w-4' />}
+              label={PLAN_MORE_LABEL}
+              onClick={() => showPlanSection('more')}
+            />
+          </div>
+        )}
+      </div>
     </SwipeArea>
   );
 }

@@ -35,9 +35,7 @@ type ViewSection = Exclude<PlanSection, 'more'>;
 type Level = 0 | 1 | 2;
 const LEVELS: Level[] = [0, 1, 2];
 
-/** Finger travel before the tiles start to show; the grid and the refresh indicator follow the measured heights. */
-const TILES_AT_PX = 16;
-/** Extra travel after a step is fully shown before the next one starts, so each step is felt. */
+/** Extra travel after the grid is fully shown before the refresh ring starts, so the last step is felt. */
 const STEP_GAP_PX = 16;
 const REFRESH_EXTRA_MIN_PX = 72;
 const INDICATOR_PX = 56;
@@ -189,34 +187,46 @@ function PullFrame({
     1: heightOf(1) - pillsHeight,
     2: heightOf(2) - pillsHeight,
   };
+  // The finger's position on one line: 0 is the pills, `rest[1]` the tiles, `gridDoneAt` the whole grid. The grid shows from
+  // the midpoint between the tiles and the grid, the same point a release settles on it, and from there the open height
+  // climbs from the tiles' height to the grid's, so neither the height nor the step shown jumps.
   const gridDoneAt = rest[2] + STEP_GAP_PX;
+  const gridFrom = (rest[1] + rest[2]) / 2;
+  const positions: Record<Level, number> = { 0: 0, 1: rest[1], 2: gridDoneAt };
   const refreshVirtual = Math.max(
     gridDoneAt + REFRESH_EXTRA_MIN_PX,
     window.innerHeight / 2,
   );
+  const getOpenHeight = (position: number) =>
+    position < gridFrom
+      ? Math.min(position, rest[1])
+      : Math.min(
+          rest[2],
+          rest[1] +
+            ((position - gridFrom) * (rest[2] - rest[1])) /
+              (gridDoneAt - gridFrom),
+        );
+  const getLevelAt = (position: number): Level => {
+    if (position >= gridFrom) return 2;
+    return position >= rest[1] / 2 ? 1 : 0;
+  };
 
   const { distance, isPulling } = usePullDown({
     isEnabled: true,
-    refreshAt: refreshVirtual - rest[settled],
+    canPullUp: settled > 0,
+    refreshAt: refreshVirtual - positions[settled],
     onRefresh,
-    onRelease: (travelled) => {
-      const virtualAtRelease = rest[settled] + travelled;
-      const nearest = LEVELS.reduce((best, level) =>
-        Math.abs(virtualAtRelease - rest[level]) <
-        Math.abs(virtualAtRelease - rest[best])
-          ? level
-          : best,
-      );
-      onSettle(nearest);
-    },
+    onRelease: (travelled) =>
+      onSettle(getLevelAt(Math.max(0, positions[settled] + travelled))),
   });
 
-  const virtual = Math.max(0, rest[settled] + distance);
-  const getPulledLevel = (): Level => {
-    if (virtual >= rest[1] + STEP_GAP_PX) return 2;
-    return virtual >= TILES_AT_PX ? 1 : 0;
-  };
-  const level: Level = isPulling ? getPulledLevel() : settled;
+  const virtual = Math.max(0, positions[settled] + distance);
+  // The tiles' step shows from the first pixel; a release below the halfway point folds back to the pills.
+  const level: Level = isPulling
+    ? virtual > 0
+      ? (Math.max(1, getLevelAt(virtual)) as Level)
+      : 0
+    : settled;
   const refreshTravel = virtual - gridDoneAt;
   const progress = isPulling
     ? Math.min(1, Math.max(0, refreshTravel / (refreshVirtual - gridDoneAt)))
@@ -279,7 +289,9 @@ function PullFrame({
           !isPulling && !isInstant && 'transition-[max-height] duration-200',
         )}
         style={{
-          maxHeight: isPulling ? pillsHeight + virtual : heights[settled],
+          maxHeight: isPulling
+            ? pillsHeight + getOpenHeight(virtual)
+            : heights[settled],
         }}
       >
         {levels[level]}
@@ -356,7 +368,11 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
         emoji={PLAN_VIEW_EMOJI[section]}
         segments={figures[section]}
         isCurrent={current === section}
-        className={layout === 'row' ? 'w-40 shrink-0 snap-start' : undefined}
+        className={
+          layout === 'row'
+            ? 'w-[calc(50%-0.25rem)] shrink-0 snap-start lg:w-[calc((100%-1rem)/3)]'
+            : undefined
+        }
         onOpen={() => {
           settle(0);
           onSelect(section);
@@ -374,7 +390,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
       </div>
     ) : (
       <div
-        className='grid grid-cols-2 gap-2'
+        className='grid grid-cols-2 gap-2 lg:grid-cols-3'
         role='group'
         aria-label={WORDS.tilesLabel}
       >

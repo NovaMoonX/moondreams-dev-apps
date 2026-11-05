@@ -18,6 +18,8 @@ const isScrolledDown = (target: EventTarget | null) => {
 
 interface PullDownOptions {
   isEnabled: boolean;
+  /** Lets an upward drag take hold too, for a page whose top is already opened and should fold back; `distance` then goes negative. */
+  canPullUp?: boolean;
   /** Finger travel, from where the pull took hold, at which `onRefresh` fires. */
   refreshAt: number;
   onRefresh: () => void;
@@ -34,7 +36,7 @@ interface Gesture {
 
 /**
  * A pull down from the top of the page: `distance` is the finger's travel since the pull took hold (negative
- * when it comes back up past that point), 0 when idle. It starts only on a mostly vertical downward drag
+ * when it comes back up past that point), 0 when idle. It starts only on a mostly vertical downward drag (or an upward one when `canPullUp` says so)
  * while the page is at the top and nothing under the finger is a scroller scrolled down, not in a dialog or a `data-no-pull` area; from then on the page's own scroll
  * is cancelled until the finger lifts. `refreshAt` fires `onRefresh` once, `onRelease` is called otherwise.
  * While enabled the page's overscroll is contained so the phone's own pull-to-reload never runs on top of it.
@@ -94,7 +96,8 @@ export function usePullDown(options: PullDownOptions) {
         const dy = touch.clientY - gesture.y;
         const dx = touch.clientX - gesture.x;
         if (Math.abs(dy) < SLOP_PX && Math.abs(dx) < SLOP_PX) return;
-        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || window.scrollY > 0) {
+        const isWrongWay = dy < 0 ? !optionsRef.current.canPullUp : dy === 0;
+        if (isWrongWay || Math.abs(dx) > Math.abs(dy) || window.scrollY > 0) {
           state.gesture = null;
           return;
         }

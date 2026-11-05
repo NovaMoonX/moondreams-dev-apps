@@ -17,17 +17,23 @@ import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 const selectOn = (_state: RootState, on: number) => on;
 const selectDial = (_state: RootState, _on: number, dial: Priority) => dial;
 
-/** What the bills still unpaid at or above `dial` ask before the next pay arrives, a bill due on the pay day itself left to that pay; null when no pay is coming. */
+/** What the bills still unpaid at or above `dial` ask before the next pay arrives, a bill due on the pay day itself left to that pay; null when no pay is coming; `payOn` is that pay's day. */
 export const selectBillsDueBeforePay = createSelector(
   [selectBillPayments, selectComingDays, selectBills, selectDial],
-  (payments, comingDays, bills, dial): number | null => {
+  (
+    payments,
+    comingDays,
+    bills,
+    dial,
+  ): { cents: number; payOn: number } | null => {
     const nextPay = comingDays[0];
     if (!nextPay) return null;
-    return bills
+    const cents = bills
       .filter(({ version }) => isCountedAt(version.payload.priority, dial))
       .flatMap(({ item }) => payments[item.id] ?? [])
       .filter(({ paid, dueOn }) => paid === null && dueOn < nextPay.on)
       .reduce((sum, { totalCents }) => sum + totalCents, 0);
+    return { cents, payOn: nextPay.on };
   },
 );
 
