@@ -11,6 +11,8 @@ export interface FundedDay {
   dayKey: string;
   on: DateOnly;
   cents: Cents;
+  /** Money moved into the bill rather than set aside by a pay: it is not a funded day, and what one payment leaves over carries to the next. */
+  isMoved?: boolean;
 }
 
 /** A payment the person marked paid and has not undone. */
@@ -230,6 +232,50 @@ export const sumOutsideTransfers = (entries: readonly TransferEntry[]): Cents =>
     0,
   );
 
+/** The money moved into each item, counted as set aside from the day it moved, less what a later transfer out of that item took back (the latest money in before it goes first). */
+export function collectMovedIn(
+  entries: readonly TransferEntry[],
+): Record<string, FundedDay[]> {
+  const ordered = entries
+    .filter((entry) => entry.cents > 0)
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => a.entry.on - b.entry.on || a.index - b.index)
+    .map(({ entry }) => entry);
+  const days = ordered.reduce<Record<string, FundedDay[]>>((acc, entry) => {
+    if (entry.fromId !== null && acc[entry.fromId] !== undefined) {
+      const fromId = entry.fromId;
+      acc[fromId] = acc[fromId].reduceRight<{ kept: FundedDay[]; owed: Cents }>(
+        ({ kept, owed }, day) => {
+          const took = Math.min(owed, day.cents);
+          return {
+            kept:
+              day.cents > took
+                ? [{ ...day, cents: day.cents - took }, ...kept]
+                : kept,
+            owed: owed - took,
+          };
+        },
+        { kept: [], owed: entry.cents },
+      ).kept;
+    }
+    if (entry.toId !== null) {
+      acc[entry.toId] = [
+        ...(acc[entry.toId] ?? []),
+        {
+          dayKey: `moved_${entry.moveId}`,
+          on: entry.on,
+          cents: entry.cents,
+          isMoved: true,
+        },
+      ];
+    }
+    return acc;
+  }, {});
+  return Object.fromEntries(
+    Object.entries(days).filter(([, list]) => list.length > 0),
+  );
+}
+
 /** What transfers added to (positive) or took from (negative) each item. */
 export function sumTransfers(
   entries: readonly TransferEntry[],
@@ -306,7 +352,8 @@ export const fundedInWindow = (
 
 /** The days that really set money aside, not the starting amount. */
 export const countFundedDays = (funded: readonly FundedDay[]) =>
-  funded.filter((entry) => entry.dayKey !== START_DAY_KEY).length;
+  funded.filter((entry) => entry.dayKey !== START_DAY_KEY && !entry.isMoved)
+    .length;
 
 export const sumFunded = (funded: readonly FundedDay[]) =>
   funded.reduce((sum, entry) => sum + entry.cents, 0);

@@ -50,15 +50,20 @@ export function readCovers(
         : words.on(cost.name, formatDateOrdinalUTC(lastDueOn)),
     );
   const hasNoEnd = costs.some(
-    ({ schedule, ending, isOutside, endsAfter }) =>
+    ({ schedule, ending, isOutside, endsAfter, becameBillId }) =>
       !isOutside &&
       endsAfter === null &&
+      becameBillId === null &&
       schedule.kind !== 'once' &&
       ending.onDate === null &&
       ending.afterCount === null,
   );
   const getText = () => {
-    if (plan.covers.length === 0) return null;
+    if (plan.covers.length === 0) {
+      return costs.some(({ becameBillId }) => becameBillId !== null)
+        ? words.allPaidOrBill
+        : null;
+    }
     if (heldCents <= 0) {
       if (plan.shortfall) return null;
       return isSetAsideUsed ? words.setAsideUsed : words.nothingSet;

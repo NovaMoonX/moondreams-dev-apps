@@ -22,6 +22,7 @@ import {
   collectCardPaid,
   collectCostPaid,
   collectFunded,
+  collectMovedIn,
   collectPaid,
   collectStarted,
   collectTransferEntries,
@@ -124,6 +125,11 @@ export function deriveBalances(input: BalancesInput): Balances {
     ),
     input.expectedOn ?? input.arrivedOn,
   );
+  const transferEntries = [
+    ...(base?.transfers ?? []),
+    ...collectTransferEntries(input.moves, startDate),
+  ];
+  const movedIn = collectMovedIn(transferEntries);
   const paidByBill = Object.entries(
     joinPaid(base, collectPaid(input.moves)),
   ).map(([billId, payments]) => {
@@ -143,6 +149,7 @@ export function deriveBalances(input: BalancesInput): Balances {
                   ]),
               ...(base?.billFunded[billId] ?? []),
               ...(funded[billId] ?? []),
+              ...(movedIn[billId] ?? []),
             ],
             payments.filter((payment) => payment.paidOn >= startDate),
           );
@@ -213,10 +220,6 @@ export function deriveBalances(input: BalancesInput): Balances {
       }, {}),
   );
 
-  const transferEntries = [
-    ...(base?.transfers ?? []),
-    ...collectTransferEntries(input.moves, startDate),
-  ];
   const transfers = sumTransfers(transferEntries);
 
   const isCard = (id: string) => input.kinds[id] === 'card';

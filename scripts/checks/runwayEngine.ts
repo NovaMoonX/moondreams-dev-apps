@@ -244,7 +244,11 @@ import {
 } from '../../src/apps/runway/engine/lookahead.ts';
 import {
   changeCost,
+  getCostShare,
   getLiveCosts,
+  getMadeBillId,
+  getMakeBillBlock,
+  hasOtherOpenCost,
   listCostPayments,
   listHorizonPayments,
   listUnmarkedOutside,
@@ -272,7 +276,11 @@ import {
   getPaidMoveId,
   getUndoMoveId,
 } from '../../src/apps/runway/engine/progress.ts';
-import { getHeldForPayment } from '../../src/apps/runway/engine/progress.ts';
+import {
+  collectMovedIn,
+  getHeldForPayment,
+} from '../../src/apps/runway/engine/progress.ts';
+import type { FundedDay } from '../../src/apps/runway/engine/progress.ts';
 import {
   getPace,
   planGoalContributions,
@@ -5476,6 +5484,8 @@ const version = (
             isOutside: false,
             pricedOn: null,
             endsAfter: null,
+            becameBillId: null,
+            becameBillOn: null,
             note: null,
           },
           ...extraCosts.map((extra) => ({
@@ -5491,6 +5501,8 @@ const version = (
             isOutside: false,
             pricedOn: null,
             endsAfter: null,
+            becameBillId: null,
+            becameBillOn: null,
             note: null,
           })),
         ],
@@ -5630,6 +5642,8 @@ const version = (
       isOutside: false,
       pricedOn: null,
       endsAfter: null,
+      becameBillId: null,
+      becameBillOn: null,
       note: null,
     });
     const dec19 = today + 57 * DAY_MS;
@@ -11081,6 +11095,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   };
   const truck = {
@@ -11221,6 +11237,8 @@ const version = (
     isOutside,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const costs = [
@@ -11495,6 +11513,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const movers = cost('movers', range(60_000, 80_000), jan15);
@@ -11762,6 +11782,8 @@ const version = (
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   };
   const truck: HorizonCost = {
@@ -12251,6 +12273,96 @@ const version = (
       null,
       'an older purchase reads costRef as null',
     ),
+  );
+}
+
+// Horizon: a repeating cost made a bill.
+{
+  const end = Date.UTC(2027, 11, 31);
+  const storage = {
+    id: 'storage',
+    name: 'Storage unit',
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: Date.UTC(2027, 1, 1),
+      monthDays: [1],
+    },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    note: null,
+  };
+  const made = {
+    ...storage,
+    becameBillId: 'bill-1',
+    becameBillOn: Date.UTC(2027, 3, 1),
+  };
+  assert.deepEqual(
+    listCostPayments(made, end, 'conservative').map(({ dueOn }) => dueOn),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1)],
+    'a cost made a bill asks nothing from the bill first due date on',
+  );
+  assert.equal(
+    listCostPayments(storage, end, 'conservative').length,
+    11,
+    'a cost that is not a bill plans to the horizon',
+  );
+
+  const toDay = (stamp: number) => `pay_${toDayStamp(stamp)}`;
+  const nov10 = utc(2026, 11, 10);
+  const nov17 = utc(2026, 11, 17);
+  const nov24 = utc(2026, 11, 24);
+  const days = [nov10, nov17, nov24].map((on) => ({ dayKey: toDay(on), on }));
+  const bill = (funded: FundedDay[]): DraftBillInput => ({
+    itemId: 'bill-1',
+    createdAt: 1,
+    priority: 'should',
+    orderIndex: 1,
+    amount: { lowCents: 60_000, highCents: 60_000 },
+    schedule: { kind: 'once', anchor: utc(2026, 12, 1), monthDays: [] },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' },
+    progress: { funded, paid: [] },
+  });
+  const [moved] = Object.values(
+    collectMovedIn([
+      {
+        moveId: 'move-1',
+        on: utc(2026, 11, 1),
+        fromId: 'moving',
+        toId: 'bill-1',
+        cents: 20_000,
+        isOutside: false,
+      },
+    ]),
+  );
+  const plain = planBillPayments(bill([]), days, utc(2027, 3, 1))[0];
+  const withMoved = planBillPayments(bill(moved), days, utc(2027, 3, 1))[0];
+  const asked = (parts: { cents: number }[]) =>
+    parts.reduce((total, part) => total + part.cents, 0);
+  assert.equal(
+    asked(plain.parts),
+    60_000,
+    'a bill with no transfer is unchanged',
+  );
+  assert.equal(
+    asked(withMoved.parts),
+    40_000,
+    'the bill asks $200 less when $200 moved into it',
+  );
+  assert.equal(
+    withMoved.fundedCents,
+    20_000,
+    'and reads the $200 as set aside',
+  );
+  assert.equal(
+    withMoved.fundedDays,
+    0,
+    'money moved in is not a confirmed income day',
   );
 }
 
@@ -14409,6 +14521,8 @@ console.log('runway engine: ok');
     isOutside: false,
     pricedOn: null,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const jan15 = utc(2027, 0, 15);
@@ -14982,6 +15096,387 @@ console.log('runway engine: ok');
       .map((problem) => problem.kind === 'short' && problem.name),
     ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
     "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
+  );
+}
+
+// Horizon: money moved into a bill, the share a cost brings, and the refusals.
+{
+  const nov1 = utc(2026, 11, 1);
+  const transfer = (
+    moveId: string,
+    on: number,
+    fromId: string | null,
+    toId: string | null,
+    cents: number,
+  ) => ({ moveId, on, fromId, toId, cents, isOutside: false });
+  const flat = (entries: ReturnType<typeof transfer>[], id: string) =>
+    (collectMovedIn(entries)[id] ?? []).map(({ cents }) => cents);
+
+  assert.deepEqual(
+    flat([transfer('a', nov1, 'moving', 'bill-1', 20_000)], 'bill-1'),
+    [20_000],
+    'money moved into a bill counts as set aside',
+  );
+  assert.deepEqual(
+    flat(
+      [
+        transfer('a', nov1, 'moving', 'bill-1', 20_000),
+        transfer('b', nov1 + DAY_MS, 'bill-1', null, 5_000),
+      ],
+      'bill-1',
+    ),
+    [15_000],
+    'a transfer out of the bill takes back from what moved in',
+  );
+  assert.deepEqual(
+    flat(
+      [
+        transfer('a', nov1, 'moving', 'bill-1', 20_000),
+        transfer('c', nov1 + DAY_MS, 'moving', 'bill-1', 10_000),
+        transfer('b', nov1 + 2 * DAY_MS, 'bill-1', 'goal', 25_000),
+      ],
+      'bill-1',
+    ),
+    [5_000],
+    'the latest money in goes out first, and an earlier entry is trimmed only as far as needed',
+  );
+  assert.deepEqual(
+    flat([transfer('b', nov1, 'bill-1', null, 5_000)], 'bill-1'),
+    [],
+    'a transfer out with nothing moved in leaves nothing',
+  );
+  assert.deepEqual(
+    flat(
+      [
+        transfer('d', nov1 + DAY_MS, 'moving', 'bill-1', 5_000),
+        transfer('b', nov1, 'bill-1', null, 6_000),
+      ],
+      'bill-1',
+    ),
+    [5_000],
+    'a transfer out never takes back money that moved in after it',
+  );
+  assert.deepEqual(
+    collectMovedIn([transfer('f', nov1, 'moving', null, 20_000)]),
+    {},
+    'a transfer to Free to Spend is moved into no item',
+  );
+
+  const start = utc(2026, 10, 1);
+  const kinds = { moving: 'horizon', 'bill-1': 'bill' } as never;
+  const startMove = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: 'money' | 'bill' | 'horizon',
+  ) =>
+    ({
+      id,
+      kind: 'start',
+      date: start,
+      refId,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: cents, holding },
+    }) as unknown as OpenMove;
+  const moveOf = (
+    id: string,
+    on: number,
+    fromId: string | null,
+    toId: string | null,
+    cents: number,
+  ) =>
+    ({
+      id,
+      kind: 'transfer',
+      date: on,
+      refId: fromId,
+      reversesMoveId: null,
+      createdAt: 2,
+      payload: { fromId, toId, cents, note: null, isOutside: false },
+    }) as unknown as OpenMove;
+  const bases = [startMove('m', null, 100_000, 'money')];
+  const paidMove = (fromFreeCents: number) =>
+    ({
+      id: 'paid_bill-1_1',
+      kind: 'billPaid',
+      date: utc(2026, 12, 1),
+      refId: 'bill-1',
+      reversesMoveId: null,
+      createdAt: 3,
+      payload: {
+        amountCents: 10_000,
+        paidOn: utc(2026, 12, 1),
+        fromFreeCents,
+      },
+    }) as unknown as OpenMove;
+  const into = moveOf('t1', nov1, null, 'bill-1', 10_000);
+  const progress = deriveBillProgress(
+    [],
+    new Map(),
+    [...bases, into],
+    start,
+    null,
+  )['bill-1'];
+  const held = getHeldForPayment(
+    progress,
+    { dueOn: utc(2026, 12, 1), amountCents: 10_000, paidOn: utc(2026, 12, 1) },
+    start,
+  );
+  assert.equal(
+    held,
+    10_000,
+    'a payment after the transfer uses the moved money',
+  );
+  const afterPay = deriveBalances({
+    startDate: start,
+    moves: [...bases, into, paidMove(10_000 - held)],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.equal(
+    afterPay.assignedByItem['bill-1'] ?? 0,
+    0,
+    'the bill holds nothing once the moved money is paid out',
+  );
+  const outOf = moveOf('t2', nov1 + DAY_MS, 'bill-1', null, 4_000);
+  const afterOut = deriveBillProgress(
+    [],
+    new Map(),
+    [...bases, into, outOf],
+    start,
+    null,
+  )['bill-1'];
+  assert.equal(
+    afterOut.funded.reduce((sum, { cents }) => sum + cents, 0),
+    6_000,
+    'a transfer out of the bill lowers what progress counts as set aside',
+  );
+  const toFree = deriveBalances({
+    startDate: start,
+    moves: [
+      ...bases,
+      startMove('h', 'moving', 30_000, 'horizon'),
+      moveOf('t3', nov1, 'moving', null, 30_000),
+    ],
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+  });
+  assert.deepEqual(
+    [toFree.assignedByItem.moving ?? 0, toFree.freeToSpendCents],
+    [0, 100_000],
+    'a transfer to Free to Spend empties the item and leaves the money on hand',
+  );
+
+  const dueFeb = utc(2027, 2, 1);
+  const monthly = {
+    itemId: 'bill-1',
+    createdAt: 1,
+    priority: 'should' as const,
+    orderIndex: 1,
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: utc(2026, 12, 1),
+      monthDays: [1],
+    },
+    ending: NEVER,
+    fundedBy: { kind: 'suggested' as const },
+    progress: {
+      funded: [{ dayKey: 'moved_t1', on: nov1, cents: 35_000, isMoved: true }],
+      paid: [],
+    },
+  } satisfies DraftBillInput;
+  const weekly = Array.from({ length: 16 }, (_, week) => {
+    const on = utc(2026, 11, 10) + week * 7 * DAY_MS;
+    return { dayKey: `pay_${toDayStamp(on)}`, on };
+  });
+  const windows = planBillPayments(monthly, weekly, dueFeb + 10 * DAY_MS).slice(
+    0,
+    3,
+  );
+  assert.deepEqual(
+    windows.map(({ fundedCents }) => fundedCents),
+    [35_000, 25_000, 15_000],
+    'a surplus moved in carries to each next payment',
+  );
+  assert.deepEqual(
+    windows.map(({ parts }) =>
+      parts.reduce((sum, part) => sum + part.cents, 0),
+    ),
+    [0, 0, 0],
+    'and the pays ask nothing while the surplus covers them',
+  );
+
+  const cost = (
+    id: string,
+    cents: number,
+    over: Record<string, unknown> = {},
+  ) => ({
+    id,
+    name: id,
+    amount: { lowCents: cents, highCents: cents },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: utc(2027, 2, 1),
+      monthDays: [1],
+    },
+    ending: { onDate: null, afterCount: 2 },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    note: null,
+    ...over,
+  });
+  const item = {
+    rest: { kind: 'later' as const },
+    costs: [
+      cost('storage', 10_000),
+      cost('movers', 30_000, { ending: { onDate: null, afterCount: 1 } }),
+    ],
+  };
+  const horizonOn = utc(2027, 12, 31);
+  const payments = listHorizonPayments(
+    item.costs as never,
+    horizonOn,
+    'conservative',
+  );
+  assert.equal(
+    getCostShare(item, 'storage', 100_000, payments),
+    70_000,
+    'the cost brings what the item holds less what its other open costs still need',
+  );
+  assert.equal(
+    getCostShare(item, 'storage', 20_000, payments),
+    0,
+    'it brings nothing when the other costs need everything held',
+  );
+  assert.equal(
+    getCostShare(item, 'storage', -5_000, payments),
+    0,
+    'and never a negative amount',
+  );
+  const withOutside = {
+    costs: [item.costs[0], cost('movers', 30_000, { isOutside: true })],
+  };
+  assert.equal(
+    getCostShare(
+      withOutside,
+      'storage',
+      50_000,
+      listHorizonPayments(
+        withOutside.costs as never,
+        horizonOn,
+        'conservative',
+      ),
+    ),
+    50_000,
+    'an outside cost needs nothing from the item',
+  );
+  assert.equal(
+    hasOtherOpenCost(item, 'storage', utc(2026, 11, 4), 'conservative'),
+    true,
+    'another live cost with a payment to come is open',
+  );
+  assert.equal(
+    hasOtherOpenCost(
+      {
+        costs: [item.costs[0], cost('movers', 30_000, { becameBillId: 'x' })],
+      },
+      'storage',
+      utc(2026, 11, 4),
+      'conservative',
+    ),
+    false,
+    'a cost that is already a bill is not open',
+  );
+  assert.equal(
+    hasOtherOpenCost(
+      {
+        costs: [
+          item.costs[0],
+          cost('far', 100, {
+            schedule: { kind: 'once', anchor: utc(2033, 1, 1), monthDays: [] },
+            ending: { onDate: null, afterCount: null },
+          }),
+        ],
+      },
+      'storage',
+      utc(2026, 11, 4),
+      'conservative',
+    ),
+    true,
+    'a payment beyond the lookahead still counts as open',
+  );
+
+  const storagePayments = listCostPayments(
+    item.costs[0] as never,
+    horizonOn,
+    'conservative',
+  );
+  assert.equal(
+    getMakeBillBlock(storagePayments, utc(2026, 11, 4)),
+    null,
+    'a cost with its next payment ahead can be made a bill',
+  );
+  assert.deepEqual(
+    getMakeBillBlock(storagePayments, utc(2027, 2, 10)),
+    { kind: 'pastDue', dueOn: utc(2027, 2, 1) },
+    'a next payment before today asks to be paid first',
+  );
+  const laterMark: CostPaidEntry = {
+    moveId: 'm',
+    costId: 'r',
+    dueOn: utc(2027, 3, 1),
+    amountCents: 10_000,
+    paidOn: utc(2027, 3, 1),
+    fromFreeCents: 0,
+    mark: 'item',
+    purchaseId: null,
+  };
+  assert.deepEqual(
+    getMakeBillBlock(
+      listCostPayments(
+        cost('r', 10_000, {
+          ending: { onDate: null, afterCount: null },
+        }) as never,
+        utc(2027, 6, 1),
+        'conservative',
+        [laterMark],
+      ),
+      utc(2026, 11, 4),
+    ),
+    { kind: 'laterPaid', dueOn: utc(2027, 3, 1) },
+    'a later payment already marked paid has to be taken back first',
+  );
+  assert.equal(
+    getMadeBillId('item', 'cost'),
+    'bill_item_cost',
+    'a cost makes one bill, whoever makes it',
+  );
+
+  const legacy = readHorizon({
+    name: 'Old',
+    emoji: null,
+    priority: 'should',
+    costs: [
+      {
+        id: 'c',
+        name: 'Old cost',
+        amount: { lowCents: 100, highCents: 100 },
+        schedule: { kind: 'once', anchor: utc(2027, 1, 1), monthDays: [] },
+        note: null,
+      },
+    ],
+  } as never);
+  assert.deepEqual(
+    [legacy.costs[0].becameBillId, legacy.costs[0].becameBillOn],
+    [null, null],
+    'a cost saved before Make it a bill reads as not a bill',
   );
 }
 

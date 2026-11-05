@@ -6,6 +6,7 @@ import {
   COST_PAID_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
+  MAKE_BILL_WORDS,
   PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
@@ -414,6 +415,31 @@ export function describeReplaced(
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
+
+/** The change-log line for a cost made a bill, with the money that went along or to Free to Spend: "Moving: Storage unit became a bill, $100.00. Monthly from Feb 1st. Brought $200.00 from Moving." */
+export const describeCostMadeBill = (
+  item: string,
+  cost: string,
+  bill: BillSealed,
+  broughtCents: number,
+  freeCents: number,
+) =>
+  [
+    MAKE_BILL_WORDS.summary(
+      item,
+      cost,
+      formatRange(bill.amount),
+      describeBillTiming(bill.timing.schedule),
+    ),
+    broughtCents > 0
+      ? MAKE_BILL_WORDS.summaryBrought(formatCents(broughtCents), item)
+      : null,
+    freeCents > 0
+      ? MAKE_BILL_WORDS.summaryFree(formatCents(freeCents), item)
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' ');
 
 /** The change-log line for a cost's payment marked paid: "Marked Movers paid on Moving: $600.00 due Jan 15th." */
 export const describeCostPaid = (

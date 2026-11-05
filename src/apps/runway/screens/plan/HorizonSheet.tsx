@@ -53,6 +53,7 @@ import CostForm from '@apps/runway/forms/CostForm';
 import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
 import CostSheet from '@apps/runway/screens/plan/CostSheet';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 interface HorizonSheetProps {
@@ -88,6 +89,7 @@ function HorizonSheet({
   const purchases = useAppSelector(selectSpendPurchases);
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const { isHidden } = useValuesHidden();
+  const { showOnPlan } = useRunwayUrlState();
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const [view, setView] = useState<'main' | 'change' | 'history'>('main');
   const [costId, setCostId] = useState<string | null>(openCostId);
@@ -477,6 +479,10 @@ function HorizonSheet({
                   cost={cost}
                   paid={getPaid(cost.id)}
                   onOpen={() => {
+                    if (cost.becameBillId !== null) {
+                      void showOnPlan('bills', { itemId: cost.becameBillId });
+                      return;
+                    }
                     setCostId(cost.id);
                     setCostEdit(null);
                   }}
