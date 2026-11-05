@@ -251,8 +251,8 @@ const getActionTitle = (view: View, kind: ItemKind) => {
   const noun = ITEM_KIND_NOUNS[kind];
   if (view === 'end') return `End the ${noun}`;
   if (view === 'archive') return `Archive the ${noun}`;
-  if (view === 'resume') return `Resume the ${noun}`;
-  return `Pause the ${noun}`;
+  if (view === 'resume') return LIFECYCLE_WORDS.resume;
+  return LIFECYCLE_WORDS.pause;
 };
 
 const VIEW_NOTES: Record<View, string> = {
@@ -382,6 +382,7 @@ function ItemSheet({
 
   const goal = itemKind === 'goal' ? (payload as GoalSealed) : null;
   const isPaused = goal !== null && (goal.state ?? 'active') === 'paused';
+  const isUnfunded = goal !== null && goal.funding.cadence.kind === 'none';
   const upcoming = isScheduled(payload)
     ? occurrences(
         getSchedule(payload),
@@ -1194,11 +1195,23 @@ function ItemSheet({
         <ActionGroup
           caption={
             goal && isStoppable
-              ? ITEM_SHEET_WORDS.stopHeading
+              ? isPaused || isUnfunded
+                ? ITEM_SHEET_WORDS.startHeading
+                : ITEM_SHEET_WORDS.stopHeading
               : ITEM_SHEET_R2_WORDS.stopOnly
           }
         >
-          {isStoppable && goal && !isPaused && (
+          {isStoppable && isUnfunded && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Play />}
+              label={LIFECYCLE_WORDS.resume}
+              subtitle={ITEM_SHEET_R2_WORDS.startSavingSub}
+              onClick={() => openChange('often')}
+            />
+          )}
+          {isStoppable && goal && !isPaused && !isUnfunded && (
             <ActionRow
               isGrouped
               hasChevron
@@ -1208,7 +1221,7 @@ function ItemSheet({
               onClick={() => goTo('pause')}
             />
           )}
-          {isStoppable && goal && isPaused && (
+          {isStoppable && goal && isPaused && !isUnfunded && (
             <ActionRow
               isGrouped
               hasChevron

@@ -189,12 +189,17 @@ export function getPace(
 
 export type GoalTrack = 'onTrack' | 'behind';
 
+/** A goal money goes into: not paused and not "Not saving for it yet". The one test every goal total and pace line uses. */
+export const isSavingFor = (
+  goal: Pick<GoalSealed, 'state' | 'funding'>,
+): boolean => goal.state !== 'paused' && goal.funding.cadence.kind !== 'none';
+
 /** Whether a goal with a date is on track: null for a goal with no date, a paused or complete one, or one with no pace to measure. */
 export function getGoalTrack(
-  goal: { state: GoalSealed['state'] },
+  goal: Pick<GoalSealed, 'state' | 'funding'>,
   pace: Pace,
 ): GoalTrack | null {
-  if (goal.state === 'paused' || pace.state === null) return null;
+  if (!isSavingFor(goal) || pace.state === null) return null;
   return pace.state === 'behind' ? 'behind' : 'onTrack';
 }
 

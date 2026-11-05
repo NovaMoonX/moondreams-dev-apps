@@ -941,7 +941,7 @@ function IncomeFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={title}
+      title={editing ? formData.payName.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps

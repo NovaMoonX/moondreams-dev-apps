@@ -18,6 +18,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useWarningHint } from '@apps/runway/hooks/useWarningHint';
 import {
+  getVersionStretches,
   isSameValue,
   planStretches,
   type StretchPlan,
@@ -45,6 +46,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeChange,
+  isIdleGoal,
   isMoneylessChange,
   isSamePayload,
   type ItemPayload,
@@ -199,8 +201,18 @@ export function useChangeFlow({
     presetDayKey,
   });
   const isUnchanged = candidate !== null && isSamePayload(current, candidate);
+  // A goal idle today and in every later stretch moves no money whatever changes; a funded stretch ahead keeps the full flow.
+  const isIdleThroughout =
+    isIdleGoal(candidate ?? current) &&
+    getVersionStretches<OpenVersion, ItemPayload>(
+      allVersions,
+      itemId,
+      today,
+    ).every(({ payload }) => isIdleGoal(payload));
   const isMoneyless =
-    candidate !== null && !isUnchanged && isMoneylessChange(current, candidate);
+    candidate !== null &&
+    !isUnchanged &&
+    (isIdleThroughout || isMoneylessChange(current, candidate));
   const span: ChangeSpan | null = isMoneyless
     ? { kind: 'version', effectiveFrom: today, effectiveUntil: null }
     : askedSpan;
@@ -460,6 +472,7 @@ export function useChangeFlow({
     presetDayKey,
     isUnchanged,
     isMoneyless,
+    isIdleThroughout,
     replaced,
     summaryText,
     today,
