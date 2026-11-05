@@ -44,7 +44,11 @@ import {
   selectAllCards,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HomeMoves } from '@apps/runway/store/selectors/moveSelectors';
-import { describeMoveSummary } from '@apps/runway/utils/moveText';
+import {
+  describeMoveBy,
+  describeMoveShort,
+  describeMoveSummary,
+} from '@apps/runway/utils/moveText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ProblemRow from '@apps/runway/components/ProblemRow';
 import { useOpenIncomeFix } from '@apps/runway/hooks/useOpenIncomeFix';
@@ -283,7 +287,8 @@ function LookaheadWarnings({
                   />
                 ) : row.kind === 'move' ? (
                   <MoveWarningRow
-                    sentence={describeMoveSummary(row.move, accounts)}
+                    sentence={describeMoveShort(row.move, accounts)}
+                    note={describeMoveBy(row.move)}
                     dayKey={row.dayKey}
                   />
                 ) : (

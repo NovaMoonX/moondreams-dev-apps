@@ -384,6 +384,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const doneCount = ready.filter(isSettled).length;
   const isAllSettled = doneCount === ready.length;
   const hasCosts = costRows.length > 0;
+  const namesBills = hasCosts || accountMoves.length > 0;
 
   if (rows.length === 0 && costRows.length === 0 && accountMoves.length === 0)
     return null;
@@ -563,7 +564,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
                 if (next) void markAll();
               }}
               aria-label={
-                hasCosts
+                namesBills
                   ? CHECKLIST_WORDS.allBillsPaidAction
                   : ITEM_SHEET_R2_WORDS.everythingPaid
               }
@@ -571,10 +572,10 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           )}
           <span className='min-w-0 flex-1 font-medium'>
             {isAllSettled
-              ? hasCosts
+              ? namesBills
                 ? CHECKLIST_WORDS.allBillsPaid
                 : CHECKLIST_R3_WORDS.allPaid
-              : hasCosts
+              : namesBills
                 ? CHECKLIST_WORDS.allBillsPaidAction
                 : ITEM_SHEET_R2_WORDS.everythingPaid}
           </span>

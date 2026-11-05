@@ -1,5 +1,5 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCentsShort } from '@/utils/moneyUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { ACCOUNT_MOVE_WORDS } from '@apps/runway/constants';
 import type { AccountMove } from '@apps/runway/engine/moves';
 import type { OpenAccount } from '@apps/runway/types';
@@ -19,14 +19,15 @@ export const getMoveNames = (
   from: nameOf(move.fromAccountId, accounts),
 });
 
-/** "Move $1,240 from Capital One A to Capital One B". */
-export const describeMoveTitle = (
+/** "Move $1,240 to Capital One B": a Things to fix row's name, with the source and date in its line. */
+export const describeMoveShort = (
   move: AccountMove,
   accounts: readonly OpenAccount[],
-) => {
-  const { to, from } = getMoveNames(move, accounts);
-  return ACCOUNT_MOVE_WORDS.title(formatCentsShort(move.moveCents), to, from);
-};
+) =>
+  ACCOUNT_MOVE_WORDS.short(
+    formatCents(move.moveCents),
+    getMoveNames(move, accounts).to,
+  );
 
 /** "Move $1,240 from Capital One A to Capital One B by Nov 12th": the title with its date, for Home. */
 export const describeMoveSummary = (
@@ -35,27 +36,16 @@ export const describeMoveSummary = (
 ) => {
   const { to, from } = getMoveNames(move, accounts);
   return ACCOUNT_MOVE_WORDS.summary(
-    formatCentsShort(move.moveCents),
+    formatCents(move.moveCents),
     to,
     from,
     formatDateOrdinalUTC(move.byOn),
   );
 };
 
-/** "By Nov 12th · Discover, Citi and Phone", or "By Nov 12th · Capital One B has $300 of $1,240" when its balance was taken off. */
-export const describeMoveBy = (
-  move: AccountMove,
-  accounts: readonly OpenAccount[],
-) => {
-  const { to } = getMoveNames(move, accounts);
-  return ACCOUNT_MOVE_WORDS.by(
+/** "By Nov 12th · for Discover, Citi and Phone": when it is due and what it is for. */
+export const describeMoveBy = (move: AccountMove) =>
+  ACCOUNT_MOVE_WORDS.by(
     formatDateOrdinalUTC(move.byOn),
-    move.balanceCents === null
-      ? ACCOUNT_MOVE_WORDS.names(move.items.map((item) => item.name))
-      : ACCOUNT_MOVE_WORDS.hasOf(
-          to,
-          formatCentsShort(move.balanceCents),
-          formatCentsShort(move.pullsCents),
-        ),
+    ACCOUNT_MOVE_WORDS.names(move.items.map((item) => item.name)),
   );
-};

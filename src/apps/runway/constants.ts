@@ -1179,17 +1179,11 @@ export const CHECKLIST_WORDS = {
 /** Money to move into the accounts that bills and cards pull from, after an income day. */
 export const ACCOUNT_MOVE_WORDS = {
   group: 'Move to accounts',
-  title: (amount: string, to: string, from: string | null) =>
-    from === null
-      ? `Move ${amount} to ${to}`
-      : `Move ${amount} from ${from} to ${to}`,
   summary: (amount: string, to: string, from: string | null, by: string) =>
     from === null
       ? `Move ${amount} to ${to} by ${by}`
       : `Move ${amount} from ${from} to ${to} by ${by}`,
-  by: (date: string, detail: string) => `By ${date} · ${detail}`,
-  hasOf: (account: string, has: string, of: string) =>
-    `${account} has ${has} of ${of}`,
+  by: (date: string, names: string) => `By ${date} · for ${names}`,
   names: (names: readonly string[]) =>
     names.length <= 3
       ? names.length < 2
@@ -1197,21 +1191,29 @@ export const ACCOUNT_MOVE_WORDS = {
         : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
       : `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`,
   sheetTitle: (to: string) => `Move to ${to}`,
+  short: (amount: string, to: string) => `Move ${amount} to ${to}`,
   pullsHeading: (to: string) => `What pulls from ${to}`,
-  pulls: (amount: string, to: string, by: string) =>
-    `${amount} pulls from ${to} by ${by}.`,
-  freshBalance: (account: string, balance: string, date: string) =>
-    `${account} held ${balance} on ${date}, so that comes off.`,
-  staleBalance: (account: string) =>
-    `${account}'s balance is older than this pay, so the whole amount is asked. Type what it holds today and it shrinks.`,
+  lead: (amount: string, from: string | null, by: string) =>
+    from === null
+      ? `Move ${amount} here by ${by}.`
+      : `Move ${amount} from ${from} by ${by}.`,
+  freshBalance: (
+    account: string,
+    balance: string,
+    date: string,
+    left: string,
+    pulls: string,
+  ) =>
+    `${account} held ${balance} on ${date}, so ${left} of the ${pulls} is left to move.`,
+  staleBalance: (account: string, date: string) =>
+    `${account}'s balance was last updated ${date}, before this pay, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
   noBalance: (account: string) =>
-    `${account} has no balance yet, so the whole amount is asked. Type what it holds today and it shrinks.`,
+    `${account} has no balance yet, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
   updateBalance: (account: string) => `Update ${account}'s balance`,
   updateBalanceSub: 'What it holds today',
   warnTitle: 'Money to move',
   warnOne: '1 move to do',
   warnMany: (count: number) => `${count} moves to do`,
-  openChecklist: 'Open the checklist',
 } as const;
 
 /** Under an amount that turns a range into a record: what it usually is. */

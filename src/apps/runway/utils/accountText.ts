@@ -80,6 +80,6 @@ export const getAccountMoveName = (
         account.institution.trim().toLowerCase(),
   );
   return isShared && account.lastFour
-    ? `${account.name} ••${account.lastFour}`
+    ? `${account.name}\u00a0••${account.lastFour}`
     : account.name;
 };

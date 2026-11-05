@@ -89,7 +89,10 @@ import type {
   Schedule,
   SourceSealed,
 } from '@apps/runway/types';
-import { describeAccountLine } from '@apps/runway/utils/accountText';
+import {
+  describeAccountLine,
+  getAccountMoveName,
+} from '@apps/runway/utils/accountText';
 import { keepOpenAccountId } from '@apps/runway/engine/accounts';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
@@ -519,9 +522,10 @@ function IncomeFormBody({
     openAccounts,
     isAccountsLoaded,
   );
-  const accountName =
-    openAccounts.find((account) => account.id === accountId)?.name ??
-    ACCOUNT_WORDS.landsInNone;
+  const landsIn = openAccounts.find((account) => account.id === accountId);
+  const accountName = landsIn
+    ? getAccountMoveName(landsIn, openAccounts)
+    : ACCOUNT_WORDS.landsInNone;
   const accountSteps: QuestionStep[] =
     openAccounts.length === 0
       ? []

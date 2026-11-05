@@ -96,8 +96,11 @@ function AccountSheet({
   const looks = useAppSelector(selectItemLooks);
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'menu' | 'balance' | 'holds'>(startView);
+  // An old figure saved untouched would read as checked today and shrink a move to nothing.
   const [balanceText, setBalanceText] = useState(() =>
-    centsToInputValue(account.balanceCents),
+    startView === 'balance' && account.balanceOn !== today
+      ? ''
+      : centsToInputValue(account.balanceCents),
   );
   const [picked, setPicked] = useState<ReadonlySet<string>>(
     () => new Set(account.holds),
