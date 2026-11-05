@@ -174,6 +174,13 @@ Problems we've hit before, so we don't hit them again.
 - **Telling it apart:** `scripts/fbDeploySmart.ts` repeats the release update on this 409 and prints the Rules API's own answer under "Repeating its update to read the answer"; a 400 naming a size is this problem, anything else is a different one. `npm run check:rules-size` estimates the size on every PR that touches `firestore.rules` and fails at 250,000 bytes (warns from 240,000); it matched the real 258,529 for the old rules at 258,530.
 - **Verified:** the estimate for the failing rules is 258,530 against the real 258,529. After the change it was 242,656, and the merge deploy of #480 is the real proof. The rules were later cut to the beta tier (about 54,000), which leaves most of the limit free; the strict version is in git history at `c784e89`.
 
+### "Uh oh, something went wrong" on the next screen after a new version ships
+
+- **Symptom:** with the Restart strip showing (or a laptop tab left open across a deploy), moving to another app (Waypoint → Runway) lands on the error screen. The console shows `Failed to load module script: … the server responded with a MIME type of "text/html"` for files such as `Waypoint-*.js` or `AuthRequiredState-*.js`.
+- **Cause:** each screen's code is a separate file whose name changes with every build. The new service worker takes over at once and drops the old version's cached files, so the old page asks the server for files the deploy removed; Hosting's catch-all rewrite answers with `index.html`, which the browser refuses as a script.
+- **Fix:** the error screen recognises a screen file that failed to load (`isStaleChunkError`) and reloads once into the new version on the address that was asked for, showing Loading meanwhile. A second failure within half a minute is a real fault, so it shows the error screen with Restart rather than reloading again.
+- **Telling it apart:** the error message names a dynamically imported module (Chrome: "Failed to fetch dynamically imported module"; Safari: "Importing a module script failed"), and `sessionStorage.staleChunkReloadAt` holds the time of the reload it made. Offline, nothing reloads.
+
 ### A door in a drawer leaves the app for the site's home after an update's Restart
 
 - **Symptom:** on the owner's Android phone (the site installed as an app), Runway's "Things to fix" → the bills-with-no-due-date row opened the site's home page instead of Bills. It started right after tapping Restart for 1.223 and stopped once the app was closed and reopened, then came back after the next Restart.

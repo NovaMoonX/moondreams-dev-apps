@@ -1,10 +1,18 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
 import { useUpdateReady } from '@hooks/useUpdateReady';
+import Loading from '@ui/Loading';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
+import {
+  canReloadForStaleChunk,
+  isStaleChunkError,
+  reloadForStaleChunk,
+} from '../lib/app/appUpdate';
+import { hasUnsavedWork } from '../lib/app/unsavedWork';
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -18,26 +26,41 @@ function ErrorBoundary() {
   const error = useRouteError();
   const { isAdmin } = useAuth();
   const isUpdateReady = useUpdateReady();
-  const { pathname } = useLocation()
+  const { pathname } = useLocation();
   const { message, stack } = getErrorDetails(error);
   const showDetails = import.meta.env.DEV || isAdmin;
+  // A screen's file missing after a deploy: the new version is loaded straight into the screen asked for.
+  const [isReloading] = useState(
+    () =>
+      isStaleChunkError(error) && canReloadForStaleChunk() && !hasUnsavedWork(),
+  );
+
+  useEffect(() => {
+    if (isReloading) reloadForStaleChunk();
+  }, [isReloading]);
+
+  if (isReloading) return <Loading />;
 
   return (
     <div className='page flex items-center justify-center px-4 py-12'>
-      <div className='w-full max-w-lg rounded-2xl border border-border bg-card p-8 text-center shadow-sm'>
+      <div className='border-border bg-card w-full max-w-lg rounded-2xl border p-8 text-center shadow-sm'>
         <p className='text-foreground/60 text-xs font-medium tracking-[0.24em] uppercase'>
-            {pathname === '/' ? 'Home' : getRegistryAppForPath(pathname)?.name ?? 'Unknown'}
+          {pathname === '/'
+            ? 'Home'
+            : (getRegistryAppForPath(pathname)?.name ?? 'Unknown')}
         </p>
         <h1 className='text-foreground mt-4 text-3xl font-semibold tracking-tight'>
           Uh oh, something went wrong.
         </h1>
         <p className='text-foreground/70 mt-3 text-base'>
-          We hit a snag loading this page. Try heading back home, or refresh to try
-          again.
+          We hit a snag loading this page. Try heading back home, or refresh to
+          try again.
         </p>
         {showDetails && (
           <div className='border-destructive/30 bg-destructive/5 mt-6 rounded-lg border p-4 text-left'>
-            <p className='text-destructive text-sm font-medium wrap-break-word'>{message}</p>
+            <p className='text-destructive text-sm font-medium wrap-break-word'>
+              {message}
+            </p>
             {stack && (
               <pre className='text-foreground/60 mt-2 max-h-48 overflow-auto text-xs whitespace-pre-wrap'>
                 {stack}
@@ -46,15 +69,23 @@ function ErrorBoundary() {
           </div>
         )}
         {isUpdateReady && (
-          <p className='text-foreground/70 mt-3 text-base'>A new version is ready. Restart to load it.</p>
+          <p className='text-foreground/70 mt-3 text-base'>
+            A new version is ready. Restart to load it.
+          </p>
         )}
         <div className='mt-6 flex flex-wrap justify-center gap-3'>
-          {isUpdateReady && <Button onClick={() => window.location.reload()}>Restart</Button>}
+          {isUpdateReady && (
+            <Button onClick={() => window.location.reload()}>Restart</Button>
+          )}
           <Link to='/'>
-            <Button variant={isUpdateReady ? 'secondary' : 'primary'}>Back home</Button>
+            <Button variant={isUpdateReady ? 'secondary' : 'primary'}>
+              Back home
+            </Button>
           </Link>
         </div>
-        <p className='text-foreground/50 mt-6 text-xs'><VersionLabel /></p>
+        <p className='text-foreground/50 mt-6 text-xs'>
+          <VersionLabel />
+        </p>
       </div>
     </div>
   );
