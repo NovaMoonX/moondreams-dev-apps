@@ -547,6 +547,10 @@ export interface AccountSealed {
   balanceOn: DateOnly | null;
   /** The goals and envelopes whose money sits in it; an id is held by one account at most. */
   holds: string[];
+  /** The yearly rate the account earns, in basis points; null for none, and always null off a checking, savings or cash management account. A version written before it reads as null. */
+  apyBps: number | null;
+  /** The day of the month interest lands (1 to 31, a day past the month's end means its last); null is the last day. */
+  interestDay: number | null;
 }
 
 export interface OpenAccount extends AccountSealed {

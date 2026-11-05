@@ -20,13 +20,18 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  formatCents,
+  parseMoneyToCents,
+  parsePercentToBps,
+} from '@/utils/moneyUtils';
 import {
   ACCOUNT_KINDS,
   ACCOUNT_KINDS_LEFT_OUT,
   ACCOUNT_KIND_LABELS,
   ACCOUNT_WORDS,
   FORM_DRAFT_PREFIX,
+  INTEREST_ACCOUNT_KINDS,
   FORM_FLOW_WORDS,
   MAX_NAME_LENGTH,
   MAX_PURCHASE_CENTS,
@@ -61,6 +66,7 @@ import type {
 } from '@apps/runway/types';
 import {
   describeAccountChanged,
+  formatApy,
   isLastFour,
 } from '@apps/runway/utils/accountText';
 import { resolveBank } from '@apps/runway/utils/cardText';
@@ -75,6 +81,10 @@ interface AccountFormData {
   /** Null until answered; only a checking account is asked. */
   isPull: boolean | null;
   balance: string;
+  /** A percent as typed; empty is none. */
+  apy: string;
+  /** A day of the month as typed; empty is the last day. */
+  interestDay: string;
 }
 
 interface AccountFormProps {
@@ -96,9 +106,13 @@ const isOfflineFailure = (error: unknown) =>
 const parseAccountDraft = (stored: unknown) => {
   const fields =
     typeof stored === 'object' && stored !== null
-      ? Object.fromEntries(
-          Object.entries(stored).filter(([key]) => key !== 'isCounted'),
-        )
+      ? {
+          apy: '',
+          interestDay: '',
+          ...Object.fromEntries(
+            Object.entries(stored).filter(([key]) => key !== 'isCounted'),
+          ),
+        }
       : stored;
   return readDraftFields<AccountFormData>(fields, {
     institution: isText,
@@ -108,6 +122,8 @@ const parseAccountDraft = (stored: unknown) => {
     hasNoLastFour: isFlag,
     isPull: isNullableFlag,
     balance: isText,
+    apy: isText,
+    interestDay: isText,
   });
 };
 
@@ -121,6 +137,9 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         hasNoLastFour: editing.lastFour === null,
         isPull: editing.isPullAccount,
         balance: '',
+        apy: editing.apyBps === null ? '' : formatApy(editing.apyBps),
+        interestDay:
+          editing.interestDay === null ? '' : String(editing.interestDay),
       }
     : {
         institution: '',
@@ -130,7 +149,24 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         hasNoLastFour: false,
         isPull: null,
         balance: '',
+        apy: '',
+        interestDay: '',
       };
+
+const MAX_APY_BPS = 2_500;
+
+/** A typed yearly percent ("4.10") as basis points, up to 25%; null for anything else. */
+const parseApy = (text: string) =>
+  parsePercentToBps(text, { maxBps: MAX_APY_BPS, stepBps: 1 });
+
+/** "0" reads as no interest, like an empty field. */
+const isNoApy = (text: string) =>
+  text === '' || /^(0+(\.0*)?|\.0+)%?$/.test(text);
+
+const parseInterestDay = (text: string) => {
+  const day = /^\d{1,2}$/.test(text.trim()) ? Number(text) : null;
+  return day !== null && day >= 1 && day <= 31 ? day : null;
+};
 
 const kindOptions = ACCOUNT_KINDS.map((value) => ({
   value,
@@ -214,6 +250,17 @@ function AccountFormBody({
       balanceCents >= 0 &&
       balanceCents <= MAX_PURCHASE_CENTS);
   const asksBalance = editing === undefined;
+  const asksInterest = INTEREST_ACCOUNT_KINDS.includes(formData.kind);
+  const apyText = formData.apy.trim();
+  const apyBps = asksInterest && !isNoApy(apyText) ? parseApy(apyText) : null;
+  const isApyValid = !asksInterest || isNoApy(apyText) || apyBps !== null;
+  const asksInterestDay = asksInterest && apyBps !== null;
+  const interestDayText = formData.interestDay.trim();
+  const interestDay = asksInterestDay
+    ? parseInterestDay(interestDayText)
+    : null;
+  const isInterestDayValid =
+    !asksInterestDay || interestDayText === '' || interestDay !== null;
 
   const steps: QuestionStep[] = [
     {
@@ -335,6 +382,68 @@ function AccountFormBody({
         />
       ),
     },
+    ...(asksInterest
+      ? [
+          {
+            id: 'apy',
+            title: ACCOUNT_WORDS.apyTitle,
+            summaryLabel: ACCOUNT_WORDS.apyLabel,
+            summaryValue:
+              apyBps === null
+                ? ACCOUNT_WORDS.apyNone
+                : ACCOUNT_WORDS.apyValue(formatApy(apyBps)),
+            isAnswered: isApyValid,
+            blocker: ACCOUNT_WORDS.apyNeeded,
+            render: () => (
+              <div className='space-y-3'>
+                <Input
+                  variant='outline'
+                  aria-label={ACCOUNT_WORDS.apyLabel}
+                  placeholder={ACCOUNT_WORDS.apyPlaceholder}
+                  inputMode='decimal'
+                  maxLength={5}
+                  value={formData.apy}
+                  onChange={(event) => set({ apy: event.target.value })}
+                />
+                <p className='text-muted-foreground text-sm'>
+                  {ACCOUNT_WORDS.apyHint}
+                </p>
+              </div>
+            ),
+          } satisfies QuestionStep,
+        ]
+      : []),
+    ...(asksInterestDay
+      ? [
+          {
+            id: 'interestDay',
+            title: ACCOUNT_WORDS.interestDayTitle,
+            summaryLabel: ACCOUNT_WORDS.interestDayLabel,
+            summaryValue:
+              interestDay === null
+                ? ACCOUNT_WORDS.interestLastDay
+                : ACCOUNT_WORDS.interestDayValue(interestDay),
+            isAnswered: isInterestDayValid,
+            blocker: ACCOUNT_WORDS.interestDayNeeded,
+            render: () => (
+              <div className='space-y-3'>
+                <Input
+                  variant='outline'
+                  aria-label={ACCOUNT_WORDS.interestDayLabel}
+                  placeholder={ACCOUNT_WORDS.interestDayPlaceholder}
+                  inputMode='numeric'
+                  maxLength={2}
+                  value={formData.interestDay}
+                  onChange={(event) => set({ interestDay: event.target.value })}
+                />
+                <p className='text-muted-foreground text-sm'>
+                  {ACCOUNT_WORDS.interestDayHint}
+                </p>
+              </div>
+            ),
+          } satisfies QuestionStep,
+        ]
+      : []),
     ...(asksBalance
       ? [
           {
@@ -409,7 +518,11 @@ function AccountFormBody({
             ? ACCOUNT_WORDS.needsPull
             : !isBalanceValid
               ? ACCOUNT_WORDS.balanceNeeded
-              : null;
+              : !isApyValid
+                ? ACCOUNT_WORDS.apyNeeded
+                : !isInterestDayValid
+                  ? ACCOUNT_WORDS.interestDayNeeded
+                  : null;
   const blocker = getBlocker();
   const shownNote = isAsking ? questions.blocker : blocker;
 
@@ -433,6 +546,8 @@ function AccountFormBody({
             ? null
             : todayAsUtcDate(),
         holds: editing ? editing.holds : [],
+        apyBps,
+        interestDay,
       };
       if (editing) {
         const summary = describeAccountChanged(editing, sealed);

@@ -3717,6 +3717,10 @@ export const ACCOUNT_KIND_LABELS: Record<
 export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] =
   ['investment'];
 
+/** The kinds of account that can earn interest. */
+export const INTEREST_ACCOUNT_KINDS: readonly (typeof ACCOUNT_KINDS)[number][] =
+  ['checking', 'savings', 'cashManagement'];
+
 /** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
 export const BILL_PAY_WORDS = {
   title: 'How do you pay it?',
@@ -3809,6 +3813,37 @@ export const ACCOUNT_WORDS = {
     `cards and bills pulling from it ${from} to ${to}`,
   changeYes: 'yes',
   changeNo: 'no',
+  changeApy: (from: string, to: string) => `APY ${from} to ${to}`,
+  changeNoApy: 'none',
+  changeInterestDay: (from: string, to: string) =>
+    `interest day ${from} to ${to}`,
+  apyTitle: 'Does it earn interest?',
+  apyLabel: 'APY',
+  apyPlaceholder: '4.10',
+  apyHint: 'The yearly rate your bank shows (APY). Leave it empty for none.',
+  apyNone: 'No interest',
+  apyNeeded: 'Type a rate like 4.10, up to 25%, or leave it empty.',
+  interestDayTitle: 'Which day does the interest arrive?',
+  interestDayLabel: 'Interest day',
+  interestDayPlaceholder: 'Last day',
+  interestDayHint: 'A day from 1 to 31. Leave it empty for the last day.',
+  interestLastDay: 'Last day of the month',
+  changeInterestLastDay: 'the last day of the month',
+  interestDayNeeded: 'Type a day from 1 to 31, or leave it empty.',
+  interestDayValue: (day: number) => `Day ${day}`,
+  apyFact: (percent: string) => `${percent}% APY`,
+  apyValue: (percent: string) => `${percent}%`,
+  interestCaption: 'Interest',
+  interestEstimate: (amount: string, day: string) =>
+    `About ${amount} interest on ${day} (estimate)`,
+  interestActual: (amount: string, day: string) =>
+    `${amount} interest on ${day}`,
+  goalInterestActual: (amount: string, day: string, account: string) =>
+    `Earned ${amount} on ${day}, its share of the interest in ${account}`,
+  interestUncounted: (amount: string, day: string) =>
+    `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
+  goalInterest: (amount: string, day: string, account: string) =>
+    `Earns about ${amount} on ${day}, its share of the interest in ${account} (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
   changeHolds: (
     name: string,

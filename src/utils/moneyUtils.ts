@@ -37,8 +37,14 @@ export function parseMoneyToCents(input: string): number | null {
 
 const PERCENT_PATTERN = /^(\d{1,3})(?:\.(\d{0,2}))?%?$/;
 
-/** Parses a typed percentage in whole or half percents ("10", "12.5") into basis points (1,000, 1,250); null for anything else, zero and above 100% included. */
-export function parsePercentToBps(input: string): number | null {
+/**
+ * Parses a typed percentage into basis points ("12.5" is 1,250); null for anything else, zero included.
+ * By default only whole or half percents up to 100% are accepted; `stepBps` and `maxBps` change that.
+ */
+export function parsePercentToBps(
+  input: string,
+  { maxBps = 10_000, stepBps = 50 }: { maxBps?: number; stepBps?: number } = {},
+): number | null {
   const match = input.trim().match(PERCENT_PATTERN);
   if (!match) {
     return null;
@@ -46,7 +52,7 @@ export function parsePercentToBps(input: string): number | null {
 
   const fraction = (match[2] ?? '').padEnd(2, '0');
   const bps = Number(match[1]) * 100 + Number(fraction);
-  const isValid = bps > 0 && bps <= 10_000 && bps % 50 === 0;
+  const isValid = bps > 0 && bps <= maxBps && bps % stepBps === 0;
   return isValid ? bps : null;
 }
 

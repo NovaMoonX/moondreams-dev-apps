@@ -49,6 +49,8 @@ import {
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveAccount,
@@ -65,6 +67,7 @@ import {
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
+import { formatApy } from '@apps/runway/utils/accountText';
 
 const MAX_HOLD_LINES = 4;
 
@@ -124,10 +127,31 @@ function AccountSheet({
   const isBalanceSame =
     balanceCents === account.balanceCents && account.balanceOn === today;
   const linkedFact = useLinkedFact(account.linkId);
+  const { interest, uncounted } = useAccountInterest(account, today);
+  const interestLine =
+    interest === null
+      ? null
+      : uncounted !== null
+        ? ACCOUNT_WORDS.interestUncounted(
+            formatCents(uncounted.cents),
+            formatDateOrdinalUTC(uncounted.on),
+          )
+        : interest.isActual
+          ? ACCOUNT_WORDS.interestActual(
+              formatCents(interest.cents),
+              formatDateOrdinalUTC(interest.on),
+            )
+          : ACCOUNT_WORDS.interestEstimate(
+              formatCents(interest.cents),
+              formatDateOrdinalUTC(interest.on),
+            );
   const facts = [
     account.balanceOn === null
       ? null
       : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
+    account.apyBps === null
+      ? null
+      : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
     linkedFact,
   ].filter((fact): fact is string => fact !== null);
@@ -463,6 +487,13 @@ function AccountSheet({
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />
+        {interestLine !== null && (
+          <ActionSection caption={ACCOUNT_WORDS.interestCaption}>
+            <p className='text-sm'>
+              <MaskedText>{interestLine}</MaskedText>
+            </p>
+          </ActionSection>
+        )}
         <ActionSection caption={ACCOUNT_WORDS.holdsTitle}>
           {holdLines.length === 0 && (
             <p className='text-muted-foreground text-sm'>

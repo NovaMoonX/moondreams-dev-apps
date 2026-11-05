@@ -49,6 +49,8 @@ export function startAccountsListener(
               balanceCents: payload.balanceCents ?? null,
               balanceOn: payload.balanceOn ?? null,
               holds: payload.holds ?? [],
+              apyBps: payload.apyBps ?? null,
+              interestDay: payload.interestDay ?? null,
             };
           }),
         );

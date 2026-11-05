@@ -1609,6 +1609,8 @@ async function writeSeedAccounts(
     lastFour: null,
     balanceOn,
     holds: [],
+    apyBps: null,
+    interestDay: null,
   } satisfies Partial<AccountSealed>;
   const accounts: { id: string; sealed: AccountSealed }[] = [
     {
@@ -1644,6 +1646,8 @@ async function writeSeedAccounts(
         kind: 'cashManagement',
         balanceCents: 80_000,
         holds: SEED_WEALTHFRONT_GOALS,
+        apyBps: 410,
+        interestDay: null,
       },
     },
   ];
@@ -3344,6 +3348,8 @@ async function seedUnlinkedPlan(
         balanceCents: 182_500,
         balanceOn: startOfUtcDay(unlinkedAt),
         holds: [],
+        apyBps: null,
+        interestDay: null,
       } satisfies AccountSealed,
       encryption,
     ),

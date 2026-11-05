@@ -162,6 +162,8 @@ export async function linkChosenAccounts(
       balanceCents: entry.balanceCents,
       balanceOn: entry.balanceCents === null ? null : todayAsUtcDate(),
       holds: [],
+      apyBps: null,
+      interestDay: null,
     });
     created.push(accountId);
     onCreated(index, { kind: 'existing', target: 'account', id: accountId });
