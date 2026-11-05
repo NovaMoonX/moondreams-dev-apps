@@ -11,6 +11,7 @@ import {
   selectEnvelopes,
   selectGoals,
   selectHasEverHadIncome,
+  selectHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
@@ -19,7 +20,7 @@ const OPTIONS = PRIORITIES.map((value) => ({
   ...PRIORITY_DIAL_WORDS.options[value],
 }));
 
-/** The Must, Should, Want dial, drawn only while the open view lists something to count. */
+/** The Must, Should, Want dial, drawn only while the open view (bills, envelopes, goals or Horizon) lists something to count. */
 function PriorityDial() {
   const today = todayAsUtcDate(useNow(60_000));
   const { planSection } = useRunwayUrlState();
@@ -28,6 +29,8 @@ function PriorityDial() {
     if (planSection === 'bills') return selectBills(state, today).length;
     if (planSection === 'envelopes')
       return selectEnvelopes(state, today).length;
+    if (planSection === 'horizon')
+      return selectHorizonItems(state, today).length;
     if (planSection === 'goals') return selectGoals(state, today).length;
     return 0;
   });

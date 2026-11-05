@@ -132,6 +132,12 @@ const getHorizonParts = (
 ): Part[] => [
   diff('Name', before.name, after.name, (value) => value),
   diff(
+    'Emoji',
+    before.emoji ?? null,
+    after.emoji ?? null,
+    (value) => value ?? 'none',
+  ),
+  diff(
     'Matters',
     before.priority,
     after.priority,
@@ -168,6 +174,9 @@ const getHorizonParts = (
       describeTimingMove(cost, old),
       diff(`${cost.name} paid`, old.isOutside, cost.isOutside, (value) =>
         value ? 'outside the plan' : 'like the rest',
+      ),
+      diff(`${cost.name} priority`, old.priority, cost.priority, (value) =>
+        value === null ? 'like the event' : PRIORITY_LABELS[value],
       ),
     ];
   }),

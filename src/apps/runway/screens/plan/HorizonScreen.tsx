@@ -17,6 +17,10 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  isHorizonCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import HorizonForm from '@apps/runway/forms/HorizonForm';
 import {
@@ -33,6 +37,7 @@ function HorizonScreen() {
   const items = useAppSelector((state) => selectHorizonItems(state, today));
   const done = useAppSelector((state) => selectDoneHorizonItems(state, today));
   const stance = useAppSelector(selectStance);
+  const { dial } = usePriorityDial();
   const [isDoneOpen, setIsDoneOpen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const everything = useAppSelector((state) =>
@@ -91,6 +96,7 @@ function HorizonScreen() {
                 horizon={version.payload}
                 today={today}
                 stance={stance}
+                isFaded={!isHorizonCountedAt(version.payload, dial)}
               />
             ))}
           </ul>

@@ -399,6 +399,16 @@ export const HORIZON_WORDS = {
   costPaidTitle: "How it's paid",
   costPaidLabel: "How it's paid",
   costPaidLike: (name: string) => `Like the rest of ${name}`,
+  costPriorityDiffers: (
+    itemName: string,
+    itemPriority: string,
+    costPriority: string,
+  ) => `${itemName} is a ${itemPriority}; this cost will be a ${costPriority}.`,
+  costPrioritySummary: (
+    costPriority: string,
+    itemName: string,
+    itemPriority: string,
+  ) => `${costPriority} · ${itemName} is a ${itemPriority}`,
   costOutsideHint:
     'Stays on your list. Runway never sets money aside for it or warns you about it.',
   outsideTag: 'Outside the plan',
@@ -520,12 +530,20 @@ export const HORIZON_WORDS = {
   putMoreDone: (amount: string, name: string) => `Put ${amount} toward ${name}`,
   needsPutMoreFrom: 'Pick where it comes from.',
   changeItem: 'Change it',
-  changeItemSub: 'Name, date, how the rest is paid and priority',
+  changeItemSub: 'Name, emoji, date, how the rest is paid and priority',
   costDue: (date: string) => `Due\u00A0${date}`,
   costDueLower: (date: string) => `due\u00A0${date}`,
-  costFact: (when: string, pricedOn: string | null, isOutside = false) =>
+  costFact: (
+    when: string,
+    pricedOn: string | null,
+    isOutside = false,
+    priority: string | null = null,
+    isLeftOut = false,
+  ) =>
     [
       when,
+      priority !== null && `counted as a ${priority}`,
+      isLeftOut && PRIORITY_DIAL_WORDS.notCounted.toLowerCase(),
       isOutside &&
         HORIZON_WORDS.outsideTag.toLowerCase().replaceAll(' ', '\u00A0'),
       pricedOn !== null && `priced ${pricedOn}`,
@@ -548,7 +566,7 @@ export const HORIZON_WORDS = {
   effectBefore: 'Now',
   effectAfter: 'After this change',
   changeCostRow: 'Change',
-  changeCostSub: "Name, date and how it's paid",
+  changeCostSub: "Name, date, how it's paid and priority",
   removeCostRow: 'Remove this cost',
   removeCostSub: 'It leaves the list and the plan',
   removeConfirmTitle: (name: string) => `Remove ${name}?`,
@@ -849,7 +867,7 @@ export const PRIORITY_DIAL_WORDS = {
   },
   trimmedNote: (counted: string) =>
     `Counting ${counted} only. Move the dial to Want to count everything; it goes back there the next time you open Runway.`,
-  counted: { must: 'Musts', should: 'Musts and Shoulds' },
+  counted: { must: 'Musts', should: 'Musts and Shoulds', want: 'Everything' },
   notCounted: 'Not in this total',
   notCountedShort: 'not counted',
   sheetSuffix: { must: 'Musts only', should: 'without Wants' },
@@ -2983,7 +3001,10 @@ export const PLAN_OVERVIEW_WORDS = {
   setAside: 'set aside',
   tileAria: (name: string, figure: string) => `${name} · ${figure}. Open`,
   priorityTotal: (counted: string) => `${counted}: `,
-  priorityRest: ' a month across bills, envelopes and goals',
+  priorityRest: ' a month',
+  priorityHelpTitle: 'What this counts',
+  priorityHelp:
+    'Bills, envelopes, goals and Horizon items at the priorities the dial counts. For Horizon, it is what to set aside each month to meet every cost on its date, each cost at its own priority.',
 } as const;
 
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */

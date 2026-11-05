@@ -20,6 +20,8 @@ interface HorizonRowProps {
   /** Set while the priorities list is being reordered. */
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
+  /** The dial counts none of the event's costs: its badge and figure dim. */
+  isFaded?: boolean;
   /** Opens the sheet from outside the row, so it stays up when the event moves to another list. */
   onOpenItem?: (itemId: string) => void;
 }
@@ -32,6 +34,7 @@ function HorizonRow({
   stance,
   reorder,
   isHighlighted = false,
+  isFaded = false,
   onOpenItem,
 }: HorizonRowProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -84,7 +87,7 @@ function HorizonRow({
         name={horizon.name}
         emoji={horizon.emoji}
         detail={detail}
-        isDetailWarning={shortfall !== null && !isHidden}
+        isDetailWarning={shortfall !== null && !isHidden && !isFaded}
         figure={left}
         figureWord={
           isDone
@@ -102,6 +105,7 @@ function HorizonRow({
         isFigureMuted={isDone}
         reorder={reorder}
         isHighlighted={isHighlighted}
+        isFaded={isFaded}
       />
       {isOpen && (
         <HorizonSheet
