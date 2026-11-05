@@ -263,6 +263,7 @@ const LOOKUP_GAP_MS = 2 * 1000;
 const MAX_KEYS = 20;
 const KEY_ID_SHAPE = /^[0-9a-f-]{36}$/i;
 const keyCache = new Map<string, { key: WebhookKey; until: number }>();
+const inFlight = new Map<string, Promise<WebhookKey | null>>();
 let lastLookupAt = 0;
 
 /** The public key Plaid signed a webhook with; null when Plaid does not know the id. Live keys are kept per instance for a day. */
@@ -270,19 +271,27 @@ export async function getWebhookKey(keyId: string): Promise<WebhookKey | null> {
   const now = Date.now();
   const cached = keyCache.get(keyId);
   if (cached && cached.until > now) return cached.key;
+  // Requests that arrive together for one id wait on one lookup, so the limit below never refuses a real one.
+  const pending = inFlight.get(keyId);
+  if (pending) return pending;
   // The id comes from an unsigned header, so anyone can send a new one: at most one lookup every two seconds per instance.
   if (!KEY_ID_SHAPE.test(keyId) || now - lastLookupAt < LOOKUP_GAP_MS) {
     return null;
   }
   lastLookupAt = now;
-  const response = await call<{ key: WebhookKey }>(
-    '/webhook_verification_key/get',
-    { key_id: keyId },
-  ).catch(() => null);
-  const key = response?.key ?? null;
-  if (key !== null && key.expired_at == null) {
-    if (keyCache.size >= MAX_KEYS) keyCache.clear();
-    keyCache.set(keyId, { key, until: now + KEY_TTL_MS });
-  }
-  return key;
+  const lookup = call<{ key: WebhookKey }>('/webhook_verification_key/get', {
+    key_id: keyId,
+  })
+    .catch(() => null)
+    .then((response) => {
+      const key = response?.key ?? null;
+      if (key !== null && key.expired_at == null) {
+        if (keyCache.size >= MAX_KEYS) keyCache.clear();
+        keyCache.set(keyId, { key, until: now + KEY_TTL_MS });
+      }
+      return key;
+    })
+    .finally(() => inFlight.delete(keyId));
+  inFlight.set(keyId, lookup);
+  return lookup;
 }
