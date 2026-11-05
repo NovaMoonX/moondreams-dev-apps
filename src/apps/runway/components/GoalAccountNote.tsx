@@ -94,7 +94,7 @@ function getBankLine(
     account.balanceCents,
     bank.cents,
   );
-  if (differenceCents === 0) return null;
+  if (differenceCents === 0 && !isHidden) return null;
   return ACCOUNT_WORDS.goalActual(
     formatCents(actualCents),
     isHidden
