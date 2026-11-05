@@ -1162,10 +1162,9 @@ export const CHANGE_WORDS = {
 export const LIFECYCLE_WORDS = {
   addReason: 'Add a reason',
   removeReason: 'Remove the reason',
-  pause: 'Pause saving',
+  pause: 'Stop saving for now',
   pauseSub: 'Nothing new goes in. The balance and history stay.',
-  resume: 'Start saving again',
-  startSaving: 'Start saving for it',
+  resume: 'Start saving',
   resumeSub: 'It gets money again from the next income day.',
   end: 'End it',
   endSub: 'It stops after the last day you pick. Its history stays.',
@@ -1178,8 +1177,8 @@ export const LIFECYCLE_WORDS = {
   endBlocker: 'Pick the last day, from today to ten years ahead.',
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
-  pauseConfirm: 'Pause',
-  resumeConfirm: 'Start again',
+  pauseConfirm: 'Stop saving',
+  resumeConfirm: 'Start saving',
   whyEnd: 'Why is it ending?',
   endsAfter: 'Ends after',
   backAfter: 'then it goes back',
@@ -3170,7 +3169,7 @@ export const GROUP_WORDS = {
   goalsHelpTitle: 'What your goals add up to',
   savingToward: (amount: string) => `Saving toward ${amount} in all.`,
   notSavingFor: (count: number) =>
-    `${count} more ${count === 1 ? 'goal' : 'goals'} you are not saving for yet`,
+    `${count} ${count === 1 ? 'goal' : 'goals'} you are not saving for yet`,
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,
@@ -3400,7 +3399,7 @@ export const MOVED_DAY_WORDS = {
 export const PAIRING_STOP_WORDS = {
   archived: 'Archived, so it gets nothing from this pay',
   ended: (date: string) => `Ended ${date}, so it gets nothing from this pay`,
-  paused: 'Paused, so it gets nothing from this pay',
+  notSaving: 'Not saving for it yet, so it gets nothing from this pay',
   stops: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} stops paying it first, so that money stays with the pay.`

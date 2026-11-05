@@ -1,3 +1,4 @@
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -134,7 +135,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           }))
         : [],
       goals: paces.flatMap(({ item, payload, pace, track }) =>
-        pace.isComplete || payload.state === 'paused'
+        pace.isComplete || !isSavingFor(payload)
           ? []
           : [{ goalId: item.id, targetDate: payload.targetDate, track }],
       ),

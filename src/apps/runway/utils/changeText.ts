@@ -397,15 +397,16 @@ const MONEYLESS_KEYS = [
   'spillTo',
 ];
 
-const isIdleGoal = (payload: ItemPayload) =>
-  'targetCents' in payload && !isSavingFor(payload);
+/** A goal nothing goes into: paused or not being saved for yet. */
+export const isIdleGoal = (payload: ItemPayload | null | undefined) =>
+  !!payload && 'targetCents' in payload && !isSavingFor(payload);
 
-/** A change to only a name, emoji, group, card or account, or any change to a goal not being saved for before or after it: it moves no money on any income day. */
+/** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
   const changed = getChangedKeys(before, after) as string[];
-  if (changed.length === 0) return false;
-  if (isIdleGoal(before) && isIdleGoal(after)) return true;
-  return changed.every((key) => MONEYLESS_KEYS.includes(key));
+  return (
+    changed.length > 0 && changed.every((key) => MONEYLESS_KEYS.includes(key))
+  );
 };
 
 /** True when two payloads say the same thing. */

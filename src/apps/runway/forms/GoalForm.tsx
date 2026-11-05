@@ -644,7 +644,11 @@ function GoalFormBody({
         : plan?.startDate != null || currentCents === 0
           ? {}
           : { startingCents: currentCents }),
-      state: editing?.payload.state ?? 'active',
+      // Starting to save for a goal nothing went into also ends a pause, so the money it is given goes in.
+      state:
+        editing && startData.often === 'none' && data.often !== 'none'
+          ? 'active'
+          : (editing?.payload.state ?? 'active'),
     };
     return result;
   };

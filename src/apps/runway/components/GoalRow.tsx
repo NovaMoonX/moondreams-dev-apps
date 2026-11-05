@@ -118,7 +118,7 @@ function GoalRow({
           figureSuffix={`of ${formatCentsShort(goal.targetCents)}`}
           fact={
             !isSavingFor(goal)
-              ? `${PRIORITY_LABELS[goal.priority]} · ${funding}`
+              ? `${PRIORITY_LABELS[goal.priority]} · ${HOW_OFTEN_WORDS.notBeingAdded.toLowerCase()}`
               : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
           quickChange={{

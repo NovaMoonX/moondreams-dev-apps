@@ -26,7 +26,10 @@ export function useGoalsSaved(today: number) {
       0,
     ),
     notSavingCount: atDial.length - counted.length,
-    hasTargets: goals.some(({ version }) => version.payload.targetCents > 0),
+    hasTargets: goals.some(
+      ({ version }) =>
+        isSavingFor(version.payload) && version.payload.targetCents > 0,
+    ),
     hasGoals: goals.length > 0,
   };
 }
