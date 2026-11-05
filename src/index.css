@@ -151,12 +151,13 @@ html[data-subview-open][data-site-banner='true'] .sticky-day-bar:not([data-subvi
 }
 
 /* The hairline is drawn over the card's contents, inside its box (it takes none of the gutter), so a header or footer stuck to the
- * screen's edge never covers it: the border runs down both sides of them as it does beside the content. */
+ * screen's edge never covers it: the border runs down both sides of them as it does beside the content. It sits just above the
+ * card's sticky bars (z-20 and below) and under every floating layer (z-30 and up), or it would cut through a pinned pill or bar. */
 .subview-card::after {
   content: '';
   position: absolute;
   inset: 0;
-  z-index: 30;
+  z-index: 21;
   pointer-events: none;
   border: 1px solid var(--subview-border, var(--color-border));
   border-radius: inherit;
