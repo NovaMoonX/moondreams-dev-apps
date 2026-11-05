@@ -13,6 +13,7 @@ import { useLinkDepositsWithUndo } from '@apps/runway/hooks/useBankMatch';
 import {
   selectDepositDays,
   selectListedDays,
+  selectLostDeposits,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -25,7 +26,8 @@ interface DepositOfferProps {
 function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waitingList = useAppSelector((state) => state.runway.needsHome);
+  const lost = useAppSelector((state) => selectLostDeposits(state, today));
   const purchases = useAppSelector((state) => state.runway.purchases);
   const days = useAppSelector((state) => selectDepositDays(state, today));
   const listed = useAppSelector((state) => selectListedDays(state, today));
@@ -33,6 +35,10 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const waiting = [
+    ...waitingList,
+    ...lost.map((entry) => ({ ...entry, needsHome: true, incomeDayId: null })),
+  ];
   const offered = (
     findDepositDays(waiting, days, purchases).offers.get(deposit.id) ?? []
   ).flatMap((dayKey) => {

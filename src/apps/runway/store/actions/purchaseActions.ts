@@ -538,7 +538,7 @@ export async function assignPurchase(
         receiptText: previous.receiptText,
         costRef: previous.costRef ?? null,
         notSameAs: previous.notSameAs,
-        incomeDayId: previous.incomeDayId,
+        incomeDayId: null,
         assignedBy: previous.assignedBy,
       } satisfies PurchaseSealed,
       encryption,
@@ -599,13 +599,12 @@ export const returnPurchaseToWaiting = (
     true,
   );
 
-/** Moves a deposit between Needs a home and an income day in one transaction that refuses when another device changed it first or the day was marked as not arrived. A change-log entry is written with it; resolves with the deposit's new `updatedAt`. A confirmed day's split is never read or written. */
+/** Moves a deposit between Needs a home and an income day (or from a day no screen shows to another) in one transaction that refuses when another device changed it first or the day was marked as not arrived. A change-log entry is written with it; resolves with the deposit's new `updatedAt`. A confirmed day's split is never read or written. */
 async function setDepositDay(
   uid: string,
   encryption: RunwayEncryption,
   previous: OpenPurchase,
   next: Pick<OpenPurchase, 'incomeDayId' | 'assignedBy' | 'needsHome'>,
-  dayId: string,
   summary: string,
 ): Promise<number> {
   const [sealed, changeSealed] = await Promise.all([
@@ -626,7 +625,11 @@ async function setDepositDay(
   await runTransaction(db, async (transaction) => {
     const [stored, day, plan] = await Promise.all([
       transaction.get(purchaseRef(uid, previous.id)),
-      transaction.get(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId)),
+      next.incomeDayId === null
+        ? null
+        : transaction.get(
+            doc(db, 'apps', 'runway', 'plans', uid, 'days', next.incomeDayId),
+          ),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
     ]);
     if (!stored.exists()) throw new Error(DEPOSIT_WORDS.gone);
@@ -634,14 +637,14 @@ async function setDepositDay(
     if (storedDoc.updatedAt !== previous.updatedAt) {
       throw new Error(SPEND_WORDS.changedElsewhere);
     }
-    if (storedDoc.needsHome === next.needsHome) {
+    if (previous.incomeDayId === next.incomeDayId) {
       throw new Error(
         next.needsHome ? DEPOSIT_WORDS.notLinked : DEPOSIT_WORDS.notWaiting,
       );
     }
     if (
-      next.incomeDayId !== null &&
-      (day.data() as Partial<IncomeDayDoc> | undefined)?.status === 'notArrived'
+      (day?.data() as Partial<IncomeDayDoc> | undefined)?.status ===
+      'notArrived'
     ) {
       throw new Error(DEPOSIT_WORDS.dayNotArrived);
     }
@@ -680,7 +683,6 @@ export const linkDepositToDay = (
     encryption,
     previous,
     { incomeDayId: dayId, assignedBy, needsHome: false },
-    dayId,
     summary,
   );
 
@@ -696,7 +698,6 @@ export const unlinkDeposit = (
     encryption,
     previous,
     { incomeDayId: null, assignedBy: 'person', needsHome: true },
-    previous.incomeDayId ?? '',
     summary,
   );
 

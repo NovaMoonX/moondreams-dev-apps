@@ -13,7 +13,8 @@ import DepositOffer from '@apps/runway/components/DepositOffer';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import { DEPOSIT_WORDS, NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
@@ -61,6 +62,9 @@ function MoneyInSheet({
           figure={`+${formatCents(-purchase.amountCents)}`}
           fact={`${formatDateOrdinalUTC(purchase.date)} · ${sourceName}`}
         />
+        {purchase.incomeDayId !== null && (
+          <p className='text-muted-foreground text-sm'>{DEPOSIT_WORDS.lost}</p>
+        )}
         {purchase.status === 'posted' && (
           <DepositOffer deposit={purchase} onDone={onClose} />
         )}
@@ -109,7 +113,10 @@ function NeedsHomeRow({
 
 /** Purchases that came in from a linked bank and wait for an envelope; money in waits apart, and a deposit that is not clearly a pay day asks which one. */
 function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
-  const { spending, moneyIn } = useAppSelector(selectNeedsHome);
+  const today = todayAsUtcDate();
+  const { spending, moneyIn } = useAppSelector((state) =>
+    selectNeedsHome(state, today),
+  );
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const sourceNameOf = useSourceName();
   const [openId, setOpenId] = useState<string | null>(null);

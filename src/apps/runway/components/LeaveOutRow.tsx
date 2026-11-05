@@ -43,7 +43,13 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
         [],
         describePurchaseAssigned(purchase, [], () => ''),
       );
-      const leftOut = { ...purchase, lines: [], needsHome: false, updatedAt };
+      const leftOut = {
+        ...purchase,
+        lines: [],
+        needsHome: false,
+        incomeDayId: null,
+        updatedAt,
+      };
       addToast({
         title: NEEDS_HOME_WORDS.leftOut,
         type: 'success',

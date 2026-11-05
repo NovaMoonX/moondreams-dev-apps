@@ -1440,13 +1440,15 @@ export const selectSpendPurchases = createSelector(
   },
 );
 
-/** The deposit linked to each income day, by the day's key. */
+/** The deposit linked to each income day, by the day's key; when two devices linked two, the lower id holds the day. */
 const selectDepositsByDay = createSelector([selectPurchases], (purchases) => {
-  const result = new Map(
-    purchases.flatMap((purchase): [string, OpenPurchase][] =>
-      purchase.incomeDayId === null ? [] : [[purchase.incomeDayId, purchase]],
-    ),
-  );
+  const result = purchases.reduce((byDay, purchase) => {
+    if (purchase.incomeDayId === null) return byDay;
+    const held = byDay.get(purchase.incomeDayId);
+    return held !== undefined && held.id < purchase.id
+      ? byDay
+      : byDay.set(purchase.incomeDayId, purchase);
+  }, new Map<string, OpenPurchase>());
   return result;
 });
 
@@ -1482,12 +1484,55 @@ export const selectDepositDays = createSelector(
   },
 );
 
+const stampToDate = (dayKey: string) => {
+  const stamp = dayKey.slice(dayKey.lastIndexOf('_') + 1);
+  const result = Date.UTC(
+    Number(stamp.slice(0, 4)),
+    Number(stamp.slice(4, 6)) - 1,
+    Number(stamp.slice(6, 8)),
+  );
+  return result;
+};
+
+/** Deposits linked to a pay day no screen shows: its payday moved, or another deposit holds the day. They wait in Needs a home again, to be linked to the right day or left out. */
+export const selectLostDeposits = createSelector(
+  [
+    selectPurchases,
+    selectListedDays,
+    selectDepositsByDay,
+    (state: RootState) => state.runway.days,
+    (state: RootState) => state.runway.daysFrom,
+    selectIsDaysLoaded,
+  ],
+  (purchases, listed, byDay, days, daysFrom, isDaysLoaded): OpenPurchase[] => {
+    if (!isDaysLoaded || daysFrom === null) return [];
+    const known = new Set([
+      ...listed.open.map((day) => day.dayKey),
+      ...listed.confirmed.map((day) => day.dayKey),
+      ...days.map((day) => day.id),
+    ]);
+    const result = purchases.filter(
+      ({ id, incomeDayId }) =>
+        incomeDayId !== null &&
+        (byDay.get(incomeDayId)?.id !== id ||
+          (!known.has(incomeDayId) && stampToDate(incomeDayId) >= daysFrom)),
+    );
+    return result;
+  },
+);
+
 const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading. */
+/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */
 export const selectNeedsHome = createSelector(
-  [selectWaitingList],
-  (waiting) => {
+  [selectWaitingList, selectLostDeposits],
+  (waitingList, lost) => {
+    const waiting = [
+      ...waitingList,
+      ...lost.filter(
+        (deposit) => !waitingList.some((entry) => entry.id === deposit.id),
+      ),
+    ];
     const sorted = [...waiting].sort(
       (a, b) =>
         b.date - a.date ||
