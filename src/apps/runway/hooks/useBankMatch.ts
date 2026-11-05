@@ -91,7 +91,10 @@ export function useMergeWithUndo() {
               getPurchaseTitle(merged[0].typed, nameOf),
             )
           : NEEDS_HOME_WORDS.matchedMany(merged.length),
-      description: NEEDS_HOME_WORDS.matchedSub,
+      description:
+        merged.length === 1
+          ? NEEDS_HOME_WORDS.matchedOneSub
+          : NEEDS_HOME_WORDS.matchedManySub,
       type: 'success',
       action: {
         label: NEEDS_HOME_WORDS.undo,

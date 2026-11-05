@@ -64,7 +64,7 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
           markNotSamePurchase(user.uid, encryption, typed, [purchase.id]),
         ),
       );
-      addToast({ title: NEEDS_HOME_WORDS.notSameSub, type: 'success' });
+      addToast({ title: NEEDS_HOME_WORDS.notSameDone, type: 'success' });
     } catch (declineError) {
       setError(getErrorMessage(declineError, NEEDS_HOME_WORDS.failed));
     }
@@ -83,7 +83,12 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map((typed) => {
           const name = getPurchaseTitle(typed, nameOf);
-          const detail = `${formatDateOrdinalUTC(typed.date)} · ${NEEDS_HOME_WORDS.sameRow}`;
+          const difference = purchase.amountCents - typed.amountCents;
+          const detail = `${formatDateOrdinalUTC(typed.date)} · ${NEEDS_HOME_WORDS.sameRow(
+            difference === 0
+              ? null
+              : `${formatCents(Math.abs(difference))} ${difference > 0 ? 'more' : 'less'}`,
+          )}`;
           return (
             <ItemRow
               key={typed.id}

@@ -3959,14 +3959,18 @@ export const NEEDS_HOME_WORDS = {
   sentTo: (name: string) => `Sent to ${name}`,
   failed: 'That did not save. Nothing was changed.',
   sameTitle: 'Did you already add this?',
-  sameHint: 'Tap the one you added, so it is counted once',
-  sameRow: 'This is the one',
+  sameHint:
+    'Tap the one you added. It takes the bank’s amount, so it is counted once',
+  sameRow: (difference: string | null) =>
+    difference === null ? 'Same amount' : `The bank’s is ${difference}`,
   notSame: 'None of these',
-  notSameSub: 'They stay as separate purchases',
+  notSameSub: 'Keep them apart and don’t ask again',
+  notSameDone: 'They stay apart. You won’t be asked about these again.',
   matchedOne: (name: string) => `${name} matched the one you added`,
   matchedMany: (count: number) =>
     `${count} purchases from your bank matched ones you added`,
-  matchedSub: 'Each is counted once, in the envelopes you picked.',
+  matchedOneSub: 'Counted once, at the bank’s amount.',
+  matchedManySub: 'Each is counted once, at the bank’s amount.',
   matchUndone: 'Match undone',
 } as const;
 
