@@ -75,6 +75,7 @@ export const RUNWAY_VIEWS = [
   'freeToSpend',
   'checkAmount',
   'checkBalance',
+  'cashPosition',
   'needsHome',
 ] as const;
 
@@ -1668,7 +1669,7 @@ export const LINK_STATUSES = ['active', 'needsAttention', 'revoked'] as const;
 export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
   plan: 'assigned',
   track: 'left',
-  link: 'left',
+  link: 'safe to spend',
 };
 
 export const TRACKING_WORDS = {
@@ -3287,9 +3288,44 @@ export const FREE_SUM_WORDS = {
   horizon: 'Held for Horizon',
   envelopesTrack: 'Left in envelopes',
   envelopesPlan: 'Set aside in envelopes',
+  envelopesLink: 'Safe to spend in envelopes',
   result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
+
+export const CASH_POSITION_WORDS = {
+  title: 'Where your cash is',
+  open: 'Where your cash is',
+  openSub: 'Your accounts, what is set aside, and what is left',
+  cash: 'Cash in your accounts',
+  cashHelp: (names: string) =>
+    names === ''
+      ? 'The accounts that count toward your total.'
+      : `Counts ${names}. An account that is not for spending is left out.`,
+  fromBank: 'From your bank',
+  typedOn: (date: string) => `You typed it on ${date}`,
+  typed: 'You typed it',
+  noBalance: 'No balance yet',
+  unknown: 'Not known yet',
+  unknownSub: 'Add a balance to every account above to see it',
+  leftOut: (names: string) => `Not counted: ${names}`,
+  bills: FREE_SUM_WORDS.bills,
+  goals: FREE_SUM_WORDS.goals,
+  horizon: FREE_SUM_WORDS.horizon,
+  cards: FREE_SUM_WORDS.cards,
+  pending: 'Charges still pending',
+  pendingHelp:
+    'Your bank counts only charges that have posted, so these have not left your balance yet.',
+  envelopes: 'Safe to spend in envelopes',
+  free: 'Not given a job yet',
+  freeHelp:
+    'Free to Spend comes from your plan. This is what your accounts hold beyond everything above, so the two can differ until your balances catch up.',
+  over: (amount: string) => `Over-assigned ${amount}`,
+  overTitle: 'Over-assigned',
+  overHelp:
+    'After what is set aside, your accounts hold less than your envelopes. Nothing was changed: their figures stay as planned until you move money or spend less.',
+  noAccounts: 'No account counts toward your total yet.',
 } as const;
 
 export const GOAL_CHART_WORDS = {
@@ -3625,6 +3661,9 @@ export const ACCOUNT_WORDS = {
     'Add the accounts your money sits in, and say which goals and envelopes each one holds.',
   pullsFrom: 'Cards and bills pull from it',
   noBalance: 'No balance yet',
+  unknown: 'Not known yet',
+  unknownSub: 'Add a balance to every account above to see it',
+  leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',

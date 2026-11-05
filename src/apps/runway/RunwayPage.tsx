@@ -353,7 +353,8 @@ function RunwayContent() {
   if (
     view === 'freeToSpend' ||
     ((view === 'checkAmount' || view === 'checkBalance') &&
-      isTrackingLevel(level))
+      isTrackingLevel(level)) ||
+    (view === 'cashPosition' && level === 'link')
   ) {
     return (
       <div>

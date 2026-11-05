@@ -5,7 +5,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { Level } from '@apps/runway/types';
 
 interface LevelGateProps {
-  /** The lowest level that needs the children. */
+  /** The lowest level that needs the children; Link draws only at Link. */
   level: Level;
   children: ReactNode;
 }
@@ -13,6 +13,7 @@ interface LevelGateProps {
 /** Draws its children only at the level that needs them; below it nothing is drawn, so nothing is ever greyed out. */
 function LevelGate({ level, children }: LevelGateProps) {
   const current = useAppSelector(selectLevel);
+  if (level === 'link' && current !== 'link') return null;
   if (level === 'track' && current === 'plan') return null;
   return <>{children}</>;
 }

@@ -3051,7 +3051,7 @@ async function writeSeedGoals(
   return goals.length * 3;
 }
 
-/** Jamie's plan is already at Track: income, envelopes, bills and goals like Alex's, a starting point 45 days back that is also the day tracking began, what each envelope held that day, and the two records of the move up. Jamie's `trackingPeriods` has one open period. */
+/** Jamie's plan is already at Link (Track, with the open period linked from 14 days ago): income, envelopes, bills and goals like Alex's, a starting point 45 days back that is also the day tracking began, what each envelope held that day, and the two records of the move up. Jamie's `trackingPeriods` has one open period. */
 async function seedTrackingPlan(
   context: SeedContext,
   keyring: ReturnType<typeof readKeyring>,
@@ -3079,7 +3079,9 @@ async function seedTrackingPlan(
     updatedAt: createdAt,
     stance: 'conservative',
     startDate,
-    trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
+    trackingPeriods: [
+      { from: startDate, to: null, linkedFrom: startOfUtcDay(createdAt) },
+    ],
     dirtyFrom: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),

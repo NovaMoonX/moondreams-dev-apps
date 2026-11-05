@@ -134,6 +134,10 @@ export function useRunwayUrlState() {
     setRequestedView('checkBalance', { history: 'replace' });
   const closeCheckBalance = () =>
     setRequestedView('freeToSpend', { history: 'replace' });
+  const openCashPosition = () =>
+    setRequestedView('cashPosition', { history: 'replace' });
+  const closeCashPosition = () =>
+    setRequestedView('freeToSpend', { history: 'replace' });
 
   const [requestedFixes, setRequestedFixes] = useQueryState(
     'fixes',
@@ -383,6 +387,8 @@ export function useRunwayUrlState() {
     closeCheckAmount,
     openCheckBalance,
     closeCheckBalance,
+    openCashPosition,
+    closeCashPosition,
     openPurchase,
     closePurchase,
     showSpendEnvelope,

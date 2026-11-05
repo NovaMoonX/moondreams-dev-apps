@@ -14,6 +14,7 @@ import {
   type BalancesInput,
 } from '@apps/runway/engine/balances';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { getCashPosition } from '@apps/runway/engine/cash';
 
 const toBalanceInputs =
   (level: Level) =>
@@ -133,3 +134,44 @@ export const selectHeldBy = (state: RootState, placeId: string | null) =>
   placeId === null
     ? selectFreeToSpend(state)
     : selectEnvelopeFigure(state, placeId);
+
+/** Where the cash in the accounts that count goes, at Link. Raw lists are read here: the account selectors live in a file that imports this one. */
+export const selectCashPosition = createSelector(
+  [
+    selectBalances,
+    (state: RootState) => state.runway.accounts,
+    (state: RootState) => state.runway.accountBalances,
+    (state: RootState) => state.runway.items,
+    (state: RootState) => state.runway.needsHome,
+    (state: RootState) => state.runway.purchases,
+    () => todayAsUtcDate(),
+  ],
+  (balances, accounts, accountBalances, items, needsHome, purchases, today) =>
+    getCashPosition({
+      accounts: [...accounts].sort(
+        (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+      ),
+      bankBalances: Object.fromEntries(
+        accountBalances.map((entry) => [entry.id, entry.cents]),
+      ),
+      balances,
+      goalIds: items
+        .filter(
+          (item) =>
+            item.kind === 'goal' &&
+            !(item.heldReleasedOn !== null && item.heldReleasedOn <= today),
+        )
+        .map((item) => item.id),
+      envelopeIds: items
+        .filter((item) => item.kind === 'envelope')
+        .map((item) => item.id),
+      purchases: [
+        ...new Map(
+          [...needsHome, ...purchases].map((purchase) => [
+            purchase.id,
+            purchase,
+          ]),
+        ).values(),
+      ],
+    }),
+);
