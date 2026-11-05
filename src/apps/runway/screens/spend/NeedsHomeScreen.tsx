@@ -170,11 +170,11 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           </p>
         ) : (
           <>
-            <div className='flex items-center gap-1.5'>
-              <p className='text-muted-foreground text-sm'>
-                {NEEDS_HOME_WORDS.introShort}
-              </p>
-              <HelpTip title={NEEDS_HOME_WORDS.title}>
+            <div>
+              <HelpTip
+                title={NEEDS_HOME_WORDS.title}
+                badgeLabel={NEEDS_HOME_WORDS.countedChip}
+              >
                 <p>{NEEDS_HOME_WORDS.intro}</p>
               </HelpTip>
             </div>

@@ -1931,7 +1931,7 @@ export const SPEND_WORDS = {
   itemsHint: 'One item to a line, with its price after two spaces.',
   showAllItems: 'Show all',
   showFewerItems: 'Show fewer',
-  addReceiptSub: 'A photo or screenshot',
+  addReceiptSub: 'A photo or screenshot. Sealed, and kept until you delete it.',
   receiptPhotos: (count: number) =>
     count === 1 ? '1 photo' : `${count} photos`,
   chooseReceipts: 'Choose photos',
@@ -3833,30 +3833,23 @@ export const ACCOUNT_WORDS = {
   interestDayValue: (day: number) => `Day ${day}`,
   apyFact: (percent: string) => `${percent}% APY`,
   apyValue: (percent: string) => `${percent}%`,
-  interestTitle: (account: string) => `Interest in ${account}`,
   interestEstimate: (amount: string, day: string) =>
     `About ${amount} interest on ${day} (estimate)`,
   interestActual: (amount: string, day: string) =>
     `${amount} interest on ${day}`,
   goalInterestActual: (amount: string, day: string) =>
     `Earned ${amount} on ${day}, its share of the interest`,
-  goalInterestTitle: (account: string) => `Interest in ${account}`,
+  interestTitle: (account: string) => `Interest in ${account}`,
+  interestUncountedChip: (amount: string) => `Interest ~${amount} · update the balance`,
   interestChip: (amount: string, day: string, isActual: boolean) =>
     `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
   goalBankTitle: (account: string) => `What ${account} shows`,
   goalBankChip: (signed: string) => `Bank ${signed}`,
-  goalBankChipHidden: 'At the bank',
   goalActual: (
     amount: string,
-    compare: {
-      difference: string;
-      direction: 'more' | 'less';
-      saved: string;
-    } | null,
+    compare: { difference: string; direction: 'more' | 'less'; saved: string },
   ) =>
-    compare === null
-      ? `The bank shows about ${amount} as its share`
-      : `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
+    `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
   goalInterest: (amount: string, day: string) =>
@@ -4096,7 +4089,7 @@ export const LINK_BANKS_GATE_ID = 'link-banks';
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',
-  introShort: 'Pick an envelope for each one',
+  countedChip: 'Counted in Free to Spend',
   intro:
     'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
   empty:
@@ -4415,7 +4408,6 @@ export const CATEGORY_PRIMARIES = [
 export const RULE_WORDS = {
   title: 'Rules',
   doorLabel: 'Rules',
-  intro: 'Rules send bank purchases to envelopes on their own.',
   empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
@@ -4446,9 +4438,7 @@ export const RULE_WORDS = {
   changesFuture: (envelope: string) =>
     `Changes future purchases. This one stays in ${envelope}.`,
   yourRule: 'Your rule',
-  heldChip: 'Your rule is waiting',
-  heldByOffer: (sentence: string) =>
-    `Your rule, ${sentence}, waits until you answer the offer above.`,
+  heldSub: (sentence: string) => `${sentence} · waits for your answer above`,
   notNow: 'Not now',
   pickOne: 'Tick at least one thing for the rule to catch.',
   pickEnvelope: 'Pick an envelope',

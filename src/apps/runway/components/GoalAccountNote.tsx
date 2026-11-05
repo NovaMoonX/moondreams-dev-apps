@@ -66,7 +66,7 @@ function AccountLines({
     <div className='flex flex-wrap gap-2'>
       {interest !== null && interestShare !== null && (
         <HelpTip
-          title={ACCOUNT_WORDS.goalInterestTitle(account.name)}
+          title={ACCOUNT_WORDS.interestTitle(account.name)}
           badgeLabel={mask(
             ACCOUNT_WORDS.interestChip(
               interestShare,
@@ -105,7 +105,7 @@ function getBankNote(
   bank: { cents: number; asOf: number } | null,
   isHidden: boolean,
 ) {
-  if (bank === null || account.linkId === null) return null;
+  if (isHidden || bank === null || account.linkId === null) return null;
   if (account.balanceCents === null) return null;
   const bankDay = todayAsUtcDate(bank.asOf);
   if (account.balanceOn !== null && bankDay < account.balanceOn) return null;
@@ -115,21 +115,16 @@ function getBankNote(
     account.balanceCents,
     bank.cents,
   );
-  if (differenceCents === 0 && !isHidden) return null;
-  const compare = isHidden
-    ? null
-    : {
-        difference: formatCents(Math.abs(differenceCents)),
-        direction: differenceCents > 0 ? ('more' as const) : ('less' as const),
-        saved: formatCents(plannedCents),
-      };
+  if (differenceCents === 0) return null;
   return {
-    chip: isHidden
-      ? ACCOUNT_WORDS.goalBankChipHidden
-      : ACCOUNT_WORDS.goalBankChip(
-          `${differenceCents > 0 ? '+' : '−'}${formatCents(Math.abs(differenceCents))}`,
-        ),
-    text: ACCOUNT_WORDS.goalActual(formatCents(actualCents), compare),
+    chip: ACCOUNT_WORDS.goalBankChip(
+      `${differenceCents > 0 ? '+' : '−'}${formatCents(Math.abs(differenceCents))}`,
+    ),
+    text: ACCOUNT_WORDS.goalActual(formatCents(actualCents), {
+      difference: formatCents(Math.abs(differenceCents)),
+      direction: differenceCents > 0 ? 'more' : 'less',
+      saved: formatCents(plannedCents),
+    }),
   };
 }
 

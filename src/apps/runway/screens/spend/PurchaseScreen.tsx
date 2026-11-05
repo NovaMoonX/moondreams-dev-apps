@@ -17,7 +17,6 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import CameraTile from '@/components/forms/CameraTile';
 import ExternalLinkText from '@/components/ExternalLinkText';
-import HelpTip from '@/components/HelpTip';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -798,16 +797,6 @@ function PurchaseScreen({
               />
             </PairOffer>
           )}
-          {heldRule !== null && (
-            <div>
-              <HelpTip
-                title={RULE_WORDS.yourRule}
-                badgeLabel={RULE_WORDS.heldChip}
-              >
-                <p>{RULE_WORDS.heldByOffer(describeRuleSentence(heldRule))}</p>
-              </HelpTip>
-            </div>
-          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -827,7 +816,21 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {canMakeRule && (merchantRule !== null || heldRule === null) && (
+            {heldRule !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={RULE_WORDS.yourRule}
+                subtitle={RULE_WORDS.heldSub(describeRuleSentence(heldRule))}
+                onClick={() => openRuleStep('edit', heldRule.id)}
+              />
+            )}
+            {canMakeRule &&
+              (merchantRule === null
+                ? heldRule === null
+                : merchantRule.id !== heldRule?.id) && (
               <ActionRow
                 isGrouped
                 isRoomy

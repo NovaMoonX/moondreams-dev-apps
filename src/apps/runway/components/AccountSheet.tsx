@@ -494,11 +494,15 @@ function AccountSheet({
           <HelpTip
             title={ACCOUNT_WORDS.interestTitle(account.name)}
             badgeLabel={mask(
-              ACCOUNT_WORDS.interestChip(
-                formatCents((uncounted ?? interest).cents),
-                formatDateOrdinalUTC((uncounted ?? interest).on),
-                interest.isActual && uncounted === null,
-              ),
+              uncounted === null
+                ? ACCOUNT_WORDS.interestChip(
+                    formatCents(interest.cents),
+                    formatDateOrdinalUTC(interest.on),
+                    interest.isActual,
+                  )
+                : ACCOUNT_WORDS.interestUncountedChip(
+                    formatCents(uncounted.cents),
+                  ),
             )}
           >
             <p>
