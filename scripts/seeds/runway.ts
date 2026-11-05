@@ -1135,8 +1135,9 @@ async function writeSeedHistory(
 
 const SEED_VENTURE_CARD = 'seed-card-venture';
 const SEED_CHASE_CARD = 'seed-card-chase';
+const SEED_DISCOVER_CARD = 'seed-card-discover';
 
-/** Two cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), and an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid. Six documents. */
+/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. Eight documents. */
 async function writeSeedCards(
   context: SeedContext,
   uid: string,
@@ -1162,6 +1163,16 @@ async function writeSeedCards(
       },
       createdAt: createdAt + 60_000,
     },
+    {
+      id: SEED_DISCOVER_CARD,
+      sealed: {
+        issuer: 'Discover',
+        name: 'it',
+        dueDay: new Date(today + 2 * DAY_MS).getUTCDate(),
+        payFromAccountId: 'seed-account-checking-b',
+      },
+      createdAt: createdAt + 120_000,
+    },
   ];
   await Promise.all(
     cards.map(async (card) => {
@@ -1174,6 +1185,19 @@ async function writeSeedCards(
       } satisfies CardDoc);
     }),
   );
+  const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
+  batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
+    id: discoverStartId,
+    kind: 'start',
+    date: startDate,
+    refId: SEED_DISCOVER_CARD,
+    reversesMoveId: null,
+    createdAt: createdAt + 120_000,
+    sealed: await sealJson(
+      { amountCents: 14_000, holding: 'card' } satisfies StartSealed,
+      encryption,
+    ),
+  } satisfies MoveDoc);
   const startId = `start_${SEED_VENTURE_CARD}_${createdAt}`;
   batch.set(context.firestore.doc(`${plan}/moves/${startId}`), {
     id: startId,
@@ -1232,7 +1256,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 4;
+  return cards.length + 5;
 }
 
 const SEED_WEALTHFRONT_GOALS = [

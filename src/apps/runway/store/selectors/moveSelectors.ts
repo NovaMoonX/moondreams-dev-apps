@@ -10,7 +10,10 @@ import {
   type MoveBillInput,
   type MoveCardInput,
 } from '@apps/runway/engine/moves';
-import { resolveVersion } from '@apps/runway/engine/resolve';
+import {
+  resolveCurrentOrNext,
+  resolveVersion,
+} from '@apps/runway/engine/resolve';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
@@ -125,7 +128,7 @@ export const selectAccountMoves = createSelector(
       dayOn,
       nextIncomeOn,
       payAccountId:
-        resolveVersion(payLineVersions, day.payLineId, day.on)?.payload
+        resolveCurrentOrNext(payLineVersions, day.payLineId, day.on)?.payload
           .accountId ?? null,
       today,
       bills,
