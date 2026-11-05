@@ -3983,7 +3983,7 @@ export const NEEDS_HOME_WORDS = {
   untitled: 'Purchase',
   moneyIn: 'Money in',
   moneyInHelp:
-    'Deposits from your bank. Matching them to your pay comes later, so for now you can leave them out of spending.',
+    'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
   leaveOut: 'Leave it out of spending',
   leaveOutSub: 'Free to Spend gets it back',
   leaveOutMoneyInSub: 'It will not count as income or spending',
@@ -4011,6 +4011,36 @@ export const NEEDS_HOME_WORDS = {
   matchedOneSub: 'Counted once, at the bank’s amount.',
   matchedManySub: 'Each is counted once, at the bank’s amount.',
   matchUndone: 'Match undone',
+} as const;
+
+export const DEPOSIT_WORDS = {
+  whichTitle: 'Which pay is this?',
+  whichHint: 'Tap the pay it belongs to. Nothing else changes.',
+  noneNear:
+    'No pay day is close to this one. You can leave it out of spending for now.',
+  dayRow: (differs: string | null) =>
+    differs === null ? 'Same as expected' : differs,
+  linkedOne: (amount: string, day: string) =>
+    `Linked your ${amount} deposit to ${day}`,
+  linkedMany: (count: number) => `Linked ${count} deposits to your pay`,
+  linkedSub: 'It will not count as spending. Undo if it is not that pay.',
+  linkedManySub: 'None of them count as spending. Undo if one is wrong.',
+  linkedByYou: (day: string) => `Linked to ${day}`,
+  undone: 'Link undone',
+  found: (amount: string, account: string, date: string) =>
+    `Deposit found: ${amount} from ${account} on ${date}`,
+  foundDifferent: (difference: string) =>
+    `That is ${difference} from what you confirmed.`,
+  unlink: 'Not this pay',
+  unlinkSub: 'Send the deposit back to Needs a home',
+  unlinked: 'The deposit is back in Needs a home',
+  unlinkFailed: 'That did not save. Nothing was changed.',
+  moreThan: (amount: string) => `${amount} more`,
+  lessThan: (amount: string) => `${amount} less`,
+  gone: 'This deposit was already removed on another device.',
+  notWaiting: 'This deposit is not waiting in Needs a home anymore.',
+  notLinked: 'This deposit is not linked to a pay anymore.',
+  dayNotArrived: 'That pay was marked as not arrived. Pick another one.',
 } as const;
 
 export const LINK_WORDS = {

@@ -3200,7 +3200,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Five more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, a deposit and a Sweetgreen lunch on the Venture X. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Seven more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment) and a Sweetgreen lunch on the Venture X. The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3363,6 +3363,8 @@ async function writeSeedPurchases(
             receiptText: entry.receiptText ?? null,
             costRef: entry.costRef ?? null,
             notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -3423,6 +3425,24 @@ async function writeSeedPurchases(
       accountId: 'seed-account-checking-a',
       cardId: null,
     },
+    {
+      id: 'seed-link-deposit-pay',
+      daysAgo: 0,
+      merchant: 'Northwind Studio payroll',
+      amountCents: -213_480,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-deposit-client',
+      daysAgo: 0,
+      merchant: 'Client payment',
+      amountCents: -15_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
   ];
   await Promise.all(
     waiting.map(async (entry) => {
@@ -3455,6 +3475,8 @@ async function writeSeedPurchases(
             receiptText: null,
             costRef: null,
             notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

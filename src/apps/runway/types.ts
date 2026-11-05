@@ -872,6 +872,7 @@ export type PaidMove = Extract<OpenMove, { kind: 'billPaid' }>;
 export type StartMove = Extract<OpenMove, { kind: 'start' }>;
 
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
+export type PurchaseAssignedBy = 'auto' | 'person';
 export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
 
 /** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to Spend. */
@@ -911,6 +912,10 @@ export interface PurchaseSealed {
   costRef?: CostRef | null;
   /** On a purchase typed by hand: the bank purchases the person said it is not, so it is never matched to them again; null when none (and on a purchase saved before matching, read as null). */
   notSameAs: string[] | null;
+  /** On a deposit linked to an income day: that day's key (`OpenDay.id`); null when it is linked to none (and on a purchase saved before deposits were matched, read as null). */
+  incomeDayId: string | null;
+  /** Who chose the deposit's day or sent it back: a pass of the app, or the person (whose choice no pass changes); null while neither has (read as null on an older purchase). */
+  assignedBy: PurchaseAssignedBy | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */

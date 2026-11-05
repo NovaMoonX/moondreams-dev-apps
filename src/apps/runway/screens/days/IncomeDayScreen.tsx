@@ -11,6 +11,10 @@ import ActionRow from '@/components/ActionRow';
 import EmptyCard from '@/components/EmptyCard';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SectionDivider from '@/components/SectionDivider';
+import {
+  DepositFound,
+  UnlinkDepositRow,
+} from '@apps/runway/components/DepositFound';
 import LeftOutBillRow from '@apps/runway/components/LeftOutBillRow';
 import Subview from '@/components/Subview';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -385,6 +389,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
             <MaskedText>{statusLine}</MaskedText>
           </p>
         </div>
+        <DepositFound dayKey={dayKey} confirmedCents={null} onCorrect={null} />
         {undated.length > 0 && (
           <UndatedBillsRow
             names={undated.map(({ name }) => name)}
@@ -470,6 +475,7 @@ function DraftDay({ dayKey, onClose }: IncomeDayScreenProps) {
               onClick={() => void save(() => EMPTY_OVERRIDE)}
             />
           )}
+          <UnlinkDepositRow dayKey={dayKey} dayOn={day.on} />
           <ActionRow
             isGrouped
             isRoomy

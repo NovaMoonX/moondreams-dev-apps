@@ -143,6 +143,8 @@ export async function openPurchase(
     receiptText: payload.receiptText ?? null,
     costRef: payload.costRef ?? null,
     notSameAs: payload.notSameAs ?? null,
+    incomeDayId: payload.incomeDayId ?? null,
+    assignedBy: payload.assignedBy ?? null,
   };
   return result;
 }

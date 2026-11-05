@@ -61,6 +61,7 @@ import {
   PRIORITIES,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
+import type { DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
   BillVersion,
@@ -74,6 +75,8 @@ import type {
   FundingAmount,
   FundingRule,
   GoalSealed,
+  MoneyRange,
+  OpenPurchase,
   GoalVersion,
   GroupVersion,
   HorizonVersion,
@@ -1422,7 +1425,11 @@ export const selectSpendPurchases = createSelector(
       ...purchases,
       ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
     ]
-      .filter((purchase) => !(purchase.needsHome && purchase.amountCents < 0))
+      .filter(
+        (purchase) =>
+          purchase.incomeDayId === null &&
+          !(purchase.needsHome && purchase.amountCents < 0),
+      )
       .sort(
         (a, b) =>
           b.date - a.date ||
@@ -1430,6 +1437,48 @@ export const selectSpendPurchases = createSelector(
           (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
     return result;
+  },
+);
+
+/** The deposit linked to each income day, by the day's key. */
+const selectDepositsByDay = createSelector([selectPurchases], (purchases) => {
+  const result = new Map(
+    purchases.flatMap((purchase): [string, OpenPurchase][] =>
+      purchase.incomeDayId === null ? [] : [[purchase.incomeDayId, purchase]],
+    ),
+  );
+  return result;
+});
+
+export const selectLinkedDeposit = (state: RootState, dayKey: string) =>
+  selectDepositsByDay(state).get(dayKey) ?? null;
+
+/** The income days a deposit may be: those still to settle and the confirmed ones whose records are read, the latter at the amount they stand on now. */
+export const selectDepositDays = createSelector(
+  [selectListedDays, selectSplitsByDay],
+  (listed, splits): DepositDay[] => {
+    const toDay = (day: ListedDay, amount: MoneyRange): DepositDay => ({
+      dayKey: day.dayKey,
+      expectedOn: day.on,
+      arrivedOn: day.arrivedOn,
+      amount,
+    });
+    return [
+      ...listed.open.flatMap((day) =>
+        day.status === 'notArrived' ? [] : [toDay(day, day.amount)],
+      ),
+      ...listed.confirmed.flatMap((day) => {
+        const split = splits.get(day.dayKey);
+        return split === undefined
+          ? []
+          : [
+              toDay(day, {
+                lowCents: split.arrivedCents,
+                highCents: split.arrivedCents,
+              }),
+            ];
+      }),
+    ];
   },
 );
 

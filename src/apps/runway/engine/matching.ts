@@ -1,5 +1,10 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
-import type { OpenPurchase } from '@apps/runway/types';
+import type {
+  Cents,
+  DateOnly,
+  MoneyRange,
+  OpenPurchase,
+} from '@apps/runway/types';
 
 const MATCH_DAYS = 3;
 /** A typed amount this close to the bank's (a tip added when it posted) is offered, never merged on its own. */
@@ -100,6 +105,125 @@ export function findPurchaseMatches(
       return offered.length > 0
         ? [[bank.id, offered.map((entry) => entry.id)]]
         : [];
+    }),
+  );
+  return { clear, offers };
+}
+
+const DEPOSIT_DAYS = 3;
+/** A person choosing by hand sees pay days this far from the deposit. */
+const OFFER_DAYS = 14;
+/** An exact amount this close to the deposit (overtime, a changed deduction) still matches. */
+const DEPOSIT_SHARE = 0.15;
+
+/** An income day a deposit may be: coming or confirmed, never one marked not arrived. A confirmed day's amount is the one it was confirmed at, as a range of one figure. */
+export interface DepositDay {
+  dayKey: string;
+  expectedOn: DateOnly;
+  arrivedOn: DateOnly | null;
+  amount: MoneyRange;
+}
+
+export interface DepositMatches {
+  /** Deposit id → the one income day it clearly is. */
+  clear: Map<string, string>;
+  /** Deposit id → pay days it may be, nearest first; only for a deposit without a clear day. */
+  offers: Map<string, string[]>;
+}
+
+const isWaitingDeposit = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  purchase.needsHome &&
+  purchase.amountCents < 0 &&
+  purchase.status === 'posted' &&
+  purchase.accountId !== null &&
+  purchase.incomeDayId === null;
+
+const getDepositDate = (day: DepositDay) => day.arrivedOn ?? day.expectedOn;
+
+const fitsAmount = (cents: Cents, { lowCents, highCents }: MoneyRange) =>
+  lowCents === highCents
+    ? Math.abs(cents - lowCents) <= lowCents * DEPOSIT_SHARE
+    : cents >= lowCents && cents <= highCents;
+
+const getAmountGap = (cents: Cents, { lowCents, highCents }: MoneyRange) =>
+  cents < lowCents
+    ? lowCents - cents
+    : cents > highCents
+      ? cents - highCents
+      : 0;
+
+/** Nearest day, then closest amount (zero inside a range), then the earliest expected day. */
+const getRank = (cents: Cents, deposit: OpenPurchase, day: DepositDay) =>
+  [
+    Math.abs(getDepositDate(day) - deposit.date),
+    getAmountGap(cents, day.amount),
+    day.expectedOn,
+  ] as const;
+
+const compareRanks = (a: readonly number[], b: readonly number[]): number =>
+  a.reduce((diff, part, index) => diff || part - b[index], 0);
+
+const compareKeys = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered. A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. The result does not depend on the order of the input. */
+export function findDepositDays(
+  waiting: readonly OpenPurchase[],
+  days: readonly DepositDay[],
+  purchases: readonly OpenPurchase[],
+): DepositMatches {
+  const linked = new Set(
+    purchases.flatMap((purchase) =>
+      purchase.incomeDayId === null ? [] : [purchase.incomeDayId],
+    ),
+  );
+  const free = [...days]
+    .filter((day) => !linked.has(day.dayKey))
+    .sort((a, b) => compareKeys(a.dayKey, b.dayKey));
+  const deposits = waiting
+    .filter(isWaitingDeposit)
+    .sort((a, b) => compareKeys(a.id, b.id));
+  const nearest = (deposit: OpenPurchase, reach: number) => {
+    const cents = -deposit.amountCents;
+    return free
+      .filter(
+        (day) => Math.abs(getDepositDate(day) - deposit.date) <= reach * DAY_MS,
+      )
+      .sort(
+        (a, b) =>
+          compareRanks(
+            getRank(cents, deposit, a),
+            getRank(cents, deposit, b),
+          ) || compareKeys(a.dayKey, b.dayKey),
+      );
+  };
+  const picks = deposits.flatMap((deposit): [string, string][] => {
+    if (deposit.assignedBy !== null) return [];
+    const cents = -deposit.amountCents;
+    const [best, next] = nearest(deposit, DEPOSIT_DAYS).filter((day) =>
+      fitsAmount(cents, day.amount),
+    );
+    const isTied =
+      next !== undefined &&
+      compareRanks(
+        getRank(cents, deposit, best),
+        getRank(cents, deposit, next),
+      ) === 0;
+    return best !== undefined && !isTied ? [[deposit.id, best.dayKey]] : [];
+  });
+  const claims = picks.reduce(
+    (counts, [, dayKey]) => counts.set(dayKey, (counts.get(dayKey) ?? 0) + 1),
+    new Map<string, number>(),
+  );
+  const clear = new Map(picks.filter(([, dayKey]) => claims.get(dayKey) === 1));
+  const taken = new Set(clear.values());
+  const offers = new Map(
+    deposits.flatMap((deposit): [string, string[]][] => {
+      if (clear.has(deposit.id)) return [];
+      const offered = nearest(deposit, OFFER_DAYS)
+        .filter((day) => !taken.has(day.dayKey))
+        .map((day) => day.dayKey);
+      return offered.length > 0 ? [[deposit.id, offered]] : [];
     }),
   );
   return { clear, offers };

@@ -12,6 +12,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  DEPOSIT_WORDS,
   HORIZON_END_WORDS,
   MAX_PURCHASE_LINES,
   PURCHASE_COST_WORDS,
@@ -61,6 +62,8 @@ import type {
   PurchaseSealed,
   ExpenseDoc,
   ExpenseSealed,
+  IncomeDayDoc,
+  PurchaseAssignedBy,
   ReceiptImageDoc,
   RunwayEncryption,
   Sealed,
@@ -212,6 +215,8 @@ export async function addPurchase(
     receiptText: input.receiptText,
     costRef,
     notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
   } satisfies PurchaseSealed;
   const sealed = await sealJson(payload, encryption);
   const markPayload: CostPaidSealed | null =
@@ -454,6 +459,8 @@ export async function editPurchase(
         receiptText: input.receiptText,
         costRef: previous.costRef ?? null,
         notSameAs: previous.notSameAs,
+        incomeDayId: previous.incomeDayId,
+        assignedBy: previous.assignedBy,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -531,6 +538,8 @@ export async function assignPurchase(
         receiptText: previous.receiptText,
         costRef: previous.costRef ?? null,
         notSameAs: previous.notSameAs,
+        incomeDayId: previous.incomeDayId,
+        assignedBy: previous.assignedBy,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -590,6 +599,107 @@ export const returnPurchaseToWaiting = (
     true,
   );
 
+/** Moves a deposit between Needs a home and an income day in one transaction that refuses when another device changed it first or the day was marked as not arrived. A change-log entry is written with it; resolves with the deposit's new `updatedAt`. A confirmed day's split is never read or written. */
+async function setDepositDay(
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  next: Pick<OpenPurchase, 'incomeDayId' | 'assignedBy' | 'needsHome'>,
+  dayId: string,
+  summary: string,
+): Promise<number> {
+  const [sealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(previous),
+        lines: [],
+        incomeDayId: next.incomeDayId,
+        assignedBy: next.assignedBy,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), previous.updatedAt + 1);
+
+  await runTransaction(db, async (transaction) => {
+    const [stored, day, plan] = await Promise.all([
+      transaction.get(purchaseRef(uid, previous.id)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid, 'days', dayId)),
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+    ]);
+    if (!stored.exists()) throw new Error(DEPOSIT_WORDS.gone);
+    const storedDoc = stored.data() as PurchaseDoc;
+    if (storedDoc.updatedAt !== previous.updatedAt) {
+      throw new Error(SPEND_WORDS.changedElsewhere);
+    }
+    if (storedDoc.needsHome === next.needsHome) {
+      throw new Error(
+        next.needsHome ? DEPOSIT_WORDS.notLinked : DEPOSIT_WORDS.notWaiting,
+      );
+    }
+    if (
+      next.incomeDayId !== null &&
+      (day.data() as Partial<IncomeDayDoc> | undefined)?.status === 'notArrived'
+    ) {
+      throw new Error(DEPOSIT_WORDS.dayNotArrived);
+    }
+    markLedgerWrite(transaction, uid, plan.data(), [previous.date]);
+    transaction.update(purchaseRef(uid, previous.id), {
+      needsHome: next.needsHome,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: [],
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return now;
+}
+
+/** Links a deposit waiting in Needs a home to the income day it is, taking it out of Needs a home with no envelopes. */
+export const linkDepositToDay = (
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  dayId: string,
+  assignedBy: PurchaseAssignedBy,
+  summary: string,
+) =>
+  setDepositDay(
+    uid,
+    encryption,
+    previous,
+    { incomeDayId: dayId, assignedBy, needsHome: false },
+    dayId,
+    summary,
+  );
+
+/** Sends a linked deposit back to Needs a home. It is marked as the person's, so no pass links it again. */
+export const unlinkDeposit = (
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  summary: string,
+) =>
+  setDepositDay(
+    uid,
+    encryption,
+    previous,
+    { incomeDayId: null, assignedBy: 'person', needsHome: true },
+    previous.incomeDayId ?? '',
+    summary,
+  );
+
 const imageRef = (uid: string, purchaseId: string, imageId: string) =>
   doc(
     db,
@@ -645,6 +755,8 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   receiptText: purchase.receiptText,
   costRef: purchase.costRef ?? null,
   notSameAs: purchase.notSameAs,
+  incomeDayId: purchase.incomeDayId,
+  assignedBy: purchase.assignedBy,
 });
 
 /** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part. */
