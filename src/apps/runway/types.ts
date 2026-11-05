@@ -47,8 +47,8 @@ export interface PlanSealedFields {
 export interface TrackingPeriod {
   from: DateOnly;
   to: DateOnly | null;
-  /** The day the first account or card was linked, which makes the level Link; null (or missing, on a period written before Link) while none is. */
-  linkedFrom?: DateOnly | null;
+  /** The day the first account or card was linked, which makes the level Link; null while none is (a period written before Link is read as null). */
+  linkedFrom: DateOnly | null;
 }
 
 export interface PlanDoc {

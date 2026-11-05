@@ -31,15 +31,19 @@ function startOpenedListener<TDoc extends { id: string }, TOpen>(
     async (snapshot) => {
       sequence.latest += 1;
       const current = sequence.latest;
-      try {
-        const opened = await Promise.all(
-          snapshot.docs.map((entry) => open(entry.data() as TDoc)),
-        );
-        if (current !== sequence.latest || run.isStopped) return;
-        onChange(opened);
-      } catch (error) {
-        if (current === sequence.latest) onError(toError(error));
-      }
+      /* Bank data is optional: a document that won't open is left out rather than closing the plan. */
+      const opened = await Promise.all(
+        snapshot.docs.map((entry) =>
+          open(entry.data() as TDoc).catch((error: unknown) => {
+            console.error(`An unreadable ${collectionName} document`, error);
+            return null;
+          }),
+        ),
+      );
+      if (current !== sequence.latest || run.isStopped) return;
+      onChange(
+        opened.filter((entry): entry is Awaited<TOpen> => entry !== null),
+      );
     },
     (error) => onError(toError(error)),
   );

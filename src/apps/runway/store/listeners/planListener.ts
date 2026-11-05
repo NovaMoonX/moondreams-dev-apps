@@ -25,7 +25,10 @@ async function openPlan(
     updatedAt: plan.updatedAt,
     stance: readStance(plan.stance),
     startDate: plan.startDate ?? null,
-    trackingPeriods: plan.trackingPeriods ?? [],
+    trackingPeriods: (plan.trackingPeriods ?? []).map((period) => ({
+      ...period,
+      linkedFrom: period.linkedFrom ?? null,
+    })),
     dirtyFrom: plan.dirtyFrom ?? null,
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,

@@ -3952,7 +3952,10 @@ export const LINK_WORDS = {
   skip: 'Don\u2019t bring in',
   linkThese: 'Link these',
   nothingPicked: 'Pick at least one to bring in.',
-  attachFailed: 'Those did not link. Nothing was changed.',
+  attachFailed:
+    'Those did not link. Try again; anything already added stays and is linked then.',
+  levelNotMoved:
+    'Linked. Your plan is still at Track; you can move it to Link in Settings, under Tracking.',
   kindDepository: 'Account',
   kindCredit: 'Card',
   kindOther: 'Other',

@@ -74,50 +74,63 @@ export async function linkChosenAccounts(
   encryption: RunwayEncryption,
   session: LinkSession,
   choices: readonly LinkChoice[],
+  onCreated: (index: number, choice: LinkChoice) => void,
 ): Promise<AttachResult & { sent: AttachChoice[] }> {
-  const sent = await Promise.all(
-    session.accounts.map(async (entry, index): Promise<AttachChoice> => {
-      const choice = choices[index] ?? { kind: 'skip' };
-      const base = {
-        providerAccountId: entry.providerAccountId,
-        accountId: null,
-        cardId: null,
-      };
-      if (choice.kind === 'skip') return base;
-      if (choice.kind === 'existing') {
-        return choice.target === 'card'
-          ? { ...base, cardId: choice.id }
-          : { ...base, accountId: choice.id };
-      }
-      if (entry.kind === 'credit') {
-        const cardId = await createCard(
-          uid,
-          encryption,
-          {
-            issuer: session.institutionName,
-            name: entry.name,
-            dueDay: null,
-            lastFour: entry.mask,
-            payFromAccountId: null,
-            owedCents: 0,
-          },
-          LINK_WORDS.newCardSummary(entry.name),
-        );
-        return { ...base, cardId };
-      }
-      const accountId = await createAccount(uid, encryption, {
-        name: entry.name,
-        institution: session.institutionName,
-        kind: toAccountKind(entry.subtype),
-        countedTowardTotal: true,
-        isPullAccount: false,
-        lastFour: entry.mask,
-        balanceCents: null,
-        balanceOn: null,
-        holds: [],
-      });
-      return { ...base, accountId };
-    }),
+  const toSent = async (
+    entry: LinkSession['accounts'][number],
+    index: number,
+  ): Promise<AttachChoice> => {
+    const choice = choices[index] ?? { kind: 'skip' };
+    const base = {
+      providerAccountId: entry.providerAccountId,
+      accountId: null,
+      cardId: null,
+    };
+    if (choice.kind === 'skip') return base;
+    if (choice.kind === 'existing') {
+      return choice.target === 'card'
+        ? { ...base, cardId: choice.id }
+        : { ...base, accountId: choice.id };
+    }
+    if (entry.kind === 'credit') {
+      const cardId = await createCard(
+        uid,
+        encryption,
+        {
+          issuer: session.institutionName,
+          name: entry.name,
+          dueDay: null,
+          lastFour: entry.mask,
+          payFromAccountId: null,
+          owedCents: 0,
+        },
+        LINK_WORDS.newCardSummary(entry.name),
+      );
+      onCreated(index, { kind: 'existing', target: 'card', id: cardId });
+      return { ...base, cardId };
+    }
+    const accountId = await createAccount(uid, encryption, {
+      name: entry.name,
+      institution: session.institutionName,
+      kind: toAccountKind(entry.subtype),
+      countedTowardTotal: true,
+      isPullAccount: false,
+      lastFour: entry.mask,
+      balanceCents: null,
+      balanceOn: null,
+      holds: [],
+    });
+    onCreated(index, { kind: 'existing', target: 'account', id: accountId });
+    return { ...base, accountId };
+  };
+  /* One at a time, and each new card or account is handed back as soon as it exists,
+     so a retry after a failed attach links it instead of making a second one. */
+  const sent = await session.accounts.reduce<Promise<AttachChoice[]>>(
+    async (soFar, entry, index) => [
+      ...(await soFar),
+      await toSent(entry, index),
+    ],
+    Promise.resolve([]),
   );
   const response = await attachCallable({
     linkId: session.linkId,

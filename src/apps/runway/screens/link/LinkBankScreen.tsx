@@ -102,6 +102,7 @@ function LinkBankScreen({
   );
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [settled, setSettled] = useState<ReadonlySet<string>>(new Set());
 
   const signIn = async () => {
@@ -156,10 +157,14 @@ function LinkBankScreen({
         encryption,
         session,
         choices,
+        (index, created) =>
+          setChoices((current) =>
+            current.map((choice, at) => (at === index ? created : choice)),
+          ),
       );
       if (result.attached > 0 && selectLevel(store.getState()) === 'track') {
-        await moveToLink(user.uid, encryption, todayAsUtcDate()).catch(
-          (error: unknown) => console.error('The level did not move', error),
+        await moveToLink(user.uid, encryption, todayAsUtcDate()).catch(() =>
+          setIsLevelStuck(true),
         );
       }
       const { accounts } = store.getState().runway;
@@ -364,6 +369,11 @@ function LinkBankScreen({
           <p className='text-muted-foreground'>
             {LINK_WORDS.doneCount(step.count)}
           </p>
+          {isLevelStuck && (
+            <p className='text-muted-foreground text-sm' role='status'>
+              {LINK_WORDS.levelNotMoved}
+            </p>
+          )}
           <Button type='button' className='w-full' onClick={onClose}>
             {LINK_WORDS.finish}
           </Button>

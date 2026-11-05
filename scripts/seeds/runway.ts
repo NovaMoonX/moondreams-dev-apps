@@ -3076,7 +3076,7 @@ async function seedTrackingPlan(
     updatedAt: createdAt,
     stance: 'conservative',
     startDate,
-    trackingPeriods: [{ from: startDate, to: null }],
+    trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
     dirtyFrom: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
