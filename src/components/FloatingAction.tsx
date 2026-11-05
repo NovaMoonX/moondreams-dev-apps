@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -17,6 +17,13 @@ const isCoveredNow = (isInSubview: boolean) =>
 const getBarHeight = () =>
   document.querySelector<HTMLElement>('[data-bottom-bar]')?.offsetHeight ?? 0;
 
+const getCardSpan = (anchor: HTMLElement | null) => {
+  const card = anchor?.closest<HTMLElement>('.subview-card');
+  if (!card) return null;
+  const rect = card.getBoundingClientRect();
+  return { left: rect.left, width: rect.width };
+};
+
 interface FloatingActionProps {
   /** Always the accessible name; drawn at rest and dropped to the icon while scrolling down. */
   label: string;
@@ -24,11 +31,11 @@ interface FloatingActionProps {
   onClick: () => void;
   /** Column the pill lines up with from `sm` up. */
   columnClassName?: string;
-  /** The action belongs to the open subview, so an open subview does not hide it (a sheet or drawer still does). */
+  /** The action belongs to the open subview: an open subview does not hide it (a sheet or drawer still does), and it lines up inside the subview's card instead of the column; it draws nothing outside a `.subview-card`. */
   isInSubview?: boolean;
 }
 
-/** The screen's one add action: a filled pill above the bottom bar, hidden under a sheet, drawer or subview. Leaves a spacer so the last row scrolls clear of it. */
+/** The screen's one add action: a filled pill above the bottom bar, hidden under a sheet or drawer, and under a subview unless `isInSubview`. Leaves a spacer so the last row scrolls clear of it. */
 function FloatingAction({
   label,
   icon,
@@ -39,11 +46,24 @@ function FloatingAction({
   const [isCovered, setIsCovered] = useState(() => isCoveredNow(isInSubview));
   const [isCompact, setIsCompact] = useState(false);
   const [barHeight, setBarHeight] = useState(getBarHeight);
+  const [cardSpan, setCardSpan] = useState<{
+    left: number;
+    width: number;
+  } | null>(null);
+  const spacerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const update = () => {
       setIsCovered(isCoveredNow(isInSubview));
       setBarHeight(getBarHeight());
+      if (isInSubview) {
+        const span = getCardSpan(spacerRef.current);
+        setCardSpan((current) =>
+          current?.left === span?.left && current?.width === span?.width
+            ? current
+            : span,
+        );
+      }
     };
     // A busy page mutates often; the check reads layout, so it runs at most once a frame.
     const queued = { frame: 0 };
@@ -66,10 +86,16 @@ function FloatingAction({
       attributeFilter: ['data-drawer-open', 'data-panel-open', 'inert'],
     });
     window.addEventListener('resize', queueUpdate);
+    const card = isInSubview
+      ? spacerRef.current?.closest('.subview-card')
+      : null;
+    const cardObserver = new ResizeObserver(queueUpdate);
+    if (card) cardObserver.observe(card);
     queueUpdate();
     return () => {
       cancelAnimationFrame(queued.frame);
       observer.disconnect();
+      cardObserver.disconnect();
       window.removeEventListener('resize', queueUpdate);
     };
   }, [isInSubview]);
@@ -87,20 +113,35 @@ function FloatingAction({
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Inside a card the pill keeps clear of the card's bottom edge, which sits one inset above the screen's.
+  const getBottom = () => {
+    if (barHeight > 0) return barHeight + GAP_PX;
+    if (cardSpan) {
+      return `calc(var(--subview-inset) + ${GAP_PX}px + env(safe-area-inset-bottom))`;
+    }
+    return 'calc(1rem + env(safe-area-inset-bottom))';
+  };
+
   return (
     <>
-      <div className='h-12' aria-hidden='true' />
-      {!isCovered && (
+      <div ref={spacerRef} className='h-12' aria-hidden='true' />
+      {!isCovered && (!isInSubview || cardSpan) && (
         <div
-          className='pointer-events-none fixed inset-x-0 z-30 px-4'
+          className={join(
+            'pointer-events-none fixed z-30',
+            cardSpan ? 'px-(--subview-pad)' : 'inset-x-0 px-4',
+          )}
           style={{
-            bottom:
-              barHeight > 0
-                ? barHeight + GAP_PX
-                : 'calc(1rem + env(safe-area-inset-bottom))',
+            ...(cardSpan && { left: cardSpan.left, width: cardSpan.width }),
+            bottom: getBottom(),
           }}
         >
-          <div className={join('mx-auto flex justify-end', columnClassName)}>
+          <div
+            className={join(
+              'mx-auto flex justify-end',
+              !cardSpan && columnClassName,
+            )}
+          >
             <Button
               type='button'
               rounded='full'
