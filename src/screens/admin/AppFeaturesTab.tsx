@@ -1,12 +1,14 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import Field from '@/components/forms/Field';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -25,6 +27,7 @@ import {
   type GateRollout,
   readGateSetting,
   saveGateDraft,
+  toGateReason,
 } from '@lib/gates/featureGates';
 import {
   type FeatureGateEntry,
@@ -37,6 +40,8 @@ import { startFeatureGatesListener } from '@store/listeners/featureGatesListener
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
 
 const PICKER_ROWS = 20;
+const REASON_MAX_LENGTH = 200;
+const REASON_COUNTER_FROM = 150;
 
 const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -100,6 +105,11 @@ function getDraftChanges(
       )
       .map((uid) => `${nameOf(uid)}: ${removedFrom}`),
   ];
+  const afterReason = toGateReason(after.reason);
+  const reasonChanges =
+    afterReason === toGateReason(before.reason)
+      ? []
+      : [afterReason ? `Reason: ${afterReason}` : 'Reason removed'];
   const rolloutLabel =
     ROLLOUT_OPTIONS.find((option) => option.value === after.rollout)?.label ??
     after.rollout;
@@ -127,6 +137,7 @@ function getDraftChanges(
       'always given it',
       'no longer kept out',
     ),
+    ...reasonChanges,
   ];
 }
 
@@ -199,30 +210,38 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   const openGate = gates.find((gate) => gate.id === opened?.gateId) ?? null;
 
   const openSheet = (gateId: string) => {
-    const { rollout, alwaysOnUids, alwaysOffUids } = readGateSetting(
+    const { rollout, alwaysOnUids, alwaysOffUids, reason } = readGateSetting(
       gatesDoc,
       app.id,
       gateId,
     );
-    const before = { rollout, alwaysOnUids, alwaysOffUids };
+    const before = { rollout, alwaysOnUids, alwaysOffUids, reason };
     setOpened({ gateId, before, draft: before, picking: null });
   };
 
   const save = async () => {
     if (!opened || !openGate) return;
+    const isReasonChanged =
+      toGateReason(opened.draft.reason) !== toGateReason(opened.before.reason);
+    const changesWhoHasIt = changes.length - (isReasonChanged ? 1 : 0);
     const isConfirmed = await confirm({
       title: `Save changes to ${openGate.label}?`,
       message: (
         <div className='space-y-3 text-left'>
+          {openGate.warning && changesWhoHasIt > 0 && (
+            <InlineNotice tone='warning'>{openGate.warning}</InlineNotice>
+          )}
           <ul className='list-disc space-y-1 pl-5'>
             {changes.map((change, index) => (
               <li key={index}>{change}</li>
             ))}
           </ul>
-          <p>
-            People, you included, see it the next time they open or refresh the
-            site.
-          </p>
+          {changesWhoHasIt > 0 && (
+            <p>
+              People, you included, see it the next time they open or refresh
+              the site.
+            </p>
+          )}
         </div>
       ),
       confirmText: 'Save',
@@ -275,6 +294,13 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                         )}
                   </span>
                 </span>
+                {gate.warning && (
+                  <TriangleAlert
+                    className='text-warning h-4 w-4 shrink-0'
+                    role='img'
+                    aria-label='Read before changing'
+                  />
+                )}
                 <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
               </Button>
             </li>
@@ -407,6 +433,9 @@ function GateControls({
 
   return (
     <div className='space-y-5'>
+      {gate.warning && (
+        <InlineNotice tone='warning'>{gate.warning}</InlineNotice>
+      )}
       <p className='text-muted-foreground text-sm'>{gate.description}</p>
 
       <div className='space-y-2'>
@@ -443,6 +472,30 @@ function GateControls({
         onAdd={() => setPicking('alwaysOffUids')}
         onRemove={(uid) => removeFrom('alwaysOffUids', uid)}
       />
+
+      <Field
+        label={<span className='text-sm'>Why it&apos;s set this way</span>}
+      >
+        {() => (
+          <Textarea
+            value={draft.reason ?? ''}
+            maxLength={REASON_MAX_LENGTH}
+            rows={3}
+            placeholder='Optional, for whoever changes this next'
+            onChange={(event) =>
+              onDraftChange({
+                ...draft,
+                reason: event.target.value,
+              })
+            }
+          />
+        )}
+      </Field>
+      {(draft.reason ?? '').length >= REASON_COUNTER_FROM && (
+        <p className='text-muted-foreground -mt-4 text-right text-xs tabular-nums'>
+          {(draft.reason ?? '').length} / {REASON_MAX_LENGTH}
+        </p>
+      )}
     </div>
   );
 }
