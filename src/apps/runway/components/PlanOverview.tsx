@@ -39,7 +39,6 @@ const STEP_GAP_PX = 16;
 const REFRESH_EXTRA_MIN_PX = 72;
 const CIRCLE_PX = 40;
 const CIRCLE_REST_PX = 8;
-const TILE_REVEAL_PX = 16;
 // The page under a dropped circle is a little taller than the circle, so the tiles clear it.
 const SPACER_SCALE = 1.2;
 const NOTE_GAP_PX = 12;
@@ -224,8 +223,8 @@ const FALLBACK: Measures = {
 };
 
 const ROW_CLASS =
-  'relative flex [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
-const ROW_TILE_CLASS = 'w-[44%] shrink-0 lg:w-[calc((100%-1rem)/3)]';
+  'relative flex snap-x snap-mandatory [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
+const ROW_TILE_CLASS = 'w-[44%] shrink-0 snap-start lg:w-[calc((100%-1rem)/3)]';
 const GRID_CLASS =
   'relative grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2';
 
@@ -505,10 +504,13 @@ function PullFrame({
       const tile = measures.rowTiles[currentIndex];
       const width = clip?.clientWidth ?? 0;
       if (!tile || width === 0) return;
-      const left = Math.max(0, tile.left - TILE_REVEAL_PX);
-      const right = tile.left + tile.width + TILE_REVEAL_PX - width;
+      const last = measures.rowTiles[measures.rowTiles.length - 1];
+      const end = last ? Math.max(0, last.left + last.width - width) : 0;
       setRowScroll((scroll) => {
-        const next = Math.min(Math.max(scroll, right), left);
+        const isShown =
+          tile.left >= scroll && tile.left + tile.width <= scroll + width;
+        // The row snaps tile by tile, so the open view's tile slides to the start, or as near it as the row's end allows.
+        const next = isShown ? scroll : Math.min(tile.left, end);
         liveRowRef.current?.scrollTo({
           left: next,
           behavior: isMotionReduced() ? 'auto' : 'smooth',
