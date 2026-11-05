@@ -813,7 +813,11 @@ function IncomeFormBody({
     editing?.kind === 'payLine'
       ? {
           ...editing.payload,
-          accountId: editing.payload.accountId ?? null,
+          accountId: keepOpenAccountId(
+            editing.payload.accountId ?? null,
+            openAccounts,
+            isAccountsLoaded,
+          ),
         }
       : (editing?.payload ?? EMPTY_PAY_LINE);
   const flow = useChangeFlow({

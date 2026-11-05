@@ -128,8 +128,11 @@ export const selectAccountMoves = createSelector(
       dayOn,
       nextIncomeOn,
       payAccountId:
-        resolveCurrentOrNext(payLineVersions, day.payLineId, day.on)?.payload
-          .accountId ?? null,
+        resolveCurrentOrNext(
+          payLineVersions,
+          day.payLineId,
+          Math.max(day.on, today),
+        )?.payload.accountId ?? null,
       today,
       bills,
       cards,

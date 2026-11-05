@@ -45,8 +45,8 @@ function MoveRow({ move, accounts, isDone, onDone }: MoveRowProps) {
     <>
       <ItemRow
         name={mask(title)}
-        detail={by}
-        ariaLabel={`${title}. ${by}`}
+        detail={mask(by)}
+        ariaLabel={mask(`${title}. ${by}`)}
         tick={{ checked: isDone, onChange: onDone }}
         onOpen={() => setIsOpen(true)}
       />
