@@ -127,13 +127,14 @@ function AccountSheet({
   const isBalanceSame =
     balanceCents === account.balanceCents && account.balanceOn === today;
   const linkedFact = useLinkedFact(account.linkId);
-  const { interest, shown } = useAccountInterest(account, today);
+  const { interest, uncounted } = useAccountInterest(account, today);
   const interestLine =
     interest === null
       ? null
-      : shown.includesInterestCents > 0
-        ? ACCOUNT_WORDS.balanceWithInterest(
-            formatCents(shown.includesInterestCents),
+      : uncounted !== null
+        ? ACCOUNT_WORDS.interestUncounted(
+            formatCents(uncounted.cents),
+            formatDateOrdinalUTC(uncounted.on),
           )
         : interest.isActual
           ? ACCOUNT_WORDS.interestActual(
@@ -480,9 +481,9 @@ function AccountSheet({
         <SheetHead
           label={ACCOUNT_WORDS.balanceLabel}
           figure={
-            shown.cents === null
+            account.balanceCents === null
               ? ACCOUNT_WORDS.noBalance
-              : formatCents(shown.cents)
+              : formatCents(account.balanceCents)
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />

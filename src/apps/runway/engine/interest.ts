@@ -41,8 +41,8 @@ export function getInterestDay(
 }
 
 /**
- * The month's interest. An approximation: for a linked account with a reading in the month before the interest
- * day and one on or after it, the rise between them (floored at zero, so a deposit counts too) replaces the estimate.
+ * The month's interest. An approximation: for a linked account with a reading in the month before the interest day
+ * and one on or after it, their rise replaces the estimate unless it is over twice the estimate (a deposit, not interest).
  */
 export function getMonthInterest(input: {
   balanceCents: Cents | null;
@@ -65,18 +65,18 @@ export function getMonthInterest(input: {
     .filter((reading) => reading.on >= previous && reading.on < on)
     .at(-1);
   const after = sorted.find((reading) => reading.on >= on && reading.on < next);
-  if (input.isLinked && before !== undefined && after !== undefined) {
-    return {
-      cents: Math.max(0, after.cents - before.cents),
-      isActual: true,
-      on,
-    };
+  const estimate = estimateMonthlyInterest(
+    input.balanceCents ?? 0,
+    input.apyBps,
+  );
+  const rise =
+    before === undefined || after === undefined
+      ? null
+      : Math.max(0, after.cents - before.cents);
+  if (input.isLinked && rise !== null && rise <= estimate * 2) {
+    return { cents: rise, isActual: true, on };
   }
-  return {
-    cents: estimateMonthlyInterest(input.balanceCents ?? 0, input.apyBps),
-    isActual: false,
-    on,
-  };
+  return { cents: estimate, isActual: false, on };
 }
 
 const REST_ID = '￿';
@@ -109,34 +109,33 @@ export function shareInterest(
   };
 }
 
-/** The balance to show for an account that says nothing of the bank: its figure plus this month's estimate once the interest day has passed with no newer reading. */
-export function getShownBalance(input: {
+/**
+ * Interest an unlinked account's typed balance has not counted yet: one estimate per interest day after the
+ * balance's date up to today, and the latest such day; null once the balance is updated or none has passed.
+ */
+export function getUncountedInterest(input: {
   balanceCents: Cents | null;
   balanceOn: DateOnly | null;
   apyBps: number | null;
   interestDay: number | null;
   isLinked: boolean;
   today: DateOnly;
-}): { cents: Cents | null; includesInterestCents: Cents } {
-  const none = { cents: input.balanceCents, includesInterestCents: 0 };
-  if (
-    input.balanceCents === null ||
-    input.apyBps === null ||
-    input.isLinked ||
-    input.balanceOn === null
-  ) {
-    return none;
+}): { cents: Cents; on: DateOnly } | null {
+  const { balanceCents, balanceOn, apyBps, interestDay } = input;
+  if (balanceCents === null || balanceOn === null || apyBps === null) {
+    return null;
   }
+  if (input.isLinked) return null;
+  const from = new Date(balanceOn);
   const now = new Date(input.today);
-  const on = getInterestDay(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    input.interestDay,
-  );
-  if (input.today < on || input.balanceOn >= on) return none;
-  const interest = estimateMonthlyInterest(input.balanceCents, input.apyBps);
-  return {
-    cents: input.balanceCents + interest,
-    includesInterestCents: interest,
-  };
+  const span =
+    (now.getUTCFullYear() - from.getUTCFullYear()) * 12 +
+    now.getUTCMonth() -
+    from.getUTCMonth();
+  const days = Array.from({ length: span + 1 }, (_, i) =>
+    getInterestDay(from.getUTCFullYear(), from.getUTCMonth() + i, interestDay),
+  ).filter((on) => on > balanceOn && on <= input.today);
+  const cents = estimateMonthlyInterest(balanceCents, apyBps) * days.length;
+  if (days.length === 0 || cents === 0) return null;
+  return { cents, on: days[days.length - 1] };
 }

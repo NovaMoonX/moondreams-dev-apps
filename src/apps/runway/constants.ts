@@ -3820,7 +3820,7 @@ export const ACCOUNT_WORDS = {
   apyTitle: 'Does it earn interest?',
   apyLabel: 'APY',
   apyPlaceholder: '4.10',
-  apyHint: 'The yearly rate, as a percent. Leave it empty for none.',
+  apyHint: 'The yearly rate your bank shows (APY). Leave it empty for none.',
   apyNone: 'No interest',
   apyNeeded: 'Type a rate like 4.10, up to 25%, or leave it empty.',
   interestDayTitle: 'Which day does the interest arrive?',
@@ -3839,11 +3839,11 @@ export const ACCOUNT_WORDS = {
   interestActual: (amount: string, day: string) =>
     `${amount} interest on ${day}`,
   goalInterestActual: (amount: string, day: string, account: string) =>
-    `Earned ${amount} on ${day}, its share of ${account}'s interest`,
-  balanceWithInterest: (amount: string) =>
-    `Includes about ${amount} interest (estimate)`,
+    `Earned ${amount} on ${day}, its share of the interest in ${account}`,
+  interestUncounted: (amount: string, day: string) =>
+    `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
   goalInterest: (amount: string, day: string, account: string) =>
-    `Earns about ${amount} on ${day}, its share of ${account}'s interest (estimate)`,
+    `Earns about ${amount} on ${day}, its share of the interest in ${account} (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
   changeHolds: (
     name: string,

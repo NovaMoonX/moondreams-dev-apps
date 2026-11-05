@@ -3,12 +3,12 @@ import { INTEREST_ACCOUNT_KINDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   getMonthInterest,
-  getShownBalance,
+  getUncountedInterest,
   type BalanceReading,
 } from '@apps/runway/engine/interest';
 import type { OpenAccount } from '@apps/runway/types';
 
-/** This month's interest for an account and the balance to show for it; both null-ish when the account earns none. */
+/** This month's interest for an account and what its typed balance has not counted yet; both null when it earns none. */
 export function useAccountInterest(account: OpenAccount, today: number) {
   const bank = useAppSelector(
     (state) =>
@@ -19,10 +19,7 @@ export function useAccountInterest(account: OpenAccount, today: number) {
     account.apyBps === null ||
     !INTEREST_ACCOUNT_KINDS.includes(account.kind)
   ) {
-    return {
-      interest: null,
-      shown: { cents: account.balanceCents, includesInterestCents: 0 },
-    };
+    return { interest: null, uncounted: null };
   }
   const now = new Date(today);
   const isLinked = account.linkId !== null;
@@ -41,7 +38,7 @@ export function useAccountInterest(account: OpenAccount, today: number) {
     year: now.getUTCFullYear(),
     month: now.getUTCMonth(),
   });
-  const shown = getShownBalance({
+  const uncounted = getUncountedInterest({
     balanceCents: account.balanceCents,
     balanceOn: account.balanceOn,
     apyBps: account.apyBps,
@@ -49,5 +46,5 @@ export function useAccountInterest(account: OpenAccount, today: number) {
     isLinked,
     today,
   });
-  return { interest, shown };
+  return { interest, uncounted };
 }

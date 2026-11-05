@@ -1,4 +1,5 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { toDayOrdinal } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { ACCOUNT_KIND_LABELS, ACCOUNT_WORDS } from '@apps/runway/constants';
 import type {
@@ -28,7 +29,9 @@ const describeApy = (bps: number | null) =>
     ? ACCOUNT_WORDS.changeNoApy
     : ACCOUNT_WORDS.apyValue(formatApy(bps));
 const describeInterestDay = (day: number | null) =>
-  day === null ? ACCOUNT_WORDS.changeInterestLastDay : `day ${day}`;
+  day === null
+    ? ACCOUNT_WORDS.changeInterestLastDay
+    : `the ${toDayOrdinal(day)}`;
 const yesNo = (value: boolean) =>
   value ? ACCOUNT_WORDS.changeYes : ACCOUNT_WORDS.changeNo;
 

@@ -44,7 +44,7 @@ import {
   estimateMonthlyInterest,
   getInterestDay,
   getMonthInterest,
-  getShownBalance,
+  getUncountedInterest,
   shareInterest,
 } from '../../src/apps/runway/engine/interest.ts';
 import { matchLinkRows } from '../../src/apps/runway/engine/linkMatch.ts';
@@ -14510,32 +14510,59 @@ const version = (
     isLinked: false,
   };
   assert.deepEqual(
-    getShownBalance({ ...shownBase, today: day(2026, 10, 30) }),
-    { cents: 1_204_100, includesInterestCents: 4_100 },
-    'an unlinked balance includes the estimate once the day has passed',
+    getUncountedInterest({ ...shownBase, today: day(2026, 10, 30) }),
+    { cents: 4_100, on: day(2026, 10, 30) },
+    'an unlinked balance has the estimate uncounted once the day has passed',
+  );
+  assert.deepEqual(
+    getUncountedInterest({ ...shownBase, today: day(2026, 11, 2) }),
+    { cents: 4_100, on: day(2026, 10, 30) },
+    'and keeps it past the 1st until the balance is updated',
+  );
+  assert.deepEqual(
+    getUncountedInterest({ ...shownBase, today: day(2027, 0, 31) }),
+    { cents: 12_300, on: day(2027, 0, 31) },
+    'one estimate per interest day since the balance',
   );
   assert.equal(
-    getShownBalance({ ...shownBase, today: day(2026, 10, 29) }).cents,
-    1_200_000,
+    getUncountedInterest({ ...shownBase, today: day(2026, 10, 29) }),
+    null,
   );
   assert.equal(
-    getShownBalance({
+    getUncountedInterest({
       ...shownBase,
       balanceOn: day(2026, 10, 30),
       today: day(2026, 10, 30),
-    }).cents,
-    1_200_000,
+    }),
+    null,
     'a reading on the interest day already holds it',
   );
   assert.equal(
-    getShownBalance({ ...shownBase, isLinked: true, today: day(2026, 10, 30) })
-      .cents,
-    1_200_000,
+    getUncountedInterest({
+      ...shownBase,
+      isLinked: true,
+      today: day(2026, 10, 30),
+    }),
+    null,
   );
   assert.equal(
-    getShownBalance({ ...shownBase, apyBps: null, today: day(2026, 10, 30) })
-      .cents,
-    1_200_000,
+    getUncountedInterest({
+      ...shownBase,
+      apyBps: null,
+      today: day(2026, 10, 30),
+    }),
+    null,
+  );
+  assert.equal(
+    getMonthInterest({
+      ...base,
+      readings: [
+        { on: day(2026, 10, 28), cents: 1_195_000 },
+        { on: day(2026, 10, 30), cents: 1_245_000 },
+      ],
+    }).isActual,
+    false,
+    'a rise over twice the estimate is a deposit, so the estimate stays',
   );
 }
 
