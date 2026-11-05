@@ -42,6 +42,7 @@ import {
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
 import { useGoalsSaved } from '@apps/runway/hooks/useGoalsSaved';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { revealItem } from '@apps/runway/utils/revealItem';
@@ -60,7 +61,8 @@ function GoalsScreen() {
   const heldByItem = useAppSelector(selectHeldByItem);
   const { dial } = usePriorityDial();
   const paces = useGoalPaces(today);
-  const { savedCents, targetCents, hasTargets } = useGoalsSaved(today);
+  const { savedCents, targetCents, hasTargets, notSavingCount } =
+    useGoalsSaved(today);
   const totalFigure = describePlanTotal(
     { kind: 'saved', savedCents, targetCents },
     dial,
@@ -134,6 +136,11 @@ function GoalsScreen() {
     }
     return (
       <div className='space-y-3'>
+        {notSavingCount > 0 && (
+          <p className='text-muted-foreground text-sm'>
+            {GROUP_WORDS.notSavingFor(notSavingCount)}
+          </p>
+        )}
         {trackedGoals.length > 0 &&
           (behindGoals.length === 0 ? (
             <div className='flex min-h-10 items-center gap-1'>
@@ -184,15 +191,20 @@ function GoalsScreen() {
                 <GroupHeading
                   figures={figures}
                   kind='goals'
-                  saved={rows.reduce(
-                    (sum, { item, payload }) => ({
-                      savedCents:
-                        sum.savedCents +
-                        Math.min(heldByItem[item.id] ?? 0, payload.targetCents),
-                      targetCents: sum.targetCents + payload.targetCents,
-                    }),
-                    { savedCents: 0, targetCents: 0 },
-                  )}
+                  saved={rows
+                    .filter(({ payload }) => isSavingFor(payload))
+                    .reduce(
+                      (sum, { item, payload }) => ({
+                        savedCents:
+                          sum.savedCents +
+                          Math.min(
+                            heldByItem[item.id] ?? 0,
+                            payload.targetCents,
+                          ),
+                        targetCents: sum.targetCents + payload.targetCents,
+                      }),
+                      { savedCents: 0, targetCents: 0 },
+                    )}
                   onOpen={() => setOpenGroupId(figures.id)}
                 />
                 {getList(rows)}

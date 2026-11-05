@@ -364,6 +364,8 @@ function ItemSheet({
 
   const goal = itemKind === 'goal' ? (payload as GoalSealed) : null;
   const isPaused = goal !== null && (goal.state ?? 'active') === 'paused';
+  const isUnfunded =
+    goal !== null && !isPaused && goal.funding.cadence.kind === 'none';
   const upcoming = isScheduled(payload)
     ? occurrences(
         getSchedule(payload),
@@ -1055,11 +1057,23 @@ function ItemSheet({
         <ActionGroup
           caption={
             goal && isStoppable
-              ? ITEM_SHEET_WORDS.stopHeading
+              ? isPaused || isUnfunded
+                ? ITEM_SHEET_WORDS.startHeading
+                : ITEM_SHEET_WORDS.stopHeading
               : ITEM_SHEET_R2_WORDS.stopOnly
           }
         >
-          {isStoppable && goal && !isPaused && (
+          {isStoppable && isUnfunded && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Play />}
+              label={LIFECYCLE_WORDS.startSaving}
+              subtitle={ITEM_SHEET_R2_WORDS.startSavingSub}
+              onClick={() => openChange('often')}
+            />
+          )}
+          {isStoppable && goal && !isPaused && !isUnfunded && (
             <ActionRow
               isGrouped
               hasChevron

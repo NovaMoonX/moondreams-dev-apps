@@ -46,7 +46,6 @@ import {
   GROUP_WORDS,
   HOW_OFTEN_WORDS,
   ITEM_SHEET_R2_WORDS,
-  LIFECYCLE_WORDS,
   PRIORITY_DIAL_WORDS,
   MAX_EMOJI_LENGTH,
   MAX_NAME_LENGTH,
@@ -89,6 +88,7 @@ import {
 } from '@apps/runway/engine/resolve';
 import { toOrdinal } from '@apps/runway/utils/monthDays';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import {
   getSectionPick,
   planGroupPriority,
@@ -1274,11 +1274,7 @@ function GroupSheet({ groupId, today, dial, onClose }: GroupSheetProps) {
                     const { payload: goal } = version;
                     const row = getFundedRow(
                       goal,
-                      goal.state === 'paused'
-                        ? LIFECYCLE_WORDS.paused
-                        : goal.funding.cadence.kind === 'none'
-                          ? HOW_OFTEN_WORDS.notBeingAdded
-                          : null,
+                      isSavingFor(goal) ? null : HOW_OFTEN_WORDS.notBeingAdded,
                     );
                     return (
                       <ItemRow

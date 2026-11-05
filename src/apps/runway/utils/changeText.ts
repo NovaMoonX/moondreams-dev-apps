@@ -14,6 +14,7 @@ import {
 } from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import {
   describeCostWhen,
@@ -395,12 +396,15 @@ const MONEYLESS_KEYS = [
   'accountId',
 ];
 
-/** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
+const isIdleGoal = (payload: ItemPayload) =>
+  'targetCents' in payload && !isSavingFor(payload);
+
+/** A change to only a name, emoji, group, card or account, or any change to a goal not being saved for before or after it: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
   const changed = getChangedKeys(before, after) as string[];
-  return (
-    changed.length > 0 && changed.every((key) => MONEYLESS_KEYS.includes(key))
-  );
+  if (changed.length === 0) return false;
+  if (isIdleGoal(before) && isIdleGoal(after)) return true;
+  return changed.every((key) => MONEYLESS_KEYS.includes(key));
 };
 
 /** True when two payloads say the same thing. */

@@ -373,7 +373,7 @@ function GoalFormBody({
     data: formData,
     set,
     comingDays,
-    allowNone: true,
+    allowNone: !editing || startData.often === 'none',
     isDraft: !!draft,
     draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,
@@ -763,7 +763,7 @@ function GoalFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={title}
+      title={editing ? formData.name.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps

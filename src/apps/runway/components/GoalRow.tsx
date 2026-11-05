@@ -7,13 +7,12 @@ import ItemSheet from '@apps/runway/components/ItemSheet';
 import {
   HOW_OFTEN_WORDS,
   ITEM_SHEET_R2_WORDS,
-  LIFECYCLE_WORDS,
   PACE_STATE_LABELS,
   PACE_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
-import type { Pace } from '@apps/runway/engine/pace';
+import { isSavingFor, type Pace } from '@apps/runway/engine/pace';
 import type { GoalSealed, Priority } from '@apps/runway/types';
 import { getExtras } from '@apps/runway/engine/parts';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
@@ -47,13 +46,11 @@ const describePaceShort = (
   savedCents: number,
 ) => {
   if (pace.isComplete) return PACE_WORDS.completed;
-  if (goal.state === 'paused') return LIFECYCLE_WORDS.paused;
-  if (goal.funding.cadence.kind === 'none')
-    return HOW_OFTEN_WORDS.notBeingAdded;
+  if (!isSavingFor(goal)) return HOW_OFTEN_WORDS.notBeingAdded;
   if (goal.funding.amount.kind === 'rest') return 'Takes what is left';
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateOrdinalUTC(pace.reachedOn.on)}`
-    : 'the days ahead do not reach it';
+    : PACE_WORDS.notReached;
   if (goal.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
     return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(goal.targetDate)}`;
@@ -120,7 +117,7 @@ function GoalRow({
           figure={formatCents(savedCents)}
           figureSuffix={`of ${formatCentsShort(goal.targetCents)}`}
           fact={
-            goal.funding.cadence.kind === 'none'
+            !isSavingFor(goal)
               ? `${PRIORITY_LABELS[goal.priority]} · ${funding}`
               : `${PRIORITY_LABELS[goal.priority]} · ${funding} · ${paceLine.charAt(0).toLowerCase()}${paceLine.slice(1)}`
           }
