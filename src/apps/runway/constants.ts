@@ -3826,22 +3826,24 @@ export const ACCOUNT_WORDS = {
   interestDayTitle: 'Which day does the interest arrive?',
   interestDayLabel: 'Interest day',
   interestDayPlaceholder: 'Last day',
-  interestDayHint: 'A day from 1 to 31. A short month uses its last day.',
+  interestDayHint: 'A day from 1 to 31. Leave it empty for the last day.',
   interestLastDay: 'Last day of the month',
   changeInterestLastDay: 'the last day of the month',
-  interestDayNeeded: 'Type a day from 1 to 31, or pick the last day.',
+  interestDayNeeded: 'Type a day from 1 to 31, or leave it empty.',
   interestDayValue: (day: number) => `Day ${day}`,
   apyFact: (percent: string) => `${percent}% APY`,
+  apyValue: (percent: string) => `${percent}%`,
+  interestCaption: 'Interest',
   interestEstimate: (amount: string, day: string) =>
     `About ${amount} interest on ${day} (estimate)`,
   interestActual: (amount: string, day: string) =>
     `${amount} interest on ${day}`,
-  goalInterestActual: (amount: string, day: string) =>
-    `${amount} of its account's interest on ${day}`,
+  goalInterestActual: (amount: string, day: string, account: string) =>
+    `Earned ${amount} on ${day}, its share of ${account}'s interest`,
   balanceWithInterest: (amount: string) =>
     `Includes about ${amount} interest (estimate)`,
-  goalInterest: (amount: string, day: string) =>
-    `About ${amount} of its account's interest on ${day} (estimate)`,
+  goalInterest: (amount: string, day: string, account: string) =>
+    `Earns about ${amount} on ${day}, its share of ${account}'s interest (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
   changeHolds: (
     name: string,

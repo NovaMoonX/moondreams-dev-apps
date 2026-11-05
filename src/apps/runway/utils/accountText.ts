@@ -1,5 +1,5 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatBps, formatCents } from '@/utils/moneyUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { ACCOUNT_KIND_LABELS, ACCOUNT_WORDS } from '@apps/runway/constants';
 import type {
   AccountSealed,
@@ -20,8 +20,13 @@ export const describeAccountLine = (
 
 const lastFourOf = (account: Pick<AccountSealed, 'lastFour'>) =>
   account.lastFour ? `••${account.lastFour}` : ACCOUNT_WORDS.changeNoLastFour;
+/** An APY in basis points as the percent a bank prints, two decimals ("4.10"). */
+export const formatApy = (bps: number) => (bps / 100).toFixed(2);
+
 const describeApy = (bps: number | null) =>
-  bps === null ? ACCOUNT_WORDS.changeNoApy : `${formatBps(bps)}%`;
+  bps === null
+    ? ACCOUNT_WORDS.changeNoApy
+    : ACCOUNT_WORDS.apyValue(formatApy(bps));
 const describeInterestDay = (day: number | null) =>
   day === null ? ACCOUNT_WORDS.changeInterestLastDay : `day ${day}`;
 const yesNo = (value: boolean) =>

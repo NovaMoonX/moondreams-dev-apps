@@ -21,7 +21,6 @@ import { useAppSelector } from '@/store';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
-  formatBps,
   formatCents,
   parseMoneyToCents,
   parsePercentToBps,
@@ -67,6 +66,7 @@ import type {
 } from '@apps/runway/types';
 import {
   describeAccountChanged,
+  formatApy,
   isLastFour,
 } from '@apps/runway/utils/accountText';
 import { resolveBank } from '@apps/runway/utils/cardText';
@@ -137,7 +137,7 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         hasNoLastFour: editing.lastFour === null,
         isPull: editing.isPullAccount,
         balance: '',
-        apy: editing.apyBps === null ? '' : formatBps(editing.apyBps),
+        apy: editing.apyBps === null ? '' : formatApy(editing.apyBps),
         interestDay:
           editing.interestDay === null ? '' : String(editing.interestDay),
       }
@@ -388,10 +388,12 @@ function AccountFormBody({
             title: ACCOUNT_WORDS.apyTitle,
             summaryLabel: ACCOUNT_WORDS.apyLabel,
             summaryValue:
-              apyBps === null ? ACCOUNT_WORDS.apyNone : `${formatBps(apyBps)}%`,
+              apyBps === null
+                ? ACCOUNT_WORDS.apyNone
+                : ACCOUNT_WORDS.apyValue(formatApy(apyBps)),
             isAnswered: isApyValid,
             blocker: ACCOUNT_WORDS.apyNeeded,
-            render: ({ moveOn }) => (
+            render: () => (
               <div className='space-y-3'>
                 <Input
                   variant='outline'
@@ -405,16 +407,6 @@ function AccountFormBody({
                 <p className='text-muted-foreground text-sm'>
                   {ACCOUNT_WORDS.apyHint}
                 </p>
-                <div className='text-center'>
-                  <RevealChip
-                    onClick={() => {
-                      set({ apy: '', interestDay: '' });
-                      moveOn();
-                    }}
-                  >
-                    {ACCOUNT_WORDS.apyNone}
-                  </RevealChip>
-                </div>
               </div>
             ),
           } satisfies QuestionStep,
@@ -432,7 +424,7 @@ function AccountFormBody({
                 : ACCOUNT_WORDS.interestDayValue(interestDay),
             isAnswered: isInterestDayValid,
             blocker: ACCOUNT_WORDS.interestDayNeeded,
-            render: ({ moveOn }) => (
+            render: () => (
               <div className='space-y-3'>
                 <Input
                   variant='outline'
@@ -446,16 +438,6 @@ function AccountFormBody({
                 <p className='text-muted-foreground text-sm'>
                   {ACCOUNT_WORDS.interestDayHint}
                 </p>
-                <div className='text-center'>
-                  <RevealChip
-                    onClick={() => {
-                      set({ interestDay: '' });
-                      moveOn();
-                    }}
-                  >
-                    {ACCOUNT_WORDS.interestLastDay}
-                  </RevealChip>
-                </div>
               </div>
             ),
           } satisfies QuestionStep,

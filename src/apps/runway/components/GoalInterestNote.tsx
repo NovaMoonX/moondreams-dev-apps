@@ -2,6 +2,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { ACCOUNT_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -47,12 +48,14 @@ function ShareLine({
   ];
   const day = formatDateOrdinalUTC(interest.on);
   const text = interest.isActual
-    ? ACCOUNT_WORDS.goalInterestActual(formatCents(share), day)
-    : ACCOUNT_WORDS.goalInterest(formatCents(share), day);
+    ? ACCOUNT_WORDS.goalInterestActual(formatCents(share), day, account.name)
+    : ACCOUNT_WORDS.goalInterest(formatCents(share), day, account.name);
   return (
-    <p className='text-muted-foreground text-sm'>
-      <MaskedText>{text}</MaskedText>
-    </p>
+    <ActionSection caption={ACCOUNT_WORDS.interestCaption}>
+      <p className='text-sm'>
+        <MaskedText>{text}</MaskedText>
+      </p>
+    </ActionSection>
   );
 }
 

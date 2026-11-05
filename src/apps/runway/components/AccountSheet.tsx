@@ -30,7 +30,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   centsToInputValue,
-  formatBps,
   formatCents,
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
@@ -68,6 +67,7 @@ import {
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
+import { formatApy } from '@apps/runway/utils/accountText';
 
 const MAX_HOLD_LINES = 4;
 
@@ -150,7 +150,7 @@ function AccountSheet({
       : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
     account.apyBps === null
       ? null
-      : ACCOUNT_WORDS.apyFact(formatBps(account.apyBps)),
+      : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
     linkedFact,
   ].filter((fact): fact is string => fact !== null);
@@ -487,9 +487,11 @@ function AccountSheet({
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />
         {interestLine !== null && (
-          <p className='text-muted-foreground text-sm'>
-            <MaskedText>{interestLine}</MaskedText>
-          </p>
+          <ActionSection caption={ACCOUNT_WORDS.interestCaption}>
+            <p className='text-sm'>
+              <MaskedText>{interestLine}</MaskedText>
+            </p>
+          </ActionSection>
         )}
         <ActionSection caption={ACCOUNT_WORDS.holdsTitle}>
           {holdLines.length === 0 && (
