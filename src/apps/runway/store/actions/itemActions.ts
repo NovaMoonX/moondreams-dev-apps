@@ -48,6 +48,8 @@ export interface CreateIncomeInput {
   payLineName: string;
   amount: MoneyRange;
   stanceOverride: Stance | null;
+  /** The account the pay lands in; null when not chosen. */
+  accountId: string | null;
   schedule: Schedule;
   ending: Ending;
   /** The first day this income is in the plan. */
@@ -90,6 +92,7 @@ export async function createIncome(
     amount: input.amount,
     ending: input.ending,
     stanceOverride: input.stanceOverride,
+    accountId: input.accountId,
     pairings: [],
   };
   const changePayload: ChangeSealed = { summary: getSummary(input) };

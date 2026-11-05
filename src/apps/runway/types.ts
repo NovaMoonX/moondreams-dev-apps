@@ -119,6 +119,8 @@ export interface PayLineSealed {
   ending: Ending;
   /** Replaces the plan's stance for this pay line; a version written before it existed has none. */
   stanceOverride: Stance | null;
+  /** The account the pay lands in; a version written before it existed has none, and null means not chosen. */
+  accountId: string | null;
   pairings: Pairing[];
 }
 

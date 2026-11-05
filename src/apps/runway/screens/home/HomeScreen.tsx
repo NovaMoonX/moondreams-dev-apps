@@ -28,6 +28,7 @@ import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
 import PrioritiesNudge from '@apps/runway/components/PrioritiesNudge';
 import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
+import { selectHomeMoves } from '@apps/runway/store/selectors/moveSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { getListedCards } from '@apps/runway/utils/cardText';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
@@ -70,6 +71,7 @@ function HomeScreen() {
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const allCards = useAppSelector(selectAllCards);
+  const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
   const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
   const moves = useAppSelector((state) => state.runway.moves);
   const startDate = useAppSelector(
@@ -121,6 +123,7 @@ function HomeScreen() {
   const hasRanges = rangeSides.income || rangeSides.expense;
   const hasWarnings =
     dueCards.length > 0 ||
+    homeMoves !== null ||
     (lookahead !== null &&
       lookahead.problems.length +
         lookahead.undated.length +
@@ -131,7 +134,11 @@ function HomeScreen() {
     <div className='space-y-6'>
       <div className='space-y-2'>
         {hasWarnings ? (
-          <LookaheadWarnings lookahead={lookahead} dueCards={dueCards} />
+          <LookaheadWarnings
+            lookahead={lookahead}
+            dueCards={dueCards}
+            moves={homeMoves}
+          />
         ) : lookahead ? (
           <HoldsThroughLine lookahead={lookahead} today={today} />
         ) : (
