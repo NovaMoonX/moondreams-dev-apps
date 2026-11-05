@@ -506,16 +506,17 @@ function PullFrame({
       if (!tile || width === 0) return;
       const last = measures.rowTiles[measures.rowTiles.length - 1];
       const end = last ? Math.max(0, last.left + last.width - width) : 0;
-      setRowScroll((scroll) => {
-        const isShown =
-          tile.left >= scroll && tile.left + tile.width <= scroll + width;
-        // The row snaps tile by tile, so the open view's tile slides to the start, or as near it as the row's end allows.
-        const next = isShown ? scroll : Math.min(tile.left, end);
-        liveRowRef.current?.scrollTo({
-          left: next,
-          behavior: isMotionReduced() ? 'auto' : 'smooth',
-        });
-        return next;
+      const row = liveRowRef.current;
+      const liveTile = row?.children[currentIndex];
+      // The row snaps tile by tile, so the open view's tile slides to the start, or as near it as the row's end allows. A drawn row keeps its scroll through its own scroll handler: setting it here as well threw the smooth slide off the snap.
+      const next =
+        row && liveTile instanceof HTMLElement
+          ? Math.min(liveTile.offsetLeft, row.scrollWidth - row.clientWidth)
+          : Math.min(tile.left, end);
+      if (!row) setRowScroll(next);
+      liveRowRef.current?.scrollTo({
+        left: next,
+        behavior: isMotionReduced() ? 'auto' : 'smooth',
       });
     });
     return () => window.cancelAnimationFrame(frame);
