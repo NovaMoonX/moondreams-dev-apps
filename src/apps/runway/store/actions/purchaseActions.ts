@@ -1187,11 +1187,15 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   tickedDayKey: purchase.tickedDayKey,
 });
 
-/** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part. */
+/** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part the person chose. */
 function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
   const difference = amountCents - typed.amountCents;
+  const last = typed.lines.reduce(
+    (at, line, index) => (line.via !== 'spill' ? index : at),
+    -1,
+  );
   const lines = typed.lines.map((line, index) =>
-    index === typed.lines.length - 1
+    index === (last === -1 ? typed.lines.length - 1 : last)
       ? { ...line, cents: line.cents + difference }
       : line,
   );

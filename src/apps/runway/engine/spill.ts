@@ -21,7 +21,7 @@ const getSteps = (
       step !== id && step in left && chain.indexOf(step) === index,
   );
 
-/** Splits each chosen line that its envelope cannot cover: the envelope's own money first (never below zero), then each chain envelope in order with what it has left, then Free to Spend (`envelopeId: null`, `via: 'spill'`). `leftByEnvelope` holds the active envelopes only, and is consumed across the lines of one purchase. The lines still add to the purchase, a spilled line stays at its own share even at 0 and its spill lines follow it, and the line cap holds: what does not fit goes to Free to Spend. */
+/** Splits each chosen line its envelope cannot cover into the envelope's chain, then Free to Spend; the lines still add up and the line cap holds. */
 export function resolveSpill(
   lines: readonly PurchaseLine[],
   leftByEnvelope: Readonly<Record<string, Cents>>,

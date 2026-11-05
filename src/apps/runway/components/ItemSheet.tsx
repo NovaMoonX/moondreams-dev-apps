@@ -20,7 +20,6 @@ import {
   ShoppingBag,
   Undo2,
   Waves,
-  X,
   Wallet,
 } from 'lucide-react';
 
@@ -140,6 +139,10 @@ import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { resolveSpill } from '@apps/runway/engine/spill';
 import { formatCents } from '@/utils/moneyUtils';
+import { formatList } from '@/utils/formatUtils';
+import { getSkippedSteps } from '@apps/runway/utils/purchaseText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import InlineNotice from '@/components/InlineNotice';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
@@ -309,6 +312,7 @@ function ItemSheet({
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const [spillIds, setSpillIds] = useState<string[]>([]);
   const [isPickingSpill, setIsPickingSpill] = useState(false);
+  const [selectedSpillId, setSelectedSpillId] = useState<string | null>(null);
   const assignedByItem = useAppSelector(
     (state) => selectBalances(state).assignedByItem,
   );
@@ -354,6 +358,7 @@ function ItemSheet({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const allCards = useAppSelector(selectAllCards);
   const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
@@ -610,7 +615,7 @@ function ItemSheet({
         )
       : [];
   const isSpillUnchanged = spillIds.join() === savedSpill.join();
-  const spillExample = resolveSpill(
+  const spillLines = resolveSpill(
     [
       {
         envelopeId: itemId,
@@ -622,21 +627,32 @@ function ItemSheet({
       spillOptions.map((option) => [option.id, assignedByItem[option.id] ?? 0]),
     ),
     { [itemId]: spillIds },
-  )
-    .filter((line) => line.via === 'spill')
-    .map((line) =>
-      SPILL_WORDS.part(
-        formatCents(line.cents),
-        line.envelopeId === null
-          ? SPILL_WORDS.free
-          : spillNameOf(line.envelopeId),
+  ).filter((line) => line.via === 'spill');
+  const spillExample = SPILL_WORDS.example(
+    formatCents(SPILL_WORDS.exampleCents),
+    getSkippedSteps(
+      spillIds,
+      itemId,
+      (id) => spillOptions.some((option) => option.id === id),
+      new Set(spillLines.flatMap((line) => line.envelopeId ?? [])),
+      spillLines.some((line) => line.envelopeId === null),
+    ).map(spillNameOf),
+    formatList(
+      spillLines.map((line) =>
+        SPILL_WORDS.part(
+          formatCents(line.cents),
+          line.envelopeId === null
+            ? SPILL_WORDS.free
+            : spillNameOf(line.envelopeId),
+        ),
       ),
-    )
-    .join(', ');
+    ),
+  );
 
   const openSpill = () => {
     goTo('spill');
     setSpillIds(savedSpill);
+    setSelectedSpillId(null);
     setIsPickingSpill(false);
   };
 
@@ -1313,55 +1329,110 @@ function ItemSheet({
   const spillCandidates = spillOptions.filter(
     (option) => !spillIds.includes(option.id),
   );
+  const moveSpill = (id: string, by: -1 | 1) =>
+    setSpillIds((current) => {
+      const at = current.indexOf(id);
+      const to = at + by;
+      if (at === -1 || to < 0 || to >= current.length) return current;
+      return current.map((entry, index) =>
+        index === at ? current[to] : index === to ? current[at] : entry,
+      );
+    });
+  const spillActionClass =
+    "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
   const spillView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
-      <ActionTitle>{SPILL_WORDS.title}</ActionTitle>
+      <ActionTitle>
+        {SPILL_WORDS.title(
+          itemKind === 'envelope' ? (payload as EnvelopeSealed).name : '',
+        )}
+      </ActionTitle>
       {spillIds.length === 0 ? (
         <p className='text-muted-foreground text-sm'>{SPILL_WORDS.nothing}</p>
       ) : (
         <ol className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
           {spillIds.map((id, index) => (
-            <li
-              key={id}
-              className='flex items-center justify-between gap-3 py-1.5 pr-1.5 pl-3'
-            >
-              <span className='min-w-0 break-words'>
-                <span className='text-muted-foreground tabular-nums'>
-                  {index + 1}.{' '}
-                </span>
-                {spillNameOf(id)}
-              </span>
+            <li key={id}>
               <Button
                 type='button'
                 variant='tertiary'
-                size='sm'
-                aria-label={SPILL_WORDS.remove(spillNameOf(id))}
+                aria-pressed={selectedSpillId === id}
+                className={join(
+                  'h-auto w-full justify-start gap-1 rounded-none px-3 py-2.5 text-left font-normal',
+                  selectedSpillId === id && 'bg-accent',
+                )}
                 onClick={() =>
-                  setSpillIds((current) =>
-                    current.filter((entry) => entry !== id),
-                  )
+                  setSelectedSpillId((current) => (current === id ? null : id))
                 }
               >
-                <X className='h-4 w-4' />
+                <span className='text-muted-foreground tabular-nums'>
+                  {index + 1}.
+                </span>
+                <span className='min-w-0 break-words'>{spillNameOf(id)}</span>
               </Button>
+              {selectedSpillId === id && (
+                <div className='flex flex-wrap gap-2 px-3 pb-2.5'>
+                  {index > 0 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className={spillActionClass}
+                      onClick={() => moveSpill(id, -1)}
+                    >
+                      {SPILL_WORDS.moveUp}
+                    </Button>
+                  )}
+                  {index < spillIds.length - 1 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className={spillActionClass}
+                      onClick={() => moveSpill(id, 1)}
+                    >
+                      {SPILL_WORDS.moveDown}
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className={spillActionClass}
+                    onClick={() => {
+                      setSelectedSpillId(null);
+                      setSpillIds((current) =>
+                        current.filter((entry) => entry !== id),
+                      );
+                    }}
+                  >
+                    {SPILL_WORDS.remove}
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ol>
       )}
       {isPickingSpill ? (
-        <PillGroup
-          label={SPILL_WORDS.pickTitle}
-          options={spillCandidates.map((option) => ({
-            value: option.id,
-            label: option.name,
-          }))}
-          value={null}
-          onChange={(id) => {
-            setSpillIds((current) => [...current, id]);
-            setIsPickingSpill(false);
-          }}
-        />
+        <div className='space-y-2'>
+          <p className='text-sm font-medium' aria-hidden>
+            {SPILL_WORDS.pickTitle}
+          </p>
+          <PillGroup
+            label={SPILL_WORDS.pickTitle}
+            options={spillCandidates.map((option) => ({
+              value: option.id,
+              label: option.name,
+            }))}
+            value={null}
+            onChange={(id) => {
+              setSpillIds((current) => [...current, id]);
+              setIsPickingSpill(false);
+            }}
+          />
+        </div>
       ) : (
         spillCandidates.length > 0 && (
           <RevealChip onClick={() => setIsPickingSpill(true)}>
@@ -1369,14 +1440,9 @@ function ItemSheet({
           </RevealChip>
         )
       )}
-      {spillIds.length > 0 && (
+      {spillIds.length > 0 && !isPickingSpill && (
         <p className='text-muted-foreground text-sm'>
-          {mask(
-            SPILL_WORDS.example(
-              formatCents(SPILL_WORDS.exampleCents),
-              spillExample,
-            ),
-          )}
+          {isHidden ? SPILL_WORDS.exampleHidden : spillExample}
         </p>
       )}
       <ModalFooterActions

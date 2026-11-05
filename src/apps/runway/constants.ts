@@ -1,4 +1,5 @@
 import { declareSealedFormDrafts } from '@lib/app/formDrafts';
+import { formatList } from '@/utils/formatUtils';
 import type { RunwayTab } from '@apps/runway/types';
 
 export const PLAN_SECTIONS = [
@@ -3045,25 +3046,36 @@ export const ITEM_VIEW_WORDS = {
   purchasesEmpty: 'Nothing spent from it this month.',
 } as const;
 
+const skippedText = (skipped: readonly string[]) =>
+  skipped.length === 0
+    ? ''
+    : `${formatList([...skipped])} ${skipped.length === 1 ? 'has' : 'have'} nothing left, so `;
+
 export const SPILL_WORDS = {
-  /** A purchase's sentence for an envelope that could not cover its share. */
+  /** The change log's sentence for an envelope that could not cover its share. */
   ranOut: (name: string, parts: string) => `${name} ran out: ${parts}`,
   part: (amount: string, source: string) => `${amount} from ${source}`,
-  /** The purchase sheet's row for money taken because the chosen envelope ran out. */
-  ranOverFrom: (name: string, from: string) =>
-    `${name} · ran over from ${from}`,
+  /** The preview's sentence, leading with the cause; `skipped` names chain steps that had nothing left. */
+  runsOut: (name: string, skipped: readonly string[], parts: string) =>
+    `${name} runs out: ${skippedText(skipped)}${parts}.`,
+  /** Caption over the sources on a purchase's sheet. */
+  sheetCaption: (name: string) => `${name} ran out, so the rest came from`,
+  sheetCaptionHidden: 'Split across envelopes',
   row: 'When it runs out',
   rowEmpty: 'Nothing set; Cover it when it\u2019s over',
-  title: 'What pays when it runs out?',
-  hint: 'Free to Spend pays whatever these cannot.',
+  title: (name: string) => `When ${name} runs out`,
+  hint: 'They pay in this order; Free to Spend pays whatever they can\u2019t.',
   add: 'Add an envelope',
-  pickTitle: 'Which envelope next?',
-  remove: (name: string) => `Remove ${name} from the list`,
+  pickTitle: 'Which envelope pays next?',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  remove: 'Remove',
   nothing: 'Nothing set. Cover it applies when this envelope is over.',
   exampleCents: 3_000,
-  example: (amount: string, parts: string) =>
-    `A ${amount} overspend would come from ${parts}.`,
-  free: 'Free to Spend',
+  example: (amount: string, skipped: readonly string[], parts: string) =>
+    `A ${amount} overspend: ${skippedText(skipped)}${parts}.`,
+  exampleHidden: 'Show amounts to see an example',
+  free: 'Free\u00a0to\u00a0Spend',
   toast: (name: string) => `Saved what pays when ${name} runs out`,
   toastCleared: (name: string) => `${name} no longer spills over`,
   summary: (name: string, chain: string) =>

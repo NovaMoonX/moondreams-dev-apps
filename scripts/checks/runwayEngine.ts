@@ -7182,6 +7182,51 @@ const version = (
     );
   }
 
+  {
+    // One envelope in two lines (a chosen B and a spill B) is refunded as one envelope, never twice.
+    const spilled = {
+      ...purchase('sp', day(1), [{ envelopeId: 'b', cents: 10_000 }]),
+      lines: [
+        { envelopeId: 'a', cents: 0, via: 'chosen' as const },
+        { envelopeId: 'b', cents: 3_000, via: 'spill' as const },
+        { envelopeId: 'b', cents: 7_000, via: 'chosen' as const },
+      ],
+    };
+    const refundOf = (earlier: OpenPurchase['lines'][], cents: number) =>
+      getRefundLines(
+        cents,
+        spilled,
+        everyone,
+        [spilled].concat(
+          earlier.map((lines, at) => ({
+            ...purchase(`r${at}`, day(2), [], 'sp'),
+            lines,
+          })),
+        ),
+      );
+    const one = refundOf([], 5_000);
+    const oneLines = one.kind === 'lines' ? one.lines : [];
+    assert.deepEqual(
+      oneLines.map((l) => [l.envelopeId, l.cents]),
+      [
+        ['b', -1_500],
+        ['b', -3_500],
+      ],
+    );
+    const two = refundOf([oneLines], 5_000);
+    const twoLines = two.kind === 'lines' ? two.lines : [];
+    assert.equal(sumPurchaseLines(twoLines), -5_000);
+    assert.deepEqual(
+      twoLines.map((l) => [l.envelopeId, l.cents]),
+      [
+        ['b', -1_500],
+        ['b', -3_500],
+      ],
+      'two refunds together return each line once, never more than it took',
+    );
+    assert.equal(sumPurchaseLines([...oneLines, ...twoLines]), -10_000);
+  }
+
   const periods: TrackingPeriod[] = [
     { from: day(0), to: day(9), linkedFrom: null },
     { from: day(20), to: null, linkedFrom: null },
@@ -7349,6 +7394,28 @@ const version = (
     kind: 'fits',
     leftAfterCents: 500,
   });
+  const overDrawn = checkAmount(
+    'groceries',
+    500,
+    envelopes.map((e) =>
+      e.id === 'groceries' ? { ...e, leftCents: -200 } : e,
+    ),
+    0,
+    ['pets'],
+  );
+  assert.equal(overDrawn.kind, 'over');
+  if (overDrawn.kind === 'over') {
+    assert.equal(
+      overDrawn.overCents,
+      500,
+      'an envelope already over has no money of its own to count',
+    );
+    assert.equal(
+      overDrawn.sources.reduce((sum, source) => sum + source.takeCents, 0) +
+        overDrawn.uncoveredCents,
+      overDrawn.overCents,
+    );
+  }
 }
 
 {

@@ -21,7 +21,7 @@ export type AmountCheck =
   | {
       kind: 'over';
       overCents: Cents;
-      /** Free to Spend when it holds money, then other envelopes with room, lowest priority first, with what each would give; with a chain, the chain in order and then Free to Spend. */
+      /** What would cover it, in the order it is taken: the chain then Free to Spend, or Free to Spend then other envelopes. */
       sources: CheckSource[];
       /** Whether the sources follow the envelope's own chain. */
       isChain?: boolean;
@@ -29,7 +29,7 @@ export type AmountCheck =
       uncoveredCents: Cents;
     };
 
-/** Whether `cents` fits in an envelope; if not, by how much, and what could cover it: the envelope's chain in order and then Free to Spend when it has one, otherwise Free to Spend when it holds money, then other envelopes (lowest priority first, the list order within a priority). Nothing moves. */
+/** Whether `cents` fits in an envelope and, if not, what could cover the rest. Nothing moves. */
 export function checkAmount(
   envelopeId: string,
   cents: Cents,
@@ -41,8 +41,8 @@ export function checkAmount(
   const leftAfterCents = (target?.leftCents ?? 0) - cents;
   if (leftAfterCents >= 0) return { kind: 'fits', leftAfterCents };
 
-  const overCents = -leftAfterCents;
   if (chain.length > 0) {
+    const overCents = cents - Math.max(0, target?.leftCents ?? 0);
     const spilled = resolveSpill(
       [{ envelopeId, cents, via: 'chosen' }],
       Object.fromEntries(
@@ -87,6 +87,7 @@ export function checkAmount(
       isChain: true,
     };
   }
+  const overCents = -leftAfterCents;
   const candidates = envelopes
     .filter((envelope) => envelope.id !== envelopeId && envelope.leftCents > 0)
     .map((envelope, index) => ({ envelope, index }))

@@ -77,6 +77,7 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
       store.getState(),
       [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
       null,
+      purchase.date,
     );
     try {
       const updatedAt = await assignPurchase(

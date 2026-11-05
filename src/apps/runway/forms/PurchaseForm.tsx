@@ -132,7 +132,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import {
   describeEnvelopes,
   describePurchaseEdit,
-  describeSpills,
+  describeSpillPreview,
   describePurchaseRemoval,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
@@ -801,11 +801,14 @@ function PurchaseFormBody({
       amount === editing.amountCents &&
       JSON.stringify(chosen) === JSON.stringify(editingChosen)
         ? editingLines
-        : getSpilledLines(
-            store.getState(),
-            chosen,
-            isEditingCounted ? editingLines : null,
-          );
+        : date === null
+          ? chosen
+          : getSpilledLines(
+              store.getState(),
+              chosen,
+              isEditingCounted ? editingLines : null,
+              date,
+            );
     if (isSplit) {
       const parts = splitIds.map((id) => ({
         envelopeId: id,
@@ -1301,17 +1304,62 @@ function PurchaseFormBody({
     return null;
   };
   const cardLine = getCardLine();
+  const isSavedAsIs =
+    editing !== undefined &&
+    lines !== null &&
+    JSON.stringify(lines) === JSON.stringify(editingLines);
   const spillLines =
-    preview === null || lines === null ? [] : describeSpills(lines, nameOf);
+    preview === null || lines === null || isHidden || isSavedAsIs
+      ? []
+      : describeSpillPreview(
+          lines,
+          nameOf,
+          (id) =>
+            envelopes.find(({ item }) => item.id === id)?.version.payload
+              .spillTo ?? [],
+          (id) => envelopes.some(({ item }) => item.id === id),
+        );
+  const spilledIds = new Set(
+    spillLines.length === 0 || lines === null
+      ? []
+      : lines.reduce<{ from: string | null; ids: string[] }>(
+          (acc, line) =>
+            line.via === 'spill'
+              ? {
+                  from: acc.from,
+                  ids: [
+                    ...acc.ids,
+                    ...(acc.from === null ? [] : [acc.from]),
+                    ...(line.envelopeId === null ? [] : [line.envelopeId]),
+                  ],
+                }
+              : { ...acc, from: line.envelopeId },
+          { from: null, ids: [] },
+        ).ids,
+  );
+  const freeSpillCents = (spillLines.length === 0 ? [] : (lines ?? [])).reduce(
+    (sum, line) =>
+      line.via === 'spill' && line.envelopeId === null ? sum + line.cents : sum,
+    0,
+  );
+  const remaining =
+    preview === null
+      ? null
+      : {
+          changes: preview.changes.filter(
+            (change) => !spilledIds.has(change.id) || change.afterCents < 0,
+          ),
+          freeDropCents: preview.freeDropCents - freeSpillCents,
+        };
   const effectNote = (preview || cardLine || spillLines.length > 0) && (
     <div className='space-y-2'>
-      {preview && (
+      {spillLines.length > 0 && <SpillNotice lines={spillLines} />}
+      {remaining && (
         <PurchaseEffectNotice
-          changes={preview.changes}
-          freeDropCents={preview.freeDropCents}
+          changes={remaining.changes}
+          freeDropCents={remaining.freeDropCents}
         />
       )}
-      {spillLines.length > 0 && <SpillNotice lines={spillLines} />}
       {cardLine && <CardChargeNotice line={cardLine} />}
     </div>
   );

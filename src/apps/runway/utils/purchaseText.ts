@@ -1,6 +1,7 @@
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, formatList } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type {
+  Cents,
   Level,
   OpenAccount,
   OpenPurchase,
@@ -87,34 +88,97 @@ interface PurchaseFields {
 
 const money = (cents: number) => formatCents(Math.abs(cents));
 
-/** One sentence per envelope that ran out, naming where its overage came from ("Groceries ran out: $10.00 from Pet care, $5.00 from Free to Spend"). */
+interface SpillGroup {
+  fromId: string;
+  parts: { sourceId: string | null; source: string; cents: Cents }[];
+}
+
+const getSpillGroups = (
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+) =>
+  lines
+    .reduce<{ fromId: string | null; group: SpillGroup | null }[]>(
+      (acc, line) => {
+        if (line.via !== 'spill')
+          return [...acc, { fromId: line.envelopeId, group: null }];
+        const last = acc[acc.length - 1];
+        if (!last || last.fromId === null) return acc;
+        const part = {
+          sourceId: line.envelopeId,
+          source:
+            line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
+          cents: line.cents,
+        };
+        const parts = [...(last.group?.parts ?? []), part];
+        return [
+          ...acc.slice(0, -1),
+          { ...last, group: { fromId: last.fromId, parts } },
+        ];
+      },
+      [],
+    )
+    .flatMap((entry) => (entry.group === null ? [] : [entry.group]));
+
+/** One change-log sentence per envelope that ran out, naming where its overage came from. */
 export function describeSpills(
   lines: readonly PurchaseLine[],
   nameOf: (envelopeId: string) => string,
 ): string[] {
-  const groups = lines.reduce<{ from: string | null; parts: string[] }[]>(
-    (acc, line) => {
-      if (line.via !== 'spill')
-        return [...acc, { from: line.envelopeId, parts: [] }];
-      const last = acc[acc.length - 1];
-      if (!last || last.from === null) return acc;
-      const source =
-        line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId);
-      return [
-        ...acc.slice(0, -1),
-        {
-          ...last,
-          parts: [...last.parts, SPILL_WORDS.part(money(line.cents), source)],
-        },
-      ];
-    },
-    [],
+  return getSpillGroups(lines, nameOf).map((group) =>
+    SPILL_WORDS.ranOut(
+      nameOf(group.fromId),
+      formatList(
+        group.parts.map((part) =>
+          SPILL_WORDS.part(money(part.cents), part.source),
+        ),
+      ),
+    ),
   );
-  return groups.flatMap((group) =>
-    group.from === null || group.parts.length === 0
-      ? []
-      : [SPILL_WORDS.ranOut(nameOf(group.from), group.parts.join(', '))],
+}
+
+/** Chain steps passed over for having nothing left: those before the last one that paid, or all of them once Free to Spend took a share. */
+export function getSkippedSteps(
+  chain: readonly string[],
+  selfId: string,
+  isKnown: (envelopeId: string) => boolean,
+  paidIds: ReadonlySet<string>,
+  isFreeUsed: boolean,
+): string[] {
+  const steps = chain.filter(
+    (id, index) => id !== selfId && isKnown(id) && chain.indexOf(id) === index,
   );
+  const last = isFreeUsed
+    ? steps.length - 1
+    : steps.reduce((at, id, index) => (paidIds.has(id) ? index : at), -1);
+  return steps.filter((id, index) => index <= last && !paidIds.has(id));
+}
+
+/** The preview's sentence for each envelope the save would run dry, leading with the cause and naming any step skipped for having nothing left. */
+export function describeSpillPreview(
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+  chainOf: (envelopeId: string) => readonly string[],
+  isKnown: (envelopeId: string) => boolean,
+): string[] {
+  return getSpillGroups(lines, nameOf).map((group) => {
+    const skipped = getSkippedSteps(
+      chainOf(group.fromId),
+      group.fromId,
+      isKnown,
+      new Set(group.parts.flatMap((part) => part.sourceId ?? [])),
+      group.parts.some((part) => part.sourceId === null),
+    ).map(nameOf);
+    return SPILL_WORDS.runsOut(
+      nameOf(group.fromId),
+      skipped,
+      formatList(
+        group.parts.map((part) =>
+          SPILL_WORDS.part(money(part.cents), part.source),
+        ),
+      ),
+    );
+  });
 }
 
 /** The change-log sentence for removing a purchase. */
