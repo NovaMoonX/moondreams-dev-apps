@@ -311,8 +311,10 @@ import {
 } from '../../src/apps/runway/engine/progress.ts';
 import type { FundedDay } from '../../src/apps/runway/engine/progress.ts';
 import {
+  getGoalTrack,
   getMonthlyPaceCents,
   getPace,
+  isSavingFor,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
 import { buildCalendarEntries } from '../../src/apps/runway/engine/dayCalendar.ts';
@@ -2359,6 +2361,30 @@ const version = (
     getMonthlyPaceCents(cushion, today),
     null,
     'a goal with no date has no pace',
+  );
+
+  // Being saved for: active and money goes in. A paused goal and one set to "Not saving for it yet" are not, and have no track.
+  const everyDay = vacation.funding;
+  const noneFunding = { ...everyDay, cadence: { kind: 'none' as const } };
+  assert.equal(isSavingFor({ state: 'active', funding: everyDay }), true);
+  assert.equal(
+    isSavingFor({ state: 'paused', funding: everyDay }),
+    false,
+    'a paused goal is not being saved for',
+  );
+  assert.equal(
+    isSavingFor({ state: 'active', funding: noneFunding }),
+    false,
+    'a goal nothing goes into is not being saved for',
+  );
+  assert.equal(
+    getGoalTrack({ state: 'paused', funding: everyDay }, behind),
+    null,
+    'a paused goal is never behind',
+  );
+  assert.equal(
+    getGoalTrack({ state: 'active', funding: everyDay }, behind),
+    'behind',
   );
 
   // A goal at its target is complete and funds nothing.

@@ -1,3 +1,4 @@
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { useEffect, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 
@@ -222,8 +223,8 @@ function PairingsEditor({
     if (header?.endedAt != null && header.endedAt < today)
       return PAIRING_STOP_WORDS.ended(formatDateOrdinalUTC(header.endedAt));
     const goal = goals.find((entry) => entry.item.id === id);
-    if (goal && (goal.version.payload.state ?? 'active') === 'paused')
-      return PAIRING_STOP_WORDS.paused;
+    if (goal && !isSavingFor(goal.version.payload))
+      return PAIRING_STOP_WORDS.notSaving;
     return null;
   };
   const lockedIds = new Set(locked.map((pairing) => pairing.targetItemId));

@@ -28,7 +28,8 @@ function ChangeSection({
   const pairedBy = useAppSelector((state) => selectPairedBy(state, today));
   const allCards = useAppSelector(selectAllCards);
   const mask = useMaskedText();
-  if (!value || value.flow.isMoneyless) return null;
+  if (!value || value.flow.isMoneyless || value.flow.isIdleThroughout)
+    return null;
   if (value.flow.isUnchanged && !isIdleShown) return null;
   const { flow, kind, itemId } = value;
   const { setWarningBox } = flow;

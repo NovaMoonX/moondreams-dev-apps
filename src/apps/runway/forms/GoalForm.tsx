@@ -373,7 +373,7 @@ function GoalFormBody({
     data: formData,
     set,
     comingDays,
-    allowNone: true,
+    allowNone: !editing || startData.often === 'none',
     isDraft: !!draft,
     draftSources: draft?.sources,
     getAmountTitle: (unit) => `How much goes in ${unit}?`,
@@ -644,7 +644,11 @@ function GoalFormBody({
         : plan?.startDate != null || currentCents === 0
           ? {}
           : { startingCents: currentCents }),
-      state: editing?.payload.state ?? 'active',
+      // Starting to save for a goal nothing went into also ends a pause, so the money it is given goes in.
+      state:
+        editing && startData.often === 'none' && data.often !== 'none'
+          ? 'active'
+          : (editing?.payload.state ?? 'active'),
     };
     return result;
   };
@@ -763,7 +767,7 @@ function GoalFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={title}
+      title={editing ? formData.name.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps

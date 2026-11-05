@@ -3,7 +3,7 @@ import {
   PACE_STATE_LABELS,
   PACE_WORDS,
 } from '@apps/runway/constants';
-import type { Pace } from '@apps/runway/engine/pace';
+import { isSavingFor, type Pace } from '@apps/runway/engine/pace';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type { GoalSealed } from '@apps/runway/types';
@@ -19,14 +19,11 @@ export interface PaceWords {
 export function describePace(goal: GoalSealed, pace: Pace): PaceWords {
   const reached = pace.reachedOn
     ? `The plan reaches it on ${formatDateOrdinalUTC(pace.reachedOn.on)}.`
-    : 'The income days ahead do not reach it.';
+    : `${PACE_WORDS.notReached.charAt(0).toUpperCase()}${PACE_WORDS.notReached.slice(1)}.`;
   if (pace.isComplete) {
     return { stateLabel: PACE_WORDS.completed, line: '' };
   }
-  if (goal.state === 'paused') {
-    return { stateLabel: null, line: PACE_WORDS.paused };
-  }
-  if (goal.funding.cadence.kind === 'none') {
+  if (!isSavingFor(goal)) {
     return { stateLabel: null, line: HOW_OFTEN_WORDS.notBeingAdded };
   }
   if (goal.funding.amount.kind === 'rest') {

@@ -1822,7 +1822,7 @@ function BillFormBody({
     <FormSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={title}
+      title={editing ? formData.name.trim() || title : title}
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
