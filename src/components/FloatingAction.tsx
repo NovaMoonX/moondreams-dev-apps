@@ -86,10 +86,16 @@ function FloatingAction({
       attributeFilter: ['data-drawer-open', 'data-panel-open', 'inert'],
     });
     window.addEventListener('resize', queueUpdate);
+    const card = isInSubview
+      ? spacerRef.current?.closest('.subview-card')
+      : null;
+    const cardObserver = new ResizeObserver(queueUpdate);
+    if (card) cardObserver.observe(card);
     queueUpdate();
     return () => {
       cancelAnimationFrame(queued.frame);
       observer.disconnect();
+      cardObserver.disconnect();
       window.removeEventListener('resize', queueUpdate);
     };
   }, [isInSubview]);
@@ -119,7 +125,7 @@ function FloatingAction({
   return (
     <>
       <div ref={spacerRef} className='h-12' aria-hidden='true' />
-      {!isCovered && (
+      {!isCovered && (!isInSubview || cardSpan) && (
         <div
           className={join(
             'pointer-events-none fixed z-30',
