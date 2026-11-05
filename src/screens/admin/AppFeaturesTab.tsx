@@ -1,4 +1,4 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery } from '@tanstack/react-query';
@@ -26,6 +26,7 @@ import {
   type GateRollout,
   readGateSetting,
   saveGateDraft,
+  toGateReason,
 } from '@lib/gates/featureGates';
 import {
   type FeatureGateEntry,
@@ -38,6 +39,7 @@ import { startFeatureGatesListener } from '@store/listeners/featureGatesListener
 import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
 
 const PICKER_ROWS = 20;
+const REASON_MAX_LENGTH = 200;
 
 const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -101,6 +103,11 @@ function getDraftChanges(
       )
       .map((uid) => `${nameOf(uid)}: ${removedFrom}`),
   ];
+  const afterReason = toGateReason(after.reason);
+  const reasonChanges =
+    afterReason === toGateReason(before.reason)
+      ? []
+      : [afterReason ? `Reason: ${afterReason}` : 'Reason removed'];
   const rolloutLabel =
     ROLLOUT_OPTIONS.find((option) => option.value === after.rollout)?.label ??
     after.rollout;
@@ -128,6 +135,7 @@ function getDraftChanges(
       'always given it',
       'no longer kept out',
     ),
+    ...reasonChanges,
   ];
 }
 
@@ -200,12 +208,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
   const openGate = gates.find((gate) => gate.id === opened?.gateId) ?? null;
 
   const openSheet = (gateId: string) => {
-    const { rollout, alwaysOnUids, alwaysOffUids } = readGateSetting(
+    const { rollout, alwaysOnUids, alwaysOffUids, reason } = readGateSetting(
       gatesDoc,
       app.id,
       gateId,
     );
-    const before = { rollout, alwaysOnUids, alwaysOffUids };
+    const before = { rollout, alwaysOnUids, alwaysOffUids, reason };
     setOpened({ gateId, before, draft: before, picking: null });
   };
 
@@ -414,7 +422,9 @@ function GateControls({
 
   return (
     <div className='space-y-5'>
-      {gate.warning && <InlineNotice tone='warning'>{gate.warning}</InlineNotice>}
+      {gate.warning && (
+        <InlineNotice tone='warning'>{gate.warning}</InlineNotice>
+      )}
       <p className='text-muted-foreground text-sm'>{gate.description}</p>
 
       <div className='space-y-2'>
@@ -451,6 +461,29 @@ function GateControls({
         onAdd={() => setPicking('alwaysOffUids')}
         onRemove={(uid) => removeFrom('alwaysOffUids', uid)}
       />
+
+      <div className='space-y-2'>
+        <label
+          htmlFor={`gate-reason-${gate.id}`}
+          className='text-foreground text-sm font-medium'
+        >
+          Why it&apos;s set this way
+        </label>
+        <Textarea
+          id={`gate-reason-${gate.id}`}
+          value={draft.reason ?? ''}
+          maxLength={REASON_MAX_LENGTH}
+          rows={2}
+          placeholder='Optional, for whoever changes this next'
+          onChange={(event) =>
+            onDraftChange({
+              ...draft,
+              reason:
+                event.target.value.trim() === '' ? null : event.target.value,
+            })
+          }
+        />
+      </div>
     </div>
   );
 }

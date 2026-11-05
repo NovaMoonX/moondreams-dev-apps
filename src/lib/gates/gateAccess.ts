@@ -9,6 +9,8 @@ export interface FeatureGateSetting {
   /** Exceptions win over the rollout; being kept out wins over being let in. */
   alwaysOnUids: string[];
   alwaysOffUids: string[];
+  /** Why the admin set it this way; never read by the access check. */
+  reason: string | null;
   updatedAt: number | null;
 }
 
@@ -52,6 +54,10 @@ export function readGateSetting(
     rollout: isGateRollout(stored?.rollout) ? stored.rollout : fallback,
     alwaysOnUids: toUidList(stored?.alwaysOnUids),
     alwaysOffUids: toUidList(stored?.alwaysOffUids),
+    reason:
+      typeof stored?.reason === 'string' && stored.reason.trim() !== ''
+        ? stored.reason
+        : null,
     updatedAt: typeof stored?.updatedAt === 'number' ? stored.updatedAt : null,
   };
 }
