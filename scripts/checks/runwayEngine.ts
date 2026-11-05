@@ -77,6 +77,7 @@ import type {
   HorizonSealed,
   OpenDay,
   Pairing,
+  TrackingPeriod,
 } from '../../src/apps/runway/types.ts';
 import type { DraftDayInput } from '../../src/apps/runway/engine/demands.ts';
 import type { ComingDay } from '../../src/apps/runway/engine/comingDays.ts';
@@ -6777,7 +6778,7 @@ const version = (
   assert.ok('periods' in again);
   const loop = Array.from({ length: 6 }).reduce<{
     day: number;
-    periods: { from: number; to: number | null }[];
+    periods: TrackingPeriod[];
   }>(
     (state) => {
       const opened = startTrackingPeriod(state.periods, state.day);
@@ -7161,16 +7162,16 @@ const version = (
     );
   }
 
-  const periods = [
-    { from: day(0), to: day(9) },
-    { from: day(20), to: null },
+  const periods: TrackingPeriod[] = [
+    { from: day(0), to: day(9), linkedFrom: null },
+    { from: day(20), to: null, linkedFrom: null },
   ];
   assert.equal(
     getCountedFrom(periods),
     day(20),
     'figures count from the open stretch',
   );
-  assert.equal(getCountedFrom([{ from: day(0), to: day(9) }]), null);
+  assert.equal(getCountedFrom([{ from: day(0), to: day(9), linkedFrom: null }]), null);
   assert.equal(isInTrackingPeriods(periods, day(9)), true);
   assert.equal(isInTrackingPeriods(periods, day(10)), false);
   assert.equal(isInTrackingPeriods(periods, day(40)), true);
@@ -12888,7 +12889,9 @@ const version = (
 }
 
 {
-  const open = [{ from: utc(2026, 1, 1), to: null }];
+  const open: TrackingPeriod[] = [
+    { from: utc(2026, 1, 1), to: null, linkedFrom: null },
+  ];
   const linked = linkTrackingPeriod(open, utc(2026, 2, 1));
   assert.ok('periods' in linked, 'an open period can be linked');
   if ('periods' in linked) {
