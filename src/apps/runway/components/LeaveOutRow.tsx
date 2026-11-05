@@ -48,6 +48,10 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
         lines: [],
         needsHome: false,
         incomeDayId: null,
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
         updatedAt,
       };
       addToast({

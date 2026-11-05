@@ -1,6 +1,12 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import type { Level, OpenPurchase, PurchaseLine } from '@apps/runway/types';
+import type {
+  Level,
+  OpenAccount,
+  OpenPurchase,
+  PurchaseLine,
+  PurchasePairKind,
+} from '@apps/runway/types';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
@@ -122,6 +128,34 @@ export function describeDepositLinked(
   return isUnlinked
     ? `Money in put back in Needs a home: ${deposited}, no longer linked to ${describePayDay(dayOn)}.`
     : `Money in linked to pay: ${deposited} is ${describePayDay(dayOn)}.`;
+}
+
+/** The account or card one side of a pair sits on, in the person's words. */
+export const getPairSideName = (
+  purchase: OpenPurchase,
+  accounts: readonly OpenAccount[],
+  cardNameOf: (cardId: string | null) => string,
+) =>
+  purchase.paidByCardId
+    ? cardNameOf(purchase.paidByCardId)
+    : (accounts.find((account) => account.id === purchase.accountId)?.name ??
+      'An account');
+
+/** The change-log sentence for money out and money in paired as a move between the person's own accounts, or sent back to Needs a home. */
+export function describeAccountPair(
+  out: OpenPurchase,
+  into: OpenPurchase,
+  kind: PurchasePairKind,
+  names: { from: string; to: string },
+  isUnpaired: boolean,
+): string {
+  const what =
+    kind === 'cardPayment'
+      ? `card payment of ${money(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(into.date)}`
+      : `move of ${money(out.amountCents)} from ${names.from} to ${names.to} on ${formatDateOrdinalUTC(out.date)}`;
+  return isUnpaired
+    ? `Money out and in put back in Needs a home: the ${what}, no longer paired.`
+    : `Money out and in paired: the ${what}.`;
 }
 
 /** The change-log sentence for a bank purchase matched to the one typed by hand, or for an Undo that splits them again. */

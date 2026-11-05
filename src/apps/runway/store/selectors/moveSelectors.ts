@@ -190,3 +190,45 @@ export const selectHomeMoves = createSelector(
     return open.length === 0 ? null : { dayKey: latest.dayKey, moves: open };
   },
 );
+
+export interface MoveTick {
+  dayKey: string;
+  lineId: string;
+  /** Ticks already on the day, which a tick is added to. */
+  doneIds: readonly string[];
+  isDone: boolean;
+}
+
+/** The checklist item that moving money into this account on this date is: the confirmed income day whose moves include the account and whose window holds the date. */
+export const selectMoveTick = (
+  state: RootState,
+  today: number,
+  accountId: string,
+  on: number,
+): MoveTick | null => {
+  const listed = selectListedDays(state, today);
+  const day = listed.confirmed.find((entry) => {
+    const { start, end } = getMoveWindow(
+      entry.arrivedOn ?? entry.on,
+      getNextIncomeOn(listed, entry),
+    );
+    return (
+      on >= start &&
+      on < end &&
+      selectAccountMoves(state, today, entry.dayKey).some(
+        (move) => move.accountId === accountId,
+      )
+    );
+  });
+  if (!day) return null;
+  const doneIds =
+    state.runway.days.find((entry) => entry.id === day.dayKey)?.doneLineIds ??
+    NO_DONE;
+  const lineId = getMoveLineId(accountId);
+  return {
+    dayKey: day.dayKey,
+    lineId,
+    doneIds,
+    isDone: doneIds.includes(lineId),
+  };
+};

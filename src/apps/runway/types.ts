@@ -873,6 +873,8 @@ export type StartMove = Extract<OpenMove, { kind: 'start' }>;
 
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 export type PurchaseAssignedBy = 'auto' | 'person';
+/** What a pair of purchases on the person's own linked accounts is: money moved between two accounts, or a payment from an account to a card. */
+export type PurchasePairKind = 'transfer' | 'cardPayment';
 export type PurchaseLineVia = (typeof PURCHASE_LINE_VIAS)[number];
 
 /** Part of a purchase: the envelope it comes out of, or null when it comes out of Free to Spend. */
@@ -916,6 +918,14 @@ export interface PurchaseSealed {
   incomeDayId: string | null;
   /** Who chose the deposit's day or sent it back: a pass of the app, or the person (whose choice no pass changes); null while neither has (read as null on an older purchase). */
   assignedBy: PurchaseAssignedBy | null;
+  /** On a purchase paired with another as a move between the person's own accounts: the other one's id; null when unpaired (and read as null on a purchase saved before pairing). */
+  pairedWithId: string | null;
+  /** What the pair is; null exactly when `pairedWithId` is. */
+  pairKind: PurchasePairKind | null;
+  /** On the card's side of a card payment: the `cardPayment` move the pairing wrote; null when none (and read as null on an older purchase). */
+  cardPaymentMoveId: string | null;
+  /** On the money-in side of a transfer: the income day whose "Move to" item the pairing ticked; null when it ticked none (and read as null on an older purchase). */
+  tickedDayKey: string | null;
 }
 
 /** A bank charge that has not settled yet is pending; once it settles it is posted, on the same document. */

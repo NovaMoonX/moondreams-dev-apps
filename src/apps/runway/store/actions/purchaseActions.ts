@@ -15,6 +15,7 @@ import {
   DEPOSIT_WORDS,
   HORIZON_END_WORDS,
   MAX_PURCHASE_LINES,
+  PAIR_WORDS,
   PURCHASE_COST_WORDS,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -25,6 +26,8 @@ import {
 } from '@apps/runway/engine/purchases';
 import { createSealedReader, sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
+import { setLinesDone } from '@apps/runway/store/actions/moveActions';
+import { getMoveLineId } from '@apps/runway/store/selectors/moveSelectors';
 import {
   findOpenCostMark,
   getCostPaidChange,
@@ -44,10 +47,16 @@ import {
   openMove,
   openPurchase,
 } from '@apps/runway/store/listeners/openLedger';
+import {
+  getCardPaymentMoveId,
+  getUndoCardPaymentMoveId,
+} from '@apps/runway/store/actions/cardActions';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
 import { describePurchaseRemoval } from '@apps/runway/utils/purchaseText';
 import type {
   Cents,
+  CardPaymentCovers,
+  CardPaymentSealed,
   CostPaidSealed,
   CostRef,
   DateOnly,
@@ -64,6 +73,7 @@ import type {
   ExpenseSealed,
   IncomeDayDoc,
   PurchaseAssignedBy,
+  PurchasePairKind,
   ReceiptImageDoc,
   RunwayEncryption,
   Sealed,
@@ -217,6 +227,10 @@ export async function addPurchase(
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
   } satisfies PurchaseSealed;
   const sealed = await sealJson(payload, encryption);
   const markPayload: CostPaidSealed | null =
@@ -461,6 +475,10 @@ export async function editPurchase(
         notSameAs: previous.notSameAs,
         incomeDayId: previous.incomeDayId,
         assignedBy: previous.assignedBy,
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -474,6 +492,8 @@ export async function editPurchase(
   );
   const changeId = generateUuid();
 
+  const now = Math.max(Date.now(), previous.updatedAt + 1);
+
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await checkDayAndEnvelopes(
@@ -486,8 +506,15 @@ export async function editPurchase(
       false,
       previous.source === 'link' && input.date === previous.date,
     );
-    const now = Math.max(Date.now(), previous.updatedAt + 1);
+    const leavePair = await readPairExit(
+      transaction,
+      uid,
+      encryption,
+      previous,
+      now,
+    );
     markLedgerWrite(transaction, uid, plan, [previous.date, input.date]);
+    leavePair();
     setNewExpense(transaction, uid, input, expenseSealed, now);
     transaction.update(purchaseRef(uid, previous.id), {
       date: input.date,
@@ -508,6 +535,7 @@ export async function editPurchase(
       } satisfies ChangeDoc,
     );
   });
+  await untickPairMove(uid, previous);
 }
 
 /** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it; resolves with the purchase's new `updatedAt`. */
@@ -540,6 +568,10 @@ export async function assignPurchase(
         notSameAs: previous.notSameAs,
         incomeDayId: null,
         assignedBy: previous.assignedBy,
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -560,7 +592,15 @@ export async function assignPurchase(
       lines.length === 0,
       previous.source === 'link',
     );
+    const leavePair = await readPairExit(
+      transaction,
+      uid,
+      encryption,
+      previous,
+      now,
+    );
     markLedgerWrite(transaction, uid, plan, [previous.date]);
+    leavePair();
     transaction.update(purchaseRef(uid, previous.id), {
       needsHome,
       updatedAt: now,
@@ -578,6 +618,7 @@ export async function assignPurchase(
       } satisfies ChangeDoc,
     );
   });
+  await untickPairMove(uid, previous);
   return now;
 }
 
@@ -614,6 +655,10 @@ async function setDepositDay(
         lines: [],
         incomeDayId: next.incomeDayId,
         assignedBy: next.assignedBy,
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
       } satisfies PurchaseSealed,
       encryption,
     ),
@@ -648,7 +693,15 @@ async function setDepositDay(
     ) {
       throw new Error(DEPOSIT_WORDS.dayNotArrived);
     }
+    const leavePair = await readPairExit(
+      transaction,
+      uid,
+      encryption,
+      previous,
+      now,
+    );
     markLedgerWrite(transaction, uid, plan.data(), [previous.date]);
+    leavePair();
     transaction.update(purchaseRef(uid, previous.id), {
       needsHome: next.needsHome,
       updatedAt: now,
@@ -666,6 +719,7 @@ async function setDepositDay(
       } satisfies ChangeDoc,
     );
   });
+  await untickPairMove(uid, previous);
   return now;
 }
 
@@ -700,6 +754,375 @@ export const unlinkDeposit = (
     { incomeDayId: null, assignedBy: 'person', needsHome: true },
     summary,
   );
+
+const planRef = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);
+const moveRef = (uid: string, moveId: string) =>
+  doc(db, 'apps', 'runway', 'plans', uid, 'moves', moveId);
+
+/** How many payments to one card on one day are looked past when a pairing needs a free move id. */
+const MAX_PAIR_MOVE_PROBES = 12;
+
+/** Reads, inside the transaction and before any write, the card payment a purchase leaving its pair carries, and returns the write that takes it back: the move that reverses it, unless that already exists. Throws when the payment it names is gone. Call it before the transaction's first write, then call what it returns. */
+async function readPairExit(
+  transaction: Transaction,
+  uid: string,
+  encryption: RunwayEncryption,
+  purchase: Pick<OpenPurchase, 'cardPaymentMoveId'>,
+  now: number,
+): Promise<() => void> {
+  const paymentId = purchase.cardPaymentMoveId;
+  if (paymentId === null) return () => undefined;
+  const reversalId = getUndoCardPaymentMoveId(paymentId);
+  const [payment, reversal] = await Promise.all([
+    transaction.get(moveRef(uid, paymentId)),
+    transaction.get(moveRef(uid, reversalId)),
+  ]);
+  if (!payment.exists()) throw new Error(PAIR_WORDS.paymentMissing);
+  if (reversal.exists()) return () => undefined;
+  const taken = await openMove(
+    { ...(payment.data() as MoveDoc), id: payment.id },
+    createSealedReader(encryption),
+  );
+  if (taken.kind !== 'cardPayment') return () => undefined;
+  const sealed = await sealJson(
+    {
+      amountCents: taken.payload.amountCents,
+      covers: taken.payload.covers ?? 'full',
+    } satisfies CardPaymentSealed,
+    encryption,
+  );
+  return () =>
+    transaction.set(moveRef(uid, reversalId), {
+      id: reversalId,
+      kind: 'cardPayment',
+      date: taken.date,
+      refId: taken.refId,
+      reversesMoveId: taken.id,
+      createdAt: now,
+      sealed,
+    } satisfies MoveDoc);
+}
+
+/** Unticks the income day's "Move to" item the pairing ticked, only while the purchase still records it; a tick that does not clear never fails the change that left the pair. */
+export async function untickPairMove(
+  uid: string,
+  purchase: Pick<OpenPurchase, 'tickedDayKey' | 'accountId'>,
+) {
+  if (purchase.tickedDayKey === null || purchase.accountId === null) return;
+  try {
+    await setLinesDone(
+      uid,
+      purchase.tickedDayKey,
+      [getMoveLineId(purchase.accountId)],
+      false,
+      [],
+    );
+  } catch (error) {
+    console.error('A move to an account was not unticked', error);
+  }
+}
+
+/** Records on the money-in side of a transfer which income day's "Move to" tick the pairing made, so every way out of the pair can untick it. Resolves with the purchase as it now stands; refuses when it changed first. */
+export async function recordPairTick(
+  uid: string,
+  encryption: RunwayEncryption,
+  into: OpenPurchase,
+  dayKey: string,
+): Promise<OpenPurchase> {
+  const sealed = await sealJson(
+    { ...toSealedPayload(into), tickedDayKey: dayKey } satisfies PurchaseSealed,
+    encryption,
+  );
+  const now = Math.max(Date.now(), into.updatedAt + 1);
+  await runTransaction(db, async (transaction) => {
+    await readUnchanged(transaction, uid, into);
+    transaction.update(purchaseRef(uid, into.id), { updatedAt: now, sealed });
+  });
+  return { ...into, tickedDayKey: dayKey, updatedAt: now };
+}
+
+/** Both purchases must still be the ones the person saw, or another device got there first. */
+async function readPairUnchanged(
+  transaction: Transaction,
+  uid: string,
+  out: OpenPurchase,
+  into: OpenPurchase,
+) {
+  const [storedOut, storedIn] = await Promise.all([
+    transaction.get(purchaseRef(uid, out.id)),
+    transaction.get(purchaseRef(uid, into.id)),
+  ]);
+  if (!storedOut.exists() || !storedIn.exists()) {
+    throw new Error(PAIR_WORDS.gone);
+  }
+  if (
+    (storedOut.data() as PurchaseDoc).updatedAt !== out.updatedAt ||
+    (storedIn.data() as PurchaseDoc).updatedAt !== into.updatedAt
+  ) {
+    throw new Error(SPEND_WORDS.changedElsewhere);
+  }
+}
+
+export interface PairedPurchases {
+  /** The money out, as it stands after pairing. */
+  out: OpenPurchase;
+  /** The money in, as it stands after pairing. */
+  into: OpenPurchase;
+  /** The `cardPayment` move written for a card payment; null for a transfer. */
+  moveId: string | null;
+}
+
+/** Pairs the money out of one linked account with the same money in to another account or a card as a move between the person's own accounts, in one transaction that refuses when either changed first. Both sides leave Needs a home with no envelopes; a card payment also writes the card's `cardPayment` move, dated on the card's side, so what the card owes follows the bank. A change-log entry is written with it. */
+export async function pairAccountPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  out: OpenPurchase,
+  into: OpenPurchase,
+  kind: PurchasePairKind,
+  assignedBy: PurchaseAssignedBy,
+  summary: string,
+  covers: CardPaymentCovers,
+): Promise<PairedPurchases> {
+  if (
+    !out.needsHome ||
+    !into.needsHome ||
+    out.pairedWithId !== null ||
+    into.pairedWithId !== null
+  ) {
+    throw new Error(PAIR_WORDS.notWaiting);
+  }
+  const cardId = kind === 'cardPayment' ? (into.paidByCardId ?? null) : null;
+  if (kind === 'cardPayment' && cardId === null) {
+    throw new Error(PAIR_WORDS.notWaiting);
+  }
+  const changeSealed = await sealJson(
+    { summary, note: null } satisfies ChangeSealed,
+    encryption,
+  );
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), out.updatedAt + 1, into.updatedAt + 1);
+
+  const moveId = await runTransaction(db, async (transaction) => {
+    const [plan] = await Promise.all([
+      transaction.get(planRef(uid)),
+      readPairUnchanged(transaction, uid, out, into),
+    ]);
+    const findFree = async (count: number): Promise<string> => {
+      if (count > MAX_PAIR_MOVE_PROBES || cardId === null) {
+        throw new Error(PAIR_WORDS.tooManyPayments);
+      }
+      const candidate = getCardPaymentMoveId(cardId, into.date, count);
+      const existing = await transaction.get(moveRef(uid, candidate));
+      return existing.exists() ? findFree(count + 1) : candidate;
+    };
+    const paymentId = cardId === null ? null : await findFree(1);
+    const [leaveOut, leaveInto] = await Promise.all([
+      readPairExit(transaction, uid, encryption, out, now),
+      readPairExit(transaction, uid, encryption, into, now),
+    ]);
+    const [outSealed, inSealed, paymentSealed] = await Promise.all([
+      sealJson(
+        {
+          ...toSealedPayload(out),
+          lines: [],
+          assignedBy,
+          pairedWithId: into.id,
+          pairKind: kind,
+          cardPaymentMoveId: null,
+          tickedDayKey: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+      sealJson(
+        {
+          ...toSealedPayload(into),
+          lines: [],
+          assignedBy,
+          pairedWithId: out.id,
+          pairKind: kind,
+          cardPaymentMoveId: paymentId,
+          tickedDayKey: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+      paymentId === null
+        ? null
+        : sealJson(
+            {
+              amountCents: out.amountCents,
+              covers,
+            } satisfies CardPaymentSealed,
+            encryption,
+          ),
+    ]);
+    markLedgerWrite(transaction, uid, plan.data(), [out.date, into.date]);
+    leaveOut();
+    leaveInto();
+    transaction.update(purchaseRef(uid, out.id), {
+      needsHome: false,
+      updatedAt: now,
+      sealed: outSealed,
+    });
+    transaction.update(purchaseRef(uid, into.id), {
+      needsHome: false,
+      updatedAt: now,
+      sealed: inSealed,
+    });
+    if (paymentId !== null && paymentSealed !== null && cardId !== null) {
+      transaction.set(moveRef(uid, paymentId), {
+        id: paymentId,
+        kind: 'cardPayment',
+        date: into.date,
+        refId: cardId,
+        reversesMoveId: null,
+        createdAt: now,
+        sealed: paymentSealed,
+      } satisfies MoveDoc);
+    }
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: [],
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+    return paymentId;
+  });
+  await untickPairMove(uid, into);
+  return {
+    out: {
+      ...out,
+      lines: [],
+      needsHome: false,
+      assignedBy,
+      pairedWithId: into.id,
+      pairKind: kind,
+      cardPaymentMoveId: null,
+      tickedDayKey: null,
+      updatedAt: now,
+    },
+    into: {
+      ...into,
+      lines: [],
+      needsHome: false,
+      assignedBy,
+      pairedWithId: out.id,
+      pairKind: kind,
+      cardPaymentMoveId: moveId,
+      tickedDayKey: null,
+      updatedAt: now,
+    },
+    moveId,
+  };
+}
+
+/** What the sync gives a purchase waiting in Needs a home: a charge on its one Free to Spend line, money in on none. */
+const getWaitingLines = (amountCents: Cents): PurchaseLine[] =>
+  amountCents > 0
+    ? [{ envelopeId: null, cents: amountCents, via: 'free' }]
+    : [];
+
+/** Sends a pair back to Needs a home, each as the bank brought it in, in one transaction that refuses when either changed first or they are not paired with each other. Both are marked as the person's, so no pass pairs them again. A card payment's move is taken back by appending the move that reverses it. A change-log entry is written with it. */
+export async function unpairAccountPurchases(
+  uid: string,
+  encryption: RunwayEncryption,
+  out: OpenPurchase,
+  into: OpenPurchase,
+  summary: string,
+): Promise<{ out: OpenPurchase; into: OpenPurchase }> {
+  if (out.pairedWithId !== into.id || into.pairedWithId !== out.id) {
+    throw new Error(PAIR_WORDS.notPaired);
+  }
+  const [outSealed, inSealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        ...toSealedPayload(out),
+        lines: getWaitingLines(out.amountCents),
+        assignedBy: 'person',
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson(
+      {
+        ...toSealedPayload(into),
+        lines: getWaitingLines(into.amountCents),
+        assignedBy: 'person',
+        pairedWithId: null,
+        pairKind: null,
+        cardPaymentMoveId: null,
+        tickedDayKey: null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), out.updatedAt + 1, into.updatedAt + 1);
+
+  await runTransaction(db, async (transaction) => {
+    const [plan, leavePair] = await Promise.all([
+      transaction.get(planRef(uid)),
+      readPairExit(transaction, uid, encryption, into, now),
+      readPairUnchanged(transaction, uid, out, into),
+    ]);
+    markLedgerWrite(transaction, uid, plan.data(), [out.date, into.date]);
+    leavePair();
+    transaction.update(purchaseRef(uid, out.id), {
+      needsHome: true,
+      updatedAt: now,
+      sealed: outSealed,
+    });
+    transaction.update(purchaseRef(uid, into.id), {
+      needsHome: true,
+      updatedAt: now,
+      sealed: inSealed,
+    });
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: [],
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  await untickPairMove(uid, into);
+  return {
+    out: {
+      ...out,
+      lines: getWaitingLines(out.amountCents),
+      needsHome: true,
+      assignedBy: 'person',
+      pairedWithId: null,
+      pairKind: null,
+      cardPaymentMoveId: null,
+      tickedDayKey: null,
+      updatedAt: now,
+    },
+    into: {
+      ...into,
+      lines: getWaitingLines(into.amountCents),
+      needsHome: true,
+      assignedBy: 'person',
+      pairedWithId: null,
+      pairKind: null,
+      cardPaymentMoveId: null,
+      tickedDayKey: null,
+      updatedAt: now,
+    },
+  };
+}
 
 const imageRef = (uid: string, purchaseId: string, imageId: string) =>
   doc(
@@ -758,6 +1181,10 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   notSameAs: purchase.notSameAs,
   incomeDayId: purchase.incomeDayId,
   assignedBy: purchase.assignedBy,
+  pairedWithId: purchase.pairedWithId,
+  pairKind: purchase.pairKind,
+  cardPaymentMoveId: purchase.cardPaymentMoveId,
+  tickedDayKey: purchase.tickedDayKey,
 });
 
 /** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part. */

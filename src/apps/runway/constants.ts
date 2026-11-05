@@ -77,6 +77,7 @@ export const RUNWAY_VIEWS = [
   'checkBalance',
   'cashPosition',
   'needsHome',
+  'accountMoves',
 ] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
@@ -4045,6 +4046,51 @@ export const DEPOSIT_WORDS = {
   notLinked: 'This deposit is not linked to a pay anymore.',
   dayNotArrived: 'That pay was marked as not arrived. Pick another one.',
   lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or leave it out.',
+} as const;
+
+export const PAIR_WORDS = {
+  whichTitle: 'Is this a move between your accounts?',
+  whichHint: 'Tap the other side to pair them.',
+  pickEnvelope: 'Then choose where it goes',
+  pickPay: 'Pick the pay it is',
+  cardPaymentTo: (card: string) => `Card payment to ${card}`,
+  cardPaymentFrom: (account: string) => `Payment from ${account}`,
+  transferred: (amount: string, from: string, to: string) =>
+    `Paired ${amount} from ${from} to ${to} as a move between your accounts`,
+  paidCard: (amount: string, card: string, from: string) =>
+    `Recorded a ${amount} payment to ${card} from ${from}`,
+  pairedMany: (count: number) => `Paired ${count} moves between your accounts`,
+  transferredSub:
+    'It will not count as spending or income. Undo if it is not a move between your accounts.',
+  paidCardSub: 'The card shows it as paid. Undo if that is wrong.',
+  pairedManySub:
+    'None of them count as spending or income. Undo if one is wrong.',
+  undone: 'Pairing undone',
+  unpair: 'Not a move between my accounts',
+  unpairSub: 'Sends both back to Needs a home',
+  unpaired: 'Both are back in Needs a home',
+  unpairFailed: 'That did not save. Nothing was changed.',
+  gone: 'One of these was already removed on another device.',
+  notWaiting: 'These are not both waiting in Needs a home anymore.',
+  notPaired: 'These are not paired with each other anymore.',
+  tooManyPayments: 'Too many payments were saved to this card that day.',
+  lost: 'Its other side changed or is gone, so it is waiting again. Pair it, file it or leave it out.',
+  doorTitle: 'Moves between your accounts',
+  screenTitle: 'Account moves',
+  doorShort: 'Account moves',
+  doorSub: 'Paired by the bank’s dates and amounts',
+  screenIntro:
+    'Money moved between your own accounts or to a card. Not spending, not income.',
+  empty: 'Nothing is paired. Anything you sent back waits in Needs a home.',
+  paymentMissing:
+    'The card payment this was paired with is gone, so nothing was changed.',
+  loading: 'Getting your moves.',
+  rowName: (from: string, to: string) => `${from} to ${to}`,
+  cardPaymentRow: (card: string) => `Payment to ${card}`,
+  sheetTransfer: (from: string, to: string) =>
+    `You moved this from ${from} to ${to}.`,
+  sheetCardPayment: (from: string, card: string) =>
+    `You paid ${card} from ${from}.`,
 } as const;
 
 export const LINK_WORDS = {

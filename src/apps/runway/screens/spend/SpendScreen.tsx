@@ -1,7 +1,14 @@
-import { useState } from 'react';
-import { ChevronRight, Layers, ShoppingBag, Wallet } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import {
+  ArrowLeftRight,
+  ChevronRight,
+  Layers,
+  ShoppingBag,
+  Wallet,
+} from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
@@ -22,6 +29,7 @@ import {
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
   SPEND_PERIODS,
+  PAIR_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -42,6 +50,7 @@ import {
   selectExpenses,
   selectItemLooks,
   selectIsMovesLoaded,
+  selectAccountPairs,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
@@ -64,6 +73,39 @@ const groupByMonth = (purchases: readonly OpenPurchase[]) =>
       : [...groups, { label, rows: [row] }];
   }, []);
 
+interface DoorButtonProps {
+  icon: ReactNode;
+  label: string;
+  count: number;
+  /** Shares its row with the other door: the icon and chevron go so both labels fit at 320px. */
+  isHalf: boolean;
+  onClick: () => void;
+}
+
+/** A thin door above the purchase list: its icon and name, then how many it holds. */
+function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
+  return (
+    <Button
+      type='button'
+      variant='tertiary'
+      onClick={onClick}
+      className={join(
+        'border-border text-foreground! h-10 min-w-0 flex-1 justify-between! rounded-xl border text-sm font-normal',
+        isHalf ? 'gap-1.5 px-2.5!' : 'gap-2 px-3!',
+      )}
+    >
+      <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
+        {!isHalf && icon}
+        <span className='text-foreground truncate'>{label}</span>
+      </span>
+      <span className='text-muted-foreground flex items-center gap-1'>
+        {count}
+        {!isHalf && <ChevronRight className='h-4 w-4' aria-hidden='true' />}
+      </span>
+    </Button>
+  );
+}
+
 /** The purchases of the period in view, newest first. Search covers that period. */
 function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
@@ -85,7 +127,9 @@ function SpendScreen() {
     isGroupsOpen,
     openGroups,
     closeGroups,
+    openView,
   } = useRunwayUrlState();
+  const pairCount = useAppSelector(selectAccountPairs).length;
   const expenseCount = useAppSelector(selectExpenses).length;
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
@@ -287,25 +331,29 @@ function SpendScreen() {
             )}
           </FilterBar>
         )}
-        {expenseCount > 0 && (
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={openGroups}
-            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
-          >
-            <span className='flex items-center gap-2'>
-              <Layers
-                className='text-muted-foreground h-4 w-4'
-                aria-hidden='true'
+        {(expenseCount > 0 || pairCount > 0) && (
+          <div className='flex gap-2'>
+            {expenseCount > 0 && (
+              <DoorButton
+                icon={<Layers className='h-4 w-4' aria-hidden='true' />}
+                label={SPEND_WORDS.groups}
+                count={expenseCount}
+                isHalf={pairCount > 0}
+                onClick={openGroups}
               />
-              {SPEND_WORDS.groups}
-            </span>
-            <span className='text-muted-foreground flex items-center gap-1'>
-              {expenseCount}
-              <ChevronRight className='h-4 w-4' aria-hidden='true' />
-            </span>
-          </Button>
+            )}
+            {pairCount > 0 && (
+              <DoorButton
+                icon={<ArrowLeftRight className='h-4 w-4' aria-hidden='true' />}
+                label={
+                  expenseCount > 0 ? PAIR_WORDS.doorShort : PAIR_WORDS.doorTitle
+                }
+                count={pairCount}
+                isHalf={expenseCount > 0}
+                onClick={() => openView('accountMoves')}
+              />
+            )}
+          </div>
         )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>

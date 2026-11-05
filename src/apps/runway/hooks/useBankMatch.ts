@@ -2,36 +2,61 @@ import { useEffect, useRef, useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { DEPOSIT_WORDS, NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import {
+  DEPOSIT_WORDS,
+  NEEDS_HOME_WORDS,
+  PAIR_WORDS,
+} from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  findAccountPairs,
   findDepositDays,
   findPurchaseMatches,
 } from '@apps/runway/engine/matching';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
   linkDepositToDay,
   mergeBankPurchase,
+  pairAccountPurchases,
+  recordPairTick,
   splitBankPurchase,
   unlinkDeposit,
+  unpairAccountPurchases,
   type MergedPurchase,
+  type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectMoveTick } from '@apps/runway/store/selectors/moveSelectors';
 import {
+  selectAllCards,
   selectDepositDays,
+  selectIsAccountsLoaded,
   selectIsDaysLoaded,
+  selectIsMovesLoaded,
   selectIsNeedsHomeLoaded,
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenPurchase } from '@apps/runway/types';
+import type {
+  CardPaymentCovers,
+  OpenPurchase,
+  RunwayEncryption,
+  PurchaseAssignedBy,
+  PurchasePairKind,
+} from '@apps/runway/types';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
+  describeAccountPair,
   describeDepositLinked,
   describePayDay,
   describePurchaseMatch,
+  getPairSideName,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
 
@@ -344,4 +369,277 @@ export function useMatchDeposits(uid: string | null) {
     };
     void run();
   }, [uid, waiting, purchases, days, isReady, runs]);
+}
+
+export interface AccountPairInput {
+  out: OpenPurchase;
+  into: OpenPurchase;
+  kind: PurchasePairKind;
+}
+
+interface DonePair extends AccountPairInput {
+  paired: PairedPurchases;
+  names: { from: string; to: string };
+}
+
+/** A payment covers the card in full when it is at least what the card owes now. */
+const getCovers = (pair: AccountPairInput): CardPaymentCovers =>
+  pair.out.amountCents >=
+  Math.max(
+    0,
+    selectBalances(store.getState()).reserveByCard[
+      pair.into.paidByCardId ?? ''
+    ] ?? 0,
+  )
+    ? 'full'
+    : 'part';
+
+/** Ticks the income day's "Move to" item that a transfer into a pull account is, unless it was ticked already, and records the tick on the money in so every way out of the pair unticks it; resolves with the money in as it now stands. A tick that does not save never fails the pairing. */
+async function tickMove(
+  uid: string,
+  encryption: RunwayEncryption,
+  into: OpenPurchase,
+  /** The day a lost pair's own tick was on, which its pairing just took back though the store may still show it. */
+  untickedDayKey: string | null,
+): Promise<OpenPurchase> {
+  const state = store.getState();
+  const account = state.runway.accounts.find(
+    (entry) => entry.id === into.accountId,
+  );
+  if (!account?.isPullAccount) return into;
+  const tick = selectMoveTick(state, todayAsUtcDate(), account.id, into.date);
+  if (tick === null || (tick.isDone && tick.dayKey !== untickedDayKey)) {
+    return into;
+  }
+  try {
+    await setLinesDone(uid, tick.dayKey, [tick.lineId], true, tick.doneIds);
+  } catch (error) {
+    console.error('A move to an account was not ticked', error);
+    return into;
+  }
+  try {
+    return await recordPairTick(uid, encryption, into, tick.dayKey);
+  } catch (error) {
+    console.error('A move to an account was ticked but not recorded', error);
+    await setLinesDone(uid, tick.dayKey, [tick.lineId], false, []).catch(
+      () => undefined,
+    );
+    return into;
+  }
+}
+
+/** Pairs money out with the money in it is the other side of, one after another, and says so in one toast with an Undo that sends them all back to Needs a home. Resolves with how many paired; a pair another device changed first is skipped, or throws when `shouldThrow`. */
+export function usePairAccountsWithUndo() {
+  const { addToast } = useToast();
+  const mask = useMaskedText();
+  const accounts = useAppSelector((state) => state.runway.accounts);
+  const cards = useAppSelector(selectAllCards);
+  const cardNameOf = getCardNamer(cards);
+
+  const undo = async (uid: string, done: readonly DonePair[]) => {
+    try {
+      const encryption = await getRunwayEncryption(uid);
+      await done.reduce(async (previous, entry) => {
+        await previous;
+        await unpairAccountPurchases(
+          uid,
+          encryption,
+          entry.paired.out,
+          entry.paired.into,
+          describeAccountPair(
+            entry.out,
+            entry.into,
+            entry.kind,
+            entry.names,
+            true,
+          ),
+        );
+      }, Promise.resolve());
+      addToast({ title: PAIR_WORDS.undone, type: 'success' });
+    } catch (undoError) {
+      addToast({
+        title: NEEDS_HOME_WORDS.undoFailed,
+        description: getErrorMessage(undoError, ''),
+        type: 'error',
+      });
+    }
+  };
+
+  const getTitle = (entry: DonePair) => {
+    const amount = formatCents(entry.out.amountCents);
+    return entry.kind === 'cardPayment'
+      ? PAIR_WORDS.paidCard(amount, entry.names.to, entry.names.from)
+      : PAIR_WORDS.transferred(amount, entry.names.from, entry.names.to);
+  };
+
+  return async (
+    uid: string,
+    pairs: readonly AccountPairInput[],
+    assignedBy: PurchaseAssignedBy,
+    shouldThrow = false,
+  ): Promise<number> => {
+    const encryption = await getRunwayEncryption(uid);
+    const done = await pairs.reduce(
+      async (previous, pair) => {
+        const list = await previous;
+        const names = {
+          from: getPairSideName(pair.out, accounts, cardNameOf),
+          to: getPairSideName(pair.into, accounts, cardNameOf),
+        };
+        try {
+          const paired = await pairAccountPurchases(
+            uid,
+            encryption,
+            pair.out,
+            pair.into,
+            pair.kind,
+            assignedBy,
+            describeAccountPair(pair.out, pair.into, pair.kind, names, false),
+            getCovers(pair),
+          );
+          const into =
+            pair.kind === 'transfer'
+              ? await tickMove(
+                  uid,
+                  encryption,
+                  paired.into,
+                  pair.into.tickedDayKey,
+                )
+              : paired.into;
+          return [...list, { ...pair, paired: { ...paired, into }, names }];
+        } catch (error) {
+          if (shouldThrow) throw error;
+          console.error('Purchases were not paired', error);
+          return list;
+        }
+      },
+      Promise.resolve([] as DonePair[]),
+    );
+    if (done.length === 0) return 0;
+    addToast({
+      title: mask(
+        done.length === 1
+          ? getTitle(done[0])
+          : PAIR_WORDS.pairedMany(done.length),
+      ),
+      description:
+        done.length === 1
+          ? done[0].kind === 'cardPayment'
+            ? PAIR_WORDS.paidCardSub
+            : PAIR_WORDS.transferredSub
+          : PAIR_WORDS.pairedManySub,
+      type: 'success',
+      action: {
+        label: NEEDS_HOME_WORDS.undo,
+        onClick: () => void undo(uid, done),
+      },
+    });
+    return done.length;
+  };
+}
+
+/** Sends one pair back to Needs a home, with a toast whose Undo pairs it again. Throws when it did not save, for the caller to show. */
+export function useUnpairAccounts() {
+  const { addToast } = useToast();
+  const accounts = useAppSelector((state) => state.runway.accounts);
+  const cardNameOf = getCardNamer(useAppSelector(selectAllCards));
+  const pairAccounts = usePairAccountsWithUndo();
+
+  return async (uid: string, pair: AccountPairInput) => {
+    const names = {
+      from: getPairSideName(pair.out, accounts, cardNameOf),
+      to: getPairSideName(pair.into, accounts, cardNameOf),
+    };
+    const back = await unpairAccountPurchases(
+      uid,
+      await getRunwayEncryption(uid),
+      pair.out,
+      pair.into,
+      describeAccountPair(pair.out, pair.into, pair.kind, names, true),
+    );
+    addToast({
+      title: PAIR_WORDS.unpaired,
+      type: 'success',
+      action: {
+        label: NEEDS_HOME_WORDS.undo,
+        onClick: () =>
+          void pairAccounts(
+            uid,
+            [{ out: back.out, into: back.into, kind: pair.kind }],
+            'person',
+            true,
+          ).catch((undoError: unknown) =>
+            addToast({
+              title: NEEDS_HOME_WORDS.undoFailed,
+              description: getErrorMessage(undoError, ''),
+              type: 'error',
+            }),
+          ),
+      },
+    });
+  };
+}
+
+/** Once Needs a home, the accounts, the cards and the days are read, pairs each recent posted money out with the one money in it clearly is the other side of. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
+export function useMatchAccountPairs(uid: string | null) {
+  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const isReady = useAppSelector(
+    (state) =>
+      selectIsNeedsHomeLoaded(state) &&
+      state.runway.purchasesFrom !== null &&
+      state.runway.isCardsLoaded &&
+      selectIsAccountsLoaded(state) &&
+      selectIsMovesLoaded(state) &&
+      selectIsPlanItemsLoaded(state) &&
+      selectIsDaysLoaded(state) &&
+      selectIsRecordsReady(state),
+  );
+  const pair = usePairAccountsWithUndo();
+  const pairRef = useRef(pair);
+  const tried = useRef(new Set<string>());
+  const isRunning = useRef(false);
+  const isWaitingToRun = useRef(false);
+  const [runs, setRuns] = useState(0);
+
+  useEffect(() => {
+    pairRef.current = pair;
+  });
+
+  useEffect(() => {
+    if (uid === null || !isReady) return;
+    if (isRunning.current) {
+      isWaitingToRun.current = true;
+      return;
+    }
+    const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
+    const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
+    const pairs = [...findAccountPairs(waiting).clear].flatMap(
+      ([outId, { inId, kind }]) => {
+        const out = byId.get(outId);
+        const into = byId.get(inId);
+        if (!out || !into || out.date < since || into.date < since) return [];
+        const key = `${out.id}:${out.updatedAt}:${into.id}:${into.updatedAt}`;
+        return tried.current.has(key) ? [] : [{ out, into, kind, key }];
+      },
+    );
+    if (pairs.length === 0) return;
+    pairs.forEach(({ key }) => tried.current.add(key));
+    isRunning.current = true;
+    const run = async () => {
+      try {
+        await pairRef.current(uid, pairs, 'auto');
+      } catch (error) {
+        // The vault or the network failed before any pair was tried, so they may be tried again.
+        pairs.forEach(({ key }) => tried.current.delete(key));
+        console.error('Purchases were not paired', error);
+      } finally {
+        isRunning.current = false;
+        if (isWaitingToRun.current) {
+          isWaitingToRun.current = false;
+          setRuns((count) => count + 1);
+        }
+      }
+    };
+    void run();
+  }, [uid, waiting, isReady, runs]);
 }

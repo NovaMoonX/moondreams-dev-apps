@@ -37,6 +37,7 @@ import {
   HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
   NEEDS_HOME_WORDS,
+  PAIR_WORDS,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
@@ -51,6 +52,7 @@ import ReceiptFileInput, {
 } from '@apps/runway/components/ReceiptFileInput';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
+import PairOffer from '@apps/runway/components/PairOffer';
 import SameAsOffer from '@apps/runway/components/SameAsOffer';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
@@ -78,6 +80,7 @@ import {
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
+  selectLostPairs,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeEnvelopes,
@@ -132,6 +135,7 @@ function PurchaseScreen({
   const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
   const purchases = useAppSelector(selectSpendPurchases);
+  const lostPairs = useAppSelector(selectLostPairs);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
   const cards = useAppSelector((state) => state.runway.cards);
@@ -179,9 +183,12 @@ function PurchaseScreen({
     restore(10);
   }, [receiptViewId]);
 
+  const lostPair = lostPairs.find((entry) => entry.id === purchaseId) ?? null;
   const purchase =
     purchases.find((entry) => entry.id === purchaseId) ??
+    lostPair ??
     (fallback?.id === purchaseId ? fallback : null);
+  const isWaiting = (purchase?.needsHome ?? false) || lostPair !== null;
   const group =
     expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
   const groupRead = useExpensePurchases(group?.id ?? null);
@@ -228,7 +235,7 @@ function PurchaseScreen({
   const fact = [
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
-    ...(purchase.needsHome
+    ...(isWaiting
       ? [sourceName]
       : facts.length > 0
         ? facts
@@ -625,11 +632,20 @@ function PurchaseScreen({
               </Button>
             </div>
           )}
-          {purchase.needsHome && purchase.amountCents > 0 && (
+          {lostPair !== null && (
+            <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
+          )}
+          {isWaiting && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
-          {purchase.needsHome && purchase.amountCents > 0 && (
-            <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+          {isWaiting && purchase.amountCents > 0 && (
+            <PairOffer
+              purchase={purchase}
+              onDone={onClose}
+              elseSubtitle={PAIR_WORDS.pickEnvelope}
+            >
+              <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+            </PairOffer>
           )}
           <ActionGroup isRoomy>
             <ActionRow
@@ -638,13 +654,9 @@ function PurchaseScreen({
               hasChevron
               icon={<Pencil />}
               label={
-                purchase.needsHome
-                  ? NEEDS_HOME_WORDS.moreOptions
-                  : SPEND_WORDS.edit
+                isWaiting ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
               }
-              subtitle={
-                purchase.needsHome ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
-              }
+              subtitle={isWaiting ? NEEDS_HOME_WORDS.moreOptionsSub : undefined}
               isDisabled={isBusy}
               onClick={() => {
                 keepEntryFor('purchase');
@@ -654,9 +666,7 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {purchase.needsHome && (
-              <LeaveOutRow purchase={purchase} onDone={onClose} />
-            )}
+            {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (

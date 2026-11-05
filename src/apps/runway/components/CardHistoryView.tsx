@@ -19,16 +19,19 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { CARD_WORDS } from '@apps/runway/constants';
+import { CARD_WORDS, PAIR_WORDS } from '@apps/runway/constants';
 import { collectCardHistory, withOwedAfter } from '@apps/runway/engine/cards';
+import { useUnpairAccounts } from '@apps/runway/hooks/useBankMatch';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { undoCardPayment } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
+  selectAccountPairs,
   selectIsMovesLoaded,
   selectItemLooks,
+  type AccountPairEntry,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeCardTakenBack } from '@apps/runway/utils/cardText';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
@@ -66,6 +69,8 @@ function CardHistoryView({
   const { addToast } = useToast();
   const { isHidden } = useValuesHidden();
   const mask = useMaskedText();
+  const unpairPair = useUnpairAccounts();
+  const pairs = useAppSelector(selectAccountPairs);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const moves = useAppSelector((state) => state.runway.moves);
   const looks = useAppSelector(selectItemLooks);
@@ -153,6 +158,22 @@ function CardHistoryView({
     setTakingBack(null);
   };
 
+  const unpair = async (pair: AccountPairEntry) => {
+    if (!user || takingBack !== null) return;
+    setTakingBack(pair.into.cardPaymentMoveId);
+    try {
+      await unpairPair(user.uid, pair);
+      setOpenPaymentId(null);
+    } catch (error) {
+      addToast({
+        title: PAIR_WORDS.unpairFailed,
+        description: getErrorMessage(error, ''),
+        type: 'error',
+      });
+    }
+    setTakingBack(null);
+  };
+
   const renderRow = (entry: Entry) => {
     const owes = CARD_WORDS.historyOwes(formatCents(entry.owedAfterCents));
     const day = formatDateOrdinalUTC(entry.on);
@@ -227,6 +248,12 @@ function CardHistoryView({
       !entry.isTakenBack,
   );
 
+  const openPair =
+    openPayment === undefined
+      ? null
+      : (pairs.find((pair) => pair.into.cardPaymentMoveId === openPayment.id) ??
+        null);
+
   if (!isLoaded) {
     return (
       <p className='text-muted-foreground text-sm'>{CARD_WORDS.loading}</p>
@@ -256,14 +283,26 @@ function CardHistoryView({
               fact={formatDateOrdinalUTC(openPayment.on)}
             />
             <ActionGroup>
-              <ActionRow
-                isGrouped
-                isDestructive
-                icon={<Undo2 />}
-                label={CARD_WORDS.takeBackAction}
-                isDisabled={takingBack !== null}
-                onClick={() => void takeBack(openPayment)}
-              />
+              {openPair === null ? (
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Undo2 />}
+                  label={CARD_WORDS.takeBackAction}
+                  isDisabled={takingBack !== null}
+                  onClick={() => void takeBack(openPayment)}
+                />
+              ) : (
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Undo2 />}
+                  label={PAIR_WORDS.unpair}
+                  subtitle={PAIR_WORDS.unpairSub}
+                  isDisabled={takingBack !== null}
+                  onClick={() => void unpair(openPair)}
+                />
+              )}
             </ActionGroup>
           </div>
         </FormSheet>
