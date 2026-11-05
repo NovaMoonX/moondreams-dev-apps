@@ -41,9 +41,8 @@ export function getInterestDay(
 }
 
 /**
- * The month's interest for an account. An approximation: when the account is linked and one reading
- * falls in the month before the interest day and one on or after it (before the next), the rise between
- * them (floored at zero, so it also counts a deposit) replaces the estimate.
+ * The month's interest. An approximation: for a linked account with a reading in the month before the interest
+ * day and one on or after it, the rise between them (floored at zero, so a deposit counts too) replaces the estimate.
  */
 export function getMonthInterest(input: {
   balanceCents: Cents | null;
@@ -55,7 +54,11 @@ export function getMonthInterest(input: {
   month: number;
 }): MonthInterest {
   const on = getInterestDay(input.year, input.month, input.interestDay);
-  const previous = getInterestDay(input.year, input.month - 1, input.interestDay);
+  const previous = getInterestDay(
+    input.year,
+    input.month - 1,
+    input.interestDay,
+  );
   const next = getInterestDay(input.year, input.month + 1, input.interestDay);
   const sorted = [...input.readings].sort((a, b) => a.on - b.on);
   const before = sorted

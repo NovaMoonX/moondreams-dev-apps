@@ -2725,8 +2725,8 @@ const version = (
     'a funding amount written before it had a kind reads as exact',
   );
   assert.deepEqual(
-    ['10', '12.5', '12.50', '0', '100', '100.5', '12.3', 'x', ''].map(
-      parsePercentToBps,
+    ['10', '12.5', '12.50', '0', '100', '100.5', '12.3', 'x', ''].map((text) =>
+      parsePercentToBps(text),
     ),
     [1_000, 1_250, 1_250, null, 10_000, null, null, null, null],
     'whole and half percents only, above zero up to 100',

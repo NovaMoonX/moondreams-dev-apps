@@ -3348,6 +3348,8 @@ async function seedUnlinkedPlan(
         balanceCents: 182_500,
         balanceOn: startOfUtcDay(unlinkedAt),
         holds: [],
+        apyBps: null,
+        interestDay: null,
       } satisfies AccountSealed,
       encryption,
     ),
