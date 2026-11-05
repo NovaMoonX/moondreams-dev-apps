@@ -9,6 +9,11 @@ import { getStorage } from 'firebase-admin/storage';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
+import { grantsPath, openGrant, type ProviderGrantDoc } from './link/grant.js';
+import { LINK_SECRETS, provider } from './link/linkShared.js';
+import { hasProviderSecrets } from './link/providerPlaid.js';
+
 if (getApps().length === 0) {
   initializeApp();
 }
@@ -75,6 +80,26 @@ async function deleteDocumentTree(
   return below + (snapshot.exists ? 1 : 0);
 }
 
+/** Best effort: a grant that cannot be opened or revoked is logged by count and never stops the delete. */
+async function revokeGrants(firestore: Firestore, uid: string) {
+  if (!hasProviderSecrets()) return;
+  const snapshots = await firestore.collection(grantsPath(uid)).get();
+  if (snapshots.empty) return;
+  const keyring = loadKeyring();
+  const outcomes = await Promise.all(
+    snapshots.docs.map((snapshot) =>
+      provider
+        .revoke(openGrant(keyring, uid, snapshot.data() as ProviderGrantDoc))
+        .then(() => true)
+        .catch(() => false),
+    ),
+  );
+  logger.info('runway.plan.grantsRevoked', {
+    revoked: outcomes.filter(Boolean).length,
+    failed: outcomes.filter((ok) => !ok).length,
+  });
+}
+
 async function deleteReceiptObjects(uid: string): Promise<number> {
   const [files] = await getStorage()
     .bucket()
@@ -92,6 +117,7 @@ export const deleteRunwayPlan = onCall(
     region: 'us-central1',
     maxInstances: 5,
     timeoutSeconds: 300,
+    secrets: [...LINK_SECRETS, RUNWAY_MASTER_KEYS],
     cors: [
       'https://apps.moondreams.dev',
       /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
@@ -131,6 +157,9 @@ export const deleteRunwayPlan = onCall(
       const strayCounts = await Promise.all(
         strays.map((collection) => deleteCollection(firestore, collection)),
       );
+      await revokeGrants(firestore, uid).catch(() => {
+        logger.warn('runway.plan.revokeSkipped');
+      });
       const serverCount = await deleteDocumentTree(
         firestore,
         firestore.doc(serverPath(uid)),

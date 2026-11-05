@@ -102,7 +102,7 @@ const masterKeyBytes = (keyring: Keyring, masterKeyId: string) => {
   return Buffer.from(keyring.keys[masterKeyId], 'hex');
 };
 
-function gcmEncrypt(key: Buffer, plain: Buffer, aad: Buffer | null) {
+export function gcmEncrypt(key: Buffer, plain: Buffer, aad: Buffer | null) {
   const nonce = randomBytes(NONCE_BYTES);
   const cipher = createCipheriv('aes-256-gcm', key, nonce);
   if (aad) cipher.setAAD(aad);
@@ -117,7 +117,7 @@ function gcmEncrypt(key: Buffer, plain: Buffer, aad: Buffer | null) {
   };
 }
 
-function gcmDecrypt(
+export function gcmDecrypt(
   key: Buffer,
   ciphertext: string,
   nonce: string,
