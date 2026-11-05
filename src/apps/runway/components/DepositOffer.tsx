@@ -91,15 +91,14 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
                   : difference > 0
                     ? DEPOSIT_WORDS.moreThan(formatCents(difference))
                     : DEPOSIT_WORDS.lessThan(formatCents(-difference));
+            const name = named.sourceName ?? named.payLineName;
             const detail = [
+              named.sourceName ? named.payLineName : null,
               formatDateOrdinalUTC(day.arrivedOn ?? day.expectedOn),
               fit,
             ]
               .filter(Boolean)
               .join(' · ');
-            const name = named.sourceName
-              ? `${named.sourceName}, ${named.payLineName}`
-              : named.payLineName;
             return (
               <ItemRow
                 key={day.dayKey}
@@ -108,7 +107,7 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
                 figure={
                   lowCents === highCents
                     ? formatCents(lowCents)
-                    : `${formatCentsShort(lowCents)} to ${formatCentsShort(highCents)}`
+                    : `${formatCentsShort(lowCents)}–${formatCentsShort(highCents)}`
                 }
                 ariaLabel={`${name}, ${detail}`}
                 isAction
