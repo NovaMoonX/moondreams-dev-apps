@@ -61,7 +61,7 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
     selectBillsDueBeforePay(state, today, dial),
   );
   const horizonShort = useAppSelector((state) =>
-    selectHorizonShortCents(state, today),
+    selectHorizonShortCents(state, today, dial),
   );
   const goalsMonthly = useGoalsMonthly(today, dial);
   const saved = useGoalsSaved(today);
@@ -76,6 +76,14 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
         sum + Math.max(0, balances.assignedByItem[item.id] ?? 0),
       0,
     );
+
+  const countedHorizon = horizonItems.filter(({ version }) =>
+    isCountedAt(version.payload.priority, dial),
+  );
+  const setAsideCents = countedHorizon.reduce(
+    (sum, { item }) => sum + Math.max(0, balances.assignedByItem[item.id] ?? 0),
+    0,
+  );
 
   const getBills = (): FigureSegment[] => {
     const monthly = monthlyFigure(totals.bills.total, monthRest);
@@ -100,8 +108,8 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
           ` ${PRIORITY_DIAL_WORDS.savedRest.want}`,
         ];
   const getHorizon = (): FigureSegment[] => {
-    if (horizonItems.length === 0) return [WORDS.nothingYet];
-    const cents = isMonthly ? horizonShort : balances.assignedToHorizonCents;
+    if (countedHorizon.length === 0) return [WORDS.nothingYet];
+    const cents = isMonthly ? horizonShort : setAsideCents;
     // A direction word beside a masked amount would still say whether anything is short.
     if (isHidden) return [money(cents), ` ${WORDS.onHorizon}`];
     if (!isMonthly) return [money(cents), ` ${WORDS.setAside}`];
@@ -137,9 +145,9 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
       horizon: getHorizon(),
       cards: getCards(),
     },
-    /** The sum the dial's trimmed total stands for; null while the dial counts everything. */
+    /** The sum the dial's trimmed total stands for a month; null while the dial counts everything or the tiles show totals. */
     priority:
-      dial === 'want'
+      dial === 'want' || !isMonthly
         ? null
         : {
             counted: PRIORITY_DIAL_WORDS.counted[dial],

@@ -64,10 +64,7 @@ function Figure({ segments }: { segments: FigureSegment[] }) {
         typeof segment === 'string' ? (
           segment
         ) : (
-          <SensitiveValue
-            key={index}
-            className='text-foreground font-semibold whitespace-nowrap'
-          >
+          <SensitiveValue key={index} className='text-foreground font-semibold'>
             {segment.private}
           </SensitiveValue>
         ),
@@ -113,7 +110,7 @@ function OverviewTile({
         <span aria-hidden='true'>{emoji}</span>
         <span className='truncate'>{name}</span>
       </span>
-      <span className='text-muted-foreground line-clamp-2 text-xs'>
+      <span className='text-muted-foreground line-clamp-3 text-xs text-balance'>
         <Figure segments={segments} />
       </span>
     </Button>
@@ -390,7 +387,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
       </div>
     ) : (
       <div
-        className='grid grid-cols-2 gap-2 lg:grid-cols-3'
+        className='grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3'
         role='group'
         aria-label={WORDS.tilesLabel}
       >
@@ -440,7 +437,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
         </Button>
       </div>
       {priority && (
-        <p className='text-muted-foreground text-sm'>
+        <p className='text-muted-foreground text-sm text-balance'>
           {WORDS.priorityTotal(priority.counted)}
           <Figure segments={[priority.total]} />
           {WORDS.priorityRest}

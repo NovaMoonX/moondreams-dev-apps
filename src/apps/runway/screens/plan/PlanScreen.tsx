@@ -23,6 +23,7 @@ const trackedSections = viewSections;
 const untrackedSections = viewSections.filter((value) => value !== 'cards');
 
 const DRAG_DAMPING = 0.4;
+const END_DAMPING = 0.1;
 
 const isCovered = () =>
   Array.from(document.querySelectorAll('[role="dialog"]')).some(
@@ -43,17 +44,21 @@ function PlanScreen() {
 
   const bodyRef = useRef<HTMLDivElement>(null);
   const sections = isTracking ? trackedSections : untrackedSections;
-  const showNeighbour = (direction: 1 | -1) => {
+  const getNeighbour = (direction: 1 | -1) => {
     const index = sections.findIndex((value) => value === planSection);
-    const next = sections[index + direction];
-    if (index >= 0 && next && !isCovered()) showPlanSection(next);
+    return index >= 0 ? sections[index + direction] : undefined;
+  };
+  const showNeighbour = (direction: 1 | -1) => {
+    const next = getNeighbour(direction);
+    if (next && !isCovered()) showPlanSection(next);
   };
   // The body follows the finger by its own offset (not a transform, which would carry a floating add button with it) and eases back to rest.
   const followFinger = (dx: number, isEnd: boolean) => {
     const body = bodyRef.current;
     if (!body || (!isEnd && isCovered())) return;
     body.style.transition = isEnd ? 'left 200ms ease-out' : 'none';
-    body.style.left = `${isEnd ? 0 : dx * DRAG_DAMPING}px`;
+    const damping = getNeighbour(dx < 0 ? 1 : -1) ? DRAG_DAMPING : END_DAMPING;
+    body.style.left = `${isEnd ? 0 : dx * damping}px`;
   };
 
   return (

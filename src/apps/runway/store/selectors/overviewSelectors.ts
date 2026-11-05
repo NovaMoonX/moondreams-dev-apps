@@ -37,22 +37,31 @@ export const selectBillsDueBeforePay = createSelector(
   },
 );
 
-/** What the Horizon items together fall short of what their costs ask, each as its row and sheet work it out. */
+/** What the Horizon items at or above `dial` together fall short of what their costs ask, each as its row and sheet work it out. */
 export const selectHorizonShortCents = createSelector(
-  [selectHorizonItems, selectBalances, selectCostPaid, selectStance, selectOn],
-  (items, balances, costPaid, stance, today): number =>
-    items.reduce(
-      (sum, { item, version }) =>
-        sum +
-        (getHorizonStatus(
-          version.payload,
-          balances.assignedByItem[item.id] ?? 0,
-          today,
-          stance,
-          costPaid[item.id],
-          balances.costPaidByItem[item.id] ?? 0,
-          balances.costFromFreeByItem[item.id] ?? 0,
-        ).plan.shortfall?.totalShortCents ?? 0),
-      0,
-    ),
+  [
+    selectHorizonItems,
+    selectBalances,
+    selectCostPaid,
+    selectStance,
+    selectOn,
+    selectDial,
+  ],
+  (items, balances, costPaid, stance, today, dial): number =>
+    items
+      .filter(({ version }) => isCountedAt(version.payload.priority, dial))
+      .reduce(
+        (sum, { item, version }) =>
+          sum +
+          (getHorizonStatus(
+            version.payload,
+            balances.assignedByItem[item.id] ?? 0,
+            today,
+            stance,
+            costPaid[item.id],
+            balances.costPaidByItem[item.id] ?? 0,
+            balances.costFromFreeByItem[item.id] ?? 0,
+          ).plan.shortfall?.totalShortCents ?? 0),
+        0,
+      ),
 );
