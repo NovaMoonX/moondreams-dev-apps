@@ -7,13 +7,13 @@ import { useEffect, useMemo, useState } from 'react';
 
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import Field from '@/components/forms/Field';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
-import Field from '@/components/forms/Field';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import useNow from '@/hooks/useNow';
 import UserAvatar from '@/ui/UserAvatar';
@@ -41,6 +41,7 @@ import { CARD_CLASS, LIST_CARD_CLASS } from './constants';
 
 const PICKER_ROWS = 20;
 const REASON_MAX_LENGTH = 200;
+const REASON_COUNTER_FROM = 150;
 
 const ROLLOUT_OPTIONS: { value: GateRollout; label: string }[] = [
   { value: 'off', label: 'Off' },
@@ -227,6 +228,9 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
       title: `Save changes to ${openGate.label}?`,
       message: (
         <div className='space-y-3 text-left'>
+          {openGate.warning && changesWhoHasIt > 0 && (
+            <InlineNotice tone='warning'>{openGate.warning}</InlineNotice>
+          )}
           <ul className='list-disc space-y-1 pl-5'>
             {changes.map((change, index) => (
               <li key={index}>{change}</li>
@@ -480,13 +484,17 @@ function GateControls({
             onChange={(event) =>
               onDraftChange({
                 ...draft,
-                reason:
-                  event.target.value.trim() === '' ? null : event.target.value,
+                reason: event.target.value,
               })
             }
           />
         )}
       </Field>
+      {(draft.reason ?? '').length >= REASON_COUNTER_FROM && (
+        <p className='text-muted-foreground -mt-4 text-right text-xs tabular-nums'>
+          {(draft.reason ?? '').length} / {REASON_MAX_LENGTH}
+        </p>
+      )}
     </div>
   );
 }
