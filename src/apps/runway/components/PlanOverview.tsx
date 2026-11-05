@@ -57,14 +57,26 @@ const toText = (segments: FigureSegment[], isHidden: boolean) =>
     )
     .join('');
 
-function Figure({ segments }: { segments: FigureSegment[] }) {
+function Figure({
+  segments,
+  isWhole = false,
+}: {
+  segments: FigureSegment[];
+  isWhole?: boolean;
+}) {
   return (
     <>
       {segments.map((segment, index) =>
         typeof segment === 'string' ? (
           segment
         ) : (
-          <SensitiveValue key={index} className='text-foreground font-semibold'>
+          <SensitiveValue
+            key={index}
+            className={join(
+              'text-foreground font-semibold',
+              isWhole && 'whitespace-nowrap',
+            )}
+          >
             {segment.private}
           </SensitiveValue>
         ),
@@ -110,7 +122,7 @@ function OverviewTile({
         <span aria-hidden='true'>{emoji}</span>
         <span className='truncate'>{name}</span>
       </span>
-      <span className='text-muted-foreground line-clamp-3 text-xs text-balance'>
+      <span className='text-muted-foreground line-clamp-3 text-xs'>
         <Figure segments={segments} />
       </span>
     </Button>
@@ -447,7 +459,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
       {priority && (
         <p className='text-muted-foreground text-sm text-balance'>
           {WORDS.priorityTotal(priority.counted)}
-          <Figure segments={[priority.total]} />
+          <Figure segments={[priority.total]} isWhole />
           {WORDS.priorityRest}
         </p>
       )}
