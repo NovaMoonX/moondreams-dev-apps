@@ -326,7 +326,14 @@ function CostForm({
       id: 'priority',
       title: FORM_FLOW_WORDS.priorityTitle,
       summaryLabel: FORM_FLOW_WORDS.priority,
-      summaryValue: PRIORITY_LABELS[formData.priority],
+      summaryValue:
+        formData.priority === itemPriority
+          ? PRIORITY_LABELS[formData.priority]
+          : HORIZON_WORDS.costPrioritySummary(
+              PRIORITY_LABELS[formData.priority],
+              itemName,
+              PRIORITY_LABELS[itemPriority],
+            ),
       isAnswered: true,
       isPreAnswered: true,
       render: ({ moveOn }) => (

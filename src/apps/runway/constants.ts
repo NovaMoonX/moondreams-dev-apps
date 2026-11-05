@@ -404,6 +404,11 @@ export const HORIZON_WORDS = {
     itemPriority: string,
     costPriority: string,
   ) => `${itemName} is a ${itemPriority}; this cost will be a ${costPriority}.`,
+  costPrioritySummary: (
+    costPriority: string,
+    itemName: string,
+    itemPriority: string,
+  ) => `${costPriority} · ${itemName} is a ${itemPriority}`,
   costOutsideHint:
     'Stays on your list. Runway never sets money aside for it or warns you about it.',
   outsideTag: 'Outside the plan',
@@ -561,7 +566,7 @@ export const HORIZON_WORDS = {
   effectBefore: 'Now',
   effectAfter: 'After this change',
   changeCostRow: 'Change',
-  changeCostSub: "Name, date and how it's paid",
+  changeCostSub: "Name, date, how it's paid and priority",
   removeCostRow: 'Remove this cost',
   removeCostSub: 'It leaves the list and the plan',
   removeConfirmTitle: (name: string) => `Remove ${name}?`,
