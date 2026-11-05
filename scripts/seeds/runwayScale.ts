@@ -358,6 +358,7 @@ export async function seedRunwayScale(
         orderIndex: index + 1,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: { kind: 'exact', cents },
           cadence:

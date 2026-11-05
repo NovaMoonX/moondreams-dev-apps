@@ -44,7 +44,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import { generateUuid } from '@/utils/idUtils';
 import { getWebLinkHost, toWebLink } from '@/utils/urlUtils';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
@@ -110,6 +110,8 @@ import {
   editPurchase,
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
+import { unspill } from '@apps/runway/engine/spill';
 import {
   selectAllCards,
   selectCards,
@@ -130,6 +132,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import {
   describeEnvelopes,
   describePurchaseEdit,
+  describeSpills,
   describePurchaseRemoval,
   getPurchaseTitle,
 } from '@apps/runway/utils/purchaseText';
@@ -142,6 +145,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import PurchaseEffectNotice, {
   CardChargeNotice,
+  SpillNotice,
 } from '@apps/runway/components/PurchaseEffectNotice';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import DateInput from '@/components/DateInput';
@@ -410,23 +414,29 @@ function PurchaseFormBody({
     },
   }));
   const editingLines = editing?.lines ?? [];
+  const editingChosen =
+    editing !== undefined && editing.amountCents > 0
+      ? unspill(editingLines)
+      : editingLines;
   const startsSplit =
-    editing !== undefined && editing.amountCents > 0 && editingLines.length > 1;
+    editing !== undefined &&
+    editing.amountCents > 0 &&
+    editingChosen.length > 1;
   const [start] = useState(() => ({
     envelopeId:
       editing && !startsSplit && editing.amountCents > 0
-        ? (editingLines[0]?.envelopeId ?? null)
+        ? (editingChosen[0]?.envelopeId ?? null)
         : presetEnvelopeId,
     isRefund: editing !== undefined && editing.amountCents < 0,
     isSplit: startsSplit,
     splitIds: startsSplit
-      ? editingLines.flatMap((line) =>
+      ? editingChosen.flatMap((line) =>
           line.envelopeId === null ? [] : [line.envelopeId],
         )
       : [],
     shares: startsSplit
       ? Object.fromEntries(
-          editingLines.flatMap((line) =>
+          editingChosen.flatMap((line) =>
             line.envelopeId === null
               ? []
               : [[line.envelopeId, (line.cents / 100).toFixed(2)]],
@@ -786,6 +796,16 @@ function PurchaseFormBody({
       if (target !== null && !liveIds.has(target)) return null;
       return toChosenLines([{ envelopeId: target, cents: -amount }]);
     }
+    const resolve = (chosen: PurchaseLine[]) =>
+      editing !== undefined &&
+      amount === editing.amountCents &&
+      JSON.stringify(chosen) === JSON.stringify(editingChosen)
+        ? editingLines
+        : getSpilledLines(
+            store.getState(),
+            chosen,
+            isEditingCounted ? editingLines : null,
+          );
     if (isSplit) {
       const parts = splitIds.map((id) => ({
         envelopeId: id,
@@ -796,15 +816,17 @@ function PurchaseFormBody({
         parts.every((part) => part.cents !== null && part.cents > 0);
       const total = parts.reduce((sum, part) => sum + (part.cents ?? 0), 0);
       if (!isValid || total !== amount) return null;
-      return toChosenLines(
-        parts.map((part) => ({
-          envelopeId: part.envelopeId,
-          cents: part.cents ?? 0,
-        })),
+      return resolve(
+        toChosenLines(
+          parts.map((part) => ({
+            envelopeId: part.envelopeId,
+            cents: part.cents ?? 0,
+          })),
+        ),
       );
     }
     if (envelopeId === null || !liveIds.has(envelopeId)) return null;
-    return toChosenLines([{ envelopeId, cents: amount }]);
+    return resolve(toChosenLines([{ envelopeId, cents: amount }]));
   };
   const lines = getLines();
 
@@ -1279,7 +1301,9 @@ function PurchaseFormBody({
     return null;
   };
   const cardLine = getCardLine();
-  const effectNote = (preview || cardLine) && (
+  const spillLines =
+    preview === null || lines === null ? [] : describeSpills(lines, nameOf);
+  const effectNote = (preview || cardLine || spillLines.length > 0) && (
     <div className='space-y-2'>
       {preview && (
         <PurchaseEffectNotice
@@ -1287,6 +1311,7 @@ function PurchaseFormBody({
           freeDropCents={preview.freeDropCents}
         />
       )}
+      {spillLines.length > 0 && <SpillNotice lines={spillLines} />}
       {cardLine && <CardChargeNotice line={cardLine} />}
     </div>
   );

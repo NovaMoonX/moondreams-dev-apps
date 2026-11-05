@@ -42,6 +42,7 @@ import {
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
+  SPILL_WORDS,
 } from '@apps/runway/constants';
 import { keepEntryFor } from '@/hooks/useBackHistory';
 import type { OpenPurchase } from '@apps/runway/types';
@@ -203,6 +204,22 @@ function PurchaseScreen({
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const getLineLabel = (index: number) => {
+    const lines = purchase?.lines ?? [];
+    const line = lines[index];
+    const name =
+      line.envelopeId === null
+        ? SPEND_WORDS.freeToSpend
+        : nameOf(line.envelopeId);
+    if (line.via !== 'spill') return name;
+    const from = lines
+      .slice(0, index)
+      .reverse()
+      .find((earlier) => earlier.via === 'chosen');
+    return from?.envelopeId == null
+      ? name
+      : SPILL_WORDS.ranOverFrom(name, nameOf(from.envelopeId));
+  };
   const sourceName = purchase
     ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
       accounts.find((account) => account.id === purchase.accountId)?.name ??
@@ -306,11 +323,15 @@ function PurchaseScreen({
       });
       return;
     }
-    const names = purchase.lines.map((line) =>
-      line.envelopeId === null
-        ? SPEND_WORDS.freeToSpend
-        : nameOf(line.envelopeId),
-    );
+    const names = [
+      ...new Set(
+        purchase.lines.map((line) =>
+          line.envelopeId === null
+            ? SPEND_WORDS.freeToSpend
+            : nameOf(line.envelopeId),
+        ),
+      ),
+    ];
     const where = names.join(', ').replace(/, ([^,]*)$/, ' and $1');
     const isConfirmed = await confirm({
       title: SPEND_WORDS.removeTitle,
@@ -583,9 +604,7 @@ function PurchaseScreen({
                     className='flex items-start justify-between gap-3 p-3'
                   >
                     <dt className='text-muted-foreground min-w-0 break-words'>
-                      {line.envelopeId === null
-                        ? SPEND_WORDS.freeToSpend
-                        : nameOf(line.envelopeId)}
+                      {getLineLabel(index)}
                     </dt>
                     <dd className='font-medium whitespace-nowrap tabular-nums'>
                       {mask(formatCents(Math.abs(line.cents)))}

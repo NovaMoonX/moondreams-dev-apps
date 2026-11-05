@@ -1195,7 +1195,9 @@ function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
       ? { ...line, cents: line.cents + difference }
       : line,
   );
-  if (lines.some((line) => line.cents <= 0)) {
+  const isEmptied = (line: PurchaseLine, index: number) =>
+    line.cents < 0 || (line.cents === 0 && typed.lines[index].cents !== 0);
+  if (lines.some(isEmptied)) {
     throw new Error(
       'The bank’s amount is too far below one of its parts. Change the parts on the one you added first.',
     );

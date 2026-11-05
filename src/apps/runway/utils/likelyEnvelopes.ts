@@ -1,4 +1,5 @@
 import { toComparable } from '@/utils/optionMatchUtils';
+import { unspill } from '@apps/runway/engine/spill';
 import type { OpenPurchase } from '@apps/runway/types';
 
 /** Envelopes this merchant was put in before, most often first, then most recent; never padded with envelopes it has not been in. */
@@ -13,10 +14,11 @@ export function rankLikelyEnvelopes(
   const known = new Set(envelopeIds);
   const stats = history.reduce<Map<string, { count: number; latest: number }>>(
     (acc, purchase) => {
-      const [line] = purchase.lines;
+      const chosen = unspill(purchase.lines);
+      const [line] = chosen;
       if (
         purchase.needsHome ||
-        purchase.lines.length !== 1 ||
+        chosen.length !== 1 ||
         line.envelopeId === null ||
         !known.has(line.envelopeId) ||
         toComparable(purchase.merchant ?? '') !== wanted

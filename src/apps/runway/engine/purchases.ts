@@ -112,7 +112,12 @@ export function getRefundLines(
           {
             envelopeId: line.envelopeId,
             cents: 0 - shares[index],
-            via: line.via,
+            via:
+              line.via === 'spill'
+                ? line.envelopeId === null
+                  ? 'free'
+                  : 'chosen'
+                : line.via,
           } satisfies PurchaseLine,
         ],
   );

@@ -4,7 +4,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -17,6 +17,7 @@ import {
   selectEnvelopes,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
 import {
@@ -72,9 +73,11 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
     if (!user || busyId !== null) return;
     setBusyId(envelopeId);
     setError(null);
-    const lines = [
-      { envelopeId, cents: purchase.amountCents, via: 'chosen' as const },
-    ];
+    const lines = getSpilledLines(
+      store.getState(),
+      [{ envelopeId, cents: purchase.amountCents, via: 'chosen' }],
+      null,
+    );
     try {
       const updatedAt = await assignPurchase(
         user.uid,

@@ -67,9 +67,10 @@ async function openVersion(
   }
   if (version.kind === 'envelope') {
     const payload = await read<
-      Omit<EnvelopeSealed, 'groupId' | 'maxCents'> & {
+      Omit<EnvelopeSealed, 'groupId' | 'maxCents' | 'spillTo'> & {
         groupId?: string | null;
         maxCents?: Cents | null;
+        spillTo?: string[] | null;
       }
     >(version.sealed);
     return {
@@ -80,6 +81,7 @@ async function openVersion(
         funding: normalizeFunding(payload.funding),
         maxCents: payload.maxCents ?? null,
         groupId: payload.groupId ?? null,
+        spillTo: payload.spillTo ?? [],
       },
     };
   }

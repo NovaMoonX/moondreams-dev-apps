@@ -963,8 +963,8 @@ export const MOVE_KINDS = [
 ] as const;
 /** Where a purchase came from; the person adds by hand now, a CSV and a linked account come later. */
 export const PURCHASE_SOURCES = ['manual', 'csv', 'link'] as const;
-/** How a purchase line got its envelope: the person chose it, or it is Free to Spend. */
-export const PURCHASE_LINE_VIAS = ['chosen', 'free'] as const;
+/** How a purchase line got its envelope: the person chose it, it ran over from the chosen envelope's chain (a null envelope is Free to Spend taking the rest), or it is Free to Spend. */
+export const PURCHASE_LINE_VIAS = ['chosen', 'spill', 'free'] as const;
 /** Envelopes one split can name; the sealed lines are not checked by rules, so the device caps them. */
 export const MAX_PURCHASE_LINES = 12;
 /** The amount a purchase can be, in cents. */
@@ -3045,6 +3045,34 @@ export const ITEM_VIEW_WORDS = {
   purchasesEmpty: 'Nothing spent from it this month.',
 } as const;
 
+export const SPILL_WORDS = {
+  /** A purchase's sentence for an envelope that could not cover its share. */
+  ranOut: (name: string, parts: string) => `${name} ran out: ${parts}`,
+  part: (amount: string, source: string) => `${amount} from ${source}`,
+  /** The purchase sheet's row for money taken because the chosen envelope ran out. */
+  ranOverFrom: (name: string, from: string) =>
+    `${name} · ran over from ${from}`,
+  row: 'When it runs out',
+  rowEmpty: 'Nothing set; Cover it when it\u2019s over',
+  title: 'What pays when it runs out?',
+  hint: 'Free to Spend pays whatever these cannot.',
+  add: 'Add an envelope',
+  pickTitle: 'Which envelope next?',
+  remove: (name: string) => `Remove ${name} from the list`,
+  nothing: 'Nothing set. Cover it applies when this envelope is over.',
+  exampleCents: 3_000,
+  example: (amount: string, parts: string) =>
+    `A ${amount} overspend would come from ${parts}.`,
+  free: 'Free to Spend',
+  toast: (name: string) => `Saved what pays when ${name} runs out`,
+  toastCleared: (name: string) => `${name} no longer spills over`,
+  summary: (name: string, chain: string) =>
+    `${name}: when it runs out, ${chain}.`,
+  summaryCleared: (name: string) =>
+    `${name}: nothing set for when it runs out.`,
+  saveFailed: 'Could not save. Nothing was changed.',
+} as const;
+
 export const CHECK_RESULT_WORDS = {
   fits: 'It fits',
   left: 'left',
@@ -3053,6 +3081,7 @@ export const CHECK_RESULT_WORDS = {
   free: 'Free to Spend',
   fromFree: 'It could come from Free to Spend, then the lowest priority first',
   fromOthers: 'It could come from, lowest priority first',
+  fromChain: 'It would come from, in the order you set',
   uncovered: (amount: string) =>
     `${amount} is more than Free to Spend and the other envelopes hold. Free to Spend would go over-assigned.`,
 } as const;

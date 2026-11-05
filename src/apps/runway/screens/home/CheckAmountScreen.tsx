@@ -58,6 +58,9 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
     priority: version.payload.priority,
     leftCents: balances.assignedByItem[item.id] ?? 0,
   }));
+  const chains = Object.fromEntries(
+    envelopes.map(({ item, version }) => [item.id, version.payload.spillTo]),
+  );
   const envelopeId =
     picked !== null && entries.some((entry) => entry.id === picked)
       ? picked
@@ -76,6 +79,7 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
           cents,
           entries,
           balances.hasMoney ? balances.freeToSpendCents : 0,
+          chains[envelopeId] ?? [],
         )
       : null;
   const heldCents = entries.find((entry) => entry.id === envelopeId)?.leftCents;
@@ -182,9 +186,11 @@ export function CheckAmountBody({ presetEnvelopeId }: CheckAmountBodyProps) {
           {check.kind === 'over' && check.sources.length > 0 && (
             <ActionSection
               caption={
-                check.sources[0].envelopeId === null
-                  ? CHECK_RESULT_WORDS.fromFree
-                  : CHECK_RESULT_WORDS.fromOthers
+                check.isChain
+                  ? CHECK_RESULT_WORDS.fromChain
+                  : check.sources[0].envelopeId === null
+                    ? CHECK_RESULT_WORDS.fromFree
+                    : CHECK_RESULT_WORDS.fromOthers
               }
             >
               <dl className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>

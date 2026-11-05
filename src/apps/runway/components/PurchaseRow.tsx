@@ -29,10 +29,11 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
       ? 'Free to Spend'
       : nameOf(purchase.lines[0].envelopeId)
     : '';
+  const chosenCount = purchase.lines.filter(
+    (line) => line.via !== 'spill',
+  ).length;
   const shortEnvelopes =
-    purchase.lines.length > 1
-      ? `${firstName} and ${purchase.lines.length - 1} more`
-      : envelopes;
+    chosenCount > 1 ? `${firstName} and ${chosenCount - 1} more` : envelopes;
   const first = purchase.lines[0]?.envelopeId ?? null;
   const lead = first === null ? null : (looks.get(first) ?? null);
   const date = formatDateOrdinalUTC(purchase.date);
