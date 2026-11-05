@@ -646,7 +646,7 @@ function EffectPreview({
                   type='button'
                   variant='secondary'
                   size='sm'
-                  className='mt-2'
+                  className="relative mt-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
                   onClick={incomeFix.open}
                 >
                   {incomeFix.hasEndingPay

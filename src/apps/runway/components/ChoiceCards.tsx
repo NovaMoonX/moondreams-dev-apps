@@ -8,7 +8,7 @@ interface ChoiceCardsProps<T extends string> {
     value: T;
     title: string;
     body: string;
-    /** The card opens something (a picker) rather than only choosing. */
+    /** The card opens something (a picker) rather than only choosing, so a chevron stands in for its check. */
     hasChevron?: boolean;
   }[];
   /** Null until the person taps one; nothing is chosen for them. */
@@ -46,7 +46,15 @@ function ChoiceCards<T extends string>({
               <span className='text-[15px] leading-[1.125rem] font-medium'>
                 {option.title}
               </span>
-              <span className='flex shrink-0 items-center gap-1'>
+              {option.hasChevron ? (
+                <ChevronRight
+                  className={join(
+                    'size-5 shrink-0',
+                    isChosen ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                  aria-hidden='true'
+                />
+              ) : (
                 <span
                   aria-hidden='true'
                   className={join(
@@ -58,13 +66,7 @@ function ChoiceCards<T extends string>({
                 >
                   {isChosen && <Check className='size-3.5' />}
                 </span>
-                {option.hasChevron && (
-                  <ChevronRight
-                    className='text-muted-foreground size-4'
-                    aria-hidden='true'
-                  />
-                )}
-              </span>
+              )}
             </span>
             <span className='text-muted-foreground block text-[13px] leading-[1.125rem]'>
               {option.body}
