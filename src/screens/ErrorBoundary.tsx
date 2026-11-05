@@ -13,7 +13,6 @@ import {
   isStaleChunkError,
   reloadForStaleChunk,
 } from '../lib/app/appUpdate';
-import { hasUnsavedWork } from '../lib/app/unsavedWork';
 
 function getErrorDetails(error: unknown) {
   if (error instanceof Error) {
@@ -32,8 +31,7 @@ function ErrorScreen({ error }: { error: unknown }) {
   const showDetails = import.meta.env.DEV || isAdmin;
   // A screen's file missing after a deploy: the new version is loaded straight into the screen asked for.
   const [isReloading] = useState(
-    () =>
-      isStaleChunkError(error) && canReloadForStaleChunk() && !hasUnsavedWork(),
+    () => isStaleChunkError(error) && canReloadForStaleChunk(),
   );
 
   useEffect(() => {

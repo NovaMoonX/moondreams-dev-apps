@@ -241,13 +241,18 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
-/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL carries `param`. */
-export function keepEntryFor(param: string) {
-  if (!new URLSearchParams(window.location.search).has(param)) return;
+/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL (or `address`, pushed with it) carries `param`; every kept entry is written here, so it carries this load's stamp. */
+export function keepEntryFor(param: string, address?: URL) {
+  const search = address?.search ?? window.location.search;
+  if (!new URLSearchParams(search).has(param)) return;
   const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
   void backLayerKey;
   void backLayerSeq;
-  window.history.pushState({ ...entry, keptFor: param, keptLoad: LOAD_ID }, '');
+  window.history.pushState(
+    { ...entry, keptFor: param, keptLoad: LOAD_ID },
+    '',
+    address,
+  );
 }
 
 const MAX_BACK_STEPS = 6;

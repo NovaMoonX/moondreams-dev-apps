@@ -160,6 +160,31 @@ await [1, 6].reduce(
     ),
   Promise.resolve(),
 );
+// A closed add form leaves no entry behind: one Back from the tab leaves it.
+const runAddForm = async (cpuRate: number) => {
+  const page = await browser.newPage();
+  if (cpuRate > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuRate });
+  }
+  await page.goto(`${origin}/home`);
+  await tap('Enter app')(page);
+  await tap('Open add')(page);
+  await tap('Close add')(page);
+  await back(page);
+  const landed = new URL(page.url());
+  const label = `add form closed, then Back${cpuRate > 1 ? ` (CPU ×${cpuRate})` : ''}`;
+  const isRight = landed.pathname === '/home';
+  if (!isRight)
+    failures.push(`${label}: stayed on ${landed.pathname}${landed.search}`);
+  console.log(
+    `${isRight ? 'ok  ' : 'FAIL'} ${label} → ${landed.pathname}${landed.search}`,
+  );
+};
+await [1, 6].reduce(
+  (done, cpuRate) => done.then(() => runAddForm(cpuRate)),
+  Promise.resolve(),
+);
 await browser.close();
 server.close();
 assert.deepEqual(
@@ -167,4 +192,6 @@ assert.deepEqual(
   [],
   `A door left the app or missed its target:\n${failures.join('\n')}`,
 );
-console.log('back-history: every door landed on its target');
+console.log(
+  'back-history: every door landed on its target, and a closed form left no entry',
+);

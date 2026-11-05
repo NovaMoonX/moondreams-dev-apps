@@ -78,6 +78,26 @@ function Day() {
   );
 }
 
+function AddForm() {
+  const close = () => writeParams({ add: null });
+  usePageHistory(close);
+  return (
+    <section>
+      <button type='button' onClick={close}>
+        Close add
+      </button>
+    </section>
+  );
+}
+
+// Like an app's door to an add form from a tab: a kept entry carrying the request goes under the form's own.
+const openAdd = () => {
+  const address = new URL(window.location.href);
+  address.searchParams.set('add', '1');
+  keepEntryFor('add', address);
+  writeParams({ add: '1' });
+};
+
 function Harness() {
   const address = new URL(useAddress());
   const params = address.searchParams;
@@ -99,7 +119,11 @@ function Harness() {
       <button type='button' onClick={() => writeParams({ sheet: '1' })}>
         Open sheet
       </button>
+      <button type='button' onClick={openAdd}>
+        Open add
+      </button>
       {params.has('target') && <p>Arrived</p>}
+      {params.has('add') && <AddForm />}
       {params.has('sheet') && <Sheet />}
       {params.has('day') && <Day />}
     </main>

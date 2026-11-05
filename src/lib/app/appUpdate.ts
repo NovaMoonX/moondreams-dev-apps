@@ -74,11 +74,23 @@ const readLastReload = () => {
   }
 };
 
+// A store that reads but refuses writes (full) would leave the screen on Loading, since the reload never happens.
+const canWriteStamp = () => {
+  try {
+    window.sessionStorage.setItem(`${STALE_CHUNK_RELOAD_KEY}:probe`, '1');
+    window.sessionStorage.removeItem(`${STALE_CHUNK_RELOAD_KEY}:probe`);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
 /** Whether a missing lazy file may reload the page into the new version: online, and not already tried in the last half minute (then it is a real fault). */
 export function canReloadForStaleChunk() {
   const result =
     navigator.onLine &&
-    Date.now() - readLastReload() >= STALE_CHUNK_RELOAD_WINDOW_MS;
+    Date.now() - readLastReload() >= STALE_CHUNK_RELOAD_WINDOW_MS &&
+    canWriteStamp();
   return result;
 }
 
