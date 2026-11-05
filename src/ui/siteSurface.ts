@@ -1,6 +1,6 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
-/** The surfaces of the site's own screens (Home, account, admin), never an app's: the site defines no `--color-card`, so `bg-card` draws nothing outside an app's theme. */
+/** The surfaces of the site's own screens (Home, account, admin), never an app's: the site defines no `--color-card`, so `bg-card` draws nothing. */
 export const SURFACE_CLASS = 'bg-white dark:bg-zinc-900';
 
 export const CARD_CLASS = join(
