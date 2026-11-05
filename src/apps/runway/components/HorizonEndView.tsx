@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowRightLeft } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { ArrowRightLeft, Check } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -34,8 +34,9 @@ import {
   MAX_NOTE_LENGTH,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
-import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  listCostPayments,
   listMadeBills,
   listOpenCosts,
   setHorizonState,
@@ -50,7 +51,10 @@ import {
   type HorizonStateWritten,
   type HorizonWhere,
 } from '@apps/runway/store/actions/horizonActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBalances,
+  selectHeldBy,
+} from '@apps/runway/store/selectors/balanceSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllHorizonItems,
@@ -97,8 +101,8 @@ function HorizonEndView({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const [pick, setPick] = useState<Choice>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
-  const pickerRef = useRef<HTMLDivElement>(null);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -108,7 +112,16 @@ function HorizonEndView({
   const isCallOff = mode === 'callOff';
   const leftCents = Math.max(0, balances.assignedByItem[itemId] ?? 0);
   const holdsMoney = leftCents > 0;
-  const stops = isCallOff ? listOpenCosts(horizon, today, stance, paid) : [];
+  const getDueOn = (cost: Parameters<typeof listCostPayments>[0]) =>
+    listCostPayments(cost, today + 400 * DAY_MS, stance, paid).find(
+      (payment) => payment.paid === null,
+    )?.dueOn ?? Number.MAX_SAFE_INTEGER;
+  const stops = isCallOff
+    ? listOpenCosts(horizon, today, stance, paid)
+        .map((cost) => ({ cost, dueOn: getDueOn(cost) }))
+        .sort((a, b) => a.dueOn - b.dueOn)
+        .map(({ cost }) => cost)
+    : [];
   const bills = isCallOff ? listMadeBills(horizon) : [];
   const rows = [
     ...stops.map((cost) => ({ cost, isBill: false })),
@@ -165,7 +178,15 @@ function HorizonEndView({
   };
   const blocker = getBlocker();
 
-  const movesMoney = holdsMoney && where !== null && where.kind !== 'keep';
+  const getFreeLine = (to: HorizonWhere) => {
+    const money = formatCents(leftCents);
+    if (to.kind === 'free') return HORIZON_END_WORDS.freeUp(money);
+    return `${HORIZON_END_WORDS.freeSame} ${
+      to.kind === 'place'
+        ? HORIZON_END_WORDS.placeGets(to.name, money)
+        : HORIZON_END_WORDS.heldStays(money, horizon.name)
+    }`;
+  };
   const changeJson =
     where !== null
       ? JSON.stringify({
@@ -210,7 +231,8 @@ function HorizonEndView({
     }
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await undoHorizonState(
+      const toId = written.move?.toId ?? null;
+      const isUndone = await undoHorizonState(
         user.uid,
         encryption,
         written,
@@ -219,7 +241,20 @@ function HorizonEndView({
           written.after.state === 'finished' ? 'finished' : 'calledOff',
         ),
         todayAsUtcDate(),
+        {
+          cents: selectHeldBy(store.getState(), toId),
+          name:
+            toId === null
+              ? HORIZON_END_WORDS.freeTitle
+              : (place?.name ?? HORIZON_END_WORDS.anotherPlace),
+        },
       );
+      if (isUndone) {
+        addToast({
+          title: mask(HORIZON_END_WORDS.openAgain(horizon.name)),
+          type: 'success',
+        });
+      }
     } catch (undoError) {
       addToast({
         title: HORIZON_END_WORDS.releaseFailed(horizon.name),
@@ -265,12 +300,22 @@ function HorizonEndView({
         setError(HORIZON_END_WORDS.alreadyDone);
         return;
       }
+      const money = formatCents(leftCents);
       addToast({
         title: mask(
           isCallOff
             ? HORIZON_END_WORDS.calledOff(live.name)
             : HORIZON_END_WORDS.finished(live.name),
         ),
+        description: !holdsMoney
+          ? undefined
+          : mask(
+              where.kind === 'free'
+                ? HORIZON_END_WORDS.movedFree(money)
+                : where.kind === 'place'
+                  ? HORIZON_END_WORDS.movedPlace(money, where.name)
+                  : HORIZON_END_WORDS.movedHeld(money),
+            ),
         type: 'success',
         action: {
           label: HORIZON_END_WORDS.undo,
@@ -290,15 +335,6 @@ function HorizonEndView({
     }
   };
 
-  useEffect(() => {
-    if (pick === 'place') {
-      pickerRef.current?.scrollIntoView({
-        block: 'nearest',
-        behavior: 'smooth',
-      });
-    }
-  }, [pick]);
-
   const leftNow = () =>
     Math.max(0, selectBalances(store.getState()).assignedByItem[itemId] ?? 0);
 
@@ -311,7 +347,7 @@ function HorizonEndView({
 
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink label={horizon.name} onBack={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <ActionTitle>{title}</ActionTitle>
         <p className='text-muted-foreground text-sm'>
@@ -320,6 +356,115 @@ function HorizonEndView({
             : HORIZON_END_WORDS.finishNote}
         </p>
       </div>
+      {holdsMoney && (
+        <ActionSection
+          caption={mask(
+            HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents)),
+          )}
+        >
+          <ChoiceCards
+            options={[
+              {
+                value: 'free' as const,
+                title: HORIZON_END_WORDS.freeTitle,
+                body: HORIZON_END_WORDS.freeBody,
+              },
+              {
+                value: 'keep' as const,
+                title: HELD_WORDS.keepTitle,
+                body: HELD_WORDS.keepBody,
+              },
+            ]}
+            value={pick === 'free' || pick === 'keep' ? pick : null}
+            onChange={(choice) => {
+              setPick(choice);
+              setIsPickerOpen(false);
+              setError(null);
+            }}
+          />
+          <ActionGroup>
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={pick === 'place' && place ? <Check /> : <ArrowRightLeft />}
+              label={HORIZON_END_WORDS.placeRow}
+              subtitle={
+                pick === 'place' && place
+                  ? HORIZON_END_WORDS.placePicked(place.name)
+                  : HORIZON_END_WORDS.placeRowSub
+              }
+              onClick={() => {
+                setPick('place');
+                setIsPickerOpen(true);
+                setError(null);
+              }}
+            />
+          </ActionGroup>
+          {pick === 'place' && isPickerOpen && (
+            <div className='space-y-3'>
+              {places.length === 0 ? (
+                <p className='text-muted-foreground text-sm'>
+                  {HORIZON_END_WORDS.placeNone}
+                </p>
+              ) : (
+                <>
+                  {places.length >= RUNWAY_SEARCH_THRESHOLD && (
+                    <SearchInput
+                      value={query}
+                      onChange={setQuery}
+                      placeholder={HORIZON_END_WORDS.placeSearch}
+                    />
+                  )}
+                  {(
+                    [
+                      ['envelope', HORIZON_END_WORDS.envelopesHeading],
+                      ['goal', HORIZON_END_WORDS.goalsHeading],
+                    ] as const
+                  ).map(([group, heading]) => {
+                    const options = shown.filter(
+                      (entry) => entry.group === group,
+                    );
+                    return options.length === 0 ? null : (
+                      <div key={group} className='space-y-2'>
+                        <SectionDivider label={heading} />
+                        <PillGroup
+                          label={heading}
+                          options={options}
+                          value={placeId}
+                          onChange={(id) => {
+                            setPlaceId(id);
+                            setIsPickerOpen(false);
+                            setQuery('');
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                  {shown.length === 0 && (
+                    <p className='text-muted-foreground text-sm'>
+                      {HORIZON_END_WORDS.placeNone}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </ActionSection>
+      )}
+      {changeJson !== null && (
+        <EffectPreview
+          changeJson={changeJson}
+          emptyText=''
+          isCompact
+          lead={
+            holdsMoney && where !== null ? (
+              <p className='text-sm'>
+                <MaskedText>{getFreeLine(where)}</MaskedText>
+              </p>
+            ) : null
+          }
+        />
+      )}
       {isCallOff && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
           {rows.length === 0 ? (
@@ -356,108 +501,6 @@ function HorizonEndView({
                 </li>
               )}
             </ul>
-          )}
-        </ActionSection>
-      )}
-      {changeJson !== null && (
-        <EffectPreview
-          changeJson={changeJson}
-          emptyText=''
-          isCompact
-          lead={
-            movesMoney && where?.kind === 'free' ? (
-              <p className='text-sm'>
-                <MaskedText>
-                  {HORIZON_END_WORDS.freeUp(formatCents(leftCents))}
-                </MaskedText>
-              </p>
-            ) : null
-          }
-        />
-      )}
-      {holdsMoney && (
-        <ActionSection
-          caption={mask(
-            HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents)),
-          )}
-        >
-          <ChoiceCards
-            options={[
-              {
-                value: 'free' as const,
-                title: HORIZON_END_WORDS.freeTitle,
-                body: HORIZON_END_WORDS.freeBody,
-              },
-              {
-                value: 'keep' as const,
-                title: HELD_WORDS.keepTitle,
-                body: HELD_WORDS.keepBody,
-              },
-            ]}
-            value={pick === 'free' || pick === 'keep' ? pick : null}
-            onChange={(choice) => {
-              setPick(choice);
-              setError(null);
-            }}
-          />
-          <ActionGroup>
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<ArrowRightLeft />}
-              label={HORIZON_END_WORDS.placeRow}
-              subtitle={
-                pick === 'place' && place
-                  ? HORIZON_END_WORDS.placePicked(place.name)
-                  : HORIZON_END_WORDS.placeRowSub
-              }
-              onClick={() => setPick('place')}
-            />
-          </ActionGroup>
-          {pick === 'place' && (
-            <div ref={pickerRef} className='space-y-3'>
-              {places.length === 0 ? (
-                <p className='text-muted-foreground text-sm'>
-                  {HORIZON_END_WORDS.placeNone}
-                </p>
-              ) : (
-                <>
-                  {places.length >= RUNWAY_SEARCH_THRESHOLD && (
-                    <SearchInput
-                      value={query}
-                      onChange={setQuery}
-                      placeholder={HORIZON_END_WORDS.placeSearch}
-                    />
-                  )}
-                  {(
-                    [
-                      ['envelope', HORIZON_END_WORDS.envelopesHeading],
-                      ['goal', HORIZON_END_WORDS.goalsHeading],
-                    ] as const
-                  ).map(([group, heading]) => {
-                    const options = shown.filter(
-                      (entry) => entry.group === group,
-                    );
-                    return options.length === 0 ? null : (
-                      <div key={group} className='space-y-2'>
-                        <SectionDivider label={heading} />
-                        <PillGroup
-                          label={heading}
-                          options={options}
-                          value={placeId}
-                          onChange={setPlaceId}
-                        />
-                      </div>
-                    );
-                  })}
-                  {shown.length === 0 && (
-                    <p className='text-muted-foreground text-sm'>
-                      {HORIZON_END_WORDS.placeNone}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
           )}
         </ActionSection>
       )}

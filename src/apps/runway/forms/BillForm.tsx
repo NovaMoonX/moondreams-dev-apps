@@ -75,6 +75,7 @@ import {
   selectCostPaid,
   selectCostPayments,
   selectHorizonItems,
+  selectHorizonVersionId,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
@@ -1729,6 +1730,7 @@ function BillFormBody({
           bringCents,
           freeCents,
           startDate: today,
+          baseVersionId: selectHorizonVersionId(state, fromCost.itemId, today),
         });
         addToast({
           title:

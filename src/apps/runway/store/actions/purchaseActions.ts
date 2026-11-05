@@ -10,6 +10,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  HORIZON_END_WORDS,
   MAX_PURCHASE_LINES,
   PURCHASE_COST_WORDS,
   SPEND_WORDS,
@@ -25,11 +26,13 @@ import {
   findOpenCostMark,
   getCostPaidChange,
   isCostUnmarked,
+  isReopenTaken,
   sealCostUnmark,
   sealReopen,
   setCostUnmark,
   undoCostPaid,
   type CostPaidNames,
+  type FinishedHorizon,
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -45,7 +48,6 @@ import type {
   CostPaidSealed,
   CostRef,
   DateOnly,
-  HorizonSealed,
   OpenPurchase,
   ChangeDoc,
   ChangeSealed,
@@ -104,7 +106,7 @@ export interface PurchaseCostMark {
   paid: WrittenCostPaid | null;
   names: CostPaidNames;
   /** The event as it stands when it is finished: taking the mark back reopens it in the same transaction. */
-  finished?: HorizonSealed | null;
+  finished?: FinishedHorizon | null;
 }
 
 const MAX_MARK_LOOKUPS = 12;
@@ -511,7 +513,7 @@ export async function deletePurchase(
                 paid.itemId,
                 names.cost,
                 todayAsUtcDate(),
-                paid.moveId,
+                HORIZON_END_WORDS.calledOffRemovePurchase,
               )
             : Promise.resolve(null),
         ]);
@@ -519,8 +521,17 @@ export async function deletePurchase(
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
-    const isUnmarkNeeded =
-      paid !== null && !(await isCostUnmarked(transaction, uid, paid));
+    const [isUnmarked, isReopenGone] =
+      paid === null
+        ? [true, false]
+        : await Promise.all([
+            isCostUnmarked(transaction, uid, paid),
+            isReopenTaken(transaction, uid, reopen),
+          ]);
+    const isUnmarkNeeded = paid !== null && !isUnmarked;
+    if (isUnmarkNeeded && isReopenGone) {
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
+    }
     markLedgerWrite(transaction, uid, plan.data(), [
       previous.date,
       ...(isUnmarkNeeded && paid ? [paid.dueOn] : []),
@@ -549,7 +560,7 @@ export async function removePurchaseOfCost(
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
   names: CostPaidNames,
-  finished: HorizonSealed | null = null,
+  finished: FinishedHorizon | null = null,
 ): Promise<boolean> {
   const snapshot =
     paid.purchaseId === null

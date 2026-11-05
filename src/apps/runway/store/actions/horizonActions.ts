@@ -371,6 +371,15 @@ export const isCostUnmarked = async (
     await transaction.get(planDoc(uid, 'moves', getUndoMoveId(paid.moveId)))
   ).exists();
 
+/** Whether another write already took the version a reopen would stand on; read before any write in the transaction. */
+export const isReopenTaken = async (
+  transaction: Transaction,
+  uid: string,
+  reopen: SealedReopen | null,
+) =>
+  reopen !== null &&
+  (await transaction.get(planDoc(uid, 'versions', reopen.version.id))).exists();
+
 /** Appends the move that reverses a mark, and its History entry, to a transaction that has read `isCostUnmarked` as false; the caller marks the ledger, once for all it writes. */
 export function setCostUnmark(
   transaction: Transaction,
@@ -406,17 +415,23 @@ export interface SealedReopen {
   change: ChangeDoc;
 }
 
+/** A finished or called-off event and the id of the version it was read from, which a write that reopens it names its own after. */
+export interface FinishedHorizon {
+  horizon: HorizonSealed;
+  versionId: string;
+}
+
 /** Seals the reopening of a finished event because one of its paid marks is taken back; the version starts today. */
 export async function sealReopen(
   encryption: RunwayEncryption,
-  finished: HorizonSealed,
+  { horizon: finished, versionId }: FinishedHorizon,
   itemId: string,
   costName: string,
   on: DateOnly,
-  markMoveId: string,
+  blocked: (name: string) => string = HORIZON_END_WORDS.calledOffTakeBack,
 ): Promise<SealedReopen> {
   if (finished.state === 'calledOff') {
-    throw new Error(HORIZON_END_WORDS.calledOffTakeBack(finished.name));
+    throw new Error(blocked(finished.name));
   }
   const now = Date.now();
   const changeId = generateUuid();
@@ -431,7 +446,7 @@ export async function sealReopen(
   ]);
   return {
     version: {
-      id: `reopen_${markMoveId}`,
+      id: `state_${versionId}`,
       itemId,
       kind: 'horizon',
       createdAt: now,
@@ -457,27 +472,22 @@ export async function undoCostPaid(
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
   names: CostPaidNames,
-  finished: HorizonSealed | null = null,
+  finished: FinishedHorizon | null = null,
   on: DateOnly = todayAsUtcDate(),
 ): Promise<boolean> {
   const sealed = await sealCostUnmark(encryption, paid);
   const reopen =
     finished === null
       ? null
-      : await sealReopen(
-          encryption,
-          finished,
-          paid.itemId,
-          names.cost,
-          on,
-          paid.moveId,
-        );
+      : await sealReopen(encryption, finished, paid.itemId, names.cost, on);
   const isWritten = await runTransaction(db, async (transaction) => {
-    const [isDone, plan] = await Promise.all([
+    const [isDone, plan, isReopenGone] = await Promise.all([
       isCostUnmarked(transaction, uid, paid),
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+      isReopenTaken(transaction, uid, reopen),
     ]);
     if (isDone) return false;
+    if (isReopenGone) throw new Error(HORIZON_END_WORDS.changedJustNow);
     const change = await getCostPaidChange(encryption, paid, names, true);
     markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
     setCostUnmark(transaction, uid, paid, sealed, change, reopen);
@@ -503,6 +513,8 @@ export interface MakeCostABillInput {
   /** Money moved from the item to Free to Spend instead, when the item has no other open cost; zero moves none. */
   freeCents: Cents;
   startDate: DateOnly;
+  /** The id of the version of the item `horizon` was made from; its next version is named after it, so a second write from the same one is refused. */
+  baseVersionId?: string;
 }
 
 /**
@@ -587,13 +599,19 @@ export async function makeCostABill(
     sealed: changeSealed,
   } satisfies ChangeDoc;
 
+  const itemVersionId =
+    input.baseVersionId === undefined
+      ? generateUuid()
+      : `state_${input.baseVersionId}`;
   return runTransaction(db, async (transaction) => {
-    const [plan, item, existing] = await Promise.all([
+    const [plan, item, existing, taken] = await Promise.all([
       transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
       transaction.get(planDoc(uid, 'items', input.itemId)),
       transaction.get(planDoc(uid, 'items', input.billId)),
+      transaction.get(planDoc(uid, 'versions', itemVersionId)),
     ]);
     if (existing.exists()) throw new Error(MAKE_BILL_WORDS.alreadyDone);
+    if (taken.exists()) throw new Error(HORIZON_END_WORDS.changedJustNow);
     if (movedCents > 0) assertPlanStarted(plan.data(), input.startDate);
     assertSourceLive(item.data() as Partial<PlanItemDoc> | undefined);
     if (groupDocs) {
@@ -613,7 +631,10 @@ export async function makeCostABill(
     transaction.set(planDoc(uid, 'items', input.billId), header);
     const billVersion = version(input.billId, 'bill', billSealed);
     transaction.set(planDoc(uid, 'versions', billVersion.id), billVersion);
-    const itemVersion = version(input.itemId, 'horizon', horizonSealed);
+    const itemVersion = {
+      ...version(input.itemId, 'horizon', horizonSealed),
+      id: itemVersionId,
+    };
     transaction.set(planDoc(uid, 'versions', itemVersion.id), itemVersion);
     transaction.set(planDoc(uid, 'changes', changeId), change);
     if (moveSealed !== null) {
@@ -642,7 +663,7 @@ export interface HorizonMoneyMove {
   cents: Cents;
   /** The day the move is dated: today, or the original's day for one that reverses it. */
   date: DateOnly;
-  /** What the source has left as this device reads it; not read when `fromId` is null or the move reverses an earlier one. */
+  /** What the source has left as this device reads it; not read when the move reverses an earlier one. */
   leftCents: Cents;
 }
 
@@ -683,7 +704,7 @@ export async function setHorizonStateWith(
   if (move && (move.cents <= 0 || move.fromId === move.toId)) {
     throw new Error(HORIZON_END_WORDS.badMove);
   }
-  if (move && !isUndo && move.fromId !== null && move.cents > move.leftCents) {
+  if (move && !isUndo && move.cents > move.leftCents) {
     throw new Error(HORIZON_END_WORDS.notEnough);
   }
   const placeIds = [move?.fromId, move?.toId].filter(
@@ -961,14 +982,18 @@ export async function releaseHorizonHeld(
     : null;
 }
 
-/** Writes the opposite of a change of state: the payload from before, from today, and the reversal of the move it made. Resolves false when it was already undone. */
+/** Writes the opposite of a change of state: the payload from before, from today, and the reversal of the move it made. `holds` is what the reversal takes the money back from has now; short of the move, nothing is written. Resolves false when it was already undone. */
 export async function undoHorizonState(
   uid: string,
   encryption: RunwayEncryption,
   written: HorizonStateWritten,
   summary: string,
   today: DateOnly,
+  holds: { cents: Cents; name: string },
 ): Promise<boolean> {
+  if (written.move && written.move.cents > holds.cents) {
+    throw new Error(HORIZON_END_WORDS.undoShort(holds.name));
+  }
   return setHorizonStateWith(uid, encryption, {
     versionId: `undo_${written.versionId}`,
     itemId: written.itemId,

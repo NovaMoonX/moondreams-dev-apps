@@ -46,23 +46,23 @@ export const getFinishedHorizon = (itemId: string) => {
     ({ item }) => item.id === itemId,
   );
   return found && found.version.payload.state !== 'open'
-    ? found.version.payload
+    ? { horizon: found.version.payload, versionId: found.version.id }
     : null;
 };
 
 /** "Moving opens again." when taking a mark back would reopen a finished event; null otherwise. */
 export const getOpensAgainNote = (itemId: string) => {
   const done = getFinishedHorizon(itemId);
-  return done?.state === 'finished'
-    ? HORIZON_END_WORDS.opensAgain(done.name)
+  return done?.horizon.state === 'finished'
+    ? HORIZON_END_WORDS.opensAgain(done.horizon.name)
     : null;
 };
 
 /** Why a paid mark cannot be taken back while the event is called off; null when it can. */
 export const getTakeBackBlock = (itemId: string) => {
   const done = getFinishedHorizon(itemId);
-  return done?.state === 'calledOff'
-    ? HORIZON_END_WORDS.calledOffTakeBack(done.name)
+  return done?.horizon.state === 'calledOff'
+    ? HORIZON_END_WORDS.calledOffTakeBack(done.horizon.name)
     : null;
 };
 

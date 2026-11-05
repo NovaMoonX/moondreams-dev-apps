@@ -331,7 +331,7 @@ export const HORIZON_WORDS = {
   costLineName: (cost: string, item: string) => `${cost}\u00A0· ${item}`,
   costLineDetail: (item: string, tail: string) => `${item}\u00A0· ${tail}`,
   costFallback: 'Cost',
-  due: (name: string, date: string) => `${name}\u00A0·\u00A0due ${date}`,
+  due: (name: string, date: string) => `${name}\u00A0·\u00A0due\u00A0${date}`,
   totalCost: 'Total cost',
   costCount: (count: number) => `${count} costs`,
   costsCaption: 'Costs',
@@ -517,8 +517,8 @@ export const HORIZON_WORDS = {
   needsPutMoreFrom: 'Pick where it comes from.',
   changeItem: 'Change it',
   changeItemSub: 'Name, date, how the rest is paid and priority',
-  costDue: (date: string) => `Due ${date}`,
-  costDueLower: (date: string) => `due ${date}`,
+  costDue: (date: string) => `Due\u00A0${date}`,
+  costDueLower: (date: string) => `due\u00A0${date}`,
   costFact: (when: string, pricedOn: string | null, isOutside = false) =>
     [
       when,
@@ -543,7 +543,6 @@ export const HORIZON_WORDS = {
   samePrice: "That's the price already.",
   effectBefore: 'Now',
   effectAfter: 'After this change',
-  paidStaysInRecord: "It's paid, so it stays in the record.",
   changeCostRow: 'Change',
   changeCostSub: "Name, date and how it's paid",
   removeCostRow: 'Remove this cost',
@@ -668,6 +667,8 @@ export const HORIZON_END_WORDS = {
   badMove: 'There is no money to move that way.',
   notEnough: 'That is more than it has left.',
   changedSince: 'It was changed since, so nothing was undone.',
+  undoShort: (name: string) =>
+    `${name} has used some of it, so this can't be undone.`,
   offline: 'You are offline, so nothing was changed.',
   alreadyDone: 'It was already changed on another device. Open it again.',
   endSummary: (
@@ -713,7 +714,11 @@ export const HORIZON_END_WORDS = {
   freeTitle: 'Free to Spend',
   opensAgain: (name: string) => `${name} opens again.`,
   calledOffTakeBack: (name: string) =>
-    `${name} is called off, so a paid mark can't be taken back. Bring it back first.`,
+    `${name} is called off. Bring it back first to take a payment back.`,
+  calledOffRemovePurchase: (name: string) =>
+    `${name} is called off. Bring it back first to remove this purchase.`,
+  tapToTakeBack: 'Tap the payment to take it back.',
+  changedJustNow: 'This changed just now. Look again, then try once more.',
   moneyChanged:
     'What it holds changed just now. Look again, then try once more.',
   endless: (cost: string) =>
@@ -721,6 +726,7 @@ export const HORIZON_END_WORDS = {
   freeUp: (amount: string) => `Free to Spend goes up by ${amount}.`,
   freeDown: (amount: string) => `Free to Spend goes down by ${amount}.`,
   nothingPaid: 'Nothing paid',
+  nothingPaidFrom: (name: string) => `Nothing paid from ${name}`,
   paidBeforeCallOff: 'Paid before calling off',
   placeSearch: 'Search envelopes and goals',
   envelopesHeading: 'Envelopes',
@@ -733,7 +739,25 @@ export const HORIZON_END_WORDS = {
     `${money} to ${place}, ${date}`,
   stillHeld: (money: string) => `Still held \u00b7 ${money}`,
   release: (amount: string) => `Release ${amount} to Free to Spend`,
-  releaseSub: 'Nothing else about it changes.',
+  releaseSub: (amount: string) => `Free to Spend goes up by ${amount}.`,
+  releasedAmount: (amount: string, name: string) =>
+    `${amount} from ${name} went to Free to Spend`,
+  releaseUndone: (amount: string, name: string) =>
+    `${amount} is back in ${name}`,
+  movedFree: (amount: string) => `${amount} went to Free to Spend.`,
+  movedPlace: (amount: string, place: string) => `${amount} went to ${place}.`,
+  movedHeld: (amount: string) => `${amount} stays held.`,
+  openAgain: (name: string) => `${name} is open again`,
+  undoneBringBack: (name: string, state: 'finished' | 'calledOff') =>
+    state === 'finished'
+      ? `${name} is done again`
+      : `${name} is called off again`,
+  freeSame: 'Free to Spend stays the same.',
+  heldStays: (amount: string, name: string) =>
+    `${amount} stays in ${name} until you release it.`,
+  bringsFrom: (name: string, amount: string, place: string) =>
+    `${name} gets ${amount} from ${place}.`,
+  placeGets: (place: string, amount: string) => `${place} gets ${amount}.`,
   released: (name: string) => `What ${name} held is Free to Spend`,
   releaseFailed: (name: string) => `${name} was not changed`,
   bringBackRow: 'Bring it back',

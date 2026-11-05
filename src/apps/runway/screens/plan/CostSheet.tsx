@@ -72,6 +72,7 @@ import {
   selectCostPaid,
   selectCostPayments,
   selectHorizonItems,
+  selectHorizonVersionId,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
@@ -194,6 +195,7 @@ interface CostSheetProps {
   onChange: () => void;
   /** Calls the whole event off, offered where Remove would leave an event with no cost. */
   onCallOff: () => void;
+  onBringBack: () => void;
 }
 
 /** One cost of an event, swapped into the event's sheet: set its price, change it, or remove it. */
@@ -207,6 +209,7 @@ function CostSheet({
   backLabel = null,
   onChange,
   onCallOff,
+  onBringBack,
 }: CostSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -334,6 +337,7 @@ function CostSheet({
       summary,
       note: null,
       effectiveFrom: today,
+      baseVersionId: selectHorizonVersionId(store.getState(), itemId, today),
     });
   };
 
@@ -480,9 +484,16 @@ function CostSheet({
             entry.fromFreeCents,
             isTrack ? entry.mark : 'item',
           );
-    return horizon.state === 'finished'
-      ? `${gives} ${HORIZON_END_WORDS.opensAgain(horizon.name)}`
-      : gives;
+    if (horizon.state !== 'finished') return gives;
+    const isFreeUntouched =
+      entry.mark !== 'outside' && entry.fromFreeCents === 0;
+    return [
+      gives === null || gives.endsWith('.') ? gives : `${gives}.`,
+      HORIZON_END_WORDS.opensAgain(horizon.name),
+      isFreeUntouched ? HORIZON_END_WORDS.freeSame : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
   };
 
   const getMarkBody = () => {
@@ -747,9 +758,19 @@ function CostSheet({
           </RevealChip>
         </div>
       )}
-      {isPaidOnce && (
+      {paidEntries.length > 0 && horizon.state === 'calledOff' && (
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-sm'>
+            {HORIZON_END_WORDS.calledOffTakeBack(horizon.name)}
+          </p>
+          <Button type='button' variant='secondary' onClick={onBringBack}>
+            {HORIZON_END_WORDS.bringBackRow}
+          </Button>
+        </div>
+      )}
+      {isPaidOnce && horizon.state !== 'calledOff' && (
         <p className='text-muted-foreground text-sm'>
-          {HORIZON_WORDS.paidStaysInRecord}
+          {HORIZON_END_WORDS.tapToTakeBack}
         </p>
       )}
       {canAddPurchase && isNear && (

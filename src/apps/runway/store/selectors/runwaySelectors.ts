@@ -690,6 +690,15 @@ export const selectAllHorizonItems = createSelector(
   },
 );
 
+/** The id of the version of an event in force on a date, which an edit of it is named after; undefined when it is not listed. */
+export const selectHorizonVersionId = (
+  state: RootState,
+  itemId: string,
+  on: number,
+) =>
+  selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
+    ?.version.id;
+
 /** The Horizon items still in the plan on a date: the ones that are not finished or called off. */
 export const selectHorizonItems = createSelector(
   [selectAllHorizonItems],

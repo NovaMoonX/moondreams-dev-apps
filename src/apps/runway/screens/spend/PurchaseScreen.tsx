@@ -243,12 +243,15 @@ function PurchaseScreen({
       (costMarks[ref.itemId] ?? []).find(
         (entry) => entry.purchaseId === purchase.id,
       ) ?? null;
-    const payload =
-      horizons.find(({ item }) => item.id === ref.itemId)?.version.payload ??
-      null;
+    const version =
+      horizons.find(({ item }) => item.id === ref.itemId)?.version ?? null;
+    const payload = version?.payload ?? null;
     return {
       paid: paid === null ? null : { ...paid, itemId: ref.itemId },
-      finished: payload && payload.state !== 'open' ? payload : null,
+      finished:
+        version && payload && payload.state !== 'open'
+          ? { horizon: payload, versionId: version.id }
+          : null,
       names: {
         item: nameOf(ref.itemId),
         cost:
@@ -272,10 +275,12 @@ function PurchaseScreen({
   const remove = async () => {
     if (!user || isBusy) return;
     const costMark = getCostMark();
-    const blocked = costMark?.finished?.state === 'calledOff';
+    const blocked = costMark?.finished?.horizon.state === 'calledOff';
     if (blocked && costMark?.finished) {
       addToast({
-        title: HORIZON_END_WORDS.calledOffTakeBack(costMark.finished.name),
+        title: HORIZON_END_WORDS.calledOffRemovePurchase(
+          costMark.finished.horizon.name,
+        ),
         type: 'error',
       });
       return;
@@ -304,8 +309,8 @@ function PurchaseScreen({
                 costMark.names.cost,
                 costMark.names.item,
               ),
-          costMark?.finished?.state === 'finished'
-            ? HORIZON_END_WORDS.opensAgain(costMark.finished.name)
+          costMark?.finished?.horizon.state === 'finished'
+            ? HORIZON_END_WORDS.opensAgain(costMark.finished.horizon.name)
             : null,
           'It stays in the change log.',
         ]

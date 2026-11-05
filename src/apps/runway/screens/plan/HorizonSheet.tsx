@@ -65,7 +65,10 @@ import {
   releaseHorizonHeld,
   undoHorizonState,
 } from '@apps/runway/store/actions/horizonActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBalances,
+  selectHeldBy,
+} from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAllHorizonItems,
   selectComingDays,
@@ -310,8 +313,13 @@ function HorizonSheet({
         );
   };
   const sentLine = getSentLine();
+  const isNothingPaid = figures.spentCents <= 0 && !isHidden;
   const getHeroLabel = () => {
-    if (figures.spentCents <= 0) return HORIZON_END_WORDS.nothingPaid;
+    if (isNothingPaid) {
+      return horizon.state === 'calledOff' && outsidePaidCents > 0
+        ? HORIZON_END_WORDS.nothingPaidFrom(horizon.name)
+        : HORIZON_END_WORDS.nothingPaid;
+    }
     return horizon.state === 'calledOff'
       ? HORIZON_END_WORDS.paidBeforeCallOff
       : HORIZON_END_WORDS.spent;
@@ -357,7 +365,7 @@ function HorizonSheet({
       }
       const money = formatCents(written.move?.cents ?? 0);
       addToast({
-        title: HORIZON_END_WORDS.released(horizon.name),
+        title: mask(HORIZON_END_WORDS.releasedAmount(money, horizon.name)),
         type: 'success',
         action: {
           label: HORIZON_END_WORDS.undo,
@@ -375,16 +383,31 @@ function HorizonSheet({
               written,
               HORIZON_END_WORDS.undoReleaseSummary(horizon.name, money),
               todayAsUtcDate(),
-            ).catch((undoError: unknown) =>
-              addToast({
-                title: HORIZON_END_WORDS.releaseFailed(horizon.name),
-                description: getErrorMessage(
-                  undoError,
-                  HORIZON_END_WORDS.failed,
-                ),
-                type: 'error',
-              }),
-            );
+              {
+                cents: selectHeldBy(store.getState(), null),
+                name: HORIZON_END_WORDS.freeTitle,
+              },
+            )
+              .then((isUndone) => {
+                if (isUndone) {
+                  addToast({
+                    title: mask(
+                      HORIZON_END_WORDS.releaseUndone(money, horizon.name),
+                    ),
+                    type: 'success',
+                  });
+                }
+              })
+              .catch((undoError: unknown) =>
+                addToast({
+                  title: HORIZON_END_WORDS.releaseFailed(horizon.name),
+                  description: getErrorMessage(
+                    undoError,
+                    HORIZON_END_WORDS.failed,
+                  ),
+                  type: 'error',
+                }),
+              );
           },
         },
       });
@@ -505,6 +528,10 @@ function HorizonSheet({
             setCostId(null);
             setView('callOff');
           }}
+          onBringBack={() => {
+            setCostId(null);
+            setView('bringBack');
+          }}
         />
       ) : addState !== null ? (
         <HorizonChangeView
@@ -541,11 +568,7 @@ function HorizonSheet({
         <div className='flex flex-1 flex-col gap-4'>
           <SheetHead
             label={getHeroLabel()}
-            figure={
-              figures.spentCents > 0
-                ? formatCents(figures.spentCents)
-                : undefined
-            }
+            figure={isNothingPaid ? undefined : formatCents(figures.spentCents)}
             fact={
               horizon.state === 'calledOff'
                 ? HORIZON_END_WORDS.calledOffOn(doneOn)
@@ -614,7 +637,9 @@ function HorizonSheet({
                 label={mask(
                   HORIZON_END_WORDS.release(formatCents(figures.leftCents)),
                 )}
-                subtitle={HORIZON_END_WORDS.releaseSub}
+                subtitle={mask(
+                  HORIZON_END_WORDS.releaseSub(formatCents(figures.leftCents)),
+                )}
                 isDisabled={isReleasing}
                 onClick={() => void release()}
               />

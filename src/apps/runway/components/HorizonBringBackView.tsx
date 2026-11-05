@@ -31,7 +31,10 @@ import {
   undoHorizonState,
   type HorizonStateWritten,
 } from '@apps/runway/store/actions/horizonActions';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBalances,
+  selectHeldBy,
+} from '@apps/runway/store/selectors/balanceSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import {
   selectAllHorizonItems,
@@ -99,10 +102,22 @@ function HorizonBringBackView({
       stance,
       paid,
     ).find((payment) => payment.paid === null);
-    return { cost, isDue: next !== undefined && next.dueOn <= today };
+    return {
+      cost,
+      dueOn: next?.dueOn ?? Number.MAX_SAFE_INTEGER,
+      isDue: next !== undefined && next.dueOn <= today,
+    };
   });
+  comes.sort((a, b) => a.dueOn - b.dueOn);
 
   const placeWords = placeName ?? HORIZON_END_WORDS.anotherPlace;
+  const getFreeLine = () => {
+    if (bringCents <= 0) return HORIZON_END_WORDS.freeSame;
+    const money = formatCents(bringCents);
+    return sent?.kind === 'place'
+      ? `${HORIZON_END_WORDS.freeSame} ${HORIZON_END_WORDS.bringsFrom(horizon.name, money, placeWords)}`
+      : HORIZON_END_WORDS.freeDown(money);
+  };
   const options = [
     {
       value: 'bring' as const,
@@ -159,16 +174,27 @@ function HorizonBringBackView({
     }
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await undoHorizonState(
+      const priorState =
+        written.before.state === 'finished' ? 'finished' : 'calledOff';
+      const isUndone = await undoHorizonState(
         user.uid,
         encryption,
         written,
-        HORIZON_END_WORDS.undoBringBackSummary(
-          horizon.name,
-          written.before.state === 'finished' ? 'finished' : 'calledOff',
-        ),
+        HORIZON_END_WORDS.undoBringBackSummary(horizon.name, priorState),
         todayAsUtcDate(),
+        {
+          cents: selectHeldBy(store.getState(), itemId),
+          name: horizon.name,
+        },
       );
+      if (isUndone) {
+        addToast({
+          title: mask(
+            HORIZON_END_WORDS.undoneBringBack(horizon.name, priorState),
+          ),
+          type: 'success',
+        });
+      }
     } catch (undoError) {
       addToast({
         title: HORIZON_END_WORDS.releaseFailed(horizon.name),
@@ -233,7 +259,7 @@ function HorizonBringBackView({
 
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink label={horizon.name} onBack={onBack} />
+      <BackLink onBack={onBack} />
       <div className='space-y-1'>
         <ActionTitle>
           {HORIZON_END_WORDS.bringBackTitle(horizon.name)}
@@ -304,13 +330,9 @@ function HorizonBringBackView({
           emptyText=''
           isCompact
           lead={
-            bringCents > 0 && sent?.kind === 'free' ? (
-              <p className='text-sm'>
-                <MaskedText>
-                  {HORIZON_END_WORDS.freeDown(formatCents(bringCents))}
-                </MaskedText>
-              </p>
-            ) : null
+            <p className='text-sm'>
+              <MaskedText>{getFreeLine()}</MaskedText>
+            </p>
           }
         />
       )}

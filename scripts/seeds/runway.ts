@@ -468,6 +468,13 @@ async function writeSeedHorizon(
             feb1 + 30 * DAY_MS,
           ),
           cost('seed-cost-cabin', 'Cabin', 60_000, 60_000, feb1 + 28 * DAY_MS),
+          cost(
+            'seed-cost-parking',
+            'Parking pass',
+            2_000,
+            2_000,
+            feb1 + 25 * DAY_MS,
+          ),
         ],
       },
     },
@@ -542,8 +549,8 @@ async function writeSeedHorizon(
     },
     {
       itemId: 'seed-horizon-ski',
-      cents: 40_000,
-      summary: 'Put $400.00 toward Ski weekend from Free to Spend.',
+      cents: 42_000,
+      summary: 'Put $420.00 toward Ski weekend from Free to Spend.',
     },
     {
       itemId: 'seed-horizon-bike',
@@ -661,6 +668,14 @@ async function writeSeedHorizon(
           amountCents: 90_000,
           fromFreeCents: 0,
           paidOn: today - 4 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-ski',
+          cost: items[4].payload.costs[2],
+          amountCents: 2_000,
+          fromFreeCents: 0,
+          paidOn: today - 6 * DAY_MS,
           mark: 'item',
         },
         {
