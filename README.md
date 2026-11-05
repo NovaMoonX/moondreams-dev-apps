@@ -174,6 +174,13 @@ Problems we've hit before, so we don't hit them again.
 - **Telling it apart:** `scripts/fbDeploySmart.ts` repeats the release update on this 409 and prints the Rules API's own answer under "Repeating its update to read the answer"; a 400 naming a size is this problem, anything else is a different one. `npm run check:rules-size` estimates the size on every PR that touches `firestore.rules` and fails at 250,000 bytes (warns from 240,000); it matched the real 258,529 for the old rules at 258,530.
 - **Verified:** the estimate for the failing rules is 258,530 against the real 258,529. After the change it was 242,656, and the merge deploy of #480 is the real proof. The rules were later cut to the beta tier (about 54,000), which leaves most of the limit free; the strict version is in git history at `c784e89`.
 
+### A door in a drawer leaves the app for the site's home after an update's Restart
+
+- **Symptom:** on the owner's Android phone (the site installed as an app), Runway's "Things to fix" → the bills-with-no-due-date row opened the site's home page instead of Bills. It started right after tapping Restart for 1.223 and stopped once the app was closed and reopened, then came back after the next Restart.
+- **Cause:** a door in a drawer steps back over the drawer's history entries before it navigates (`afterBackLayersClose`), and an entry pushed to keep a closing layer's place (`keepEntryFor`) is marked in `history.state`. Restart reloads the page, which keeps the whole history and those marks, and URL writes copy them onto later entries. The reloaded code read the earlier load's marks as its own dead entries and kept stepping back, past Runway's first entry, to the site's home. Closing the app starts a clean history, so the bug went away until the next Restart.
+- **Fix:** each page load stamps its marks with its own id and ignores marks without it, and opening Bills always clears a day the address may still hold.
+- **Telling it apart:** `npm run check:back-history` restarts a stand-in app after a long session and taps a door; it fails on the old hook with the landing on `/home`. In a session, `history.state` on the entries behind the app holding `keptFor` with a `keptLoad` that isn't the current load's is this problem.
+
 ### Pinch-zoom on a full-screen photo works on one phone and not another
 
 - **Symptom:** in a full-screen photo (Going Once's thing photos, the admin's screenshots) two fingers do nothing on a OnePlus 12, while the same page zooms on a Galaxy Fold.

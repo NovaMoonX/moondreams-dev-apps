@@ -309,9 +309,8 @@ export function useRunwayUrlState() {
       | { itemId: string; step?: string; returnTo?: PlanSection }
       | 'undatedBills',
   ) => {
-    if (requestedDay !== null) {
-      await setRequestedDay(null, { history: 'replace' });
-    }
+    // Unconditional: run after a sheet's back steps, this render's `requestedDay` can predate the address.
+    await setRequestedDay(null, { history: 'replace' });
     await showPlanSection(section);
     await showTab('plan');
     if (target === 'undatedBills') {

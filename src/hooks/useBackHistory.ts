@@ -22,6 +22,8 @@ let lastSeq = 0;
 let steppedAt = 0;
 let isFlushQueued = false;
 let adoptUrl: string | null = null;
+// Marks the entries this page load kept, so one kept before a reload (an update's restart) never counts as dead.
+const LOAD_ID = generateUuid();
 
 const readEntry = () => {
   const state: unknown = window.history.state;
@@ -57,10 +59,17 @@ const nextSeq = () => {
 
 const isStepping = () => Date.now() - steppedAt < STEP_TIMEOUT_MS;
 
+const readKeptFor = () => {
+  const { keptFor, keptLoad } = window.history.state ?? {};
+  const result =
+    typeof keptFor === 'string' && keptLoad === LOAD_ID ? keptFor : null;
+  return result;
+};
+
 // An entry pushed to keep a closing layer's place (`keepEntryFor`) is dead once its param is gone.
 const isKeptEntryDone = () => {
-  const keptFor: unknown = window.history.state?.keptFor;
-  if (typeof keptFor !== 'string') return false;
+  const keptFor = readKeptFor();
+  if (keptFor === null) return false;
   const result = !new URLSearchParams(window.location.search).has(keptFor);
   return result;
 };
@@ -238,7 +247,7 @@ export function keepEntryFor(param: string) {
   const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
   void backLayerKey;
   void backLayerSeq;
-  window.history.pushState({ ...entry, keptFor: param }, '');
+  window.history.pushState({ ...entry, keptFor: param, keptLoad: LOAD_ID }, '');
 }
 
 const MAX_BACK_STEPS = 6;
@@ -251,9 +260,7 @@ export function afterBackLayersClose(action: () => void) {
   const step = (stepsLeft: number) => {
     // A kept entry only holds a closing layer's place, and a dead-entry step already under way lands on its own.
     const isLeavingDead = isStepping();
-    const isLayerEntry =
-      readEntry().key !== null ||
-      typeof window.history.state?.keptFor === 'string';
+    const isLayerEntry = readEntry().key !== null || readKeptFor() !== null;
     if ((!isLeavingDead && !isLayerEntry) || stepsLeft === 0) {
       isSteppingBack = false;
       action();
