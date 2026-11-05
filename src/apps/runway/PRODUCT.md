@@ -571,7 +571,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [ ] Cards with a reserve each, filled by card purchases and bills paid by card, and paid off in one step
 - [ ] Link bank and card accounts through one provider, with a one-time line-up of balances, matching purchases you entered by hand, and matching deposits to expected income days
 - [ ] Move down from Link: unlink an account and keep its history
-- [ ] "Safe to spend" for each envelope from live balances, and Where your cash is
+- [x] "Safe to spend" for each envelope from live balances, and Where your cash is
 - [ ] Goals held in linked accounts, with the difference line
 - [ ] Match new purchases and deposits on Runway's servers as they arrive, by the same rules as on the device
 - [ ] Notifications with no amounts or names: money arrived and ready to confirm, a bill was paid

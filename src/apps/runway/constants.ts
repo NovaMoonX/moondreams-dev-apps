@@ -75,6 +75,7 @@ export const RUNWAY_VIEWS = [
   'freeToSpend',
   'checkAmount',
   'checkBalance',
+  'cashPosition',
   'needsHome',
 ] as const;
 
@@ -1668,7 +1669,7 @@ export const LINK_STATUSES = ['active', 'needsAttention', 'revoked'] as const;
 export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
   plan: 'assigned',
   track: 'left',
-  link: 'left',
+  link: 'safe to spend',
 };
 
 export const TRACKING_WORDS = {
@@ -3287,9 +3288,39 @@ export const FREE_SUM_WORDS = {
   horizon: 'Held for Horizon',
   envelopesTrack: 'Left in envelopes',
   envelopesPlan: 'Set aside in envelopes',
+  envelopesLink: 'Safe to spend in envelopes',
   result: 'Free to Spend',
   laterFix:
     'To fix a balance later, correct the income day or the bill payment it came from.',
+} as const;
+
+/** Issue 61: where the cash in the accounts that count goes. */
+export const CASH_POSITION_WORDS = {
+  title: 'Where your cash is',
+  open: 'Where your cash is',
+  openSub: 'What your accounts hold and what is already spoken for',
+  cash: 'Cash in your accounts',
+  cashHelp: (names: string) =>
+    names === ''
+      ? 'The accounts that count toward your total.'
+      : `Counts ${names}. An account that is not for spending is left out.`,
+  fromBank: 'From your bank',
+  typedOn: (date: string) => `You typed it on ${date}`,
+  typed: 'You typed it',
+  noBalance: 'No balance yet',
+  bills: 'Bills set aside',
+  goals: 'Goals',
+  horizon: 'Set aside for later',
+  cards: 'Cards waiting to be paid',
+  pending: 'Charges still pending',
+  pendingHelp:
+    'Your bank counts only charges that have posted, so these have not left your balance yet.',
+  envelopes: 'Safe to spend in envelopes',
+  free: 'Free',
+  over: (amount: string) => `Over-assigned ${amount}`,
+  overHelp:
+    'Your envelopes hold more than the cash left after what is spoken for. Their figures stay as planned.',
+  noAccounts: 'No account counts toward your total yet.',
 } as const;
 
 export const GOAL_CHART_WORDS = {

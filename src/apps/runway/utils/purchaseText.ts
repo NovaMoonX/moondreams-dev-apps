@@ -6,7 +6,7 @@ import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const FREE_NAME = 'Free to Spend';
 
-/** An envelope's figure with its word: assigned at Plan, and at Track what is left or how far over. */
+/** An envelope's figure with its word: assigned at Plan, and at Track what is left (safe to spend at Link) or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {
   if (isTrackingLevel(level) && cents < 0) {
     return { value: `−${formatCents(-cents)}`, word: 'over' };

@@ -138,6 +138,7 @@ import type {
 } from '../../src/apps/runway/types.ts';
 import { describeEnvelopeFigure } from '../../src/apps/runway/utils/purchaseText.ts';
 import { getLevelWords } from '../../src/apps/runway/utils/levelText.ts';
+import { getCashPosition } from '../../src/apps/runway/engine/cash.ts';
 import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import {
   previewBillShareView,
@@ -16721,6 +16722,152 @@ console.log('runway engine: ok');
     [legacy.costs[0].becameBillId, legacy.costs[0].becameBillOn],
     [null, null],
     'a cost saved before Make it a bill reads as not a bill',
+  );
+}
+
+// Where your cash is (Issue 61).
+{
+  const account = (
+    id: string,
+    changes: Partial<OpenAccount> = {},
+  ): OpenAccount => ({
+    id,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+    linkId: null,
+    name: id,
+    institution: 'Capital One',
+    kind: 'checking',
+    countedTowardTotal: true,
+    isPullAccount: false,
+    lastFour: null,
+    balanceCents: null,
+    balanceOn: null,
+    holds: [],
+    ...changes,
+  });
+  const balances = {
+    assignedByItem: { g1: 20_000, g2: 30_000 },
+    assignedToBillsCents: 10_000,
+    assignedToHorizonCents: 5_000,
+    assignedToCardsCents: 7_000,
+    assignedToEnvelopesCents: 15_000,
+  };
+  const charge = (
+    amountCents: number,
+    accountId: string | null,
+    changes: { source?: 'link' | 'manual'; status?: 'pending' | 'posted' } = {},
+  ) => ({
+    source: 'link' as const,
+    status: 'pending' as const,
+    amountCents,
+    accountId,
+    ...changes,
+  });
+  const base = {
+    accounts: [
+      account('a', { linkId: 'l', balanceCents: 1 }),
+      account('b', { balanceCents: 50_000 }),
+      account('c', {
+        countedTowardTotal: false,
+        balanceCents: 900_000,
+        holds: ['g2'],
+      }),
+    ],
+    bankBalances: { a: 100_000 },
+    balances,
+    goalIds: ['g1', 'g2'],
+    purchases: [],
+  };
+  const sumParts = (p: ReturnType<typeof getCashPosition>) =>
+    p.committedCents + p.envelopesCents + p.freeCents - p.overAssignedCents;
+
+  const position = getCashPosition({
+    ...base,
+    purchases: [
+      charge(2_500, 'a'),
+      charge(4_000, null),
+      charge(3_000, 'c'),
+      charge(1_000, 'a', { status: 'posted' }),
+      charge(-900, 'a'),
+      charge(800, 'a', { source: 'manual' }),
+    ],
+  });
+  assert.equal(position.cashCents, 150_000, 'counted accounts only');
+  assert.deepEqual(
+    position.accounts.map((entry) => [entry.id, entry.cents, entry.isBank]),
+    [
+      ['a', 100_000, true],
+      ['b', 50_000, false],
+    ],
+    'the bank figure wins over the typed one for a linked account',
+  );
+  assert.equal(
+    position.goalsCents,
+    20_000,
+    "a left-out account's goals are not committed",
+  );
+  assert.equal(
+    position.pendingCents,
+    2_500,
+    'a pending charge on a counted account counts; a card, an uncounted account, a posted, a refund and a typed one do not',
+  );
+  assert.equal(
+    position.committedCents,
+    10_000 + 20_000 + 5_000 + 7_000 + 2_500,
+  );
+  assert.equal(position.freeCents, 150_000 - 44_500 - 15_000);
+  assert.equal(position.overAssignedCents, 0);
+  assert.equal(
+    sumParts(position),
+    position.cashCents,
+    'the parts add up to the cent',
+  );
+
+  const over = getCashPosition({
+    ...base,
+    accounts: [account('b', { balanceCents: 30_000 })],
+    goalIds: ['g1'],
+  });
+  assert.equal(over.freeCents, 0);
+  assert.equal(
+    over.overAssignedCents,
+    10_000 + 20_000 + 5_000 + 7_000 + 15_000 - 30_000,
+  );
+  assert.equal(
+    sumParts(over),
+    over.cashCents,
+    'over-assigned parts add up too',
+  );
+
+  const unknown = getCashPosition({
+    ...base,
+    accounts: [
+      account('b', { balanceCents: 50_000 }),
+      account('n'),
+      account('m', { linkId: 'l' }),
+    ],
+    bankBalances: {},
+  });
+  assert.deepEqual(
+    unknown.accounts.map((entry) => [entry.id, entry.cents]),
+    [
+      ['b', 50_000],
+      ['n', null],
+      ['m', null],
+    ],
+    'an account with no balance is listed with none',
+  );
+  assert.equal(unknown.cashCents, 50_000, 'and left out of the sum');
+  assert.equal(
+    getCashPosition({
+      ...base,
+      accounts: [account('x', { linkId: 'l', balanceCents: 7_000 })],
+      bankBalances: {},
+    }).cashCents,
+    7_000,
+    'a linked account with no bank figure yet falls back to the typed one',
   );
 }
 

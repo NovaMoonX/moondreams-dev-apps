@@ -1,6 +1,12 @@
 import { useState } from 'react';
 
-import { Calculator, ChevronRight, Landmark, Wallet } from 'lucide-react';
+import {
+  Calculator,
+  ChevronRight,
+  Landmark,
+  Wallet,
+  WalletCards,
+} from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -19,6 +25,7 @@ import { useAppSelector } from '@/store';
 import {
   BALANCE_CHECK_WORDS,
   CARD_WORDS,
+  CASH_POSITION_WORDS,
   CHECK_WORDS,
   ENVELOPE_SPEND_WORDS,
   FREE_SUM_WORDS,
@@ -26,6 +33,8 @@ import {
 } from '@apps/runway/constants';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
+import { WhereYourCashIsBody } from '@apps/runway/screens/home/WhereYourCashIsScreen';
+import LevelGate from '@apps/runway/components/LevelGate';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -65,10 +74,13 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     closeCheckAmount,
     openCheckBalance,
     closeCheckBalance,
+    openCashPosition,
+    closeCashPosition,
     leaveViewForTab,
   } = useRunwayUrlState();
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
+  const isViewingCash = view === 'cashPosition';
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
@@ -94,9 +106,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     },
     {
       sign: '+',
-      name: isTrackingLevel(level)
-        ? FREE_SUM_WORDS.envelopesTrack
-        : FREE_SUM_WORDS.envelopesPlan,
+      name:
+        level === 'link'
+          ? FREE_SUM_WORDS.envelopesLink
+          : isTrackingLevel(level)
+            ? FREE_SUM_WORDS.envelopesTrack
+            : FREE_SUM_WORDS.envelopesPlan,
       value: formatCents(balances.assignedToEnvelopesCents),
       section: 'envelopes',
     },
@@ -166,11 +181,13 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const getTitle = () => {
     if (isChecking) return CHECK_WORDS.title;
     if (isCheckingBalance) return BALANCE_CHECK_WORDS.title;
+    if (isViewingCash) return CASH_POSITION_WORDS.title;
     return sheetKey === null ? HOME_WORDS.freeToSpend : 'Where things stand';
   };
   const getBack = () => {
     if (isChecking) return closeCheckAmount;
     if (isCheckingBalance) return closeCheckBalance;
+    if (isViewingCash) return closeCashPosition;
     return sheetKey === null ? undefined : () => setSheetKey(null);
   };
 
@@ -185,6 +202,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
         <CheckAmountBody presetEnvelopeId={checkEnvelope} />
       ) : isCheckingBalance ? (
         <CheckBalanceBody onOpenDays={() => leaveViewForTab('days')} />
+      ) : isViewingCash ? (
+        <WhereYourCashIsBody />
       ) : sheetKey !== null ? (
         <StartingAmountsSheet
           key={sheetKey}
@@ -334,6 +353,17 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 onClick={openCheckBalance}
               />
             )}
+            <LevelGate level='link'>
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<WalletCards />}
+                label={CASH_POSITION_WORDS.open}
+                subtitle={CASH_POSITION_WORDS.openSub}
+                onClick={openCashPosition}
+              />
+            </LevelGate>
           </ActionGroup>
           {!isStartOpen && (
             <p className='text-muted-foreground text-sm'>
