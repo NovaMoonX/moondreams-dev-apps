@@ -3052,13 +3052,10 @@ const skippedText = (skipped: readonly string[]) =>
     : `${formatList([...skipped])} ${skipped.length === 1 ? 'has' : 'have'} nothing left, so `;
 
 export const SPILL_WORDS = {
-  /** The change log's sentence for an envelope that could not cover its share. */
   ranOut: (name: string, parts: string) => `${name} ran out: ${parts}`,
   part: (amount: string, source: string) => `${amount} from ${source}`,
-  /** The preview's sentence, leading with the cause; `skipped` names chain steps that had nothing left. */
   runsOut: (name: string, skipped: readonly string[], parts: string) =>
     `${name} runs out: ${skippedText(skipped)}${parts}.`,
-  /** Caption over the sources on a purchase's sheet. */
   sheetCaption: (name: string) => `${name} ran out, so the rest came from`,
   sheetCaptionHidden: 'Split across envelopes',
   row: 'When it runs out',

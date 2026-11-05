@@ -1187,7 +1187,7 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   tickedDayKey: purchase.tickedDayKey,
 });
 
-/** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part the person chose. */
+// A difference (a tip added when it posted) lands on the last line the person chose, never a spill line.
 function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
   const difference = amountCents - typed.amountCents;
   const last = typed.lines.reduce(

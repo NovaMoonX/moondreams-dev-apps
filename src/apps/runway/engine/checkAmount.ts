@@ -23,7 +23,6 @@ export type AmountCheck =
       overCents: Cents;
       /** What would cover it, in the order it is taken: the chain then Free to Spend, or Free to Spend then other envelopes. */
       sources: CheckSource[];
-      /** Whether the sources follow the envelope's own chain. */
       isChain?: boolean;
       /** What neither Free to Spend nor another envelope could cover. */
       uncoveredCents: Cents;
