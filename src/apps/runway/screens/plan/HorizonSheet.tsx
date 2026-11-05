@@ -773,7 +773,7 @@ function HorizonSheet({
               </p>
             )}
             {stage === 'open' && waitingOn.length > 0 && (
-              <p>
+              <p className='pt-2'>
                 {HORIZON_END_WORDS.finishWaits(
                   waitingOn.slice(0, 2).map(({ name }) => name),
                   Math.max(0, waitingOn.length - 2),

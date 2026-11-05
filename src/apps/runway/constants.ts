@@ -769,7 +769,7 @@ export const HORIZON_END_WORDS = {
   bringBackRow: 'Bring it back',
   bringBackSub: 'Its costs plan again from today',
   bringBackHeldSub:
-    'Its costs plan again from today. To put what it holds somewhere other than Free to Spend, bring it back and finish it again.',
+    'Its costs plan again from today. Bring it back first to put the money somewhere else.',
   bringBackTitle: (name: string) => `Bring ${name} back?`,
   bringBackNote: 'Its unpaid costs plan again from today.',
   whatComesBack: 'What comes back',
