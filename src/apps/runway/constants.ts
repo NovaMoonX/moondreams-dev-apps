@@ -62,7 +62,12 @@ export const STANCE_HELP: Record<(typeof STANCES)[number], string> = {
 export const STANCE_FOLLOW_PLAN = 'plan' as const;
 
 /** Entries on Plan > More; one appears when the screen it opens exists. */
-export const MORE_ENTRIES = ['priorities', 'settings', 'changeLog'] as const;
+export const MORE_ENTRIES = [
+  'priorities',
+  'accounts',
+  'settings',
+  'changeLog',
+] as const;
 
 /** The full screens Home opens, kept in the URL as `view`. */
 export const RUNWAY_VIEWS = [
@@ -76,10 +81,16 @@ export const RUNWAY_VIEWS = [
 export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
-  { priorities: 'Priorities', settings: 'Settings', changeLog: 'Change log' };
+  {
+    priorities: 'Priorities',
+    accounts: 'Accounts',
+    settings: 'Settings',
+    changeLog: 'Change log',
+  };
 
 export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
   priorities: 'Which items get their money first when it runs short.',
+  accounts: 'Where your money is held, and what each account holds.',
   settings:
     'How the plan reads a range of pay or a bill, and whether you track spending.',
   changeLog: 'Every change to the plan, with the reason you gave.',
@@ -110,6 +121,7 @@ export const CHANGE_KIND_LABELS: Record<(typeof CHANGE_KINDS)[number], string> =
     cardChange: 'Card',
     moveChange: 'Move',
     paymentChange: 'Payment',
+    accountChange: 'Account',
   };
 
 export const RANGE_END_WORDS = {
@@ -203,6 +215,7 @@ export const CHANGE_KINDS = [
   'cardChange',
   'moveChange',
   'paymentChange',
+  'accountChange',
 ] as const;
 
 export const SCHEDULE_LABELS: Record<(typeof SCHEDULE_KINDS)[number], string> =
@@ -3331,6 +3344,177 @@ export const CARD_ISSUERS = [
   'Apple Card',
 ] as const;
 
+export const ACCOUNT_KINDS = [
+  'checking',
+  'savings',
+  'cashManagement',
+  'investment',
+  'other',
+] as const;
+
+export const ACCOUNT_KIND_LABELS: Record<
+  (typeof ACCOUNT_KINDS)[number],
+  string
+> = {
+  checking: 'Checking',
+  savings: 'Savings',
+  cashManagement: 'Cash account',
+  investment: 'Investing',
+  other: 'Other',
+};
+
+/** Kinds whose money is not for spending, so a new one starts left out of the total. */
+export const ACCOUNT_KINDS_LEFT_OUT: readonly (typeof ACCOUNT_KINDS)[number][] =
+  ['investment'];
+
+/** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
+export const BILL_PAY_WORDS = {
+  title: 'How do you pay it?',
+  label: 'Paid with',
+  cardDetail: 'Credit card',
+  fromBank: 'Straight from your bank',
+} as const;
+
+export const ACCOUNT_WORDS = {
+  sectionTitle: 'Accounts',
+  add: 'Add an account',
+  emptyTitle:
+    'Add the accounts your money sits in, and say which goals and envelopes each one holds.',
+  pullsFrom: 'Cards and bills pull from it',
+  noBalance: 'No balance yet',
+  balanceOn: (day: string) => `As of ${day}`,
+  holdsTitle: 'What it holds',
+  holdsEmpty: 'Nothing is held here yet.',
+  notYetGivenAJob: 'Not yet given a job',
+  shortOfWhatItHolds: (amount: string) => `${amount} short of what it holds`,
+  rowShort: (bankLine: string, amount: string) =>
+    `${bankLine} ·\u00a0${amount}\u00a0short`,
+  rowPulledFrom: (bankLine: string) => `${bankLine} ·\u00a0Pulled\u00a0from`,
+  showMore: (count: number) => `Show ${count} more`,
+  showFewer: 'Show fewer',
+  chooseHolds: 'Choose what it holds',
+  chooseHoldsSub: 'Goals and envelopes kept here',
+  chooseHoldsHeldElsewhere: (account: string) => `Now in ${account}`,
+  chooseHoldsTitle: 'Which goals and envelopes does it hold?',
+  chooseHoldsTotal: 'Picked',
+  chooseHoldsOfBalance: 'of its',
+  chooseHoldsSearch: 'Search goals and envelopes',
+  chooseHoldsNoMatch: 'No goal or envelope by that name.',
+  updateBalance: 'Update the balance',
+  updateBalanceSub: 'What the account holds today',
+  balanceTitle: 'What does it hold today?',
+  balanceLabel: 'Balance',
+  change: 'Change the account',
+  changeSub: 'Name, bank, last 4 digits and more',
+  archive: 'Archive',
+  archiveSub: 'It leaves the list; what it held is no longer placed in it.',
+  archiveConfirmTitle: (name: string) => `Archive ${name}`,
+  archiveConfirmText: 'Archive',
+  archived: (name: string) => `${name} archived`,
+  archiveFailed: 'The account was not archived',
+  institutionTitle: 'Which bank holds it?',
+  institutionLabel: 'Bank',
+  institutionPlaceholder: 'Capital One',
+  nameTitle: 'What do you call it?',
+  nameLabel: 'Name',
+  namePlaceholder: 'Checking A',
+  kindTitle: 'What kind of account is it?',
+  kindLabel: 'Kind',
+  lastFourTitle: 'What are its last 4 digits?',
+  lastFourLabel: 'Last 4 digits',
+  lastFourHint: 'Tells two accounts at one bank apart.',
+  lastFourSkip: 'Skip',
+  lastFourNone: 'Not given',
+  needsFourDigits: 'Type 4 digits, or skip.',
+  pullTitle: 'Do your cards and bills pull from it?',
+  pullLabel: 'Cards and bills',
+  pullYes: 'Yes, they pull from it',
+  pullNo: 'No',
+  needsName: 'Give it a name.',
+  needsInstitution: 'Say which bank holds it.',
+  saveAdd: 'Add account',
+  save: 'Save',
+  added: (name: string) => `${name} added`,
+  saved: (name: string) => `${name} saved`,
+  saveFailed: 'The account was not saved',
+  payFromTitle: 'Which account does it come out of?',
+  payFromLabel: 'Comes out of',
+  payFromNone: 'Not chosen yet',
+  changeAdded: (name: string) => `Added the account ${name}`,
+  changeChanged: (name: string, what: string) =>
+    `Changed the account ${name}: ${what}`,
+  changeName: (from: string, to: string) => `name ${from} to ${to}`,
+  changeBank: (from: string, to: string) => `bank ${from} to ${to}`,
+  changeKind: (from: string, to: string) => `kind ${from} to ${to}`,
+  changeLastFour: (from: string, to: string) =>
+    `last 4 digits ${from} to ${to}`,
+  changeNoLastFour: 'none',
+  changePull: (from: string, to: string) =>
+    `cards and bills pulling from it ${from} to ${to}`,
+  changeYes: 'yes',
+  changeNo: 'no',
+  changeArchived: (name: string) => `Archived the account ${name}`,
+  changeHolds: (
+    name: string,
+    added: string[],
+    removed: string[],
+    movedFrom: string[],
+  ) =>
+    [
+      `Changed what ${name} holds`,
+      [
+        added.length === 0 ? null : `now holds ${added.join(', ')}`,
+        removed.length === 0 ? null : `no longer holds ${removed.join(', ')}`,
+      ]
+        .filter((part) => part !== null)
+        .join('; '),
+    ]
+      .filter((part) => part !== '')
+      .join(': ') +
+    (movedFrom.length === 0
+      ? ''
+      : `, moving some from ${movedFrom.join(' and ')}`),
+  changeBalance: (name: string, amount: string, day: string) =>
+    `${name} balance ${amount} on ${day}`,
+  withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
+  sheetTitle: 'Account',
+  searchPlaceholder: 'Search accounts',
+  searchEmpty: 'No account matches that.',
+  loading: 'Getting your accounts.',
+  sheetTitleNew: 'New account',
+  discardNew: 'account',
+  offline: 'This needs a connection. Nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+  goalsHeading: 'Goals',
+  envelopesHeading: 'Envelopes',
+  holdsNothingToPick:
+    'Add a goal or an envelope first, then say where it sits.',
+  holdsSave: 'Save',
+  holdsSaved: (name: string) => `Changed what ${name} holds`,
+  holdsFailed: 'What it holds was not saved',
+  undo: 'Undo',
+  changeHoldsUndone: (names: string[]) =>
+    `Took back the change to what ${names.join(' and ')} ${names.length === 1 ? 'holds' : 'hold'}`,
+  holdsNotUndone: 'The change was not taken back',
+  holdsChangedSince: (names: string[]) =>
+    `What ${names.join(' and ')} ${names.length === 1 ? 'holds' : 'hold'} changed since, so nothing was undone.`,
+  heldIn: (name: string) => `Held in ${name}`,
+  notHeld: 'Not held in an account yet',
+  heldSub: 'Change which account holds it',
+  whichAccountTitle: 'Which account holds it?',
+  whichAccountLabel: 'Account',
+  notInAccount: 'Not in an account',
+  balanceSave: 'Save',
+  balanceSaved: (name: string) => `Balance of ${name} updated`,
+  balanceFailed: 'The balance was not saved',
+  balanceNotNow: 'Not now',
+  balanceHint: 'Leave it empty to add it later.',
+  balanceNeeded: 'Type an amount.',
+  balanceSame: 'That is already the balance for today.',
+  needsPull: 'Say whether cards and bills pull from it.',
+  institutionsUsed: 'Banks you already use',
+} as const;
+
 export const CARD_WORDS = {
   sectionTitle: 'Cards',
   add: 'Add a card',
@@ -3422,6 +3606,15 @@ export const CARD_WORDS = {
     `Takes ${amount} off what you owe on ${name}.`,
   usualCard: (envelope: string) => `What you usually use for ${envelope}`,
   loading: 'Getting what each card waits for.',
+  lastFourTitle: 'What are its last 4 digits?',
+  lastFourLabel: 'Last 4 digits',
+  lastFourHint: 'Tells two cards from one bank apart.',
+  lastFourSkip: 'Skip',
+  lastFourNone: 'Not given',
+  needsFourDigits: 'Type 4 digits, or skip.',
+  payFromTitle: 'Which account does it come out of?',
+  payFromLabel: 'Comes out of',
+  payFromNone: 'Not chosen yet',
   chargedTo: (card: string) => `Charged to ${card}`,
   comingDueTitle: 'Coming due',
   comingDueOne: '1 card due',
@@ -3466,6 +3659,12 @@ export const CARD_WORDS = {
   changeNoName: 'no name',
   changeDueDay: (from: string, to: string) => `due day ${from} to ${to}`,
   changeNoDueDay: 'no due day',
+  changeLastFour: (from: string, to: string) =>
+    `last 4 digits ${from} to ${to}`,
+  changeNoLastFour: 'none',
+  withLastFour: (name: string, lastFour: string) => `${name} ••${lastFour}`,
+  changePayFrom: (from: string, to: string) =>
+    `the account it comes out of ${from} to ${to}`,
   changeArchived: (name: string) => `Archived ${name}`,
   changePaid: (
     covers: 'full' | 'minimum' | 'part',

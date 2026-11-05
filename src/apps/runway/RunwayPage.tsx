@@ -22,6 +22,7 @@ import SetupLanding from '@apps/runway/screens/start/SetupLanding';
 import StartingOutScreen from '@apps/runway/screens/start/StartingOutScreen';
 import { useStartDraft } from '@apps/runway/utils/startDraft';
 import HomeScreen from '@apps/runway/screens/home/HomeScreen';
+import AccountsScreen from '@apps/runway/screens/plan/AccountsScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
 import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
@@ -350,6 +351,14 @@ function RunwayContent() {
     return (
       <div>
         <PrioritiesScreen onClose={closeMoreEntry} />
+      </div>
+    );
+  }
+
+  if (moreEntry === 'accounts') {
+    return (
+      <div>
+        <AccountsScreen onClose={closeMoreEntry} />
       </div>
     );
   }
