@@ -13,7 +13,6 @@ import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import {
-  NEEDS_HOME_WORDS,
   RULE_WORDS,
   SPEND_WORDS,
   TICK_HIT_CLASS,
@@ -50,7 +49,10 @@ import type {
   RunwayEncryption,
 } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
-import { describePurchaseReturned } from '@apps/runway/utils/purchaseText';
+import {
+  describePurchaseReturned,
+  getPurchaseTitle,
+} from '@apps/runway/utils/purchaseText';
 import {
   describeRule,
   describeRulePlaced,
@@ -58,16 +60,11 @@ import {
 } from '@apps/runway/utils/ruleText';
 
 interface RuleSheetProps {
-  /** The purchase a new rule is made from, which the rule also sends when it is still waiting in Needs a home; null when changing a rule. */
   purchase: OpenPurchase | null;
-  /** The rule being changed; null when making one. */
   rule: OpenRule | null;
   onClose: () => void;
-  /** Shows a Back chip, for a step inside the purchase's own sheet. */
   onBack?: () => void;
-  /** The envelope an already placed purchase stays in; the sheet says the rule only changes future purchases. */
   stayName?: string | null;
-  /** Makes the cancel button "Not now" and remembers the answer. */
   onDecline?: () => void;
 }
 
@@ -78,7 +75,6 @@ interface Facts {
   cardId: string | null;
 }
 
-/** Only the sentences the rule's own checks write are shown; any other failure reads as the plain fallback. */
 const toRuleError = (error: unknown, fallback: string) => {
   const message = error instanceof Error ? error.message : '';
   return message === RULE_WORDS.pickOne || message === RULE_WORDS.gone
@@ -156,6 +152,7 @@ function RuleSheet({
   const [picked, setPicked] = useState<string | null>(likely);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [willSend] = useState(purchase?.needsHome ?? false);
 
   const isMerchantAlone = ticks.merchant && !ticks.kind && !ticks.card;
   const target = picked === RULE_VARIES && !isMerchantAlone ? null : picked;
@@ -218,7 +215,10 @@ function RuleSheet({
   ) =>
     addToast({
       title: RULE_WORDS.made,
-      description: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
+      description: RULE_WORDS.madeSent(
+        getPurchaseTitle(placed, nameOf),
+        nameOf(envelopeId),
+      ),
       type: 'success',
       action: {
         label: RULE_WORDS.undo,
@@ -282,7 +282,7 @@ function RuleSheet({
         purchase.id,
       ).catch(() => null);
       const home = fresh?.lines.find((line) => line.via === 'chosen');
-      if (!fresh || fresh.ruleId !== made.id || fresh.needsHome || !home) {
+      if (!fresh || fresh.ruleId === null || fresh.needsHome || !home) {
         throw sendError;
       }
       toastPlaced(user.uid, encryption, fresh, home.envelopeId ?? made.target);
@@ -408,7 +408,14 @@ function RuleSheet({
           </p>
         )}
         <div className='space-y-2'>
-          <p className='text-sm font-medium'>{RULE_WORDS.question}</p>
+          <div className='flex items-center gap-2'>
+            <p className='text-sm font-medium'>{RULE_WORDS.question}</p>
+            {hasMerchant && tickRows.length > 1 && (
+              <HelpTip title={RULE_WORDS.merchantAloneTitle}>
+                {RULE_WORDS.merchantAlone}
+              </HelpTip>
+            )}
+          </div>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             {tickRows.map(({ name, label, sub }) => (
               <li key={name}>
@@ -430,14 +437,6 @@ function RuleSheet({
               </li>
             ))}
           </ul>
-          {hasMerchant && tickRows.length > 1 && (
-            <HelpTip
-              title={RULE_WORDS.merchantAloneTitle}
-              linkLabel={RULE_WORDS.merchantAloneTitle}
-            >
-              {RULE_WORDS.merchantAlone}
-            </HelpTip>
-          )}
         </div>
         <div className='space-y-2'>
           <p className='text-sm font-medium'>{RULE_WORDS.envelope}</p>
@@ -490,14 +489,16 @@ function RuleSheet({
           ) : undefined
         }
         cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onDecline ?? onClose}
-            disabled={isBusy}
-          >
-            {onDecline ? RULE_WORDS.notNow : 'Cancel'}
-          </Button>
+          onBack && !onDecline ? undefined : (
+            <Button
+              type='button'
+              variant='secondary'
+              onClick={onDecline ?? onClose}
+              disabled={isBusy}
+            >
+              {onDecline ? RULE_WORDS.notNow : 'Cancel'}
+            </Button>
+          )
         }
         rightActions={
           <Button
@@ -506,7 +507,7 @@ function RuleSheet({
             disabled={blocker !== null || isBusy || isUnchanged}
             onClick={() => void save()}
           >
-            {purchase?.needsHome ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
+            {willSend ? RULE_WORDS.saveAndSend : RULE_WORDS.save}
           </Button>
         }
       />

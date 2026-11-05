@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import {
   ArrowLeftRight,
-  ChevronRight,
   Layers,
   Repeat,
   ShoppingBag,
@@ -82,13 +81,21 @@ interface DoorButtonProps {
   icon: ReactNode;
   label: string;
   count: number;
-  /** Shares its row with the other door: the chevron goes so both labels fit at 320px. */
+  /** Below 360px a half door shows this instead of its label. */
+  narrowLabel: string;
   isHalf: boolean;
   onClick: () => void;
 }
 
 /** A thin door above the purchase list: its icon and name, then how many it holds. */
-function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
+function DoorButton({
+  icon,
+  label,
+  narrowLabel,
+  count,
+  isHalf,
+  onClick,
+}: DoorButtonProps) {
   return (
     <Button
       type='button'
@@ -101,12 +108,21 @@ function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
     >
       <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
         {icon}
-        <span className='text-foreground truncate'>{label}</span>
+        <span
+          className={join(
+            'text-foreground truncate',
+            isHalf && 'max-[359px]:hidden',
+          )}
+        >
+          {label}
+        </span>
+        {isHalf && (
+          <span className='text-foreground truncate min-[360px]:hidden'>
+            {narrowLabel}
+          </span>
+        )}
       </span>
-      <span className='text-muted-foreground flex items-center gap-1'>
-        {count}
-        {!isHalf && <ChevronRight className='h-4 w-4' aria-hidden='true' />}
-      </span>
+      <span className='text-muted-foreground'>{count}</span>
     </Button>
   );
 }
@@ -163,6 +179,7 @@ function SpendScreen() {
                 icon: <Layers className='h-4 w-4' aria-hidden='true' />,
                 label: SPEND_WORDS.groups,
                 shortLabel: SPEND_WORDS.groups,
+                narrowLabel: SPEND_WORDS.groups,
                 count: expenseCount,
                 onClick: openGroups,
               },
@@ -175,6 +192,7 @@ function SpendScreen() {
                 icon: <ArrowLeftRight className='h-4 w-4' aria-hidden='true' />,
                 label: PAIR_WORDS.doorTitle,
                 shortLabel: PAIR_WORDS.doorShort,
+                narrowLabel: PAIR_WORDS.doorNarrow,
                 count: pairCount,
                 onClick: () => openView('accountMoves'),
               },
@@ -187,6 +205,7 @@ function SpendScreen() {
                 icon: <Repeat className='h-4 w-4' aria-hidden='true' />,
                 label: RULE_WORDS.doorLabel,
                 shortLabel: RULE_WORDS.doorLabel,
+                narrowLabel: RULE_WORDS.doorLabel,
                 count: ruleCount,
                 onClick: () => openView('rules'),
               },
@@ -391,6 +410,7 @@ function SpendScreen() {
                     key={door.id}
                     icon={door.icon}
                     label={row.length > 1 ? door.shortLabel : door.label}
+                    narrowLabel={door.narrowLabel}
                     count={door.count}
                     isHalf={row.length > 1}
                     onClick={door.onClick}

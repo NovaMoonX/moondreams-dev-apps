@@ -4142,6 +4142,7 @@ export const PAIR_WORDS = {
   doorTitle: 'Moves between your accounts',
   screenTitle: 'Account moves',
   doorShort: 'Account moves',
+  doorNarrow: 'Moves',
   doorSub: 'Paired by the bank’s dates and amounts',
   screenIntro:
     'Money moved between your own accounts or to a card. Not spending, not income.',
@@ -4364,10 +4365,9 @@ export const RULE_WORDS = {
   goToNeedsHome: 'Go to Needs a home',
   changesFuture: (envelope: string) =>
     `Changes future purchases. This one stays in ${envelope}.`,
-  yourRule: (sentence: string) => `Your rule: ${sentence}`,
-  yourRuleSub: 'Change or remove it',
-  heldByOffer:
-    'Your rule will wait until you answer the offer above, then it can send this one.',
+  yourRule: 'Your rule',
+  heldByOffer: (sentence: string) =>
+    `Your rule, ${sentence}, waits until you answer the offer above.`,
   notNow: 'Not now',
   pickOne: 'Tick at least one thing for the rule to catch.',
   pickEnvelope: 'Pick an envelope',
@@ -4395,8 +4395,9 @@ export const RULE_WORDS = {
   undo: 'Undo',
   undone: 'Put back in Needs a home',
   undoFailed: 'That was not put back. Nothing was changed.',
-  undoPartial: (stayed: number, total: number) =>
-    `${stayed} of ${total} purchases stayed where your rules sent them`,
+  undoPartial: (back: number, total: number, stayed: number) =>
+    `Put ${back} of ${total} back. ${stayed} stayed where your rules sent them.`,
+  madeSent: (name: string, envelope: string) => `${name} sent to ${envelope}`,
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,

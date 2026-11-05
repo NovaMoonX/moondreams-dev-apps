@@ -30,6 +30,8 @@ import type { OpenPurchase, OpenRule, PurchaseLine } from '@apps/runway/types';
 import { describePurchaseReturned } from '@apps/runway/utils/purchaseText';
 import { describeRulePlaced } from '@apps/runway/utils/ruleText';
 
+const MAX_ATTEMPTS = 3;
+
 interface RuleWork {
   purchase: OpenPurchase;
   rule: OpenRule;
@@ -92,6 +94,7 @@ export function usePlaceByRules(uid: string | null) {
       selectIsRecordsReady(state),
   );
   const tried = useRef(new Set<string>());
+  const attempts = useRef(new Map<string, number>());
   const isRunning = useRef(false);
   const isWaitingToRun = useRef(false);
   const [runs, setRuns] = useState(0);
@@ -126,6 +129,12 @@ export function usePlaceByRules(uid: string | null) {
       lines: lines[index],
     }));
     isRunning.current = true;
+
+    const allowRetry = (key: string) => {
+      const count = (attempts.current.get(key) ?? 0) + 1;
+      attempts.current.set(key, count);
+      if (count < MAX_ATTEMPTS) tried.current.delete(key);
+    };
 
     const run = async () => {
       const { looks: names, addToast: toast } = latest.current;
@@ -171,7 +180,7 @@ export function usePlaceByRules(uid: string | null) {
                 message !== SPEND_WORDS.changedElsewhere &&
                 message !== SPEND_WORDS.notFound
               ) {
-                tried.current.delete(key);
+                allowRetry(key);
                 console.error('A purchase was not placed by a rule', error);
               }
               return list;
@@ -200,7 +209,11 @@ export function usePlaceByRules(uid: string | null) {
             return;
           }
           toast({
-            title: RULE_WORDS.undoPartial(stayed.length, placed.length),
+            title: RULE_WORDS.undoPartial(
+              placed.length - stayed.length,
+              placed.length,
+              stayed.length,
+            ),
             type: 'error',
           });
         };
@@ -221,7 +234,7 @@ export function usePlaceByRules(uid: string | null) {
         });
       } catch (error) {
         // The vault or the network failed before any purchase was tried, so they may be tried again.
-        found.forEach(({ key }) => tried.current.delete(key));
+        found.forEach(({ key }) => allowRetry(key));
         console.error('Rules were not applied', error);
       } finally {
         isRunning.current = false;

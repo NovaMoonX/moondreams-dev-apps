@@ -3763,8 +3763,57 @@ async function seedRules(
       ),
     } satisfies PurchaseDoc,
   );
+  await Promise.all(
+    [5, 8, 11].map(async (daysAgo, index) => {
+      const id = `seed-link-purchase-sprouts-${index + 1}`;
+      const at = today - daysAgo * DAY_MS;
+      const createdAt = at + 12 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/purchases/${id}`), {
+        id,
+        date: at,
+        source: 'link',
+        status: 'posted',
+        needsHome: false,
+        accountId: null,
+        expenseId: null,
+        dedupeKey: `${id}-dedupe`,
+        createdAt,
+        updatedAt: createdAt,
+        sealed: await sealJson(
+          {
+            amountCents: 3_180 + index * 240,
+            merchant: 'Sprouts',
+            category: 'FOOD_AND_DRINK_GROCERIES',
+            ruleId: null,
+            label: null,
+            note: null,
+            lines: [
+              {
+                envelopeId: 'seed-envelope-groceries',
+                cents: 3_180 + index * 240,
+                via: 'chosen',
+              },
+            ],
+            refundOfId: null,
+            paidByCardId: null,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: 'person',
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
   await batch.commit();
-  return rules.length + 1;
+  return rules.length + 4;
 }
 
 /**

@@ -52,9 +52,9 @@ import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
 import {
   findPlacementRun,
-  findRule,
   isHeldByOffer,
   toMerchantKey,
+  wouldRulePlace,
 } from '@apps/runway/engine/rules';
 import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
@@ -94,6 +94,7 @@ import {
   selectItemLooks,
   selectSpendPurchases,
   selectLostPairs,
+  selectEnvelopes,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -165,12 +166,17 @@ function PurchaseScreen({
   const stance = useAppSelector(selectStance);
   const level = useAppSelector(selectLevel);
   const rules = useAppSelector(selectRules);
+  const liveEnvelopes = useAppSelector((state) =>
+    selectEnvelopes(state, todayAsUtcDate()),
+  );
   const recentPurchases = useAppSelector((state) => state.runway.purchases);
   const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
   const { describe: describeRuleSentence } = useRuleNames();
-  const [ruleView, setRuleView] = useState<'make' | 'suggest' | 'edit' | null>(
-    null,
-  );
+  const [ruleStep, setRuleStep] = useState<{
+    view: 'make' | 'suggest' | 'edit';
+    ruleId: string | null;
+    wasWaiting: boolean;
+  } | null>(null);
   const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
@@ -293,23 +299,23 @@ function PurchaseScreen({
     canMakeRule && merchantKey !== null
       ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
       : null;
-  const fittingMatch = canMakeRule
-    ? findRule(
-        {
-          merchant: purchase.merchant,
-          category: purchase.category,
-          cardId: purchase.paidByCardId ?? null,
-        },
-        rules,
-      )
-    : null;
-  const isRuleHeld =
-    fittingMatch !== null &&
-    !fittingMatch.isAsk &&
-    purchase.assignedBy === null &&
-    purchase.pairedWithId === null &&
-    isHeldByOffer(purchase.id, waitingPurchases, recentPurchases);
-  const editedRule = placedRule ?? merchantRule;
+  const heldRule =
+    canMakeRule && isHeldByOffer(purchase.id, waitingPurchases, recentPurchases)
+      ? wouldRulePlace(
+          purchase,
+          rules,
+          new Set(liveEnvelopes.map(({ item }) => item.id)),
+          new Set(),
+        )
+      : null;
+  const stepRule =
+    ruleStep?.view === 'edit'
+      ? (rules.find((entry) => entry.id === ruleStep.ruleId) ?? null)
+      : null;
+  const openRuleStep = (
+    view: 'make' | 'suggest' | 'edit',
+    ruleId: string | null,
+  ) => setRuleStep({ view, ruleId, wasWaiting: isWaiting });
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
@@ -575,20 +581,20 @@ function PurchaseScreen({
     );
   }
 
-  if (ruleView !== null && (ruleView !== 'edit' || editedRule !== null)) {
+  if (ruleStep !== null && (ruleStep.view !== 'edit' || stepRule !== null)) {
     return (
       <RuleSheet
-        key={ruleView}
-        purchase={ruleView === 'edit' ? null : purchase}
-        rule={ruleView === 'edit' ? editedRule : null}
-        stayName={isWaiting ? null : envelopes}
-        onBack={() => setRuleView(null)}
-        onClose={() => setRuleView(null)}
+        key={ruleStep.view}
+        purchase={ruleStep.view === 'edit' ? null : purchase}
+        rule={stepRule}
+        stayName={ruleStep.wasWaiting ? null : envelopes}
+        onBack={() => setRuleStep(null)}
+        onClose={() => setRuleStep(null)}
         onDecline={
-          ruleView === 'suggest' && user && merchantKey !== null
+          ruleStep.view === 'suggest' && user && merchantKey !== null
             ? () => {
                 declineRule(user.uid, merchantKey);
-                setRuleView(null);
+                setRuleStep(null);
               }
             : undefined
         }
@@ -791,9 +797,9 @@ function PurchaseScreen({
               />
             </PairOffer>
           )}
-          {isRuleHeld && (
+          {heldRule !== null && (
             <p className='text-muted-foreground text-sm'>
-              {RULE_WORDS.heldByOffer}
+              {RULE_WORDS.heldByOffer(describeRuleSentence(heldRule))}
             </p>
           )}
           <ActionGroup isRoomy>
@@ -815,7 +821,7 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {canMakeRule && (
+            {canMakeRule && (merchantRule !== null || heldRule === null) && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -824,15 +830,17 @@ function PurchaseScreen({
                 label={
                   merchantRule === null
                     ? RULE_WORDS.alwaysDo
-                    : RULE_WORDS.yourRule(describeRuleSentence(merchantRule))
+                    : RULE_WORDS.yourRule
                 }
                 subtitle={
                   merchantRule === null
                     ? RULE_WORDS.alwaysDoSub
-                    : RULE_WORDS.yourRuleSub
+                    : describeRuleSentence(merchantRule)
                 }
                 onClick={() =>
-                  setRuleView(merchantRule === null ? 'make' : 'edit')
+                  merchantRule === null
+                    ? openRuleStep('make', null)
+                    : openRuleStep('edit', merchantRule.id)
                 }
               />
             )}
@@ -852,7 +860,7 @@ function PurchaseScreen({
                 subtitle={RULE_WORDS.placedBySub(
                   describeRuleSentence(placedRule),
                 )}
-                onClick={() => setRuleView('edit')}
+                onClick={() => openRuleStep('edit', placedRule.id)}
               />
             )}
             {suggestion !== null && (
@@ -863,7 +871,7 @@ function PurchaseScreen({
                 icon={<Repeat />}
                 label={RULE_WORDS.suggest(purchase.merchant?.trim() ?? '')}
                 subtitle={RULE_WORDS.suggestSub(nameOf(suggestion.envelopeId))}
-                onClick={() => setRuleView('suggest')}
+                onClick={() => openRuleStep('suggest', null)}
               />
             )}
             {paysRef !== null &&

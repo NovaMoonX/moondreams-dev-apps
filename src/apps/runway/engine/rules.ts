@@ -125,6 +125,37 @@ export const isHeldByOffer = (
   purchases: readonly OpenPurchase[],
 ) => getAskedIds(waiting, purchases).has(purchaseId);
 
+/** The rule that would send this waiting charge on its own, or null; `asked` holds the charges a merge or pair offer is waiting on (pass an empty set to ignore offers). */
+export function wouldRulePlace(
+  purchase: OpenPurchase,
+  rules: readonly OpenRule[],
+  envelopeIds: ReadonlySet<string>,
+  asked: ReadonlySet<string>,
+): OpenRule | null {
+  if (
+    purchase.source !== 'link' ||
+    !purchase.needsHome ||
+    purchase.amountCents <= 0 ||
+    purchase.assignedBy !== null ||
+    purchase.pairedWithId !== null ||
+    purchase.incomeDayId !== null ||
+    asked.has(purchase.id)
+  ) {
+    return null;
+  }
+  const match = findRule(
+    {
+      merchant: purchase.merchant,
+      category: purchase.category,
+      cardId: purchase.paidByCardId ?? null,
+    },
+    rules,
+  );
+  return match && !match.isAsk && envelopeIds.has(match.rule.target)
+    ? match.rule
+    : null;
+}
+
 /**
  * The waiting bank charges a rule sends on its own: money out, never placed or sent back by the person, unpaired, and with no merge or pair offer (those ask first).
  * A rule that asks every time, or whose envelope is not in `envelopeIds`, places nothing.
@@ -138,28 +169,8 @@ export function findRulePlacements(
   if (rules.length === 0) return [];
   const asked = getAskedIds(waiting, purchases);
   return waiting.flatMap((purchase): RulePlacement[] => {
-    if (
-      purchase.source !== 'link' ||
-      !purchase.needsHome ||
-      purchase.amountCents <= 0 ||
-      purchase.assignedBy !== null ||
-      purchase.pairedWithId !== null ||
-      purchase.incomeDayId !== null ||
-      asked.has(purchase.id)
-    ) {
-      return [];
-    }
-    const match = findRule(
-      {
-        merchant: purchase.merchant,
-        category: purchase.category,
-        cardId: purchase.paidByCardId ?? null,
-      },
-      rules,
-    );
-    return match && !match.isAsk && envelopeIds.has(match.rule.target)
-      ? [{ purchase, rule: match.rule }]
-      : [];
+    const rule = wouldRulePlace(purchase, rules, envelopeIds, asked);
+    return rule ? [{ purchase, rule }] : [];
   });
 }
 
