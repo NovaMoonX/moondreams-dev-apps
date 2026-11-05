@@ -83,7 +83,7 @@ export const RUNWAY_VIEWS = [
 ] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
-export const SETTINGS_VIEWS = ['tracking', 'delete'] as const;
+export const SETTINGS_VIEWS = ['tracking', 'notifications', 'delete'] as const;
 
 export const MORE_ENTRY_LABELS: Record<(typeof MORE_ENTRIES)[number], string> =
   {
@@ -2343,6 +2343,34 @@ export const BUDGET_WORDS = {
   dateTooFar: (name: string, date: string, months: number) =>
     `${name} aims for ${date}, which is more than ${months} months away. The date was left out.`,
   empty: 'Nothing is left to add.',
+} as const;
+
+/** The daily push sends between these hours; the shared sender drops anything from 10 pm to 8 am. */
+export const NOTIFY_FIRST_HOUR = 8;
+export const NOTIFY_LAST_HOUR = 21;
+export const DEFAULT_NOTIFY_HOUR = 19;
+
+/** Back in the app after this long away, the banks are asked for what is new. */
+export const RETURN_PULL_AFTER_MS = 15 * 60_000;
+
+export const NOTIFY_WORDS = {
+  rowLabel: 'Notifications',
+  rowOff: 'Off',
+  rowOn: (hour: string) => `Purchases waiting, at ${hour}`,
+  rowOnDeviceOff: (hour: string) => `On at ${hour}, not on this device`,
+  sectionCaption: 'Reminders',
+  group: 'Daily reminder',
+  switchLabel: 'Purchases waiting for a home',
+  switchHelp: 'Once a day, only when something is waiting.',
+  hourLabel: 'Remind me at',
+  zone: (abbreviation: string) => `Your time zone: ${abbreviation}`,
+  zoneSaved: (abbreviation: string) => `Set in ${abbreviation} time`,
+  switchZone: (abbreviation: string) => `Use ${abbreviation}`,
+  dismissed:
+    'Nothing changed. Allow notifications when your browser asks, then switch this on again.',
+  saveFailed: 'That did not save. Nothing was changed.',
+  deviceOff: 'Not on this device yet',
+  deviceOffSub: 'Turn on for this device',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';

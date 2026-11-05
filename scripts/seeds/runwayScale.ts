@@ -237,6 +237,7 @@ export async function seedRunwayScale(
     stance: 'conservative',
     startDate,
     trackingPeriods: [{ from: startDate, to: null }],
+    notify: { needsHome: false },
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
