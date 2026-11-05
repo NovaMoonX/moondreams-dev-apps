@@ -256,7 +256,7 @@ export function closing(
       ]),
   );
   const purchases = entries.purchases.filter(
-    (purchase) => purchase.date >= startDate,
+    (purchase) => purchase.date >= startDate && purchase.lines.length > 0,
   );
   const spentByItem = purchases
     .flatMap((purchase) => purchase.lines)

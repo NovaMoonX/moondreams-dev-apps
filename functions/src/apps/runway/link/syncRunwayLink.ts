@@ -298,6 +298,9 @@ async function syncPurchases(
       firestore,
       toWrites(firestore, uid, outcome, planKey, unreadable, updateTimes, now),
     );
+    /* The batch can't share a transaction with the mark, so it marks again once the batch has landed:
+       a closing rebuilt in between is refused by the plan's new stamp and built again. */
+    await markClosedMonths(firestore, uid, outcome.touchedDates, Date.now());
     await grantRef.update({ cursor: page.nextCursor });
     totals.created += outcome.created;
     totals.updated += outcome.updated;

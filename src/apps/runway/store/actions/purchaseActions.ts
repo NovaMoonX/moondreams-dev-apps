@@ -471,6 +471,8 @@ export async function editPurchase(
       input.lines,
       known,
       previous.date,
+      false,
+      previous.source === 'link' && input.date === previous.date,
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan, [previous.date, input.date]);

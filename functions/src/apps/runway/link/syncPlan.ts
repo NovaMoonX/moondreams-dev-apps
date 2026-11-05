@@ -225,8 +225,11 @@ export function applyTransactions(
       target,
       states,
     );
-    if (before === null || state.date !== before.date) {
-      touchedDates.push(state.date, ...(before ? [before.date] : []));
+    if (state.isNew || state.isChanged) {
+      touchedDates.push(
+        state.date,
+        ...(before && before.date !== state.date ? [before.date] : []),
+      );
     }
     states.set(state.docId, state);
     writes.set(state.docId, state);

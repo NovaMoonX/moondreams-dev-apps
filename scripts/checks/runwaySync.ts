@@ -187,6 +187,20 @@ assert.equal(
   0,
   'a replay writes nothing, so no second document',
 );
+assert.deepEqual(replay.touchedDates, [], 'a replay marks no month');
+const repriced = applyTransactions(
+  keyOf,
+  targets,
+  [tx('t1', 'card', 650)],
+  [],
+  [],
+  stored,
+);
+assert.deepEqual(
+  repriced.touchedDates,
+  [Date.UTC(2026, 10, 1)],
+  'a new amount on the same day marks that day',
+);
 
 const pendingId = purchaseIdFor(keyOf('t4-pending'));
 const person = new Map<string, PurchaseState>(stored);
