@@ -3764,7 +3764,7 @@ async function seedRules(
     } satisfies PurchaseDoc,
   );
   await Promise.all(
-    [5, 8, 11].map(async (daysAgo, index) => {
+    [1, 2, 3].map(async (daysAgo, index) => {
       const id = `seed-link-purchase-sprouts-${index + 1}`;
       const at = today - daysAgo * DAY_MS;
       const createdAt = at + 12 * 3_600_000;
