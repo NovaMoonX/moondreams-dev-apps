@@ -13,6 +13,7 @@ import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
+import Field from '@/components/forms/Field';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import useNow from '@/hooks/useNow';
 import UserAvatar from '@/ui/UserAvatar';
@@ -219,6 +220,9 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
 
   const save = async () => {
     if (!opened || !openGate) return;
+    const isReasonChanged =
+      toGateReason(opened.draft.reason) !== toGateReason(opened.before.reason);
+    const changesWhoHasIt = changes.length - (isReasonChanged ? 1 : 0);
     const isConfirmed = await confirm({
       title: `Save changes to ${openGate.label}?`,
       message: (
@@ -228,10 +232,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
               <li key={index}>{change}</li>
             ))}
           </ul>
-          <p>
-            People, you included, see it the next time they open or refresh the
-            site.
-          </p>
+          {changesWhoHasIt > 0 && (
+            <p>
+              People, you included, see it the next time they open or refresh
+              the site.
+            </p>
+          )}
         </div>
       ),
       confirmText: 'Save',
@@ -462,28 +468,25 @@ function GateControls({
         onRemove={(uid) => removeFrom('alwaysOffUids', uid)}
       />
 
-      <div className='space-y-2'>
-        <label
-          htmlFor={`gate-reason-${gate.id}`}
-          className='text-foreground text-sm font-medium'
-        >
-          Why it&apos;s set this way
-        </label>
-        <Textarea
-          id={`gate-reason-${gate.id}`}
-          value={draft.reason ?? ''}
-          maxLength={REASON_MAX_LENGTH}
-          rows={2}
-          placeholder='Optional, for whoever changes this next'
-          onChange={(event) =>
-            onDraftChange({
-              ...draft,
-              reason:
-                event.target.value.trim() === '' ? null : event.target.value,
-            })
-          }
-        />
-      </div>
+      <Field
+        label={<span className='text-sm'>Why it&apos;s set this way</span>}
+      >
+        {() => (
+          <Textarea
+            value={draft.reason ?? ''}
+            maxLength={REASON_MAX_LENGTH}
+            rows={2}
+            placeholder='Optional, for whoever changes this next'
+            onChange={(event) =>
+              onDraftChange({
+                ...draft,
+                reason:
+                  event.target.value.trim() === '' ? null : event.target.value,
+              })
+            }
+          />
+        )}
+      </Field>
     </div>
   );
 }
