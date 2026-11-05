@@ -19,6 +19,8 @@ import { addUtcMonths, DAY_MS } from './dates';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
 
+const MONTH_MS = (365.25 / 12) * DAY_MS;
+
 /** A cost's payment marked paid and not undone. */
 export interface CostPaidEntry {
   moveId: string;
@@ -143,27 +145,25 @@ export const sumCountedShortCents = (
           0,
         );
 
-/** What one income day's draft asks for the costs of still-open items whose priority `isCounted`; a line that gives back a fronted payment asks nothing of the item. */
-export const sumHorizonAskedCents = (
-  lines: readonly {
-    itemId: string;
-    costId?: string | null;
-    repaysFree?: boolean;
-    tier: Priority;
-    demandCents: Cents;
-  }[],
-  openItemIds: ReadonlySet<string>,
-  isCounted: (priority: Priority) => boolean,
+/** The steady amount a month that meets every uncovered payment of the costs in `countedIds` on its due date, the pace a dated goal is held to; a payment already due asks all of itself now. */
+export const getHorizonPaceCents = (
+  covers: readonly HorizonCover[],
+  countedIds: ReadonlySet<string>,
+  today: DateOnly,
 ): Cents =>
-  lines
-    .filter(
-      (line) =>
-        !!line.costId &&
-        !line.repaysFree &&
-        openItemIds.has(line.itemId) &&
-        isCounted(line.tier),
-    )
-    .reduce((sum, line) => sum + line.demandCents, 0);
+  covers
+    .filter(({ costId }) => countedIds.has(costId))
+    .reduce<{ shortCents: Cents; paceCents: Cents }>(
+      (walk, { dueOn, coveredCents, totalCents }) => {
+        const shortCents = walk.shortCents + totalCents - coveredCents;
+        const months = Math.max(1, (dueOn - today) / MONTH_MS);
+        return {
+          shortCents,
+          paceCents: Math.max(walk.paceCents, Math.ceil(shortCents / months)),
+        };
+      },
+      { shortCents: 0, paceCents: 0 },
+    ).paceCents;
 
 /** The payments of costs paid outside the plan that nobody has marked, soonest first. Until each is marked the item is not ready to finish, whatever its date. */
 export const listUnmarkedOutside = (

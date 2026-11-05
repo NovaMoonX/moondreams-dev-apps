@@ -1,7 +1,7 @@
 import { useEffect, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { getCostPriority } from '@apps/runway/engine/horizon';
+import { getCostPriority, getLiveCosts } from '@apps/runway/engine/horizon';
 import { PRIORITIES } from '@apps/runway/constants';
 import type { HorizonSealed, Priority } from '@apps/runway/types';
 
@@ -19,16 +19,18 @@ const subscribe = (listener: () => void) => {
 export const isCountedAt = (priority: Priority, dial: Priority) =>
   PRIORITIES.indexOf(priority) <= PRIORITIES.indexOf(dial);
 
-/** A Horizon item counts at `dial` when any of its costs does, each at its own priority; one with no costs counts at its own. */
+/** A Horizon item counts at `dial` when any of its live costs does, each at its own priority; one with none counts at its own. */
 export const isHorizonCountedAt = (
   payload: Pick<HorizonSealed, 'priority' | 'costs'>,
   dial: Priority,
-) =>
-  payload.costs.length === 0
+) => {
+  const live = getLiveCosts(payload);
+  return live.length === 0
     ? isCountedAt(payload.priority, dial)
-    : payload.costs.some((cost) =>
+    : live.some((cost) =>
         isCountedAt(getCostPriority(cost, payload.priority), dial),
       );
+};
 
 /** How far down the priorities a total counts; in memory only and cleared when the app is left, so a trimmed total never outlives the visit. */
 export function usePriorityDial() {

@@ -3004,7 +3004,7 @@ export const PLAN_OVERVIEW_WORDS = {
   priorityRest: ' a month',
   priorityHelpTitle: 'What this counts',
   priorityHelp:
-    'Bills, envelopes, goals and Horizon items at the priorities the dial counts. Each Horizon cost counts at its own priority.',
+    'Bills, envelopes, goals and Horizon items at the priorities the dial counts. For Horizon, it is what to set aside each month to meet every cost on its date, each cost at its own priority.',
 } as const;
 
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */

@@ -87,7 +87,7 @@ function HorizonRow({
         name={horizon.name}
         emoji={horizon.emoji}
         detail={detail}
-        isDetailWarning={shortfall !== null && !isHidden}
+        isDetailWarning={shortfall !== null && !isHidden && !isFaded}
         figure={left}
         figureWord={
           isDone

@@ -294,7 +294,7 @@ import {
   sumCostPayments,
   sumCostSpent,
   sumCountedShortCents,
-  sumHorizonAskedCents,
+  getHorizonPaceCents,
   type CostPaidEntry,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
@@ -17302,34 +17302,83 @@ console.log('runway engine: ok');
     'should',
     'a Should cost inside a Must item is drafted as a Should',
   );
-  const countsAt = (dial: 'must' | 'should' | 'want') => (priority: string) =>
-    ['must', 'should', 'want'].indexOf(priority) <=
-    ['must', 'should', 'want'].indexOf(dial);
-  const asked = (dial: 'must' | 'should' | 'want') =>
-    sumHorizonAskedCents(
-      costLines(draftOn(jan15, mixed)),
-      new Set(['moving']),
-      countsAt(dial),
-    );
-  const all = asked('want');
-  assert.ok(all > 0, 'the draft asks something of the pay for its costs');
+  const paceDay = utc(2027, 1, 1);
+  const inMonths = (months: number) =>
+    paceDay + months * (365.25 / 12) * DAY_MS;
+  const cover = (
+    costId: string,
+    dueOn: number,
+    totalCents: number,
+    coveredCents = 0,
+  ) => ({ costId, dueOn, totalCents, coveredCents });
   assert.equal(
-    asked('must') + asked('should'),
-    all - (all - asked('should')) + asked('must') + 0,
-    'the dial counts cost by cost',
-  );
-  assert.ok(
-    asked('must') < all && asked('must') === asked('should'),
-    "at Must only the Must cost counts, though the item's other cost is a Want",
+    getHorizonPaceCents(
+      [cover('trip', inMonths(6), 300_000)],
+      new Set(['trip']),
+      paceDay,
+    ),
+    50_000,
+    'one cost due in six months asks a sixth of itself each month, the pace a dated goal keeps',
   );
   assert.equal(
-    sumHorizonAskedCents(
-      costLines(draftOn(jan15, mixed)),
-      new Set(),
-      countsAt('want'),
+    getHorizonPaceCents(
+      [cover('trip', inMonths(6), 300_000, 120_000)],
+      new Set(['trip']),
+      paceDay,
+    ),
+    30_000,
+    'money already held for it is not asked again',
+  );
+  assert.equal(
+    getHorizonPaceCents(
+      [1, 2, 3].map((k) => cover('rent', inMonths(k), 10_000)),
+      new Set(['rent']),
+      paceDay,
+    ),
+    10_000,
+    'a cost paid every month asks its own amount a month, not a sum of shares',
+  );
+  assert.equal(
+    getHorizonPaceCents(
+      [
+        cover('storage', inMonths(1), 20_000),
+        cover('trip', inMonths(6), 300_000),
+      ],
+      new Set(['trip']),
+      paceDay,
+    ),
+    50_000,
+    'a cost the dial leaves out adds nothing',
+  );
+  assert.equal(
+    getHorizonPaceCents(
+      [
+        cover('storage', inMonths(1), 20_000),
+        cover('trip', inMonths(6), 300_000),
+      ],
+      new Set(['trip', 'storage']),
+      paceDay,
+    ),
+    53_334,
+    'two counted costs share one steady pace that meets both dates',
+  );
+  assert.equal(
+    getHorizonPaceCents(
+      [cover('trip', paceDay - 3 * DAY_MS, 5_000)],
+      new Set(['trip']),
+      paceDay,
+    ),
+    5_000,
+    'a payment already due asks all of itself now',
+  );
+  assert.equal(
+    getHorizonPaceCents(
+      [cover('trip', inMonths(6), 300_000, 300_000)],
+      new Set(['trip']),
+      paceDay,
     ),
     0,
-    'an item that is no longer open asks nothing',
+    'a cost the money held covers asks nothing',
   );
   const later = planHorizon(
     {

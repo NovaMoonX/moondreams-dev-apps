@@ -3,22 +3,18 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
-  computeDraftView,
   selectBillPayments,
-  selectBillProgress,
   selectBills,
   selectComingDays,
   selectCostPaid,
-  selectDraftHeldByItem,
   selectHorizonItems,
-  selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getCostPriority,
   sumCountedShortCents,
-  sumHorizonAskedCents,
+  getHorizonPaceCents,
+  getLiveCosts,
 } from '@apps/runway/engine/horizon';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
@@ -26,63 +22,45 @@ import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 const selectOn = (_state: RootState, on: number) => on;
 const selectDial = (_state: RootState, _on: number, dial: Priority) => dial;
-const selectItems = (state: RootState) => state.runway.items;
-const selectVersions = (state: RootState) => state.runway.versions;
-const selectDays = (state: RootState) => state.runway.days;
 
-/** What the income days of the coming month ask for the costs of open Horizon items counted at `dial`, each cost at its own priority. */
+/** The steady amount a month the costs of open Horizon items counted at `dial` need, each cost at its own priority, to meet every payment on its due date from what is not yet held; the usual-month basis the dated goals use. */
 export const selectHorizonMonthCents = createSelector(
   [
-    selectItems,
-    selectVersions,
-    selectStance,
-    selectDays,
-    selectComingDays,
-    selectDraftHeldByItem,
-    selectSettledKey,
-    selectBillProgress,
     selectHorizonItems,
+    selectBalances,
+    selectCostPaid,
+    selectStance,
     selectOn,
     selectDial,
   ],
-  (
-    items,
-    versions,
-    stance,
-    days,
-    coming,
-    held,
-    settledKey,
-    progress,
-    horizonItems,
-    today,
-    dial,
-  ): number => {
-    const until = addUtcMonths(today, 1);
-    const openIds = new Set(horizonItems.map(({ item }) => item.id));
-    return coming
-      .filter(({ on }) => on < until)
-      .reduce((sum, { dayKey }) => {
-        const view = computeDraftView(
-          items,
-          versions,
-          stance,
-          days,
-          dayKey,
+  (items, balances, costPaid, stance, today, dial): number =>
+    items.reduce(
+      (sum, { item, version }) =>
+        sum +
+        getHorizonPaceCents(
+          getHorizonStatus(
+            version.payload,
+            balances.assignedByItem[item.id] ?? 0,
+            today,
+            stance,
+            costPaid[item.id],
+            balances.costPaidByItem[item.id] ?? 0,
+            balances.costFromFreeByItem[item.id] ?? 0,
+          ).plan.covers,
+          new Set(
+            getLiveCosts(version.payload)
+              .filter((cost) =>
+                isCountedAt(
+                  getCostPriority(cost, version.payload.priority),
+                  dial,
+                ),
+              )
+              .map(({ id }) => id),
+          ),
           today,
-          held,
-          settledKey,
-          progress,
-          { coming },
-        );
-        return (
-          sum +
-          sumHorizonAskedCents(view?.draft.lines ?? [], openIds, (priority) =>
-            isCountedAt(priority, dial),
-          )
-        );
-      }, 0);
-  },
+        ),
+      0,
+    ),
 );
 
 /** What the bills still unpaid at or above `dial` ask before the next pay arrives, a bill due on the pay day itself left to that pay; null when no pay is coming; `payOn` is that pay's day. */
@@ -130,7 +108,7 @@ export const selectHorizonShortCents = createSelector(
             balances.costFromFreeByItem[item.id] ?? 0,
           ).plan,
           new Set(
-            version.payload.costs
+            getLiveCosts(version.payload)
               .filter((cost) =>
                 isCountedAt(
                   getCostPriority(cost, version.payload.priority),
