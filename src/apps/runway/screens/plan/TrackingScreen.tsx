@@ -14,18 +14,16 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import LevelGate from '@apps/runway/components/LevelGate';
 import { LEVELS, LEVEL_LABELS, TRACKING_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getOpenPeriod } from '@apps/runway/engine/level';
+import { getOpenPeriod, isTrackingLevel } from '@apps/runway/engine/level';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { moveToPlan } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import LineUpScreen from '@apps/runway/screens/plan/LineUpScreen';
 import type { Level } from '@apps/runway/types';
 
 const PERIODS_PREVIEW = 3;
-const levelOptions = LEVELS.map((value) => ({
-  value,
-  label: LEVEL_LABELS[value],
-}));
 
 interface TrackingScreenProps {
   onClose: () => void;
@@ -41,6 +39,8 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
     (state) => state.runway.plan?.trackingPeriods ?? [],
   );
   const [isLineUp, setIsLineUp] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
+  const canLink = useCanLinkBank();
   const [isAll, setIsAll] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -71,10 +71,17 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
     }
   };
 
+  const levelOptions = LEVELS.filter((value) =>
+    value === 'link'
+      ? canLink || level === 'link'
+      : !(value === 'track' && level === 'link'),
+  ).map((value) => ({ value, label: LEVEL_LABELS[value] }));
+
   const choose = (next: Level) => {
     if (next === level) return;
     setError(null);
-    if (next === 'track') setIsLineUp(true);
+    if (next === 'link') setIsLinking(true);
+    else if (next === 'track') setIsLineUp(true);
     else void stop();
   };
 
@@ -90,7 +97,7 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
               onChange={choose}
             />
             <InlineNotice tone='info'>
-              {level === 'track'
+              {isTrackingLevel(level)
                 ? TRACKING_WORDS.trackHelp
                 : TRACKING_WORDS.planHelp}
             </InlineNotice>
@@ -139,6 +146,7 @@ function TrackingScreen({ onClose }: TrackingScreenProps) {
           )}
         </div>
       </Subview>
+      {isLinking && <LinkBankScreen onClose={() => setIsLinking(false)} />}
       {isLineUp && level === 'plan' && (
         <LineUpScreen onClose={() => setIsLineUp(false)} />
       )}

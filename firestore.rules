@@ -325,16 +325,23 @@ service cloud.firestore {
     // (apps/runway/server, apps/runway/keyChecks) have no match, so only Functions reach them.
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
+    // `links` and `accountBalances` are written only by Functions (bank data), and a card's or account's `linkId`
+    // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it.
     match /apps/runway/plans/{uid}/{document=**} {
-      allow read, create: if isUser(uid);
+      allow read: if isUser(uid);
+      allow create: if isUser(uid)
+        && !(document[0] in ['links', 'accountBalances'])
+        && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null);
     }
 
     match /apps/runway/plans/{uid} {
-      allow update: if isUser(uid);
+      allow create, update: if isUser(uid);
     }
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
-      allow update: if isUser(uid) && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses'];
+      allow update: if isUser(uid)
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses']
+        && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null));
       allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses'];
     }
 

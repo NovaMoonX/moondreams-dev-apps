@@ -13,7 +13,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
+import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { CARD_WORDS } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -47,6 +50,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const cards = useAppSelector(selectAllCards);
   const balances = useAppSelector(selectBalances);
   const [isArchiving, setIsArchiving] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
   const today = todayAsUtcDate(useNow(60_000));
   const [view, setView] = useState<'menu' | 'history' | 'purchase'>('menu');
@@ -63,6 +67,8 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
     today,
     startDate,
   );
+
+  const linkedFact = useLinkedFact(card.linkId);
 
   const handleArchive = async () => {
     if (!user || isArchiving) return;
@@ -94,6 +100,15 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       setIsArchiving(false);
     }
   };
+
+  if (isLinking) {
+    return (
+      <LinkBankScreen
+        startedFrom={{ target: 'card', id: card.id }}
+        onClose={() => setIsLinking(false)}
+      />
+    );
+  }
 
   if (view === 'purchase' && purchaseId !== null) {
     return (
@@ -138,11 +153,14 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               reserveCents > 0 ? CARD_WORDS.reserveLabel : CARD_WORDS.allPaid
             }
             figure={formatCents(Math.max(0, reserveCents))}
-            fact={
+            fact={[
               reserveCents < 0
                 ? mask(CARD_WORDS.paidAhead(formatCents(-reserveCents)))
-                : describeCardDue(card, today, due)
-            }
+                : describeCardDue(card, today, due),
+              linkedFact,
+            ]
+              .filter(Boolean)
+              .join(' \u00b7 ')}
           />
           <Button
             type='button'
@@ -153,6 +171,10 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
             {CARD_WORDS.payOffShort}
           </Button>
           <ActionGroup>
+            <LinkToBankRow
+              linkId={card.linkId}
+              onOpen={() => setIsLinking(true)}
+            />
             <ActionRow
               isGrouped
               hasChevron

@@ -25,6 +25,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getCardName, getListedCards } from '@apps/runway/utils/cardText';
 import type { BillVersion, PayLineVersion } from '@apps/runway/types';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const selectVersions = (state: RootState) => state.runway.versions;
 const selectMoves = (state: RootState) => state.runway.moves;
@@ -77,7 +78,7 @@ export const selectAccountMoves = createSelector(
   ): AccountMove[] => {
     const day = listed.confirmed.find((entry) => entry.dayKey === dayKey);
     if (!day || accounts.length === 0) return NO_MOVES;
-    const isTrack = level === 'track';
+    const isTrack = isTrackingLevel(level);
     const dayOn = day.arrivedOn ?? day.on;
     const nextIncomeOn = getNextIncomeOn(listed, day);
     const { start, end } = getMoveWindow(dayOn, nextIncomeOn);

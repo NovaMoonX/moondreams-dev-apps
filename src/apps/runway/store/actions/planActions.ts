@@ -7,6 +7,8 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { DEFAULT_CURRENCY_CODE } from '@apps/runway/constants';
 import { toDayStamp } from '@apps/runway/engine/dates';
 import {
+  getLevel,
+  linkTrackingPeriod,
   startTrackingPeriod,
   stopTrackingPeriod,
 } from '@apps/runway/engine/level';
@@ -214,6 +216,41 @@ export async function moveToPlan(
       kind: 'levelMove',
       createdAt: now,
       effectiveFrom: stopDate,
+      itemIds: [],
+      sealed: changeSealed,
+    } satisfies ChangeDoc);
+  });
+}
+
+/** Moves Track up to Link from `linkDate` in one transaction, writing the period's link day and a `levelMove` change; a plan already at Link is left alone. */
+export async function moveToLink(
+  uid: string,
+  encryption: RunwayEncryption,
+  linkDate: DateOnly,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const changeSealed = await sealJson(
+    {
+      summary: `Linked a bank from ${formatDateOrdinalUTC(linkDate)}.`,
+    } satisfies ChangeSealed,
+    encryption,
+  );
+  const ref = planPath(uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const periods = (snapshot.data() as PlanDoc).trackingPeriods ?? [];
+    if (getLevel(periods) === 'link') return;
+    const next = linkTrackingPeriod(periods, linkDate);
+    if ('error' in next) throw new Error(next.error);
+
+    transaction.update(ref, { trackingPeriods: next.periods, updatedAt: now });
+    transaction.set(subPath(uid, 'changes', changeId), {
+      id: changeId,
+      kind: 'levelMove',
+      createdAt: now,
+      effectiveFrom: null,
       itemIds: [],
       sealed: changeSealed,
     } satisfies ChangeDoc);

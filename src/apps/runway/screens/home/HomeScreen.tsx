@@ -52,6 +52,7 @@ import { describeRangeBasis } from '@apps/runway/utils/rangeText';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 function HomeScreen() {
   const today = todayAsUtcDate(useNow(60_000));
@@ -72,7 +73,9 @@ function HomeScreen() {
   const { open } = useAppSelector((state) => selectListedDays(state, today));
   const allCards = useAppSelector(selectAllCards);
   const homeMoves = useAppSelector((state) => selectHomeMoves(state, today));
-  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
+  const isTrack = useAppSelector((state) =>
+    isTrackingLevel(selectLevel(state)),
+  );
   const moves = useAppSelector((state) => state.runway.moves);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? 0,

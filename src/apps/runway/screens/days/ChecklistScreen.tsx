@@ -76,6 +76,7 @@ import {
   getCardName,
   getMarkCardId,
 } from '@apps/runway/utils/cardText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 interface ChecklistBillRowProps {
   line: RecordLine;
@@ -139,15 +140,14 @@ function ChecklistBillRow({
     setPending(null);
     if (!isWritten) return false;
     const state = store.getState();
-    const cardName =
-      selectLevel(state) === 'track'
-        ? getBillCardName(
-            state.runway.versions,
-            state.runway.cards,
-            line.itemId,
-            payment.dueOn,
-          )
-        : null;
+    const cardName = isTrackingLevel(selectLevel(state))
+      ? getBillCardName(
+          state.runway.versions,
+          state.runway.cards,
+          line.itemId,
+          payment.dueOn,
+        )
+      : null;
     addToast({
       title: !next
         ? ITEM_SHEET_R2_WORDS.unmarkedPaid(getLineTitle(line))
@@ -226,7 +226,9 @@ function ChecklistCostRow({
   today,
 }: ChecklistCostRowProps) {
   const stance = useAppSelector(selectStance);
-  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
+  const isTrack = useAppSelector((state) =>
+    isTrackingLevel(selectLevel(state)),
+  );
   const [isOpen, setIsOpen] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [pending, setPending] = useState<boolean | null>(null);

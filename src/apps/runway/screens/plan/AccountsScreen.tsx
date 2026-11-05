@@ -14,6 +14,9 @@ import AccountSheets, {
 } from '@apps/runway/components/AccountSheets';
 import { ACCOUNT_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import AddMethodSheet from '@apps/runway/components/AddMethodSheet';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import AccountForm from '@apps/runway/forms/AccountForm';
 import {
   selectAccountHoldings,
@@ -36,6 +39,8 @@ function AccountsScreen({ onClose }: AccountsScreenProps) {
   const [query, setQuery] = useState('');
   const [formKey, setFormKey] = useState<number | null>(null);
   const [open, setOpen] = useState<OpenedAccount | null>(null);
+  const canLink = useCanLinkBank();
+  const [addStep, setAddStep] = useState<'pick' | 'link' | null>(null);
 
   const needle = query.trim().toLowerCase();
   const visible =
@@ -104,8 +109,26 @@ function AccountsScreen({ onClose }: AccountsScreenProps) {
             isInSubview
             label={ACCOUNT_WORDS.add}
             icon={<Plus className='h-5 w-5' aria-hidden='true' />}
-            onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+            onClick={() =>
+              canLink
+                ? setAddStep('pick')
+                : setFormKey((current) => (current ?? 0) + 1)
+            }
           />
+        )}
+        {addStep === 'pick' && (
+          <AddMethodSheet
+            kind='account'
+            onClose={() => setAddStep(null)}
+            onLink={() => setAddStep('link')}
+            onManual={() => {
+              setAddStep(null);
+              setFormKey((current) => (current ?? 0) + 1);
+            }}
+          />
+        )}
+        {addStep === 'link' && (
+          <LinkBankScreen onClose={() => setAddStep(null)} />
         )}
         {formKey !== null && (
           <AccountForm key={formKey} isOpen onClose={() => setFormKey(null)} />

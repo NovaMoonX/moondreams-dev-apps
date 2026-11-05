@@ -39,6 +39,7 @@ export function startCardsListener(
               createdAt: data.createdAt,
               updatedAt: data.updatedAt,
               archivedAt: data.archivedAt ?? null,
+              linkId: data.linkId ?? null,
               issuer: payload.issuer,
               name: payload.name ?? null,
               dueDay: payload.dueDay ?? null,

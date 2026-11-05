@@ -25,6 +25,7 @@ import {
   selectEnvelopes,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const RANGES = ['1m', '6m', '1y'] as const;
 
@@ -42,7 +43,9 @@ export function useMoneySeries(
   const dirtyFrom = useAppSelector(
     (state) => state.runway.plan?.dirtyFrom ?? null,
   );
-  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
+  const isTrack = useAppSelector((state) =>
+    isTrackingLevel(selectLevel(state)),
+  );
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const envelopeIds = useMemo(

@@ -13,6 +13,7 @@ import {
   deriveBalances,
   type BalancesInput,
 } from '@apps/runway/engine/balances';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const toBalanceInputs =
   (level: Level) =>
@@ -34,12 +35,12 @@ const toBalanceInputs =
       days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
     ),
     expectedOn: new Map(days.map((day) => [day.id, day.expectedOn])),
-    purchases: level === 'track' ? purchases : [],
+    purchases: isTrackingLevel(level) ? purchases : [],
     closing:
-      closing !== null && level !== 'track'
+      closing !== null && !isTrackingLevel(level)
         ? withoutSpending(closing)
         : closing,
-    isCountingCards: level === 'track',
+    isCountingCards: isTrackingLevel(level),
     releasedFrom: Object.fromEntries(
       items.flatMap((item) =>
         item.heldReleasedOn === null ? [] : [[item.id, item.heldReleasedOn]],

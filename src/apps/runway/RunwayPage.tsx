@@ -7,6 +7,7 @@ import EmptyCard from '@/components/EmptyCard';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
+import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
@@ -54,6 +55,7 @@ import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
 import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
 import { isRevealPending } from '@apps/runway/utils/revealItem';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const tabScrolls = new Map<RunwayTab, number>();
 const RESTORE_FRAMES = 40;
@@ -208,6 +210,7 @@ function RunwayContent() {
     [],
   );
   useTrackAppUsage('runway', user?.uid ?? null);
+  useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
@@ -338,7 +341,8 @@ function RunwayContent() {
 
   if (
     view === 'freeToSpend' ||
-    ((view === 'checkAmount' || view === 'checkBalance') && level === 'track')
+    ((view === 'checkAmount' || view === 'checkBalance') &&
+      isTrackingLevel(level))
   ) {
     return (
       <div>

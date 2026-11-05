@@ -173,6 +173,7 @@ import {
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import DateInput from '@/components/DateInput';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const NO_PAY_WAY_VALUE = 'none';
 
@@ -661,7 +662,7 @@ function BillFormBody({
   const allCards = useAppSelector(selectAllCards);
   const openAccounts = useAppSelector(selectAccounts);
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
-  const isTracking = useAppSelector(selectLevel) === 'track';
+  const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
       ? {

@@ -99,6 +99,7 @@ export async function createCard(
       createdAt: now,
       updatedAt: now,
       archivedAt: null,
+      linkId: null,
       sealed,
     } satisfies CardDoc);
     transaction.set(changeRef(uid, change.id), change);

@@ -1,10 +1,18 @@
 import { useState, type ReactNode } from 'react';
 import InlineNotice from '@/components/InlineNotice';
-import { Activity, ChevronRight, Gauge, Trash2 } from 'lucide-react';
+import {
+  Activity,
+  ChevronRight,
+  Gauge,
+  Landmark,
+  Link2,
+  Trash2,
+} from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import GatesClosedNote from '@/components/GatesClosedNote';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SummaryEditor from '@/components/SummaryEditor';
@@ -14,6 +22,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
+  LINK_WORDS,
   SETTINGS_GROUP_WORDS,
   STANCE_HELP,
   STANCE_LABELS,
@@ -22,10 +31,16 @@ import {
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { getOpenPeriod } from '@apps/runway/engine/level';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { setStance } from '@apps/runway/store/actions/planActions';
 import { selectStance } from '@apps/runway/store/selectors/runwaySelectors';
-import type { Stance } from '@apps/runway/types';
+import type { OpenLink, Stance } from '@apps/runway/types';
+import {
+  describeUnfinishedLink,
+  isUnfinishedLink,
+} from '@apps/runway/utils/linkText';
 
 const stanceOptions = STANCES.map((value) => ({
   value,
@@ -39,6 +54,8 @@ interface SettingsRowProps {
   isDestructive?: boolean;
   /** The last row of a frame that holds several: the frame draws the border. */
   isGrouped?: boolean;
+  /** A row inside a frame with more rows under it. */
+  isMiddle?: boolean;
   onOpen: () => void;
 }
 
@@ -49,6 +66,7 @@ function SettingsRow({
   value,
   isDestructive = false,
   isGrouped = false,
+  isMiddle = false,
   onOpen,
 }: SettingsRowProps) {
   return (
@@ -57,9 +75,11 @@ function SettingsRow({
       variant='tertiary'
       className={join(
         'hover:bg-muted text-foreground! h-auto min-h-16 w-full items-start justify-start gap-3 px-3! py-2 text-left font-normal whitespace-normal',
-        isGrouped
-          ? 'rounded-none rounded-b-2xl'
-          : 'border-border rounded-2xl border',
+        isMiddle
+          ? 'rounded-none'
+          : isGrouped
+            ? 'rounded-none rounded-b-2xl'
+            : 'border-border rounded-2xl border',
       )}
       onClick={onOpen}
     >
@@ -107,6 +127,12 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const { openSettingsView } = useRunwayUrlState();
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
+  const canLink = useCanLinkBank();
+  const links = useAppSelector((state) => state.runway.links);
+  const unfinished = links.filter(isUnfinishedLink);
+  const [linking, setLinking] = useState<{ resume: OpenLink | null } | null>(
+    null,
+  );
 
   const choose = async (next: Stance) => {
     if (!user) return;
@@ -160,12 +186,35 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               value={
                 open === null
                   ? 'Plan only'
-                  : `Track, since ${formatDateOrdinalUTC(open.from)}`
+                  : `${open.linkedFrom ? 'Link' : 'Track'}, since ${formatDateOrdinalUTC(open.from)}`
               }
               onOpen={() => openSettingsView('tracking')}
             />
           </div>
         </ActionSection>
+        {canLink && (
+          <ActionSection caption={LINK_WORDS.yourBank}>
+            <div className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
+              {unfinished.map((link) => (
+                <SettingsRow
+                  key={link.id}
+                  isMiddle
+                  icon={<Link2 />}
+                  label={LINK_WORDS.unfinishedRow(link.institutionName)}
+                  value={describeUnfinishedLink(link)}
+                  onOpen={() => setLinking({ resume: link })}
+                />
+              ))}
+              <SettingsRow
+                isMiddle
+                icon={<Landmark />}
+                label={LINK_WORDS.settingsRow}
+                value={LINK_WORDS.settingsRowHelp}
+                onOpen={() => setLinking({ resume: null })}
+              />
+            </div>
+          </ActionSection>
+        )}
         <ActionSection caption={SETTINGS_GROUP_WORDS.plan}>
           <SettingsRow
             icon={<Trash2 />}
@@ -175,7 +224,14 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             onOpen={() => openSettingsView('delete')}
           />
         </ActionSection>
+        <GatesClosedNote appId='runway' />
       </div>
+      {linking && (
+        <LinkBankScreen
+          resume={linking.resume}
+          onClose={() => setLinking(null)}
+        />
+      )}
     </Subview>
   );
 }

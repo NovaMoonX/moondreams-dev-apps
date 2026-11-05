@@ -26,6 +26,7 @@ import { resolveVersion } from '@apps/runway/engine/resolve';
 import { createOptionMatcher } from '@/utils/optionMatchUtils';
 import type { RootState } from '@/store';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const issuerMatcher = createOptionMatcher({
   typos: true,
@@ -131,7 +132,7 @@ export function getMarkCardId(
   billId: string,
   dueOn: number,
 ): string | null {
-  return selectLevel(state) === 'track'
+  return isTrackingLevel(selectLevel(state))
     ? getBillCardId(state.runway.versions, billId, dueOn)
     : null;
 }
