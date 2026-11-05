@@ -1187,15 +1187,21 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   tickedDayKey: purchase.tickedDayKey,
 });
 
-/** The typed purchase's envelopes on the bank's amount: a difference (a tip added when it posted) goes to the last part. */
+// A difference (a tip added when it posted) lands on the last line the person chose, never a spill line.
 function repriceTyped(typed: OpenPurchase, amountCents: Cents): PurchaseLine[] {
   const difference = amountCents - typed.amountCents;
+  const last = typed.lines.reduce(
+    (at, line, index) => (line.via !== 'spill' ? index : at),
+    -1,
+  );
   const lines = typed.lines.map((line, index) =>
-    index === typed.lines.length - 1
+    index === (last === -1 ? typed.lines.length - 1 : last)
       ? { ...line, cents: line.cents + difference }
       : line,
   );
-  if (lines.some((line) => line.cents <= 0)) {
+  const isEmptied = (line: PurchaseLine, index: number) =>
+    line.cents < 0 || (line.cents === 0 && typed.lines[index].cents !== 0);
+  if (lines.some(isEmptied)) {
     throw new Error(
       'The bank’s amount is too far below one of its parts. Change the parts on the one you added first.',
     );

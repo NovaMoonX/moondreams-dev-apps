@@ -393,6 +393,7 @@ const MONEYLESS_KEYS = [
   'groupId',
   'paidByCardId',
   'accountId',
+  'spillTo',
 ];
 
 /** A change to only a name, emoji, group, card or account: it moves no money on any income day. */

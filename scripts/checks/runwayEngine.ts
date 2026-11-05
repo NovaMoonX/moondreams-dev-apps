@@ -111,6 +111,7 @@ import {
   previewBillShare,
 } from '../../src/apps/runway/engine/billShare.ts';
 import { checkAmount } from '../../src/apps/runway/engine/checkAmount.ts';
+import { resolveSpill, unspill } from '../../src/apps/runway/engine/spill.ts';
 import { hasPaysToChoose } from '../../src/apps/runway/utils/payFrom.ts';
 import {
   describePurchaseEdit,
@@ -4336,6 +4337,7 @@ const version = (
     },
     groupId: null,
     maxCents: null,
+    spillTo: [],
   });
   const base: OpenVersion[] = [
     {
@@ -4708,6 +4710,7 @@ const version = (
     },
     groupId: null,
     maxCents: null,
+    spillTo: [],
   });
   const goalPayload = (state?: 'active' | 'paused') =>
     ({
@@ -7179,6 +7182,51 @@ const version = (
     );
   }
 
+  {
+    // One envelope in two lines (a chosen B and a spill B) is refunded as one envelope, never twice.
+    const spilled = {
+      ...purchase('sp', day(1), [{ envelopeId: 'b', cents: 10_000 }]),
+      lines: [
+        { envelopeId: 'a', cents: 0, via: 'chosen' as const },
+        { envelopeId: 'b', cents: 3_000, via: 'spill' as const },
+        { envelopeId: 'b', cents: 7_000, via: 'chosen' as const },
+      ],
+    };
+    const refundOf = (earlier: OpenPurchase['lines'][], cents: number) =>
+      getRefundLines(
+        cents,
+        spilled,
+        everyone,
+        ([spilled] as OpenPurchase[]).concat(
+          earlier.map((lines, at) => ({
+            ...purchase(`r${at}`, day(2), [], 'sp'),
+            lines,
+          })),
+        ),
+      );
+    const one = refundOf([], 5_000);
+    const oneLines = one.kind === 'lines' ? one.lines : [];
+    assert.deepEqual(
+      oneLines.map((l) => [l.envelopeId, l.cents]),
+      [
+        ['b', -1_500],
+        ['b', -3_500],
+      ],
+    );
+    const two = refundOf([oneLines], 5_000);
+    const twoLines = two.kind === 'lines' ? two.lines : [];
+    assert.equal(sumPurchaseLines(twoLines), -5_000);
+    assert.deepEqual(
+      twoLines.map((l) => [l.envelopeId, l.cents]),
+      [
+        ['b', -1_500],
+        ['b', -3_500],
+      ],
+      'two refunds together return each line once, never more than it took',
+    );
+    assert.equal(sumPurchaseLines([...oneLines, ...twoLines]), -10_000);
+  }
+
   const periods: TrackingPeriod[] = [
     { from: day(0), to: day(9), linkedFrom: null },
     { from: day(20), to: null, linkedFrom: null },
@@ -7196,6 +7244,178 @@ const version = (
   assert.equal(isInTrackingPeriods(periods, day(10)), false);
   assert.equal(isInTrackingPeriods(periods, day(40)), true);
   assert.equal(isInTrackingPeriods([], day(1)), false);
+}
+
+{
+  const chosen = (envelopeId: string, cents: number) => ({
+    envelopeId,
+    cents,
+    via: 'chosen' as const,
+  });
+  const sum = (lines: readonly { cents: number }[]) =>
+    lines.reduce((total, line) => total + line.cents, 0);
+  const left = { groceries: 1_000, pets: 1_500, general: 4_000, bare: 0 };
+  const chains = { groceries: ['pets', 'general'] };
+
+  const over = resolveSpill([chosen('groceries', 4_000)], left, chains);
+  assert.deepEqual(over, [
+    chosen('groceries', 1_000),
+    { envelopeId: 'pets', cents: 1_500, via: 'spill' },
+    { envelopeId: 'general', cents: 1_500, via: 'spill' },
+  ]);
+  assert.equal(sum(over), 4_000, 'the lines add to the purchase');
+
+  const thirty = resolveSpill(
+    [chosen('groceries', 4_000)],
+    { ...left, groceries: 1_000, pets: 2_000, general: 500 },
+    chains,
+  );
+  assert.deepEqual(thirty, [
+    chosen('groceries', 1_000),
+    { envelopeId: 'pets', cents: 2_000, via: 'spill' },
+    { envelopeId: 'general', cents: 500, via: 'spill' },
+    { envelopeId: null, cents: 500, via: 'spill' },
+  ]);
+  assert.equal(sum(thirty), 4_000);
+
+  assert.deepEqual(
+    resolveSpill([chosen('groceries', 800)], left, chains),
+    [chosen('groceries', 800)],
+    'what the envelope covers does not spill',
+  );
+  const empty = resolveSpill(
+    [chosen('groceries', 500)],
+    { ...left, groceries: -200 },
+    chains,
+  );
+  assert.deepEqual(
+    empty,
+    [chosen('groceries', 0), { envelopeId: 'pets', cents: 500, via: 'spill' }],
+    'an envelope that is already over contributes nothing, never a negative',
+  );
+
+  const refund = [chosen('groceries', -3_000)];
+  assert.deepEqual(resolveSpill(refund, left, chains), refund);
+  const freeLine = [{ envelopeId: null, cents: 3_000, via: 'free' as const }];
+  assert.deepEqual(resolveSpill(freeLine, left, chains), freeLine);
+  const noChain = [chosen('pets', 9_000)];
+  assert.deepEqual(resolveSpill(noChain, left, chains), noChain);
+
+  const odd = resolveSpill([chosen('groceries', 3_000)], left, {
+    groceries: ['groceries', 'pets', 'pets', 'ghost', 'general'],
+  });
+  assert.deepEqual(
+    odd,
+    [
+      chosen('groceries', 1_000),
+      { envelopeId: 'pets', cents: 1_500, via: 'spill' },
+      { envelopeId: 'general', cents: 500, via: 'spill' },
+    ],
+    'itself, repeats and unknown ids are skipped',
+  );
+
+  const split = resolveSpill(
+    [chosen('groceries', 2_000), chosen('pets', 1_000)],
+    left,
+    chains,
+  );
+  assert.deepEqual(
+    split,
+    [
+      chosen('groceries', 1_000),
+      { envelopeId: 'pets', cents: 500, via: 'spill' },
+      { envelopeId: 'general', cents: 500, via: 'spill' },
+      chosen('pets', 1_000),
+    ],
+    'left is consumed across the lines of one purchase',
+  );
+
+  assert.deepEqual(unspill(over), [chosen('groceries', 4_000)]);
+  assert.deepEqual(unspill(thirty), [chosen('groceries', 4_000)]);
+  assert.deepEqual(unspill(split), [
+    chosen('groceries', 2_000),
+    chosen('pets', 1_000),
+  ]);
+  assert.deepEqual(
+    unspill(resolveSpill(unspill(over), left, chains)),
+    unspill(over),
+  );
+
+  const many = Array.from({ length: 14 }, (_, index) => `e${index}`);
+  const wide = resolveSpill(
+    [chosen('groceries', 100_000)],
+    { groceries: 0, ...Object.fromEntries(many.map((id) => [id, 100])) },
+    { groceries: many },
+  );
+  assert.equal(wide.length, 12, 'the line cap holds');
+  assert.equal(sum(wide), 100_000);
+  assert.deepEqual(wide[11], {
+    envelopeId: null,
+    cents: 100_000 - 10 * 100,
+    via: 'spill',
+  });
+
+  const envelopes = [
+    { id: 'groceries', priority: 'should' as const, leftCents: 1_000 },
+    { id: 'pets', priority: 'want' as const, leftCents: 1_500 },
+    { id: 'general', priority: 'must' as const, leftCents: 4_000 },
+  ];
+  const chained = checkAmount('groceries', 4_000, envelopes, 800, [
+    'pets',
+    'general',
+  ]);
+  assert.deepEqual(chained, {
+    kind: 'over',
+    overCents: 3_000,
+    isChain: true,
+    sources: [
+      { envelopeId: 'pets', takeCents: 1_500, leftAfterCents: 0 },
+      { envelopeId: 'general', takeCents: 1_500, leftAfterCents: 2_500 },
+    ],
+    uncoveredCents: 0,
+  });
+  const chainedFree = checkAmount('groceries', 9_000, envelopes, 800, ['pets']);
+  assert.deepEqual(chainedFree, {
+    kind: 'over',
+    overCents: 8_000,
+    isChain: true,
+    sources: [
+      { envelopeId: 'pets', takeCents: 1_500, leftAfterCents: 0 },
+      { envelopeId: null, takeCents: 800, leftAfterCents: 0 },
+    ],
+    uncoveredCents: 5_700,
+  });
+  assert.deepEqual(
+    checkAmount('groceries', 4_000, envelopes, 800, []),
+    checkAmount('groceries', 4_000, envelopes, 800),
+    'without a chain, nothing changes',
+  );
+  assert.deepEqual(checkAmount('groceries', 500, envelopes, 800, ['pets']), {
+    kind: 'fits',
+    leftAfterCents: 500,
+  });
+  const overDrawn = checkAmount(
+    'groceries',
+    500,
+    envelopes.map((e) =>
+      e.id === 'groceries' ? { ...e, leftCents: -200 } : e,
+    ),
+    0,
+    ['pets'],
+  );
+  assert.equal(overDrawn.kind, 'over');
+  if (overDrawn.kind === 'over') {
+    assert.equal(
+      overDrawn.overCents,
+      500,
+      'an envelope already over has no money of its own to count',
+    );
+    assert.equal(
+      overDrawn.sources.reduce((sum, source) => sum + source.takeCents, 0) +
+        overDrawn.uncoveredCents,
+      overDrawn.overCents,
+    );
+  }
 }
 
 {
@@ -11756,6 +11976,7 @@ const version = (
       cadence: { kind: 'everyIncomeDay' },
     },
     maxCents: null,
+    spillTo: [],
     groupId: null,
   } as unknown as ItemPayload;
   const goal = {

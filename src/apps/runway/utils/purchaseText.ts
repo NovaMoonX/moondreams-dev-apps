@@ -1,12 +1,15 @@
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, formatList } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type {
+  Cents,
   Level,
   OpenAccount,
   OpenPurchase,
   PurchaseLine,
   PurchasePairKind,
 } from '@apps/runway/types';
+import { SPILL_WORDS } from '@apps/runway/constants';
+import { unspill } from '@apps/runway/engine/spill';
 import { getLevelWords } from '@apps/runway/utils/levelText';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
@@ -23,14 +26,16 @@ export function describeEnvelopeFigure(level: Level, cents: number) {
   };
 }
 
-/** The names a purchase comes out of: up to three, then "and N more". */
+/** The names a purchase comes out of as the person chose them (a spill is not a choice): up to three, then "and N more". */
 export function describeEnvelopes(
   lines: readonly PurchaseLine[],
   nameOf: (envelopeId: string) => string,
 ): string {
-  const names = lines.map((line) =>
-    line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
-  );
+  const names = lines
+    .filter((line) => line.via !== 'spill')
+    .map((line) =>
+      line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
+    );
   if (names.length <= 3)
     return names.join(', ').replace(/, ([^,]*)$/, ' and $1');
   return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
@@ -83,6 +88,99 @@ interface PurchaseFields {
 
 const money = (cents: number) => formatCents(Math.abs(cents));
 
+interface SpillGroup {
+  fromId: string;
+  parts: { sourceId: string | null; source: string; cents: Cents }[];
+}
+
+const getSpillGroups = (
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+) =>
+  lines
+    .reduce<{ fromId: string | null; group: SpillGroup | null }[]>(
+      (acc, line) => {
+        if (line.via !== 'spill')
+          return [...acc, { fromId: line.envelopeId, group: null }];
+        const last = acc[acc.length - 1];
+        if (!last || last.fromId === null) return acc;
+        const part = {
+          sourceId: line.envelopeId,
+          source:
+            line.envelopeId === null ? FREE_NAME : nameOf(line.envelopeId),
+          cents: line.cents,
+        };
+        const parts = [...(last.group?.parts ?? []), part];
+        return [
+          ...acc.slice(0, -1),
+          { ...last, group: { fromId: last.fromId, parts } },
+        ];
+      },
+      [],
+    )
+    .flatMap((entry) => (entry.group === null ? [] : [entry.group]));
+
+/** One change-log sentence per envelope that ran out, naming where its overage came from. */
+export function describeSpills(
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+): string[] {
+  return getSpillGroups(lines, nameOf).map((group) =>
+    SPILL_WORDS.ranOut(
+      nameOf(group.fromId),
+      formatList(
+        group.parts.map((part) =>
+          SPILL_WORDS.part(money(part.cents), part.source),
+        ),
+      ),
+    ),
+  );
+}
+
+/** Chain steps passed over for having nothing left: those before the last one that paid, or all of them once Free to Spend took a share. */
+export function getSkippedSteps(
+  chain: readonly string[],
+  selfId: string,
+  isKnown: (envelopeId: string) => boolean,
+  paidIds: ReadonlySet<string>,
+  isFreeUsed: boolean,
+): string[] {
+  const steps = chain.filter(
+    (id, index) => id !== selfId && isKnown(id) && chain.indexOf(id) === index,
+  );
+  const last = isFreeUsed
+    ? steps.length - 1
+    : steps.reduce((at, id, index) => (paidIds.has(id) ? index : at), -1);
+  return steps.filter((id, index) => index <= last && !paidIds.has(id));
+}
+
+/** The preview's sentence for each envelope the save would run dry, leading with the cause and naming any step skipped for having nothing left. */
+export function describeSpillPreview(
+  lines: readonly PurchaseLine[],
+  nameOf: (envelopeId: string) => string,
+  chainOf: (envelopeId: string) => readonly string[],
+  isKnown: (envelopeId: string) => boolean,
+): string[] {
+  return getSpillGroups(lines, nameOf).map((group) => {
+    const skipped = getSkippedSteps(
+      chainOf(group.fromId),
+      group.fromId,
+      isKnown,
+      new Set(group.parts.flatMap((part) => part.sourceId ?? [])),
+      group.parts.some((part) => part.sourceId === null),
+    ).map(nameOf);
+    return SPILL_WORDS.runsOut(
+      nameOf(group.fromId),
+      skipped,
+      formatList(
+        group.parts.map((part) =>
+          SPILL_WORDS.part(money(part.cents), part.source),
+        ),
+      ),
+    );
+  });
+}
+
 /** The change-log sentence for removing a purchase. */
 export function describePurchaseRemoval(
   purchase: OpenPurchase,
@@ -103,7 +201,8 @@ export function describePurchaseAssigned(
     lines.length === 0
       ? 'left out of spending'
       : `sent to ${describeEnvelopes(lines, nameOf)}`;
-  return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+  const spills = describeSpills(lines, nameOf).map((spill) => ` ${spill}.`);
+  return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.${spills.join('')}`;
 }
 
 /** The change-log sentence for putting a sent purchase back in Needs a home. */
@@ -195,15 +294,26 @@ export function describePurchaseEdit(
   const shape = (lines: readonly PurchaseLine[]) =>
     describeEnvelopes(lines, nameOf);
   const key = (lines: readonly PurchaseLine[]) =>
-    lines.length > 1
-      ? lines.map((line) => `${line.envelopeId}:${line.cents}`).join()
+    unspill(lines).length > 1
+      ? unspill(lines)
+          .map((line) => `${line.envelopeId}:${line.cents}`)
+          .join()
       : shape(lines);
+  const spillKey = (lines: readonly PurchaseLine[]) =>
+    lines
+      .filter((line) => line.via === 'spill')
+      .map((line) => `${line.envelopeId}:${line.cents}`)
+      .join();
   const changes = [
     after.amountCents !== before.amountCents
       ? `amount ${money(before.amountCents)} to ${money(after.amountCents)}`
       : null,
     key(after.lines) !== key(before.lines)
       ? `envelopes ${shape(before.lines)} to ${shape(after.lines)}`
+      : null,
+    spillKey(after.lines) !== spillKey(before.lines)
+      ? describeSpills(after.lines, nameOf).join('; ') ||
+        'no longer spills over'
       : null,
     after.date !== before.date
       ? `day ${formatDateOrdinalUTC(before.date)} to ${formatDateOrdinalUTC(after.date)}`

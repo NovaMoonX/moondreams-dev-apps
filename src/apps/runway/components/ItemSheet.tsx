@@ -19,6 +19,7 @@ import {
   Ruler,
   ShoppingBag,
   Undo2,
+  Waves,
   Wallet,
 } from 'lucide-react';
 
@@ -89,6 +90,7 @@ import {
   MOVE_WORDS,
   SET_HELD_WORDS,
   SPEND_WORDS,
+  SPILL_WORDS,
 } from '@apps/runway/constants';
 import { getHolderById } from '@apps/runway/engine/accounts';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
@@ -127,6 +129,7 @@ import {
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
+  selectEnvelopes,
   selectAllCards,
   selectGroups,
   selectPairedBy,
@@ -134,7 +137,12 @@ import {
 import { describeAccountLine } from '@apps/runway/utils/accountText';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { resolveSpill } from '@apps/runway/engine/spill';
 import { formatCents } from '@/utils/moneyUtils';
+import { formatList } from '@/utils/formatUtils';
+import { getSkippedSteps } from '@apps/runway/utils/purchaseText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import InlineNotice from '@/components/InlineNotice';
 import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
@@ -173,6 +181,7 @@ type View =
   | 'move'
   | 'setHeld'
   | 'heldIn'
+  | 'spill'
   | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
@@ -260,6 +269,7 @@ const VIEW_NOTES: Record<View, string> = {
   move: '',
   setHeld: '',
   heldIn: '',
+  spill: '',
   dayAction: '',
 };
 
@@ -300,6 +310,13 @@ function ItemSheet({
     (state) => selectBalances(state).assignedByItem[itemId] ?? 0,
   );
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
+  const [spillIds, setSpillIds] = useState<string[]>([]);
+  const [isPickingSpill, setIsPickingSpill] = useState(false);
+  const [selectedSpillId, setSelectedSpillId] = useState<string | null>(null);
+  const assignedByItem = useAppSelector(
+    (state) => selectBalances(state).assignedByItem,
+  );
+  const allEnvelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const version = useAppSelector(
     (state): OpenVersion | null =>
       resolveCurrentOrNext(state.runway.versions, itemId, today) ?? null,
@@ -341,6 +358,7 @@ function ItemSheet({
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
   const allCards = useAppSelector(selectAllCards);
   const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
@@ -576,6 +594,113 @@ function ItemSheet({
       goTo('menu');
     } catch (saveError) {
       setError(getErrorMessage(saveError, GROUP_WORDS.saveFailed));
+    } finally {
+      isSavingRef.current = false;
+      setIsSaving(false);
+    }
+  };
+
+  const spillOptions = allEnvelopes
+    .filter(({ item }) => item.id !== itemId)
+    .map(({ item, version: option }) => ({
+      id: item.id,
+      name: option.payload.name,
+    }));
+  const spillNameOf = (id: string) =>
+    spillOptions.find((option) => option.id === id)?.name ?? '';
+  const savedSpill =
+    itemKind === 'envelope'
+      ? ((payload as EnvelopeSealed).spillTo ?? []).filter((id) =>
+          spillOptions.some((option) => option.id === id),
+        )
+      : [];
+  const isSpillUnchanged = spillIds.join() === savedSpill.join();
+  const spillLines = resolveSpill(
+    [
+      {
+        envelopeId: itemId,
+        cents: Math.max(0, heldCents) + SPILL_WORDS.exampleCents,
+        via: 'chosen',
+      },
+    ],
+    Object.fromEntries(
+      spillOptions.map((option) => [option.id, assignedByItem[option.id] ?? 0]),
+    ),
+    { [itemId]: spillIds },
+  ).filter((line) => line.via === 'spill');
+  const spillExample = SPILL_WORDS.example(
+    formatCents(SPILL_WORDS.exampleCents),
+    getSkippedSteps(
+      spillIds,
+      itemId,
+      (id) => spillOptions.some((option) => option.id === id),
+      new Set(spillLines.flatMap((line) => line.envelopeId ?? [])),
+      spillLines.some((line) => line.envelopeId === null),
+    ).map(spillNameOf),
+    formatList(
+      spillLines.map((line) =>
+        SPILL_WORDS.part(
+          formatCents(line.cents),
+          line.envelopeId === null
+            ? SPILL_WORDS.free
+            : spillNameOf(line.envelopeId),
+        ),
+      ),
+    ),
+  );
+
+  const openSpill = () => {
+    goTo('spill');
+    setSpillIds(savedSpill);
+    setSelectedSpillId(null);
+    setIsPickingSpill(false);
+  };
+
+  const saveSpill = async () => {
+    if (isSavingRef.current || !user || itemKind !== 'envelope') return;
+    const envelope = payload as EnvelopeSealed;
+    isSavingRef.current = true;
+    setError(null);
+    setIsSaving(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const chain = spillIds.map(spillNameOf).join(' then ');
+      await changeItem(user.uid, encryption, {
+        itemId,
+        kind: 'envelope',
+        payload: { ...envelope, spillTo: spillIds },
+        summary:
+          spillIds.length === 0
+            ? SPILL_WORDS.summaryCleared(envelope.name)
+            : SPILL_WORDS.summary(envelope.name, chain),
+        note: null,
+        effectiveFrom: today,
+        changeEffectiveFrom: null,
+        newGroup: null,
+        stretches: getVersionStretches<EnvelopeVersion, EnvelopeSealed>(
+          store
+            .getState()
+            .runway.versions.filter(
+              (candidate): candidate is EnvelopeVersion =>
+                candidate.kind === 'envelope',
+            ),
+          itemId,
+          today,
+        ).map((stretch) => ({
+          ...stretch,
+          payload: { ...stretch.payload, spillTo: spillIds },
+        })),
+      });
+      addToast({
+        title:
+          spillIds.length === 0
+            ? SPILL_WORDS.toastCleared(envelope.name)
+            : SPILL_WORDS.toast(envelope.name),
+        type: 'success',
+      });
+      goTo('menu');
+    } catch (saveError) {
+      setError(getErrorMessage(saveError, SPILL_WORDS.saveFailed));
     } finally {
       isSavingRef.current = false;
       setIsSaving(false);
@@ -1041,6 +1166,20 @@ function ItemSheet({
             label={SPEND_WORDS.title}
             onClick={() => goTo('purchases')}
           />
+          {canChange && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Waves />}
+              label={SPILL_WORDS.row}
+              subtitle={mask(
+                savedSpill.length === 0
+                  ? SPILL_WORDS.rowEmpty
+                  : savedSpill.map(spillNameOf).join(', then '),
+              )}
+              onClick={openSpill}
+            />
+          )}
           <ActionRow
             isGrouped
             hasChevron
@@ -1179,6 +1318,151 @@ function ItemSheet({
             loading={isSaving}
             disabled={isSaving || groupBlocker !== null}
             onClick={() => void saveGroup()}
+          >
+            Save
+          </Button>
+        }
+      />
+    </div>
+  );
+
+  const spillCandidates = spillOptions.filter(
+    (option) => !spillIds.includes(option.id),
+  );
+  const moveSpill = (id: string, by: -1 | 1) =>
+    setSpillIds((current) => {
+      const at = current.indexOf(id);
+      const to = at + by;
+      if (at === -1 || to < 0 || to >= current.length) return current;
+      return current.map((entry, index) =>
+        index === at ? current[to] : index === to ? current[at] : entry,
+      );
+    });
+  const spillActionClass =
+    "relative before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']";
+  const spillView = (
+    <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>
+        {SPILL_WORDS.title(
+          itemKind === 'envelope' ? (payload as EnvelopeSealed).name : '',
+        )}
+      </ActionTitle>
+      {spillIds.length === 0 ? (
+        <p className='text-muted-foreground text-sm'>{SPILL_WORDS.nothing}</p>
+      ) : (
+        <ol className='border-border bg-card divide-border divide-y rounded-2xl border text-sm'>
+          {spillIds.map((id, index) => (
+            <li key={id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                aria-pressed={selectedSpillId === id}
+                className={join(
+                  'h-auto w-full justify-start gap-1 rounded-none px-3 py-2.5 text-left font-normal',
+                  selectedSpillId === id && 'bg-accent',
+                )}
+                onClick={() =>
+                  setSelectedSpillId((current) => (current === id ? null : id))
+                }
+              >
+                <span className='text-muted-foreground tabular-nums'>
+                  {index + 1}.
+                </span>
+                <span className='min-w-0 break-words'>{spillNameOf(id)}</span>
+              </Button>
+              {selectedSpillId === id && (
+                <div className='flex flex-wrap gap-2 px-3 pb-2.5'>
+                  {index > 0 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className={spillActionClass}
+                      onClick={() => moveSpill(id, -1)}
+                    >
+                      {SPILL_WORDS.moveUp}
+                    </Button>
+                  )}
+                  {index < spillIds.length - 1 && (
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      size='sm'
+                      className={spillActionClass}
+                      onClick={() => moveSpill(id, 1)}
+                    >
+                      {SPILL_WORDS.moveDown}
+                    </Button>
+                  )}
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    className={spillActionClass}
+                    onClick={() => {
+                      setSelectedSpillId(null);
+                      setSpillIds((current) =>
+                        current.filter((entry) => entry !== id),
+                      );
+                    }}
+                  >
+                    {SPILL_WORDS.remove}
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+      {isPickingSpill ? (
+        <div className='space-y-2'>
+          <p className='text-sm font-medium' aria-hidden>
+            {SPILL_WORDS.pickTitle}
+          </p>
+          <PillGroup
+            label={SPILL_WORDS.pickTitle}
+            options={spillCandidates.map((option) => ({
+              value: option.id,
+              label: option.name,
+            }))}
+            value={null}
+            onChange={(id) => {
+              setSpillIds((current) => [...current, id]);
+              setIsPickingSpill(false);
+            }}
+          />
+        </div>
+      ) : (
+        spillCandidates.length > 0 && (
+          <RevealChip onClick={() => setIsPickingSpill(true)}>
+            {SPILL_WORDS.add}
+          </RevealChip>
+        )
+      )}
+      {spillIds.length > 0 && !isPickingSpill && (
+        <p className='text-muted-foreground text-sm'>
+          {isHidden ? SPILL_WORDS.exampleHidden : spillExample}
+        </p>
+      )}
+      <ModalFooterActions
+        note={error ?? SPILL_WORDS.hint}
+        cancelAction={
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => goTo('menu')}
+            disabled={isSaving}
+          >
+            Cancel
+          </Button>
+        }
+        rightActions={
+          <Button
+            type='button'
+            loading={isSaving}
+            disabled={isSaving || isSpillUnchanged}
+            onClick={() => void saveSpill()}
           >
             Save
           </Button>
@@ -1382,19 +1666,21 @@ function ItemSheet({
             ? browse
             : view === 'group'
               ? groupView
-              : view === 'move'
-                ? moveView
-                : view === 'setHeld'
-                  ? setHeldView
-                  : view === 'heldIn'
-                    ? heldInView
-                    : view === 'dayAction' && dayAction?.renderView
-                      ? dayAction.renderView({
-                          onBack: () => goTo('menu'),
-                          onClose,
-                          openChange,
-                        })
-                      : action
+              : view === 'spill'
+                ? spillView
+                : view === 'move'
+                  ? moveView
+                  : view === 'setHeld'
+                    ? setHeldView
+                    : view === 'heldIn'
+                      ? heldInView
+                      : view === 'dayAction' && dayAction?.renderView
+                        ? dayAction.renderView({
+                            onBack: () => goTo('menu'),
+                            onClose,
+                            openChange,
+                          })
+                        : action
         }
       >
         {menu}

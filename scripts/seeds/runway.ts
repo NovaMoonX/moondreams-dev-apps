@@ -1012,6 +1012,7 @@ async function writeSeedKeptEnvelope(
     orderIndex: 11,
     groupId: null,
     maxCents: null,
+    spillTo: [],
     funding: {
       amount: { kind: 'exact', cents: 6_000 },
       cadence: { kind: 'everyIncomeDay' },
@@ -1103,6 +1104,7 @@ async function writeSeedLifecycle(
     orderIndex,
     groupId: null,
     maxCents: null,
+    spillTo: [],
     funding: funding(cents),
   });
   const phonePlan: BillSealed = {
@@ -1166,6 +1168,7 @@ async function writeSeedLifecycle(
         orderIndex: 2.5,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: funding(150_000),
       } satisfies EnvelopeSealed,
     },
@@ -2326,6 +2329,7 @@ async function writeSeedEnvelopes(
         orderIndex: 1,
         groupId: 'seed-group-home',
         maxCents: null,
+        spillTo: [],
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
         extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],
       },
@@ -2339,6 +2343,7 @@ async function writeSeedEnvelopes(
         orderIndex: 2,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: exact(6_000),
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -2354,6 +2359,7 @@ async function writeSeedEnvelopes(
         orderIndex: 1,
         groupId: null,
         maxCents: null,
+        spillTo: ['seed-envelope-everyday', 'seed-envelope-gifts'],
         funding: { amount: exact(5_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2366,6 +2372,7 @@ async function writeSeedEnvelopes(
         orderIndex: 2,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: exact(4_000),
           cadence: { kind: 'everyNth', n: 3, anchorDayKey: paydayKey(0) },
@@ -2381,6 +2388,7 @@ async function writeSeedEnvelopes(
         orderIndex: 1,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: exact(20_000),
           cadence: {
@@ -2399,6 +2407,7 @@ async function writeSeedEnvelopes(
         orderIndex: 3,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: { kind: 'percent', bps: 1_000, of: 'dayMoney' },
           cadence: { kind: 'everyIncomeDay' },
@@ -2414,6 +2423,7 @@ async function writeSeedEnvelopes(
         orderIndex: 2,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: { kind: 'rest' },
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -2429,6 +2439,7 @@ async function writeSeedEnvelopes(
         orderIndex: 3,
         groupId: null,
         maxCents: null,
+        spillTo: [],
         funding: {
           amount: exact(9_500),
           cadence: {
@@ -2450,6 +2461,7 @@ async function writeSeedEnvelopes(
               orderIndex: 3,
               groupId: null,
               maxCents: null,
+              spillTo: [],
               funding: {
                 amount: exact(2_000),
                 cadence: {
@@ -3200,7 +3212,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Fourteen more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens, and an unclear one (two $100.00 debits from Checking A, three and two days ago, and one $100.00 deposit to Checking B two days ago: neither debit is clearly the other side, so all three are offered each other in Needs a home). The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, twelve rows in all (one spills from Dining out into its chain) so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Fourteen more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens, and an unclear one (two $100.00 debits from Checking A, three and two days ago, and one $100.00 deposit to Checking B two days ago: neither debit is clearly the other side, so all three are offered each other in Needs a home). The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3323,6 +3335,17 @@ async function writeSeedPurchases(
       note: null,
       lines: [line('seed-envelope-dining', 1_425)],
       paidByCardId: SEED_VENTURE_CARD,
+    },
+    {
+      id: 'seed-purchase-chipotle',
+      daysAgo: 1,
+      merchant: 'Chipotle',
+      note: 'Burrito bowl and chips',
+      lines: [
+        line('seed-envelope-dining', 0),
+        { envelopeId: 'seed-envelope-everyday', cents: 1_500, via: 'spill' },
+        { envelopeId: 'seed-envelope-gifts', cents: 1_000, via: 'spill' },
+      ],
     },
     {
       id: 'seed-purchase-market',

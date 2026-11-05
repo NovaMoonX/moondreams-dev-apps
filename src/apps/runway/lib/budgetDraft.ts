@@ -168,6 +168,7 @@ export function toEnvelopeValue(
     orderIndex: 0,
     groupId: null,
     maxCents: null,
+    spillTo: [],
     funding: {
       amount: { kind: 'exact', cents: item.amountCents ?? 0 },
       cadence:
@@ -415,6 +416,7 @@ export function moveBudgetValue(
       orderIndex,
       groupId,
       maxCents: null,
+      spillTo: [],
       ...(keepsFunding && extras !== null ? { extras } : {}),
       funding:
         funding.cadence.kind === 'none'

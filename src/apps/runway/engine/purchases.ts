@@ -88,15 +88,30 @@ export function getRefundLines(
   const returned = purchases
     .filter((purchase) => purchase.refundOfId === original.id)
     .flatMap((purchase) => purchase.lines);
-  const remaining = taken.map((line) =>
-    Math.max(
+  const keyOf = (line: PurchaseLine) => line.envelopeId ?? FREE_ID;
+  const remaining = taken.reduce<number[]>((acc, line, index) => {
+    const key = keyOf(line);
+    const own = taken
+      .map((entry, at) => ({ entry, at }))
+      .filter(({ entry }) => keyOf(entry) === key);
+    if (own[0].at !== index) return acc;
+    const back = returned
+      .filter((entry) => keyOf(entry) === key)
+      .reduce((sum, entry) => sum + entry.cents, 0);
+    const pool = Math.max(
       0,
-      line.cents +
-        returned
-          .filter((back) => back.envelopeId === line.envelopeId)
-          .reduce((sum, back) => sum + back.cents, 0),
-    ),
-  );
+      own.reduce((sum, { entry }) => sum + entry.cents, 0) + back,
+    );
+    const parts = allocate(
+      pool,
+      own.map(({ entry }) => entry.cents),
+      own.map(({ at }) => String(at)),
+    );
+    own.forEach(({ at }, part) => {
+      acc[at] = parts[part];
+    });
+    return acc;
+  }, []);
   const canFollowRemaining =
     remaining.reduce((sum, cents) => sum + cents, 0) >= refundCents;
   const ids = taken.map((line) => line.envelopeId ?? FREE_ID);
@@ -112,7 +127,12 @@ export function getRefundLines(
           {
             envelopeId: line.envelopeId,
             cents: 0 - shares[index],
-            via: line.via,
+            via:
+              line.via === 'spill'
+                ? line.envelopeId === null
+                  ? 'free'
+                  : 'chosen'
+                : line.via,
           } satisfies PurchaseLine,
         ],
   );
