@@ -41,9 +41,9 @@ export function getInterestDay(
 }
 
 /**
- * The month's interest for an account. An approximation: when the account is linked and a reading
- * on or after the interest day follows one before it, the rise between them (floored at zero, so it
- * also counts a deposit) replaces the estimate.
+ * The month's interest for an account. An approximation: when the account is linked and one reading
+ * falls in the month before the interest day and one on or after it (before the next), the rise between
+ * them (floored at zero, so it also counts a deposit) replaces the estimate.
  */
 export function getMonthInterest(input: {
   balanceCents: Cents | null;
@@ -55,9 +55,13 @@ export function getMonthInterest(input: {
   month: number;
 }): MonthInterest {
   const on = getInterestDay(input.year, input.month, input.interestDay);
+  const previous = getInterestDay(input.year, input.month - 1, input.interestDay);
+  const next = getInterestDay(input.year, input.month + 1, input.interestDay);
   const sorted = [...input.readings].sort((a, b) => a.on - b.on);
-  const before = sorted.filter((reading) => reading.on < on).at(-1);
-  const after = sorted.find((reading) => reading.on >= on);
+  const before = sorted
+    .filter((reading) => reading.on >= previous && reading.on < on)
+    .at(-1);
+  const after = sorted.find((reading) => reading.on >= on && reading.on < next);
   if (input.isLinked && before !== undefined && after !== undefined) {
     return {
       cents: Math.max(0, after.cents - before.cents),
@@ -74,7 +78,7 @@ export function getMonthInterest(input: {
 
 const REST_ID = '￿';
 
-/** Shares an account's interest between the goals it holds and the rest of the account, by what each holds; the shares and the rest add up to the total to the cent. */
+/** Shares an account's interest between the goals it holds and the rest of the account, by what each holds (the rest from the plan's balance, not the bank's); the shares and the rest add up to the total to the cent. */
 export function shareInterest(
   totalCents: Cents,
   goals: readonly { id: string; heldCents: Cents }[],

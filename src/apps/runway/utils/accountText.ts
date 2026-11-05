@@ -23,7 +23,7 @@ const lastFourOf = (account: Pick<AccountSealed, 'lastFour'>) =>
 const describeApy = (bps: number | null) =>
   bps === null ? ACCOUNT_WORDS.changeNoApy : `${formatBps(bps)}%`;
 const describeInterestDay = (day: number | null) =>
-  day === null ? ACCOUNT_WORDS.interestLastDay : `day ${day}`;
+  day === null ? ACCOUNT_WORDS.changeInterestLastDay : `day ${day}`;
 const yesNo = (value: boolean) =>
   value ? ACCOUNT_WORDS.changeYes : ACCOUNT_WORDS.changeNo;
 

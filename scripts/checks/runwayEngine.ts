@@ -14428,6 +14428,28 @@ const version = (
     'a fall between readings floors at zero',
   );
   assert.equal(
+    getMonthInterest({
+      ...base,
+      readings: [
+        { on: day(2026, 7, 15), cents: 500_000 },
+        { on: day(2026, 10, 30), cents: 703_000 },
+      ],
+    }).isActual,
+    false,
+    'a reading from before last month’s interest day keeps the estimate, so a deposit is never called interest',
+  );
+  assert.equal(
+    getMonthInterest({
+      ...base,
+      readings: [
+        { on: day(2026, 9, 31), cents: 1_195_000 },
+        { on: day(2026, 10, 30), cents: 1_199_250 },
+      ],
+    }).isActual,
+    true,
+    'a reading on last month’s interest day still counts',
+  );
+  assert.equal(
     getMonthInterest({ ...base, apyBps: null, readings: [] }).cents,
     0,
   );

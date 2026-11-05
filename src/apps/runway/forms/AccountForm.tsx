@@ -20,7 +20,12 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatBps, formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
+import {
+  formatBps,
+  formatCents,
+  parseMoneyToCents,
+  parsePercentToBps,
+} from '@/utils/moneyUtils';
 import {
   ACCOUNT_KINDS,
   ACCOUNT_KINDS_LEFT_OUT,
@@ -101,9 +106,13 @@ const isOfflineFailure = (error: unknown) =>
 const parseAccountDraft = (stored: unknown) => {
   const fields =
     typeof stored === 'object' && stored !== null
-      ? Object.fromEntries(
-          Object.entries(stored).filter(([key]) => key !== 'isCounted'),
-        )
+      ? {
+          apy: '',
+          interestDay: '',
+          ...Object.fromEntries(
+            Object.entries(stored).filter(([key]) => key !== 'isCounted'),
+          ),
+        }
       : stored;
   return readDraftFields<AccountFormData>(fields, {
     institution: isText,
@@ -144,15 +153,14 @@ const getInitialData = (editing: OpenAccount | undefined): AccountFormData =>
         interestDay: '',
       };
 
-const APY_PATTERN = /^(\d{1,2})(?:\.(\d{0,2}))?%?$/;
+const MAX_APY_BPS = 2_500;
 
-/** A typed yearly percent ("4.10") as basis points; null for anything else. */
-const parseApy = (text: string) => {
-  const match = text.trim().match(APY_PATTERN);
-  if (!match) return null;
-  const bps = Number(match[1]) * 100 + Number((match[2] ?? '').padEnd(2, '0'));
-  return bps > 0 ? bps : null;
-};
+/** A typed yearly percent ("4.10") as basis points, up to 25%; null for anything else. */
+const parseApy = (text: string) =>
+  parsePercentToBps(text, { maxBps: MAX_APY_BPS, stepBps: 1 });
+
+/** "0" reads as no interest, like an empty field. */
+const isNoApy = (text: string) => text === '' || /^0*(\.0*)?%?$/.test(text);
 
 const parseInterestDay = (text: string) => {
   const day = /^\d{1,2}$/.test(text.trim()) ? Number(text) : null;
@@ -243,8 +251,8 @@ function AccountFormBody({
   const asksBalance = editing === undefined;
   const asksInterest = INTEREST_ACCOUNT_KINDS.includes(formData.kind);
   const apyText = formData.apy.trim();
-  const apyBps = asksInterest && apyText !== '' ? parseApy(apyText) : null;
-  const isApyValid = !asksInterest || apyText === '' || apyBps !== null;
+  const apyBps = asksInterest && !isNoApy(apyText) ? parseApy(apyText) : null;
+  const isApyValid = !asksInterest || isNoApy(apyText) || apyBps !== null;
   const asksInterestDay = asksInterest && apyBps !== null;
   const interestDayText = formData.interestDay.trim();
   const interestDay = asksInterestDay

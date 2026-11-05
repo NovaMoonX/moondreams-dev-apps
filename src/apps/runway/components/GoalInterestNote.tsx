@@ -26,14 +26,13 @@ function ShareLine({
   const holdings = useAppSelector((state) =>
     selectAccountHoldings(state, today),
   )[account.id];
-  const goalIds = useAppSelector(
-    (state) =>
-      new Set(
-        state.runway.items
-          .filter((item) => item.kind === 'goal')
-          .map((item) => item.id),
-      ),
+  const goalIdList = useAppSelector((state) =>
+    state.runway.items
+      .filter((item) => item.kind === 'goal')
+      .map((item) => item.id)
+      .join(' '),
   );
+  const goalIds = new Set(goalIdList.split(' '));
   const assigned = useAppSelector(selectBalances).assignedByItem;
   const { interest } = useAccountInterest(account, today);
   const items = holdings?.items ?? [];
