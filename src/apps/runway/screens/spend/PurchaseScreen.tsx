@@ -36,6 +36,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
+  NEEDS_HOME_WORDS,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
@@ -48,6 +49,8 @@ import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
+import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
+import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
 import { forgetReceiptImage } from '@apps/runway/hooks/useReceiptImageUrl';
@@ -130,6 +133,8 @@ function PurchaseScreen({
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
+  const cards = useAppSelector((state) => state.runway.cards);
+  const accounts = useAppSelector((state) => state.runway.accounts);
   const expenses = useAppSelector(selectExpenses);
   const costMarks = useAppSelector(selectCostPaid);
   const horizons = useAppSelector((state) =>
@@ -190,6 +195,11 @@ function PurchaseScreen({
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const sourceName = purchase
+    ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
+      accounts.find((account) => account.id === purchase.accountId)?.name ??
+      NEEDS_HOME_WORDS.fromBank)
+    : '';
 
   if (purchase === null) {
     return (
@@ -216,9 +226,12 @@ function PurchaseScreen({
   const facts = getPurchaseFacts(purchase, envelopes, isHidden);
   const fact = [
     formatDateOrdinalUTC(purchase.date),
-    ...(facts.length > 0
-      ? facts
-      : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
+    ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
+    ...(purchase.needsHome
+      ? [sourceName]
+      : facts.length > 0
+        ? facts
+        : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
   const receiptText = purchase.receiptText?.trim() || null;
@@ -611,13 +624,23 @@ function PurchaseScreen({
               </Button>
             </div>
           )}
+          {purchase.needsHome && purchase.amountCents > 0 && (
+            <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
               isRoomy
               hasChevron
               icon={<Pencil />}
-              label={SPEND_WORDS.edit}
+              label={
+                purchase.needsHome
+                  ? NEEDS_HOME_WORDS.moreOptions
+                  : SPEND_WORDS.edit
+              }
+              subtitle={
+                purchase.needsHome ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
+              }
               isDisabled={isBusy}
               onClick={() => {
                 keepEntryFor('purchase');
@@ -627,6 +650,9 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {purchase.needsHome && (
+              <LeaveOutRow purchase={purchase} onDone={onClose} />
+            )}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (

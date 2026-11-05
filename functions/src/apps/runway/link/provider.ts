@@ -12,6 +12,28 @@ export interface NormalizedAccount {
   balanceCents: number | null;
 }
 
+/** A bank transaction in the shape the app uses; money out is positive, money in negative. */
+export interface NormalizedTransaction {
+  providerTransactionId: string;
+  /** For a posted charge, the id the same charge had while it was pending. */
+  pendingTransactionId: string | null;
+  providerAccountId: string;
+  /** Date-only: UTC midnight of the transaction's day. */
+  date: number;
+  amountCents: number;
+  merchant: string | null;
+  isPending: boolean;
+}
+
+export interface TransactionSync {
+  added: NormalizedTransaction[];
+  modified: NormalizedTransaction[];
+  /** Provider transaction ids. */
+  removed: string[];
+  nextCursor: string;
+  hasMore: boolean;
+}
+
 /** What the provider lets the server act with later; sealed before it is stored and never returned to a client. */
 export interface ProviderGrant {
   credential: string;
@@ -38,4 +60,9 @@ export interface BankDataProvider {
   /** Every account under the grant, with live balances. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;
+  /** One page of changes since `cursor` (null for the first sync). */
+  syncTransactions(
+    grant: ProviderGrant,
+    cursor: string | null,
+  ): Promise<TransactionSync>;
 }

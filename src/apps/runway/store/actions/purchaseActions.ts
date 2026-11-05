@@ -253,7 +253,10 @@ export async function addPurchase(
       id,
       date: input.date,
       source: 'manual',
+      status: null,
       needsHome: false,
+      accountId: null,
+      dedupeKey: null,
       expenseId: input.expenseId,
       createdAt: now,
       updatedAt: now,
@@ -268,6 +271,8 @@ export async function addPurchase(
       id,
       date: input.date,
       source: 'manual',
+      status: null,
+      accountId: null,
       needsHome: false,
       expenseId: input.expenseId,
       createdAt: written.now,
@@ -324,7 +329,7 @@ async function setCostMark(
   return paid;
 }
 
-/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
+/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `isDateStored` skips both day checks for a purchase from the bank, whose date is the bank's and can be before tracking began. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
 async function checkDayAndEnvelopes(
   transaction: Transaction,
   uid: string,
@@ -332,6 +337,8 @@ async function checkDayAndEnvelopes(
   lines: readonly PurchaseLine[],
   known: ReadonlySet<string>,
   keptDate: DateOnly | null,
+  isDayExempt = false,
+  isDateStored = false,
 ): Promise<Partial<PlanDoc> | undefined> {
   const envelopeIds = [
     ...new Set(
@@ -352,14 +359,19 @@ async function checkDayAndEnvelopes(
   ]);
   const planData = plan.data() as Partial<PlanDoc> | undefined;
   const periods = planData?.trackingPeriods ?? [];
-  if (!isInTrackingPeriods(periods, date)) {
+  if (isDayExempt) return planData;
+  if (!isDateStored && !isInTrackingPeriods(periods, date)) {
     throw new Error(
       `Tracking was not on for ${formatDateOrdinalUTC(date)}. Pick a day you were tracking.`,
     );
   }
   const countedFrom = getCountedFrom(periods);
   const isKept = keptDate === date && countedFrom !== null;
-  if (!isKept && (countedFrom === null || date < countedFrom)) {
+  if (
+    !isDateStored &&
+    !isKept &&
+    (countedFrom === null || date < countedFrom)
+  ) {
     throw new Error(
       countedFrom === null
         ? 'Tracking is off, probably from another device. Reopen Runway to see where it stands.'
@@ -459,6 +471,8 @@ export async function editPurchase(
       input.lines,
       known,
       previous.date,
+      false,
+      previous.source === 'link' && input.date === previous.date,
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan, [previous.date, input.date]);
@@ -466,6 +480,7 @@ export async function editPurchase(
     transaction.update(purchaseRef(uid, previous.id), {
       date: input.date,
       expenseId: input.expenseId,
+      needsHome: false,
       updatedAt: now,
       sealed,
     });
@@ -482,6 +497,92 @@ export async function editPurchase(
     );
   });
 }
+
+/** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it; resolves with the purchase's new `updatedAt`. */
+export async function assignPurchase(
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  lines: PurchaseLine[],
+  summary: string,
+  needsHome = false,
+): Promise<number> {
+  if (lines.length > MAX_PURCHASE_LINES)
+    throw new Error('Pick where it comes from.');
+  if (lines.length > 0 && sumLines(lines) !== previous.amountCents) {
+    throw new Error('The parts do not add up to the amount.');
+  }
+  const [sealed, changeSealed] = await Promise.all([
+    sealJson(
+      {
+        amountCents: previous.amountCents,
+        merchant: previous.merchant,
+        label: previous.label,
+        note: previous.note,
+        lines,
+        refundOfId: previous.refundOfId,
+        paidByCardId: previous.paidByCardId ?? null,
+        link: previous.link,
+        receiptText: previous.receiptText,
+        costRef: previous.costRef ?? null,
+      } satisfies PurchaseSealed,
+      encryption,
+    ),
+    sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
+  ]);
+  const changeId = generateUuid();
+  const now = Math.max(Date.now(), previous.updatedAt + 1);
+
+  await runTransaction(db, async (transaction) => {
+    await readUnchanged(transaction, uid, previous);
+    const plan = await checkDayAndEnvelopes(
+      transaction,
+      uid,
+      previous.date,
+      lines,
+      new Set(),
+      previous.date,
+      lines.length === 0,
+      previous.source === 'link',
+    );
+    markLedgerWrite(transaction, uid, plan, [previous.date]);
+    transaction.update(purchaseRef(uid, previous.id), {
+      needsHome,
+      updatedAt: now,
+      sealed,
+    });
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: now,
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+  });
+  return now;
+}
+
+/** Puts a purchase sent or left out from Needs a home back to waiting as the bank brought it in: a charge on its one Free to Spend line, money in on none. */
+export const returnPurchaseToWaiting = (
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  summary: string,
+) =>
+  assignPurchase(
+    uid,
+    encryption,
+    previous,
+    previous.amountCents > 0
+      ? [{ envelopeId: null, cents: previous.amountCents, via: 'free' }]
+      : [],
+    summary,
+    true,
+  );
 
 /** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. A purchase that pays a cost takes that cost's mark back in the same transaction (`costMark`), unless it was already taken back. */
 export async function deletePurchase(

@@ -6902,6 +6902,8 @@ const version = (
       id,
       date: on,
       source: 'manual',
+      status: null,
+      accountId: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7268,6 +7270,8 @@ const version = (
     id: 'p',
     date: dayMs,
     source: 'manual' as const,
+    status: null,
+    accountId: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7633,26 +7637,34 @@ const version = (
     const cents = pickCents(6_000) * (isRefund ? -1 : 1);
     const envelopeId = envelopeIds[index % envelopeIds.length];
     const lines =
-      index % 11 === 0
-        ? [
-            { envelopeId, cents: Math.ceil(cents / 2), via: 'chosen' as const },
-            {
-              envelopeId: null,
-              cents: cents - Math.ceil(cents / 2),
-              via: 'free' as const,
-            },
-          ]
-        : [
-            {
-              envelopeId: index % 23 === 0 ? null : envelopeId,
-              cents,
-              via: 'chosen' as const,
-            },
-          ];
+      index % 31 === 0
+        ? []
+        : index % 11 === 0
+          ? [
+              {
+                envelopeId,
+                cents: Math.ceil(cents / 2),
+                via: 'chosen' as const,
+              },
+              {
+                envelopeId: null,
+                cents: cents - Math.ceil(cents / 2),
+                via: 'free' as const,
+              },
+            ]
+          : [
+              {
+                envelopeId: index % 23 === 0 ? null : envelopeId,
+                cents,
+                via: 'chosen' as const,
+              },
+            ];
     return {
       id: `p${index}`,
       date,
       source: 'manual',
+      status: null,
+      accountId: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9565,6 +9577,8 @@ const version = (
     id,
     date: on,
     source: 'manual',
+    status: null,
+    accountId: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10040,6 +10054,8 @@ const version = (
     id: 'p1',
     date: d(2026, 11, 4),
     source: 'manual',
+    status: null,
+    accountId: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -10062,6 +10078,79 @@ const version = (
     ),
     [['p1'], ['pay2', true], ['pay1', false], ['paid_rent']],
     'newest first: its purchases, its payments (one taken back), the bill charged to it; cash purchases and undo moves are not entries',
+  );
+}
+
+// A purchase with no lines (money in waiting in Needs a home, or one left out of spending) moves no money and charges no card.
+{
+  const start = Date.UTC(2026, 9, 1);
+  const base = {
+    startDate: start,
+    moves: [
+      {
+        id: 's-money',
+        kind: 'start',
+        date: start,
+        refId: null,
+        reversesMoveId: null,
+        createdAt: start,
+        payload: { amountCents: 100_000, holding: 'money' },
+      } as unknown as OpenMove,
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { card: 'card' } as const,
+  };
+  const purchase = (
+    id: string,
+    amountCents: number,
+    lines: OpenPurchase['lines'],
+    paidByCardId: string | null = null,
+  ) =>
+    ({
+      id,
+      date: start + 86_400_000,
+      source: 'link',
+      status: 'posted',
+      accountId: 'checking',
+      needsHome: lines.length > 0,
+      createdAt: 1,
+      updatedAt: 1,
+      amountCents,
+      merchant: null,
+      label: null,
+      note: null,
+      lines,
+      refundOfId: null,
+      paidByCardId,
+      link: null,
+      receiptText: null,
+      expenseId: null,
+    }) as OpenPurchase;
+  const before = deriveBalances(base);
+  const waitingCharge = deriveBalances({
+    ...base,
+    purchases: [
+      purchase('p1', 4_000, [{ envelopeId: null, cents: 4_000, via: 'free' }]),
+    ],
+  });
+  assert.equal(
+    waitingCharge.freeToSpendCents,
+    before.freeToSpendCents - 4_000,
+    'a waiting charge counts against Free to Spend',
+  );
+  const lineless = deriveBalances({
+    ...base,
+    purchases: [
+      purchase('deposit', -200_000, []),
+      purchase('leftOut', 4_000, []),
+      purchase('leftOutCard', 2_500, [], 'card'),
+    ],
+  });
+  assert.deepEqual(
+    [lineless.freeToSpendCents, lineless.moneyOnHandCents, lineless.spentCents],
+    [before.freeToSpendCents, before.moneyOnHandCents, before.spentCents],
+    'waiting money in and a left-out charge, on an account or a card, change no figure',
   );
 }
 
@@ -12110,6 +12199,8 @@ const version = (
     id,
     date: jan15,
     source: 'manual',
+    status: null,
+    accountId: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,
@@ -12314,6 +12405,9 @@ const version = (
       id: 'old',
       date: jan15,
       source: 'manual',
+      status: null,
+      accountId: null,
+      dedupeKey: null,
       needsHome: false,
       expenseId: null,
       createdAt: 1,

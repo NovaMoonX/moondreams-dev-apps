@@ -139,3 +139,18 @@ export const startGroupedPurchasesListener = (
     onChange,
     onError,
   );
+
+/** Every purchase waiting for a home, whatever its date; read on the one field, since the dates are sorted on the device. */
+export const startNeedsHomeListener = (
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (purchases: OpenPurchase[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe =>
+  startConstrainedPurchasesListener(
+    uid,
+    encryption,
+    where('needsHome', '==', true),
+    onChange,
+    onError,
+  );

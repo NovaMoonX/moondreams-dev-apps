@@ -154,6 +154,28 @@ def main():
         check(f'unlisted update [{a}]', commit(tok, [put(other, {'x': 2})]), False)
         check(f'unlisted delete [{a}]', commit(tok, [rm(other)]), False)
 
+    # A purchase from a bank is made only by Functions: a client creates with no dedupeKey and a source that is not 'link',
+    # and an update keeps both. A legacy purchase has neither key.
+    bank = f'{base}/purchases/bank-1'
+    pdoc2 = dict(id='bank-1', date=TODAY, source='manual', needsHome=False, createdAt=NOW, updatedAt=NOW, sealed=SEAL)
+    for a, tok in actors.items():
+        admin([rm(bank)])
+        check(f'purchase create, legacy shape [{a}]', commit(tok, [put_new(bank, pdoc2)]), a == 'o')
+        admin([rm(bank)])
+        check(f'purchase create with a dedupeKey [{a}]', commit(tok, [put_new(bank, dict(pdoc2, dedupeKey='abc'))]), False)
+        check(f'purchase create as a link purchase [{a}]', commit(tok, [put_new(bank, dict(pdoc2, source='link'))]), False)
+        check(f'purchase create with a null dedupeKey [{a}]', commit(tok, [put_new(bank, dict(pdoc2, dedupeKey=None, status=None))]), a == 'o')
+        admin([put(bank, dict(pdoc2, source='link', status='posted', needsHome=True, dedupeKey='abc'))])
+        linked = dict(pdoc2, source='link', status='posted', needsHome=True, dedupeKey='abc')
+        check(f'link purchase update keeping both [{a}]', commit(tok, [put(bank, dict(linked, needsHome=False))]), a == 'o')
+        check(f'link purchase update changing dedupeKey [{a}]', commit(tok, [put(bank, dict(linked, dedupeKey='xyz'))]), False)
+        check(f'link purchase update dropping dedupeKey [{a}]', commit(tok, [put(bank, {k: v for k, v in linked.items() if k != 'dedupeKey'})]), False)
+        check(f'link purchase update changing source [{a}]', commit(tok, [put(bank, dict(linked, source='manual'))]), False)
+        admin([put(bank, pdoc2)])
+        check(f'legacy purchase update to a link source [{a}]', commit(tok, [put(bank, dict(pdoc2, source='link'))]), False)
+        check(f'legacy purchase update adding a dedupeKey [{a}]', commit(tok, [put(bank, dict(pdoc2, dedupeKey='abc'))]), False)
+    admin([rm(bank)])
+
     admin([put(f'{base}/purchases/purchases-1', dict(id='purchases-1', createdAt=NOW, sealed=SEAL))])
     img = f'{base}/purchases/purchases-1/receiptImages/img-1'
     idoc = dict(id='img-1', purchaseId='purchases-1', createdAt=NOW, bytes=10, sealed=SEAL)

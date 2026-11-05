@@ -10,7 +10,12 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
-import { grantsPath, openGrant, type ProviderGrantDoc } from './link/grant.js';
+import {
+  grantsPath,
+  itemIndexPath,
+  openGrant,
+  type ProviderGrantDoc,
+} from './link/grant.js';
 import { LINK_SECRETS, provider } from './link/linkShared.js';
 import { hasProviderSecrets } from './link/providerPlaid.js';
 
@@ -84,6 +89,16 @@ async function deleteDocumentTree(
 async function revokeGrants(firestore: Firestore, uid: string) {
   const snapshots = await firestore.collection(grantsPath(uid)).get();
   if (snapshots.empty) return;
+  await Promise.all(
+    snapshots.docs.map((snapshot) =>
+      firestore
+        .doc(
+          itemIndexPath((snapshot.data() as ProviderGrantDoc).providerItemId),
+        )
+        .delete()
+        .catch(() => undefined),
+    ),
+  );
   if (!hasProviderSecrets() && process.env.FUNCTIONS_EMULATOR !== 'true') {
     logger.warn('runway.plan.revokeSkipped', { skipped: snapshots.size });
     return;

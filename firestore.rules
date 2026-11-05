@@ -326,12 +326,15 @@ service cloud.firestore {
     // Versions, changes, moves and a day's records are append-only: their ids come from their own
     // fields, so writing the same record twice is refused rather than overwriting it.
     // `links` and `accountBalances` are written only by Functions (bank data), and a card's or account's `linkId`
-    // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it.
+    // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
+    // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
+    // neither and never changes either.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
         && !(document[0] in ['links', 'accountBalances'])
-        && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null);
+        && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
+        && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
     }
 
     match /apps/runway/plans/{uid} {
@@ -341,7 +344,8 @@ service cloud.firestore {
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
         && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses']
-        && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null));
+        && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
+        && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
       allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses'];
     }
 

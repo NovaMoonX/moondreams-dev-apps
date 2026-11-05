@@ -28,6 +28,8 @@ export const provider: BankDataProvider = {
   getInstitutionName: (grant) => pickProvider().getInstitutionName(grant),
   listAccounts: (grant) => pickProvider().listAccounts(grant),
   revoke: (grant) => pickProvider().revoke(grant),
+  syncTransactions: (grant, cursor) =>
+    pickProvider().syncTransactions(grant, cursor),
 };
 export const LINK_SECRETS = PROVIDER_SECRETS;
 

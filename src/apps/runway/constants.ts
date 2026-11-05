@@ -75,6 +75,7 @@ export const RUNWAY_VIEWS = [
   'freeToSpend',
   'checkAmount',
   'checkBalance',
+  'needsHome',
 ] as const;
 
 /** The screens Settings opens, kept in the URL as `settingsView`. */
@@ -3929,10 +3930,40 @@ export const CARD_WORDS = {
 /** The feature switch for linking a bank (`FEATURE_GATES`). */
 export const LINK_BANKS_GATE_ID = 'link-banks';
 
+/** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
+export const NEEDS_HOME_WORDS = {
+  title: 'Needs a home',
+  homeSub: 'From your bank',
+  intro:
+    'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
+  empty:
+    'Nothing is waiting. New purchases from your bank show up here on their own.',
+  loading: 'Getting your purchases.',
+  pending: 'Pending',
+  fromBank: 'from your bank',
+  untitled: 'Purchase',
+  moneyIn: 'Money in',
+  moneyInHelp:
+    'Deposits from your bank. Matching them to your pay comes later, so for now you can leave them out of spending.',
+  leaveOut: 'Leave it out of spending',
+  leaveOutSub: 'Free to Spend gets it back',
+  leaveOutMoneyInSub: 'It will not count as income or spending',
+  leftOut: 'Left out of spending',
+  whichTitle: 'Which envelope?',
+  likelyHint: (merchant: string) => `Where you put ${merchant} before`,
+  sendHere: 'Send it here',
+  moreOptions: 'Pick an envelope',
+  moreOptionsSub: 'Or split it across several',
+  undo: 'Undo',
+  undoFailed: 'That was not put back. Nothing was changed.',
+  sentTo: (name: string) => `Sent to ${name}`,
+  failed: 'That did not save. Nothing was changed.',
+} as const;
+
 export const LINK_WORDS = {
   yourBank: 'Your bank',
   settingsRow: 'Link a bank',
-  settingsRowHelp: 'Bring in your accounts and balances',
+  settingsRowHelp: 'Bring in your accounts, balances and purchases',
   unfinishedRow: (bank: string) => `Finish linking ${bank}`,
   unfinishedStarted: (date: string, count: number) =>
     `Started ${date} \u00b7 ${count === 1 ? '1 account' : `${count} accounts`}`,
@@ -3948,6 +3979,7 @@ export const LINK_WORDS = {
   points: [
     'You sign in in your bank\u2019s own window. Runway never sees your password.',
     'Your accounts and their balances come in now.',
+    'Purchases from the last 30 days follow, and new ones keep arriving.',
   ],
   signIn: 'Sign in at your bank',
   notLinked: 'Nothing was linked.',
@@ -4004,6 +4036,18 @@ export const LINK_WORDS = {
   rowLinked: (when: string) => `Linked \u00b7 updated ${when}`,
   methodCardTitle: 'How do you want to add the card?',
   methodAccountTitle: 'How do you want to add the account?',
+  refresh: 'Refresh from your bank',
+  refreshing: 'Asking your bank\u2026',
+  refreshHelp: 'Bring in new purchases and the latest balance',
+  refreshed: 'Up to date with your bank.',
+  newInNeedsHome: (count: number) =>
+    count === 1
+      ? '1 new purchase is in Needs a home'
+      : `${count} new purchases are in Needs a home`,
+  refreshNothing: 'Nothing new from your bank yet.',
+  refreshFailed: 'Your bank did not answer. Try again in a few minutes.',
+  needsAttention: 'Your bank needs you to sign in again.',
+  syncing: 'Purchases from the last 30 days are on their way to Needs a home.',
   methodLink: 'Link it from your bank',
   methodLinkHelp: 'Sign in at your bank and pick it from your accounts',
   methodManual: 'Add it myself',

@@ -1421,15 +1421,40 @@ export const selectSpendPurchases = createSelector(
     const result = [
       ...purchases,
       ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
-    ].sort(
+    ]
+      .filter((purchase) => !(purchase.needsHome && purchase.amountCents < 0))
+      .sort(
+        (a, b) =>
+          b.date - a.date ||
+          b.createdAt - a.createdAt ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+    return result;
+  },
+);
+
+const selectWaitingList = (state: RootState) => state.runway.needsHome;
+
+/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading. */
+export const selectNeedsHome = createSelector(
+  [selectWaitingList],
+  (waiting) => {
+    const sorted = [...waiting].sort(
       (a, b) =>
         b.date - a.date ||
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
+    const result = {
+      spending: sorted.filter((purchase) => purchase.amountCents >= 0),
+      moneyIn: sorted.filter((purchase) => purchase.amountCents < 0),
+    };
     return result;
   },
 );
+
+export const selectIsNeedsHomeLoaded = (state: RootState) =>
+  state.runway.isNeedsHomeLoaded;
 
 const selectCardList = (state: RootState) => state.runway.cards;
 

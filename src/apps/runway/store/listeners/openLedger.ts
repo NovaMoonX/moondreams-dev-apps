@@ -126,6 +126,8 @@ export async function openPurchase(
     id: entry.id,
     date: entry.date,
     source: entry.source,
+    status: entry.status ?? null,
+    accountId: entry.accountId ?? null,
     needsHome: entry.needsHome,
     expenseId: entry.expenseId ?? null,
     createdAt: entry.createdAt,

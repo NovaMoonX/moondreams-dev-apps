@@ -1102,7 +1102,7 @@ Cold start reads a month of entries, no matter how old the plan is. A closing st
 
 ## Next Steps
 
-**The owner's order for accounts and linking (Nov 2026).** The owner asked for these first, in this order, ahead of the rest of Next Steps: Issue 43 (spill-over, useful before linking), Issue 52 (accounts), Issue 53 (money to move), Issue 56 (the Plaid spike), Issue 57 and Issue 59 (link and bring transactions in), Issue 51 (Needs a home; its CSV import may follow later), Issue 55 (deposits, card payments and transfers between their own accounts), Issue 78 (rules) and Issue 62 (goals in linked accounts).
+**The owner's order for accounts and linking (Nov 2026).** The owner asked for these first, in this order, ahead of the rest of Next Steps: Issue 43 (spill-over, useful before linking), Issue 52 (accounts), Issue 53 (money to move), Issue 56 (the Plaid spike), Issue 57 and Issue 59 (link, then bring purchases in to Needs a home). The rest of the linking run then goes in this order: Issue 60 (match what was typed by hand), Issue 61 (safe to spend), Issue 55 (deposits, card payments and transfers between their own accounts), Issue 43 (spill-over), Issue 78 (rules), Issue 58 (unlink), Issue 54 (interest on accounts) and Issue 62 (goals in linked accounts). Needs a home moved from Issue 51 into Issue 59; the CSV import itself is parked, since the owner links their banks instead.
 
 ### Issue 29: Start from gross pay, with each deduction
 
@@ -1755,7 +1755,9 @@ A card is named by its issuer and an optional name ("Capital One Venture X"). A 
 - [ ] The PR carries one `minor` label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; driven at 390×844 in light and dark.
 - [ ] `PRODUCT.md`, `UX.md` and `TECHNICAL.md` match what shipped.
 
-### Issue 51: Import purchases from a CSV, with Needs a home
+### Issue 51: Import purchases from a CSV (parked)
+
+**Parked (Nov 2026):** the owner links their banks and does not need a CSV import. Needs a home moved into Issue 59; what is left here is the import itself.
 
 **Prerequisites:** Issue 24
 **Target PR Size:** ~550 lines (split the matching pass from the import if it runs over)
@@ -1769,14 +1771,13 @@ A card is named by its issuer and an optional name ("Capital One Venture X"). A 
 **Context:** Read the TDD's "Matching", Open question 4 (parser), `dedupeKey` and `UX.md`'s Needs a home row.
 
 ### Description
-A bank CSV becomes purchases that wait in Needs a home, where each is sent to an envelope (or split) in a tap. Rules moved to Issue 78; the Needs a home screen built here is also where linked purchases land, so the owner's Link path needs it before the import itself.
+A bank CSV becomes purchases that wait in Needs a home (built in Issue 59), where each is sent to an envelope (or split) in a tap. Rules moved to Issue 78.
 
 ### Possible Approach
 1. Pick the parser per Open question 4. The device dedupe key is an HMAC under the plan key.
-2. Needs a home can ship before the import if the Link issues reach it first.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read / Update / Delete:** imports, Needs a home.
+- [ ] **Create / Read / Update / Delete:** imports.
 
 ### Success Criteria
 - [ ] Importing the same file twice makes no duplicates (emulator).
@@ -1847,28 +1848,30 @@ Once accounts are named, the checklist lists the moves between accounts a confir
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 54: Interest on savings goals, shared across goals in an account
+### Issue 54: Interest on an account, shared across the goals it holds
 
 **Prerequisites:** Issue 52
 **Target PR Size:** ~350 lines
 **Files:**
 - `src/apps/runway/engine/` (`interest.ts`)
-- `src/apps/runway/forms/GoalForm.tsx`
+- `src/apps/runway/forms/AccountForm.tsx`
 - `src/apps/runway/screens/plan/AccountsScreen.tsx`
 
-**Context:** Read the TDD's `GoalSealed.rateBps` and the goal pace note.
+**Context:** Read the TDD's goal pace note and Issue 52's accounts.
 
 ### Description
-A goal can earn interest from the account holding it; the interest is shared across the goals in the account in proportion to their balances, and shown as an estimate.
+Any checking, savings or cash management account can carry an APY. Interest arrives monthly: the plan adds the month's estimate to the account's balance on its interest day, and the goals the account holds share it in proportion to their balances. When the account is linked, the bank's balance refresh reconciles the estimate with what actually landed.
 
 ### Possible Approach
-1. Shares use `allocate`; the estimate is labelled everywhere it shows.
+1. The APY lives on the account (sealed), not on a goal; shares use `allocate`, and the estimate is labelled everywhere it shows.
+2. The interest day is set on the account (default: the last day of the month).
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Update / Read:** the rate and the estimate.
+- [ ] **Update / Read:** an account's APY and interest day, and the estimate on the account and on each goal it holds.
 
 ### Success Criteria
 - [ ] Shares add to the account's interest to the cent (check case).
+- [ ] A linked account's refreshed balance replaces the month's estimate, and the goals' shares follow (check case).
 - [ ] `npm run check:runway-engine` passes and gained the cases this issue adds to the engine.
 - [ ] Every sealed field this issue adds is read by this issue's own screens; a field for a later tier is not added early.
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
@@ -2044,9 +2047,9 @@ A person can unlink an account: new purchases stop and what already came in stay
 - [ ] The PR carries one `minor` (or `patch`) label; `npx tsc -b --force`, `npx eslint .` and `npm run check:apps` pass; the feature was driven in a real browser at 390×844 in light and dark, and any new form or drawer was measured against the container rules.
 - [ ] The README Build Plan lines this issue delivers are checked off; `UX.md` and `TECHNICAL.md` still match what shipped; the Runway rules files are updated if the app's design vocabulary changed.
 
-### Issue 59: Bring in transactions: sync, webhook, normalize and dedupe
+### Issue 59: Bring in transactions to Needs a home: sync, webhook, normalize and dedupe
 
-**Prerequisites:** Issue 57, Issue 51
+**Prerequisites:** Issue 57
 **Target PR Size:** ~600 lines (split the webhook from the sync if it runs over)
 **Files:**
 - `functions/src/apps/runway/link/syncAccount.ts`, `webhook.ts`, `normalize.ts`, `functions/README.md`
@@ -2056,14 +2059,14 @@ A person can unlink an account: new purchases stop and what already came in stay
 **Context:** Read the TDD's `syncRunwayAccount` bullet, `dedupeKey` and "Matching".
 
 ### Description
-New bank transactions appear in Needs a home as pending or posted purchases, one document each, without duplicates, and a pending charge becomes the same document when it posts.
+New bank transactions appear in Needs a home as pending or posted purchases, one document each, without duplicates, and a pending charge becomes the same document when it posts. The first link brings in the last 30 days. A charge counts against Free to Spend as soon as it arrives, pending or not, until the person sends it to an envelope. Needs a home (from Issue 51) is built here: each purchase is sent to an envelope, split, or left out of spending, and money in waits under "Money in" with "Leave it out of spending" until Issue 55 matches it.
 
 ### Possible Approach
 1. The webhook verifies the provider's signed header and queues a sync; a scheduled backstop `syncRunwayAccounts` catches a missed webhook.
 2. `dedupeKey = HMAC(HKDF(plan data key, 'runway-dedupe'), linkId + providerTransactionId)`; purchases are sealed with the plan key and the function logs counts and ids only.
 
 ### CRUD & Entry-Point Requirements
-- [ ] **Create / Read:** synced purchases in Needs a home and the sync time on the link.
+- [ ] **Create / Read / Update:** synced purchases in Needs a home (send to an envelope, split, leave out of spending), the sync time on the link, and Refresh from a linked account's or card's sheet.
 
 ### Success Criteria
 - [ ] Replaying the same webhook payload creates no second document, and a pending charge that posts keeps its id (emulator).
@@ -2086,10 +2089,10 @@ New bank transactions appear in Needs a home as pending or posted purchases, one
 **Context:** Read the TDD's "Matching" step 5 and the Link journey in `UX.md`.
 
 ### Description
-When an account is linked, hand-entered purchases are offered as matches to the arriving real ones by amount and date within three days, and nothing is counted twice.
+When an account is linked, a hand-entered purchase and an arriving real one with the same amount within three days are one purchase, and nothing is counted twice. One clear match merges on its own, with Undo; an unclear one (two candidates, or a different amount) asks.
 
 ### Possible Approach
-1. The manual purchase is offered as the match and the person confirms; the pair becomes one purchase.
+1. A clear match keeps the hand-entered purchase's envelopes and takes the bank's date, status and id; Undo splits them back. An unclear one is offered and the person confirms.
 
 ### CRUD & Entry-Point Requirements
 - [ ] **Update:** accept or decline the match.

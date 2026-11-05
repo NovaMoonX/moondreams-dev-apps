@@ -203,7 +203,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     startDate === null
       ? []
       : (input.purchases ?? []).filter(
-          (purchase) => purchase.date >= startDate,
+          (purchase) => purchase.date >= startDate && purchase.lines.length > 0,
         );
   const spentCents =
     (base?.spentCents ?? 0) +

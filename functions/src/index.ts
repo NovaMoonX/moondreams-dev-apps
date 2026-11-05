@@ -17,6 +17,9 @@ export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.j
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';
 export { attachRunwayAccounts } from './apps/runway/attachRunwayAccounts.js';
 export { discardRunwayLink } from './apps/runway/discardRunwayLink.js';
+export { syncRunwayLinks } from './apps/runway/syncRunwayLinks.js';
+export { runwayPlaidWebhook } from './apps/runway/runwayPlaidWebhook.js';
+export { syncRunwayAccounts } from './apps/runway/syncRunwayAccounts.js';
 export { deleteTrip } from './apps/waypoint/deleteTrip.js';
 export { deleteSale } from './apps/going-once/deleteSale.js';
 export { buildSalePhotoArchive } from './apps/going-once/buildSalePhotoArchive.js';

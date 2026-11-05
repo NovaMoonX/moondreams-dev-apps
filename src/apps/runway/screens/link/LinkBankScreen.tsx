@@ -30,6 +30,7 @@ import {
   discardLink,
   exchangeLink,
   linkChosenAccounts,
+  syncLinks,
   type LinkSession,
 } from '@apps/runway/store/actions/linkActions';
 import { moveToLink } from '@apps/runway/store/actions/planActions';
@@ -230,6 +231,11 @@ function LinkBankScreen({
       if (result.attached > 0 && selectLevel(store.getState()) === 'track') {
         await moveToLink(user.uid, encryption, todayAsUtcDate()).catch(() =>
           setIsLevelStuck(true),
+        );
+      }
+      if (result.attached > 0) {
+        void syncLinks().catch((error: unknown) =>
+          console.error('The first sync did not run', error),
         );
       }
       const { accounts } = store.getState().runway;
@@ -462,6 +468,9 @@ function LinkBankScreen({
             <p className='text-muted-foreground'>
               {LINK_WORDS.doneCount(step.count)}
             </p>
+            {step.count > 0 && (
+              <p className='text-muted-foreground'>{LINK_WORDS.syncing}</p>
+            )}
             {isLevelStuck && (
               <p className='text-muted-foreground text-sm' role='status'>
                 {LINK_WORDS.levelNotMoved}
