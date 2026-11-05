@@ -37,7 +37,9 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
+import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import SheetHead from '@apps/runway/components/SheetHead';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
   ACCOUNT_WORDS,
   MAX_PURCHASE_CENTS,
@@ -107,6 +109,7 @@ function AccountSheet({
   );
   const [isUnfolded, setIsUnfolded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const nameOf = (id: string) =>
@@ -535,6 +538,10 @@ function AccountSheet({
               goTo('holds');
             }}
           />
+          <LinkToBankRow
+            linkId={account.linkId}
+            onOpen={() => setIsLinking(true)}
+          />
           <ActionRow
             isGrouped
             hasChevron
@@ -554,6 +561,15 @@ function AccountSheet({
       </div>
     );
   };
+
+  if (isLinking) {
+    return (
+      <LinkBankScreen
+        startedFrom={{ target: 'account', id: account.id }}
+        onClose={() => setIsLinking(false)}
+      />
+    );
+  }
 
   return (
     <FormSheet

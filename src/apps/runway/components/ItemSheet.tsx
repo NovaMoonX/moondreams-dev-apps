@@ -157,6 +157,7 @@ import {
   NEW_GROUP_ID,
   resolveGroupChoice,
 } from '@apps/runway/utils/groupChoice';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 type View =
   | 'menu'
@@ -355,7 +356,7 @@ function ItemSheet({
     return null;
   const payload = version.payload;
   const paidWithCard =
-    level === 'track' && payment
+    isTrackingLevel(level) && payment
       ? getBillCardName(versions, allCards, itemId, payment.dueOn)
       : null;
   const itemKind: ItemKind = version.kind ?? kind;
@@ -822,7 +823,7 @@ function ItemSheet({
   const blocker = getBlocker();
   const isArchivable = itemKind !== 'source' && header?.archivedAt == null;
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
-  const isTrackEnvelope = itemKind === 'envelope' && level === 'track';
+  const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow = itemKind === 'bill' && paid.isReady && payment !== null;
 

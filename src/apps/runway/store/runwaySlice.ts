@@ -5,6 +5,8 @@ import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
   DateOnly,
   OpenAccount,
+  OpenAccountBalance,
+  OpenLink,
   OpenCard,
   OpenExpense,
   OpenChange,
@@ -38,6 +40,9 @@ export interface RunwayState {
   accounts: OpenAccount[];
   /** The accounts have been read once, so an account's figures are not mistaken for none. */
   isAccountsLoaded: boolean;
+  /** Every link a bank sign-in made, and what the bank last said each linked account or card holds. */
+  links: OpenLink[];
+  accountBalances: OpenAccountBalance[];
   /** Every expense group. */
   expenses: OpenExpense[];
   /** The purchases of the recent window. */
@@ -88,6 +93,8 @@ const initialState: RunwayState = {
   isCardsLoaded: false,
   accounts: [],
   isAccountsLoaded: false,
+  links: [],
+  accountBalances: [],
   expenses: [],
   purchases: [],
   daysFrom: null,
@@ -166,6 +173,15 @@ export const runwaySlice = createSlice({
     setAccounts: (state, action: PayloadAction<OpenAccount[]>) => {
       state.accounts = action.payload;
       state.isAccountsLoaded = true;
+    },
+    setLinks: (state, action: PayloadAction<OpenLink[]>) => {
+      state.links = action.payload;
+    },
+    setAccountBalances: (
+      state,
+      action: PayloadAction<OpenAccountBalance[]>,
+    ) => {
+      state.accountBalances = action.payload;
     },
     setMoves: (
       state,
@@ -252,6 +268,8 @@ export const {
   setMoves,
   setCards,
   setAccounts,
+  setLinks,
+  setAccountBalances,
   setExpenses,
   setPurchases,
   setPeriodPurchases,

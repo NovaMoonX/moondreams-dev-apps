@@ -38,6 +38,7 @@ import {
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { describeFreeToSpend } from '@apps/runway/utils/balanceText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 interface FreeToSpendScreenProps {
   onClose: () => void;
@@ -76,7 +77,8 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   );
   const [sheetKey, setSheetKey] = useState<number | null>(null);
   const hasCards = useAppSelector(
-    (state) => state.runway.cards.length > 0 && selectLevel(state) === 'track',
+    (state) =>
+      state.runway.cards.length > 0 && isTrackingLevel(selectLevel(state)),
   );
   const figure = getFreeToSpendFigure(balances);
   const free = describeFreeToSpend(figure);
@@ -92,10 +94,9 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     },
     {
       sign: '+',
-      name:
-        level === 'track'
-          ? FREE_SUM_WORDS.envelopesTrack
-          : FREE_SUM_WORDS.envelopesPlan,
+      name: isTrackingLevel(level)
+        ? FREE_SUM_WORDS.envelopesTrack
+        : FREE_SUM_WORDS.envelopesPlan,
       value: formatCents(balances.assignedToEnvelopesCents),
       section: 'envelopes',
     },
@@ -311,7 +312,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 onClick={() => setSheetKey((current) => (current ?? 0) + 1)}
               />
             )}
-            {level === 'track' && (
+            {isTrackingLevel(level) && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -322,7 +323,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 onClick={() => openCheckAmount(null)}
               />
             )}
-            {level === 'track' && (
+            {isTrackingLevel(level) && (
               <ActionRow
                 isGrouped
                 isRoomy

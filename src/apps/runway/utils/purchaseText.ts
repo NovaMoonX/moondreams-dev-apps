@@ -2,12 +2,13 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import type { Level, OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import { getLevelWords } from '@apps/runway/utils/levelText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const FREE_NAME = 'Free to Spend';
 
 /** An envelope's figure with its word: assigned at Plan, and at Track what is left or how far over. */
 export function describeEnvelopeFigure(level: Level, cents: number) {
-  if (level === 'track' && cents < 0) {
+  if (isTrackingLevel(level) && cents < 0) {
     return { value: `−${formatCents(-cents)}`, word: 'over' };
   }
   return {

@@ -39,6 +39,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const CALENDAR_STYLES = {
   containerClassName: 'border-0 bg-transparent p-0 shadow-none',
@@ -80,7 +81,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const cards = useAppSelector(selectCards);
-  const isTracking = useAppSelector(selectLevel) === 'track';
+  const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const reserveByCard = useAppSelector(selectBalances).reserveByCard;
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);

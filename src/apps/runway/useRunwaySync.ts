@@ -24,6 +24,10 @@ import {
   startRecordsListener,
 } from '@apps/runway/store/listeners/dayListeners';
 import { startAccountsListener } from '@apps/runway/store/listeners/accountListeners';
+import {
+  startAccountBalancesListener,
+  startLinksListener,
+} from '@apps/runway/store/listeners/linkListeners';
 import { startCardsListener } from '@apps/runway/store/listeners/cardListeners';
 import { startExpensesListener } from '@apps/runway/store/listeners/expenseListeners';
 import { startMovesListener } from '@apps/runway/store/listeners/moveListeners';
@@ -52,6 +56,8 @@ import {
   setChanges,
   setChangesFailed,
   setCards,
+  setLinks,
+  setAccountBalances,
   setAccounts,
   setExpenses,
   setClosing,
@@ -151,6 +157,18 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           uid,
           encryption,
           (accounts) => dispatch(setAccounts(accounts)),
+          fail,
+        ),
+        startLinksListener(
+          uid,
+          encryption,
+          (links) => dispatch(setLinks(links)),
+          fail,
+        ),
+        startAccountBalancesListener(
+          uid,
+          encryption,
+          (balances) => dispatch(setAccountBalances(balances)),
           fail,
         ),
         startExpensesListener(

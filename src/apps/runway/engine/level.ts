@@ -10,9 +10,17 @@ export function getOpenPeriod(
   return result;
 }
 
-/** Track is on while the last period is open; a plan with no periods is at Plan. */
+/** Plan with no open period, Link once the open period has a link day, Track otherwise; a plan with no periods is at Plan. */
 export function getLevel(periods: readonly TrackingPeriod[]): Level {
-  const result: Level = getOpenPeriod(periods) === null ? 'plan' : 'track';
+  const open = getOpenPeriod(periods);
+  if (open === null) return 'plan';
+  const result: Level = (open.linkedFrom ?? null) === null ? 'track' : 'link';
+  return result;
+}
+
+/** Whether purchases are tracked: Track and Link behave alike for everything built so far. */
+export function isTrackingLevel(level: Level): boolean {
+  const result = level === 'track' || level === 'link';
   return result;
 }
 
@@ -30,7 +38,7 @@ export function startTrackingPeriod(
   periods: readonly TrackingPeriod[],
   from: DateOnly,
 ): { periods: TrackingPeriod[] } | { error: string } {
-  if (getLevel(periods) === 'track') {
+  if (isTrackingLevel(getLevel(periods))) {
     return {
       error:
         'Tracking is already on, probably from another device. Reopen Settings to see where it stands.',
@@ -42,7 +50,7 @@ export function startTrackingPeriod(
       error: 'Pick a day after the last time tracking stopped.',
     };
   }
-  return { periods: [...periods, { from, to: null }] };
+  return { periods: [...periods, { from, to: null, linkedFrom: null }] };
 }
 
 /** Closes the open period on `to`, or says why not (not tracking, or a day before it began). */
@@ -59,5 +67,36 @@ export function stopTrackingPeriod(
   if (to < open.from) {
     return { error: 'Tracking cannot stop before the day it started.' };
   }
-  return { periods: [...periods.slice(0, -1), { from: open.from, to }] };
+  return {
+    periods: [
+      ...periods.slice(0, -1),
+      { from: open.from, to, linkedFrom: open.linkedFrom ?? null },
+    ],
+  };
+}
+
+/** Marks the open period as linked from `on`, or says why not (not tracking, or already linked). */
+export function linkTrackingPeriod(
+  periods: readonly TrackingPeriod[],
+  on: DateOnly,
+): { periods: TrackingPeriod[] } | { error: string } {
+  const open = getOpenPeriod(periods);
+  if (open === null) {
+    return {
+      error:
+        'Tracking is off, probably from another device. Reopen Settings to see where it stands.',
+    };
+  }
+  if ((open.linkedFrom ?? null) !== null) {
+    return {
+      error:
+        'A bank is already linked, probably from another device. Reopen Settings to see where it stands.',
+    };
+  }
+  return {
+    periods: [
+      ...periods.slice(0, -1),
+      { from: open.from, to: null, linkedFrom: Math.max(on, open.from) },
+    ],
+  };
 }

@@ -54,6 +54,7 @@ import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
 import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
 import { isRevealPending } from '@apps/runway/utils/revealItem';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const tabScrolls = new Map<RunwayTab, number>();
 const RESTORE_FRAMES = 40;
@@ -338,7 +339,8 @@ function RunwayContent() {
 
   if (
     view === 'freeToSpend' ||
-    ((view === 'checkAmount' || view === 'checkBalance') && level === 'track')
+    ((view === 'checkAmount' || view === 'checkBalance') &&
+      isTrackingLevel(level))
   ) {
     return (
       <div>

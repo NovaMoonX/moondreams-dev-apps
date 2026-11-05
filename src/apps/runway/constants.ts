@@ -1652,18 +1652,22 @@ export const PAY_SHARE_WORDS = {
     `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
 } as const;
 
-/** The levels that exist so far; tracking is one switch for the whole plan, and Link arrives later. */
-export const LEVELS = ['plan', 'track'] as const;
+/** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
+export const LEVELS = ['plan', 'track', 'link'] as const;
 
 export const LEVEL_LABELS: Record<(typeof LEVELS)[number], string> = {
   plan: 'Plan only',
   track: 'Plan and track spending',
+  link: 'Link',
 };
+
+export const LINK_STATUSES = ['active', 'needsAttention', 'revoked'] as const;
 
 /** What an envelope's figure is called at each level. */
 export const ENVELOPE_FIGURE_WORDS: Record<(typeof LEVELS)[number], string> = {
   plan: 'assigned',
   track: 'left',
+  link: 'left',
 };
 
 export const TRACKING_WORDS = {
@@ -3924,3 +3928,55 @@ export const CARD_WORDS = {
 
 /** The feature switch for linking a bank (`FEATURE_GATES`). */
 export const LINK_BANKS_GATE_ID = 'link-banks';
+
+export const LINK_WORDS = {
+  settingsRow: 'Link a bank',
+  settingsRowHelp: 'Bring in your accounts and balances',
+  unfinishedRow: (bank: string) => `Finish linking ${bank}`,
+  unfinishedHelp: 'Say which of your accounts each one is',
+  title: 'Link a bank',
+  intro: 'Sign in at your bank, and Runway can bring your accounts in.',
+  points: [
+    'You sign in in your bank\u2019s own window. Runway never sees your password.',
+    'Your accounts and their balances come in now.',
+    'Purchases follow soon.',
+  ],
+  signIn: 'Sign in at your bank',
+  notLinked: 'Nothing was linked.',
+  sessionFailed: 'Your bank\u2019s window did not open. Nothing was linked.',
+  exchangeFailed: 'Runway could not read your accounts. Nothing was linked.',
+  matchTitle: 'Is this one of yours?',
+  matchHelp: (bank: string) =>
+    `${bank} sent these. Say which of yours each one is.`,
+  addAsNew: 'Add as new',
+  skip: 'Don\u2019t bring in',
+  linkThese: 'Link these',
+  nothingPicked: 'Pick at least one to bring in.',
+  attachFailed: 'Those did not link. Nothing was changed.',
+  kindDepository: 'Account',
+  kindCredit: 'Card',
+  kindOther: 'Other',
+  noBalance: 'No balance',
+  useBankTitle: 'Use the bank\u2019s?',
+  useBankHelp: 'These balances differ from what you typed.',
+  yours: 'Yours',
+  bank: 'Bank',
+  useBanks: 'Use the bank\u2019s',
+  keepMine: 'Keep mine',
+  noneTyped: 'Nothing typed',
+  updated: (name: string) => `${name} now matches the bank.`,
+  updateFailed: 'That balance did not save. Nothing was changed.',
+  done: 'Linked',
+  doneCount: (count: number) =>
+    count === 1 ? '1 account is linked.' : `${count} accounts are linked.`,
+  finish: 'Done',
+  rowLabel: 'Link to your bank',
+  rowHelp: 'Bring its balance in from your bank',
+  rowLinked: (when: string) => `Linked \u00b7 updated ${when}`,
+  methodTitle: 'How do you want to add it?',
+  methodLink: 'Link it from your bank',
+  methodLinkHelp: 'Sign in at your bank and pick it from your accounts',
+  methodManual: 'Add it myself',
+  methodManualHelp: 'Type its details',
+  newCardSummary: (name: string) => `Added the card ${name} from your bank`,
+} as const;

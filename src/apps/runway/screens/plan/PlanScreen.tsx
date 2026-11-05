@@ -26,6 +26,7 @@ import {
   RunwayPreviewContext,
   useRunwayUrlState,
 } from '@apps/runway/useRunwayUrlState';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const viewSections = PLAN_SECTIONS.filter((value) => value !== 'more');
 
@@ -89,7 +90,7 @@ function PlanScreen() {
     useRunwayUrlState();
   const hasIncome = useAppSelector(selectHasEverHadIncome);
   // Cards are part of tracking, like the Spend tab: hidden, not disabled, at Plan.
-  const isTracking = useAppSelector(selectLevel) === 'track';
+  const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const planSection =
     !hasIncome || (requestedSection === 'cards' && !isTracking)
       ? 'income'

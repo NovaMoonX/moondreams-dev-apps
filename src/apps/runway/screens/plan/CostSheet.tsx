@@ -90,6 +90,7 @@ import {
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import { formatRange } from '@apps/runway/utils/rangeText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 type PriceWay = 'exact' | 'range';
 
@@ -227,7 +228,7 @@ function CostSheet({
   const { dialogId: lockDialogId, onDialogClose: onLockClose } =
     useSheetHistory(isLockOpen, () => setIsLockOpen(false));
   const { showOnPlan } = useRunwayUrlState();
-  const isTrack = useAppSelector(selectLevel) === 'track';
+  const isTrack = isTrackingLevel(useAppSelector(selectLevel));
   const isRestoring = useRef(false);
   const payments = useAppSelector((state) => selectCostPayments(state, today))[
     itemId

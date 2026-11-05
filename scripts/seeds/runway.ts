@@ -12,6 +12,7 @@ import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   DEFAULT_CURRENCY_CODE,
   HORIZON_END_WORDS,
+  LINK_BANKS_GATE_ID,
 } from '../../src/apps/runway/constants.ts';
 import { formatCents } from '../../src/utils/moneyUtils.ts';
 import {
@@ -56,8 +57,11 @@ import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
+  AccountBalanceDoc,
   AccountDoc,
   AccountSealed,
+  LinkDoc,
+  LinkSealed,
   CardDoc,
   CardPaymentSealed,
   TransferSealed,
@@ -238,6 +242,22 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       makeKeyCheck(keyring, masterKeyId, createdAt),
     ),
   );
+  batch.set(
+    context.firestore.doc('featureGates/runway'),
+    {
+      appId: 'runway',
+      gates: {
+        [LINK_BANKS_GATE_ID]: {
+          rollout: 'off',
+          alwaysOnUids: [owner.uid, FIXTURE_USERS.partnerTwo.uid],
+          alwaysOffUids: [],
+          reason: 'Seeded: Alex and Jamie test linking',
+          updatedAt: context.now,
+        },
+      },
+    },
+    { merge: true },
+  );
   await batch.commit();
   const closingDocuments = await seedClosings(
     context,
@@ -252,7 +272,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     firestoreDocuments:
       trackingDocuments +
       closingDocuments +
-      2 +
+      3 +
       incomeDocuments +
       envelopeDocuments +
       billDocuments +
@@ -1373,10 +1393,11 @@ async function writeSeedHistory(
 }
 
 const SEED_VENTURE_CARD = 'seed-card-venture';
+const SEED_LINK = 'seed-link-capital-one';
 const SEED_CHASE_CARD = 'seed-card-chase';
 const SEED_DISCOVER_CARD = 'seed-card-discover';
 
-/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. Eight documents. */
+/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. One bank link holds the Venture X and Checking A (a third provider account was skipped), with their balances. Ten documents. */
 async function writeSeedCards(
   context: SeedContext,
   uid: string,
@@ -1420,9 +1441,59 @@ async function writeSeedCards(
         createdAt: card.createdAt,
         updatedAt: card.createdAt,
         archivedAt: null,
+        linkId: card.id === SEED_VENTURE_CARD ? SEED_LINK : null,
         sealed: await sealJson(card.sealed, encryption),
       } satisfies CardDoc);
     }),
+  );
+  batch.set(context.firestore.doc(`${plan}/links/${SEED_LINK}`), {
+    id: SEED_LINK,
+    status: 'active',
+    lastSyncAt: context.now - 2 * 60_000,
+    createdAt,
+    sealed: await sealJson(
+      {
+        institutionName: 'Capital One',
+        providerAccounts: [
+          {
+            providerAccountId: 'seed-provider-venture',
+            name: 'Venture X',
+            kind: 'credit',
+            mask: '8841',
+            accountId: null,
+            cardId: SEED_VENTURE_CARD,
+            isSkipped: false,
+          },
+          {
+            providerAccountId: 'seed-provider-checking',
+            name: '360 Checking',
+            kind: 'depository',
+            mask: '4821',
+            accountId: 'seed-account-checking-a',
+            cardId: null,
+            isSkipped: false,
+          },
+          {
+            providerAccountId: 'seed-provider-savings',
+            name: '360 Savings',
+            kind: 'depository',
+            mask: '3302',
+            accountId: null,
+            cardId: null,
+            isSkipped: true,
+          },
+        ],
+      } satisfies LinkSealed,
+      encryption,
+    ),
+  } satisfies LinkDoc);
+  batch.set(
+    context.firestore.doc(`${plan}/accountBalances/${SEED_VENTURE_CARD}`),
+    {
+      id: SEED_VENTURE_CARD,
+      asOf: context.now - 2 * 60_000,
+      sealed: await sealJson({ cents: 0 }, encryption),
+    } satisfies AccountBalanceDoc,
   );
   const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
   batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
@@ -1495,7 +1566,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 5;
+  return cards.length + 5 + 2;
 }
 
 const SEED_WEALTHFRONT_GOALS = [
@@ -1504,7 +1575,7 @@ const SEED_WEALTHFRONT_GOALS = [
   'seed-goal-phone',
 ];
 
-/** Three accounts: two Capital One checking accounts (B is pulled from) and a Wealthfront cash account holding three goals. */
+/** Three accounts: two Capital One checking accounts (B is pulled from) and a Wealthfront cash account holding three goals. Checking A is linked, with the bank's balance beside it. Four documents. */
 async function writeSeedAccounts(
   context: SeedContext,
   uid: string,
@@ -1565,12 +1636,20 @@ async function writeSeedAccounts(
         createdAt: createdAt + index * 60_000,
         updatedAt: createdAt + index * 60_000,
         archivedAt: null,
-        linkId: null,
+        linkId: account.id === 'seed-account-checking-a' ? SEED_LINK : null,
         sealed: await sealJson(account.sealed, encryption),
       } satisfies AccountDoc);
     }),
   );
-  return accounts.length;
+  batch.set(
+    context.firestore.doc(`${plan}/accountBalances/seed-account-checking-a`),
+    {
+      id: 'seed-account-checking-a',
+      asOf: context.now - 2 * 60_000,
+      sealed: await sealJson({ cents: 221_450 }, encryption),
+    } satisfies AccountBalanceDoc,
+  );
+  return accounts.length + 1;
 }
 
 /** The starting point, 45 days back so every confirmed day counts: $3,400.00 on hand, two goals part-filled and two bills part set aside, and $42.00 moved from Groceries to the Vacation fund three days ago. Two changes and six moves. */

@@ -12,6 +12,7 @@ import type {
   PURCHASE_SOURCES,
   START_HOLDINGS,
   DAY_STATUSES,
+  LINK_STATUSES,
   GOAL_STATES,
   LEVELS,
   HOLD_CHOICES,
@@ -46,6 +47,8 @@ export interface PlanSealedFields {
 export interface TrackingPeriod {
   from: DateOnly;
   to: DateOnly | null;
+  /** The day the first account or card was linked, which makes the level Link; null (or missing, on a period written before Link) while none is. */
+  linkedFrom?: DateOnly | null;
 }
 
 export interface PlanDoc {
@@ -492,6 +495,8 @@ export interface CardDoc {
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
+  /** Set by linking; null for a card typed by hand, and read as null on a card written before Link. */
+  linkId: string | null;
   sealed: Sealed;
 }
 
@@ -514,7 +519,7 @@ export interface AccountDoc {
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
-  /** Set by linking (planned); null for an account typed by hand. */
+  /** Set by linking; null for an account typed by hand. */
   linkId: string | null;
   sealed: Sealed;
 }
@@ -551,6 +556,67 @@ export interface OpenCard extends CardSealed {
   createdAt: number;
   updatedAt: number;
   archivedAt: number | null;
+  linkId: string | null;
+}
+
+export type LinkStatus = (typeof LINK_STATUSES)[number];
+
+/** One sign-in at one bank; written by Functions, read here. */
+export interface LinkDoc {
+  id: string;
+  status: LinkStatus;
+  lastSyncAt: number | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export type ProviderAccountKind = 'depository' | 'credit' | 'other';
+
+/** An account the bank sent, and what the person did with it: bound to one of theirs, or left out. */
+export interface LinkProviderAccount {
+  providerAccountId: string;
+  name: string;
+  kind: ProviderAccountKind;
+  mask: string | null;
+  accountId: string | null;
+  cardId: string | null;
+  isSkipped: boolean;
+}
+
+export interface LinkSealed {
+  institutionName: string;
+  providerAccounts: LinkProviderAccount[];
+}
+
+export interface OpenLink extends LinkSealed {
+  id: string;
+  status: LinkStatus;
+  lastSyncAt: number | null;
+  createdAt: number;
+}
+
+/** What the bank last said an account or card holds; written by Functions. */
+export interface AccountBalanceDoc {
+  id: string;
+  asOf: number;
+  sealed: Sealed;
+}
+
+export interface OpenAccountBalance {
+  id: string;
+  asOf: number;
+  cents: Cents;
+}
+
+/** An account as the bank describes it, before the person says which of theirs it is. */
+export interface NormalizedAccount {
+  providerAccountId: string;
+  name: string;
+  kind: ProviderAccountKind;
+  subtype: string | null;
+  mask: string | null;
+  /** For a credit account, what is owed, as a positive number. */
+  balanceCents: Cents | null;
 }
 
 /** A named group of purchases ("Chicago trip") whose total is shown across them; it changes no balance. */

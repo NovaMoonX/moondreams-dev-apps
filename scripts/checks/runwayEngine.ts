@@ -8,6 +8,8 @@ import {
 import {
   getEarliestTrackingStart,
   getLevel,
+  isTrackingLevel,
+  linkTrackingPeriod,
   startTrackingPeriod,
   stopTrackingPeriod,
 } from '../../src/apps/runway/engine/level.ts';
@@ -22,6 +24,7 @@ import {
   keepPullAccountId,
   resolvePayFromAccountId,
 } from '../../src/apps/runway/engine/accounts.ts';
+import { matchLinkRows } from '../../src/apps/runway/engine/linkMatch.ts';
 import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
   collectCardHistory,
@@ -9868,6 +9871,7 @@ const version = (
     createdAt: 1,
     updatedAt: 1,
     archivedAt: null,
+    linkId: null,
   });
   const d = (y: number, m: number, day: number) => Date.UTC(y, m - 1, day);
   assert.equal(
@@ -12880,6 +12884,127 @@ const version = (
       (payment) => payment.paid === null && payment.dueOn <= today,
     ),
     'a payment dated before today is due now',
+  );
+}
+
+{
+  const open = [{ from: utc(2026, 1, 1), to: null }];
+  const linked = linkTrackingPeriod(open, utc(2026, 2, 1));
+  assert.ok('periods' in linked, 'an open period can be linked');
+  if ('periods' in linked) {
+    assert.equal(getLevel(linked.periods), 'link');
+    assert.ok(isTrackingLevel('link') && isTrackingLevel('track'));
+    assert.ok(!isTrackingLevel('plan'));
+    assert.ok(
+      'error' in linkTrackingPeriod(linked.periods, utc(2026, 3, 1)),
+      'a plan already at Link is refused',
+    );
+    const stopped = stopTrackingPeriod(linked.periods, utc(2026, 4, 1));
+    assert.ok('periods' in stopped, 'Link can move back to Plan');
+    if ('periods' in stopped) assert.equal(getLevel(stopped.periods), 'plan');
+  }
+  assert.ok('error' in linkTrackingPeriod([], utc(2026, 2, 1)));
+}
+
+{
+  const bank = (
+    id: string,
+    name: string,
+    lastFour: string | null,
+    extra: { linkId?: string | null; archivedAt?: number | null } = {},
+  ) => ({
+    id,
+    bank: name,
+    lastFour,
+    linkId: extra.linkId ?? null,
+    archivedAt: extra.archivedAt ?? null,
+  });
+  const rows = [
+    { providerAccountId: 'p1', kind: 'depository' as const, mask: '1177' },
+    { providerAccountId: 'p2', kind: 'depository' as const, mask: '4821' },
+    { providerAccountId: 'p3', kind: 'credit' as const, mask: '8841' },
+    { providerAccountId: 'p4', kind: 'other' as const, mask: '0042' },
+  ];
+  const accounts = [
+    bank('a', 'Capital One', '4821'),
+    bank('b', 'capital  one', '1177'),
+  ];
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Capital One',
+      rows,
+      cards: [bank('c', 'Capital One', '8841')],
+      accounts,
+      startedFrom: null,
+    }),
+    [
+      { kind: 'existing', target: 'account', id: 'b' },
+      { kind: 'existing', target: 'account', id: 'a' },
+      { kind: 'existing', target: 'card', id: 'c' },
+      { kind: 'skip' },
+    ],
+    'two checking accounts at one bank are told apart by last four; other is left out',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Capital One',
+      rows,
+      cards: [bank('c', 'Capital One', '8841', { linkId: 'link-1' })],
+      accounts: [bank('a', 'Capital One', '4821', { archivedAt: 5 })],
+      startedFrom: null,
+    }).map((choice) => choice.kind),
+    ['new', 'new', 'new', 'skip'],
+    'a linked card and an archived account are never offered',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Capital One',
+      rows: [
+        { providerAccountId: 'p1', kind: 'depository', mask: '4821' },
+        { providerAccountId: 'p2', kind: 'depository', mask: '4821' },
+      ],
+      cards: [],
+      accounts: [bank('a', 'Capital One', '4821')],
+      startedFrom: null,
+    }),
+    [{ kind: 'existing', target: 'account', id: 'a' }, { kind: 'new' }],
+    'one account is never preset on two rows',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Chase',
+      rows: [{ providerAccountId: 'p1', kind: 'depository', mask: '4821' }],
+      cards: [],
+      accounts: [bank('a', 'Capital One', '4821')],
+      startedFrom: null,
+    }),
+    [{ kind: 'new' }],
+    'the same last four at another bank is not a match',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Capital One',
+      rows,
+      cards: [],
+      accounts,
+      startedFrom: { target: 'account', id: 'a' },
+    }).slice(0, 2),
+    [
+      { kind: 'existing', target: 'account', id: 'b' },
+      { kind: 'existing', target: 'account', id: 'a' },
+    ],
+    'the account the flow started from takes the row with its last four',
+  );
+  assert.deepEqual(
+    matchLinkRows({
+      institutionName: 'Capital One',
+      rows: [{ providerAccountId: 'p1', kind: 'depository', mask: '9999' }],
+      cards: [],
+      accounts: [bank('a', 'Capital One', null)],
+      startedFrom: { target: 'account', id: 'a' },
+    }),
+    [{ kind: 'existing', target: 'account', id: 'a' }],
+    'the starting account is preset on the first row of its kind when no last four matches',
   );
 }
 

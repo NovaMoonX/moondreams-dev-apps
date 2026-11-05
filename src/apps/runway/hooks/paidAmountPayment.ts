@@ -4,6 +4,7 @@ import { getHeldFor } from '@apps/runway/hooks/useBillPaid';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import type { Cents, MoneyRange } from '@apps/runway/types';
 import { getBillCardName } from '@apps/runway/utils/cardText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 /** What the sheet needs to know about the payment being marked, whatever it is a payment of. */
 export interface PaidAmountPayment {
@@ -26,7 +27,7 @@ export interface PaidAmountPayment {
 /** The card a bill's payment would be charged to, only while tracking, since cards are part of it. */
 export const useBillCardName = (billId: string, dueOn: number | null) =>
   useAppSelector((state) =>
-    dueOn !== null && selectLevel(state) === 'track'
+    dueOn !== null && isTrackingLevel(selectLevel(state))
       ? getBillCardName(
           state.runway.versions,
           state.runway.cards,

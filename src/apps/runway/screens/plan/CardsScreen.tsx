@@ -10,6 +10,9 @@ import CardSheets, {
   type OpenedCard,
 } from '@apps/runway/components/CardSheets';
 import { CARD_WORDS } from '@apps/runway/constants';
+import AddMethodSheet from '@apps/runway/components/AddMethodSheet';
+import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import CardForm from '@apps/runway/forms/CardForm';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -33,6 +36,8 @@ function CardsScreen() {
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'card';
   const [open, setOpen] = useState<OpenedCard | null>(null);
+  const canLink = useCanLinkBank();
+  const [addStep, setAddStep] = useState<'pick' | 'link' | null>(null);
 
   // An archived card that still waits to be paid stays listed, so it can be paid off.
   const cards = getListedCards(allCards, balances.reserveByCard);
@@ -65,8 +70,25 @@ function CardsScreen() {
       <FloatingAction
         label={CARD_WORDS.add}
         icon={<CreditCard className='h-5 w-5' aria-hidden='true' />}
-        onClick={() => setFormKey((current) => (current ?? 0) + 1)}
+        onClick={() =>
+          canLink
+            ? setAddStep('pick')
+            : setFormKey((current) => (current ?? 0) + 1)
+        }
       />
+      {addStep === 'pick' && (
+        <AddMethodSheet
+          onClose={() => setAddStep(null)}
+          onLink={() => setAddStep('link')}
+          onManual={() => {
+            setAddStep(null);
+            setFormKey((current) => (current ?? 0) + 1);
+          }}
+        />
+      )}
+      {addStep === 'link' && (
+        <LinkBankScreen onClose={() => setAddStep(null)} />
+      )}
       {(formKey !== null || isRequested) && (
         <CardForm
           key={formKey ?? 'requested'}

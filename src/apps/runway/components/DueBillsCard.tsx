@@ -50,6 +50,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getBillCardName } from '@apps/runway/utils/cardText';
+import { isTrackingLevel } from '@apps/runway/engine/level';
 
 type DueBill = Lookahead['due'][number];
 type DueCost = Lookahead['dueCosts'][number];
@@ -144,15 +145,14 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
       return true;
     }
     const state = store.getState();
-    const cardName =
-      selectLevel(state) === 'track'
-        ? getBillCardName(
-            state.runway.versions,
-            state.runway.cards,
-            due.billId,
-            due.dueOn,
-          )
-        : null;
+    const cardName = isTrackingLevel(selectLevel(state))
+      ? getBillCardName(
+          state.runway.versions,
+          state.runway.cards,
+          due.billId,
+          due.dueOn,
+        )
+      : null;
     const laterDates = due.laterDueOn.filter((on) => on !== today);
     const isDueAgainToday = due.laterDueOn.includes(today);
     const missedTitle = DUE_WORDS.paidMissed(
@@ -256,7 +256,9 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isAsking, setIsAsking] = useState(false);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
-  const isTrack = useAppSelector((state) => selectLevel(state) === 'track');
+  const isTrack = useAppSelector((state) =>
+    isTrackingLevel(selectLevel(state)),
+  );
   const name = HORIZON_WORDS.costLineName(due.costName, due.itemName);
   const paid = useCostPaid({
     itemId: due.itemId,
