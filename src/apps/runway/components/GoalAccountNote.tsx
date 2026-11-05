@@ -68,7 +68,7 @@ function AccountLines({
         <HelpTip
           title={ACCOUNT_WORDS.goalInterestTitle(account.name)}
           badgeLabel={mask(
-            ACCOUNT_WORDS.goalInterestChip(
+            ACCOUNT_WORDS.interestChip(
               interestShare,
               interestDay,
               interest.isActual,

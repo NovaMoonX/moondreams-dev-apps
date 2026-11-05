@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import ActionGroup from '@/components/ActionGroup';
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -169,16 +170,25 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           </p>
         ) : (
           <>
-            <p className='text-muted-foreground text-sm'>
-              {NEEDS_HOME_WORDS.intro}
-            </p>
+            <div className='flex items-center gap-1.5'>
+              <p className='text-muted-foreground text-sm'>
+                {NEEDS_HOME_WORDS.introShort}
+              </p>
+              <HelpTip title={NEEDS_HOME_WORDS.title}>
+                <p>{NEEDS_HOME_WORDS.intro}</p>
+              </HelpTip>
+            </div>
             {spending.length > 0 && renderRows(spending)}
             {moneyIn.length > 0 && (
               <div className='space-y-2'>
-                <SectionDivider label={NEEDS_HOME_WORDS.moneyIn} />
-                <p className='text-muted-foreground text-sm'>
-                  {NEEDS_HOME_WORDS.moneyInHelp}
-                </p>
+                <SectionDivider
+                  label={NEEDS_HOME_WORDS.moneyIn}
+                  trailing={
+                    <HelpTip title={NEEDS_HOME_WORDS.moneyIn}>
+                      <p>{NEEDS_HOME_WORDS.moneyInHelp}</p>
+                    </HelpTip>
+                  }
+                />
                 {renderRows(moneyIn)}
               </div>
             )}

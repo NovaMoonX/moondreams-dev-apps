@@ -74,12 +74,7 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   if (offered.length === 0) return null;
   return (
     <div className='space-y-2'>
-      <div>
-        <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.sameTitle}</p>
-        <p className='text-muted-foreground text-xs'>
-          {NEEDS_HOME_WORDS.sameHint}
-        </p>
-      </div>
+      <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.sameTitle}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map((typed) => {
           const name = getPurchaseTitle(typed, nameOf);
