@@ -3294,7 +3294,6 @@ export const FREE_SUM_WORDS = {
     'To fix a balance later, correct the income day or the bill payment it came from.',
 } as const;
 
-/** Issue 61: where the cash in the accounts that count goes. */
 export const CASH_POSITION_WORDS = {
   title: 'Where your cash is',
   open: 'Where your cash is',
@@ -3308,15 +3307,15 @@ export const CASH_POSITION_WORDS = {
   typedOn: (date: string) => `You typed it on ${date}`,
   typed: 'You typed it',
   noBalance: 'No balance yet',
-  bills: 'Bills set aside',
-  goals: 'Goals',
-  horizon: 'Set aside for later',
-  cards: 'Cards waiting to be paid',
+  bills: FREE_SUM_WORDS.bills,
+  goals: FREE_SUM_WORDS.goals,
+  horizon: FREE_SUM_WORDS.horizon,
+  cards: FREE_SUM_WORDS.cards,
   pending: 'Charges still pending',
   pendingHelp:
     'Your bank counts only charges that have posted, so these have not left your balance yet.',
   envelopes: 'Safe to spend in envelopes',
-  free: 'Free',
+  free: 'Not given a job yet',
   over: (amount: string) => `Over-assigned ${amount}`,
   overHelp:
     'Your envelopes hold more than the cash left after what is spoken for. Their figures stay as planned.',
