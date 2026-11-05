@@ -5,6 +5,7 @@
 import {
   createHash,
   createPublicKey,
+  timingSafeEqual,
   verify as verifySignature,
   type JsonWebKey,
 } from 'node:crypto';
@@ -233,8 +234,13 @@ async function runFlow(credentials: Credentials, webhookUrl: string | null) {
   try {
     await readItem(credentials, accessToken, webhookUrl);
   } finally {
-    await call(credentials, '/item/remove', { access_token: accessToken });
-    console.log('Removed the sandbox Item.');
+    await call(credentials, '/item/remove', { access_token: accessToken })
+      .then(() => console.log('Removed the sandbox Item.'))
+      .catch((error: unknown) =>
+        console.error(
+          `Could not remove the sandbox Item: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
   }
 }
 
@@ -280,7 +286,9 @@ async function verifyWebhook(
   const bodyHash = createHash('sha256')
     .update(readFileSync(bodyPath))
     .digest('hex');
-  if (bodyHash !== payload.request_body_sha256)
+  const expected = Buffer.from(String(payload.request_body_sha256 ?? ''));
+  const actual = Buffer.from(bodyHash);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
     throw new Error(
       'Refused: the body hash does not match request_body_sha256 (the file must hold the exact raw body).',
     );
