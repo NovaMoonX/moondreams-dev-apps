@@ -18,9 +18,7 @@ if (getApps().length === 0) {
 }
 
 /**
- * `{}` → `{ results: [{ linkId, state, created, updated, removed }] }`: brings in what is new from every active link of
- * the caller, and retries the bank's revoke for an unlinked link whose grant was kept. Safe to call again at any time; a repeat
- * changes nothing.
+ * `{}` → `{ results: [{ linkId, state, created, updated, removed }] }`: every active link of the caller, plus a retry of any revoke the bank refused. Safe to repeat.
  */
 export const syncRunwayLinks = onCall(
   {
