@@ -3840,6 +3840,12 @@ export const ACCOUNT_WORDS = {
     `${amount} interest on ${day}`,
   goalInterestActual: (amount: string, day: string) =>
     `Earned ${amount} on ${day}, its share of the interest`,
+  goalInterestTitle: (account: string) => `Interest in ${account}`,
+  goalInterestChip: (amount: string, day: string, isActual: boolean) =>
+    `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
+  goalBankTitle: (account: string) => `What ${account} shows`,
+  goalBankChip: (signed: string) => `Bank ${signed}`,
+  goalBankChipHidden: 'At the bank',
   goalActual: (
     amount: string,
     compare: {
