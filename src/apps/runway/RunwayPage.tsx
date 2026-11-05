@@ -7,6 +7,7 @@ import EmptyCard from '@/components/EmptyCard';
 import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
+import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ValuesHiddenProvider from '@/components/ValuesHiddenProvider';
@@ -209,6 +210,7 @@ function RunwayContent() {
     [],
   );
   useTrackAppUsage('runway', user?.uid ?? null);
+  useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
