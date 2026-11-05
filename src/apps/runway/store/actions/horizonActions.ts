@@ -8,9 +8,11 @@ import {
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 
+import { MAKE_BILL_WORDS } from '@apps/runway/constants';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
+import { buildGroupDocs } from '@apps/runway/store/actions/itemActions';
 import {
   assertPlanStarted,
   assertSourceLive,
@@ -19,16 +21,19 @@ import {
   type MoveLeftoverInput,
 } from '@apps/runway/store/actions/transferActions';
 import {
+  describeCostMadeBill,
   describeCostPaid,
   describeCostTakenBack,
 } from '@apps/runway/utils/changeText';
 import type {
+  BillSealed,
   ChangeDoc,
   ChangeSealed,
   Cents,
   CostPaidMark,
   CostPaidSealed,
   DateOnly,
+  GroupSealed,
   HorizonSealed,
   MoveDoc,
   PlanDoc,
@@ -36,6 +41,7 @@ import type {
   PlanVersionDoc,
   RunwayEncryption,
   Sealed,
+  TransferSealed,
 } from '@apps/runway/types';
 
 const planDoc = (uid: string, collectionName: string, id: string) =>
@@ -401,4 +407,149 @@ export async function undoCostPaid(
     return true;
   });
   return isWritten;
+}
+
+export interface MakeCostABillInput {
+  /** `getMadeBillId` of the item and cost, so a retry or a second device resolves to the same bill. */
+  billId: string;
+  /** Made once by the caller, for the move of money. */
+  moveId: string;
+  itemId: string;
+  itemName: string;
+  costName: string;
+  /** The item as it stands with the cost handed to the bill (`becameBillId` set). */
+  horizon: HorizonSealed;
+  bill: BillSealed;
+  newGroup: GroupSealed | null;
+  /** Money moved from the item to the bill, as this device reads what the item holds; zero moves none. */
+  bringCents: Cents;
+  /** Money moved from the item to Free to Spend instead, when the item has no other open cost; zero moves none. */
+  freeCents: Cents;
+  startDate: DateOnly;
+}
+
+/**
+ * Makes a cost a bill in one transaction: the bill's header, first version and change (as `createBill`
+ * writes them), the item's next version with the cost's `becameBillId`, and the move of money when any
+ * goes. One change names both items. The bill's id comes from its cost, so a second device making the
+ * same cost a bill finds the first one's header and throws the already-done error.
+ */
+export async function makeCostABill(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: MakeCostABillInput,
+): Promise<void> {
+  const now = Date.now();
+  const changeId = generateUuid();
+  const movedCents = input.bringCents + input.freeCents;
+  const groupDocs = input.newGroup
+    ? await buildGroupDocs(
+        encryption,
+        { group: input.newGroup, startDate: input.startDate },
+        now,
+      )
+    : null;
+  const bill: BillSealed = groupDocs
+    ? { ...input.bill, groupId: groupDocs.groupId }
+    : input.bill;
+  const [billSealed, horizonSealed, changeSealed, moveSealed] =
+    await Promise.all([
+      sealJson(bill, encryption),
+      sealJson(input.horizon, encryption),
+      sealJson(
+        {
+          summary: describeCostMadeBill(
+            input.itemName,
+            input.costName,
+            bill,
+            input.bringCents,
+            input.freeCents,
+          ),
+        } satisfies ChangeSealed,
+        encryption,
+      ),
+      movedCents > 0
+        ? sealJson(
+            {
+              fromId: input.itemId,
+              toId: input.bringCents > 0 ? input.billId : null,
+              cents: movedCents,
+              note: null,
+              isOutside: false,
+            } satisfies TransferSealed,
+            encryption,
+          )
+        : Promise.resolve(null),
+    ]);
+  const version = (itemId: string, kind: 'bill' | 'horizon', sealed: Sealed) =>
+    ({
+      id: generateUuid(),
+      itemId,
+      kind,
+      createdAt: now,
+      effectiveFrom: input.startDate,
+      effectiveUntil: null,
+      changeId,
+      sealed,
+    }) satisfies PlanVersionDoc;
+  const header = {
+    id: input.billId,
+    kind: 'bill',
+    parentId: null,
+    createdAt: now,
+    endedAt: null,
+    archivedAt: null,
+    heldReleasedOn: null,
+  } satisfies PlanItemDoc;
+  const change = {
+    id: changeId,
+    kind: 'planChange',
+    createdAt: now,
+    effectiveFrom: input.startDate,
+    itemIds: [input.itemId, input.billId],
+    sealed: changeSealed,
+  } satisfies ChangeDoc;
+
+  return runTransaction(db, async (transaction) => {
+    const [plan, item, existing] = await Promise.all([
+      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+      transaction.get(planDoc(uid, 'items', input.itemId)),
+      transaction.get(planDoc(uid, 'items', input.billId)),
+    ]);
+    if (existing.exists()) throw new Error(MAKE_BILL_WORDS.alreadyDone);
+    if (movedCents > 0) assertPlanStarted(plan.data(), input.startDate);
+    assertSourceLive(item.data() as Partial<PlanItemDoc> | undefined);
+    if (groupDocs) {
+      transaction.set(
+        planDoc(uid, 'items', groupDocs.groupId),
+        groupDocs.header,
+      );
+      transaction.set(
+        planDoc(uid, 'versions', groupDocs.version.id),
+        groupDocs.version,
+      );
+      transaction.set(
+        planDoc(uid, 'changes', groupDocs.change.id),
+        groupDocs.change,
+      );
+    }
+    transaction.set(planDoc(uid, 'items', input.billId), header);
+    const billVersion = version(input.billId, 'bill', billSealed);
+    transaction.set(planDoc(uid, 'versions', billVersion.id), billVersion);
+    const itemVersion = version(input.itemId, 'horizon', horizonSealed);
+    transaction.set(planDoc(uid, 'versions', itemVersion.id), itemVersion);
+    transaction.set(planDoc(uid, 'changes', changeId), change);
+    if (moveSealed !== null) {
+      markLedgerWrite(transaction, uid, plan.data(), [input.startDate]);
+      transaction.set(planDoc(uid, 'moves', input.moveId), {
+        id: input.moveId,
+        kind: 'transfer',
+        date: input.startDate,
+        refId: input.itemId,
+        reversesMoveId: null,
+        createdAt: now,
+        sealed: moveSealed,
+      } satisfies MoveDoc);
+    }
+  });
 }

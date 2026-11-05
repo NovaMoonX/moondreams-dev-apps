@@ -338,6 +338,8 @@ function CostForm({
       isOutside: formData.isOutside,
       pricedOn: cost?.pricedOn ?? null,
       endsAfter: cost?.endsAfter ?? null,
+      becameBillId: cost?.becameBillId ?? null,
+      becameBillOn: cost?.becameBillOn ?? null,
       note: cost?.note ?? null,
     });
   };

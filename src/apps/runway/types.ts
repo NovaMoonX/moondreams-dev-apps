@@ -410,12 +410,19 @@ export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
   rest?: HorizonRest | null;
   costs: (Omit<
     HorizonCost,
-    'isOutside' | 'ending' | 'pricedOn' | 'endsAfter'
+    | 'isOutside'
+    | 'ending'
+    | 'pricedOn'
+    | 'endsAfter'
+    | 'becameBillId'
+    | 'becameBillOn'
   > & {
     isOutside?: boolean;
     ending?: Ending;
     pricedOn?: DateOnly | null;
     endsAfter?: DateOnly | null;
+    becameBillId?: string | null;
+    becameBillOn?: DateOnly | null;
   })[];
 };
 
@@ -434,6 +441,10 @@ export interface HorizonCost {
   pricedOn: DateOnly | null;
   /** Set when a cost with paid payments is removed: it asks for nothing after this day. */
   endsAfter: DateOnly | null;
+  /** Set by Make it a bill: the bill that took the cost over, which plans every payment from its first due date. */
+  becameBillId: string | null;
+  /** The bill's first due date; the cost plans nothing from it on. */
+  becameBillOn: DateOnly | null;
   note: string | null;
 }
 

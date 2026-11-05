@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import RevealChip from '@/components/RevealChip';
+import SummaryRow from '@/components/SummaryRow';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import HelpTip from '@/components/HelpTip';
@@ -23,6 +25,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
+import { generateUuid } from '@/utils/idUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -44,6 +47,7 @@ import {
   FORM_FLOW_WORDS,
   PAID_FROM_WORDS,
   INCOME_ENDING_LABELS,
+  MAKE_BILL_WORDS,
   INCOME_ENDINGS,
   MAX_CHOSEN_DAYS,
   MAX_EMOJI_LENGTH,
@@ -54,6 +58,25 @@ import {
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  getCostShare,
+  getMadeBillId,
+  getMakeBillBlock,
+  hasOtherOpenCost,
+  listCoveredFrom,
+  setCostBill,
+} from '@apps/runway/engine/horizon';
+import ChoiceCards from '@apps/runway/components/ChoiceCards';
+import EffectPreview from '@apps/runway/components/EffectPreview';
+import { makeCostABill } from '@apps/runway/store/actions/horizonActions';
+import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectCostPaid,
+  selectCostPayments,
+  selectHorizonItems,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
 import { clearBillPins } from '@apps/runway/store/actions/dayActions';
 import { getBillPins } from '@apps/runway/engine/billShare';
@@ -129,7 +152,11 @@ import {
 import type {
   BillFundedBy,
   BillSealed,
+  Cents,
+  DateOnly,
   Ending,
+  HorizonCost,
+  HorizonSealed,
   Priority,
   Schedule,
 } from '@apps/runway/types';
@@ -224,6 +251,21 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
   return draft && formData ? { ...draft, formData } : null;
 };
 
+/** A repeating cost being made a bill: the form starts filled from it and asks about the money its item holds. */
+export interface BillFromCost {
+  itemId: string;
+  horizon: HorizonSealed;
+  cost: HorizonCost;
+  /** The cost's next unpaid payment, which is the bill's first due date. */
+  firstDueOn: DateOnly;
+  /** The part of what the item holds that is this cost's to bring: what its other open costs still need stays. */
+  shareCents: Cents;
+  /** Another cost of the item still has a payment to pay with this money. */
+  hasOtherOpenCost: boolean;
+}
+
+type Bring = 'yes' | 'no';
+
 interface BillFormProps {
   isOpen: boolean;
   onClose: () => void;
@@ -242,6 +284,8 @@ interface BillFormProps {
   draft?: DraftSink<BillSealed>;
   /** A group the new bill starts in, already answered (the add action on a group's sheet). */
   presetGroupId?: string;
+  /** Makes the bill from a repeating cost, writing it with the cost's item in one save. */
+  fromCost?: BillFromCost;
 }
 
 export type BillStepId =
@@ -532,6 +576,25 @@ const getEditingData = (
 const scrollIntoSight = (element: HTMLDivElement | null) =>
   element?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 
+const withoutYear = (date: DateOnly) =>
+  formatDateOrdinalUTC(date).replace(/,\s\d{4}$/, '');
+
+const formatBringDates = (dates: readonly DateOnly[]) => {
+  const shown = dates.slice(0, 3);
+  const year = (date: DateOnly) => new Date(date).getUTCFullYear();
+  const isOneYear = shown.every((date) => year(date) === year(shown[0]));
+  const names = shown.map((date, index) =>
+    isOneYear && index < shown.length - 1
+      ? withoutYear(date)
+      : formatDateOrdinalUTC(date),
+  );
+  return new Intl.ListFormat('en', { type: 'conjunction' }).format(
+    dates.length > 3
+      ? [...names, MAKE_BILL_WORDS.moreDates(dates.length - 3)]
+      : names,
+  );
+};
+
 function BillFormBody({
   onStartOver,
   isOpen,
@@ -544,8 +607,19 @@ function BillFormBody({
   openStep = null,
   draft,
   presetGroupId,
+  fromCost,
 }: BillFormProps & StartOverProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
+  const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
+  const [made] = useState(() => ({
+    billId: fromCost
+      ? getMadeBillId(fromCost.itemId, fromCost.cost.id)
+      : generateUuid(),
+    moveId: newTransferMoveId(),
+  }));
+  const [bring, setBring] = useState<Bring | null>(null);
   const today = todayAsUtcDate();
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
@@ -568,10 +642,26 @@ function BillFormBody({
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = useAppSelector(selectLevel) === 'track';
   const [startData] = useState<BillFormData>(() =>
-    editing || draft?.initial
+    editing || draft?.initial || fromCost
       ? {
           ...getEditingData(
-            (editing?.payload ?? draft?.initial) as BillSealed,
+            (editing?.payload ??
+              draft?.initial ??
+              (fromCost
+                ? {
+                    ...EMPTY_BILL,
+                    name: fromCost.cost.name,
+                    priority: fromCost.horizon.priority,
+                    amount: fromCost.cost.amount,
+                    timing: {
+                      kind: 'date',
+                      schedule: {
+                        ...fromCost.cost.schedule,
+                        anchor: fromCost.firstDueOn,
+                      },
+                    },
+                  }
+                : EMPTY_BILL)) as BillSealed,
             editing === undefined,
           ),
           accountId: keepPullAccountId(
@@ -605,10 +695,12 @@ function BillFormBody({
           accountId: null,
         },
   );
-  const startsChosen = editing !== undefined || draft !== undefined;
-  const draftKey = draft
-    ? null
-    : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
+  const startsChosen =
+    editing !== undefined || draft !== undefined || fromCost !== undefined;
+  const draftKey =
+    draft || fromCost
+      ? null
+      : `${FORM_DRAFT_PREFIX}${noun}:${editing?.itemId ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
   const kept = useFormDraft({
@@ -705,16 +797,20 @@ function BillFormBody({
     getEveryMonths(formData) === getEveryMonths(startData) &&
     formData.isLater === startData.isLater &&
     JSON.stringify(formData.dayKeys) === JSON.stringify(startData.dayKeys);
-  const blocker = getBlocker(
-    formData,
-    isPayMissing,
-    parseAmountDraft(formData.amount) !== null,
-    today,
-    isChosen && !isFundingUntouched,
-    pickedCount,
-    editing !== undefined,
-    noun,
-  );
+  const heldCents = fromCost ? Math.max(0, fromCost.shareCents) : 0;
+  const isBringAsked = fromCost !== undefined && heldCents > 0;
+  const bringChoice: Bring | null = isBringAsked ? bring : 'no';
+  const blocker =
+    getBlocker(
+      formData,
+      isPayMissing,
+      parseAmountDraft(formData.amount) !== null,
+      today,
+      isChosen && !isFundingUntouched,
+      pickedCount,
+      editing !== undefined,
+      noun,
+    ) ?? (fromCost && bringChoice === null ? MAKE_BILL_WORDS.pickBring : null);
 
   const getPaidFromSummary = () => {
     if (formData.paidFrom === 'spread' && savedFundedBy === 'chosen')
@@ -773,7 +869,9 @@ function BillFormBody({
     formData.isLater ||
     (dueDate !== undefined && (editing !== undefined || dueDate >= today));
   const canLater =
-    editing === undefined || editing.payload.timing.schedule.anchor === null;
+    editing === undefined
+      ? fromCost === undefined
+      : editing.payload.timing.schedule.anchor === null;
 
   const resolveGroup = (data: BillFormData) =>
     resolveGroupChoice(data.group.choice, data.group.newText, groupChoices);
@@ -788,7 +886,87 @@ function BillFormBody({
   const getGroupName = (data: BillFormData) =>
     resolveGroup(data).name || FORM_FLOW_WORDS.noGroup;
 
+  const bringAmount = parseAmountDraft(formData.amount);
+  const bringDates =
+    fromCost &&
+    bringAmount !== null &&
+    formData.frequency !== null &&
+    dueDate !== undefined &&
+    isRepeatAnswered(formData)
+      ? listCoveredFrom(
+          toSchedule(formData, formData.frequency, dueDate),
+          bringAmount,
+          dueDate,
+          heldCents,
+          getStanceOverride(formData.amount) ?? planStance,
+        )
+      : [];
+  const itemName = fromCost?.horizon.name ?? '';
+  const isFreeInstead = fromCost !== undefined && !fromCost.hasOtherOpenCost;
+  const bringYesTitle =
+    bringDates.length === 0
+      ? MAKE_BILL_WORDS.yesPart(
+          dueDate === undefined ? '' : formatDateOrdinalUTC(dueDate),
+        )
+      : MAKE_BILL_WORDS.yesCovers(formatBringDates(bringDates));
+  const bringNoTitle = isFreeInstead
+    ? MAKE_BILL_WORDS.noFree
+    : MAKE_BILL_WORDS.noLeave(itemName);
+  const bringStep: QuestionStep[] = isBringAsked
+    ? [
+        {
+          id: 'bring',
+          title: mask(
+            MAKE_BILL_WORDS.bringTitle(itemName, formatCents(heldCents)),
+          ),
+          summaryLabel: MAKE_BILL_WORDS.bringLabel,
+          summaryValue:
+            bring === null
+              ? ''
+              : bring === 'yes'
+                ? bringYesTitle
+                : bringNoTitle,
+          isAnswered: bring !== null,
+          blocker: MAKE_BILL_WORDS.pickBring,
+          render: ({ moveOn }) => (
+            <ChoiceCards
+              options={[
+                {
+                  value: 'yes' as const,
+                  title: bringYesTitle,
+                  body: mask(
+                    MAKE_BILL_WORDS.yesBody(
+                      formatCents(heldCents),
+                      formData.name.trim() || fromCost?.cost.name || '',
+                    ),
+                  ),
+                },
+                {
+                  value: 'no' as const,
+                  title: bringNoTitle,
+                  body: mask(
+                    isFreeInstead
+                      ? MAKE_BILL_WORDS.noFreeBody(formatCents(heldCents))
+                      : MAKE_BILL_WORDS.noLeaveBody(
+                          itemName,
+                          formatCents(heldCents),
+                        ),
+                  ),
+                },
+              ]}
+              value={bring}
+              onChange={(value) => {
+                setBring(value);
+                moveOn();
+              }}
+            />
+          ),
+        },
+      ]
+    : [];
+
   const steps: QuestionStep[] = [
+    ...bringStep,
     {
       id: 'name',
       title: FORM_FLOW_WORDS.nameTitle,
@@ -1259,14 +1437,15 @@ function BillFormBody({
     },
   ];
   const [isAll, setIsAll] = useState(false);
-  const { isHidden } = useValuesHidden();
-  const mask = useMaskedText();
   const maskNote = (note: string | null | undefined) =>
     note ? mask(note) : null;
   const questions = useQuestionFlow({
-    steps: maskSummaries(steps, isHidden),
+    steps: maskSummaries(
+      fromCost ? steps.filter(({ id }) => id !== 'due') : steps,
+      isHidden,
+    ),
     startFolded: editing !== undefined || !!draft?.initial,
-    foldAnswered: kept.restored !== null,
+    foldAnswered: kept.restored !== null || fromCost !== undefined,
     initialOpenId: draft?.openStep ?? null,
   });
 
@@ -1343,6 +1522,49 @@ function BillFormBody({
   };
 
   const candidate = blocker === null ? buildBill(formData) : null;
+  const firstDueOn = candidate?.timing.schedule.anchor ?? null;
+  const previewJson =
+    fromCost && candidate && firstDueOn !== null && bringChoice !== null
+      ? JSON.stringify({
+          kind: 'makeBill',
+          item: {
+            id: made.billId,
+            kind: 'bill',
+            parentId: null,
+            createdAt: today,
+            endedAt: null,
+            archivedAt: null,
+            heldReleasedOn: null,
+          },
+          versions: [
+            {
+              itemId: made.billId,
+              kind: 'bill',
+              effectiveFrom: today,
+              effectiveUntil: null,
+              changeId: 'what-if',
+              payload: candidate,
+            },
+            {
+              itemId: fromCost.itemId,
+              kind: 'horizon',
+              effectiveFrom: today,
+              effectiveUntil: null,
+              changeId: 'what-if',
+              payload: setCostBill(
+                fromCost.horizon,
+                fromCost.cost.id,
+                made.billId,
+                firstDueOn,
+              ),
+            },
+          ],
+          itemId: fromCost.itemId,
+          bringCents: bringChoice === 'yes' ? heldCents : 0,
+          freeCents: bringChoice === 'no' && isFreeInstead ? heldCents : 0,
+          on: today,
+        } satisfies PreviewChange)
+      : null;
   const isFundingChanged =
     candidate !== null &&
     editing !== undefined &&
@@ -1399,7 +1621,9 @@ function BillFormBody({
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
   const isDirty =
-    JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
+    JSON.stringify(formData) !== JSON.stringify(startData) ||
+    isChangeDirty ||
+    bring !== null;
   const keptValue = useMemo(
     () => ({ formData, isPriorityChosen, note: flow.note, from: flow.from }),
     [formData, isPriorityChosen, flow.note, flow.from],
@@ -1453,6 +1677,75 @@ function BillFormBody({
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
+      if (fromCost) {
+        const state = store.getState();
+        const live = selectHorizonItems(state, today).find(
+          ({ item }) => item.id === fromCost.itemId,
+        )?.version.payload;
+        const cost = live?.costs.find(({ id }) => id === fromCost.cost.id);
+        const anchor = bill.timing.schedule.anchor;
+        if (!live || !cost || cost.becameBillId !== null || anchor === null) {
+          throw new Error(MAKE_BILL_WORDS.alreadyDone);
+        }
+        const livePayments =
+          selectCostPayments(state, today)[fromCost.itemId] ?? [];
+        const liveNext = livePayments.find(
+          ({ costId, paid }) => costId === cost.id && paid === null,
+        );
+        if (
+          !liveNext ||
+          liveNext.dueOn !== anchor ||
+          getMakeBillBlock(
+            livePayments.filter(({ costId }) => costId === cost.id),
+            today,
+          ) !== null
+        ) {
+          throw new Error(MAKE_BILL_WORDS.changed);
+        }
+        const shareCents = getCostShare(
+          live,
+          cost.id,
+          selectBalances(state).assignedByItem[fromCost.itemId] ?? 0,
+          livePayments,
+        );
+        const isFreeLive = !hasOtherOpenCost(
+          live,
+          cost.id,
+          today,
+          selectStance(state),
+          selectCostPaid(state)[fromCost.itemId] ?? [],
+        );
+        const bringCents = bringChoice === 'yes' ? shareCents : 0;
+        const freeCents = bringChoice === 'no' && isFreeLive ? shareCents : 0;
+        await makeCostABill(user.uid, encryption, {
+          billId: made.billId,
+          moveId: made.moveId,
+          itemId: fromCost.itemId,
+          itemName: live.name,
+          costName: cost.name,
+          horizon: setCostBill(live, cost.id, made.billId, anchor),
+          bill,
+          newGroup: resolveGroup(formData).newGroup,
+          bringCents,
+          freeCents,
+          startDate: today,
+        });
+        addToast({
+          title:
+            bringCents > 0
+              ? MAKE_BILL_WORDS.made(bill.name, formatCents(bringCents))
+              : freeCents > 0
+                ? MAKE_BILL_WORDS.madeFree(
+                    bill.name,
+                    live.name,
+                    formatCents(freeCents),
+                  )
+                : MAKE_BILL_WORDS.made(bill.name, null),
+          type: 'success',
+        });
+        onClose();
+        return;
+      }
       await createBill(user.uid, encryption, {
         startDate: today,
         bill,
@@ -1539,8 +1832,19 @@ function BillFormBody({
                 {openStep !== null && editing && (
                   <BackLink onBack={() => setIsAll(false)} />
                 )}
+                {fromCost && (
+                  <SummaryRow
+                    label={MAKE_BILL_WORDS.firstDue}
+                    detail={MAKE_BILL_WORDS.firstDueDetail}
+                  >
+                    {formatDateOrdinalUTC(fromCost.firstDueOn)}
+                  </SummaryRow>
+                )}
                 <QuestionFlow flow={questions} />
               </>
+            )}
+            {fromCost && !isAsking && previewJson !== null && (
+              <EffectPreview changeJson={previewJson} />
             )}
             {!(isQuick && quickStep) && changeSection}
             <ModalFooterActions
@@ -1600,9 +1904,11 @@ function BillFormBody({
                         ? flow.isMoneyless
                           ? 'Save'
                           : CHANGE_WORDS.review
-                        : draft?.initial
-                          ? 'Save'
-                          : 'Add'}
+                        : fromCost
+                          ? MAKE_BILL_WORDS.primary
+                          : draft?.initial
+                            ? 'Save'
+                            : 'Add'}
                   </Button>
                 )
               }

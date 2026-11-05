@@ -1,9 +1,11 @@
 import { useRef, useState } from 'react';
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
+  Lock,
   Pencil,
+  Receipt,
   ReceiptText,
   Tag,
   Trash2,
@@ -21,6 +23,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -37,27 +40,34 @@ import {
   FORM_FLOW_WORDS,
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
+  MAKE_BILL_WORDS,
   PAY_SHARE_WORDS,
   PURCHASE_COST_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import {
+  getCostShare,
   getLiveCosts,
+  getMakeBillBlock,
   getPurchaseMarkFigures,
+  hasOtherOpenCost,
   removeCost,
   restoreCost,
   setCostPrice,
   settleCostPaid,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import BillForm from '@apps/runway/forms/BillForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectCostPaid,
   selectCostPayments,
   selectHorizonItems,
   selectSpendPurchases,
@@ -204,6 +214,11 @@ function CostSheet({
   const [takingBackId, setTakingBackId] = useState<string | null>(null);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [isMakingBill, setIsMakingBill] = useState(false);
+  const [isLockOpen, setIsLockOpen] = useState(false);
+  const { dialogId: lockDialogId, onDialogClose: onLockClose } =
+    useSheetHistory(isLockOpen, () => setIsLockOpen(false));
+  const { showOnPlan } = useRunwayUrlState();
   const isTrack = useAppSelector(selectLevel) === 'track';
   const isRestoring = useRef(false);
   const payments = useAppSelector((state) => selectCostPayments(state, today))[
@@ -248,7 +263,21 @@ function CostSheet({
   const isLive = cost.endsAfter === null;
   const isRepeat = cost.schedule.kind !== 'once';
   const isPaidOnce = !isRepeat && paidEntries.length > 0;
-  const isRemovable = isLive && !isPaidOnce && getLiveCosts(horizon).length > 1;
+  const isBill = cost.becameBillId !== null;
+  const itemPaid = useAppSelector(selectCostPaid)[itemId];
+  const makeBillBlock = getMakeBillBlock(costPayments, today);
+  const canMakeBill =
+    isRepeat && isLive && !cost.isOutside && !isBill && next !== null;
+  const hasOtherOpen = hasOtherOpenCost(
+    horizon,
+    cost.id,
+    today,
+    stance,
+    itemPaid ?? [],
+  );
+  const shareCents = getCostShare(horizon, cost.id, heldCents, payments ?? []);
+  const isRemovable =
+    isLive && !isPaidOnce && !isBill && getLiveCosts(horizon).length > 1;
   const settled =
     next === null
       ? paidEntries.reduce<CostPaidEntry | null>(
@@ -546,18 +575,24 @@ function CostSheet({
         }
         suffix={describeCost(cost).per || undefined}
         fact={
-          settled
-            ? COST_PAID_WORDS.paidHead(
-                formatDateOrdinalUTC(settled.paidOn),
-                settled.mark === 'outside',
-              )
-            : HORIZON_WORDS.costFact(
-                when,
-                cost.pricedOn === null
-                  ? null
-                  : formatDateOrdinalUTC(cost.pricedOn),
-                cost.isOutside,
-              )
+          isBill && !settled
+            ? cost.becameBillOn === null
+              ? MAKE_BILL_WORDS.nowABill
+              : MAKE_BILL_WORDS.nowABillFact(
+                  formatDateOrdinalUTC(cost.becameBillOn),
+                )
+            : settled
+              ? COST_PAID_WORDS.paidHead(
+                  formatDateOrdinalUTC(settled.paidOn),
+                  settled.mark === 'outside',
+                )
+              : HORIZON_WORDS.costFact(
+                  when,
+                  cost.pricedOn === null
+                    ? null
+                    : formatDateOrdinalUTC(cost.pricedOn),
+                  cost.isOutside,
+                )
         }
       />
       {!settled && (
@@ -577,7 +612,7 @@ function CostSheet({
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}
-        {!settled && (
+        {!settled && !isBill && (
           <ActionRow
             isGrouped
             isRoomy
@@ -605,6 +640,48 @@ function CostSheet({
           subtitle={HORIZON_WORDS.changeCostSub}
           onClick={onChange}
         />
+        {canMakeBill && makeBillBlock === null && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Receipt />}
+            label={MAKE_BILL_WORDS.row}
+            subtitle={MAKE_BILL_WORDS.rowSub}
+            onClick={() => setIsMakingBill(true)}
+          />
+        )}
+        {canMakeBill && makeBillBlock !== null && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<Lock />}
+            label={MAKE_BILL_WORDS.row}
+            subtitle={
+              makeBillBlock.kind === 'laterPaid'
+                ? MAKE_BILL_WORDS.lockedLaterPaid(
+                    formatDateOrdinalUTC(makeBillBlock.dueOn),
+                  )
+                : MAKE_BILL_WORDS.lockedPastDue(
+                    formatDateOrdinalUTC(makeBillBlock.dueOn),
+                  )
+            }
+            onClick={() => setIsLockOpen(true)}
+          />
+        )}
+        {cost.becameBillId !== null && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Receipt />}
+            label={MAKE_BILL_WORDS.openBill(cost.name)}
+            subtitle={MAKE_BILL_WORDS.nowABillSub}
+            onClick={() =>
+              showOnPlan('bills', { itemId: cost.becameBillId ?? '' })
+            }
+          />
+        )}
         {isFar && isMoreOpen && addRow}
         {next && isFar && isMoreOpen && markRow}
         {isRemovable && (
@@ -632,7 +709,7 @@ function CostSheet({
           {HORIZON_WORDS.paidStaysInRecord}
         </p>
       )}
-      {isLive && !isPaidOnce && !isRemovable && (
+      {isLive && !isPaidOnce && !isRemovable && !isBill && (
         <p className='text-muted-foreground text-sm'>
           {HORIZON_WORDS.changeLastCost}
         </p>
@@ -648,6 +725,36 @@ function CostSheet({
               {PURCHASE_COST_WORDS.addRow}
             </Button>
           }
+        />
+      )}
+      <Modal
+        id={lockDialogId}
+        isOpen={isLockOpen}
+        onClose={onLockClose}
+        title={MAKE_BILL_WORDS.lockedTitle}
+      >
+        <div className='space-y-4'>
+          <p className='text-muted-foreground text-sm'>
+            {MAKE_BILL_WORDS.lockedWhy}
+          </p>
+          <div className='flex justify-end'>
+            <Button onClick={onLockClose}>Got it</Button>
+          </div>
+        </div>
+      </Modal>
+      {isMakingBill && next && (
+        <BillForm
+          isOpen
+          title={MAKE_BILL_WORDS.title(cost.name)}
+          fromCost={{
+            itemId,
+            horizon,
+            cost,
+            firstDueOn: next.dueOn,
+            shareCents,
+            hasOtherOpenCost: hasOtherOpen,
+          }}
+          onClose={() => setIsMakingBill(false)}
         />
       )}
       {isAddingPurchase && next && (

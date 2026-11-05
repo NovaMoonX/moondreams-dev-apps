@@ -39,10 +39,15 @@ import {
   getPaidMoveId,
 } from '../../src/apps/runway/engine/progress.ts';
 import {
+  describeCostMadeBill,
   describeCostPaid,
   describeCostTakenBack,
 } from '../../src/apps/runway/utils/changeText.ts';
-import { settleCostPaid } from '../../src/apps/runway/engine/horizon.ts';
+import {
+  getMadeBillId,
+  setCostBill,
+  settleCostPaid,
+} from '../../src/apps/runway/engine/horizon.ts';
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
@@ -265,7 +270,7 @@ const nextCalendarDay = (today: number, month: number, day: number) => {
     : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
 };
 
-/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (the $50.00 its confirmed day's Surgery line set aside, the other $470.00 from Free to Spend) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Miso's surgery Medication is already a bill (nothing was held to bring along, so no transfer) on Alex's plan only. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (the $50.00 its confirmed day's Surgery line set aside, the other $470.00 from Free to Spend) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
 async function writeSeedHorizon(
   context: SeedContext,
   uid: string,
@@ -302,6 +307,8 @@ async function writeSeedHorizon(
     isOutside,
     pricedOn,
     endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
     note: null,
   });
   const feb1 = nextCalendarDay(today, 1, 1);
@@ -639,8 +646,90 @@ async function writeSeedHorizon(
       change(changeId, createdAt, today, [id], addedChanges[index]),
     );
   });
+  const surgery = items.find(({ id }) => id === 'seed-horizon-surgery');
+  const medication = surgery?.payload.costs.find(
+    ({ id }) => id === 'seed-cost-medication',
+  );
+  const billId = getMadeBillId('seed-horizon-surgery', 'seed-cost-medication');
+  if (surgery && medication && medication.schedule.anchor !== null) {
+    const madeAt = context.now - DAY_MS;
+    const bill: BillSealed = {
+      name: medication.name,
+      emoji: null,
+      priority: surgery.payload.priority,
+      orderIndex: 99,
+      amount: medication.amount,
+      timing: { kind: 'date', schedule: medication.schedule },
+      ending: medication.ending,
+      fundedBy: { kind: 'suggested' },
+      stanceOverride: null,
+      groupId: null,
+    };
+    const madeChangeId = 'seed-change-medication-bill';
+    const [billSealed, itemSealed, madeSealed] = await Promise.all([
+      sealJson(bill, encryption),
+      sealJson(
+        setCostBill(
+          surgery.payload,
+          medication.id,
+          billId,
+          medication.schedule.anchor,
+        ),
+        encryption,
+      ),
+      sealJson(
+        {
+          summary: describeCostMadeBill(
+            surgery.payload.name,
+            medication.name,
+            bill,
+            0,
+            0,
+          ),
+        } satisfies ChangeSealed,
+        encryption,
+      ),
+    ]);
+    batch.set(
+      context.firestore.doc(`${plan}/items/${billId}`),
+      header(billId, 'bill', null, madeAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${billId}`),
+      version(
+        `seed-version-${billId}`,
+        billId,
+        'bill',
+        madeAt,
+        today,
+        madeChangeId,
+        billSealed,
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${surgery.id}-bill`),
+      version(
+        `seed-version-${surgery.id}-bill`,
+        surgery.id,
+        'horizon',
+        madeAt,
+        today,
+        madeChangeId,
+        itemSealed,
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${madeChangeId}`),
+      change(madeChangeId, madeAt, today, [surgery.id, billId], madeSealed),
+    );
+  }
   await batch.commit();
-  return items.length * 3 + transfers.length * 2 + marks.length * 2;
+  return (
+    items.length * 3 +
+    transfers.length * 2 +
+    marks.length * 2 +
+    (surgery ? 4 : 0)
+  );
 }
 
 const MOVERS_PURCHASE_ID = 'seed-purchase-movers';

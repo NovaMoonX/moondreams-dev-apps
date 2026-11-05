@@ -23,6 +23,7 @@ import {
   collectCardPaid,
   collectCostPaid,
   collectFunded,
+  collectMovedIn,
   collectPaid,
   collectRepaid,
   collectStarted,
@@ -452,11 +453,16 @@ export function deriveBillProgress(
     collectFunded(records, expectedOn),
   );
   const started = collectStarted(moves, startDate);
+  const movedIn = collectMovedIn([
+    ...(base?.transfers ?? []),
+    ...collectTransferEntries(moves, startDate),
+  ]);
   const funded = Object.fromEntries(
     [
       ...new Set([
         ...Object.keys(confirmedFunded),
         ...Object.keys(started.byItem),
+        ...Object.keys(movedIn),
       ]),
     ].map((id) => [
       id,
@@ -471,6 +477,7 @@ export function deriveBillProgress(
             ]
           : []),
         ...(confirmedFunded[id] ?? []),
+        ...(movedIn[id] ?? []),
       ],
     ]),
   );
