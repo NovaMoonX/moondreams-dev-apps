@@ -3840,6 +3840,20 @@ export const ACCOUNT_WORDS = {
     `${amount} interest on ${day}`,
   goalInterestActual: (amount: string, day: string, account: string) =>
     `Earned ${amount} on ${day}, its share of the interest in ${account}`,
+  goalActualCaption: 'At the bank',
+  goalActual: (
+    account: string,
+    amount: string,
+    difference: string,
+    direction: 'more' | 'less' | 'same' | null,
+    asOf: string | null,
+  ) => {
+    const said = `${account} says about ${amount} for it${asOf === null ? '' : ` as of ${asOf}`}`;
+    if (direction === null) return said;
+    return direction === 'same'
+      ? `${said}, which matches the plan`
+      : `${said}, ${difference} ${direction} than planned`;
+  },
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
   goalInterest: (amount: string, day: string, account: string) =>
