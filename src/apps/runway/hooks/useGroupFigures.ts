@@ -1,4 +1,5 @@
 import { useAppSelector } from '@/store';
+import { DAY_MS } from '@apps/runway/engine/dates';
 import { getMonthlyPaceCents } from '@apps/runway/engine/pace';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -20,6 +21,9 @@ import { fundingAtLevel } from '@apps/runway/engine/parts';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { FundingRule, MoneyRange, Priority } from '@apps/runway/types';
 import { getGroupMemberNames } from '@apps/runway/utils/billText';
+
+/** A month from today, so items starting later this month or early next one still count late in a month. */
+const USUAL_MONTH_OFFSET_MS = 30 * DAY_MS;
 
 const toBillMember = ({ version: bill }: ResolvedBill) => ({
   name: bill.payload.name,
@@ -95,8 +99,7 @@ export function usePlanTotals(
   );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const payLines = useResolvedPayLines(today);
-  // A month from today, so items starting later this month or early next one still count late in a month.
-  const usualMonth = today + 30 * 86_400_000;
+  const usualMonth = today + USUAL_MONTH_OFFSET_MS;
   return {
     income: monthlyTotal(payLines, usualMonth),
     bills: monthlyTotal(bills.map(toBillMember), usualMonth),
@@ -123,12 +126,16 @@ export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
       version.payload.state !== 'paused' &&
       isCountedAt(version.payload.priority, dial),
   );
-  const dated = live.filter(
-    ({ version }) => version.payload.targetDate !== null,
+  const heldOf = ({ item }: ResolvedGoal) =>
+    Math.max(0, assignedByItem[item.id] ?? 0);
+  const open = live.filter(
+    (goal) => heldOf(goal) < goal.version.payload.targetCents,
   );
-  const undated = live.filter(
-    (goal) => goal.version.payload.targetDate === null && isFundedGoal(goal),
-  );
+  const isDated = ({ version }: ResolvedGoal) =>
+    version.payload.targetDate !== null && version.payload.targetDate >= today;
+  const dated = open.filter(isDated);
+  // No date, or one already past: what the goal's rule puts in is the honest monthly figure.
+  const undated = open.filter((goal) => !isDated(goal) && isFundedGoal(goal));
   const paceCents = dated.reduce(
     (sum, { item, version }) =>
       sum +
@@ -136,7 +143,7 @@ export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
         {
           targetCents: version.payload.targetCents,
           targetDate: version.payload.targetDate,
-          heldCents: Math.max(0, assignedByItem[item.id] ?? 0),
+          heldCents: heldOf({ item, version }),
         },
         today,
       ) ?? 0),
@@ -144,7 +151,7 @@ export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
   );
   const { total } = monthlyTotal(
     [],
-    today + 30 * 86_400_000,
+    today + USUAL_MONTH_OFFSET_MS,
     toCountedMembers(undated, dial, today, payLines),
   );
   return {

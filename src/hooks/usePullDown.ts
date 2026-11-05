@@ -4,6 +4,18 @@ const SLOP_PX = 8;
 const ZOOMED_SCALE = 1.05;
 const IGNORED_TARGETS = '[role="dialog"], [data-no-pull]';
 
+const isScrolledDown = (target: EventTarget | null) => {
+  const climb = (element: Element | null): boolean => {
+    if (!element) return false;
+    const { overflowY } = getComputedStyle(element);
+    const isScroller = overflowY === 'auto' || overflowY === 'scroll';
+    return (
+      (isScroller && element.scrollTop > 0) || climb(element.parentElement)
+    );
+  };
+  return target instanceof Element && climb(target);
+};
+
 interface PullDownOptions {
   isEnabled: boolean;
   /** Finger travel, from where the pull took hold, at which `onRefresh` fires. */
@@ -23,7 +35,7 @@ interface Gesture {
 /**
  * A pull down from the top of the page: `distance` is the finger's travel since the pull took hold (negative
  * when it comes back up past that point), 0 when idle. It starts only on a mostly vertical downward drag
- * while the page is at the top, not in a dialog or a `data-no-pull` area; from then on the page's own scroll
+ * while the page is at the top and nothing under the finger is a scroller scrolled down, not in a dialog or a `data-no-pull` area; from then on the page's own scroll
  * is cancelled until the finger lifts. `refreshAt` fires `onRefresh` once, `onRelease` is called otherwise.
  * While enabled the page's overscroll is contained so the phone's own pull-to-reload never runs on top of it.
  */
@@ -63,6 +75,7 @@ export function usePullDown(options: PullDownOptions) {
         event.touches.length === 1 &&
         window.scrollY <= 0 &&
         !isIgnored &&
+        !isScrolledDown(event.target) &&
         !isZoomed
           ? {
               id: touch.identifier,

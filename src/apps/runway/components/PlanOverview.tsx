@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -32,6 +33,7 @@ import type { PlanSection } from '@apps/runway/types';
 
 type ViewSection = Exclude<PlanSection, 'more'>;
 type Level = 0 | 1 | 2;
+const LEVELS: Level[] = [0, 1, 2];
 
 /** Finger travel before the tiles start to show; the grid and the refresh indicator follow the measured heights. */
 const TILES_AT_PX = 16;
@@ -156,26 +158,29 @@ function RefreshRing({
   );
 }
 
-interface PlanOverviewProps {
-  sections: readonly ViewSection[];
-  current: PlanSection;
-  onSelect: (section: PlanSection) => void;
+interface PullFrameProps {
+  /** The content of each step; built by the parent so a pull re-renders only this frame, never the figures inside them. */
+  levels: Record<Level, ReactNode>;
+  settled: Level;
+  isInstant: boolean;
+  isRefreshing: boolean;
+  onSettle: (level: Level, isInstant?: boolean) => void;
+  onRefresh: () => void;
 }
 
-/** The top of the Plan tab: the thin row of views, which a pull down grows into a row of tiles, then a grid of them, then a refresh. */
-function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
-  const today = todayAsUtcDate(useNow(60_000));
-  const restart = useRestartApp();
-  const [mode, setMode] = useState<OverviewMode>('monthly');
-  const [settled, setSettled] = useState<Level>(0);
-  const [isInstant, setIsInstant] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+/** The height wrapper and refresh ring: owns the pull, measures every step's height up front and clips the open step to the finger. */
+function PullFrame({
+  levels,
+  settled,
+  isInstant,
+  isRefreshing,
+  onSettle,
+  onRefresh,
+}: PullFrameProps) {
   const [heights, setHeights] = useState<Partial<Record<Level, number>>>({});
-  const contentRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
-  const renderedLevelRef = useRef<Level>(0);
+  const measureRefs = useRef<Partial<Record<Level, HTMLDivElement | null>>>({});
   const pendingShiftRef = useRef(0);
-  const { figures, priority } = usePlanOverview(today, mode);
 
   const heightOf = (level: Level) => heights[level] ?? FALLBACK_HEIGHTS[level];
   const pillsHeight = heightOf(0);
@@ -193,21 +198,16 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
   const { distance, isPulling } = usePullDown({
     isEnabled: true,
     refreshAt: refreshVirtual - rest[settled],
-    onRefresh: () => {
-      setIsRefreshing(true);
-      restart();
-    },
+    onRefresh,
     onRelease: (travelled) => {
       const virtualAtRelease = rest[settled] + travelled;
-      const levels: Level[] = [0, 1, 2];
-      const nearest = levels.reduce((best, level) =>
+      const nearest = LEVELS.reduce((best, level) =>
         Math.abs(virtualAtRelease - rest[level]) <
         Math.abs(virtualAtRelease - rest[best])
           ? level
           : best,
       );
-      setIsInstant(false);
-      setSettled(nearest);
+      onSettle(nearest);
     },
   });
 
@@ -228,7 +228,6 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
       : 0;
 
   useLayoutEffect(() => {
-    renderedLevelRef.current = level;
     if (pendingShiftRef.current > 0) {
       window.scrollBy(0, -pendingShiftRef.current);
       pendingShiftRef.current = 0;
@@ -236,18 +235,23 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
   });
 
   useEffect(() => {
-    const content = contentRef.current;
-    if (!content) return;
-    const observer = new ResizeObserver(() => {
-      const height = content.offsetHeight;
-      const rendered = renderedLevelRef.current;
-      setHeights((previous) =>
-        previous[rendered] === height
+    const measure = () =>
+      setHeights((previous) => {
+        const next = Object.fromEntries(
+          LEVELS.map((step) => [
+            step,
+            measureRefs.current[step]?.offsetHeight ?? previous[step],
+          ]),
+        );
+        return LEVELS.every((step) => next[step] === previous[step])
           ? previous
-          : { ...previous, [rendered]: height },
-      );
+          : next;
+      });
+    const observer = new ResizeObserver(measure);
+    LEVELS.forEach((step) => {
+      const node = measureRefs.current[step];
+      if (node) observer.observe(node);
     });
-    observer.observe(content);
     return () => observer.disconnect();
   }, []);
 
@@ -260,150 +264,25 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
         0,
         clip.offsetHeight - (heights[0] ?? 0),
       );
-      setIsInstant(true);
-      setSettled(0);
+      onSettle(0, true);
     };
     window.addEventListener('scroll', fold, { passive: true });
     return () => window.removeEventListener('scroll', fold);
-  }, [settled, heights]);
-
-  useEffect(() => {
-    if (!isRefreshing) return;
-    const timer = window.setTimeout(
-      () => setIsRefreshing(false),
-      REFRESH_RESET_MS,
-    );
-    return () => window.clearTimeout(timer);
-  }, [isRefreshing]);
-
-  const open = (section: PlanSection) => {
-    setIsInstant(false);
-    setSettled(0);
-    onSelect(section);
-  };
-
-  const getMaxHeight = () => {
-    if (isPulling) return pillsHeight + virtual;
-    return heights[settled];
-  };
-
-  const tiles = sections.map((section) => (
-    <OverviewTile
-      key={section}
-      name={PLAN_SECTION_LABELS[section]}
-      emoji={PLAN_VIEW_EMOJI[section]}
-      segments={figures[section]}
-      isCurrent={current === section}
-      className={level === 1 ? 'w-40 shrink-0 snap-start' : undefined}
-      onOpen={() => open(section)}
-    />
-  ));
-
-  const getTiles = (): ReactNode => {
-    if (level === 1) {
-      return (
-        <div
-          data-no-swipe
-          className='flex touch-pan-y [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1'
-          aria-label={WORDS.tilesLabel}
-          role='group'
-        >
-          {tiles}
-        </div>
-      );
-    }
-    return (
-      <div
-        className='grid grid-cols-2 gap-2'
-        role='group'
-        aria-label={WORDS.tilesLabel}
-      >
-        {tiles}
-      </div>
-    );
-  };
+  }, [settled, heights, onSettle]);
 
   return (
-    <div>
+    <div className='relative'>
       <div
         ref={clipRef}
         className={join(
           'overflow-hidden',
           !isPulling && !isInstant && 'transition-[max-height] duration-200',
         )}
-        style={{ maxHeight: getMaxHeight() }}
+        style={{
+          maxHeight: isPulling ? pillsHeight + virtual : heights[settled],
+        }}
       >
-        <div ref={contentRef} className='space-y-3'>
-          <div data-no-swipe>
-            <PillRow
-              label='Plan sections'
-              isThin
-              isScrolling
-              scrollKey={current}
-            >
-              {sections.map((section) => (
-                <Pill
-                  key={section}
-                  emoji={PLAN_VIEW_EMOJI[section]}
-                  isThin
-                  isSelected={current === section}
-                  className='max-[359px]:px-1! max-sm:px-2 max-sm:[&_[data-pill-emoji]]:hidden'
-                  onClick={() => onSelect(section)}
-                >
-                  {PLAN_SECTION_LABELS[section]}
-                </Pill>
-              ))}
-            </PillRow>
-          </div>
-          {level === 0 ? (
-            <div className='flex justify-end'>
-              <Button
-                type='button'
-                variant='tertiary'
-                size='sm'
-                onClick={() => {
-                  setIsInstant(false);
-                  setSettled(2);
-                }}
-              >
-                {WORDS.viewAll}
-                <ChevronDown className='h-4 w-4' aria-hidden='true' />
-              </Button>
-            </div>
-          ) : (
-            <>
-              <div className='flex items-center justify-between gap-2'>
-                <SegmentedControl
-                  isCompact
-                  label={WORDS.modeLabel}
-                  options={MODE_OPTIONS}
-                  value={mode}
-                  onChange={setMode}
-                />
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='sm'
-                  onClick={() => {
-                    setIsInstant(false);
-                    setSettled(0);
-                  }}
-                >
-                  {WORDS.viewLess}
-                  <ChevronUp className='h-4 w-4' aria-hidden='true' />
-                </Button>
-              </div>
-              {priority && (
-                <p className='text-muted-foreground text-sm'>
-                  {WORDS.priorityTotal(priority.counted)}
-                  <Figure segments={[priority.total]} />
-                  {WORDS.priorityRest}
-                </p>
-              )}
-              {getTiles()}
-            </>
-          )}
-        </div>
+        {levels[level]}
       </div>
       <div
         className={join(
@@ -422,7 +301,169 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
           </>
         )}
       </div>
+      {LEVELS.map((step) => (
+        <div
+          key={step}
+          ref={(node) => {
+            measureRefs.current[step] = node;
+          }}
+          aria-hidden='true'
+          inert
+          className='pointer-events-none invisible absolute inset-x-0 top-0'
+        >
+          {levels[step]}
+        </div>
+      ))}
     </div>
+  );
+}
+
+interface PlanOverviewProps {
+  sections: readonly ViewSection[];
+  current: PlanSection;
+  onSelect: (section: PlanSection) => void;
+}
+
+/** The top of the Plan tab: the thin row of views, which a pull down grows into a row of tiles, then a grid of them, then a refresh. */
+function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
+  const today = todayAsUtcDate(useNow(60_000));
+  const [mode, setMode] = useState<OverviewMode>('monthly');
+  const [settled, setSettled] = useState<Level>(0);
+  const [isInstant, setIsInstant] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const restart = useRestartApp(() => setIsRefreshing(true));
+  const { figures, priority } = usePlanOverview(today, mode);
+
+  useEffect(() => {
+    if (!isRefreshing) return;
+    const timer = window.setTimeout(
+      () => setIsRefreshing(false),
+      REFRESH_RESET_MS,
+    );
+    return () => window.clearTimeout(timer);
+  }, [isRefreshing]);
+
+  const settle = useCallback((level: Level, isFoldedByScroll = false) => {
+    setIsInstant(isFoldedByScroll);
+    setSettled(level);
+  }, []);
+
+  const tiles = (layout: 'row' | 'grid') => {
+    const items = sections.map((section) => (
+      <OverviewTile
+        key={section}
+        name={PLAN_SECTION_LABELS[section]}
+        emoji={PLAN_VIEW_EMOJI[section]}
+        segments={figures[section]}
+        isCurrent={current === section}
+        className={layout === 'row' ? 'w-40 shrink-0 snap-start' : undefined}
+        onOpen={() => {
+          settle(0);
+          onSelect(section);
+        }}
+      />
+    ));
+    return layout === 'row' ? (
+      <div
+        data-no-swipe
+        className='flex touch-pan-y [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1'
+        aria-label={WORDS.tilesLabel}
+        role='group'
+      >
+        {items}
+      </div>
+    ) : (
+      <div
+        className='grid grid-cols-2 gap-2'
+        role='group'
+        aria-label={WORDS.tilesLabel}
+      >
+        {items}
+      </div>
+    );
+  };
+
+  const pills = (
+    <div data-no-swipe>
+      <PillRow label='Plan sections' isThin isScrolling scrollKey={current}>
+        {sections.map((section) => (
+          <Pill
+            key={section}
+            emoji={PLAN_VIEW_EMOJI[section]}
+            isThin
+            isSelected={current === section}
+            className='max-[359px]:px-1! max-sm:px-2 max-sm:[&_[data-pill-emoji]]:hidden'
+            onClick={() => onSelect(section)}
+          >
+            {PLAN_SECTION_LABELS[section]}
+          </Pill>
+        ))}
+      </PillRow>
+    </div>
+  );
+
+  const opened = (layout: 'row' | 'grid') => (
+    <div className='space-y-3'>
+      {pills}
+      <div className='flex items-center justify-between gap-2'>
+        <SegmentedControl
+          isCompact
+          label={WORDS.modeLabel}
+          options={MODE_OPTIONS}
+          value={mode}
+          onChange={setMode}
+        />
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          onClick={() => settle(0)}
+        >
+          {WORDS.viewLess}
+          <ChevronUp className='h-4 w-4' aria-hidden='true' />
+        </Button>
+      </div>
+      {priority && (
+        <p className='text-muted-foreground text-sm'>
+          {WORDS.priorityTotal(priority.counted)}
+          <Figure segments={[priority.total]} />
+          {WORDS.priorityRest}
+        </p>
+      )}
+      {tiles(layout)}
+    </div>
+  );
+
+  const levels: Record<Level, ReactNode> = {
+    0: (
+      <div className='space-y-3'>
+        {pills}
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            onClick={() => settle(2)}
+          >
+            {WORDS.viewAll}
+            <ChevronDown className='h-4 w-4' aria-hidden='true' />
+          </Button>
+        </div>
+      </div>
+    ),
+    1: opened('row'),
+    2: opened('grid'),
+  };
+
+  return (
+    <PullFrame
+      levels={levels}
+      settled={settled}
+      isInstant={isInstant}
+      isRefreshing={isRefreshing}
+      onSettle={settle}
+      onRefresh={restart}
+    />
   );
 }
 

@@ -2316,8 +2316,8 @@ const version = (
   );
   assert.equal(
     getMonthlyPaceCents({ ...phone, targetDate: today - DAY_MS }, today),
-    20_000,
-    'a date already past asks for what is left',
+    null,
+    'a date already past has no pace; the goal counts what its rule puts in',
   );
   assert.equal(
     getMonthlyPaceCents({ ...vacation, heldCents: 180_000 }, today),

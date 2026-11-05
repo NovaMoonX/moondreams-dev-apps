@@ -200,13 +200,14 @@ export function getGoalTrack(
 
 const MONTH_MS = (365.25 / 12) * DAY_MS;
 
-/** What a goal needs each month, from `today`, to reach its target by its date; null with no date or when nothing is left. A date inside the first month asks for what is left in that one month. */
+/** What a goal needs each month, from `today`, to reach its target by its date; null with no date, a date already past, or nothing left. A date less than a month away asks for what is left. */
 export function getMonthlyPaceCents(
   goal: Pick<PaceGoal, 'targetCents' | 'targetDate' | 'heldCents'>,
   today: DateOnly,
 ): Cents | null {
   const remaining = goal.targetCents - goal.heldCents;
-  if (goal.targetDate === null || remaining <= 0) return null;
+  if (goal.targetDate === null || goal.targetDate < today || remaining <= 0)
+    return null;
   const months = Math.max(1, (goal.targetDate - today) / MONTH_MS);
   return Math.ceil(remaining / months);
 }
