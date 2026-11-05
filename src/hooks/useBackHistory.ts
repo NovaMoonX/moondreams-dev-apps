@@ -249,7 +249,12 @@ let isSteppingBack = false;
 export function afterBackLayersClose(action: () => void) {
   if (isSteppingBack) return;
   const step = (stepsLeft: number) => {
-    if (readEntry().key === null || stepsLeft === 0) {
+    // A kept entry only holds a closing layer's place, and a dead-entry step already under way lands on its own.
+    const isLeavingDead = isStepping();
+    const isLayerEntry =
+      readEntry().key !== null ||
+      typeof window.history.state?.keptFor === 'string';
+    if ((!isLeavingDead && !isLayerEntry) || stepsLeft === 0) {
       isSteppingBack = false;
       action();
       return;
@@ -263,6 +268,7 @@ export function afterBackLayersClose(action: () => void) {
       isSteppingBack = false;
     }, BACK_STEP_TIMEOUT_MS);
     window.addEventListener('popstate', onPop, { once: true });
+    if (isLeavingDead) return;
     window.history.back();
   };
   isSteppingBack = true;
