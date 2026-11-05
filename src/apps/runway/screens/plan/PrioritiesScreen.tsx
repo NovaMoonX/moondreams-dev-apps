@@ -84,6 +84,7 @@ import {
   selectGoals,
   selectHeldByItem,
   selectHorizonItems,
+  selectHorizonVersionId,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
@@ -153,6 +154,20 @@ type Unit =
   | { kind: 'row'; item: PriorityItem; tierIndex: number }
   | { kind: 'slot'; tier: Priority; gap: number; label: string }
   | { kind: 'cut' };
+
+const getBaseVersionIds = (
+  moves: readonly { itemId: string; kind: string }[],
+  today: number,
+) =>
+  Object.fromEntries(
+    moves.flatMap(({ itemId, kind }) => {
+      const id =
+        kind === 'horizon'
+          ? selectHorizonVersionId(store.getState(), itemId, today)
+          : undefined;
+      return id === undefined ? [] : [[itemId, id]];
+    }),
+  );
 
 const unitKey = (unit: Unit) =>
   unit.kind === 'row'
@@ -667,14 +682,16 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     setError(null);
     try {
       const encryption = await getRunwayEncryption(user.uid);
+      const moves = buildMoves(
+        assignments,
+        store.getState().runway.versions as RankedVersion[],
+        today,
+      );
       await reorderItems(user.uid, encryption, {
-        moves: buildMoves(
-          assignments,
-          store.getState().runway.versions as RankedVersion[],
-          today,
-        ),
+        moves,
         summary,
         effectiveFrom: today,
+        baseVersionIds: getBaseVersionIds(moves, today),
       });
       setSaved({
         restore: assignments.flatMap((assignment) => {
@@ -741,14 +758,16 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
     setSaved({ ...saved, status: 'undoing', error: null });
     try {
       const encryption = await getRunwayEncryption(user.uid);
+      const moves = buildMoves(
+        restore,
+        store.getState().runway.versions as RankedVersion[],
+        today,
+      );
       await reorderItems(user.uid, encryption, {
-        moves: buildMoves(
-          restore,
-          store.getState().runway.versions as RankedVersion[],
-          today,
-        ),
+        moves,
         summary: PRIORITIES_WORDS.undid(saved.summary),
         effectiveFrom: today,
+        baseVersionIds: getBaseVersionIds(moves, today),
       });
       setSaved({ ...saved, status: 'restored', error: null });
       setFlashedIds(saved.movedIds);

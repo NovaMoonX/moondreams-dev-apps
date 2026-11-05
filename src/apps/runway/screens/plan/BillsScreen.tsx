@@ -73,6 +73,7 @@ function BillsScreen() {
     clearAdd,
     openItem,
     closeOpenItem,
+    showPlanSection,
     openDueBill,
     isUndatedBillsOnly,
     openUndatedBills,
@@ -342,7 +343,10 @@ function BillsScreen() {
           startsAtStep={getOpenStep()}
           onClose={() => {
             setOpenBillId(null);
-            if (openItem !== null) closeOpenItem();
+            if (openItem === null) return;
+            closeOpenItem();
+            if (openItem.returnTo !== null)
+              void showPlanSection(openItem.returnTo);
           }}
         />
       )}

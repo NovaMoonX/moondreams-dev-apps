@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { useAppSelector } from '@/store';
 import {
   formatDateOrdinalUTC,
   formatRelativeDayUTC,
@@ -14,6 +15,7 @@ import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   BILL_WORDS,
   GROUP_WORDS,
+  MAKE_BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
@@ -27,6 +29,7 @@ import {
   isUndatedBill,
   joinPaymentAndState,
 } from '@apps/runway/utils/billText';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
@@ -169,6 +172,14 @@ export function BillSheet({
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
   const paidFromAction = usePaidFromAction(billId, today);
+  const horizonItems = useAppSelector((state) =>
+    selectAllHorizonItems(state, today),
+  );
+  const madeFrom = horizonItems.flatMap(({ version }) =>
+    version.payload.costs
+      .filter((cost) => cost.becameBillId === billId)
+      .map((cost) => ({ item: version.payload.name, cost: cost.name })),
+  )[0];
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -225,13 +236,20 @@ export function BillSheet({
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
       extra={
-        <BillPaidFromNotice
-          billId={billId}
-          bill={bill}
-          payment={payment}
-          today={today}
-          onPickAnother={() => setPickedStep('funding')}
-        />
+        <>
+          {madeFrom && (
+            <p className='text-muted-foreground text-sm'>
+              {MAKE_BILL_WORDS.madeFrom(madeFrom.item, madeFrom.cost)}
+            </p>
+          )}
+          <BillPaidFromNotice
+            billId={billId}
+            bill={bill}
+            payment={payment}
+            today={today}
+            onPickAnother={() => setPickedStep('funding')}
+          />
+        </>
       }
       payment={payment}
       onClose={onClose}

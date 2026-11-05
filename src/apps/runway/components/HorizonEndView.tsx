@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft, Check } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -331,6 +331,24 @@ function HorizonEndView({
     }
   };
 
+  const closePicker = () => {
+    setIsPickerOpen(false);
+    setQuery('');
+    if (place === null) setPick(null);
+  };
+  useEffect(() => {
+    if (!isPickerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.stopImmediatePropagation();
+      closePicker();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+    // closePicker only reads `place`, which the deps below cover.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPickerOpen, place]);
+
   const leftNow = () =>
     Math.max(0, selectBalances(store.getState()).assignedByItem[itemId] ?? 0);
 
@@ -344,13 +362,7 @@ function HorizonEndView({
   if (isPickerOpen) {
     return (
       <div className='flex flex-1 flex-col gap-4'>
-        <BackLink
-          onBack={() => {
-            setIsPickerOpen(false);
-            setQuery('');
-            if (place === null) setPick(null);
-          }}
-        />
+        <BackLink onBack={closePicker} />
         <ActionTitle>{HORIZON_END_WORDS.placeCaption}</ActionTitle>
         {places.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
@@ -440,6 +452,7 @@ function HorizonEndView({
               {
                 value: 'place' as const,
                 title: HORIZON_END_WORDS.placeRow,
+                hasChevron: true,
                 body:
                   pick === 'place' && place
                     ? HORIZON_END_WORDS.placePicked(place.name)

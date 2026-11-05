@@ -296,6 +296,8 @@ export interface HoldsBlock {
   standingItemId?: string | null;
   /** The day a warning names, so the card that lists the days can keep it in view. */
   namedOn?: number | null;
+  /** The warning is that no pay comes before a bill is due, so a door to the pay that ends sits under it. */
+  isIncomeFix?: boolean;
 }
 
 /** A problem as the end of "With this change, ...": lower case after the comma, the day short. */
@@ -305,6 +307,7 @@ function describeChangeProblem(
   isHidden: boolean,
   note: string | null,
   grewBy: number | null = null,
+  incomeEndsOn: number | null = null,
 ) {
   const name = problem.name === '' ? 'A bill' : problem.name;
   const on = formatDateOrdinalUTC(problem.on);
@@ -312,6 +315,17 @@ function describeChangeProblem(
     more > 0
       ? ` ${more} more ${more === 1 ? 'item needs' : 'items need'} a look.`
       : '';
+  if (
+    problem.kind === 'noIncome' &&
+    problem.reason === 'noIncome' &&
+    incomeEndsOn !== null &&
+    incomeEndsOn < problem.on
+  ) {
+    return {
+      text: `With this change, ${name} on ${on} falls after your last income day, ${formatDateOrdinalUTC(incomeEndsOn)}.${tail}`,
+      figure: null,
+    };
+  }
   if (problem.kind === 'noIncome' && problem.reason !== 'short') {
     return {
       text: `With this change, ${name} on ${on} ${problem.reason === 'noPick' ? 'is set to come from a pay that is not before it is due' : 'has no income before it is due'}.${tail}`,
@@ -467,8 +481,12 @@ export function describeHoldsBlocks(
               ? (notes[first.problem.dayKey] ?? null)
               : null,
             first.grewBy,
+            after.incomeEndsOn,
           ),
           namedOn: first.problem.on,
+          isIncomeFix:
+            first.problem.kind === 'noIncome' &&
+            first.problem.reason === 'noIncome',
         },
       ]
     : [];

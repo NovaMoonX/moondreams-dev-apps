@@ -5,6 +5,7 @@ import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getHorizonFigures,
   getHorizonStage,
+  getNextUnpaidPayment,
   type CostPaidEntry,
   listHorizonPayments,
   planHorizon,
@@ -47,9 +48,12 @@ export function getHorizonStatus(
     fromFreeCents,
   );
   const plan = planHorizon(horizon, figures.leftCents, payments);
-  const next = planned.find(
-    ({ dueOn, paid: mark }) => mark === null && dueOn >= today,
-  );
+  const next =
+    horizon.state === 'open'
+      ? getNextUnpaidPayment(horizon.costs, today, stance, paid)
+      : planned.find(
+          ({ dueOn, paid: mark }) => mark === null && dueOn >= today,
+        );
   return {
     figures,
     plan,

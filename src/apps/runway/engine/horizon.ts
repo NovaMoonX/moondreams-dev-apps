@@ -452,6 +452,20 @@ export const getHorizonFigures = (
 /** How far ahead "every payment is settled" looks, so a cost far off still keeps an event from being ready. */
 const SETTLED_MONTHS = 120;
 
+/** The soonest payment from today on still unpaid across every cost, inside the plan or not and however far off, or null when none is. */
+export const getNextUnpaidPayment = (
+  costs: readonly HorizonCost[],
+  today: DateOnly,
+  stance: Stance,
+  paid: readonly CostPaidEntry[] = [],
+): CostPayment | null =>
+  listHorizonPayments(
+    costs,
+    addUtcMonths(today, SETTLED_MONTHS),
+    stance,
+    paid,
+  ).find((payment) => payment.paid === null && payment.dueOn >= today) ?? null;
+
 /** Where an event stands: its stored state, and for an open one whether every cost is settled (paid, ended or a bill), which makes it ready to finish. Derived, never stored. */
 export type HorizonStage = 'open' | 'readyToFinish' | 'finished' | 'calledOff';
 
