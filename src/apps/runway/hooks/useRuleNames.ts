@@ -28,8 +28,9 @@ export function useRuleNames() {
     looks.get(target)?.name ?? RULE_WORDS.noEnvelope;
 
   return {
-    describe: (rule: RuleSealed) =>
+    describe: (rule: RuleSealed, isCardLeftOut = false) =>
       describeRule(rule, {
+        isCardLeftOut,
         envelope:
           rule.target === RULE_VARIES ? '' : getEnvelopeName(rule.target),
         card: getCardLabel(rule.cardId),

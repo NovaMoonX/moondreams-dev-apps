@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { store, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findRulePlacements } from '@apps/runway/engine/rules';
@@ -135,7 +134,7 @@ export function usePlaceByRules(uid: string | null) {
       try {
         const encryption = await getRunwayEncryption(uid);
         const placed = await works.reduce(
-          async (previous, { purchase, rule, lines: placedLines }) => {
+          async (previous, { purchase, rule, lines: placedLines, key }) => {
             const list = await previous;
             try {
               const updatedAt = await assignPurchase(
@@ -172,6 +171,7 @@ export function usePlaceByRules(uid: string | null) {
                 message !== SPEND_WORDS.changedElsewhere &&
                 message !== SPEND_WORDS.notFound
               ) {
+                tried.current.delete(key);
                 console.error('A purchase was not placed by a rule', error);
               }
               return list;
@@ -181,25 +181,28 @@ export function usePlaceByRules(uid: string | null) {
         );
         if (placed.length === 0) return;
         const undo = async () => {
-          try {
-            await placed.reduce(async (previous, { placed: entry }) => {
-              await previous;
-              await returnPurchaseToWaiting(
+          const results = await Promise.allSettled(
+            placed.map(({ placed: entry }) =>
+              returnPurchaseToWaiting(
                 uid,
                 encryption,
                 entry,
                 describePurchaseReturned(entry, nameOf),
                 { ruleId: null, assignedBy: 'person' },
-              );
-            }, Promise.resolve());
+              ),
+            ),
+          );
+          const stayed = results.filter(
+            (result) => result.status === 'rejected',
+          );
+          if (stayed.length === 0) {
             toast({ title: RULE_WORDS.undone, type: 'success' });
-          } catch (undoError) {
-            toast({
-              title: RULE_WORDS.undoFailed,
-              description: getErrorMessage(undoError, ''),
-              type: 'error',
-            });
+            return;
           }
+          toast({
+            title: RULE_WORDS.undoPartial(stayed.length, placed.length),
+            type: 'error',
+          });
         };
         const [{ placed: first }] = placed;
         toast({

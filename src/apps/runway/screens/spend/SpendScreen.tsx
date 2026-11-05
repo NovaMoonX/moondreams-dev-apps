@@ -52,6 +52,7 @@ import {
   selectExpenses,
   selectItemLooks,
   selectIsMovesLoaded,
+  selectIsRulesLoaded,
   selectAccountPairs,
   selectRules,
   selectSpendPurchases,
@@ -81,7 +82,7 @@ interface DoorButtonProps {
   icon: ReactNode;
   label: string;
   count: number;
-  /** Shares its row with the other door: the icon and chevron go so both labels fit at 320px. */
+  /** Shares its row with the other door: the chevron goes so both labels fit at 320px. */
   isHalf: boolean;
   onClick: () => void;
 }
@@ -99,7 +100,7 @@ function DoorButton({ icon, label, count, isHalf, onClick }: DoorButtonProps) {
       )}
     >
       <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
-        {!isHalf && icon}
+        {icon}
         <span className='text-foreground truncate'>{label}</span>
       </span>
       <span className='text-muted-foreground flex items-center gap-1'>
@@ -137,44 +138,7 @@ function SpendScreen() {
   const expenseCount = useAppSelector(selectExpenses).length;
   const level = useAppSelector(selectLevel);
   const ruleCount = useAppSelector(selectRules).length;
-  const doors = [
-    ...(expenseCount > 0
-      ? [
-          {
-            id: 'groups',
-            icon: <Layers className='h-4 w-4' aria-hidden='true' />,
-            label: SPEND_WORDS.groups,
-            shortLabel: SPEND_WORDS.groups,
-            count: expenseCount,
-            onClick: openGroups,
-          },
-        ]
-      : []),
-    ...(pairCount > 0
-      ? [
-          {
-            id: 'accountMoves',
-            icon: <ArrowLeftRight className='h-4 w-4' aria-hidden='true' />,
-            label: PAIR_WORDS.doorTitle,
-            shortLabel: PAIR_WORDS.doorShort,
-            count: pairCount,
-            onClick: () => openView('accountMoves'),
-          },
-        ]
-      : []),
-    ...(level === 'link'
-      ? [
-          {
-            id: 'rules',
-            icon: <Repeat className='h-4 w-4' aria-hidden='true' />,
-            label: RULE_WORDS.doorLabel,
-            shortLabel: RULE_WORDS.doorLabel,
-            count: ruleCount,
-            onClick: () => openView('rules'),
-          },
-        ]
-      : []),
-  ];
+  const isRulesLoaded = useAppSelector(selectIsRulesLoaded);
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
   const periodFailedFor = useAppSelector(
@@ -188,6 +152,47 @@ function SpendScreen() {
   const isPeriodReady =
     periodFor === range.key ||
     (recentFrom !== null && range.from >= recentFrom);
+  const areDoorsReady = isLoaded && isPeriodReady && isRulesLoaded;
+  const doors = !areDoorsReady
+    ? []
+    : [
+        ...(expenseCount > 0
+          ? [
+              {
+                id: 'groups',
+                icon: <Layers className='h-4 w-4' aria-hidden='true' />,
+                label: SPEND_WORDS.groups,
+                shortLabel: SPEND_WORDS.groups,
+                count: expenseCount,
+                onClick: openGroups,
+              },
+            ]
+          : []),
+        ...(pairCount > 0
+          ? [
+              {
+                id: 'accountMoves',
+                icon: <ArrowLeftRight className='h-4 w-4' aria-hidden='true' />,
+                label: PAIR_WORDS.doorTitle,
+                shortLabel: PAIR_WORDS.doorShort,
+                count: pairCount,
+                onClick: () => openView('accountMoves'),
+              },
+            ]
+          : []),
+        ...(level === 'link'
+          ? [
+              {
+                id: 'rules',
+                icon: <Repeat className='h-4 w-4' aria-hidden='true' />,
+                label: RULE_WORDS.doorLabel,
+                shortLabel: RULE_WORDS.doorLabel,
+                count: ruleCount,
+                onClick: () => openView('rules'),
+              },
+            ]
+          : []),
+      ];
   const total = purchases.reduce(
     (sum, purchase) => sum + purchase.amountCents,
     0,

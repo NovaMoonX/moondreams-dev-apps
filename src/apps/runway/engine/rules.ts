@@ -22,8 +22,6 @@ const BROAD_MERCHANTS = [
   'bj s',
   'ebay',
   'etsy',
-  'paypal',
-  'square',
   'venmo',
 ];
 
@@ -105,9 +103,30 @@ export interface RulePlacement {
   rule: OpenRule;
 }
 
+const getAskedIds = (
+  waiting: readonly OpenPurchase[],
+  purchases: readonly OpenPurchase[],
+) => {
+  const merges = findPurchaseMatches(waiting, purchases);
+  const pairs = findAccountPairs(waiting, true);
+  return new Set([
+    ...merges.clear.keys(),
+    ...merges.offers.keys(),
+    ...pairs.clear.keys(),
+    ...[...pairs.clear.values()].map(({ inId }) => inId),
+    ...pairs.offers.keys(),
+  ]);
+};
+
+/** Whether a merge or pair offer is waiting on this charge, so a rule leaves it until the person answers. */
+export const isHeldByOffer = (
+  purchaseId: string,
+  waiting: readonly OpenPurchase[],
+  purchases: readonly OpenPurchase[],
+) => getAskedIds(waiting, purchases).has(purchaseId);
+
 /**
- * The bank charges waiting in Needs a home that a rule sends to an envelope on its own: money out the person has not placed or sent back,
- * not paired and not a deposit, and with no offer to merge with one typed by hand or to pair with a move between accounts (those ask first).
+ * The waiting bank charges a rule sends on its own: money out, never placed or sent back by the person, unpaired, and with no merge or pair offer (those ask first).
  * A rule that asks every time, or whose envelope is not in `envelopeIds`, places nothing.
  */
 export function findRulePlacements(
@@ -117,15 +136,7 @@ export function findRulePlacements(
   envelopeIds: ReadonlySet<string>,
 ): RulePlacement[] {
   if (rules.length === 0) return [];
-  const merges = findPurchaseMatches(waiting, purchases);
-  const pairs = findAccountPairs(waiting, true);
-  const asked = new Set([
-    ...merges.clear.keys(),
-    ...merges.offers.keys(),
-    ...pairs.clear.keys(),
-    ...[...pairs.clear.values()].map(({ inId }) => inId),
-    ...pairs.offers.keys(),
-  ]);
+  const asked = getAskedIds(waiting, purchases);
   return waiting.flatMap((purchase): RulePlacement[] => {
     if (
       purchase.source !== 'link' ||

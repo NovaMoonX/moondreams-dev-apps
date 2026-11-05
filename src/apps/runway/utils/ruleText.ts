@@ -33,6 +33,8 @@ export interface RuleNames {
   envelope: string;
   /** The rule's card, when it names one. */
   card: string | null;
+  /** The sentence sits under its card's heading, so it leaves the card out. */
+  isCardLeftOut?: boolean;
 }
 
 /** The rule as a sentence: "Restaurants on Venture X go to Dining out", "Safeway goes to Groceries", "Amazon: ask me every time". */
@@ -41,11 +43,12 @@ export function describeRule(rule: RuleSealed, names: RuleNames): string {
   if (merchantName !== null && rule.target === RULE_VARIES) {
     return `${merchantName}: ${RULE_WORDS.askEvery.toLowerCase()}`;
   }
+  const onCard = names.isCardLeftOut ? '' : ` on ${names.card ?? 'a card'}`;
   const subject =
     merchantName ??
     (category === null
-      ? `Everything on ${names.card ?? 'a card'}`
-      : `${getCategoryLabel(category)}${cardId === null ? '' : ` on ${names.card ?? 'a card'}`}`);
+      ? `Everything${onCard}`
+      : `${getCategoryLabel(category)}${cardId === null ? '' : onCard}`);
   const verb =
     merchantName !== null
       ? 'goes'

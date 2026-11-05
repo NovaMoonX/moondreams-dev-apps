@@ -446,6 +446,15 @@ const getChangeItemIds = (...lineSets: (readonly PurchaseLine[])[]) =>
     ),
   ].slice(0, 20);
 
+const isSameLines = (a: readonly PurchaseLine[], b: readonly PurchaseLine[]) =>
+  a.length === b.length &&
+  a.every(
+    (line, index) =>
+      line.envelopeId === b[index].envelopeId &&
+      line.cents === b[index].cents &&
+      line.via === b[index].via,
+  );
+
 /** Saves a changed amount, envelope(s), day, place or note on a purchase. The purchase is re-read in the same transaction and refused if another device changed it first, so a second device never applies the difference twice. A change-log entry is written with it. */
 export async function editPurchase(
   uid: string,
@@ -461,13 +470,14 @@ export async function editPurchase(
   if (sumLines(input.lines) !== input.amountCents) {
     throw new Error('The parts do not add up to the amount.');
   }
+  const isSameHome = isSameLines(previous.lines, input.lines);
   const [sealed, changeSealed, expenseSealed] = await Promise.all([
     sealJson(
       {
         amountCents: input.amountCents,
         merchant: input.merchant,
         category: previous.category,
-        ruleId: null,
+        ruleId: isSameHome ? previous.ruleId : null,
         label: input.label,
         note: input.note,
         lines: input.lines,
@@ -478,7 +488,7 @@ export async function editPurchase(
         costRef: previous.costRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: previous.incomeDayId,
-        assignedBy: previous.assignedBy,
+        assignedBy: isSameHome ? previous.assignedBy : 'person',
         pairedWithId: null,
         pairKind: null,
         cardPaymentMoveId: null,
@@ -540,6 +550,21 @@ export async function editPurchase(
     );
   });
   await untickPairMove(uid, previous);
+}
+
+/** The purchase as stored now (not the store, which lags a write), or null when it is gone. */
+export async function readPurchaseNow(
+  uid: string,
+  encryption: RunwayEncryption,
+  id: string,
+): Promise<OpenPurchase | null> {
+  const snapshot = await getDoc(purchaseRef(uid, id));
+  return snapshot.exists()
+    ? openPurchase(
+        { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
+        createSealedReader(encryption),
+      )
+    : null;
 }
 
 export interface PurchasePlacement {

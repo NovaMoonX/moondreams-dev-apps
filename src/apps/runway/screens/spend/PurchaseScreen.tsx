@@ -50,7 +50,13 @@ import { keepEntryFor } from '@/hooks/useBackHistory';
 import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import RuleSheet from '@apps/runway/forms/RuleSheet';
-import { findPlacementRun, toMerchantKey } from '@apps/runway/engine/rules';
+import {
+  findPlacementRun,
+  findRule,
+  isHeldByOffer,
+  toMerchantKey,
+} from '@apps/runway/engine/rules';
+import { declineRule, isRuleDeclined } from '@apps/runway/utils/ruleDeclined';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
@@ -160,6 +166,7 @@ function PurchaseScreen({
   const level = useAppSelector(selectLevel);
   const rules = useAppSelector(selectRules);
   const recentPurchases = useAppSelector((state) => state.runway.purchases);
+  const waitingPurchases = useAppSelector((state) => state.runway.needsHome);
   const { describe: describeRuleSentence } = useRuleNames();
   const [ruleView, setRuleView] = useState<'make' | 'suggest' | 'edit' | null>(
     null,
@@ -269,8 +276,40 @@ function PurchaseScreen({
           rules,
         )
       : null;
+  const merchantKey = toMerchantKey(purchase.merchant);
   const suggestion =
-    run !== null && run.purchaseIds.includes(purchase.id) ? run : null;
+    run !== null &&
+    run.purchaseIds.includes(purchase.id) &&
+    !(user && merchantKey !== null && isRuleDeclined(user.uid, merchantKey))
+      ? run
+      : null;
+  const canMakeRule =
+    isWaiting &&
+    level === 'link' &&
+    lostPair === null &&
+    purchase.source === 'link' &&
+    purchase.amountCents > 0;
+  const merchantRule =
+    canMakeRule && merchantKey !== null
+      ? (rules.find((entry) => entry.merchantKey === merchantKey) ?? null)
+      : null;
+  const fittingMatch = canMakeRule
+    ? findRule(
+        {
+          merchant: purchase.merchant,
+          category: purchase.category,
+          cardId: purchase.paidByCardId ?? null,
+        },
+        rules,
+      )
+    : null;
+  const isRuleHeld =
+    fittingMatch !== null &&
+    !fittingMatch.isAsk &&
+    purchase.assignedBy === null &&
+    purchase.pairedWithId === null &&
+    isHeldByOffer(purchase.id, waitingPurchases, recentPurchases);
+  const editedRule = placedRule ?? merchantRule;
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
@@ -536,6 +575,27 @@ function PurchaseScreen({
     );
   }
 
+  if (ruleView !== null && (ruleView !== 'edit' || editedRule !== null)) {
+    return (
+      <RuleSheet
+        key={ruleView}
+        purchase={ruleView === 'edit' ? null : purchase}
+        rule={ruleView === 'edit' ? editedRule : null}
+        stayName={isWaiting ? null : envelopes}
+        onBack={() => setRuleView(null)}
+        onClose={() => setRuleView(null)}
+        onDecline={
+          ruleView === 'suggest' && user && merchantKey !== null
+            ? () => {
+                declineRule(user.uid, merchantKey);
+                setRuleView(null);
+              }
+            : undefined
+        }
+      />
+    );
+  }
+
   if (editTarget !== null) {
     return (
       <PurchaseForm
@@ -731,6 +791,11 @@ function PurchaseScreen({
               />
             </PairOffer>
           )}
+          {isRuleHeld && (
+            <p className='text-muted-foreground text-sm'>
+              {RULE_WORDS.heldByOffer}
+            </p>
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -750,21 +815,27 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {isWaiting &&
-              level === 'link' &&
-              lostPair === null &&
-              purchase.source === 'link' &&
-              purchase.amountCents > 0 && (
-                <ActionRow
-                  isGrouped
-                  isRoomy
-                  hasChevron
-                  icon={<Repeat />}
-                  label={RULE_WORDS.alwaysDo}
-                  subtitle={RULE_WORDS.alwaysDoSub}
-                  onClick={() => setRuleView('make')}
-                />
-              )}
+            {canMakeRule && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={
+                  merchantRule === null
+                    ? RULE_WORDS.alwaysDo
+                    : RULE_WORDS.yourRule(describeRuleSentence(merchantRule))
+                }
+                subtitle={
+                  merchantRule === null
+                    ? RULE_WORDS.alwaysDoSub
+                    : RULE_WORDS.yourRuleSub
+                }
+                onClick={() =>
+                  setRuleView(merchantRule === null ? 'make' : 'edit')
+                }
+              />
+            )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow
@@ -896,13 +967,6 @@ function PurchaseScreen({
           />
         </div>
       </FormSheet>
-      {ruleView !== null && (
-        <RuleSheet
-          purchase={ruleView === 'edit' ? null : purchase}
-          rule={ruleView === 'edit' ? placedRule : null}
-          onClose={() => setRuleView(null)}
-        />
-      )}
     </>
   );
 }

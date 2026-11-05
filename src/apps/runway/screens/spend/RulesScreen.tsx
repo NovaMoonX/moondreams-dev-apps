@@ -4,6 +4,8 @@ import { Repeat } from 'lucide-react';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+
 import { useAppSelector } from '@/store';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { RULE_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
@@ -14,6 +16,7 @@ import {
   selectIsRulesLoaded,
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenRule } from '@apps/runway/types';
 
 interface RulesScreenProps {
@@ -26,6 +29,7 @@ function RulesScreen({ onClose }: RulesScreenProps) {
   const cards = useAppSelector(selectAllCards);
   const isLoaded = useAppSelector(selectIsRulesLoaded);
   const { describe, isEnded, getEnvelopeName, getCardLabel } = useRuleNames();
+  const { openView } = useRunwayUrlState();
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string | null>(null);
   const opened = rules.find((rule) => rule.id === openId) ?? null;
@@ -57,8 +61,8 @@ function RulesScreen({ onClose }: RulesScreenProps) {
         ];
   });
 
-  const renderRow = (rule: OpenRule) => {
-    const sentence = describe(rule);
+  const renderRow = (rule: OpenRule, isCardLeftOut: boolean) => {
+    const sentence = describe(rule, isCardLeftOut);
     const detail = isEnded(rule)
       ? RULE_WORDS.endedEnvelope(getEnvelopeName(rule.target))
       : undefined;
@@ -88,7 +92,12 @@ function RulesScreen({ onClose }: RulesScreenProps) {
         {!isLoaded ? (
           <p className='text-muted-foreground text-sm'>{RULE_WORDS.loading}</p>
         ) : rules.length === 0 ? (
-          <p className='text-muted-foreground text-sm'>{RULE_WORDS.empty}</p>
+          <div className='space-y-3'>
+            <p className='text-muted-foreground text-sm'>{RULE_WORDS.empty}</p>
+            <Button type='button' onClick={() => openView('needsHome')}>
+              {RULE_WORDS.goToNeedsHome}
+            </Button>
+          </div>
         ) : (
           <>
             <p className='text-muted-foreground text-sm'>{RULE_WORDS.intro}</p>
@@ -108,7 +117,9 @@ function RulesScreen({ onClose }: RulesScreenProps) {
                 <div key={group.key} className='space-y-2'>
                   <SectionDivider label={group.label} />
                   <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-                    {group.rows.map(renderRow)}
+                    {group.rows.map((rule) =>
+                      renderRow(rule, group.key !== 'any'),
+                    )}
                   </ul>
                 </div>
               ))

@@ -1,18 +1,21 @@
 import { useState } from 'react';
+import { Check } from 'lucide-react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import {
   NEEDS_HOME_WORDS,
   RULE_WORDS,
+  SPEND_WORDS,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -26,6 +29,7 @@ import { placingByHand } from '@apps/runway/hooks/useRuleMatch';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   assignPurchase,
+  readPurchaseNow,
   returnPurchaseToWaiting,
 } from '@apps/runway/store/actions/purchaseActions';
 import {
@@ -39,7 +43,12 @@ import {
   selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
-import type { OpenPurchase, OpenRule, RuleSealed } from '@apps/runway/types';
+import type {
+  OpenPurchase,
+  OpenRule,
+  RuleSealed,
+  RunwayEncryption,
+} from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
 import { describePurchaseReturned } from '@apps/runway/utils/purchaseText';
 import {
@@ -54,6 +63,12 @@ interface RuleSheetProps {
   /** The rule being changed; null when making one. */
   rule: OpenRule | null;
   onClose: () => void;
+  /** Shows a Back chip, for a step inside the purchase's own sheet. */
+  onBack?: () => void;
+  /** The envelope an already placed purchase stays in; the sheet says the rule only changes future purchases. */
+  stayName?: string | null;
+  /** Makes the cancel button "Not now" and remembers the answer. */
+  onDecline?: () => void;
 }
 
 interface Facts {
@@ -62,6 +77,14 @@ interface Facts {
   category: string | null;
   cardId: string | null;
 }
+
+/** Only the sentences the rule's own checks write are shown; any other failure reads as the plain fallback. */
+const toRuleError = (error: unknown, fallback: string) => {
+  const message = error instanceof Error ? error.message : '';
+  return message === RULE_WORDS.pickOne || message === RULE_WORDS.gone
+    ? message
+    : fallback;
+};
 
 const getFacts = (
   purchase: OpenPurchase | null,
@@ -82,7 +105,14 @@ const getFacts = (
       };
 
 /** Makes an always-do-this rule from a waiting purchase, or changes or removes one. */
-function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
+function RuleSheet({
+  purchase,
+  rule,
+  onClose,
+  onBack,
+  stayName = null,
+  onDecline,
+}: RuleSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
@@ -142,22 +172,25 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
     : target === null
       ? RULE_WORDS.pickEnvelope
       : null;
-  const sentence = hasCondition
-    ? `${describeRule(draft, {
-        envelope:
-          target === null ? RULE_WORDS.anEnvelope : getEnvelopeName(target),
-        card: getCardLabel(draft.cardId),
-      })}.`
-    : '';
+  const sentence =
+    hasCondition && target !== null
+      ? `${describeRule(draft, {
+          envelope: getEnvelopeName(target),
+          card: getCardLabel(draft.cardId),
+        })}.`
+      : '';
+  const isUnchanged =
+    rule !== null &&
+    draft.merchantKey === rule.merchantKey &&
+    draft.category === rule.category &&
+    draft.cardId === rule.cardId &&
+    draft.target === rule.target;
 
   const options = [
     ...envelopes.map(({ item }) => ({
       value: item.id,
       label: looks.get(item.id)?.name ?? '',
     })),
-    ...(isMerchantAlone
-      ? [{ value: RULE_VARIES, label: RULE_WORDS.askEvery }]
-      : []),
   ];
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -177,6 +210,31 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
           },
     );
 
+  const toastPlaced = (
+    uid: string,
+    encryption: RunwayEncryption,
+    placed: OpenPurchase,
+    envelopeId: string,
+  ) =>
+    addToast({
+      title: RULE_WORDS.made,
+      description: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
+      type: 'success',
+      action: {
+        label: RULE_WORDS.undo,
+        onClick: () =>
+          void returnPurchaseToWaiting(
+            uid,
+            encryption,
+            placed,
+            describePurchaseReturned(placed, nameOf),
+            { ruleId: null, assignedBy: 'person' },
+          ).catch(() =>
+            addToast({ title: RULE_WORDS.undoFailed, type: 'error' }),
+          ),
+      },
+    });
+
   const sendThisOne = async (made: OpenRule) => {
     if (!user || !purchase?.needsHome || made.target === RULE_VARIES) return;
     const lines = getSpilledLines(
@@ -186,45 +244,49 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
       purchase.date,
     );
     const encryption = await getRunwayEncryption(user.uid);
-    const updatedAt = await assignPurchase(
-      user.uid,
-      encryption,
-      purchase,
-      lines,
-      describeRulePlaced(purchase, lines, nameOf, describe(made)),
-      false,
-      { ruleId: made.id, assignedBy: 'auto' },
-    );
-    const placed: OpenPurchase = {
-      ...purchase,
-      lines,
-      needsHome: false,
-      assignedBy: 'auto',
-      ruleId: made.id,
-      updatedAt,
-    };
-    addToast({
-      title: RULE_WORDS.made,
-      description: NEEDS_HOME_WORDS.sentTo(nameOf(made.target)),
-      type: 'success',
-      action: {
-        label: RULE_WORDS.undo,
-        onClick: () =>
-          void returnPurchaseToWaiting(
-            user.uid,
-            encryption,
-            placed,
-            describePurchaseReturned(placed, nameOf),
-            { ruleId: null, assignedBy: 'person' },
-          ).catch((undoError: unknown) =>
-            addToast({
-              title: RULE_WORDS.undoFailed,
-              description: getErrorMessage(undoError, ''),
-              type: 'error',
-            }),
-          ),
-      },
-    });
+    try {
+      const updatedAt = await assignPurchase(
+        user.uid,
+        encryption,
+        purchase,
+        lines,
+        describeRulePlaced(purchase, lines, nameOf, describe(made)),
+        false,
+        { ruleId: made.id, assignedBy: 'auto' },
+      );
+      toastPlaced(
+        user.uid,
+        encryption,
+        {
+          ...purchase,
+          lines,
+          needsHome: false,
+          assignedBy: 'auto',
+          ruleId: made.id,
+          updatedAt,
+        },
+        made.target,
+      );
+    } catch (sendError) {
+      const message = sendError instanceof Error ? sendError.message : '';
+      if (
+        message !== SPEND_WORDS.changedElsewhere &&
+        message !== SPEND_WORDS.notFound
+      ) {
+        throw sendError;
+      }
+      // The rule pass may have placed it first; what is stored now decides.
+      const fresh = await readPurchaseNow(
+        user.uid,
+        encryption,
+        purchase.id,
+      ).catch(() => null);
+      const home = fresh?.lines.find((line) => line.via === 'chosen');
+      if (!fresh || fresh.ruleId !== made.id || fresh.needsHome || !home) {
+        throw sendError;
+      }
+      toastPlaced(user.uid, encryption, fresh, home.envelopeId ?? made.target);
+    }
   };
 
   const save = async () => {
@@ -256,10 +318,10 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
       );
       try {
         await sendThisOne(made);
-      } catch (sendError) {
+      } catch {
         addToast({
           title: RULE_WORDS.made,
-          description: getErrorMessage(sendError, NEEDS_HOME_WORDS.failed),
+          description: RULE_WORDS.madeNotSent,
           type: 'warning',
         });
       }
@@ -268,7 +330,7 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
       }
       onClose();
     } catch (saveError) {
-      setError(getErrorMessage(saveError, RULE_WORDS.saveFailed));
+      setError(toRuleError(saveError, RULE_WORDS.saveFailed));
       setIsBusy(false);
     } finally {
       if (purchase) placingByHand.delete(purchase.id);
@@ -296,7 +358,7 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
       addToast({ title: RULE_WORDS.removed, type: 'success' });
       onClose();
     } catch (removeError) {
-      setError(getErrorMessage(removeError, RULE_WORDS.removeFailed));
+      setError(toRuleError(removeError, RULE_WORDS.removeFailed));
       setIsBusy(false);
     }
   };
@@ -339,6 +401,12 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
       title={rule ? RULE_WORDS.editTitle : RULE_WORDS.sheetTitle}
     >
       <div className='space-y-4 pb-4'>
+        {onBack && <BackLink onBack={onBack} />}
+        {stayName !== null && (
+          <p className='text-muted-foreground text-sm'>
+            {RULE_WORDS.changesFuture(stayName)}
+          </p>
+        )}
         <div className='space-y-2'>
           <p className='text-sm font-medium'>{RULE_WORDS.question}</p>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -363,9 +431,12 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
             ))}
           </ul>
           {hasMerchant && tickRows.length > 1 && (
-            <p className='text-muted-foreground text-xs'>
+            <HelpTip
+              title={RULE_WORDS.merchantAloneTitle}
+              linkLabel={RULE_WORDS.merchantAloneTitle}
+            >
               {RULE_WORDS.merchantAlone}
-            </p>
+            </HelpTip>
           )}
         </div>
         <div className='space-y-2'>
@@ -376,6 +447,20 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
             value={target}
             onChange={setPicked}
           />
+          {isMerchantAlone && (
+            <Button
+              type='button'
+              variant='tertiary'
+              aria-pressed={picked === RULE_VARIES}
+              className='border-border text-foreground! h-10 w-full justify-between! rounded-xl border text-sm font-normal'
+              onClick={() => setPicked(RULE_VARIES)}
+            >
+              <span>{RULE_WORDS.askEvery}</span>
+              {picked === RULE_VARIES && (
+                <Check className='h-4 w-4' aria-hidden='true' />
+              )}
+            </Button>
+          )}
         </div>
         {sentence !== '' && (
           <p className='text-sm' role='status'>
@@ -408,16 +493,17 @@ function RuleSheet({ purchase, rule, onClose }: RuleSheetProps) {
           <Button
             type='button'
             variant='secondary'
-            onClick={onClose}
+            onClick={onDecline ?? onClose}
             disabled={isBusy}
           >
-            Cancel
+            {onDecline ? RULE_WORDS.notNow : 'Cancel'}
           </Button>
         }
         rightActions={
           <Button
             type='button'
-            disabled={blocker !== null || isBusy}
+            className='whitespace-nowrap'
+            disabled={blocker !== null || isBusy || isUnchanged}
             onClick={() => void save()}
           >
             {purchase?.needsHome ? RULE_WORDS.saveAndSend : RULE_WORDS.save}

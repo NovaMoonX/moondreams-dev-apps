@@ -3214,7 +3214,10 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, twelve rows in all (one spills from Dining out into its chain) so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Fifteen more came in from the bank link and wait in Needs a home (and one a rule already placed): a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens, and an unclear one (two $100.00 debits from Checking A, three and two days ago, and one $100.00 deposit to Checking B two days ago: neither debit is clearly the other side, so all three are offered each other in Needs a home). The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
+/**
+ * Jamie's spending (twelve rows, one group, an overspent dinner, a split and its refund) plus what waits in Needs a home from the bank link: a pending coffee, debits, deposits, two account moves and an unclear pair. One purchase a rule already placed.
+ * The Sweetgreen lunch fits the restaurants rule and waits only because its merge offer (the typed one lacks the tip) is unanswered.
+ */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3643,7 +3646,10 @@ async function writeSeedPurchases(
   return purchases.length + waiting.length + changes.length + 1 + ruled;
 }
 
-/** Jamie's rules, each sealed like the app seals them: Safeway to Groceries, restaurants on the Venture X to Dining out, everything on the Discover to Everyday spending, and Amazon asks every time. One purchase a rule already placed (a Safeway run) says which. None of them catches what waits in Needs a home but the Amazon charge, which it asks about. Rules left by an earlier run go first. Five documents. */
+/**
+ * Jamie's rules, sealed like the app seals them: Safeway, restaurants on the Venture X, everything on the Discover, and Amazon asks every time. Rules from an earlier run go first.
+ * Only the Amazon charge is left to ask about; the Sweetgreen lunch waits on its merge offer, not on a rule.
+ */
 async function seedRules(
   context: SeedContext,
   plan: string,

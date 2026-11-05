@@ -4039,6 +4039,7 @@ export const NEEDS_HOME_WORDS = {
   undo: 'Undo',
   undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,
+  alreadySent: (name: string) => `Your rule already sent this to ${name}`,
   failed: 'That did not save. Nothing was changed.',
   sameTitle: 'Did you already add this?',
   sameHint:
@@ -4328,16 +4329,27 @@ export const RULE_WORDS = {
   thisKindSub: 'Any place like it',
   thisCard: (card: string) => `Everything on ${card}`,
   thisCardSub: 'Every purchase on this card',
+  merchantAloneTitle: 'Why are the others unavailable?',
   merchantAlone:
     'A place on its own can’t be narrowed to a kind or a card. Untick it to choose those.',
   envelope: 'Which envelope?',
   askEvery: 'Ask me every time',
   save: 'Save',
   anEnvelope: 'an envelope',
-  saveAndSend: 'Save and send this one',
+  saveAndSend: 'Save and send',
   saveFailed: 'That did not save. Nothing was changed.',
+  madeNotSent:
+    'The rule is saved, but this purchase was not sent. It is still waiting in Needs a home.',
+  goToNeedsHome: 'Go to Needs a home',
+  changesFuture: (envelope: string) =>
+    `Changes future purchases. This one stays in ${envelope}.`,
+  yourRule: (sentence: string) => `Your rule: ${sentence}`,
+  yourRuleSub: 'Change or remove it',
+  heldByOffer:
+    'Your rule will wait until you answer the offer above, then it can send this one.',
+  notNow: 'Not now',
   pickOne: 'Tick at least one thing for the rule to catch.',
-  pickEnvelope: 'Pick an envelope first.',
+  pickEnvelope: 'Pick an envelope',
   remove: 'Remove the rule',
   removeConfirmTitle: 'Remove this rule?',
   removeConfirm: (sentence: string) =>
@@ -4362,6 +4374,8 @@ export const RULE_WORDS = {
   undo: 'Undo',
   undone: 'Put back in Needs a home',
   undoFailed: 'That was not put back. Nothing was changed.',
+  undoPartial: (stayed: number, total: number) =>
+    `${stayed} of ${total} purchases stayed where your rules sent them`,
   changeMade: (sentence: string) => `Rule made: ${sentence}.`,
   changeChanged: (sentence: string) => `Rule changed: ${sentence}.`,
   changeRemoved: (sentence: string) => `Rule removed: ${sentence}.`,

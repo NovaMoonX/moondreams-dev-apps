@@ -188,7 +188,10 @@ function upsert(
     next.date !== current.date ||
     next.status !== current.status ||
     next.payload.amountCents !== current.payload.amountCents ||
-    next.payload.merchant !== current.payload.merchant;
+    next.payload.merchant !== current.payload.merchant ||
+    next.payload.category !== current.payload.category ||
+    JSON.stringify(next.payload.lines) !==
+      JSON.stringify(current.payload.lines);
   return {
     state: { ...next, isChanged: current.isChanged || isChanged },
     before: current,
