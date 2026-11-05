@@ -253,7 +253,10 @@ export async function addPurchase(
       id,
       date: input.date,
       source: 'manual',
+      status: null,
       needsHome: false,
+      accountId: null,
+      dedupeKey: null,
       expenseId: input.expenseId,
       createdAt: now,
       updatedAt: now,
@@ -268,6 +271,8 @@ export async function addPurchase(
       id,
       date: input.date,
       source: 'manual',
+      status: null,
+      accountId: null,
       needsHome: false,
       expenseId: input.expenseId,
       createdAt: written.now,
@@ -491,14 +496,15 @@ export async function editPurchase(
   });
 }
 
-/** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it. */
+/** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it; resolves with the purchase's new `updatedAt`. */
 export async function assignPurchase(
   uid: string,
   encryption: RunwayEncryption,
   previous: OpenPurchase,
   lines: PurchaseLine[],
   summary: string,
-): Promise<void> {
+  needsHome = false,
+): Promise<number> {
   if (lines.length > MAX_PURCHASE_LINES)
     throw new Error('Pick where it comes from.');
   if (lines.length > 0 && sumLines(lines) !== previous.amountCents) {
@@ -523,6 +529,7 @@ export async function assignPurchase(
     sealJson({ summary, note: null } satisfies ChangeSealed, encryption),
   ]);
   const changeId = generateUuid();
+  const now = Math.max(Date.now(), previous.updatedAt + 1);
 
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
@@ -536,10 +543,9 @@ export async function assignPurchase(
       lines.length === 0,
       previous.source === 'link',
     );
-    const now = Math.max(Date.now(), previous.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan, [previous.date]);
     transaction.update(purchaseRef(uid, previous.id), {
-      needsHome: false,
+      needsHome,
       updatedAt: now,
       sealed,
     });
@@ -555,7 +561,24 @@ export async function assignPurchase(
       } satisfies ChangeDoc,
     );
   });
+  return now;
 }
+
+/** Puts a purchase sent from Needs a home back to waiting, on its one Free to Spend line; resolves with the new `updatedAt`. */
+export const returnPurchaseToWaiting = (
+  uid: string,
+  encryption: RunwayEncryption,
+  previous: OpenPurchase,
+  summary: string,
+) =>
+  assignPurchase(
+    uid,
+    encryption,
+    previous,
+    [{ envelopeId: null, cents: previous.amountCents, via: 'free' }],
+    summary,
+    true,
+  );
 
 /** Removes a purchase (its lines go with it, so the envelopes and Free to Spend recover). Refused when another device changed or removed it first; a change-log entry is written with it. A purchase that pays a cost takes that cost's mark back in the same transaction (`costMark`), unless it was already taken back. */
 export async function deletePurchase(

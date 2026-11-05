@@ -49,6 +49,7 @@ import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
   type ReceiptChooser,
 } from '@apps/runway/components/ReceiptFileInput';
+import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
@@ -132,6 +133,8 @@ function PurchaseScreen({
   const purchases = useAppSelector(selectSpendPurchases);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
+  const cards = useAppSelector((state) => state.runway.cards);
+  const accounts = useAppSelector((state) => state.runway.accounts);
   const expenses = useAppSelector(selectExpenses);
   const costMarks = useAppSelector(selectCostPaid);
   const horizons = useAppSelector((state) =>
@@ -192,6 +195,11 @@ function PurchaseScreen({
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
+  const sourceName = purchase
+    ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
+      accounts.find((account) => account.id === purchase.accountId)?.name ??
+      NEEDS_HOME_WORDS.fromBank)
+    : '';
 
   if (purchase === null) {
     return (
@@ -219,9 +227,11 @@ function PurchaseScreen({
   const fact = [
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
-    ...(facts.length > 0
-      ? facts
-      : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
+    ...(purchase.needsHome
+      ? [sourceName]
+      : facts.length > 0
+        ? facts
+        : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
   const receiptText = purchase.receiptText?.trim() || null;
@@ -628,6 +638,9 @@ function PurchaseScreen({
                   ? NEEDS_HOME_WORDS.moreOptions
                   : SPEND_WORDS.edit
               }
+              subtitle={
+                purchase.needsHome ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
+              }
               isDisabled={isBusy}
               onClick={() => {
                 keepEntryFor('purchase');
@@ -637,6 +650,9 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {purchase.needsHome && (
+              <LeaveOutRow purchase={purchase} onDone={onClose} />
+            )}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (

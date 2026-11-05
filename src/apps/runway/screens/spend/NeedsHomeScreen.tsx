@@ -1,33 +1,25 @@
 import { useState } from 'react';
-import { Ban } from 'lucide-react';
-
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
-import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
-import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
 import {
   selectIsNeedsHomeLoaded,
   selectNeedsHome,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
-import { describePurchaseAssigned } from '@apps/runway/utils/purchaseText';
 
 interface NeedsHomeScreenProps {
   onClose: () => void;
@@ -52,31 +44,7 @@ function MoneyInSheet({
   sourceName: string;
   onClose: () => void;
 }) {
-  const { user } = useAuth();
-  const { addToast } = useToast();
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const title = purchase.merchant?.trim() || NEEDS_HOME_WORDS.moneyIn;
-
-  const leaveOut = async () => {
-    if (!user || isBusy) return;
-    setIsBusy(true);
-    setError(null);
-    try {
-      await assignPurchase(
-        user.uid,
-        await getRunwayEncryption(user.uid),
-        purchase,
-        [],
-        describePurchaseAssigned(purchase, [], () => ''),
-      );
-      addToast({ title: NEEDS_HOME_WORDS.leftOut, type: 'success' });
-      onClose();
-    } catch (leaveError) {
-      setError(getErrorMessage(leaveError, NEEDS_HOME_WORDS.failed));
-      setIsBusy(false);
-    }
-  };
 
   return (
     <FormSheet
@@ -93,21 +61,8 @@ function MoneyInSheet({
           fact={`${formatDateOrdinalUTC(purchase.date)} · ${sourceName}`}
         />
         <ActionGroup isRoomy>
-          <ActionRow
-            isGrouped
-            isRoomy
-            icon={<Ban />}
-            label={NEEDS_HOME_WORDS.leaveOut}
-            subtitle={NEEDS_HOME_WORDS.leaveOutSub}
-            isDisabled={isBusy}
-            onClick={() => void leaveOut()}
-          />
+          <LeaveOutRow purchase={purchase} onDone={onClose} />
         </ActionGroup>
-        {error && (
-          <p className='text-destructive text-sm' role='alert'>
-            {error}
-          </p>
-        )}
       </div>
     </FormSheet>
   );

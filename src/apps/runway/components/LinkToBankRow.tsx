@@ -46,7 +46,13 @@ function LinkToBankRow({ linkId, onOpen }: LinkToBankRowProps) {
           : mine?.state === 'failed'
             ? { title: LINK_WORDS.refreshFailed, type: 'error' }
             : mine?.state === 'ok'
-              ? { title: LINK_WORDS.refreshed, type: 'success' }
+              ? {
+                  title:
+                    mine.created > 0
+                      ? LINK_WORDS.newInNeedsHome(mine.created)
+                      : LINK_WORDS.refreshed,
+                  type: 'success',
+                }
               : { title: LINK_WORDS.refreshNothing, type: 'info' },
       );
     } catch {

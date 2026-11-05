@@ -100,6 +100,14 @@ export function describePurchaseAssigned(
   return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
 }
 
+/** The change-log sentence for putting a sent purchase back in Needs a home. */
+export function describePurchaseReturned(
+  purchase: OpenPurchase,
+  nameOf: (envelopeId: string) => string,
+): string {
+  return `Purchase put back in Needs a home: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+}
+
 const describeGroupChange = (
   before: string | null,
   after: string | null,

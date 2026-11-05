@@ -2,22 +2,27 @@ import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
+import ItemRow from '@apps/runway/components/ItemRow';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { NEEDS_HOME_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
+import {
+  assignPurchase,
+  returnPurchaseToWaiting,
+} from '@apps/runway/store/actions/purchaseActions';
 import {
   selectEnvelopes,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { rankLikelyEnvelopes } from '@apps/runway/utils/likelyEnvelopes';
-import { describePurchaseAssigned } from '@apps/runway/utils/purchaseText';
+import {
+  describePurchaseAssigned,
+  describePurchaseReturned,
+} from '@apps/runway/utils/purchaseText';
 
 const LIKELY_SHOWN = 3;
 
@@ -46,6 +51,23 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
     LIKELY_SHOWN,
   );
 
+  const putBack = async (uid: string, sent: OpenPurchase) => {
+    try {
+      await returnPurchaseToWaiting(
+        uid,
+        await getRunwayEncryption(uid),
+        sent,
+        describePurchaseReturned(sent, nameOf),
+      );
+    } catch (undoError) {
+      addToast({
+        title: NEEDS_HOME_WORDS.undoFailed,
+        description: getErrorMessage(undoError, ''),
+        type: 'error',
+      });
+    }
+  };
+
   const send = async (envelopeId: string) => {
     if (!user || busyId !== null) return;
     setBusyId(envelopeId);
@@ -54,7 +76,7 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
       { envelopeId, cents: purchase.amountCents, via: 'chosen' as const },
     ];
     try {
-      await assignPurchase(
+      const updatedAt = await assignPurchase(
         user.uid,
         await getRunwayEncryption(user.uid),
         purchase,
@@ -64,6 +86,16 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
       addToast({
         title: NEEDS_HOME_WORDS.sentTo(nameOf(envelopeId)),
         type: 'success',
+        action: {
+          label: NEEDS_HOME_WORDS.undo,
+          onClick: () =>
+            void putBack(user.uid, {
+              ...purchase,
+              lines,
+              needsHome: false,
+              updatedAt,
+            }),
+        },
       });
       onDone();
     } catch (sendError) {
@@ -75,21 +107,25 @@ function NeedsHomeAssign({ purchase, onDone }: NeedsHomeAssignProps) {
   if (likely.length === 0) return null;
   return (
     <div className='space-y-2'>
-      <p className='text-muted-foreground text-sm'>
-        {NEEDS_HOME_WORDS.whereTitle}
-      </p>
-      <ActionGroup>
+      <div>
+        <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
+        <p className='text-muted-foreground text-xs'>
+          {NEEDS_HOME_WORDS.likelyHint(purchase.merchant?.trim() ?? '')}
+        </p>
+      </div>
+      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {likely.map((id) => (
-          <ActionRow
+          <ItemRow
             key={id}
-            isGrouped
-            icon={looks.get(id)?.emoji ?? nameOf(id).slice(0, 1)}
-            label={nameOf(id)}
-            isDisabled={busyId !== null}
-            onClick={() => void send(id)}
+            name={nameOf(id)}
+            emoji={looks.get(id)?.emoji ?? null}
+            detail={NEEDS_HOME_WORDS.sendHere}
+            isPrivate={false}
+            ariaLabel={`${nameOf(id)}, ${NEEDS_HOME_WORDS.sendHere}`}
+            onOpen={() => void send(id)}
           />
         ))}
-      </ActionGroup>
+      </ul>
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}

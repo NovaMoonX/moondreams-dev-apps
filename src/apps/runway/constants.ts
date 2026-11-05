@@ -3933,10 +3933,7 @@ export const LINK_BANKS_GATE_ID = 'link-banks';
 /** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
-  homeSub: (count: number) =>
-    count === 1
-      ? '1 purchase from your bank is waiting'
-      : `${count} purchases from your bank are waiting`,
+  homeSub: 'From your bank',
   intro:
     'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
   empty:
@@ -3951,8 +3948,13 @@ export const NEEDS_HOME_WORDS = {
   leaveOut: 'Leave it out of spending',
   leaveOutSub: 'It will not change any envelope or Free to Spend.',
   leftOut: 'Left out of spending',
-  whereTitle: 'Where did it come from?',
-  moreOptions: 'Pick another envelope or split it',
+  whichTitle: 'Which envelope?',
+  likelyHint: (merchant: string) => `Where you put ${merchant} before`,
+  sendHere: 'Send it here',
+  moreOptions: 'Pick another envelope',
+  moreOptionsSub: 'Or split it across several',
+  undo: 'Undo',
+  undoFailed: 'That was not put back. Nothing was changed.',
   sentTo: (name: string) => `Sent to ${name}`,
   failed: 'That did not save. Nothing was changed.',
 } as const;
@@ -4037,6 +4039,10 @@ export const LINK_WORDS = {
   refreshing: 'Asking your bank\u2026',
   refreshHelp: 'Bring in new purchases and the latest balance',
   refreshed: 'Up to date with your bank.',
+  newInNeedsHome: (count: number) =>
+    count === 1
+      ? '1 new purchase is in Needs a home'
+      : `${count} new purchases are in Needs a home`,
   refreshNothing: 'Nothing new from your bank yet.',
   refreshFailed: 'Your bank did not answer. Try again in a few minutes.',
   needsAttention: 'Your bank needs you to sign in again.',
