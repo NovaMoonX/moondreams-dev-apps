@@ -4096,7 +4096,7 @@ export const LINK_BANKS_GATE_ID = 'link-banks';
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',
-  introShort: 'Say which envelope each one came out of',
+  introShort: 'Pick an envelope for each one',
   intro:
     'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
   empty:
