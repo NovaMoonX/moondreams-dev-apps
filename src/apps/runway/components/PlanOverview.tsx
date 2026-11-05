@@ -47,6 +47,9 @@ const REFRESH_RESET_MS = 1500;
 const RING_RADIUS = 11;
 const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
 
+/** The closed and opened rows that hold View all share one height, so the button never moves between them. */
+const BUTTON_ROW_CLASS = 'flex min-h-8 items-center gap-2';
+
 const MODE_OPTIONS = WORDS.modes.map(({ value, label }) => ({ value, label }));
 
 const toText = (segments: FigureSegment[], isHidden: boolean) =>
@@ -116,7 +119,7 @@ function OverviewTile({
       aria-current={isCurrent ? 'true' : undefined}
       onClick={onOpen}
       className={join(
-        'bg-card! border-border text-foreground! hover:bg-muted! flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal',
+        'bg-(--color-card)! border-border text-foreground! hover:bg-muted! flex h-full min-h-[4.5rem] w-full min-w-0 flex-col items-start justify-start gap-1 border px-3 py-2 text-left font-normal whitespace-normal',
         isCurrent && 'border-primary',
         className,
       )}
@@ -652,7 +655,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
   const header = (
     <>
       {pills}
-      <div className='flex items-center justify-between gap-2'>
+      <div className={join(BUTTON_ROW_CLASS, 'justify-between')}>
         <SegmentedControl
           isCompact
           label={WORDS.modeLabel}
@@ -687,7 +690,7 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
   const closed = (
     <div className='space-y-3'>
       {pills}
-      <div className='flex justify-end'>
+      <div className={join(BUTTON_ROW_CLASS, 'justify-end')}>
         <Button
           type='button'
           variant='tertiary'
