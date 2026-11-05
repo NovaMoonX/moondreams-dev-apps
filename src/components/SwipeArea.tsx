@@ -36,8 +36,10 @@ function SwipeArea({ children, onSwipe, onDrag, className }: SwipeAreaProps) {
     const dy = event.clientY - start.y;
     if (axis.current === null) {
       if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_SLOP_PX) return;
-      axis.current =
-        Math.abs(dx) >= Math.abs(dy) * SWIPE_AXIS_RATIO ? 'x' : 'y';
+      if (Math.abs(dx) >= Math.abs(dy) * SWIPE_AXIS_RATIO) axis.current = 'x';
+      else if (Math.abs(dy) >= Math.abs(dx) * SWIPE_AXIS_RATIO)
+        axis.current = 'y';
+      else return;
     }
     if (axis.current === 'y' || !onDrag) return;
     isDragging.current = true;
