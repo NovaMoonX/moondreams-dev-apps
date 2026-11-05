@@ -34,6 +34,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
+  HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
@@ -247,7 +248,7 @@ function PurchaseScreen({
       null;
     return {
       paid: paid === null ? null : { ...paid, itemId: ref.itemId },
-      finished: payload?.state === 'finished' ? payload : null,
+      finished: payload && payload.state !== 'open' ? payload : null,
       names: {
         item: nameOf(ref.itemId),
         cost:
@@ -271,6 +272,14 @@ function PurchaseScreen({
   const remove = async () => {
     if (!user || isBusy) return;
     const costMark = getCostMark();
+    const blocked = costMark?.finished?.state === 'calledOff';
+    if (blocked && costMark?.finished) {
+      addToast({
+        title: HORIZON_END_WORDS.calledOffTakeBack(costMark.finished.name),
+        type: 'error',
+      });
+      return;
+    }
     const names = purchase.lines.map((line) =>
       line.envelopeId === null
         ? SPEND_WORDS.freeToSpend
@@ -295,6 +304,9 @@ function PurchaseScreen({
                 costMark.names.cost,
                 costMark.names.item,
               ),
+          costMark?.finished?.state === 'finished'
+            ? HORIZON_END_WORDS.opensAgain(costMark.finished.name)
+            : null,
           'It stays in the change log.',
         ]
           .filter(Boolean)

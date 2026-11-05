@@ -50,6 +50,8 @@ import {
 } from '@apps/runway/constants';
 import {
   changeCost,
+  listEndlessCosts,
+  listOpenCosts,
   type CostChange,
   getPurchaseMarkFigures,
   type CostPaidEntry,
@@ -57,11 +59,11 @@ import {
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   releaseHorizonHeld,
   undoHorizonState,
-  type HorizonStateWritten,
 } from '@apps/runway/store/actions/horizonActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -117,6 +119,7 @@ function HorizonSheet({
   const [isTakingFromPays, setIsTakingFromPays] = useState(false);
   const { user } = useAuth();
   const { addToast } = useToast();
+  const mask = useMaskedText();
   const [isReleasing, setIsReleasing] = useState(false);
   const [view, setView] = useState<
     'main' | 'change' | 'history' | 'finish' | 'callOff' | 'bringBack'
@@ -192,7 +195,10 @@ function HorizonSheet({
     horizon.happensUntil === null
       ? HORIZON_WORDS.around(formatDateOrdinalUTC(horizon.happensOn))
       : HORIZON_WORDS.aroundRange(
-          formatDateRangeOrdinalUTC(horizon.happensOn, horizon.happensUntil),
+          formatDateRangeOrdinalUTC(
+            horizon.happensOn,
+            horizon.happensUntil,
+          ).replace(/ /g, '\u00A0'),
         );
   const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear} ` : '';
   const fact = [
@@ -304,20 +310,40 @@ function HorizonSheet({
         );
   };
   const sentLine = getSentLine();
+  const getHeroLabel = () => {
+    if (figures.spentCents <= 0) return HORIZON_END_WORDS.nothingPaid;
+    return horizon.state === 'calledOff'
+      ? HORIZON_END_WORDS.paidBeforeCallOff
+      : HORIZON_END_WORDS.spent;
+  };
+  const endlessIds = new Set(listEndlessCosts(horizon).map(({ id }) => id));
+  const stillOpen = listOpenCosts(horizon, today, stance, paid);
+  const endlessBlock =
+    stage === 'open' &&
+    stillOpen.length > 0 &&
+    stillOpen.every(({ id }) => endlessIds.has(id))
+      ? stillOpen[0]
+      : null;
 
   const release = async () => {
     if (!user || isReleasing) return;
+    if (!navigator.onLine) {
+      addToast({ title: HORIZON_END_WORDS.offline, type: 'error' });
+      return;
+    }
     setIsReleasing(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      const live = selectAllHorizonItems(
-        store.getState(),
-        todayAsUtcDate(),
-      ).find(({ item }) => item.id === itemId)?.version.payload;
-      const written = live
+      const getFound = () =>
+        selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
+          ({ item }) => item.id === itemId,
+        )?.version;
+      const found = getFound();
+      const written = found
         ? await releaseHorizonHeld(user.uid, encryption, {
             itemId,
-            horizon: live,
+            horizon: found.payload,
+            baseVersionId: found.id,
             today: todayAsUtcDate(),
             leftCents: Math.max(
               0,
@@ -335,11 +361,18 @@ function HorizonSheet({
         type: 'success',
         action: {
           label: HORIZON_END_WORDS.undo,
-          onClick: () =>
+          onClick: () => {
+            if (getFound()?.id !== written.versionId) {
+              addToast({
+                title: HORIZON_END_WORDS.changedSince,
+                type: 'error',
+              });
+              return;
+            }
             void undoHorizonState(
               user.uid,
               encryption,
-              written as HorizonStateWritten,
+              written,
               HORIZON_END_WORDS.undoReleaseSummary(horizon.name, money),
               todayAsUtcDate(),
             ).catch((undoError: unknown) =>
@@ -351,7 +384,8 @@ function HorizonSheet({
                 ),
                 type: 'error',
               }),
-            ),
+            );
+          },
         },
       });
     } catch (releaseError) {
@@ -418,7 +452,7 @@ function HorizonSheet({
           today={today}
           stance={stance}
           onBack={() => setView('main')}
-          onClose={onClose}
+          onClose={() => setView('main')}
         />
       ) : view === 'change' ? (
         <HorizonChangeForm
@@ -506,12 +540,12 @@ function HorizonSheet({
       ) : isDone ? (
         <div className='flex flex-1 flex-col gap-4'>
           <SheetHead
-            label={
-              horizon.state === 'calledOff'
-                ? HORIZON_END_WORDS.paid
-                : HORIZON_END_WORDS.spent
+            label={getHeroLabel()}
+            figure={
+              figures.spentCents > 0
+                ? formatCents(figures.spentCents)
+                : undefined
             }
-            figure={formatCents(figures.spentCents)}
             fact={
               horizon.state === 'calledOff'
                 ? HORIZON_END_WORDS.calledOffOn(doneOn)
@@ -563,23 +597,23 @@ function HorizonSheet({
             </ul>
           </div>
           <ActionGroup isRoomy>
-            {horizon.state === 'calledOff' && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                hasChevron
-                icon={<RotateCcw />}
-                label={HORIZON_END_WORDS.bringBackRow}
-                subtitle={HORIZON_END_WORDS.bringBackSub}
-                onClick={() => setView('bringBack')}
-              />
-            )}
+            <ActionRow
+              isGrouped
+              isRoomy
+              hasChevron
+              icon={<RotateCcw />}
+              label={HORIZON_END_WORDS.bringBackRow}
+              subtitle={HORIZON_END_WORDS.bringBackSub}
+              onClick={() => setView('bringBack')}
+            />
             {figures.leftCents > 0 && (
               <ActionRow
                 isGrouped
                 isRoomy
                 icon={<Unlock />}
-                label={HORIZON_END_WORDS.release}
+                label={mask(
+                  HORIZON_END_WORDS.release(formatCents(figures.leftCents)),
+                )}
                 subtitle={HORIZON_END_WORDS.releaseSub}
                 isDisabled={isReleasing}
                 onClick={() => void release()}
@@ -598,6 +632,11 @@ function HorizonSheet({
         </div>
       ) : (
         <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+          {endlessBlock && (
+            <InlineNotice tone='info'>
+              <p>{HORIZON_END_WORDS.endless(endlessBlock.name)}</p>
+            </InlineNotice>
+          )}
           {stage === 'readyToFinish' && (
             <InlineNotice tone='success' title={HORIZON_END_WORDS.readyTitle}>
               <p>{HORIZON_END_WORDS.readySub}</p>

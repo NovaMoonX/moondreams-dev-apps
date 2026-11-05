@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
@@ -10,6 +10,8 @@ import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import NoteTextField from '@/components/NoteTextField';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
+import SearchInput from '@/components/SearchInput';
+import SectionDivider from '@/components/SectionDivider';
 import RevealChip from '@/components/RevealChip';
 import SuggestionChips from '@/components/SuggestionChips';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,7 +23,7 @@ import {
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import EffectPreview from '@apps/runway/components/EffectPreview';
-import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
+import ChoiceCards from '@apps/runway/components/ChoiceCards';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_REASON_CHIPS,
@@ -30,6 +32,7 @@ import {
   HORIZON_END_WORDS,
   LIFECYCLE_WORDS,
   MAX_NOTE_LENGTH,
+  RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -58,6 +61,8 @@ import {
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
+
+const MAX_STOPS_SHOWN = 3;
 
 type Choice = 'free' | 'keep' | 'place' | null;
 
@@ -92,6 +97,8 @@ function HorizonEndView({
   const goals = useAppSelector((state) => selectGoals(state, today));
   const [pick, setPick] = useState<Choice>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const pickerRef = useRef<HTMLDivElement>(null);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -103,25 +110,42 @@ function HorizonEndView({
   const holdsMoney = leftCents > 0;
   const stops = isCallOff ? listOpenCosts(horizon, today, stance, paid) : [];
   const bills = isCallOff ? listMadeBills(horizon) : [];
+  const rows = [
+    ...stops.map((cost) => ({ cost, isBill: false })),
+    ...bills.map((cost) => ({ cost, isBill: true })),
+  ];
 
-  const places: (PillOption<string> & { name: string })[] = [
-    ...envelopes.map(({ item, version }) => ({
-      value: item.id,
-      name: version.payload.name,
-      label: version.payload.name,
-      emoji:
-        emojiOf(version.payload.emoji, version.payload.groupId) ?? undefined,
-    })),
+  const toPlace = (
+    {
+      item,
+      version,
+    }: {
+      item: { id: string };
+      version: {
+        payload: { name: string; emoji: string | null; groupId: string | null };
+      };
+    },
+    group: 'envelope' | 'goal',
+  ) => ({
+    value: item.id,
+    name: version.payload.name,
+    group,
+    label: version.payload.name,
+    emoji: emojiOf(version.payload.emoji, version.payload.groupId) ?? undefined,
+  });
+  const places: (PillOption<string> & {
+    name: string;
+    group: 'envelope' | 'goal';
+  })[] = [
+    ...envelopes.map((entry) => toPlace(entry, 'envelope')),
     ...goals
       .filter(({ version }) => version.payload.state !== 'paused')
-      .map(({ item, version }) => ({
-        value: item.id,
-        name: version.payload.name,
-        label: version.payload.name,
-        emoji:
-          emojiOf(version.payload.emoji, version.payload.groupId) ?? undefined,
-      })),
+      .map((entry) => toPlace(entry, 'goal')),
   ];
+  const needle = query.trim().toLowerCase();
+  const shown = places.filter(({ name }) =>
+    name.toLowerCase().includes(needle),
+  );
   const place = places.find(({ value }) => value === placeId) ?? null;
 
   const getWhere = (): HorizonWhere | null => {
@@ -141,8 +165,9 @@ function HorizonEndView({
   };
   const blocker = getBlocker();
 
+  const movesMoney = holdsMoney && where !== null && where.kind !== 'keep';
   const changeJson =
-    isCallOff && where !== null
+    where !== null
       ? JSON.stringify({
           kind: 'version',
           version: {
@@ -151,7 +176,12 @@ function HorizonEndView({
             effectiveFrom: today,
             effectiveUntil: null,
             changeId: 'what-if',
-            payload: setHorizonState(horizon, 'calledOff', today, null),
+            payload: setHorizonState(
+              horizon,
+              isCallOff ? 'calledOff' : 'finished',
+              today,
+              null,
+            ),
           },
           move:
             holdsMoney && where.kind !== 'keep'
@@ -167,11 +197,11 @@ function HorizonEndView({
   const getLive = () =>
     selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
       ({ item }) => item.id === itemId,
-    )?.version.payload ?? null;
+    )?.version ?? null;
 
   const undo = async (written: HorizonStateWritten) => {
     const live = getLive();
-    if (!user || live === null || live.state !== written.after.state) {
+    if (!user || live === null || live.id !== written.versionId) {
       addToast({
         title: HORIZON_END_WORDS.changedSince,
         type: 'error',
@@ -205,9 +235,14 @@ function HorizonEndView({
       setError(HORIZON_END_WORDS.offline);
       return;
     }
-    const live = getLive();
-    if (live === null || live.state !== 'open') {
+    const found = getLive();
+    const live = found?.payload ?? null;
+    if (found === null || live === null || live.state !== 'open') {
       setError(HORIZON_END_WORDS.alreadyDone);
+      return;
+    }
+    if (leftNow() !== leftCents) {
+      setError(HORIZON_END_WORDS.moneyChanged);
       return;
     }
     const why = reason.trim() === '' ? null : reason.trim();
@@ -220,8 +255,9 @@ function HorizonEndView({
       const written = await run(user.uid, encryption, {
         itemId,
         horizon: live,
+        baseVersionId: found.id,
         today,
-        leftCents: leftNow(),
+        leftCents,
         where,
         note: why,
       });
@@ -254,6 +290,15 @@ function HorizonEndView({
     }
   };
 
+  useEffect(() => {
+    if (pick === 'place') {
+      pickerRef.current?.scrollIntoView({
+        block: 'nearest',
+        behavior: 'smooth',
+      });
+    }
+  }, [pick]);
+
   const leftNow = () =>
     Math.max(0, selectBalances(store.getState()).assignedByItem[itemId] ?? 0);
 
@@ -277,33 +322,39 @@ function HorizonEndView({
       </div>
       {isCallOff && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
-          {stops.length === 0 && bills.length === 0 ? (
+          {rows.length === 0 ? (
             <p className='text-muted-foreground text-sm'>
               {HORIZON_END_WORDS.noOpenCosts}
             </p>
           ) : (
             <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {stops.map((cost) => (
-                <li key={cost.id} className='px-3 py-2 text-sm break-words'>
-                  <MaskedText>
-                    {HORIZON_END_WORDS.stopsRow(
-                      cost.name,
-                      describeCostWhen(cost.schedule, cost.ending),
-                      cost.schedule.kind === 'once'
-                        ? describeCost(cost).figure
-                        : null,
-                    )}
-                  </MaskedText>
+              {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
+                isBill ? (
+                  <li
+                    key={cost.id}
+                    className='text-muted-foreground px-3 py-2 text-sm break-words'
+                  >
+                    {HORIZON_END_WORDS.staysBill(cost.name)}
+                  </li>
+                ) : (
+                  <li key={cost.id} className='px-3 py-2 text-sm break-words'>
+                    <MaskedText>
+                      {HORIZON_END_WORDS.stopsRow(
+                        cost.name,
+                        describeCostWhen(cost.schedule, cost.ending),
+                        cost.schedule.kind === 'once'
+                          ? describeCost(cost).figure
+                          : null,
+                      )}
+                    </MaskedText>
+                  </li>
+                ),
+              )}
+              {rows.length > MAX_STOPS_SHOWN && (
+                <li className='text-muted-foreground px-3 py-2 text-sm'>
+                  {HORIZON_END_WORDS.andMore(rows.length - MAX_STOPS_SHOWN)}
                 </li>
-              ))}
-              {bills.map((cost) => (
-                <li
-                  key={cost.id}
-                  className='text-muted-foreground px-3 py-2 text-sm break-words'
-                >
-                  {HORIZON_END_WORDS.staysBill(cost.name)}
-                </li>
-              ))}
+              )}
             </ul>
           )}
         </ActionSection>
@@ -311,8 +362,17 @@ function HorizonEndView({
       {changeJson !== null && (
         <EffectPreview
           changeJson={changeJson}
-          emptyText={HORIZON_END_WORDS.effectNone}
+          emptyText=''
           isCompact
+          lead={
+            movesMoney && where?.kind === 'free' ? (
+              <p className='text-sm'>
+                <MaskedText>
+                  {HORIZON_END_WORDS.freeUp(formatCents(leftCents))}
+                </MaskedText>
+              </p>
+            ) : null
+          }
         />
       )}
       {holdsMoney && (
@@ -321,14 +381,24 @@ function HorizonEndView({
             HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents)),
           )}
         >
-          <HeldChoiceList
+          <ChoiceCards
+            options={[
+              {
+                value: 'free' as const,
+                title: HORIZON_END_WORDS.freeTitle,
+                body: HORIZON_END_WORDS.freeBody,
+              },
+              {
+                value: 'keep' as const,
+                title: HELD_WORDS.keepTitle,
+                body: HELD_WORDS.keepBody,
+              },
+            ]}
             value={pick === 'free' || pick === 'keep' ? pick : null}
             onChange={(choice) => {
               setPick(choice);
               setError(null);
             }}
-            freeBody={HORIZON_END_WORDS.freeBody}
-            keepBody={HELD_WORDS.keepBody}
           />
           <ActionGroup>
             <ActionRow
@@ -344,19 +414,51 @@ function HorizonEndView({
               onClick={() => setPick('place')}
             />
           </ActionGroup>
-          {pick === 'place' &&
-            (places.length === 0 ? (
-              <p className='text-muted-foreground text-sm'>
-                {HORIZON_END_WORDS.placeNone}
-              </p>
-            ) : (
-              <PillGroup
-                label={HORIZON_END_WORDS.placeCaption}
-                options={places}
-                value={placeId}
-                onChange={setPlaceId}
-              />
-            ))}
+          {pick === 'place' && (
+            <div ref={pickerRef} className='space-y-3'>
+              {places.length === 0 ? (
+                <p className='text-muted-foreground text-sm'>
+                  {HORIZON_END_WORDS.placeNone}
+                </p>
+              ) : (
+                <>
+                  {places.length >= RUNWAY_SEARCH_THRESHOLD && (
+                    <SearchInput
+                      value={query}
+                      onChange={setQuery}
+                      placeholder={HORIZON_END_WORDS.placeSearch}
+                    />
+                  )}
+                  {(
+                    [
+                      ['envelope', HORIZON_END_WORDS.envelopesHeading],
+                      ['goal', HORIZON_END_WORDS.goalsHeading],
+                    ] as const
+                  ).map(([group, heading]) => {
+                    const options = shown.filter(
+                      (entry) => entry.group === group,
+                    );
+                    return options.length === 0 ? null : (
+                      <div key={group} className='space-y-2'>
+                        <SectionDivider label={heading} />
+                        <PillGroup
+                          label={heading}
+                          options={options}
+                          value={placeId}
+                          onChange={setPlaceId}
+                        />
+                      </div>
+                    );
+                  })}
+                  {shown.length === 0 && (
+                    <p className='text-muted-foreground text-sm'>
+                      {HORIZON_END_WORDS.placeNone}
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </ActionSection>
       )}
       {isCallOff && isReasonOpen && (

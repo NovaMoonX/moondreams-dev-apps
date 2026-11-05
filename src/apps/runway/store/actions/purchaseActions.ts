@@ -511,6 +511,7 @@ export async function deletePurchase(
                 paid.itemId,
                 names.cost,
                 todayAsUtcDate(),
+                paid.moveId,
               )
             : Promise.resolve(null),
         ]);

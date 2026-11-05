@@ -255,6 +255,7 @@ import {
   getCostShare,
   getHorizonStage,
   getLiveCosts,
+  listEndlessCosts,
   getMadeBillId,
   getMakeBillBlock,
   hasOtherOpenCost,
@@ -12751,7 +12752,17 @@ const version = (
     0,
     'kept held asks nothing',
   );
-  assert.equal(getBringableCents(sent, 0), 80_000);
+  assert.equal(getBringableCents(sent, 200_000), 80_000);
+  assert.equal(
+    getBringableCents(sent, 30_000),
+    30_000,
+    'from Free to Spend, no more than it holds',
+  );
+  assert.equal(
+    getBringableCents(sent, -5_000),
+    0,
+    'and nothing when it is over',
+  );
   assert.equal(
     getBringableCents(
       { kind: 'place', toId: 'food', cents: 80_000, moveId: 'm' },
@@ -12766,6 +12777,45 @@ const version = (
       0,
     ),
     0,
+  );
+
+  // Where "everything is settled" stops looking: a cost that ends after the look-ahead keeps the event open.
+  const edgeCost = (afterCount: number | null, onDate: number | null) => ({
+    ...makeCost('edge', 1_000, today, 'monthly'),
+    ending: { onDate, afterCount },
+  });
+  const stageOf = (cost: HorizonCost, marks: CostPaidEntry[] = []) =>
+    getHorizonStage({ ...open, costs: [cost] }, today, 'conservative', marks);
+  assert.equal(
+    stageOf(edgeCost(122, null)),
+    'open',
+    'a cost with payments past ten years is not settled',
+  );
+  assert.equal(
+    stageOf(edgeCost(null, utc(2040, 0, 1))),
+    'open',
+    'an unpaid cost ending in 2040 is open',
+  );
+  assert.equal(
+    stageOf(edgeCost(null, utc(2060, 0, 1))),
+    'open',
+    'one that ends past the look-ahead is open',
+  );
+  assert.equal(
+    stageOf(makeCost('far', 1_000, utc(2040, 0, 1))),
+    'open',
+    'a one-time cost past the look-ahead is open',
+  );
+  assert.equal(
+    stageOf(edgeCost(null, null)),
+    'open',
+    'a cost that repeats with no end never settles',
+  );
+  assert.deepEqual(
+    listEndlessCosts({ costs: [edgeCost(null, null), edgeCost(3, null)] })
+      .length,
+    1,
+    'only the one with no end is endless',
   );
 
   // A payment whose day passed while the event was off is due now once it is back.
@@ -15999,400 +16049,6 @@ console.log('runway engine: ok');
     [legacy.costs[0].becameBillId, legacy.costs[0].becameBillOn],
     [null, null],
     'a cost saved before Make it a bill reads as not a bill',
-  );
-}
-
-// Finish, call off and bring back an event, and where its money goes (Issue 88).
-{
-  const today = utc(2026, 10, 23);
-  const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
-  const never = { onDate: null, afterCount: null };
-  const dueOn = today + 24 * DAY_MS;
-  const makeCost = (
-    id: string,
-    cents: number,
-    anchor: number,
-    kind: 'once' | 'monthly' = 'once',
-  ): HorizonCost => ({
-    id,
-    name: id,
-    amount: exactRange(cents),
-    schedule:
-      kind === 'once'
-        ? { kind, anchor, monthDays: [] }
-        : { kind, anchor, monthDays: [new Date(anchor).getUTCDate()] },
-    ending: never,
-    isOutside: false,
-    pricedOn: null,
-    endsAfter: null,
-    becameBillId: null,
-    becameBillOn: null,
-    note: null,
-  });
-  const movers = makeCost('movers', 60_000, dueOn);
-  const storage = makeCost('storage', 10_000, dueOn + 20 * DAY_MS, 'monthly');
-  const open: HorizonSealed = {
-    name: 'Moving',
-    emoji: null,
-    happensOn: dueOn,
-    happensUntil: null,
-    priority: 'should',
-    orderIndex: 1,
-    rest: { kind: 'pays' },
-    note: null,
-    state: 'open',
-    stateOn: null,
-    stateMoney: null,
-    costs: [movers, storage],
-  };
-  const paidMovers: CostPaidEntry = {
-    moveId: 'paid_movers',
-    costId: 'movers',
-    dueOn,
-    paidOn: dueOn,
-    amountCents: 60_000,
-    fromFreeCents: 0,
-    mark: 'item',
-    purchaseId: null,
-  } as never;
-  const sent = {
-    kind: 'free' as const,
-    toId: null,
-    cents: 80_000,
-    moveId: 'transfer_end',
-  };
-  const calledOff = setHorizonState(open, 'calledOff', today, sent);
-
-  // State and stage.
-  assert.equal(
-    readHorizon({ ...open, state: undefined, stateOn: undefined } as never)
-      .state,
-    'open',
-    'a version sealed before reads as open',
-  );
-  assert.deepEqual(
-    [calledOff.state, calledOff.stateOn, calledOff.stateMoney],
-    ['calledOff', today, sent],
-  );
-  const reopened = setHorizonState(calledOff, 'open', today, sent);
-  assert.deepEqual(
-    [reopened.state, reopened.stateOn, reopened.stateMoney],
-    ['open', null, null],
-    'reopening clears the day and the money',
-  );
-  assert.equal(getHorizonStage(open, today, 'conservative', []), 'open');
-  const settledStorage = { ...storage, endsAfter: dueOn };
-  const settledOpen = { ...open, costs: [movers, settledStorage] };
-  assert.equal(
-    getHorizonStage(settledOpen, today, 'conservative', [paidMovers]),
-    'readyToFinish',
-    'paid, ended or a bill: ready to finish',
-  );
-  assert.equal(
-    getHorizonStage(settledOpen, today, 'conservative', []),
-    'open',
-    'an unpaid cost keeps it open, which is what taking back a paid mark does',
-  );
-  assert.equal(
-    getHorizonStage(
-      {
-        ...open,
-        costs: [movers, { ...storage, becameBillId: 'bill_moving_storage' }],
-      },
-      today,
-      'conservative',
-      [paidMovers],
-    ),
-    'readyToFinish',
-    'a cost that became a bill is settled',
-  );
-  assert.equal(
-    getHorizonStage(calledOff, today, 'conservative', []),
-    'calledOff',
-  );
-  assert.deepEqual(
-    listOpenCosts(open, today, 'conservative', [paidMovers]).map(
-      ({ id }) => id,
-    ),
-    ['storage'],
-  );
-  assert.deepEqual(
-    listMadeBills({
-      costs: [movers, { ...storage, becameBillId: 'b' }],
-    }).map(({ id }) => id),
-    ['storage'],
-  );
-
-  // A called-off item asks nothing; what is paid stays.
-  const horizon = dueOn + 200 * DAY_MS;
-  assert.deepEqual(
-    listHorizonPayments(
-      open.costs,
-      horizon,
-      'conservative',
-      [paidMovers],
-      'calledOff',
-    ).map(({ costId, paid }) => [costId, paid !== null]),
-    [['movers', true]],
-    'only the paid payment stays; the unpaid ones stop',
-  );
-  assert.ok(
-    listHorizonPayments(open.costs, horizon, 'conservative', [paidMovers])
-      .length > 1,
-    'an open item still plans them',
-  );
-
-  // The pays an item asks of: nothing once called off, the same as before once brought back.
-  const planItems: PlanItemDoc[] = [
-    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
-    item('src', 1),
-    item('moving', 2, { kind: 'horizon' }),
-  ];
-  const movingVersion = (
-    id: string,
-    payload: HorizonSealed,
-    createdAt: number,
-  ): OpenVersion => ({
-    id,
-    itemId: 'moving',
-    kind: 'horizon',
-    createdAt,
-    effectiveFrom: today,
-    effectiveUntil: null,
-    changeId: `c_${id}`,
-    payload,
-  });
-  const versions: OpenVersion[] = [
-    {
-      id: 'vsrc',
-      itemId: 'src',
-      kind: 'source',
-      createdAt: 1,
-      effectiveFrom: today,
-      effectiveUntil: null,
-      changeId: 'c',
-      payload: { name: 'Acme', pairings: [] },
-    },
-    {
-      id: 'vpay',
-      itemId: 'pay',
-      kind: 'payLine',
-      createdAt: 1,
-      effectiveFrom: today,
-      effectiveUntil: null,
-      changeId: 'c',
-      payload: {
-        name: 'Paycheck',
-        schedule: { kind: 'weekly', anchor: today, monthDays: [] },
-        amount: exactRange(10_000),
-        ending: never,
-        stanceOverride: null,
-        pairings: [],
-      },
-    },
-    movingVersion('vm', open, 2),
-  ];
-  const inputsFor = (
-    over: Partial<Parameters<typeof previewItemShorts>[0]> = {},
-  ) => ({
-    items: planItems,
-    versions,
-    openDays: [],
-    stance: 'conservative' as const,
-    today,
-    heldByItem: {} as Record<string, number>,
-    settledKey: '',
-    billProgress: {},
-    ...over,
-  });
-  const whatIf = (payload: HorizonSealed) => ({
-    itemId: 'moving',
-    kind: 'horizon' as const,
-    effectiveFrom: today,
-    effectiveUntil: null,
-    changeId: 'what-if',
-    payload,
-  });
-  const asking = previewItemShorts(
-    inputsFor(),
-    { kind: 'versions', versions: [] },
-    'moving',
-  );
-  assert.ok(asking.askedCents > 0, 'the open event asks the pays for money');
-  const off = previewItemShorts(
-    inputsFor(),
-    { kind: 'version', version: whatIf(calledOff) },
-    'moving',
-  );
-  assert.deepEqual(
-    [off.askedCents, off.carriedCents, off.payCount],
-    [0, 0, 0],
-    'a called-off event asks nothing from today',
-  );
-
-  // Free to Spend reconciles for each place the money goes, and the Undo.
-  const start = utc(2026, 10, 1);
-  const startMove = (
-    id: string,
-    refId: string | null,
-    cents: number,
-    holding: string,
-  ) =>
-    ({
-      id,
-      kind: 'start',
-      date: start,
-      refId,
-      reversesMoveId: null,
-      createdAt: 1,
-      payload: { amountCents: cents, holding },
-    }) as unknown as OpenMove;
-  const transfer = (
-    id: string,
-    on: number,
-    fromId: string | null,
-    toId: string | null,
-    cents: number,
-    reversesMoveId: string | null = null,
-    createdAt = 2,
-  ) =>
-    ({
-      id,
-      kind: 'transfer',
-      date: on,
-      refId: fromId ?? toId,
-      reversesMoveId,
-      createdAt,
-      payload: { fromId, toId, cents, note: null, isOutside: false },
-    }) as unknown as OpenMove;
-  const baseMoves = [
-    startMove('s-money', null, 200_000, 'money'),
-    startMove('s-food', 'food', 10_000, 'envelope'),
-    startMove('s-moving', 'moving', 80_000, 'horizon'),
-  ];
-  const balancesOf = (extra: OpenMove[]) =>
-    deriveBalances({
-      startDate: start,
-      moves: [...baseMoves, ...extra],
-      records: [],
-      arrivedOn: new Map(),
-      kinds: { food: 'envelope', moving: 'horizon' } as const,
-    });
-  const held = balancesOf([]);
-  assert.equal(held.freeToSpendCents, 110_000);
-  const toFree = balancesOf([transfer('t1', today, 'moving', null, 80_000)]);
-  assert.equal(toFree.assignedByItem.moving, 0);
-  assert.equal(
-    toFree.freeToSpendCents,
-    held.freeToSpendCents + 80_000,
-    'to Free to Spend raises it by what was held',
-  );
-  const toFood = balancesOf([transfer('t1', today, 'moving', 'food', 80_000)]);
-  assert.equal(toFood.assignedByItem.food, 90_000);
-  assert.equal(
-    toFood.freeToSpendCents,
-    held.freeToSpendCents,
-    'to an envelope leaves it unchanged',
-  );
-  assert.equal(
-    balancesOf([]).freeToSpendCents,
-    held.freeToSpendCents,
-    'kept held leaves it unchanged',
-  );
-  const undone = balancesOf([
-    transfer('t1', today, 'moving', null, 80_000),
-    transfer('undo_t1', today, 'moving', null, 80_000, 't1', 3),
-  ]);
-  assert.deepEqual(
-    [undone.assignedByItem.moving, undone.freeToSpendCents],
-    [80_000, held.freeToSpendCents],
-    'the Undo reverses the move',
-  );
-  const broughtBack = balancesOf([
-    transfer('t1', today, 'moving', null, 80_000),
-    transfer('t2', today + DAY_MS, null, 'moving', 80_000),
-  ]);
-  assert.deepEqual(
-    [broughtBack.assignedByItem.moving, broughtBack.freeToSpendCents],
-    [80_000, held.freeToSpendCents],
-    'brought back with its money, it holds what it did',
-  );
-
-  // Brought back with its money asks the pays as one never called off; at $0 as one holding nothing.
-  const readingFor = (heldCents: number) =>
-    previewItemShorts(
-      inputsFor({ heldByItem: { moving: heldCents } }),
-      { kind: 'versions', versions: [] },
-      'moving',
-    );
-  const backWithMoney = previewItemShorts(
-    inputsFor({ heldByItem: { moving: 0 } }),
-    {
-      kind: 'version',
-      version: whatIf(reopened),
-      move: { fromId: null, toId: 'moving', cents: 80_000 },
-    },
-    'moving',
-  );
-  assert.deepEqual(
-    backWithMoney,
-    readingFor(80_000),
-    'the preview of bringing it back with its money is the plan of an item never called off',
-  );
-  const backAtZero = previewItemShorts(
-    inputsFor({ heldByItem: { moving: 0 } }),
-    { kind: 'version', version: whatIf(reopened) },
-    'moving',
-  );
-  assert.deepEqual(backAtZero, readingFor(0), 'at $0 it holds nothing');
-  const reopenedVersions = [...versions, movingVersion('vback', reopened, 9)];
-  assert.deepEqual(
-    previewItemShorts(
-      inputsFor({ versions: reopenedVersions, heldByItem: { moving: 80_000 } }),
-      { kind: 'versions', versions: [] },
-      'moving',
-    ),
-    backWithMoney,
-    "the preview's pays are what the saved item drafts",
-  );
-
-  // Money that stayed held, or a place that no longer has it.
-  assert.equal(getBringableCents(null, 0), 0);
-  assert.equal(
-    getBringableCents(
-      { kind: 'held', toId: null, cents: 5_000, moveId: null },
-      0,
-    ),
-    0,
-    'kept held asks nothing',
-  );
-  assert.equal(getBringableCents(sent, 0), 80_000);
-  assert.equal(
-    getBringableCents(
-      { kind: 'place', toId: 'food', cents: 80_000, moveId: 'm' },
-      30_000,
-    ),
-    30_000,
-    'no more than the place still has',
-  );
-  assert.equal(
-    getBringableCents(
-      { kind: 'place', toId: 'food', cents: 80_000, moveId: 'm' },
-      0,
-    ),
-    0,
-  );
-
-  // A payment whose day passed while the event was off is due now once it is back.
-  const stale = {
-    ...open,
-    costs: [makeCost('late', 5_000, today - 3 * DAY_MS)],
-  };
-  assert.ok(
-    listCostPayments(stale.costs[0], today, 'conservative', []).some(
-      (payment) => payment.paid === null && payment.dueOn <= today,
-    ),
-    'a payment dated before today is due now',
   );
 }
 

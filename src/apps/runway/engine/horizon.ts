@@ -462,20 +462,20 @@ const isCostSettled = (
   paid: readonly CostPaidEntry[],
 ) => {
   if (cost.becameBillId !== null || cost.endsAfter !== null) return true;
-  if (cost.schedule.anchor === null) return false;
-  if (
-    cost.schedule.kind !== 'once' &&
-    cost.ending.onDate === null &&
-    cost.ending.afterCount === null
-  ) {
-    return false;
-  }
-  return listCostPayments(
-    cost,
-    addUtcMonths(today, SETTLED_MONTHS),
-    stance,
-    paid,
-  ).every((payment) => payment.paid !== null);
+  const { anchor } = cost.schedule;
+  if (anchor === null) return false;
+  const limit = addUtcMonths(today, SETTLED_MONTHS);
+  const { ending, schedule } = cost;
+  const isEndReached =
+    schedule.kind === 'once'
+      ? anchor <= limit
+      : (ending.onDate !== null && ending.onDate <= limit) ||
+        (ending.afterCount !== null &&
+          occurrences(schedule, ending, 0, limit).length >= ending.afterCount);
+  if (!isEndReached) return false;
+  return listCostPayments(cost, limit, stance, paid).every(
+    (payment) => payment.paid !== null,
+  );
 };
 
 export function getHorizonStage(
@@ -522,13 +522,22 @@ export const setHorizonState = (
   stateMoney: state === 'open' ? null : money,
 });
 
-/** What can come back into a reopened event: the money it sent away, less what the place it went to no longer has. Money kept held, or never moved, comes back by itself and asks nothing. */
+/** What can come back into a reopened event: the money it sent away, less what the place it went to (or Free to Spend) no longer has. Money kept held, or never moved, comes back by itself and asks nothing. */
 export function getBringableCents(
   money: HorizonMoneyLeft | null,
-  placeLeftCents: Cents,
+  availableCents: Cents,
 ): Cents {
   if (money === null || money.kind === 'held' || money.cents <= 0) return 0;
-  return money.kind === 'free'
-    ? money.cents
-    : Math.min(money.cents, Math.max(0, placeLeftCents));
+  return Math.min(money.cents, Math.max(0, availableCents));
 }
+
+/** The costs that repeat with no end, which keep an event from being ready to finish until they are ended or made a bill. */
+export const listEndlessCosts = (horizon: Pick<HorizonSealed, 'costs'>) =>
+  horizon.costs.filter(
+    (cost) =>
+      cost.becameBillId === null &&
+      cost.endsAfter === null &&
+      cost.schedule.kind !== 'once' &&
+      cost.ending.onDate === null &&
+      cost.ending.afterCount === null,
+  );

@@ -694,7 +694,10 @@ export const HORIZON_END_WORDS = {
     money === null
       ? `Brought ${name} back.`
       : `Brought ${name} back, with ${money}.`,
-  undoBringBackSummary: (name: string) => `Called ${name} off again.`,
+  undoBringBackSummary: (name: string, state: 'finished' | 'calledOff') =>
+    state === 'finished'
+      ? `Finished ${name} again.`
+      : `Called ${name} off again.`,
   releaseSummary: (name: string, money: string) =>
     `${name}'s ${money} is Free to Spend.`,
   undoReleaseSummary: (name: string, money: string) =>
@@ -707,14 +710,30 @@ export const HORIZON_END_WORDS = {
   spent: 'Spent',
   paid: 'Paid',
   anotherPlace: 'another place',
+  freeTitle: 'Free to Spend',
+  opensAgain: (name: string) => `${name} opens again.`,
+  calledOffTakeBack: (name: string) =>
+    `${name} is called off, so a paid mark can't be taken back. Bring it back first.`,
+  moneyChanged:
+    'What it holds changed just now. Look again, then try once more.',
+  endless: (cost: string) =>
+    `${cost} repeats with no end. End it or make it a bill to finish.`,
+  freeUp: (amount: string) => `Free to Spend goes up by ${amount}.`,
+  freeDown: (amount: string) => `Free to Spend goes down by ${amount}.`,
+  nothingPaid: 'Nothing paid',
+  paidBeforeCallOff: 'Paid before calling off',
+  placeSearch: 'Search envelopes and goals',
+  envelopesHeading: 'Envelopes',
+  goalsHeading: 'Goals',
+  andMore: (count: number) => `and ${count} more`,
   stopped: 'Stopped \u00b7 never paid',
   wentToFree: (money: string, date: string) =>
     `${money} to Free to Spend, ${date}`,
   wentToPlace: (money: string, place: string, date: string) =>
     `${money} to ${place}, ${date}`,
   stillHeld: (money: string) => `Still held \u00b7 ${money}`,
-  release: 'Release what it holds',
-  releaseSub: 'It becomes Free to Spend.',
+  release: (amount: string) => `Release ${amount} to Free to Spend`,
+  releaseSub: 'Nothing else about it changes.',
   released: (name: string) => `What ${name} held is Free to Spend`,
   releaseFailed: (name: string) => `${name} was not changed`,
   bringBackRow: 'Bring it back',
@@ -3301,16 +3320,16 @@ export const SETTINGS_GROUP_WORDS = {
 /** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */
 export const HELD_WORDS = {
   caption: (amount: string) => `The ${amount} it holds`,
-  freeTitle: 'Make it Free\u00a0to\u00a0spend',
+  freeTitle: 'Make it Free\u00a0to\u00a0Spend',
   freeArchive: 'From today.',
   freeEnd: (date: string) => `From ${date}.`,
   keepTitle: 'Keep it held',
   keepBody: 'Until you release it.',
   blocker: 'Choose what happens to the money it holds.',
   release: 'Release what it holds',
-  releaseNow: 'It becomes Free\u00a0to\u00a0spend.',
+  releaseNow: 'It becomes Free\u00a0to\u00a0Spend.',
   releaseOn: (date: string) =>
-    `It becomes Free\u00a0to\u00a0spend from ${date}.`,
+    `It becomes Free\u00a0to\u00a0Spend from ${date}.`,
   released: (name: string) => `What ${name} held is Free to Spend`,
   releaseFailed: (name: string) => `${name} was not changed`,
   undo: 'Undo',

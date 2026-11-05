@@ -25,6 +25,7 @@ import {
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { getOpensAgainNote } from '@apps/runway/hooks/useCostPaid';
 import {
   useLiveCostMove,
   useUndoTransfer,
@@ -63,17 +64,22 @@ function ChangeRow({
       title: words.undoTitle,
       message: move.cost
         ? mask(
-            COST_PAID_WORDS.confirm(
-              move.cost.name,
-              move.cost.itemName,
-              formatDateOrdinalUTC(move.cost.dueOn),
-              describeCostGivesBack(
+            [
+              COST_PAID_WORDS.confirm(
+                move.cost.name,
                 move.cost.itemName,
-                move.cost.amountCents,
-                move.cost.fromFreeCents,
-                move.cost.mark,
+                formatDateOrdinalUTC(move.cost.dueOn),
+                describeCostGivesBack(
+                  move.cost.itemName,
+                  move.cost.amountCents,
+                  move.cost.fromFreeCents,
+                  move.cost.mark,
+                ),
               ),
-            ),
+              getOpensAgainNote(move.cost.itemId),
+            ]
+              .filter(Boolean)
+              .join(' '),
           )
         : move.bill
           ? mask(

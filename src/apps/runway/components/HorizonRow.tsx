@@ -20,6 +20,8 @@ interface HorizonRowProps {
   /** Set while the priorities list is being reordered. */
   reorder?: ItemRowReorder;
   isHighlighted?: boolean;
+  /** Opens the sheet from outside the row, so it stays up when the event moves to another list. */
+  onOpenItem?: (itemId: string) => void;
 }
 
 /** An event in the plan: its badge, name, a shortfall or the next cost due, and what is left of the money put toward it; it opens the event's sheet. */
@@ -30,6 +32,7 @@ function HorizonRow({
   stance,
   reorder,
   isHighlighted = false,
+  onOpenItem,
 }: HorizonRowProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { isHidden } = useValuesHidden();
@@ -91,7 +94,12 @@ function HorizonRow({
             : null
         }
         ariaLabel={`${horizon.name}, ${left} ${isDone ? 'spent' : 'left'}. ${detail}. Open`}
-        onOpen={reorder ? undefined : () => setIsOpen(true)}
+        onOpen={
+          reorder
+            ? undefined
+            : () => (onOpenItem ? onOpenItem(itemId) : setIsOpen(true))
+        }
+        isFigureMuted={isDone}
         reorder={reorder}
         isHighlighted={isHighlighted}
       />

@@ -10,6 +10,7 @@ import {
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   COST_PAID_WORDS,
+  HORIZON_END_WORDS,
   ITEM_SHEET_R2_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -39,13 +40,29 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, HorizonCost } from '@apps/runway/types';
 
-/** The event when it is finished, so taking one of its paid marks back reopens it. */
+/** The event when it is finished or called off: taking one of its paid marks back reopens a finished one and is refused on a called-off one. */
 export const getFinishedHorizon = (itemId: string) => {
   const found = selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
     ({ item }) => item.id === itemId,
   );
-  return found?.version.payload.state === 'finished'
+  return found && found.version.payload.state !== 'open'
     ? found.version.payload
+    : null;
+};
+
+/** "Moving opens again." when taking a mark back would reopen a finished event; null otherwise. */
+export const getOpensAgainNote = (itemId: string) => {
+  const done = getFinishedHorizon(itemId);
+  return done?.state === 'finished'
+    ? HORIZON_END_WORDS.opensAgain(done.name)
+    : null;
+};
+
+/** Why a paid mark cannot be taken back while the event is called off; null when it can. */
+export const getTakeBackBlock = (itemId: string) => {
+  const done = getFinishedHorizon(itemId);
+  return done?.state === 'calledOff'
+    ? HORIZON_END_WORDS.calledOffTakeBack(done.name)
     : null;
 };
 

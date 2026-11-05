@@ -82,11 +82,13 @@ function HorizonBringBackView({
       ? ([...envelopes, ...goals].find(({ item }) => item.id === sent.toId)
           ?.version.payload.name ?? null)
       : null;
-  const placeLeftCents =
-    sent?.kind === 'place'
-      ? Math.max(0, balances.assignedByItem[sent.toId ?? ''] ?? 0)
-      : 0;
-  const bringableCents = getBringableCents(sent, placeLeftCents);
+  const getAvailable = (live: typeof balances) => {
+    return sent?.kind === 'place'
+      ? (live.assignedByItem[sent.toId ?? ''] ?? 0)
+      : live.freeToSpendCents;
+  };
+  const availableCents = Math.max(0, getAvailable(balances));
+  const bringableCents = getBringableCents(sent, availableCents);
   const isAsked = isSentAway && bringableCents > 0;
   const bringCents = answer === 'bring' ? bringableCents : 0;
   const reopened = setHorizonState(horizon, 'open', today, null);
@@ -104,7 +106,7 @@ function HorizonBringBackView({
   const options = [
     {
       value: 'bring' as const,
-      title: HORIZON_END_WORDS.bringYes(formatCents(bringableCents)),
+      title: mask(HORIZON_END_WORDS.bringYes(formatCents(bringableCents))),
       body:
         sent?.kind === 'place'
           ? HORIZON_END_WORDS.bringYesPlace(placeWords)
@@ -147,11 +149,11 @@ function HorizonBringBackView({
   const getLive = () =>
     selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
       ({ item }) => item.id === itemId,
-    )?.version.payload ?? null;
+    )?.version ?? null;
 
   const undo = async (written: HorizonStateWritten) => {
     const live = getLive();
-    if (!user || live === null || live.state !== 'open') {
+    if (!user || live === null || live.id !== written.versionId) {
       addToast({ title: HORIZON_END_WORDS.changedSince, type: 'error' });
       return;
     }
@@ -161,7 +163,10 @@ function HorizonBringBackView({
         user.uid,
         encryption,
         written,
-        HORIZON_END_WORDS.undoBringBackSummary(horizon.name),
+        HORIZON_END_WORDS.undoBringBackSummary(
+          horizon.name,
+          written.before.state === 'finished' ? 'finished' : 'calledOff',
+        ),
         todayAsUtcDate(),
       );
     } catch (undoError) {
@@ -179,8 +184,9 @@ function HorizonBringBackView({
       setError(HORIZON_END_WORDS.offline);
       return;
     }
-    const live = getLive();
-    if (live === null || live.state !== 'calledOff') {
+    const found = getLive();
+    const live = found?.payload ?? null;
+    if (found === null || live === null || live.state === 'open') {
       setError(HORIZON_END_WORDS.alreadyDone);
       return;
     }
@@ -192,17 +198,13 @@ function HorizonBringBackView({
       const written = await bringBackHorizon(user.uid, encryption, {
         itemId,
         horizon: live,
+        baseVersionId: found.id,
         today,
         bringCents,
-        placeLeftCents:
-          live.stateMoney?.kind === 'place'
-            ? Math.max(
-                0,
-                selectBalances(store.getState()).assignedByItem[
-                  live.stateMoney.toId ?? ''
-                ] ?? 0,
-              )
-            : 0,
+        availableCents: Math.max(
+          0,
+          getAvailable(selectBalances(store.getState())),
+        ),
       });
       if (written === null) {
         setError(HORIZON_END_WORDS.alreadyDone);
@@ -299,8 +301,17 @@ function HorizonBringBackView({
       {changeJson !== null && (
         <EffectPreview
           changeJson={changeJson}
-          emptyText={HORIZON_END_WORDS.effectNone}
+          emptyText=''
           isCompact
+          lead={
+            bringCents > 0 && sent?.kind === 'free' ? (
+              <p className='text-sm'>
+                <MaskedText>
+                  {HORIZON_END_WORDS.freeDown(formatCents(bringCents))}
+                </MaskedText>
+              </p>
+            ) : null
+          }
         />
       )}
       <ModalFooterActions

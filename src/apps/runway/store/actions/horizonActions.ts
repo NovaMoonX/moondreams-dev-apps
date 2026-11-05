@@ -413,7 +413,11 @@ export async function sealReopen(
   itemId: string,
   costName: string,
   on: DateOnly,
+  markMoveId: string,
 ): Promise<SealedReopen> {
+  if (finished.state === 'calledOff') {
+    throw new Error(HORIZON_END_WORDS.calledOffTakeBack(finished.name));
+  }
   const now = Date.now();
   const changeId = generateUuid();
   const [sealed, changeSealed] = await Promise.all([
@@ -427,7 +431,7 @@ export async function sealReopen(
   ]);
   return {
     version: {
-      id: generateUuid(),
+      id: `reopen_${markMoveId}`,
       itemId,
       kind: 'horizon',
       createdAt: now,
@@ -460,7 +464,14 @@ export async function undoCostPaid(
   const reopen =
     finished === null
       ? null
-      : await sealReopen(encryption, finished, paid.itemId, names.cost, on);
+      : await sealReopen(
+          encryption,
+          finished,
+          paid.itemId,
+          names.cost,
+          on,
+          paid.moveId,
+        );
   const isWritten = await runTransaction(db, async (transaction) => {
     const [isDone, plan] = await Promise.all([
       isCostUnmarked(transaction, uid, paid),
@@ -773,6 +784,8 @@ interface EndHorizonInput {
   itemId: string;
   /** The open event as the device reads it just before the write. */
   horizon: HorizonSealed;
+  /** The id of the version `horizon` was read from; the write is named after it, so a second device working from the same version finds it taken. */
+  baseVersionId: string;
   today: DateOnly;
   /** What the event holds as the device reads it; below zero counts as zero. */
   leftCents: Cents;
@@ -811,7 +824,7 @@ async function endHorizon(
           moveId: move === null ? null : moveId,
         };
   const after = setHorizonState(horizon, state, today, money);
-  const versionId = generateUuid();
+  const versionId = `state_${input.baseVersionId}`;
   const summary = HORIZON_END_WORDS.endSummary(
     horizon.name,
     state,
@@ -855,11 +868,12 @@ export interface BringBackInput {
   itemId: string;
   /** The called-off event as the device reads it just before the write. */
   horizon: HorizonSealed;
+  baseVersionId: string;
   today: DateOnly;
   /** What comes back from where the call-off sent it; zero starts the event at nothing. */
   bringCents: Cents;
-  /** What the envelope or goal it went to has now, read when the money came from one. */
-  placeLeftCents: Cents;
+  /** What the place it went to, or Free to Spend, has now. */
+  availableCents: Cents;
 }
 
 /** Reopens a called-off event from today, bringing its money back from where it went when the person said so. */
@@ -878,11 +892,11 @@ export async function bringBackHorizon(
           toId: input.itemId,
           cents: bringCents,
           date: today,
-          leftCents: input.placeLeftCents,
+          leftCents: input.availableCents,
         }
       : null;
   const after = setHorizonState(horizon, 'open', today, null);
-  const versionId = generateUuid();
+  const versionId = `state_${input.baseVersionId}`;
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.itemId,
@@ -904,6 +918,7 @@ export interface ReleaseHorizonInput {
   itemId: string;
   /** The finished or called-off event that kept its money held. */
   horizon: HorizonSealed;
+  baseVersionId: string;
   today: DateOnly;
   /** What it holds now; zero releases nothing. */
   leftCents: Cents;
@@ -931,7 +946,7 @@ export async function releaseHorizonHeld(
     ...horizon,
     stateMoney: { kind: 'free', toId: null, cents, moveId },
   };
-  const versionId = generateUuid();
+  const versionId = `state_${input.baseVersionId}`;
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.itemId,

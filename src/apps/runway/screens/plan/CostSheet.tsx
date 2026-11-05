@@ -467,15 +467,23 @@ function CostSheet({
     return name === null ? null : PURCHASE_COST_WORDS.paidWith(name);
   };
 
-  const getTakeBackSubtitle = (entry: CostPaidEntry) =>
-    entry.mark === 'outside'
-      ? COST_PAID_WORDS.takeBackSubOutside
-      : describeCostGivesBack(
-          horizon.name,
-          entry.amountCents,
-          entry.fromFreeCents,
-          isTrack ? entry.mark : 'item',
-        );
+  const getTakeBackSubtitle = (entry: CostPaidEntry) => {
+    if (horizon.state === 'calledOff') {
+      return HORIZON_END_WORDS.calledOffTakeBack(horizon.name);
+    }
+    const gives =
+      entry.mark === 'outside'
+        ? COST_PAID_WORDS.takeBackSubOutside
+        : describeCostGivesBack(
+            horizon.name,
+            entry.amountCents,
+            entry.fromFreeCents,
+            isTrack ? entry.mark : 'item',
+          );
+    return horizon.state === 'finished'
+      ? `${gives} ${HORIZON_END_WORDS.opensAgain(horizon.name)}`
+      : gives;
+  };
 
   const getMarkBody = () => {
     if (cost.isOutside) return COST_PAID_WORDS.markSubOutside(horizon.name);
@@ -522,18 +530,22 @@ function CostSheet({
     if (entry.mark === 'purchase' && isTrack) {
       const isConfirmed = await confirm({
         title: PURCHASE_COST_WORDS.takeBackTitle(cost.name),
-        message: mask(
-          PURCHASE_COST_WORDS.takeBackText(
-            formatCents(entry.amountCents),
-            formatDateOrdinalUTC(entry.paidOn),
-            describeCostGivesBack(
-              horizon.name,
-              entry.amountCents,
-              entry.fromFreeCents,
-              'item',
+        message:
+          mask(
+            PURCHASE_COST_WORDS.takeBackText(
+              formatCents(entry.amountCents),
+              formatDateOrdinalUTC(entry.paidOn),
+              describeCostGivesBack(
+                horizon.name,
+                entry.amountCents,
+                entry.fromFreeCents,
+                'item',
+              ),
             ),
-          ),
-        ),
+          ) +
+          (horizon.state === 'finished'
+            ? ` ${HORIZON_END_WORDS.opensAgain(horizon.name)}`
+            : ''),
         confirmText: COST_PAID_WORDS.takeBack,
         destructive: true,
       });
@@ -602,16 +614,18 @@ function CostSheet({
                   formatDateOrdinalUTC(settled.paidOn),
                   settled.mark === 'outside',
                 )
-              : HORIZON_WORDS.costFact(
-                  when,
-                  cost.pricedOn === null
-                    ? null
-                    : formatDateOrdinalUTC(cost.pricedOn),
-                  cost.isOutside,
-                )
+              : isDone
+                ? HORIZON_END_WORDS.stopped
+                : HORIZON_WORDS.costFact(
+                    when,
+                    cost.pricedOn === null
+                      ? null
+                      : formatDateOrdinalUTC(cost.pricedOn),
+                    cost.isOutside,
+                  )
         }
       />
-      {!settled && (
+      {!settled && !isDone && (
         <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       )}
       <ActionGroup isRoomy>
@@ -834,7 +848,7 @@ function CostSheet({
                 icon={<Undo2 />}
                 label={COST_PAID_WORDS.takeBack}
                 subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
-                isDisabled={costPaid.isBusy}
+                isDisabled={costPaid.isBusy || horizon.state === 'calledOff'}
                 onClick={() => void takeBackEntry(takingBack)}
               />
             </ActionGroup>
