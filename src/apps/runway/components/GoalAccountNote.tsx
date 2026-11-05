@@ -3,13 +3,14 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { ActionSection } from '@apps/runway/components/ActionSection';
+import HelpTip from '@/components/HelpTip';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { ACCOUNT_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getGoalActual } from '@apps/runway/engine/goalActual';
 import { shareInterest } from '@apps/runway/engine/interest';
 import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { selectAccountHoldings } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
 
@@ -27,6 +28,7 @@ function AccountLines({
   today: number;
 }) {
   const { isHidden } = useValuesHidden();
+  const mask = useMaskedText();
   const holdings = useAppSelector((state) =>
     selectAccountHoldings(state, today),
   )[account.id];
@@ -48,43 +50,62 @@ function AccountLines({
     .map((item) => ({ id: item.id, heldCents: item.cents }));
   if (!goals.some((goal) => goal.id === goalId)) return null;
 
-  const interestLine =
+  const interestShare =
     interest === null
       ? null
-      : (interest.isActual
-          ? ACCOUNT_WORDS.goalInterestActual
-          : ACCOUNT_WORDS.goalInterest)(
-          formatCents(
-            shareInterest(interest.cents, goals, account.balanceCents).byId[
-              goalId
-            ] ?? 0,
-          ),
-          formatDateOrdinalUTC(interest.on),
+      : formatCents(
+          shareInterest(interest.cents, goals, account.balanceCents).byId[
+            goalId
+          ] ?? 0,
         );
-  const bankLine = getBankLine(account, goalId, goals, bank, isHidden);
-  const lines = [interestLine, bankLine].filter(
-    (line): line is string => line !== null,
-  );
-  if (lines.length === 0) return null;
+  const interestDay =
+    interest === null ? '' : formatDateOrdinalUTC(interest.on);
+  const bankNote = getBankNote(account, goalId, goals, bank, isHidden);
+  if (interest === null && bankNote === null) return null;
   return (
-    <ActionSection caption={account.name}>
-      {lines.map((line) => (
-        <p key={line} className='text-sm'>
-          <MaskedText>{line}</MaskedText>
-        </p>
-      ))}
-    </ActionSection>
+    <div className='flex flex-wrap gap-2'>
+      {interest !== null && interestShare !== null && (
+        <HelpTip
+          title={ACCOUNT_WORDS.interestTitle(account.name)}
+          badgeLabel={mask(
+            ACCOUNT_WORDS.interestChip(
+              interestShare,
+              interestDay,
+              interest.isActual,
+            ),
+          )}
+        >
+          <p>
+            <MaskedText>
+              {(interest.isActual
+                ? ACCOUNT_WORDS.goalInterestActual
+                : ACCOUNT_WORDS.goalInterest)(interestShare, interestDay)}
+            </MaskedText>
+          </p>
+        </HelpTip>
+      )}
+      {bankNote !== null && (
+        <HelpTip
+          title={ACCOUNT_WORDS.goalBankTitle(account.name)}
+          badgeLabel={bankNote.chip}
+        >
+          <p>
+            <MaskedText>{bankNote.text}</MaskedText>
+          </p>
+        </HelpTip>
+      )}
+    </div>
   );
 }
 
-function getBankLine(
+function getBankNote(
   account: OpenAccount,
   goalId: string,
   goals: { id: string; heldCents: number }[],
   bank: { cents: number; asOf: number } | null,
   isHidden: boolean,
 ) {
-  if (bank === null || account.linkId === null) return null;
+  if (isHidden || bank === null || account.linkId === null) return null;
   if (account.balanceCents === null) return null;
   const bankDay = todayAsUtcDate(bank.asOf);
   if (account.balanceOn !== null && bankDay < account.balanceOn) return null;
@@ -94,17 +115,17 @@ function getBankLine(
     account.balanceCents,
     bank.cents,
   );
-  if (differenceCents === 0 && !isHidden) return null;
-  return ACCOUNT_WORDS.goalActual(
-    formatCents(actualCents),
-    isHidden
-      ? null
-      : {
-          difference: formatCents(Math.abs(differenceCents)),
-          direction: differenceCents > 0 ? 'more' : 'less',
-          saved: formatCents(plannedCents),
-        },
-  );
+  if (differenceCents === 0) return null;
+  return {
+    chip: ACCOUNT_WORDS.goalBankChip(
+      `${differenceCents > 0 ? '+' : '−'}${formatCents(Math.abs(differenceCents))}`,
+    ),
+    text: ACCOUNT_WORDS.goalActual(formatCents(actualCents), {
+      difference: formatCents(Math.abs(differenceCents)),
+      direction: differenceCents > 0 ? 'more' : 'less',
+      saved: formatCents(plannedCents),
+    }),
+  };
 }
 
 /** What the account holding a goal says about it: its share of the month's interest, and of any difference the bank shows from the typed balance; nothing when neither applies. */

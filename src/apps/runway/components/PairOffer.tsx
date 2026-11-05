@@ -102,13 +102,10 @@ function PairOffer({
   if (!self || offered.length === 0 || isElse) return <>{children}</>;
   return (
     <div className='space-y-2'>
-      <div>
-        <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
-        <p className='text-muted-foreground text-xs'>{PAIR_WORDS.whichHint}</p>
-      </div>
+      <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map(({ other, kind, name }) => {
-          const detail = formatDateOrdinalUTC(other.date);
+          const detail = `${PAIR_WORDS.pairVerb} · ${formatDateOrdinalUTC(other.date)}`;
           return (
             <ItemRow
               key={other.id}

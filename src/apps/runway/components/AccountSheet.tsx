@@ -15,6 +15,7 @@ import ActionRow from '@/components/ActionRow';
 import AmountHero from '@/components/AmountHero';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
@@ -51,6 +52,7 @@ import {
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   archiveAccount,
@@ -128,6 +130,7 @@ function AccountSheet({
     balanceCents === account.balanceCents && account.balanceOn === today;
   const linkedFact = useLinkedFact(account.linkId);
   const { interest, uncounted } = useAccountInterest(account, today);
+  const mask = useMaskedText();
   const interestLine =
     interest === null
       ? null
@@ -487,12 +490,25 @@ function AccountSheet({
           }
           fact={facts.length === 0 ? null : facts.join(' · ')}
         />
-        {interestLine !== null && (
-          <ActionSection caption={ACCOUNT_WORDS.interestCaption}>
-            <p className='text-sm'>
+        {interest !== null && interestLine !== null && (
+          <HelpTip
+            title={ACCOUNT_WORDS.interestTitle(account.name)}
+            badgeLabel={mask(
+              uncounted === null
+                ? ACCOUNT_WORDS.interestChip(
+                    formatCents(interest.cents),
+                    formatDateOrdinalUTC(interest.on),
+                    interest.isActual,
+                  )
+                : ACCOUNT_WORDS.interestUncountedChip(
+                    formatCents(uncounted.cents),
+                  ),
+            )}
+          >
+            <p>
               <MaskedText>{interestLine}</MaskedText>
             </p>
-          </ActionSection>
+          </HelpTip>
         )}
         <ActionSection caption={ACCOUNT_WORDS.holdsTitle}>
           {holdLines.length === 0 && (
