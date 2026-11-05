@@ -1627,6 +1627,18 @@ export const selectExpenses = createSelector([selectExpenseList], (expenses) =>
   ),
 );
 
+const selectRuleList = (state: RootState) => state.runway.rules;
+
+/** Every always-do-this rule, oldest first. */
+export const selectRules = createSelector([selectRuleList], (rules) =>
+  [...rules].sort(
+    (a, b) => a.createdAt - b.createdAt || a.id.localeCompare(b.id),
+  ),
+);
+
+export const selectIsRulesLoaded = (state: RootState) =>
+  state.runway.isRulesLoaded;
+
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>
   cards.filter((card) => card.archivedAt === null),

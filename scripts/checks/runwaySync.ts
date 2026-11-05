@@ -124,6 +124,7 @@ const tx = (
   date: Date.UTC(2026, 10, 1),
   amountCents: cents,
   merchant: 'Cafe',
+  category: null,
   isPending: false,
   ...extra,
 });

@@ -134,8 +134,10 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const sourceNameOf = useSourceName();
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sent, setSent] = useState<OpenPurchase | null>(null);
   const opened =
     [...spending, ...moneyIn].find((entry) => entry.id === openId) ?? null;
+  const isMoneyIn = opened !== null && opened.amountCents < 0;
 
   const renderRows = (rows: readonly OpenPurchase[]) => (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
@@ -183,17 +185,18 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           </>
         )}
       </div>
-      {opened !== null && opened.amountCents >= 0 && (
+      {openId !== null && !isMoneyIn && (
         <PurchaseScreen
-          key={opened.id}
-          purchaseId={opened.id}
-          fallback={opened}
+          key={openId}
+          purchaseId={openId}
+          fallback={opened ?? (sent?.id === openId ? sent : null)}
           onOpen={setOpenId}
           onClose={() => setOpenId(null)}
+          onSuggestRule={setSent}
           hasGroupLink={false}
         />
       )}
-      {opened !== null && opened.amountCents < 0 && (
+      {opened !== null && isMoneyIn && (
         <MoneyInSheet
           key={opened.id}
           purchase={opened}

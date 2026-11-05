@@ -9,6 +9,7 @@ import type {
   OpenLink,
   OpenCard,
   OpenExpense,
+  OpenRule,
   OpenChange,
   OpenDay,
   OpenMove,
@@ -47,6 +48,9 @@ export interface RunwayState {
   isAccountBalancesLoaded: boolean;
   /** Every expense group. */
   expenses: OpenExpense[];
+  /** Every always-do-this rule, and whether they have been read once, so no pass runs on a rule list that is still arriving. */
+  rules: OpenRule[];
+  isRulesLoaded: boolean;
   /** The purchases of the recent window. */
   purchases: OpenPurchase[];
   /** Every purchase waiting for a home, whatever its date, and whether they have been read once. */
@@ -102,6 +106,8 @@ const initialState: RunwayState = {
   accountBalances: [],
   isAccountBalancesLoaded: false,
   expenses: [],
+  rules: [],
+  isRulesLoaded: false,
   purchases: [],
   needsHome: [],
   isNeedsHomeLoaded: false,
@@ -173,6 +179,10 @@ export const runwaySlice = createSlice({
     },
     setExpenses: (state, action: PayloadAction<OpenExpense[]>) => {
       state.expenses = action.payload;
+    },
+    setRules: (state, action: PayloadAction<OpenRule[]>) => {
+      state.rules = action.payload;
+      state.isRulesLoaded = true;
     },
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
@@ -284,6 +294,7 @@ export const {
   setLinks,
   setAccountBalances,
   setExpenses,
+  setRules,
   setPurchases,
   setPeriodPurchases,
   setNeedsHome,

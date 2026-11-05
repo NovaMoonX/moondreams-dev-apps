@@ -5,6 +5,7 @@ import {
   Layers,
   Pencil,
   ReceiptText,
+  Repeat,
   Trash2,
   Undo2,
 } from 'lucide-react';
@@ -41,12 +42,17 @@ import {
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
+  RULE_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
 } from '@apps/runway/constants';
 import { keepEntryFor } from '@/hooks/useBackHistory';
 import type { OpenPurchase, PurchaseLine } from '@apps/runway/types';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import RuleSheet from '@apps/runway/forms/RuleSheet';
+import { findPlacementRun, toMerchantKey } from '@apps/runway/engine/rules';
+import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import ExpenseView from '@apps/runway/components/ExpenseView';
 import ReceiptFileInput, {
   type ReceiptChooser,
@@ -82,6 +88,7 @@ import {
   selectItemLooks,
   selectSpendPurchases,
   selectLostPairs,
+  selectRules,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
   describeEnvelopes,
@@ -117,6 +124,8 @@ interface PurchaseScreenProps {
   fallback?: OpenPurchase | null;
   /** False when it was opened from its own group, which is already under it. */
   hasGroupLink?: boolean;
+  /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
+  onSuggestRule?: (placed: OpenPurchase) => void;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
@@ -126,6 +135,7 @@ function PurchaseScreen({
   onClose,
   fallback = null,
   hasGroupLink = true,
+  onSuggestRule,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -147,6 +157,13 @@ function PurchaseScreen({
     selectAllHorizonItems(state, todayAsUtcDate()),
   );
   const stance = useAppSelector(selectStance);
+  const level = useAppSelector(selectLevel);
+  const rules = useAppSelector(selectRules);
+  const recentPurchases = useAppSelector((state) => state.runway.purchases);
+  const { describe: describeRuleSentence } = useRuleNames();
+  const [ruleView, setRuleView] = useState<'make' | 'suggest' | 'edit' | null>(
+    null,
+  );
   const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
@@ -240,6 +257,20 @@ function PurchaseScreen({
   }
 
   const refund = isRefund(purchase);
+  const placedRule =
+    purchase.ruleId === null
+      ? null
+      : (rules.find((entry) => entry.id === purchase.ruleId) ?? null);
+  const run =
+    level === 'link' && !isWaiting && purchase.source === 'link'
+      ? findPlacementRun(
+          toMerchantKey(purchase.merchant),
+          recentPurchases,
+          rules,
+        )
+      : null;
+  const suggestion =
+    run !== null && run.purchaseIds.includes(purchase.id) ? run : null;
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const amount = formatCents(Math.abs(purchase.amountCents));
   const original = purchase.refundOfId
@@ -693,7 +724,11 @@ function PurchaseScreen({
               onDone={onClose}
               elseSubtitle={PAIR_WORDS.pickEnvelope}
             >
-              <NeedsHomeAssign purchase={purchase} onDone={onClose} />
+              <NeedsHomeAssign
+                purchase={purchase}
+                onDone={onClose}
+                onSuggestRule={onSuggestRule}
+              />
             </PairOffer>
           )}
           <ActionGroup isRoomy>
@@ -715,7 +750,51 @@ function PurchaseScreen({
                 }));
               }}
             />
+            {isWaiting &&
+              level === 'link' &&
+              lostPair === null &&
+              purchase.source === 'link' &&
+              purchase.amountCents > 0 && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Repeat />}
+                  label={RULE_WORDS.alwaysDo}
+                  subtitle={RULE_WORDS.alwaysDoSub}
+                  onClick={() => setRuleView('make')}
+                />
+              )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
+            {placedRule !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={RULE_WORDS.placedBy(
+                  nameOf(
+                    purchase.lines.find((line) => line.via !== 'spill')
+                      ?.envelopeId ?? placedRule.target,
+                  ),
+                )}
+                subtitle={RULE_WORDS.placedBySub(
+                  describeRuleSentence(placedRule),
+                )}
+                onClick={() => setRuleView('edit')}
+              />
+            )}
+            {suggestion !== null && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Repeat />}
+                label={RULE_WORDS.suggest(purchase.merchant?.trim() ?? '')}
+                subtitle={RULE_WORDS.suggestSub(nameOf(suggestion.envelopeId))}
+                onClick={() => setRuleView('suggest')}
+              />
+            )}
             {paysRef !== null &&
               paysHorizon !== null &&
               paysCostName !== null && (
@@ -817,6 +896,13 @@ function PurchaseScreen({
           />
         </div>
       </FormSheet>
+      {ruleView !== null && (
+        <RuleSheet
+          purchase={ruleView === 'edit' ? null : purchase}
+          rule={ruleView === 'edit' ? placedRule : null}
+          onClose={() => setRuleView(null)}
+        />
+      )}
     </>
   );
 }

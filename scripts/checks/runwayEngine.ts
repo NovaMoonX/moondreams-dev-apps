@@ -31,6 +31,14 @@ import {
   keepPullAccountId,
   resolvePayFromAccountId,
 } from '../../src/apps/runway/engine/accounts.ts';
+import {
+  findRule,
+  findPlacementRun,
+  findRulePlacements,
+  isBroadMerchant,
+  RULE_VARIES,
+} from '../../src/apps/runway/engine/rules.ts';
+import type { OpenRule } from '../../src/apps/runway/types.ts';
 import { matchLinkRows } from '../../src/apps/runway/engine/linkMatch.ts';
 import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
@@ -6922,6 +6930,8 @@ const version = (
       pairKind: null,
       cardPaymentMoveId: null,
       tickedDayKey: null,
+      category: null,
+      ruleId: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7514,6 +7524,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7914,6 +7926,8 @@ const version = (
       pairKind: null,
       cardPaymentMoveId: null,
       tickedDayKey: null,
+      category: null,
+      ruleId: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9835,6 +9849,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10381,6 +10397,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     ...extra,
   });
 
@@ -10536,6 +10554,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     ...extra,
   });
   const payDay = (
@@ -10835,6 +10855,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     ...extra,
   });
   const onCard = { accountId: null, paidByCardId: 'venture' };
@@ -13254,6 +13276,8 @@ const version = (
     pairKind: null,
     cardPaymentMoveId: null,
     tickedDayKey: null,
+    category: null,
+    ruleId: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,
@@ -17776,6 +17800,254 @@ console.log('runway engine: ok');
     7_000,
     'a linked account with no bank figure yet falls back to the typed one',
   );
+}
+
+{
+  const rule = (id: string, over: Partial<OpenRule>): OpenRule => ({
+    id,
+    createdAt: 1,
+    updatedAt: 1,
+    merchantKey: null,
+    merchantName: null,
+    category: null,
+    cardId: null,
+    target: 'e-main',
+    ...over,
+  });
+  const before: OpenPurchase = {
+    id: 'p',
+    date: 86_400_000,
+    source: 'manual',
+    status: null,
+    accountId: null,
+    notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    tickedDayKey: null,
+    category: null,
+    ruleId: null,
+    needsHome: false,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: 4_000,
+    merchant: 'Safeway',
+    label: null,
+    note: null,
+    refundOfId: null,
+    paidByCardId: null,
+    link: null,
+    receiptText: null,
+    expenseId: null,
+    lines: [],
+  };
+  const merchantRule = rule('m', {
+    merchantKey: 'safeway',
+    merchantName: 'Safeway',
+    target: 'e-merchant',
+  });
+  const kindCardRule = rule('kc', {
+    category: 'FOOD',
+    cardId: 'c1',
+    target: 'e-kc',
+  });
+  const kindRule = rule('k', { category: 'FOOD', target: 'e-kind' });
+  const cardRule = rule('c', { cardId: 'c1', target: 'e-card' });
+  const all = [cardRule, kindRule, kindCardRule, merchantRule];
+  const fact = (
+    merchant: string | null,
+    category: string | null,
+    cardId: string | null,
+  ) => ({ merchant, category, cardId });
+  assert.equal(
+    findRule(fact('Safeway', 'FOOD', 'c1'), all)?.rule.id,
+    'm',
+    'a merchant rule beats the rest',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'FOOD', 'c1'), all)?.rule.id,
+    'kc',
+    'a kind with a card beats a kind alone',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'FOOD', 'c2'), all)?.rule.id,
+    'k',
+    'a kind beats a card',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'GAS', 'c1'), all)?.rule.id,
+    'c',
+    'a card rule is the last resort',
+  );
+  assert.equal(
+    findRule(fact('Chipotle', 'GAS', 'c2'), all),
+    null,
+    'nothing fits, nothing is chosen',
+  );
+  assert.equal(
+    findRule(fact('SAFEWAY #12', null, null), [merchantRule])?.rule.id === 'm',
+    false,
+    'a different store name is not the merchant',
+  );
+  assert.equal(
+    findRule(fact(null, null, null), [rule('empty', {})]),
+    null,
+    'a rule that looks at nothing fits nothing',
+  );
+  assert.equal(
+    findRule(fact('Amazon', 'FOOD', 'c2'), [kindRule]),
+    null,
+    'a broad merchant escapes a kind rule',
+  );
+  assert.equal(
+    findRule(fact('Amazon', 'FOOD', 'c1'), [kindCardRule]),
+    null,
+    'also a kind with a card',
+  );
+  assert.equal(
+    findRule(fact('Amazon', 'FOOD', 'c1'), [cardRule])?.rule.id,
+    'c',
+    'but a card rule still fits it',
+  );
+  const variesRule = rule('v', {
+    merchantKey: 'corner shop',
+    merchantName: 'Corner Shop',
+    target: RULE_VARIES,
+  });
+  assert.equal(
+    findRule(fact('Corner Shop', 'FOOD', null), [variesRule, kindRule])?.isAsk,
+    true,
+    'a merchant that varies asks',
+  );
+  assert.equal(
+    isBroadMerchant('corner shop', [variesRule]),
+    true,
+    'a varies merchant is broad',
+  );
+  assert.equal(isBroadMerchant('corner shop', [kindRule]), false);
+  assert.equal(
+    findRule(fact('Safeway', null, null), [
+      { ...merchantRule, id: 'old', category: null, cardId: null },
+    ])?.rule.id,
+    'old',
+    'an old merchant-only rule still fits',
+  );
+
+  const waitingCharge = (
+    id: string,
+    over: Partial<OpenPurchase>,
+  ): OpenPurchase => ({
+    ...before,
+    id,
+    source: 'link' as const,
+    needsHome: true,
+    lines: [],
+    amountCents: 2_500,
+    merchant: 'Safeway',
+    ...over,
+  });
+  const ids = new Set(['e-merchant', 'e-kind']);
+  const placed = findRulePlacements(
+    [
+      waitingCharge('ok', {}),
+      waitingCharge('deposit', { amountCents: -2_500 }),
+      waitingCharge('hand', { assignedBy: 'person' }),
+      waitingCharge('paired', { pairedWithId: 'x' }),
+      waitingCharge('income', { incomeDayId: 'd' }),
+      waitingCharge('typed', { source: 'manual' as const }),
+    ],
+    [],
+    [merchantRule],
+    ids,
+  );
+  assert.deepEqual(
+    placed.map((entry) => entry.purchase.id),
+    ['ok'],
+    'only a waiting charge nobody has touched is placed',
+  );
+  assert.deepEqual(
+    findRulePlacements(
+      [waitingCharge('ok', {})],
+      [],
+      [merchantRule],
+      new Set(),
+    ),
+    [],
+    'a rule whose envelope is gone places nothing',
+  );
+  assert.deepEqual(
+    findRulePlacements(
+      [waitingCharge('ok', {})],
+      [],
+      [{ ...merchantRule, target: RULE_VARIES }],
+      ids,
+    ),
+    [],
+    'a rule that asks places nothing',
+  );
+
+  const own = (
+    id: string,
+    date: number,
+    envelopeId: string,
+    over: Partial<OpenPurchase> = {},
+  ): OpenPurchase => ({
+    ...before,
+    id,
+    date,
+    source: 'link' as const,
+    lines: [{ envelopeId, cents: 4_000, via: 'chosen' as const }],
+    ...over,
+  });
+  const three = [own('a', 3, 'x'), own('b', 2, 'x'), own('c', 1, 'x')];
+  assert.deepEqual(
+    findPlacementRun('safeway', three, []),
+    { envelopeId: 'x', purchaseIds: ['a', 'b', 'c'] },
+    'three in a row to one envelope',
+  );
+  assert.equal(
+    findPlacementRun('safeway', [...three.slice(0, 2), own('c', 1, 'y')], []),
+    null,
+    'a different envelope breaks the run',
+  );
+  assert.equal(
+    findPlacementRun(
+      'safeway',
+      [...three.slice(0, 2), own('c', 1, 'x', { assignedBy: 'auto' })],
+      [],
+    ),
+    null,
+    'a placement by a rule is not theirs',
+  );
+  assert.equal(
+    findPlacementRun('safeway', three, [merchantRule]),
+    null,
+    'no suggestion once a rule names the merchant',
+  );
+
+  const chains = { 'e-merchant': ['e-spare'] };
+  const rulePlaced = resolveSpill(
+    [{ envelopeId: 'e-merchant', cents: 2_500, via: 'chosen' as const }],
+    { 'e-merchant': 1_000, 'e-spare': 5_000 },
+    chains,
+  );
+  assert.deepEqual(
+    rulePlaced,
+    resolveSpill(
+      [{ envelopeId: 'e-merchant', cents: 2_500, via: 'chosen' as const }],
+      { 'e-merchant': 1_000, 'e-spare': 5_000 },
+      chains,
+    ),
+    'a rule-placed overspend splits exactly as one added by hand',
+  );
+  assert.equal(
+    rulePlaced.reduce((sum, line) => sum + line.cents, 0),
+    2_500,
+    'and the split still adds up',
+  );
+  assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
 }
 
 console.log('runway engine: ok');

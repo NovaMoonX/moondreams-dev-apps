@@ -67,6 +67,8 @@ import type {
   TransferSealed,
   CardSealed,
   ExpenseDoc,
+  RuleDoc,
+  RuleSealed,
   ExpenseSealed,
   ChangeDoc,
   ChangeSealed,
@@ -3212,7 +3214,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, twelve rows in all (one spills from Dining out into its chain) so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Fourteen more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens, and an unclear one (two $100.00 debits from Checking A, three and two days ago, and one $100.00 deposit to Checking B two days ago: neither debit is clearly the other side, so all three are offered each other in Needs a home). The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, twelve rows in all (one spills from Dining out into its chain) so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Fifteen more came in from the bank link and wait in Needs a home (and one a rule already placed): a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens, and an unclear one (two $100.00 debits from Checking A, three and two days ago, and one $100.00 deposit to Checking B two days ago: neither debit is clearly the other side, so all three are offered each other in Needs a home). The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3392,6 +3394,8 @@ async function writeSeedPurchases(
             pairKind: null,
             cardPaymentMoveId: null,
             tickedDayKey: null,
+            category: null,
+            ruleId: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -3406,6 +3410,7 @@ async function writeSeedPurchases(
     status: 'pending' | 'posted';
     accountId: string | null;
     cardId: string | null;
+    category?: string;
   }[] = [
     {
       id: 'seed-link-purchase-coffee',
@@ -3415,6 +3420,7 @@ async function writeSeedPurchases(
       status: 'pending',
       accountId: null,
       cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_COFFEE',
     },
     {
       id: 'seed-link-purchase-gas',
@@ -3442,6 +3448,17 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: null,
       cardId: SEED_VENTURE_CARD,
+      category: 'FOOD_AND_DRINK_RESTAURANT',
+    },
+    {
+      id: 'seed-link-purchase-amazon',
+      daysAgo: 2,
+      merchant: 'Amazon',
+      amountCents: 3_299,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_DISCOVER_CARD,
+      category: 'GENERAL_MERCHANDISE_ONLINE_MARKETPLACES',
     },
     {
       id: 'seed-link-deposit-refund',
@@ -3571,12 +3588,15 @@ async function writeSeedPurchases(
             pairKind: null,
             cardPaymentMoveId: null,
             tickedDayKey: null,
+            category: entry.category ?? null,
+            ruleId: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
       } satisfies PurchaseDoc);
     }),
   );
+  const ruled = await seedRules(context, plan, encryption, today);
   const safewayDate = today - 3 * DAY_MS;
   const removedDate = today - 8 * DAY_MS;
   const changes = [
@@ -3620,7 +3640,121 @@ async function writeSeedPurchases(
     } satisfies ExpenseDoc,
   );
   await batch.commit();
-  return purchases.length + waiting.length + changes.length + 1;
+  return purchases.length + waiting.length + changes.length + 1 + ruled;
+}
+
+/** Jamie's rules, each sealed like the app seals them: Safeway to Groceries, restaurants on the Venture X to Dining out, everything on the Discover to Everyday spending, and Amazon asks every time. One purchase a rule already placed (a Safeway run) says which. None of them catches what waits in Needs a home but the Amazon charge, which it asks about. Rules left by an earlier run go first. Five documents. */
+async function seedRules(
+  context: SeedContext,
+  plan: string,
+  encryption: Parameters<typeof sealJson>[1],
+  today: number,
+): Promise<number> {
+  const kept = await context.firestore.collection(`${plan}/rules`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
+  const createdAt = today - 10 * DAY_MS;
+  const rules: { id: string; payload: RuleSealed }[] = [
+    {
+      id: 'seed-rule-safeway',
+      payload: {
+        merchantKey: 'safeway',
+        merchantName: 'Safeway',
+        category: null,
+        cardId: null,
+        target: 'seed-envelope-groceries',
+      },
+    },
+    {
+      id: 'seed-rule-restaurants',
+      payload: {
+        merchantKey: null,
+        merchantName: null,
+        category: 'FOOD_AND_DRINK_RESTAURANT',
+        cardId: SEED_VENTURE_CARD,
+        target: 'seed-envelope-dining',
+      },
+    },
+    {
+      id: 'seed-rule-discover',
+      payload: {
+        merchantKey: null,
+        merchantName: null,
+        category: null,
+        cardId: SEED_DISCOVER_CARD,
+        target: 'seed-envelope-everyday',
+      },
+    },
+    {
+      id: 'seed-rule-amazon',
+      payload: {
+        merchantKey: 'amazon',
+        merchantName: 'Amazon',
+        category: null,
+        cardId: null,
+        target: 'varies',
+      },
+    },
+  ];
+  const batch = context.firestore.batch();
+  await Promise.all(
+    rules.map(async ({ id, payload }, index) => {
+      batch.set(context.firestore.doc(`${plan}/rules/${id}`), {
+        id,
+        createdAt: createdAt + index,
+        updatedAt: createdAt + index,
+        sealed: await sealJson(payload, encryption),
+      } satisfies RuleDoc);
+    }),
+  );
+  const date = today - 4 * DAY_MS;
+  const placedAt = date + 12 * 3_600_000;
+  batch.set(
+    context.firestore.doc(`${plan}/purchases/seed-link-purchase-ruled`),
+    {
+      id: 'seed-link-purchase-ruled',
+      date,
+      source: 'link',
+      status: 'posted',
+      needsHome: false,
+      accountId: null,
+      expenseId: null,
+      dedupeKey: 'seed-link-purchase-ruled-dedupe',
+      createdAt: placedAt,
+      updatedAt: placedAt,
+      sealed: await sealJson(
+        {
+          amountCents: 4_725,
+          merchant: 'Safeway',
+          category: 'FOOD_AND_DRINK_GROCERIES',
+          ruleId: 'seed-rule-safeway',
+          label: null,
+          note: null,
+          lines: [
+            {
+              envelopeId: 'seed-envelope-groceries',
+              cents: 4_725,
+              via: 'chosen',
+            },
+          ],
+          refundOfId: null,
+          paidByCardId: SEED_VENTURE_CARD,
+          link: null,
+          receiptText: null,
+          costRef: null,
+          notSameAs: null,
+          incomeDayId: null,
+          assignedBy: 'auto',
+          pairedWithId: null,
+          pairKind: null,
+          cardPaymentMoveId: null,
+          tickedDayKey: null,
+        } satisfies PurchaseSealed,
+        encryption,
+      ),
+    } satisfies PurchaseDoc,
+  );
+  await batch.commit();
+  return rules.length + 1;
 }
 
 /**

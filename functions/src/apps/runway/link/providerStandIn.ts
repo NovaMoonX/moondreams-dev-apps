@@ -44,6 +44,7 @@ const transaction = (
   days: number,
   amountCents: number,
   merchant: string,
+  category: string | null,
   extra: Partial<NormalizedTransaction> = {},
 ): NormalizedTransaction => ({
   providerTransactionId,
@@ -52,6 +53,7 @@ const transaction = (
   date: daysAgo(days),
   amountCents,
   merchant,
+  category,
   isPending: false,
   ...extra,
 });
@@ -63,21 +65,51 @@ const FIRST_PAGE: NormalizedTransaction[] = [
     3,
     5_432,
     'Trader Joe\u2019s',
+    'FOOD_AND_DRINK_GROCERIES',
   ),
-  transaction('stand-in-t2', 'stand-in-sapphire', 6, 4_110, 'Shell'),
+  transaction(
+    'stand-in-t2',
+    'stand-in-sapphire',
+    6,
+    4_110,
+    'Shell',
+    'TRANSPORTATION_GAS',
+  ),
   transaction(
     'stand-in-t3-pending',
     'stand-in-sapphire',
     1,
     675,
     'Blue Bottle Coffee',
+    'FOOD_AND_DRINK_COFFEE',
     {
       isPending: true,
     },
   ),
-  transaction('stand-in-t4', 'stand-in-sapphire', 12, 1_549, 'Netflix'),
-  transaction('stand-in-t5', 'stand-in-checking', 8, -215_000, 'Payroll'),
-  transaction('stand-in-t6', 'stand-in-checking', 10, 8_820, 'Costco'),
+  transaction(
+    'stand-in-t4',
+    'stand-in-sapphire',
+    12,
+    1_549,
+    'Netflix',
+    'ENTERTAINMENT_TV_AND_MOVIES',
+  ),
+  transaction(
+    'stand-in-t5',
+    'stand-in-checking',
+    8,
+    -215_000,
+    'Payroll',
+    'INCOME_WAGES',
+  ),
+  transaction(
+    'stand-in-t6',
+    'stand-in-checking',
+    10,
+    8_820,
+    'Costco',
+    'GENERAL_MERCHANDISE_SUPERSTORES',
+  ),
 ];
 
 /** The pending coffee posts a little higher, with its pending id, and the pending one goes away. */
@@ -87,6 +119,7 @@ const POSTED_COFFEE = transaction(
   1,
   750,
   'Blue Bottle Coffee',
+  'FOOD_AND_DRINK_COFFEE',
   {
     pendingTransactionId: 'stand-in-t3-pending',
   },

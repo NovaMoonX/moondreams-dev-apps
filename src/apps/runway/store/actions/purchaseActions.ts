@@ -216,6 +216,8 @@ export async function addPurchase(
   const payload = {
     amountCents: input.amountCents,
     merchant: input.merchant,
+    category: null,
+    ruleId: null,
     label: input.label,
     note: input.note,
     lines: input.lines,
@@ -464,6 +466,8 @@ export async function editPurchase(
       {
         amountCents: input.amountCents,
         merchant: input.merchant,
+        category: previous.category,
+        ruleId: null,
         label: input.label,
         note: input.note,
         lines: input.lines,
@@ -538,6 +542,11 @@ export async function editPurchase(
   await untickPairMove(uid, previous);
 }
 
+export interface PurchasePlacement {
+  ruleId: string | null;
+  assignedBy: PurchaseAssignedBy | null;
+}
+
 /** Gives a purchase waiting in Needs a home its envelopes, or none (a deposit left out of spending), in one transaction that refuses when another device changed it first. A change-log entry is written with it; resolves with the purchase's new `updatedAt`. */
 export async function assignPurchase(
   uid: string,
@@ -546,6 +555,8 @@ export async function assignPurchase(
   lines: PurchaseLine[],
   summary: string,
   needsHome = false,
+  /** Who placed it and by which rule; left out, the person did, by hand. */
+  placement: PurchasePlacement | null = null,
 ): Promise<number> {
   if (lines.length > MAX_PURCHASE_LINES)
     throw new Error('Pick where it comes from.');
@@ -557,6 +568,8 @@ export async function assignPurchase(
       {
         amountCents: previous.amountCents,
         merchant: previous.merchant,
+        category: previous.category,
+        ruleId: placement?.ruleId ?? null,
         label: previous.label,
         note: previous.note,
         lines,
@@ -567,7 +580,7 @@ export async function assignPurchase(
         costRef: previous.costRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: null,
-        assignedBy: previous.assignedBy,
+        assignedBy: placement ? placement.assignedBy : previous.assignedBy,
         pairedWithId: null,
         pairKind: null,
         cardPaymentMoveId: null,
@@ -628,6 +641,7 @@ export const returnPurchaseToWaiting = (
   encryption: RunwayEncryption,
   previous: OpenPurchase,
   summary: string,
+  placement: PurchasePlacement | null = null,
 ) =>
   assignPurchase(
     uid,
@@ -638,6 +652,7 @@ export const returnPurchaseToWaiting = (
       : [],
     summary,
     true,
+    placement,
   );
 
 /** Moves a deposit between Needs a home and an income day (or from a day no screen shows to another) in one transaction that refuses when another device changed it first or the day was marked as not arrived. A change-log entry is written with it; resolves with the deposit's new `updatedAt`. A confirmed day's split is never read or written. */
@@ -1170,6 +1185,8 @@ const readImages = async (uid: string, purchaseId: string) => {
 const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   amountCents: purchase.amountCents,
   merchant: purchase.merchant,
+  category: purchase.category,
+  ruleId: purchase.ruleId,
   label: purchase.label,
   note: purchase.note,
   lines: purchase.lines,
@@ -1233,6 +1250,8 @@ export async function mergeBankPurchase(
         ...toSealedPayload(typed),
         amountCents: bank.amountCents,
         merchant: bank.merchant ?? typedMerchant,
+        category: bank.category,
+        ruleId: null,
         label:
           typed.label ??
           (typedMerchant !== null && typedMerchant !== bank.merchant

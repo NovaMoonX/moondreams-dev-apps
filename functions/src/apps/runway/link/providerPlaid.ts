@@ -131,6 +131,7 @@ interface PlaidTransaction {
   amount: number;
   merchant_name: string | null;
   name: string | null;
+  personal_finance_category?: { detailed?: string | null } | null;
   pending: boolean;
 }
 
@@ -152,6 +153,7 @@ const toTransactions = (list: PlaidTransaction[]) =>
       amount: entry.amount,
       merchantName: entry.merchant_name,
       name: entry.name,
+      category: entry.personal_finance_category?.detailed ?? null,
       isPending: entry.pending,
     });
     return normalized ? [normalized] : [];

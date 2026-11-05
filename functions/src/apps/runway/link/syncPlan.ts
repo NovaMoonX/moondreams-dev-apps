@@ -150,6 +150,8 @@ function upsert(
       payload: {
         amountCents: tx.amountCents,
         merchant: tx.merchant,
+        category: tx.category,
+        ruleId: null,
         label: null,
         note: null,
         lines: waitingLines(tx.amountCents),
@@ -172,6 +174,7 @@ function upsert(
       ...current.payload,
       amountCents: tx.amountCents,
       merchant: current.needsHome ? tx.merchant : current.payload.merchant,
+      category: tx.category ?? current.payload.category ?? null,
       lines: current.needsHome
         ? waitingLines(tx.amountCents)
         : repriceLines(

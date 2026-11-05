@@ -343,10 +343,10 @@ service cloud.firestore {
 
     match /apps/runway/plans/{uid}/{collection}/{id} {
       allow update: if isUser(uid)
-        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses']
+        && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

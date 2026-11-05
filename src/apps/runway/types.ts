@@ -642,6 +642,34 @@ export interface OpenExpense extends ExpenseSealed {
   updatedAt: number;
 }
 
+/** An always-do-this rule, stored under `rules`. The collection's name is the one the first design gave it. */
+export interface RuleDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** At least one of the three conditions is set: a merchant alone, a kind of place alone, a card alone, or a kind of place with a card. */
+export interface RuleSealed {
+  /** This merchant, in the one comparable form (`toComparable`); null when the rule does not name one. */
+  merchantKey: string | null;
+  /** The merchant as the person last saw it, for the sentence; null exactly when `merchantKey` is. */
+  merchantName: string | null;
+  /** This kind of place: the bank's detailed category; null when the rule does not name one. */
+  category: string | null;
+  /** Everything on this card; null when the rule does not name one. */
+  cardId: string | null;
+  /** The envelope's id, or `'varies'` (a merchant alone) to ask every time. */
+  target: string;
+}
+
+export interface OpenRule extends RuleSealed {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 /** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
 export interface ReceiptImageDoc {
   id: string;
@@ -898,6 +926,10 @@ export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  /** The bank's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null on a purchase typed by hand and on one saved before it was read (read as null). */
+  category: string | null;
+  /** The rule that placed it; null when the person did, and on a purchase saved before rules (read as null). */
+  ruleId: string | null;
   /** The person's own name for the purchase; it titles the row before the merchant. Null on purchases saved before labels existed. */
   label: string | null;
   /** A memo, read on the purchase's sheet and never used as its title. */
