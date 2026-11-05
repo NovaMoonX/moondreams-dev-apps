@@ -1135,8 +1135,9 @@ async function writeSeedHistory(
 
 const SEED_VENTURE_CARD = 'seed-card-venture';
 const SEED_CHASE_CARD = 'seed-card-chase';
+const SEED_DISCOVER_CARD = 'seed-card-discover';
 
-/** Two cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), and an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid. Six documents. */
+/** Three cards: a Capital One Venture X that owed $250.00 on the starting day and was paid off in two payments (the $35.00 minimum twelve days ago, the rest ten days ago), an unnamed Chase that the car registration is charged to, marked paid, whose due day passed three days ago unpaid, and a Discover it owing $140.00, due in two days and paid from Checking B, so the last paycheck has money to move. Eight documents. */
 async function writeSeedCards(
   context: SeedContext,
   uid: string,
@@ -1162,6 +1163,16 @@ async function writeSeedCards(
       },
       createdAt: createdAt + 60_000,
     },
+    {
+      id: SEED_DISCOVER_CARD,
+      sealed: {
+        issuer: 'Discover',
+        name: 'it',
+        dueDay: new Date(today + 2 * DAY_MS).getUTCDate(),
+        payFromAccountId: 'seed-account-checking-b',
+      },
+      createdAt: createdAt + 120_000,
+    },
   ];
   await Promise.all(
     cards.map(async (card) => {
@@ -1174,6 +1185,19 @@ async function writeSeedCards(
       } satisfies CardDoc);
     }),
   );
+  const discoverStartId = `start_${SEED_DISCOVER_CARD}_${createdAt + 120_000}`;
+  batch.set(context.firestore.doc(`${plan}/moves/${discoverStartId}`), {
+    id: discoverStartId,
+    kind: 'start',
+    date: startDate,
+    refId: SEED_DISCOVER_CARD,
+    reversesMoveId: null,
+    createdAt: createdAt + 120_000,
+    sealed: await sealJson(
+      { amountCents: 14_000, holding: 'card' } satisfies StartSealed,
+      encryption,
+    ),
+  } satisfies MoveDoc);
   const startId = `start_${SEED_VENTURE_CARD}_${createdAt}`;
   batch.set(context.firestore.doc(`${plan}/moves/${startId}`), {
     id: startId,
@@ -1232,7 +1256,7 @@ async function writeSeedCards(
       encryption,
     ),
   } satisfies MoveDoc);
-  return cards.length + 4;
+  return cards.length + 5;
 }
 
 const SEED_WEALTHFRONT_GOALS = [
@@ -1280,6 +1304,7 @@ async function writeSeedAccounts(
         lastFour: '1177',
         isPullAccount: true,
         balanceCents: 65_000,
+        balanceOn: balanceOn - 14 * DAY_MS,
       },
     },
     {
@@ -1402,6 +1427,7 @@ async function writeSeedIncome(
   context: SeedContext,
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
+  payAccountId: string | null = null,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -1417,6 +1443,7 @@ async function writeSeedIncome(
     amount: { lowCents: 214_000, highCents: 214_000 },
     ending: { onDate: null, afterCount: 6 },
     stanceOverride: null,
+    accountId: payAccountId,
     pairings: [
       {
         targetItemId: 'seed-envelope-groceries',
@@ -1431,6 +1458,7 @@ async function writeSeedIncome(
     amount: { lowCents: 90_000, highCents: 90_000 },
     ending: { onDate: null, afterCount: null },
     stanceOverride: null,
+    accountId: null,
     pairings: [
       {
         targetItemId: 'seed-envelope-savings',
@@ -1450,6 +1478,7 @@ async function writeSeedIncome(
     amount: { lowCents: 12_000, highCents: 18_000 },
     ending: { onDate: null, afterCount: null },
     stanceOverride: null,
+    accountId: null,
     pairings: [
       {
         targetItemId: 'seed-bill-rent',
@@ -2783,7 +2812,12 @@ async function seedTrackingPlan(
   await batch.commit();
 
   const documents = [
-    await writeSeedIncome(context, owner.uid, encryption),
+    await writeSeedIncome(
+      context,
+      owner.uid,
+      encryption,
+      'seed-account-checking-a',
+    ),
     await writeSeedEnvelopes(context, owner.uid, encryption, true),
     await writeSeedBills(context, owner.uid, encryption),
     await writeSeedGoals(context, owner.uid, encryption),

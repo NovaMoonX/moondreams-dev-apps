@@ -4,7 +4,7 @@ import type { OpenAccount } from '@apps/runway/types';
 
 export type OpenedAccount = {
   accountId: string;
-  view: 'menu' | 'change';
+  view: 'menu' | 'change' | 'balance';
 };
 
 interface AccountSheetsProps {
@@ -31,6 +31,7 @@ function AccountSheets({ accounts, open, onChange }: AccountSheetsProps) {
   return (
     <AccountSheet
       account={opened}
+      startView={open.view === 'balance' ? 'balance' : 'menu'}
       onClose={() => onChange(null)}
       onChange={() => onChange({ accountId: opened.id, view: 'change' })}
     />

@@ -22,6 +22,7 @@ import {
   keepPullAccountId,
   resolvePayFromAccountId,
 } from '../../src/apps/runway/engine/accounts.ts';
+import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
   collectCardHistory,
   getCardDueState,
@@ -821,6 +822,7 @@ const version = (
       amount: { lowCents: cents, highCents: cents },
       ending,
       stanceOverride: null,
+      accountId: null,
       pairings: [],
     },
   });
@@ -967,6 +969,7 @@ const version = (
       amount: { lowCents: 1, highCents: 1 },
       ending: { onDate: null, afterCount: 4 },
       stanceOverride: null,
+      accountId: null,
       pairings: [],
     },
   });
@@ -3537,6 +3540,7 @@ const version = (
       amount: { lowCents: 100_000, highCents: 100_000 },
       ending: NEVER,
       stanceOverride: null,
+      accountId: null,
       pairings: [],
     },
   };
@@ -4338,6 +4342,7 @@ const version = (
         amount: exactRange(100_000),
         ending: never,
         stanceOverride: null,
+        accountId: null,
         pairings: [],
       },
     },
@@ -4527,6 +4532,7 @@ const version = (
       amount: exactRange(100_000),
       ending: never,
       stanceOverride: null,
+      accountId: null,
       pairings: [],
     },
   };
@@ -4740,6 +4746,7 @@ const version = (
         amount: exact(100_000),
         ending: NEVER,
         stanceOverride: null,
+        accountId: null,
         pairings: [],
       },
     },
@@ -5469,6 +5476,7 @@ const version = (
         amount: exactRange(10_000),
         ending: never,
         stanceOverride: null,
+        accountId: null,
         pairings: [],
       },
     },
@@ -14635,6 +14643,175 @@ console.log('runway engine: ok');
       .unassignedCents,
     null,
     'no balance means no unassigned figure',
+  );
+}
+
+// Moves to accounts.
+{
+  const account = (
+    id: string,
+    changes: Partial<OpenAccount> = {},
+  ): OpenAccount => ({
+    id,
+    createdAt: 1,
+    updatedAt: 1,
+    archivedAt: null,
+    linkId: null,
+    name: id,
+    institution: 'Capital One',
+    kind: 'checking',
+    countedTowardTotal: true,
+    isPullAccount: false,
+    lastFour: null,
+    balanceCents: null,
+    balanceOn: null,
+    holds: [],
+    ...changes,
+  });
+  const a = account('a');
+  const b = account('b', { isPullAccount: true });
+  const dayOn = utc(2026, 10, 5);
+  const nextOn = utc(2026, 10, 19);
+  const bill = (
+    id: string,
+    day: number,
+    cents: number,
+    changes: Partial<{
+      paidByCardId: string | null;
+      accountId: string | null;
+    }> = {},
+  ) => ({
+    id,
+    name: id,
+    dueOn: utc(2026, 10, day),
+    cents,
+    paidByCardId: null,
+    accountId: null,
+    ...changes,
+  });
+  const card = (id: string, day: number, cents: number) => ({
+    id,
+    name: id,
+    dueOn: utc(2026, 10, day),
+    cents,
+    payFromAccountId: null,
+  });
+  const run = (changes: Partial<Parameters<typeof getAccountMoves>[0]> = {}) =>
+    getAccountMoves({
+      accounts: [a, b],
+      dayOn,
+      nextIncomeOn: nextOn,
+      payAccountId: 'a',
+      today: dayOn,
+      bills: [bill('Phone', 12, 8_000)],
+      cards: [card('Citi', 15, 116_000)],
+      ...changes,
+    });
+  const [both] = run();
+  assert.equal(
+    run().length,
+    1,
+    'a bill and a card pulling from B are one move',
+  );
+  assert.equal(both.accountId, 'b');
+  assert.equal(both.fromAccountId, 'a');
+  assert.equal(both.moveCents, 124_000);
+  assert.equal(both.pullsCents, 124_000);
+  assert.equal(both.balanceCents, null);
+  assert.equal(both.byOn, utc(2026, 10, 12), 'by the earliest item');
+  assert.deepEqual(
+    both.items.map((item) => [item.kind, item.id]),
+    [
+      ['bill', 'Phone'],
+      ['card', 'Citi'],
+    ],
+    'items are in due order',
+  );
+  assert.deepEqual(
+    run({ today: utc(2026, 10, 13) })[0]?.items.map((item) => item.id),
+    ['Citi'],
+    'a payment due before today is not moved for',
+  );
+  assert.equal(
+    run({ today: utc(2026, 10, 16) }).length,
+    0,
+    'nothing left to pull before the next income day asks nothing',
+  );
+  assert.deepEqual(
+    run({
+      cards: [card('Citi', 15, 116_000), card('Chase', 22, 5_000)],
+    })[0].items.map((item) => item.id),
+    ['Phone', 'Citi'],
+    'a card due after the next income day is left out',
+  );
+  assert.deepEqual(
+    run({
+      bills: [bill('Early', 3, 1_000), bill('Phone', 12, 8_000)],
+    })[0].items.map((item) => item.id),
+    ['Phone', 'Citi'],
+    'a bill due before the day is left out',
+  );
+  assert.deepEqual(
+    run({ accounts: [a, { ...b, balanceCents: 200_000, balanceOn: dayOn }] }),
+    [],
+    'a fresh balance that covers it asks nothing',
+  );
+  const covering = run({
+    accounts: [a, { ...b, balanceCents: 30_000, balanceOn: dayOn }],
+  })[0];
+  assert.equal(covering.moveCents, 94_000, 'a part cover asks the difference');
+  assert.equal(covering.balanceCents, 30_000);
+  assert.equal(covering.pullsCents, 124_000);
+  assert.equal(
+    run({
+      accounts: [a, { ...b, balanceCents: 200_000, balanceOn: dayOn - DAY_MS }],
+    })[0].moveCents,
+    124_000,
+    'a balance typed before the day is ignored',
+  );
+  const later = run({
+    accounts: [a, { ...b, balanceCents: 10_000, balanceOn: utc(2026, 10, 13) }],
+  })[0];
+  assert.deepEqual(
+    later.items.map((item) => item.id),
+    ['Citi'],
+    'items due before a fresh balance are not counted',
+  );
+  assert.equal(later.moveCents, 106_000);
+  assert.deepEqual(
+    run({
+      bills: [bill('Phone', 12, 8_000, { paidByCardId: 'x' })],
+      cards: [],
+    }),
+    [],
+    'a bill charged to a card is not counted against B',
+  );
+  assert.deepEqual(
+    run({ payAccountId: 'b' }),
+    [],
+    'the pay landing in B needs no move',
+  );
+  assert.equal(
+    run({ payAccountId: 'gone' })[0].fromAccountId,
+    null,
+    'a pay account that is not open names no source',
+  );
+  assert.deepEqual(run({ accounts: [a] }), [], 'no pull account means no move');
+  const two = account('c', { isPullAccount: true });
+  assert.equal(
+    run({
+      accounts: [a, b, two],
+      bills: [bill('Phone', 12, 8_000, { accountId: 'c' })],
+      cards: [],
+    })[0].accountId,
+    'c',
+    'a bill names the account it comes out of',
+  );
+  assert.equal(
+    run({ nextIncomeOn: null, cards: [card('Citi', 30, 5_000)] })[0].items
+      .length,
+    2,
+    'with no later income day, 31 days are covered',
   );
 }
 

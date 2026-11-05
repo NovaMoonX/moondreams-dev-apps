@@ -17,6 +17,7 @@ import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 import ChecklistGroup from '@apps/runway/components/ChecklistGroup';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import MoveRow from '@apps/runway/components/MoveRow';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
@@ -28,6 +29,7 @@ import {
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   CARD_WORDS,
+  ACCOUNT_MOVE_WORDS,
   COST_PAID_WORDS,
   DUE_WORDS,
   HORIZON_WORDS,
@@ -48,6 +50,11 @@ import {
   undoBillsPaid,
 } from '@apps/runway/store/actions/moveActions';
 import {
+  getMoveLineId,
+  selectAccountMoves,
+} from '@apps/runway/store/selectors/moveSelectors';
+import {
+  selectAccounts,
   selectBillPayments,
   selectCostPayments,
   selectHorizonItems,
@@ -341,6 +348,13 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         payment.fundedCents < payment.totalCents;
       return { line, payment, isWaiting };
     });
+  const accounts = useAppSelector(selectAccounts);
+  const accountMoves = useAppSelector((state) =>
+    selectAccountMoves(state, today, day.dayKey),
+  );
+  const moveDoneCount = accountMoves.filter((move) =>
+    done.has(getMoveLineId(move.accountId)),
+  ).length;
   const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const costPayments = useAppSelector((state) =>
     selectCostPayments(state, today),
@@ -370,8 +384,10 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const doneCount = ready.filter(isSettled).length;
   const isAllSettled = doneCount === ready.length;
   const hasCosts = costRows.length > 0;
+  const namesBills = hasCosts || accountMoves.length > 0;
 
-  if (rows.length === 0 && costRows.length === 0) return null;
+  if (rows.length === 0 && costRows.length === 0 && accountMoves.length === 0)
+    return null;
 
   const markAll = async () => {
     if (!user || isMarkingRef.current) return;
@@ -548,7 +564,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
                 if (next) void markAll();
               }}
               aria-label={
-                hasCosts
+                namesBills
                   ? CHECKLIST_WORDS.allBillsPaidAction
                   : ITEM_SHEET_R2_WORDS.everythingPaid
               }
@@ -556,10 +572,10 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           )}
           <span className='min-w-0 flex-1 font-medium'>
             {isAllSettled
-              ? hasCosts
+              ? namesBills
                 ? CHECKLIST_WORDS.allBillsPaid
                 : CHECKLIST_R3_WORDS.allPaid
-              : hasCosts
+              : namesBills
                 ? CHECKLIST_WORDS.allBillsPaidAction
                 : ITEM_SHEET_R2_WORDS.everythingPaid}
           </span>
@@ -582,6 +598,34 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               today={today}
               isDone={done.has(line.lineId)}
               onDone={(isDone) => setDone([line.lineId], isDone)}
+            />
+          ))}
+        </ChecklistGroup>
+      )}
+      {accountMoves.length > 0 && (
+        <ChecklistGroup
+          label={ACCOUNT_MOVE_WORDS.group}
+          onToggleAll={
+            accountMoves.length > 1
+              ? (isDone) =>
+                  void setDone(
+                    accountMoves.map((move) => getMoveLineId(move.accountId)),
+                    isDone,
+                  )
+              : undefined
+          }
+          doneCount={moveDoneCount}
+          total={accountMoves.length}
+        >
+          {accountMoves.map((move) => (
+            <MoveRow
+              key={move.accountId}
+              move={move}
+              accounts={accounts}
+              isDone={done.has(getMoveLineId(move.accountId))}
+              onDone={(isDone) =>
+                void setDone([getMoveLineId(move.accountId)], isDone)
+              }
             />
           ))}
         </ChecklistGroup>
