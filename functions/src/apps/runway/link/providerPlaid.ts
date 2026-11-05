@@ -259,23 +259,30 @@ export interface WebhookKey {
 }
 
 const KEY_TTL_MS = 24 * 60 * 60 * 1000;
-const MISS_TTL_MS = 60 * 1000;
-const keyCache = new Map<string, { key: WebhookKey | null; until: number }>();
+const LOOKUP_GAP_MS = 2 * 1000;
+const MAX_KEYS = 20;
+const KEY_ID_SHAPE = /^[0-9a-f-]{36}$/i;
+const keyCache = new Map<string, { key: WebhookKey; until: number }>();
+let lastLookupAt = 0;
 
-/** The public key Plaid signed a webhook with; null when Plaid does not know the id. Kept per instance, a miss for a minute. */
+/** The public key Plaid signed a webhook with; null when Plaid does not know the id. Live keys are kept per instance for a day. */
 export async function getWebhookKey(keyId: string): Promise<WebhookKey | null> {
   const now = Date.now();
   const cached = keyCache.get(keyId);
   if (cached && cached.until > now) return cached.key;
+  // The id comes from an unsigned header, so anyone can send a new one: at most one lookup every two seconds per instance.
+  if (!KEY_ID_SHAPE.test(keyId) || now - lastLookupAt < LOOKUP_GAP_MS) {
+    return null;
+  }
+  lastLookupAt = now;
   const response = await call<{ key: WebhookKey }>(
     '/webhook_verification_key/get',
     { key_id: keyId },
   ).catch(() => null);
   const key = response?.key ?? null;
-  const isLive = key !== null && key.expired_at == null;
-  keyCache.set(keyId, {
-    key,
-    until: now + (isLive ? KEY_TTL_MS : MISS_TTL_MS),
-  });
+  if (key !== null && key.expired_at == null) {
+    if (keyCache.size >= MAX_KEYS) keyCache.clear();
+    keyCache.set(keyId, { key, until: now + KEY_TTL_MS });
+  }
   return key;
 }
