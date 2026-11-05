@@ -1,0 +1,133 @@
+import { useEffect, useRef, useState } from 'react';
+
+const SLOP_PX = 8;
+const ZOOMED_SCALE = 1.05;
+const IGNORED_TARGETS = '[role="dialog"], [data-no-pull]';
+
+interface PullDownOptions {
+  isEnabled: boolean;
+  /** Finger travel, from where the pull took hold, at which `onRefresh` fires. */
+  refreshAt: number;
+  onRefresh: () => void;
+  /** The finger lifted before `refreshAt`, with how far it had travelled (below zero after pulling back up past the start). */
+  onRelease: (distance: number) => void;
+}
+
+interface Gesture {
+  id: number;
+  x: number;
+  y: number;
+  isPulling: boolean;
+}
+
+/**
+ * A pull down from the top of the page: `distance` is the finger's travel since the pull took hold (negative
+ * when it comes back up past that point), 0 when idle. It starts only on a mostly vertical downward drag
+ * while the page is at the top, not in a dialog or a `data-no-pull` area; from then on the page's own scroll
+ * is cancelled until the finger lifts. `refreshAt` fires `onRefresh` once, `onRelease` is called otherwise.
+ * While enabled the page's overscroll is contained so the phone's own pull-to-reload never runs on top of it.
+ */
+export function usePullDown(options: PullDownOptions) {
+  const [distance, setDistance] = useState(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const optionsRef = useRef(options);
+
+  useEffect(() => {
+    optionsRef.current = options;
+  });
+
+  const { isEnabled } = options;
+  useEffect(() => {
+    if (!isEnabled) return;
+    const root = document.documentElement;
+    const before = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = 'contain';
+    const state: { gesture: Gesture | null } = { gesture: null };
+
+    const find = (list: TouchList) =>
+      Array.from(list).find((touch) => touch.identifier === state.gesture?.id);
+    const end = () => {
+      state.gesture = null;
+      setDistance(0);
+      setIsPulling(false);
+    };
+
+    const onStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      const isIgnored =
+        event.target instanceof Element &&
+        event.target.closest(IGNORED_TARGETS) !== null;
+      const isZoomed = (window.visualViewport?.scale ?? 1) > ZOOMED_SCALE;
+      state.gesture =
+        touch &&
+        event.touches.length === 1 &&
+        window.scrollY <= 0 &&
+        !isIgnored &&
+        !isZoomed
+          ? {
+              id: touch.identifier,
+              x: touch.clientX,
+              y: touch.clientY,
+              isPulling: false,
+            }
+          : null;
+    };
+
+    const onMove = (event: TouchEvent) => {
+      const { gesture } = state;
+      const touch = gesture ? find(event.touches) : undefined;
+      if (!gesture || !touch) return;
+      if (!gesture.isPulling) {
+        const dy = touch.clientY - gesture.y;
+        const dx = touch.clientX - gesture.x;
+        if (Math.abs(dy) < SLOP_PX && Math.abs(dx) < SLOP_PX) return;
+        if (dy <= 0 || Math.abs(dx) > Math.abs(dy) || window.scrollY > 0) {
+          state.gesture = null;
+          return;
+        }
+        // The pull takes hold here, so the page does not jump by the slop that came before it.
+        gesture.isPulling = true;
+        gesture.y = touch.clientY;
+        setIsPulling(true);
+      }
+      if (event.cancelable) event.preventDefault();
+      const next = touch.clientY - gesture.y;
+      if (next >= optionsRef.current.refreshAt) {
+        end();
+        optionsRef.current.onRefresh();
+        return;
+      }
+      setDistance(next);
+    };
+
+    const onEnd = (event: TouchEvent) => {
+      const { gesture } = state;
+      const touch = gesture ? find(event.changedTouches) : undefined;
+      if (!gesture || !touch) return;
+      const wasPulling = gesture.isPulling;
+      const travelled = touch.clientY - gesture.y;
+      end();
+      if (wasPulling) optionsRef.current.onRelease(travelled);
+    };
+
+    const onCancel = () => {
+      const wasPulling = state.gesture?.isPulling ?? false;
+      end();
+      if (wasPulling) optionsRef.current.onRelease(0);
+    };
+
+    document.addEventListener('touchstart', onStart, { passive: true });
+    document.addEventListener('touchmove', onMove, { passive: false });
+    document.addEventListener('touchend', onEnd);
+    document.addEventListener('touchcancel', onCancel);
+    return () => {
+      root.style.overscrollBehaviorY = before;
+      document.removeEventListener('touchstart', onStart);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onEnd);
+      document.removeEventListener('touchcancel', onCancel);
+    };
+  }, [isEnabled]);
+
+  return { distance, isPulling };
+}

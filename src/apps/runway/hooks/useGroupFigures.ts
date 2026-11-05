@@ -1,4 +1,6 @@
 import { useAppSelector } from '@/store';
+import { getMonthlyPaceCents } from '@apps/runway/engine/pace';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   getIncomeDaysPerMonth,
   monthlyTotal,
@@ -16,7 +18,7 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { fundingAtLevel } from '@apps/runway/engine/parts';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
-import type { FundingRule, Priority } from '@apps/runway/types';
+import type { FundingRule, MoneyRange, Priority } from '@apps/runway/types';
 import { getGroupMemberNames } from '@apps/runway/utils/billText';
 
 const toBillMember = ({ version: bill }: ResolvedBill) => ({
@@ -110,6 +112,46 @@ export function usePlanTotals(
 const isFundedGoal = ({ version }: ResolvedGoal) =>
   version.payload.state !== 'paused' &&
   version.payload.funding.cadence.kind !== 'none';
+
+/** What the goals counted at `dial` take in a usual month: a goal with a date at the pace that finishes it on time, one without at what its rule puts in. */
+export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
+  const goals = useAppSelector((state) => selectGoals(state, today));
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const payLines = useResolvedPayLines(today);
+  const live = goals.filter(
+    ({ version }) =>
+      version.payload.state !== 'paused' &&
+      isCountedAt(version.payload.priority, dial),
+  );
+  const dated = live.filter(
+    ({ version }) => version.payload.targetDate !== null,
+  );
+  const undated = live.filter(
+    (goal) => goal.version.payload.targetDate === null && isFundedGoal(goal),
+  );
+  const paceCents = dated.reduce(
+    (sum, { item, version }) =>
+      sum +
+      (getMonthlyPaceCents(
+        {
+          targetCents: version.payload.targetCents,
+          targetDate: version.payload.targetDate,
+          heldCents: Math.max(0, assignedByItem[item.id] ?? 0),
+        },
+        today,
+      ) ?? 0),
+    0,
+  );
+  const { total } = monthlyTotal(
+    [],
+    today + 30 * 86_400_000,
+    toCountedMembers(undated, dial, today, payLines),
+  );
+  return {
+    lowCents: paceCents + total.lowCents,
+    highCents: paceCents + total.highCents,
+  };
+}
 
 export interface GroupFigures {
   id: string;

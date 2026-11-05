@@ -36,12 +36,12 @@ import {
   selectIsRecordsReady,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import PlanTotal from '@apps/runway/components/PlanTotal';
 import {
   isCountedAt,
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
+import { useGoalsSaved } from '@apps/runway/hooks/useGoalsSaved';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { revealItem } from '@apps/runway/utils/revealItem';
@@ -58,27 +58,13 @@ function GoalsScreen() {
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
   const heldByItem = useAppSelector(selectHeldByItem);
-  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const { dial } = usePriorityDial();
   const paces = useGoalPaces(today);
-  const counted = goals.filter(({ version }) =>
-    isCountedAt(version.payload.priority, dial),
-  );
-  const targetCents = counted.reduce(
-    (sum, { version }) => sum + version.payload.targetCents,
-    0,
-  );
+  const { savedCents, targetCents, hasTargets } = useGoalsSaved(today);
   const totalFigure = describePlanTotal(
-    {
-      kind: 'saved',
-      savedCents: counted.reduce(
-        (sum, { item }) => sum + Math.max(0, assignedByItem[item.id] ?? 0),
-        0,
-      ),
-      targetCents,
-    },
+    { kind: 'saved', savedCents, targetCents },
     dial,
-    goals.some(({ version }) => version.payload.targetCents > 0),
+    hasTargets,
   );
   const { addRequest, clearAdd, openItem, openItemAt, closeOpenItem } =
     useRunwayUrlState();
