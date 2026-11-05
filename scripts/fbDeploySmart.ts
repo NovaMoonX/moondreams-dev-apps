@@ -114,7 +114,7 @@ const openCallables = () => {
     return true;
   } catch {
     console.error(
-      "\nThe callables are still private, and running the deploy again won't change that because the functions now exist. Fix the error above, then run `npm run fb:invoker -- --all`.",
+      "\nThe callables and public webhooks are still private, and running the deploy again won't change that because the functions now exist. Fix the error above, then run `npm run fb:invoker -- --all`.",
     );
     return false;
   }
@@ -125,7 +125,7 @@ const run = async () => {
   // A callable a dropped or failed run left private stays private, since the CLI opens only new ones; opening is idempotent.
   if (first.code === 0) {
     if (!targets.includes('functions')) return 0;
-    console.log('\nOpening every callable.\n');
+    console.log('\nOpening every callable and public webhook.\n');
     return openCallables() ? 0 : 1;
   }
   if (RELEASE_EXISTS.test(first.output)) {
