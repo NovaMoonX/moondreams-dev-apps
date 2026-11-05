@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { mkdtemp, readdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -12,6 +13,10 @@ interface Page {
   goBack: () => Promise<unknown>;
   goForward: () => Promise<unknown>;
   waitForTimeout: (ms: number) => Promise<void>;
+  on: (
+    event: 'request',
+    handler: (request: { url: () => string }) => void,
+  ) => void;
   waitForFunction: (
     fn: (arg: string) => boolean,
     arg: string,
@@ -34,7 +39,23 @@ const { chromium } = require('playwright') as {
   };
 };
 
+// The same stand-in Firebase settings wherever it runs, so a session's own keys never decide whether the app boots; emulator mode keeps it off the real project.
+const buildEnv = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith('VITE_')),
+  ),
+  VITE_USE_FIREBASE_EMULATORS: 'true',
+  VITE_FIREBASE_API_KEY: 'check-api-key',
+  VITE_FIREBASE_AUTH_DOMAIN_CUSTOM: 'localhost',
+  VITE_FIREBASE_PROJECT_ID: 'demo-stale-chunk',
+  VITE_FIREBASE_STORAGE_BUCKET: 'demo-stale-chunk.appspot.com',
+  VITE_FIREBASE_DATABASE_URL: 'http://localhost:9000?ns=demo-stale-chunk',
+  VITE_FIREBASE_MESSAGING_SENDER_ID: '0',
+  VITE_FIREBASE_APP_ID: '1:0:web:0',
+};
 const root = await mkdtemp(path.join(tmpdir(), 'stale-chunk-'));
+// Two production builds are large; they go however the check ends, a failed assert or build included.
+process.on('exit', () => rmSync(root, { recursive: true, force: true }));
 const buildInto = (name: string) => {
   const outDir = path.join(root, name);
   execFileSync(
@@ -50,22 +71,13 @@ const buildInto = (name: string) => {
     ],
     {
       stdio: 'inherit',
-      env: { ...process.env, SITE_VERSION: `check-${name}` },
+      env: { ...buildEnv, SITE_VERSION: `check-${name}` },
     },
   );
   return outDir;
 };
-// Removes the builds when a build itself fails, since the cleanup below is never reached.
-const buildOrClean = (name: string) => {
-  try {
-    return buildInto(name);
-  } catch (error) {
-    execFileSync('rm', ['-rf', root]);
-    throw error;
-  }
-};
-const before = buildOrClean('before');
-const after = buildOrClean('after');
+const before = buildInto('before');
+const after = buildInto('after');
 const newScript = (
   await readFile(path.join(after, 'index.html'), 'utf8')
 ).match(/assets\/index-[^"]+\.js/)?.[0];
@@ -119,6 +131,7 @@ interface Landing {
   text: string;
   stamp: string | null;
   presetStamp: string;
+  isRunwayMissed: boolean;
 }
 
 const browser = await chromium.launch();
@@ -130,16 +143,18 @@ const openAfterDeploy = async (isRetry: boolean) => {
     viewport: { width: 390, height: 844 },
   });
   const page = await context.newPage();
+  const asked: string[] = [];
+  page.on('request', (request) => asked.push(request.url()));
   await page.goto(`${origin}/`);
-  // The old build has to be running before the deploy; a page that never booted proves nothing.
+  // The old build's router has to be running before the deploy (it numbers its entry); a page that never booted proves nothing.
   await page.waitForFunction(
     () =>
-      (document.getElementById('root')?.childElementCount ?? 0) > 0 &&
-      !document.body.innerText.includes('something went wrong'),
+      typeof (window.history.state as { idx?: unknown } | null)?.idx ===
+        'number' &&
+      (document.getElementById('root')?.childElementCount ?? 0) > 0,
     '',
     { timeout: 20000 },
   );
-  await page.waitForTimeout(1500);
   await page.evaluate(() => {
     (window as unknown as { isOldPage: boolean }).isOldPage = true;
   });
@@ -160,7 +175,9 @@ const openAfterDeploy = async (isRetry: boolean) => {
     ),
   );
   await page.goBack();
-  await page.waitForTimeout(500);
+  await page.waitForFunction(() => window.location.pathname === '/', '', {
+    timeout: 5000,
+  });
   await page.goForward();
   // Settled once the new build runs, or the old page shows its error screen.
   await page.waitForFunction(
@@ -172,6 +189,7 @@ const openAfterDeploy = async (isRetry: boolean) => {
     newScript,
     { timeout: 20000 },
   );
+  // Long enough for a second reload to start, if the guard against a loop failed.
   await page.waitForTimeout(1500);
   const landing = await page.evaluate(() => ({
     pathname: window.location.pathname,
@@ -185,7 +203,8 @@ const openAfterDeploy = async (isRetry: boolean) => {
     stamp: window.sessionStorage.getItem('staleChunkReloadAt'),
   }));
   await context.close();
-  return { ...landing, presetStamp } as Landing;
+  const isRunwayMissed = asked.some((url) => url.endsWith(`/${oldRunway}`));
+  return { ...landing, presetStamp, isRunwayMissed } as Landing;
 };
 
 const failures: string[] = [];
@@ -206,13 +225,13 @@ const runBoth = async () => {
   } finally {
     await browser.close();
     server.close();
-    await rm(root, { recursive: true, force: true });
   }
 };
 const { fresh, retry } = await runBoth();
 report(
   'a deploy, then a screen not yet loaded: reloads into the new version on that screen',
-  fresh.pathname === '/runway' &&
+  fresh.isRunwayMissed &&
+    fresh.pathname === '/runway' &&
     !fresh.isOldPage &&
     fresh.script.endsWith(newScript) &&
     !fresh.text.includes('something went wrong') &&
@@ -221,7 +240,8 @@ report(
 );
 report(
   'a second miss within half a minute: the error screen with Restart, no reload',
-  retry.isOldPage &&
+  retry.isRunwayMissed &&
+    retry.isOldPage &&
     retry.text.includes('something went wrong') &&
     retry.text.includes('Restart') &&
     retry.stamp === retry.presetStamp,
