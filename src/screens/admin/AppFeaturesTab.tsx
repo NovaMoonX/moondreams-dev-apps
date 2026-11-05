@@ -2,11 +2,12 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import { X } from '@moondreamsdev/dreamer-ui/symbols';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronRight, Plus } from 'lucide-react';
+import { ChevronRight, Plus, TriangleAlert } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
@@ -275,6 +276,12 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                         )}
                   </span>
                 </span>
+                {gate.warning && (
+                  <TriangleAlert
+                    className='text-warning h-4 w-4 shrink-0'
+                    aria-label='Read before changing'
+                  />
+                )}
                 <ChevronRight className='text-muted-foreground h-4 w-4 shrink-0' />
               </Button>
             </li>
@@ -407,6 +414,7 @@ function GateControls({
 
   return (
     <div className='space-y-5'>
+      {gate.warning && <InlineNotice tone='warning'>{gate.warning}</InlineNotice>}
       <p className='text-muted-foreground text-sm'>{gate.description}</p>
 
       <div className='space-y-2'>

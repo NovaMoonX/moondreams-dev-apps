@@ -3921,3 +3921,6 @@ export const CARD_WORDS = {
   changeTakenBack: (name: string, amount: string, day: string) =>
     `Took back the ${amount} payment to ${name} from ${day}`,
 } as const;
+
+/** The feature switch for linking a bank (`FEATURE_GATES`). */
+export const LINK_BANKS_GATE_ID = 'link-banks';

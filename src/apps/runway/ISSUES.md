@@ -1978,7 +1978,7 @@ Settle, before any Link code is written, what Plaid access will be: production a
 
 ### Issue 57: Choose Link and connect a bank
 
-**Prerequisites:** Issue 56, Issue 52, Issue 22; production Plaid access approved and `RUNWAY_PLAID_CLIENT_ID` and `RUNWAY_PLAID_SECRET` saved as production Functions secrets (`npm run runway:plaid-secrets -- production`) before this merges, since CI deploys every function. Verify the first real webhook against the checks in the TDD's "Bank data", and record the production Transactions rate and approval lead time in Open question 3.
+**Prerequisites:** Issue 56, Issue 52, Issue 22; the Trial plan's production keys (full production access waits until someone besides the owner links; when it is set up, enable the same four products there: Transactions, Balance, Liabilities and Investments, not Recurring Transactions or Transactions Refresh) and `RUNWAY_PLAID_CLIENT_ID` and `RUNWAY_PLAID_SECRET` saved as production Functions secrets (`npm run runway:plaid-secrets -- production`) before this merges, since CI deploys every function. Linking is behind the `link-banks` feature switch (Off, given only to its tester while on the Trial plan): the screens read `useIsGateOpen` and the link callables call `assertGateOpen`, and Runway's settings gain `GatesClosedNote` once Link is on screen. Verify the first real webhook against the checks in the TDD's "Bank data", and record the production Transactions rate and approval lead time in Open question 3.
 **Target PR Size:** ~600 lines (split the functions from the screens if it runs over)
 **Files:**
 - `functions/src/apps/runway/link/provider.ts`, `providerPlaid.ts`, `normalize.ts`, `createLinkSession.ts`, `attachAccount.ts`
