@@ -3297,7 +3297,7 @@ export const FREE_SUM_WORDS = {
 export const CASH_POSITION_WORDS = {
   title: 'Where your cash is',
   open: 'Where your cash is',
-  openSub: 'What your accounts hold and what is already spoken for',
+  openSub: 'Your accounts, what is set aside, and what is left',
   cash: 'Cash in your accounts',
   cashHelp: (names: string) =>
     names === ''
@@ -3307,6 +3307,9 @@ export const CASH_POSITION_WORDS = {
   typedOn: (date: string) => `You typed it on ${date}`,
   typed: 'You typed it',
   noBalance: 'No balance yet',
+  unknown: 'Not known yet',
+  unknownSub: 'Add a balance to every account above to see it',
+  leftOut: (names: string) => `Not counted: ${names}`,
   bills: FREE_SUM_WORDS.bills,
   goals: FREE_SUM_WORDS.goals,
   horizon: FREE_SUM_WORDS.horizon,
@@ -3316,9 +3319,12 @@ export const CASH_POSITION_WORDS = {
     'Your bank counts only charges that have posted, so these have not left your balance yet.',
   envelopes: 'Safe to spend in envelopes',
   free: 'Not given a job yet',
+  freeHelp:
+    'Free to Spend comes from your plan. This is what your accounts hold beyond everything above, so the two can differ until your balances catch up.',
   over: (amount: string) => `Over-assigned ${amount}`,
+  overTitle: 'Over-assigned',
   overHelp:
-    'Your envelopes hold more than the cash left after what is spoken for. Their figures stay as planned.',
+    'After what is set aside, your accounts hold less than your envelopes. Nothing was changed: their figures stay as planned until you move money or spend less.',
   noAccounts: 'No account counts toward your total yet.',
 } as const;
 
@@ -3655,6 +3661,9 @@ export const ACCOUNT_WORDS = {
     'Add the accounts your money sits in, and say which goals and envelopes each one holds.',
   pullsFrom: 'Cards and bills pull from it',
   noBalance: 'No balance yet',
+  unknown: 'Not known yet',
+  unknownSub: 'Add a balance to every account above to see it',
+  leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',

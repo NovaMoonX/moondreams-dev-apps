@@ -16748,7 +16748,7 @@ console.log('runway engine: ok');
     ...changes,
   });
   const balances = {
-    assignedByItem: { g1: 20_000, g2: 30_000 },
+    assignedByItem: { g1: 20_000, g2: 30_000, e1: 11_000, e2: 4_000 },
     assignedToBillsCents: 10_000,
     assignedToHorizonCents: 5_000,
     assignedToCardsCents: 7_000,
@@ -16772,16 +16772,20 @@ console.log('runway engine: ok');
       account('c', {
         countedTowardTotal: false,
         balanceCents: 900_000,
-        holds: ['g2'],
+        holds: ['g2', 'e2'],
       }),
     ],
     bankBalances: { a: 100_000 },
     balances,
     goalIds: ['g1', 'g2'],
+    envelopeIds: ['e1', 'e2'],
     purchases: [],
   };
   const sumParts = (p: ReturnType<typeof getCashPosition>) =>
-    p.committedCents + p.envelopesCents + p.freeCents - p.overAssignedCents;
+    p.committedCents +
+    p.envelopesCents +
+    (p.freeCents ?? 0) -
+    p.overAssignedCents;
 
   const position = getCashPosition({
     ...base,
@@ -16817,7 +16821,13 @@ console.log('runway engine: ok');
     position.committedCents,
     10_000 + 20_000 + 5_000 + 7_000 + 2_500,
   );
-  assert.equal(position.freeCents, 150_000 - 44_500 - 15_000);
+  assert.equal(
+    position.envelopesCents,
+    11_000,
+    "a left-out account's envelopes are not taken off the cash that counts",
+  );
+  assert.deepEqual(position.leftOut, ['c'], 'a left-out account is named');
+  assert.equal(position.freeCents, 150_000 - 44_500 - 11_000);
   assert.equal(position.overAssignedCents, 0);
   assert.equal(
     sumParts(position),
@@ -16829,6 +16839,7 @@ console.log('runway engine: ok');
     ...base,
     accounts: [account('b', { balanceCents: 30_000 })],
     goalIds: ['g1'],
+    envelopeIds: ['e1'],
   });
   assert.equal(over.freeCents, 0);
   assert.equal(
@@ -16859,7 +16870,13 @@ console.log('runway engine: ok');
     ],
     'an account with no balance is listed with none',
   );
-  assert.equal(unknown.cashCents, 50_000, 'and left out of the sum');
+  assert.equal(
+    unknown.cashCents,
+    null,
+    'an account that counts with no balance leaves the cash unknown, never short',
+  );
+  assert.equal(unknown.freeCents, null, 'and what is free with it');
+  assert.equal(unknown.overAssignedCents, 0, 'so nothing reads as over');
   assert.equal(
     getCashPosition({
       ...base,

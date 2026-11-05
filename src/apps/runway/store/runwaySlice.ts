@@ -43,6 +43,8 @@ export interface RunwayState {
   /** Every link a bank sign-in made, and what the bank last said each linked account or card holds. */
   links: OpenLink[];
   accountBalances: OpenAccountBalance[];
+  /** The bank balances have been read once, so a linked account is not drawn as holding nothing. */
+  isAccountBalancesLoaded: boolean;
   /** Every expense group. */
   expenses: OpenExpense[];
   /** The purchases of the recent window. */
@@ -98,6 +100,7 @@ const initialState: RunwayState = {
   isAccountsLoaded: false,
   links: [],
   accountBalances: [],
+  isAccountBalancesLoaded: false,
   expenses: [],
   purchases: [],
   needsHome: [],
@@ -187,6 +190,7 @@ export const runwaySlice = createSlice({
       action: PayloadAction<OpenAccountBalance[]>,
     ) => {
       state.accountBalances = action.payload;
+      state.isAccountBalancesLoaded = true;
     },
     setMoves: (
       state,

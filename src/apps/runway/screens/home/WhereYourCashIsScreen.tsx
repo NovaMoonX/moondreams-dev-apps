@@ -5,11 +5,12 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import HelpTip from '@/components/HelpTip';
 import InlineNotice from '@/components/InlineNotice';
 import SensitiveValue from '@/components/SensitiveValue';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { CASH_POSITION_WORDS, NEEDS_LOOK_WORDS } from '@apps/runway/constants';
+import { CASH_POSITION_WORDS } from '@apps/runway/constants';
 import { selectCashPosition } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectIsAccountsLoaded,
@@ -35,9 +36,10 @@ export function WhereYourCashIsBody() {
     (state) =>
       selectIsMovesLoaded(state) &&
       selectIsRecordsReady(state) &&
-      selectIsAccountsLoaded(state),
+      selectIsAccountsLoaded(state) &&
+      state.runway.isAccountBalancesLoaded,
   );
-  const { isHidden, toggle } = useValuesHidden();
+  const { isHidden } = useValuesHidden();
 
   if (!isReady) {
     return <p className='text-muted-foreground text-sm'>Getting your plan.</p>;
@@ -50,18 +52,16 @@ export function WhereYourCashIsBody() {
       ? CASH_POSITION_WORDS.typed
       : CASH_POSITION_WORDS.typedOn(formatDateOrdinalUTC(account.balanceOn));
   };
+  // While amounts are hidden every row is drawn, so a row's presence never says its figure is not zero.
   const take = (
     key: string,
     name: string,
     cents: number,
     help?: string,
-  ): CashRow => ({
-    key,
-    sign: '−',
-    name,
-    value: formatCents(cents),
-    help,
-  });
+  ): CashRow[] =>
+    !isHidden && cents === 0
+      ? []
+      : [{ key, sign: '−', name, value: formatCents(cents), help }];
   const rows: CashRow[] = [
     ...position.accounts.map((account): CashRow => ({
       key: account.id,
@@ -70,52 +70,46 @@ export function WhereYourCashIsBody() {
       subtext: getAccountSubtext(account),
       value: account.cents === null ? null : formatCents(account.cents),
     })),
-    take('bills', CASH_POSITION_WORDS.bills, position.billsCents),
-    take('goals', CASH_POSITION_WORDS.goals, position.goalsCents),
-    ...(position.horizonCents !== 0
-      ? [take('horizon', CASH_POSITION_WORDS.horizon, position.horizonCents)]
-      : []),
-    take('cards', CASH_POSITION_WORDS.cards, position.cardsCents),
-    ...(position.pendingCents !== 0
-      ? [
-          take(
-            'pending',
-            CASH_POSITION_WORDS.pending,
-            position.pendingCents,
-            CASH_POSITION_WORDS.pendingHelp,
-          ),
-        ]
-      : []),
-    take('envelopes', CASH_POSITION_WORDS.envelopes, position.envelopesCents),
+    ...take('bills', CASH_POSITION_WORDS.bills, position.billsCents),
+    ...take('goals', CASH_POSITION_WORDS.goals, position.goalsCents),
+    ...take('horizon', CASH_POSITION_WORDS.horizon, position.horizonCents),
+    ...take('cards', CASH_POSITION_WORDS.cards, position.cardsCents),
+    ...take(
+      'pending',
+      CASH_POSITION_WORDS.pending,
+      position.pendingCents,
+      CASH_POSITION_WORDS.pendingHelp,
+    ),
+    ...take(
+      'envelopes',
+      CASH_POSITION_WORDS.envelopes,
+      position.envelopesCents,
+    ),
     {
       key: 'free',
       sign: '=',
       name: CASH_POSITION_WORDS.free,
-      value: formatCents(position.freeCents),
+      subtext:
+        position.freeCents === null
+          ? CASH_POSITION_WORDS.unknownSub
+          : undefined,
+      help: CASH_POSITION_WORDS.freeHelp,
+      value:
+        position.freeCents === null
+          ? CASH_POSITION_WORDS.unknown
+          : formatCents(position.freeCents),
       isEmphasised: true,
     },
   ];
   const names = position.accounts.map((account) => account.name).join(', ');
   const getWarning = (): ReactNode => {
     if (position.overAssignedCents <= 0) return null;
-    if (isHidden) {
-      return (
-        <InlineNotice tone='warning' title={NEEDS_LOOK_WORDS.title}>
-          <button
-            type='button'
-            className='text-left underline'
-            onClick={toggle}
-          >
-            {NEEDS_LOOK_WORDS.door}
-          </button>
-        </InlineNotice>
-      );
-    }
+    if (isHidden) return <NeedsALookRow />;
     return (
-      <InlineNotice tone='warning'>
+      <InlineNotice tone='warning' title={CASH_POSITION_WORDS.overTitle}>
         {CASH_POSITION_WORDS.over(formatCents(position.overAssignedCents))}
         <span className='relative z-10 ml-1 inline-block align-middle'>
-          <HelpTip title={CASH_POSITION_WORDS.over('')}>
+          <HelpTip title={CASH_POSITION_WORDS.overTitle}>
             {CASH_POSITION_WORDS.overHelp}
           </HelpTip>
         </span>
@@ -135,7 +129,13 @@ export function WhereYourCashIsBody() {
           </span>
         </p>
         <p className='text-4xl font-semibold tracking-tight tabular-nums'>
-          <SensitiveValue>{formatCents(position.cashCents)}</SensitiveValue>
+          {position.cashCents === null ? (
+            <span className='text-muted-foreground text-2xl'>
+              {CASH_POSITION_WORDS.unknown}
+            </span>
+          ) : (
+            <SensitiveValue>{formatCents(position.cashCents)}</SensitiveValue>
+          )}
         </p>
       </div>
       {position.accounts.length === 0 ? (
@@ -157,7 +157,7 @@ export function WhereYourCashIsBody() {
               </span>
               <span
                 className={join(
-                  'min-w-0 text-left',
+                  'min-w-0 text-left break-words',
                   row.isEmphasised && 'font-medium',
                 )}
               >
@@ -179,13 +179,24 @@ export function WhereYourCashIsBody() {
                   row.isEmphasised ? 'text-base font-semibold' : 'font-medium',
                 )}
               >
-                {row.value !== null && (
-                  <SensitiveValue>{row.value}</SensitiveValue>
+                {row.value === CASH_POSITION_WORDS.unknown ? (
+                  <span className='text-muted-foreground font-normal'>
+                    {row.value}
+                  </span>
+                ) : (
+                  row.value !== null && (
+                    <SensitiveValue>{row.value}</SensitiveValue>
+                  )
                 )}
               </span>
             </div>
           ))}
         </div>
+      )}
+      {position.leftOut.length > 0 && (
+        <p className='text-muted-foreground text-xs'>
+          {CASH_POSITION_WORDS.leftOut(position.leftOut.join(', '))}
+        </p>
       )}
       {getWarning()}
     </div>

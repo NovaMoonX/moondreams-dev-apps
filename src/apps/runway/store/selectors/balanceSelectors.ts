@@ -162,6 +162,9 @@ export const selectCashPosition = createSelector(
             !(item.heldReleasedOn !== null && item.heldReleasedOn <= today),
         )
         .map((item) => item.id),
+      envelopeIds: items
+        .filter((item) => item.kind === 'envelope')
+        .map((item) => item.id),
       purchases: [
         ...new Map(
           [...needsHome, ...purchases].map((purchase) => [
