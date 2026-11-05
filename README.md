@@ -176,7 +176,7 @@ Problems we've hit before, so we don't hit them again.
 
 ### "Uh oh, something went wrong" on the next screen after a new version ships
 
-- **Symptom:** with the Restart strip showing (or a laptop tab left open across a deploy), moving to another app (Waypoint → Runway) lands on the error screen. The console shows `Failed to load module script: … the server responded with a MIME type of "text/html"` for files such as `Waypoint-*.js` or `AuthRequiredState-*.js`.
+- **Symptom:** in a tab opened before a deploy (often with the Restart strip showing), moving to another app (Waypoint → Runway) lands on the error screen. The console shows `Failed to load module script: … the server responded with a MIME type of "text/html"` for files such as `Waypoint-*.js` or `AuthRequiredState-*.js`.
 - **Cause:** each screen's code is a separate file whose name changes with every build. The new service worker takes over at once and drops the old version's cached files, so the old page asks the server for files the deploy removed; Hosting's catch-all rewrite answers with `index.html`, which the browser refuses as a script.
 - **Fix:** the error screen recognises a screen file that failed to load (`isStaleChunkError`) and reloads once into the new version on the address that was asked for, showing Loading meanwhile. A second failure within half a minute is a real fault, so it shows the error screen with Restart rather than reloading again.
 - **Telling it apart:** the error message names a dynamically imported module (Chrome: "Failed to fetch dynamically imported module"; Safari: "Importing a module script failed"), and `sessionStorage.staleChunkReloadAt` holds the time of the reload it made. Offline, nothing reloads.

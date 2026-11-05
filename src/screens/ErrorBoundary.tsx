@@ -4,6 +4,7 @@ import { Link, useLocation, useRouteError } from 'react-router-dom';
 
 import { VersionLabel } from '@components/VersionLabel';
 import { useAuth } from '@hooks/useAuth';
+import { useRestartApp } from '@hooks/useRestartApp';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 import Loading from '@ui/Loading';
 import { getRegistryAppForPath } from '../lib/app/app.registry';
@@ -22,9 +23,9 @@ function getErrorDetails(error: unknown) {
   return { message: String(error), stack: null };
 }
 
-function ErrorBoundary() {
-  const error = useRouteError();
+function ErrorScreen({ error }: { error: unknown }) {
   const { isAdmin } = useAuth();
+  const restart = useRestartApp();
   const isUpdateReady = useUpdateReady();
   const { pathname } = useLocation();
   const { message, stack } = getErrorDetails(error);
@@ -74,9 +75,7 @@ function ErrorBoundary() {
           </p>
         )}
         <div className='mt-6 flex flex-wrap justify-center gap-3'>
-          {isUpdateReady && (
-            <Button onClick={() => window.location.reload()}>Restart</Button>
-          )}
+          {isUpdateReady && <Button onClick={restart}>Restart</Button>}
           <Link to='/'>
             <Button variant={isUpdateReady ? 'secondary' : 'primary'}>
               Back home
@@ -89,6 +88,13 @@ function ErrorBoundary() {
       </div>
     </div>
   );
+}
+
+// Keyed by the address, so each failed navigation decides afresh whether to reload.
+function ErrorBoundary() {
+  const error = useRouteError();
+  const { key } = useLocation();
+  return <ErrorScreen key={key} error={error} />;
 }
 
 export default ErrorBoundary;
