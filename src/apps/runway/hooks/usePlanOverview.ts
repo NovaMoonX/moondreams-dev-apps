@@ -24,7 +24,7 @@ import {
 import {
   selectBills,
   selectEnvelopes,
-  selectHorizonItems,
+  selectAllHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { MoneyRange } from '@apps/runway/types';
 
@@ -55,7 +55,7 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const horizonItems = useAppSelector((state) =>
-    selectHorizonItems(state, today),
+    selectAllHorizonItems(state, today),
   );
   const dueBeforePay = useAppSelector((state) =>
     selectBillsDueBeforePay(state, today, dial),
@@ -77,6 +77,7 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
       0,
     );
 
+  // A finished or called-off event can still hold money, so it counts toward what is set aside.
   const countedHorizon = horizonItems.filter(({ version }) =>
     isCountedAt(version.payload.priority, dial),
   );
@@ -108,7 +109,11 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
           ` ${PRIORITY_DIAL_WORDS.savedRest.want}`,
         ];
   const getHorizon = (): FigureSegment[] => {
-    if (countedHorizon.length === 0) return [WORDS.nothingYet];
+    if (
+      setAsideCents === 0 &&
+      !countedHorizon.some(({ version }) => version.payload.state === 'open')
+    )
+      return [WORDS.nothingYet];
     const cents = isMonthly ? horizonShort : setAsideCents;
     // A direction word beside a masked amount would still say whether anything is short.
     if (isHidden) return [money(cents), ` ${WORDS.onHorizon}`];

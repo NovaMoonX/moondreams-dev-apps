@@ -1,7 +1,7 @@
 import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
-import { GROUP_WORDS } from '@apps/runway/constants';
+import { GROUP_WORDS, HORIZON_END_WORDS } from '@apps/runway/constants';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -9,6 +9,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
+import { getNextVersionId } from '@apps/runway/engine/horizon';
 import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
@@ -475,6 +476,8 @@ export interface ChangeItemInput {
   newGroup?: GroupSealed | null;
   /** For a change to one field only: the item's stretches from `effectiveFrom` on, each written as its own version so later and temporary versions keep their amounts and dates. */
   stretches?: VersionStretch<ItemPayload>[];
+  /** For an event (`horizon`) only: the id of the version the edit was made from. Each version is written under an id named after it and the write is refused when that id is taken, so two devices editing the same version cannot both land. */
+  baseVersionId?: string;
 }
 
 /**
@@ -524,8 +527,11 @@ export async function changeItem(
       sealJson(withGroup(stretch.payload), encryption),
     ),
   ]);
+  const base = input.kind === 'horizon' ? input.baseVersionId : undefined;
+  const getVersionId = (index: number) =>
+    base === undefined ? generateUuid() : getNextVersionId(base, index);
   const versions = stretches.map((stretch, index): PlanVersionDoc => ({
-    id: generateUuid(),
+    id: getVersionId(index),
     itemId: input.itemId,
     kind: input.kind,
     createdAt: now,
@@ -545,6 +551,19 @@ export async function changeItem(
     itemIds: [input.itemId],
     sealed: changeSealed,
   };
+  if (base !== undefined) {
+    await runTransaction(db, async (transaction) => {
+      const taken = await transaction.get(
+        itemPath(uid, 'versions', versions[0].id),
+      );
+      if (taken.exists()) throw new Error(HORIZON_END_WORDS.changedJustNow);
+      versions.forEach((version) =>
+        transaction.set(itemPath(uid, 'versions', version.id), version),
+      );
+      transaction.set(itemPath(uid, 'changes', changeId), change);
+    });
+    return;
+  }
   const batch = writeBatch(db);
   if (groupDocs) {
     batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);

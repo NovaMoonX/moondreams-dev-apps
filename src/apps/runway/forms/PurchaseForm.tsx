@@ -136,6 +136,7 @@ import {
 import { getCardName } from '@apps/runway/utils/cardText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { getFinishedHorizon } from '@apps/runway/hooks/useCostPaid';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -1160,7 +1161,11 @@ function PurchaseFormBody({
                 encryption,
                 added.purchase,
                 describePurchaseRemoval(added.purchase, () => itemName),
-                { paid, names: { item: itemName, cost: costName } },
+                {
+                  paid,
+                  names: { item: itemName, cost: costName },
+                  finished: getFinishedHorizon(paid.itemId),
+                },
               ).catch((undoError: unknown) =>
                 addToast({
                   title: PURCHASE_COST_WORDS.undoFailed(costName),

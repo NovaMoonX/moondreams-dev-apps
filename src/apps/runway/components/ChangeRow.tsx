@@ -26,6 +26,10 @@ import {
 } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
+  getOpensAgainNote,
+  getTakeBackBlock,
+} from '@apps/runway/hooks/useCostPaid';
+import {
   useLiveCostMove,
   useUndoTransfer,
 } from '@apps/runway/hooks/useUndoTransfer';
@@ -57,23 +61,29 @@ function ChangeRow({
   const canUndo = move !== null && !isUndone;
   const words = move?.bill || move?.cost ? PAID_HISTORY_WORDS : MOVE_WORDS;
   const [isOpen, setIsOpen] = useState(false);
+  const takeBackBlock = move?.cost ? getTakeBackBlock(move.cost.itemId) : null;
   const takeBack = async () => {
     if (move === null) return;
     const isConfirmed = await confirm({
       title: words.undoTitle,
       message: move.cost
         ? mask(
-            COST_PAID_WORDS.confirm(
-              move.cost.name,
-              move.cost.itemName,
-              formatDateOrdinalUTC(move.cost.dueOn),
-              describeCostGivesBack(
+            [
+              COST_PAID_WORDS.confirm(
+                move.cost.name,
                 move.cost.itemName,
-                move.cost.amountCents,
-                move.cost.fromFreeCents,
-                move.cost.mark,
+                formatDateOrdinalUTC(move.cost.dueOn),
+                describeCostGivesBack(
+                  move.cost.itemName,
+                  move.cost.amountCents,
+                  move.cost.fromFreeCents,
+                  move.cost.mark,
+                ),
               ),
-            ),
+              getOpensAgainNote(move.cost.itemId),
+            ]
+              .filter(Boolean)
+              .join(' '),
           )
         : move.bill
           ? mask(
@@ -179,18 +189,22 @@ function ChangeRow({
             <p className='text-sm break-words'>
               <MaskedText>{change.summary}</MaskedText>
             </p>
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                isDestructive
-                icon={<Undo2 />}
-                label={words.undoThis}
-                onClick={() => {
-                  setIsOpen(false);
-                  void takeBack();
-                }}
-              />
-            </ActionGroup>
+            {takeBackBlock === null ? (
+              <ActionGroup>
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Undo2 />}
+                  label={words.undoThis}
+                  onClick={() => {
+                    setIsOpen(false);
+                    void takeBack();
+                  }}
+                />
+              </ActionGroup>
+            ) : (
+              <p className='text-muted-foreground text-sm'>{takeBackBlock}</p>
+            )}
           </div>
         </FormSheet>
       )}

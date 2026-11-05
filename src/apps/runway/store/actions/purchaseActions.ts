@@ -10,6 +10,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  HORIZON_END_WORDS,
   MAX_PURCHASE_LINES,
   PURCHASE_COST_WORDS,
   SPEND_WORDS,
@@ -25,12 +26,16 @@ import {
   findOpenCostMark,
   getCostPaidChange,
   isCostUnmarked,
+  isReopenTaken,
   sealCostUnmark,
+  sealReopen,
   setCostUnmark,
   undoCostPaid,
   type CostPaidNames,
+  type FinishedHorizon,
   type WrittenCostPaid,
 } from '@apps/runway/store/actions/horizonActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import {
   openMove,
@@ -100,6 +105,8 @@ export interface PurchaseCostMark {
   /** Null when the screen has not loaded the mark; the delete then looks for the live one itself. */
   paid: WrittenCostPaid | null;
   names: CostPaidNames;
+  /** The event as it stands when it is finished: taking the mark back reopens it in the same transaction. */
+  finished?: FinishedHorizon | null;
 }
 
 const MAX_MARK_LOOKUPS = 12;
@@ -493,25 +500,44 @@ export async function deletePurchase(
       ? null
       : (costMark.paid ?? (await readLiveCostMark(uid, encryption, previous)));
   const names = costMark?.names ?? null;
-  const [unmarkSealed, unmarkChange] =
+  const [unmarkSealed, unmarkChange, reopen] =
     paid === null || names === null
-      ? [null, null]
+      ? [null, null, null]
       : await Promise.all([
           sealCostUnmark(encryption, paid),
           getCostPaidChange(encryption, paid, names, true),
+          costMark?.finished
+            ? sealReopen(
+                encryption,
+                costMark.finished,
+                paid.itemId,
+                names.cost,
+                todayAsUtcDate(),
+                HORIZON_END_WORDS.calledOffRemovePurchase,
+              )
+            : Promise.resolve(null),
         ]);
   const changeId = generateUuid();
   await runTransaction(db, async (transaction) => {
     await readUnchanged(transaction, uid, previous);
     const plan = await transaction.get(doc(db, 'apps', 'runway', 'plans', uid));
-    const isUnmarkNeeded =
-      paid !== null && !(await isCostUnmarked(transaction, uid, paid));
+    const [isUnmarked, isReopenGone] =
+      paid === null
+        ? [true, false]
+        : await Promise.all([
+            isCostUnmarked(transaction, uid, paid),
+            isReopenTaken(transaction, uid, reopen),
+          ]);
+    const isUnmarkNeeded = paid !== null && !isUnmarked;
+    if (isUnmarkNeeded && isReopenGone) {
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
+    }
     markLedgerWrite(transaction, uid, plan.data(), [
       previous.date,
       ...(isUnmarkNeeded && paid ? [paid.dueOn] : []),
     ]);
     if (isUnmarkNeeded && paid && unmarkSealed && unmarkChange) {
-      setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange);
+      setCostUnmark(transaction, uid, paid, unmarkSealed, unmarkChange, reopen);
     }
     transaction.delete(purchaseRef(uid, previous.id));
     transaction.set(
@@ -534,13 +560,14 @@ export async function removePurchaseOfCost(
   encryption: RunwayEncryption,
   paid: WrittenCostPaid,
   names: CostPaidNames,
+  finished: FinishedHorizon | null = null,
 ): Promise<boolean> {
   const snapshot =
     paid.purchaseId === null
       ? null
       : await getDoc(purchaseRef(uid, paid.purchaseId));
   if (snapshot === null || !snapshot.exists()) {
-    return undoCostPaid(uid, encryption, paid, names);
+    return undoCostPaid(uid, encryption, paid, names, finished);
   }
   const previous = await openPurchase(
     { ...(snapshot.data() as PurchaseDoc), id: snapshot.id },
@@ -551,7 +578,7 @@ export async function removePurchaseOfCost(
     encryption,
     previous,
     describePurchaseRemoval(previous, () => names.item),
-    { paid, names },
+    { paid, names, finished },
   );
   await removeReceiptImagesOf(uid, previous.id).catch((cleanupError) => {
     console.error('A removed purchase left receipts behind', cleanupError);

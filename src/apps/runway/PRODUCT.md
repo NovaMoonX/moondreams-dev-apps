@@ -584,7 +584,7 @@ Every change says from when and shows, before it saves, which coming income days
 - [x] Pay a cost as a purchase on Track (Add what you paid)
 - [x] Turn a repeating cost into a bill, bringing what is left with it
 - [x] Change an event and its costs, and remove a cost (never an item's last)
-- [ ] Finish or call off an item, choosing where its money goes, and bring a called-off item back
+- [x] Finish or call off an item, choosing where its money goes, and bring a called-off item back
 
 ### Beyond
 

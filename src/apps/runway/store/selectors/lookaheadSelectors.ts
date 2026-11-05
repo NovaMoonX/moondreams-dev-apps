@@ -22,7 +22,7 @@ import {
   selectBills,
   selectComingDays,
   selectDraftHeldByItem,
-  selectHorizonItems,
+  selectAllHorizonItems,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -83,7 +83,7 @@ export function computeLookahead(
     bills: ReturnType<typeof selectBills>;
     payments: ReturnType<typeof selectBillPayments>;
     /** The Horizon items in the plan; their payments are read against what each holds. */
-    horizonItems?: ReturnType<typeof selectHorizonItems>;
+    horizonItems?: ReturnType<typeof selectAllHorizonItems>;
     /** Free to Spend now; a payment fronted by it is checked against it. */
     freeToSpendCents?: number | null;
   },
@@ -113,6 +113,7 @@ export function computeLookahead(
       name: version.payload.name,
       rest: version.payload.rest,
       costs: version.payload.costs,
+      state: version.payload.state,
       heldCents: heldByItem[item.id] ?? 0,
       paid: billProgress[item.id]?.costPaid ?? [],
     })),
@@ -151,7 +152,7 @@ export const selectLookahead = createSelector(
     selectComingDays,
     selectBills,
     selectBillPayments,
-    selectHorizonItems,
+    selectAllHorizonItems,
     selectFreeToSpend,
     (_state: RootState, _today?: number, extraHeld?: Record<string, number>) =>
       extraHeld,

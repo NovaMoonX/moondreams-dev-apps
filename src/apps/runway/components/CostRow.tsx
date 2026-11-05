@@ -15,10 +15,17 @@ interface CostRowProps {
   paid?: { line: string; amountCents: number; isSettled: boolean } | null;
   /** Opens the cost to change it; the row then has a chevron. */
   onOpen?: () => void;
+  /** Replaces the due line on a cost that was never paid and no longer asks for money. */
+  stoppedNote?: string | null;
 }
 
 /** One cost of an event: its name and date on the left, its figure on the right. */
-function CostRow({ cost, paid = null, onOpen }: CostRowProps) {
+function CostRow({
+  cost,
+  paid = null,
+  onOpen,
+  stoppedNote = null,
+}: CostRowProps) {
   const described = describeCost(cost, paid === null);
   const { line, per } = described;
   const figure = paid?.isSettled
@@ -30,7 +37,8 @@ function CostRow({ cost, paid = null, onOpen }: CostRowProps) {
       <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
       {!paid?.isSettled && (
         <span className='text-muted-foreground block text-sm break-words'>
-          {cost.becameBillId !== null ? MAKE_BILL_WORDS.nowABill : line}
+          {stoppedNote ??
+            (cost.becameBillId !== null ? MAKE_BILL_WORDS.nowABill : line)}
         </span>
       )}
       {paid && (

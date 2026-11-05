@@ -4,6 +4,7 @@ import { HORIZON_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import { addUtcMonths } from '@apps/runway/engine/dates';
 import {
   getHorizonFigures,
+  getHorizonStage,
   type CostPaidEntry,
   listHorizonPayments,
   planHorizon,
@@ -29,7 +30,13 @@ export function getHorizonStatus(
   fromFreeCents = 0,
 ) {
   const through = addUtcMonths(today, LOOKAHEAD_MONTHS);
-  const payments = listHorizonPayments(horizon.costs, through, stance, paid);
+  const payments = listHorizonPayments(
+    horizon.costs,
+    through,
+    stance,
+    paid,
+    horizon.state,
+  );
   const outsideIds = new Set(
     horizon.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
   );
@@ -46,6 +53,7 @@ export function getHorizonStatus(
   return {
     figures,
     plan,
+    stage: getHorizonStage(horizon, today, stance, paid),
     /** A cost pays more than once in the year ahead, so the totals count that year. */
     hasRepeats: payments.some(
       ({ costId }, index) =>

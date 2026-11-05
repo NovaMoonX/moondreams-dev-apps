@@ -10,6 +10,7 @@ import {
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
   COST_PAID_WORDS,
+  HORIZON_END_WORDS,
   ITEM_SHEET_R2_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -33,10 +34,37 @@ import {
 import { removePurchaseOfCost } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  selectAllHorizonItems,
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { Cents, HorizonCost } from '@apps/runway/types';
+
+/** The event when it is finished or called off: taking one of its paid marks back reopens a finished one and is refused on a called-off one. */
+export const getFinishedHorizon = (itemId: string) => {
+  const found = selectAllHorizonItems(store.getState(), todayAsUtcDate()).find(
+    ({ item }) => item.id === itemId,
+  );
+  return found && found.version.payload.state !== 'open'
+    ? { horizon: found.version.payload, versionId: found.version.id }
+    : null;
+};
+
+/** "Moving opens again." when taking a mark back would reopen a finished event; null otherwise. */
+export const getOpensAgainNote = (itemId: string) => {
+  const done = getFinishedHorizon(itemId);
+  return done?.horizon.state === 'finished'
+    ? HORIZON_END_WORDS.opensAgain(done.horizon.name)
+    : null;
+};
+
+/** Why a paid mark cannot be taken back while the event is called off; null when it can. */
+export const getTakeBackBlock = (itemId: string) => {
+  const done = getFinishedHorizon(itemId);
+  return done?.horizon.state === 'calledOff'
+    ? HORIZON_END_WORDS.calledOffTakeBack(done.horizon.name)
+    : null;
+};
 
 const getHeldNow = (itemId: string) =>
   selectBalances(store.getState()).assignedByItem[itemId] ?? 0;
@@ -52,8 +80,20 @@ export async function undoCostPayment(
   const written: WrittenCostPaid = { ...paid, itemId };
   return inTurn(() =>
     paid.mark === 'purchase'
-      ? removePurchaseOfCost(uid, encryption, written, names)
-      : undoCostPaid(uid, encryption, written, names),
+      ? removePurchaseOfCost(
+          uid,
+          encryption,
+          written,
+          names,
+          getFinishedHorizon(itemId),
+        )
+      : undoCostPaid(
+          uid,
+          encryption,
+          written,
+          names,
+          getFinishedHorizon(itemId),
+        ),
   );
 }
 
