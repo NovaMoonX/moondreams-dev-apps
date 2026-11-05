@@ -8,7 +8,7 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 interface MoveWarningRowProps {
   /** "Move $1,240 to Capital One B". */
   sentence: string;
-  /** "From Capital One A · by Nov 12th". */
+  /** "By Nov 12th · for Discover, Citi and Phone". */
   note: string;
   /** The confirmed day whose checklist holds the move. */
   dayKey: string;
