@@ -39,7 +39,7 @@ import {
   selectBills,
   selectEnvelopes,
   selectGoals,
-  selectHorizonItems,
+  selectAllHorizonItems,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import SensitiveValue from '@/components/SensitiveValue';
@@ -170,7 +170,7 @@ function StartingAmountsSheet({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const bills = useAppSelector((state) => selectBills(state, today));
   const horizonItems = useAppSelector((state) =>
-    selectHorizonItems(state, today),
+    selectAllHorizonItems(state, today),
   );
 
   const started = collectStarted(moves, plan?.startDate ?? null);

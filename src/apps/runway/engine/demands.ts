@@ -14,6 +14,7 @@ import type {
   FundingRule,
   HorizonCost,
   HorizonRest,
+  HorizonState,
   MoneyRange,
   Pairing,
   Priority,
@@ -890,6 +891,8 @@ export interface DraftHorizonInput {
   orderIndex: number;
   rest: HorizonRest;
   costs: readonly HorizonCost[];
+  /** A finished or called-off item asks nothing for its unpaid payments; a fronted payment it already made is still given back. Read as open when missing. */
+  state?: HorizonState;
   /** What the item holds before the day drafted. */
   heldCents: Cents;
   /** Cents the person set a pay to put toward one cost, by cost id and then day key. */
@@ -940,11 +943,14 @@ export function planCostShares(
     rest.kind === 'onePay'
       ? chronological.find((day) => day.dayKey === rest.dayKey)
       : undefined;
-  const { covers } = planHorizon(
-    item,
-    item.heldCents,
-    all.filter(({ costId, dueOn }) => !isPaid(costId, dueOn)),
-  );
+  const { covers } =
+    (item.state ?? 'open') === 'open'
+      ? planHorizon(
+          item,
+          item.heldCents,
+          all.filter(({ costId, dueOn }) => !isPaid(costId, dueOn)),
+        )
+      : { covers: [] };
   const shares = covers
     .filter(({ coveredCents, totalCents }) => coveredCents < totalCents)
     .map((cover): CostSharePlan => {

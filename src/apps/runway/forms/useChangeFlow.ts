@@ -39,6 +39,7 @@ import {
   selectAllCards,
   selectComingDays,
   selectGroups,
+  selectHorizonVersionId,
   selectResolvedPlan,
   selectSettledKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -339,6 +340,10 @@ export function useChangeFlow({
           effectiveUntil: span.effectiveUntil,
           changeEffectiveFrom: isMoneyless ? null : span.effectiveFrom,
           stretches: written,
+          baseVersionId:
+            kind === 'horizon'
+              ? selectHorizonVersionId(state, itemId, today)
+              : undefined,
         });
         if (carry !== null && carry.carried.length > 0) {
           const moves = carry.carried.map(({ from, to }) => ({

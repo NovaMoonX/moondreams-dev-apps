@@ -18,7 +18,10 @@ import type {
   ItemShortsReading,
   PreviewChange,
 } from '@apps/runway/store/selectors/previewSelectors';
-import { selectHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectHorizonItems,
+  selectHorizonVersionId,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed } from '@apps/runway/types';
 
 interface TakeFromPaysViewProps {
@@ -66,6 +69,11 @@ function TakeFromPaysView({
             summary,
             note: null,
             effectiveFrom: today,
+            baseVersionId: selectHorizonVersionId(
+              store.getState(),
+              itemId,
+              today,
+            ),
           }),
         )
       : Promise.resolve();

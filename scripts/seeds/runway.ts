@@ -326,6 +326,9 @@ async function writeSeedHorizon(
         orderIndex: 20,
         rest: { kind: 'outside' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost(
             'seed-cost-truck',
@@ -368,6 +371,9 @@ async function writeSeedHorizon(
         orderIndex: 21,
         rest: { kind: 'pays' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
           cost(
@@ -400,6 +406,9 @@ async function writeSeedHorizon(
         orderIndex: 22,
         rest: { kind: 'later' },
         note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
         costs: [
           cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
           cost(
@@ -412,10 +421,116 @@ async function writeSeedHorizon(
         ],
       },
     },
+    {
+      id: 'seed-horizon-couch',
+      payload: {
+        name: 'New couch',
+        emoji: '🛋️',
+        happensOn: today - 6 * DAY_MS,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 23,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'finished' as const,
+        stateOn: today - 3 * DAY_MS,
+        stateMoney: null,
+        costs: [
+          cost('seed-cost-couch', 'Couch', 90_000, 90_000, today - 5 * DAY_MS),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-ski',
+      payload: {
+        name: 'Ski weekend',
+        emoji: '⛷️',
+        happensOn: feb1 + 30 * DAY_MS,
+        happensUntil: null,
+        priority: 'want',
+        orderIndex: 24,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'calledOff' as const,
+        stateOn: today - 2 * DAY_MS,
+        stateMoney: {
+          kind: 'free' as const,
+          toId: null,
+          cents: 40_000,
+          moveId: 'transfer_seed-calloff-seed-horizon-ski',
+        },
+        costs: [
+          cost(
+            'seed-cost-lift',
+            'Lift tickets',
+            40_000,
+            40_000,
+            feb1 + 30 * DAY_MS,
+          ),
+          cost('seed-cost-cabin', 'Cabin', 60_000, 60_000, feb1 + 28 * DAY_MS),
+          cost(
+            'seed-cost-parking',
+            'Parking pass',
+            2_000,
+            2_000,
+            feb1 + 25 * DAY_MS,
+          ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-bike',
+      payload: {
+        name: 'Bike repair',
+        emoji: '🚲',
+        happensOn: today - 4 * DAY_MS,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 25,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'open' as const,
+        stateOn: null,
+        stateMoney: null,
+        costs: [
+          cost(
+            'seed-cost-tuneup',
+            'Tune-up',
+            12_000,
+            12_000,
+            today - 4 * DAY_MS,
+          ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-shed',
+      payload: {
+        name: 'Garden shed',
+        emoji: '🏡',
+        happensOn: today - 9 * DAY_MS,
+        happensUntil: null,
+        priority: 'want',
+        orderIndex: 26,
+        rest: { kind: 'later' },
+        note: null,
+        state: 'finished' as const,
+        stateOn: today - DAY_MS,
+        stateMoney: {
+          kind: 'held' as const,
+          toId: null,
+          cents: 25_000,
+          moveId: null,
+        },
+        costs: [
+          cost('seed-cost-shed', 'Shed', 22_500, 22_500, today - 8 * DAY_MS),
+        ],
+      },
+    },
   ];
   // Track's plan holds only Moving, whose Movers are paid by a purchase.
   const items = isTrack ? allItems.slice(0, 1) : allItems;
-  const movedOn = today - 2 * DAY_MS;
+  const movedOn = today - 7 * DAY_MS;
   const toward: { itemId: string; cents: number; summary: string }[] = [
     {
       itemId: 'seed-horizon-moving',
@@ -426,6 +541,26 @@ async function writeSeedHorizon(
       itemId: 'seed-horizon-wedding',
       cents: 120_000,
       summary: "Put $1,200.00 toward Sam's wedding from Free to Spend.",
+    },
+    {
+      itemId: 'seed-horizon-couch',
+      cents: 90_000,
+      summary: 'Put $900.00 toward New couch from Free to Spend.',
+    },
+    {
+      itemId: 'seed-horizon-ski',
+      cents: 42_000,
+      summary: 'Put $420.00 toward Ski weekend from Free to Spend.',
+    },
+    {
+      itemId: 'seed-horizon-bike',
+      cents: 15_000,
+      summary: 'Put $150.00 toward Bike repair from Free to Spend.',
+    },
+    {
+      itemId: 'seed-horizon-shed',
+      cents: 47_500,
+      summary: 'Put $475.00 toward Garden shed from Free to Spend.',
     },
   ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
 
@@ -460,6 +595,34 @@ async function writeSeedHorizon(
         ),
       };
     }),
+  );
+
+  const returned: { itemId: string; cents: number; summary: string }[] = [
+    {
+      itemId: 'seed-horizon-ski',
+      cents: 40_000,
+      summary: 'Called off Ski weekend. $400.00 went to Free to Spend.',
+    },
+  ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
+  const returns = await Promise.all(
+    returned.map(async ({ itemId, cents, summary }) => ({
+      itemId,
+      moveId: `transfer_seed-calloff-${itemId}`,
+      sealed: await sealJson(
+        {
+          fromId: itemId,
+          toId: null,
+          cents,
+          note: null,
+          isOutside: false,
+        } satisfies TransferSealed,
+        encryption,
+      ),
+      change: await sealJson(
+        { summary, note: null } satisfies ChangeSealed,
+        encryption,
+      ),
+    })),
   );
 
   const marked: {
@@ -498,6 +661,38 @@ async function writeSeedHorizon(
           fromFreeCents: 0,
           paidOn: today - DAY_MS,
           mark: 'outside',
+        },
+        {
+          itemId: 'seed-horizon-couch',
+          cost: items[3].payload.costs[0],
+          amountCents: 90_000,
+          fromFreeCents: 0,
+          paidOn: today - 4 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-ski',
+          cost: items[4].payload.costs[2],
+          amountCents: 2_000,
+          fromFreeCents: 0,
+          paidOn: today - 6 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-bike',
+          cost: items[5].payload.costs[0],
+          amountCents: 12_000,
+          fromFreeCents: 0,
+          paidOn: today - 3 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-shed',
+          cost: items[6].payload.costs[0],
+          amountCents: 22_500,
+          fromFreeCents: 0,
+          paidOn: today - 2 * DAY_MS,
+          mark: 'item',
         },
       ];
   const marks = await Promise.all(
@@ -622,6 +817,31 @@ async function writeSeedHorizon(
       );
     },
   );
+  returns.forEach(
+    ({ itemId, moveId, sealed: moveSealed, change: moveChange }) => {
+      const createdAt = movedOn + 11 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'transfer',
+        date: movedOn,
+        refId: itemId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: moveSealed,
+      } satisfies MoveDoc);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-calloff-${itemId}`),
+        {
+          id: `seed-change-calloff-${itemId}`,
+          kind: 'moveChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [itemId],
+          sealed: moveChange,
+        } satisfies ChangeDoc,
+      );
+    },
+  );
   items.forEach(({ id }, index) => {
     const createdAt = addedAt + index * 1000;
     const changeId = `seed-change-${id}`;
@@ -727,6 +947,7 @@ async function writeSeedHorizon(
   return (
     items.length * 3 +
     transfers.length * 2 +
+    returns.length * 2 +
     marks.length * 2 +
     (surgery ? 4 : 0)
   );

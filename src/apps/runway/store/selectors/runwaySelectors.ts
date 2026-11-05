@@ -668,8 +668,8 @@ const getNextCostOn = (version: HorizonVersion, on: number) =>
     ),
   );
 
-/** The Horizon items in the plan on a date, soonest next cost first, then the event's own date. */
-export const selectHorizonItems = createSelector(
+/** Every Horizon item listed on a date, open or done, soonest next cost first, then the event's own date. */
+export const selectAllHorizonItems = createSelector(
   [selectItems, selectVersions, selectOn],
   (items, versions, on): ResolvedHorizon[] => {
     const horizonVersions = versions.filter(isHorizon);
@@ -688,6 +688,35 @@ export const selectHorizonItems = createSelector(
       );
     return result;
   },
+);
+
+/** The id of the version of an event in force on a date, which an edit of it is named after; undefined when it is not listed. */
+export const selectHorizonVersionId = (
+  state: RootState,
+  itemId: string,
+  on: number,
+) =>
+  selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
+    ?.version.id;
+
+/** The Horizon items still in the plan on a date: the ones that are not finished or called off. */
+export const selectHorizonItems = createSelector(
+  [selectAllHorizonItems],
+  (all): ResolvedHorizon[] =>
+    all.filter(({ version }) => version.payload.state === 'open'),
+);
+
+/** The finished and called-off Horizon items, the latest first. */
+export const selectDoneHorizonItems = createSelector(
+  [selectAllHorizonItems],
+  (all): ResolvedHorizon[] =>
+    all
+      .filter(({ version }) => version.payload.state !== 'open')
+      .sort(
+        (a, b) =>
+          (b.version.payload.stateOn ?? 0) - (a.version.payload.stateOn ?? 0) ||
+          a.item.id.localeCompare(b.item.id),
+      ),
 );
 
 export interface DraftView {
@@ -713,7 +742,7 @@ export const selectStance = (state: RootState) =>
   readStance(state.runway.plan?.stance);
 /** Every Horizon item's cost payments through the lookahead's end, each with the mark that settled it, keyed by item id. */
 export const selectCostPayments = createSelector(
-  [selectHorizonItems, selectBillProgress, selectStance, selectOn],
+  [selectAllHorizonItems, selectBillProgress, selectStance, selectOn],
   (items, progress, stance, today): Record<string, CostPayment[]> => {
     const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
     return Object.fromEntries(
@@ -724,6 +753,7 @@ export const selectCostPayments = createSelector(
           horizon,
           stance,
           progress[item.id]?.costPaid ?? [],
+          version.payload.state,
         ),
       ]),
     );
@@ -989,6 +1019,7 @@ export function computeDraftView(
     orderIndex: version.payload.orderIndex,
     rest: version.payload.rest,
     costs: version.payload.costs,
+    state: version.payload.state,
     heldCents: heldByItem[item.id] ?? 0,
     paid: billProgress[item.id]?.costPaid ?? [],
     repaid: billProgress[item.id]?.repaid,

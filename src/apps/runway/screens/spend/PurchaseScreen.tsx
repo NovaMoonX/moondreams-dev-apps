@@ -34,6 +34,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
+  HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
   PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
@@ -68,7 +69,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   selectCostPaid,
   selectExpenses,
-  selectHorizonItems,
+  selectAllHorizonItems,
   selectStance,
   selectIsMovesLoaded,
   selectItemLooks,
@@ -132,7 +133,7 @@ function PurchaseScreen({
   const expenses = useAppSelector(selectExpenses);
   const costMarks = useAppSelector(selectCostPaid);
   const horizons = useAppSelector((state) =>
-    selectHorizonItems(state, todayAsUtcDate()),
+    selectAllHorizonItems(state, todayAsUtcDate()),
   );
   const stance = useAppSelector(selectStance);
   const [isCostOpen, setIsCostOpen] = useState(false);
@@ -242,8 +243,15 @@ function PurchaseScreen({
       (costMarks[ref.itemId] ?? []).find(
         (entry) => entry.purchaseId === purchase.id,
       ) ?? null;
+    const version =
+      horizons.find(({ item }) => item.id === ref.itemId)?.version ?? null;
+    const payload = version?.payload ?? null;
     return {
       paid: paid === null ? null : { ...paid, itemId: ref.itemId },
+      finished:
+        version && payload && payload.state !== 'open'
+          ? { horizon: payload, versionId: version.id }
+          : null,
       names: {
         item: nameOf(ref.itemId),
         cost:
@@ -267,6 +275,16 @@ function PurchaseScreen({
   const remove = async () => {
     if (!user || isBusy) return;
     const costMark = getCostMark();
+    const blocked = costMark?.finished?.horizon.state === 'calledOff';
+    if (blocked && costMark?.finished) {
+      addToast({
+        title: HORIZON_END_WORDS.calledOffRemovePurchase(
+          costMark.finished.horizon.name,
+        ),
+        type: 'error',
+      });
+      return;
+    }
     const names = purchase.lines.map((line) =>
       line.envelopeId === null
         ? SPEND_WORDS.freeToSpend
@@ -291,6 +309,9 @@ function PurchaseScreen({
                 costMark.names.cost,
                 costMark.names.item,
               ),
+          costMark?.finished?.horizon.state === 'finished'
+            ? HORIZON_END_WORDS.opensAgain(costMark.finished.horizon.name)
+            : null,
           'It stays in the change log.',
         ]
           .filter(Boolean)

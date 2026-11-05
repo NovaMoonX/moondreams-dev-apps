@@ -3,6 +3,7 @@ import { Button, Modal } from '@moondreamsdev/dreamer-ui/components';
 import {
   CircleCheck,
   HandCoins,
+  Ban,
   Lock,
   Pencil,
   Receipt,
@@ -38,6 +39,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import {
   COST_PAID_WORDS,
   FORM_FLOW_WORDS,
+  HORIZON_END_WORDS,
   HORIZON_PRICE_REASON_CHIPS,
   HORIZON_WORDS,
   MAKE_BILL_WORDS,
@@ -70,6 +72,7 @@ import {
   selectCostPaid,
   selectCostPayments,
   selectHorizonItems,
+  selectHorizonVersionId,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
@@ -190,6 +193,9 @@ interface CostSheetProps {
   backLabel?: string | null;
   /** Opens the cost's Change form, which replaces the event's sheet. */
   onChange: () => void;
+  /** Calls the whole event off, offered where Remove would leave an event with no cost. */
+  onCallOff: () => void;
+  onBringBack: () => void;
 }
 
 /** One cost of an event, swapped into the event's sheet: set its price, change it, or remove it. */
@@ -202,6 +208,8 @@ function CostSheet({
   onBack,
   backLabel = null,
   onChange,
+  onCallOff,
+  onBringBack,
 }: CostSheetProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -255,7 +263,8 @@ function CostSheet({
     payment: next,
   });
 
-  const canAddPurchase = isTrack && next !== null && !cost.isOutside;
+  const isDone = horizon.state !== 'open';
+  const canAddPurchase = !isDone && isTrack && next !== null && !cost.isOutside;
   const isNear = next !== null && next.dueOn - 7 * DAY_MS <= today;
   const isFar = canAddPurchase && !isNear;
   const isMarkShown = !canAddPurchase || isNear || isMoreOpen;
@@ -267,7 +276,12 @@ function CostSheet({
   const itemPaid = useAppSelector(selectCostPaid)[itemId];
   const makeBillBlock = getMakeBillBlock(costPayments, today);
   const canMakeBill =
-    isRepeat && isLive && !cost.isOutside && !isBill && next !== null;
+    !isDone &&
+    isRepeat &&
+    isLive &&
+    !cost.isOutside &&
+    !isBill &&
+    next !== null;
   const hasOtherOpen = hasOtherOpenCost(
     horizon,
     cost.id,
@@ -277,7 +291,12 @@ function CostSheet({
   );
   const shareCents = getCostShare(horizon, cost.id, heldCents, payments ?? []);
   const isRemovable =
-    isLive && !isPaidOnce && !isBill && getLiveCosts(horizon).length > 1;
+    !isDone &&
+    isLive &&
+    !isPaidOnce &&
+    !isBill &&
+    getLiveCosts(horizon).length > 1;
+  const isLast = !isDone && isLive && !isPaidOnce && !isRemovable && !isBill;
   const settled =
     next === null
       ? paidEntries.reduce<CostPaidEntry | null>(
@@ -285,6 +304,7 @@ function CostSheet({
           null,
         )
       : null;
+  const isStopped = isDone && !isBill && !settled;
   const when = isRepeat
     ? describeCostTiming(cost.schedule, cost.ending)
     : HORIZON_WORDS.costDue(
@@ -318,6 +338,7 @@ function CostSheet({
       summary,
       note: null,
       effectiveFrom: today,
+      baseVersionId: selectHorizonVersionId(store.getState(), itemId, today),
     });
   };
 
@@ -451,15 +472,27 @@ function CostSheet({
     return name === null ? null : PURCHASE_COST_WORDS.paidWith(name);
   };
 
-  const getTakeBackSubtitle = (entry: CostPaidEntry) =>
-    entry.mark === 'outside'
-      ? COST_PAID_WORDS.takeBackSubOutside
-      : describeCostGivesBack(
-          horizon.name,
-          entry.amountCents,
-          entry.fromFreeCents,
-          isTrack ? entry.mark : 'item',
-        );
+  const getTakeBackSubtitle = (entry: CostPaidEntry) => {
+    const gives =
+      entry.mark === 'outside'
+        ? COST_PAID_WORDS.takeBackSubOutside
+        : describeCostGivesBack(
+            horizon.name,
+            entry.amountCents,
+            entry.fromFreeCents,
+            isTrack ? entry.mark : 'item',
+          );
+    if (horizon.state !== 'finished') return gives;
+    const isFreeUntouched =
+      entry.mark !== 'outside' && entry.fromFreeCents === 0;
+    return [
+      gives === null || gives.endsWith('.') ? gives : `${gives}.`,
+      HORIZON_END_WORDS.opensAgain(horizon.name),
+      isFreeUntouched ? HORIZON_END_WORDS.freeSame : null,
+    ]
+      .filter(Boolean)
+      .join(' ');
+  };
 
   const getMarkBody = () => {
     if (cost.isOutside) return COST_PAID_WORDS.markSubOutside(horizon.name);
@@ -506,18 +539,22 @@ function CostSheet({
     if (entry.mark === 'purchase' && isTrack) {
       const isConfirmed = await confirm({
         title: PURCHASE_COST_WORDS.takeBackTitle(cost.name),
-        message: mask(
-          PURCHASE_COST_WORDS.takeBackText(
-            formatCents(entry.amountCents),
-            formatDateOrdinalUTC(entry.paidOn),
-            describeCostGivesBack(
-              horizon.name,
-              entry.amountCents,
-              entry.fromFreeCents,
-              'item',
+        message:
+          mask(
+            PURCHASE_COST_WORDS.takeBackText(
+              formatCents(entry.amountCents),
+              formatDateOrdinalUTC(entry.paidOn),
+              describeCostGivesBack(
+                horizon.name,
+                entry.amountCents,
+                entry.fromFreeCents,
+                'item',
+              ),
             ),
-          ),
-        ),
+          ) +
+          (horizon.state === 'finished'
+            ? ` ${HORIZON_END_WORDS.opensAgain(horizon.name)}`
+            : ''),
         confirmText: COST_PAID_WORDS.takeBack,
         destructive: true,
       });
@@ -574,6 +611,7 @@ function CostSheet({
           settled ? formatCents(settled.amountCents) : formatRange(cost.amount)
         }
         suffix={describeCost(cost).per || undefined}
+        isFigureMuted={isStopped}
         fact={
           isBill && !settled
             ? cost.becameBillOn === null
@@ -586,16 +624,18 @@ function CostSheet({
                   formatDateOrdinalUTC(settled.paidOn),
                   settled.mark === 'outside',
                 )
-              : HORIZON_WORDS.costFact(
-                  when,
-                  cost.pricedOn === null
-                    ? null
-                    : formatDateOrdinalUTC(cost.pricedOn),
-                  cost.isOutside,
-                )
+              : isDone
+                ? HORIZON_END_WORDS.stopped
+                : HORIZON_WORDS.costFact(
+                    when,
+                    cost.pricedOn === null
+                      ? null
+                      : formatDateOrdinalUTC(cost.pricedOn),
+                    cost.isOutside,
+                  )
         }
       />
-      {!settled && (
+      {!settled && !isDone && (
         <RangeNote isShort range={cost.amount} stance={stance} side='expense' />
       )}
       <ActionGroup isRoomy>
@@ -612,7 +652,7 @@ function CostSheet({
             onClick={() => setTakingBackId(entry.moveId)}
           />
         ))}
-        {!settled && !isBill && (
+        {!isDone && !settled && !isBill && (
           <ActionRow
             isGrouped
             isRoomy
@@ -631,15 +671,17 @@ function CostSheet({
             onClick={() => setView('price')}
           />
         )}
-        <ActionRow
-          isGrouped
-          isRoomy
-          hasChevron
-          icon={<Pencil />}
-          label={HORIZON_WORDS.changeCostRow}
-          subtitle={HORIZON_WORDS.changeCostSub}
-          onClick={onChange}
-        />
+        {!isDone && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Pencil />}
+            label={HORIZON_WORDS.changeCostRow}
+            subtitle={HORIZON_WORDS.changeCostSub}
+            onClick={onChange}
+          />
+        )}
         {canMakeBill && makeBillBlock === null && (
           <ActionRow
             isGrouped
@@ -684,6 +726,17 @@ function CostSheet({
         )}
         {isFar && isMoreOpen && addRow}
         {next && isFar && isMoreOpen && markRow}
+        {isLast && (
+          <ActionRow
+            isGrouped
+            isRoomy
+            hasChevron
+            icon={<Ban />}
+            label={HORIZON_END_WORDS.callOffLabel(horizon.name)}
+            subtitle={HORIZON_END_WORDS.callOffRowSub}
+            onClick={onCallOff}
+          />
+        )}
         {isRemovable && (
           <ActionRow
             isGrouped
@@ -704,14 +757,19 @@ function CostSheet({
           </RevealChip>
         </div>
       )}
-      {isPaidOnce && (
-        <p className='text-muted-foreground text-sm'>
-          {HORIZON_WORDS.paidStaysInRecord}
-        </p>
+      {paidEntries.length > 0 && horizon.state === 'calledOff' && (
+        <div className='space-y-2'>
+          <p className='text-muted-foreground text-sm'>
+            {HORIZON_END_WORDS.calledOffTakeBack(horizon.name)}
+          </p>
+          <Button type='button' variant='secondary' onClick={onBringBack}>
+            {HORIZON_END_WORDS.bringBackRow}
+          </Button>
+        </div>
       )}
-      {isLive && !isPaidOnce && !isRemovable && !isBill && (
+      {isPaidOnce && horizon.state !== 'calledOff' && (
         <p className='text-muted-foreground text-sm'>
-          {HORIZON_WORDS.changeLastCost}
+          {HORIZON_END_WORDS.tapToTakeBack}
         </p>
       )}
       {canAddPurchase && isNear && (
@@ -803,17 +861,19 @@ function CostSheet({
                 </p>
               )}
             </div>
-            <ActionGroup>
-              <ActionRow
-                isGrouped
-                isDestructive
-                icon={<Undo2 />}
-                label={COST_PAID_WORDS.takeBack}
-                subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
-                isDisabled={costPaid.isBusy}
-                onClick={() => void takeBackEntry(takingBack)}
-              />
-            </ActionGroup>
+            {horizon.state !== 'calledOff' && (
+              <ActionGroup>
+                <ActionRow
+                  isGrouped
+                  isDestructive
+                  icon={<Undo2 />}
+                  label={COST_PAID_WORDS.takeBack}
+                  subtitle={mask(getTakeBackSubtitle(takingBack) ?? '')}
+                  isDisabled={costPaid.isBusy}
+                  onClick={() => void takeBackEntry(takingBack)}
+                />
+              </ActionGroup>
+            )}
           </div>
         </FormSheet>
       )}

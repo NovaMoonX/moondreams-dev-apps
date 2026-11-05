@@ -126,3 +126,9 @@ export const selectFreeToSpend = (state: RootState) =>
 /** What one envelope has been assigned since the starting point. */
 export const selectEnvelopeFigure = (state: RootState, itemId: string) =>
   selectBalances(state).assignedByItem[itemId] ?? 0;
+
+/** What a place holds now; null is Free to Spend. */
+export const selectHeldBy = (state: RootState, placeId: string | null) =>
+  placeId === null
+    ? selectFreeToSpend(state)
+    : selectEnvelopeFigure(state, placeId);

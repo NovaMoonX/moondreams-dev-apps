@@ -53,7 +53,7 @@ const NO_PINNED: ReadonlySet<string> = new Set();
 interface EffectPreviewProps {
   /** What is layered over the plan, as JSON of a `PreviewChange`; null while the form is not finished. */
   changeJson: string | null;
-  /** Words for the empty case when a change moves no income day. */
+  /** Words for the empty case when a change moves no income day; an empty string says nothing at all. */
   emptyText?: string;
   /** Words for a form that is finished but has no change in it yet. */
   waitingText?: string;
@@ -409,6 +409,7 @@ function EffectPreview({
       if (holdsText?.blocks.some((block) => block.tone === 'warning'))
         return null;
       if (describeLead !== undefined && holdsText?.isSame !== true) return null;
+      if (emptyText === '') return null;
       return emptyText ? (
         <InlineNotice tone='info'>
           <MaskedText>{emptyText}</MaskedText>

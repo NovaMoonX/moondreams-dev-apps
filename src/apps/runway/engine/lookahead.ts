@@ -8,6 +8,7 @@ import type {
   DateOnly,
   HorizonCost,
   HorizonRest,
+  HorizonState,
   MoneyRange,
   Priority,
   Stance,
@@ -66,6 +67,8 @@ export interface LookaheadHorizonItem {
   rest: HorizonRest;
   costs: readonly HorizonCost[];
   heldCents: Cents;
+  /** A finished or called-off item asks nothing and is never warned about; read as open when missing. */
+  state?: HorizonState;
   /** Payments already marked paid; they ask nothing and are not warned about. */
   paid?: readonly { costId: string; dueOn: DateOnly }[];
 }
@@ -299,6 +302,7 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
 /** The first payment of each cost inside the plan that is due today or past due and not marked paid. */
 const findDueCosts = (input: LookaheadInput): Lookahead['dueCosts'] =>
   (input.horizonItems ?? [])
+    .filter((item) => (item.state ?? 'open') === 'open')
     .flatMap((item) =>
       item.costs
         .filter(({ isOutside }) => !isOutside)
@@ -381,7 +385,13 @@ const findHorizonShort = (
 ): HorizonShort[] => {
   const stance = input.stance ?? 'conservative';
   const items = (input.horizonItems ?? []).map((item) => {
-    const all = listHorizonPayments(item.costs, input.horizon, stance);
+    const all = listHorizonPayments(
+      item.costs,
+      input.horizon,
+      stance,
+      [],
+      item.state ?? 'open',
+    );
     const open = all.filter(
       ({ costId, dueOn }) =>
         !(item.paid ?? []).some(
