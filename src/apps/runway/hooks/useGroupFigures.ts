@@ -1,4 +1,7 @@
 import { useAppSelector } from '@/store';
+import { DAY_MS } from '@apps/runway/engine/dates';
+import { getMonthlyPaceCents } from '@apps/runway/engine/pace';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   getIncomeDaysPerMonth,
   monthlyTotal,
@@ -16,8 +19,11 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { fundingAtLevel } from '@apps/runway/engine/parts';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
-import type { FundingRule, Priority } from '@apps/runway/types';
+import type { FundingRule, MoneyRange, Priority } from '@apps/runway/types';
 import { getGroupMemberNames } from '@apps/runway/utils/billText';
+
+/** A month from today, so items starting later this month or early next one still count late in a month. */
+const USUAL_MONTH_OFFSET_MS = 30 * DAY_MS;
 
 const toBillMember = ({ version: bill }: ResolvedBill) => ({
   name: bill.payload.name,
@@ -93,8 +99,7 @@ export function usePlanTotals(
   );
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const payLines = useResolvedPayLines(today);
-  // A month from today, so items starting later this month or early next one still count late in a month.
-  const usualMonth = today + 30 * 86_400_000;
+  const usualMonth = today + USUAL_MONTH_OFFSET_MS;
   return {
     income: monthlyTotal(payLines, usualMonth),
     bills: monthlyTotal(bills.map(toBillMember), usualMonth),
@@ -110,6 +115,50 @@ export function usePlanTotals(
 const isFundedGoal = ({ version }: ResolvedGoal) =>
   version.payload.state !== 'paused' &&
   version.payload.funding.cadence.kind !== 'none';
+
+/** What the goals counted at `dial` take in a usual month: a goal with a date at the pace that finishes it on time, one without at what its rule puts in. */
+export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
+  const goals = useAppSelector((state) => selectGoals(state, today));
+  const assignedByItem = useAppSelector(selectBalances).assignedByItem;
+  const payLines = useResolvedPayLines(today);
+  const live = goals.filter(
+    ({ version }) =>
+      version.payload.state !== 'paused' &&
+      isCountedAt(version.payload.priority, dial),
+  );
+  const heldOf = ({ item }: ResolvedGoal) =>
+    Math.max(0, assignedByItem[item.id] ?? 0);
+  const open = live.filter(
+    (goal) => heldOf(goal) < goal.version.payload.targetCents,
+  );
+  const isDated = ({ version }: ResolvedGoal) =>
+    version.payload.targetDate !== null && version.payload.targetDate >= today;
+  const dated = open.filter(isDated);
+  // No date, or one already past: what the goal's rule puts in is the honest monthly figure.
+  const undated = open.filter((goal) => !isDated(goal) && isFundedGoal(goal));
+  const paceCents = dated.reduce(
+    (sum, { item, version }) =>
+      sum +
+      (getMonthlyPaceCents(
+        {
+          targetCents: version.payload.targetCents,
+          targetDate: version.payload.targetDate,
+          heldCents: heldOf({ item, version }),
+        },
+        today,
+      ) ?? 0),
+    0,
+  );
+  const { total } = monthlyTotal(
+    [],
+    today + USUAL_MONTH_OFFSET_MS,
+    toCountedMembers(undated, dial, today, payLines),
+  );
+  return {
+    lowCents: paceCents + total.lowCents,
+    highCents: paceCents + total.highCents,
+  };
+}
 
 export interface GroupFigures {
   id: string;

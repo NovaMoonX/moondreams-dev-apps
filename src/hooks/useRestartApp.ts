@@ -2,8 +2,8 @@ import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { hasUnsavedWork } from '@lib/app/unsavedWork';
 
-/** Reloads the page to load a new version, first asking whether to throw away a form's typed work when one holds some. */
-export function useRestartApp() {
+/** Reloads the page to load a new version, first asking whether to throw away a form's typed work when one holds some; `onProceed` runs only once it is going ahead. */
+export function useRestartApp(onProceed?: () => void) {
   const { confirm } = useActionModal();
 
   const restart = async () => {
@@ -18,6 +18,7 @@ export function useRestartApp() {
       });
       if (!isConfirmed) return;
     }
+    onProceed?.();
     window.location.reload();
   };
 

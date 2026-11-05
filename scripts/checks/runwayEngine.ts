@@ -290,6 +290,7 @@ import {
 } from '../../src/apps/runway/engine/progress.ts';
 import type { FundedDay } from '../../src/apps/runway/engine/progress.ts';
 import {
+  getMonthlyPaceCents,
   getPace,
   planGoalContributions,
 } from '../../src/apps/runway/engine/pace.ts';
@@ -2311,6 +2312,33 @@ const version = (
   assert.equal(behind.neededPerDayCents, 25_715);
   assert.equal(behind.plannedByDateCents, 175_000);
   assert.equal(behind.reachedOn?.on, dayOf(73).on, 'reached after the date');
+
+  // The monthly pace that finishes a goal on time: what is left over the months to its date, never under one month.
+  assert.equal(
+    getMonthlyPaceCents(vacation, today),
+    Math.ceil(180_000 / (50 / (365.25 / 12))),
+    'vacation fund: $1,800 over 50 days',
+  );
+  assert.equal(
+    getMonthlyPaceCents(phone, today),
+    20_000,
+    'a date inside the first month asks for what is left',
+  );
+  assert.equal(
+    getMonthlyPaceCents({ ...phone, targetDate: today - DAY_MS }, today),
+    null,
+    'a date already past has no pace; the goal counts what its rule puts in',
+  );
+  assert.equal(
+    getMonthlyPaceCents({ ...vacation, heldCents: 180_000 }, today),
+    null,
+    'a goal at its target needs nothing',
+  );
+  assert.equal(
+    getMonthlyPaceCents(cushion, today),
+    null,
+    'a goal with no date has no pace',
+  );
 
   // A goal at its target is complete and funds nothing.
   const complete = getPace({ ...phone, heldCents: 20_000 }, incomes);

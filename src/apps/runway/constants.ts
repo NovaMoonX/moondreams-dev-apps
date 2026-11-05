@@ -2779,6 +2779,34 @@ export const PLAN_VIEW_EMOJI = {
 
 export const PLAN_MORE_LABEL = 'Settings and tools';
 
+/** The Plan tab's overview: the tiles that open each view, their Monthly | Total switch and the pull that reveals them. */
+export const PLAN_OVERVIEW_WORDS = {
+  tilesLabel: 'Plan overview',
+  modeLabel: 'What the tiles show',
+  modes: [
+    { value: 'monthly', label: 'Monthly' },
+    { value: 'total', label: 'Total' },
+  ],
+  viewAll: 'View all',
+  viewLess: 'View less',
+  pullHint: 'Keep pulling to refresh Runway',
+  releaseHint: 'Let go to refresh Runway',
+  refreshing: 'Refreshing Runway',
+  nothingYet: 'Nothing yet',
+  monthly: 'a month',
+  dueBeforePay: (payDay: string) => `due before your ${payDay} pay`,
+  nothingBeforePay: (payDay: string) => `Nothing due before your ${payDay} pay`,
+  inEnvelopes: 'in your envelopes',
+  savedOf: ' of ',
+  nothingShort: 'Nothing short',
+  shortInTotal: 'short in total',
+  onHorizon: 'on your horizon',
+  setAside: 'set aside',
+  tileAria: (name: string, figure: string) => `${name} · ${figure}. Open`,
+  priorityTotal: (counted: string) => `${counted}: `,
+  priorityRest: ' a month across bills, envelopes and goals',
+} as const;
+
 /** Quick periods on Spend, as the URL keeps them; any other value is a month as `yyyy-mm`. */
 export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
