@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { onCall } from 'firebase-functions/v2/https';
 
 import { RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
@@ -43,7 +44,10 @@ export const syncRunwayLinks = onCall(
           syncRunwayLink(firestore, keyring, uid, link.id),
         ),
       ) as Promise<LinkSyncResult[]>,
-      finishRevokedLinks(firestore, keyring, uid),
+      finishRevokedLinks(firestore, keyring, uid).catch(() => {
+        logger.warn('runway.link.revokeRetryFailed');
+        return 0;
+      }),
     ]);
     return { results };
   },

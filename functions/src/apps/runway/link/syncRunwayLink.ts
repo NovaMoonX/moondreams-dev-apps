@@ -348,11 +348,6 @@ async function writeBalances(
   await commitWrites(firestore, writes);
 }
 
-/**
- * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
- * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
- * counts and the link id only.
- */
 /* An unlink can land while a sync runs, so every write that marks the link live re-reads it in the
    same transaction and stands down once it reads revoked. */
 async function writeUnlessRevoked(
@@ -368,6 +363,11 @@ async function writeUnlessRevoked(
   });
 }
 
+/**
+ * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
+ * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
+ * counts and the link id only.
+ */
 export async function syncRunwayLink(
   firestore: Firestore,
   keyring: Keyring,

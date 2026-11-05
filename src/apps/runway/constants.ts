@@ -4280,6 +4280,8 @@ export const LINK_WORDS = {
   unlinkFailed: 'That bank was not unlinked. Nothing was changed.',
   unlinkLevelFailed:
     'Unlinked, but your plan still reads Link. Tap Unlink once more, here or from this bank in Settings, to finish moving it to Track.',
+  unlinkLogFailed:
+    'Unlinked. Your change log did not get a line for it this time.',
   unlinkBankPending:
     'Nothing new comes in from here on. Your bank has not confirmed yet, so Runway asks it again the next time it refreshes.',
   unlinkedToast: (bank: string) => `Unlinked ${bank}`,

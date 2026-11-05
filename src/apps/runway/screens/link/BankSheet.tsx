@@ -91,7 +91,9 @@ function BankSheet({ linkId, onClose, onLinkAgain }: BankSheetProps) {
         );
       }
     } catch {
-      setError(LINK_WORDS.unlinkLevelFailed);
+      setError(
+        isLastBank ? LINK_WORDS.unlinkLevelFailed : LINK_WORDS.unlinkLogFailed,
+      );
     } finally {
       setIsBusy(false);
     }
