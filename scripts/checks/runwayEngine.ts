@@ -268,6 +268,7 @@ import {
   getBringableCents,
   getCostShare,
   getHorizonStage,
+  getCostPriority,
   getLiveCosts,
   listEndlessCosts,
   getMadeBillId,
@@ -292,6 +293,8 @@ import {
   getHorizonFigures,
   sumCostPayments,
   sumCostSpent,
+  sumCountedShortCents,
+  sumHorizonAskedCents,
   type CostPaidEntry,
 } from '../../src/apps/runway/engine/horizon.ts';
 import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
@@ -5555,6 +5558,7 @@ const version = (
             endsAfter: null,
             becameBillId: null,
             becameBillOn: null,
+            priority: null,
             note: null,
           },
           ...extraCosts.map((extra) => ({
@@ -5572,6 +5576,7 @@ const version = (
             endsAfter: null,
             becameBillId: null,
             becameBillOn: null,
+            priority: null,
             note: null,
           })),
         ],
@@ -5713,6 +5718,7 @@ const version = (
       endsAfter: null,
       becameBillId: null,
       becameBillOn: null,
+      priority: null,
       note: null,
     });
     const dec19 = today + 57 * DAY_MS;
@@ -12295,6 +12301,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   };
   const truck = {
@@ -12437,6 +12444,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   });
   const costs = [
@@ -12713,6 +12721,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   });
   const movers = cost('movers', range(60_000, 80_000), jan15);
@@ -12849,6 +12858,7 @@ const version = (
       schedule: movers.schedule,
       ending: movers.ending,
       isOutside: true,
+      priority: null,
     },
   );
   assert.equal(
@@ -12865,6 +12875,7 @@ const version = (
       schedule: movers.schedule,
       ending: movers.ending,
       isOutside: false,
+      priority: null,
     }),
     null,
     'a cost taken out meanwhile gives no candidate',
@@ -12985,6 +12996,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   };
   const truck: HorizonCost = {
@@ -13510,6 +13522,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   };
   const made = {
@@ -13607,6 +13620,7 @@ const version = (
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   });
   const movers = makeCost('movers', 60_000, dueOn);
@@ -16658,6 +16672,7 @@ console.log('runway engine: ok');
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   });
   const jan15 = utc(2027, 0, 15);
@@ -17232,6 +17247,96 @@ console.log('runway engine: ok');
     ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
     "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
   );
+
+  // A cost can carry its own priority; null follows its item.
+  const trip = cost('trip', 'Trip', 30_000, feb1);
+  const mixed = item(
+    { kind: 'pays' },
+    [{ ...storage, priority: 'want' }, trip],
+    0,
+    { priority: 'must' },
+  );
+  const mixedLines = costLines(draftOn(jan15, mixed));
+  assert.deepEqual(
+    mixedLines.map((line) => [line.costId, line.tier]).sort(),
+    [
+      ['storage', 'want'],
+      ['trip', 'must'],
+    ],
+    'a Want cost inside a Must item is drafted at its own priority, and a cost with none follows its item',
+  );
+  const shouldInMust = item(
+    { kind: 'pays' },
+    [{ ...trip, priority: 'should' }],
+    0,
+    { priority: 'must' },
+  );
+  assert.equal(
+    costLines(draftOn(jan15, shouldInMust))[0].tier,
+    'should',
+    'a Should cost inside a Must item is drafted as a Should',
+  );
+  const countsAt = (dial: 'must' | 'should' | 'want') => (priority: string) =>
+    ['must', 'should', 'want'].indexOf(priority) <=
+    ['must', 'should', 'want'].indexOf(dial);
+  const asked = (dial: 'must' | 'should' | 'want') =>
+    sumHorizonAskedCents(
+      costLines(draftOn(jan15, mixed)),
+      new Set(['moving']),
+      countsAt(dial),
+    );
+  const all = asked('want');
+  assert.ok(all > 0, 'the draft asks something of the pay for its costs');
+  assert.equal(
+    asked('must') + asked('should'),
+    all - (all - asked('should')) + asked('must') + 0,
+    'the dial counts cost by cost',
+  );
+  assert.ok(
+    asked('must') < all && asked('must') === asked('should'),
+    "at Must only the Must cost counts, though the item's other cost is a Want",
+  );
+  assert.equal(
+    sumHorizonAskedCents(
+      costLines(draftOn(jan15, mixed)),
+      new Set(),
+      countsAt('want'),
+    ),
+    0,
+    'an item that is no longer open asks nothing',
+  );
+  const later = planHorizon(
+    {
+      rest: { kind: 'later' },
+      costs: [{ ...storage, priority: 'want' }, trip],
+    },
+    0,
+    listHorizonPayments(
+      [{ ...storage, priority: 'want' }, trip],
+      utc(2027, 5, 1),
+      'conservative',
+    ),
+  );
+  assert.equal(
+    sumCountedShortCents(later, new Set(['trip'])),
+    30_000,
+    "only the counted cost's shortfall is added up",
+  );
+  assert.ok(
+    sumCountedShortCents(later, new Set(['trip', 'storage'])) >
+      sumCountedShortCents(later, new Set(['trip'])),
+    'and a second counted cost adds its own',
+  );
+  assert.equal(
+    getCostPriority({ priority: null }, 'must'),
+    'must',
+    'a cost with no priority is its item’s',
+  );
+  assert.equal(
+    getCostPriority({ priority: 'should' }, 'must'),
+    'should',
+    'and one with its own keeps it',
+  );
 }
 
 // Horizon: money moved into a bill, the share a cost brings, and the refusals.
@@ -17464,6 +17569,7 @@ console.log('runway engine: ok');
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
     ...over,
   });
@@ -17612,6 +17718,11 @@ console.log('runway engine: ok');
     [legacy.costs[0].becameBillId, legacy.costs[0].becameBillOn],
     [null, null],
     'a cost saved before Make it a bill reads as not a bill',
+  );
+  assert.equal(
+    legacy.costs[0].priority,
+    null,
+    'a cost saved before it had its own priority follows its item',
   );
 }
 

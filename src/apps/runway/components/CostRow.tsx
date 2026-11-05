@@ -1,12 +1,18 @@
 import { ChevronRight, CircleCheck } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import SensitiveValue from '@/components/SensitiveValue';
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { HORIZON_WORDS, MAKE_BILL_WORDS } from '@apps/runway/constants';
+import PriorityBadge from '@apps/runway/components/PriorityBadge';
+import {
+  HORIZON_WORDS,
+  MAKE_BILL_WORDS,
+  PRIORITY_DIAL_WORDS,
+} from '@apps/runway/constants';
 import { formatCentsShort } from '@/utils/moneyUtils';
-import type { HorizonCost } from '@apps/runway/types';
+import type { HorizonCost, Priority } from '@apps/runway/types';
 import { describeCost } from '@apps/runway/utils/horizonText';
 
 interface CostRowProps {
@@ -17,6 +23,10 @@ interface CostRowProps {
   onOpen?: () => void;
   /** Replaces the due line on a cost that was never paid and no longer asks for money. */
   stoppedNote?: string | null;
+  /** The cost's priority when it differs from its event's; the badge sits beside the name. */
+  badge?: Priority | null;
+  /** The priority dial leaves the cost out: its badge and figure dim. */
+  isFaded?: boolean;
 }
 
 /** One cost of an event: its name and date on the left, its figure on the right. */
@@ -25,6 +35,8 @@ function CostRow({
   paid = null,
   onOpen,
   stoppedNote = null,
+  badge = null,
+  isFaded = false,
 }: CostRowProps) {
   const described = describeCost(cost, paid === null);
   const { line, per } = described;
@@ -34,7 +46,16 @@ function CostRow({
 
   const label = (
     <span className='block min-w-[6.5rem] flex-1'>
-      <span className='line-clamp-2 font-medium break-words'>{cost.name}</span>
+      <span className='flex items-start gap-2'>
+        <span className='line-clamp-2 min-w-0 flex-1 font-medium break-words'>
+          {cost.name}
+        </span>
+        {badge && (
+          <span className={join('shrink-0', isFaded && 'opacity-45')}>
+            <PriorityBadge priority={badge} />
+          </span>
+        )}
+      </span>
       {!paid?.isSettled && (
         <span className='text-muted-foreground block text-sm break-words'>
           {stoppedNote ??
@@ -52,9 +73,15 @@ function CostRow({
       )}
     </span>
   );
+  const notCounted = isFaded ? `. ${PRIORITY_DIAL_WORDS.notCounted}` : '';
   const amount = (
     <span className='block min-w-0 text-right'>
-      <span className='block font-semibold tabular-nums'>
+      <span
+        className={join(
+          'block tabular-nums',
+          isFaded ? 'text-muted-foreground font-medium' : 'font-semibold',
+        )}
+      >
         <SensitiveValue>{figure}</SensitiveValue>
       </span>
       {per && (
@@ -71,11 +98,11 @@ function CostRow({
         type='button'
         variant='tertiary'
         className='hover:bg-muted/60 text-foreground! h-auto min-h-14 w-full justify-start gap-3 rounded-none px-3! py-2 text-left font-normal'
-        aria-label={
+        aria-label={`${
           cost.becameBillId !== null
             ? MAKE_BILL_WORDS.openBill(cost.name)
             : HORIZON_WORDS.changeCost(cost.name)
-        }
+        }${notCounted}`}
         onClick={onOpen}
       >
         {label}
@@ -90,6 +117,9 @@ function CostRow({
     <li className='flex min-h-14 items-center gap-3 px-3 py-2'>
       {label}
       {amount}
+      {isFaded && (
+        <span className='sr-only'>{PRIORITY_DIAL_WORDS.notCounted}</span>
+      )}
     </li>
   );
 }

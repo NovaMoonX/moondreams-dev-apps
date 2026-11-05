@@ -8,6 +8,7 @@ import type {
   HorizonState,
   HorizonStored,
   MoneyRange,
+  Priority,
   Schedule,
   Stance,
 } from '@apps/runway/types';
@@ -121,6 +122,49 @@ export const sumCostSpent = (paid: readonly CostPaidEntry[]): Cents =>
     0,
   );
 
+/** The priority a cost is counted at: its own, else its item's. */
+export const getCostPriority = (
+  cost: Pick<HorizonCost, 'priority'>,
+  itemPriority: Priority,
+): Priority => cost.priority ?? itemPriority;
+
+/** How far a plan's uncovered payments fall short, counting only the costs in `countedIds`; none when the rest is not decided later. */
+export const sumCountedShortCents = (
+  plan: Pick<HorizonPlan, 'covers' | 'shortfall'>,
+  countedIds: ReadonlySet<string>,
+): Cents =>
+  plan.shortfall === null
+    ? 0
+    : plan.covers
+        .filter(({ costId }) => countedIds.has(costId))
+        .reduce(
+          (sum, { coveredCents, totalCents }) =>
+            sum + totalCents - coveredCents,
+          0,
+        );
+
+/** What one income day's draft asks for the costs of still-open items whose priority `isCounted`; a line that gives back a fronted payment asks nothing of the item. */
+export const sumHorizonAskedCents = (
+  lines: readonly {
+    itemId: string;
+    costId?: string | null;
+    repaysFree?: boolean;
+    tier: Priority;
+    demandCents: Cents;
+  }[],
+  openItemIds: ReadonlySet<string>,
+  isCounted: (priority: Priority) => boolean,
+): Cents =>
+  lines
+    .filter(
+      (line) =>
+        !!line.costId &&
+        !line.repaysFree &&
+        openItemIds.has(line.itemId) &&
+        isCounted(line.tier),
+    )
+    .reduce((sum, line) => sum + line.demandCents, 0);
+
 /** The payments of costs paid outside the plan that nobody has marked, soonest first. Until each is marked the item is not ready to finish, whatever its date. */
 export const listUnmarkedOutside = (
   costs: readonly HorizonCost[],
@@ -147,6 +191,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
     endsAfter: cost.endsAfter ?? null,
     becameBillId: cost.becameBillId ?? null,
     becameBillOn: cost.becameBillOn ?? null,
+    priority: cost.priority ?? null,
   })),
   state: stored.state ?? 'open',
   stateOn: stored.stateOn ?? null,
@@ -275,10 +320,10 @@ export const setCostPrice = (
 /** The cost fields a cost's Change form owns; its price, the day it was priced and where it ended stay as they are. */
 export type CostChange = Pick<
   HorizonCost,
-  'name' | 'schedule' | 'ending' | 'isOutside'
+  'name' | 'schedule' | 'ending' | 'isOutside' | 'priority'
 >;
 
-/** The item with one cost's name, schedule, ending and paid-outside answer replaced; null when the cost is no longer in it. */
+/** The item with one cost's name, schedule, ending, paid-outside answer and priority replaced; null when the cost is no longer in it. */
 export const changeCost = (
   horizon: HorizonSealed,
   costId: string,
@@ -295,6 +340,7 @@ export const changeCost = (
                 schedule: fields.schedule,
                 ending: fields.ending,
                 isOutside: fields.isOutside,
+                priority: fields.priority,
               }
             : cost,
         ),

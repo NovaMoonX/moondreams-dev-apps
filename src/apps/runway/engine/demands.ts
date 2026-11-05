@@ -39,7 +39,12 @@ import {
   type BillProgressInput,
   type PaidPayment,
 } from './progress';
-import { getPriorBeat, listHorizonPayments, planHorizon } from './horizon';
+import {
+  getCostPriority,
+  getPriorBeat,
+  listHorizonPayments,
+  planHorizon,
+} from './horizon';
 import { planGoalContributions } from './pace';
 import { effectiveStance, pick } from './stance';
 import { getCalendarCents } from './calendar';
@@ -1050,7 +1055,10 @@ function buildHorizonDemands(
       dayKey: day.dayKey,
       itemId: item.itemId,
       part: null,
-      tier: item.priority,
+      tier: getCostPriority(
+        item.costs.find(({ id }) => id === plan.costId) ?? { priority: null },
+        item.priority,
+      ),
       dueBeforeNext: plan.repays === null && plan.dueOn < nextAfter(day.on),
       orderIndex: item.orderIndex,
       createdAt: item.createdAt,

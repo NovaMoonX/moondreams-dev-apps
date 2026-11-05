@@ -174,6 +174,9 @@ const getHorizonParts = (
       diff(`${cost.name} paid`, old.isOutside, cost.isOutside, (value) =>
         value ? 'outside the plan' : 'like the rest',
       ),
+      diff(`${cost.name} priority`, old.priority, cost.priority, (value) =>
+        value === null ? 'like the event' : PRIORITY_LABELS[value],
+      ),
     ];
   }),
 ];

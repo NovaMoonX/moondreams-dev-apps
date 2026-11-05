@@ -14,11 +14,13 @@ import {
 import { useGoalsSaved } from '@apps/runway/hooks/useGoalsSaved';
 import {
   isCountedAt,
+  isHorizonCountedAt,
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectBillsDueBeforePay,
+  selectHorizonMonthCents,
   selectHorizonShortCents,
 } from '@apps/runway/store/selectors/overviewSelectors';
 import {
@@ -64,6 +66,9 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
     selectHorizonShortCents(state, today, dial),
   );
   const goalsMonthly = useGoalsMonthly(today, dial);
+  const horizonMonthCents = useAppSelector((state) =>
+    selectHorizonMonthCents(state, today, dial),
+  );
   const saved = useGoalsSaved(today);
   // The line above the tiles already names the priority, so a tile only says "a month".
   const monthRest = WORDS.monthly;
@@ -79,7 +84,7 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
 
   // A finished or called-off event can still hold money, so it counts toward what is set aside.
   const countedHorizon = horizonItems.filter(({ version }) =>
-    isCountedAt(version.payload.priority, dial),
+    isHorizonCountedAt(version.payload, dial),
   );
   const setAsideCents = countedHorizon.reduce(
     (sum, { item }) => sum + Math.max(0, balances.assignedByItem[item.id] ?? 0),
@@ -134,11 +139,13 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
     lowCents:
       totals.bills.total.lowCents +
       totals.envelopes.total.lowCents +
-      goalsMonthly.lowCents,
+      goalsMonthly.lowCents +
+      horizonMonthCents,
     highCents:
       totals.bills.total.highCents +
       totals.envelopes.total.highCents +
-      goalsMonthly.highCents,
+      goalsMonthly.highCents +
+      horizonMonthCents,
   };
 
   return {
@@ -150,13 +157,12 @@ export function usePlanOverview(today: number, mode: OverviewMode) {
       horizon: getHorizon(),
       cards: getCards(),
     },
-    /** The sum the dial's trimmed total stands for a month; null while the dial counts everything or the tiles show totals. */
-    priority:
-      dial === 'want' || !isMonthly
-        ? null
-        : {
-            counted: PRIORITY_DIAL_WORDS.counted[dial],
-            total: range(priorityTotal),
-          },
+    /** The sum the dial's total stands for a month, at every dial position; null while the tiles show totals. */
+    priority: !isMonthly
+      ? null
+      : {
+          counted: PRIORITY_DIAL_WORDS.counted[dial],
+          total: range(priorityTotal),
+        },
   };
 }

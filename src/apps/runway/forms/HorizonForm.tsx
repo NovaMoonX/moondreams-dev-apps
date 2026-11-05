@@ -743,6 +743,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       {costDraft !== null && (
         <CostForm
           itemName={name}
+          itemPriority={formData.priority}
           happensOn={date ?? today}
           cost={costDraft === 'new' ? undefined : costDraft}
           onSave={(saved) => {

@@ -54,6 +54,7 @@ import {
 } from '@apps/runway/constants';
 import {
   changeCost,
+  getCostPriority,
   listEndlessCosts,
   listOpenCosts,
   type CostChange,
@@ -82,6 +83,10 @@ import {
   selectCostPayments,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import CostForm from '@apps/runway/forms/CostForm';
 import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
 import CostSheet from '@apps/runway/screens/plan/CostSheet';
@@ -114,6 +119,7 @@ function HorizonSheet({
   returnLabel = null,
   onClose,
 }: HorizonSheetProps) {
+  const { dial } = usePriorityDial();
   const balances = useAppSelector(selectBalances);
   const paid = useAppSelector(selectCostPaid)[itemId];
   const costPayments = useAppSelector((state) =>
@@ -433,6 +439,7 @@ function HorizonSheet({
     return (
       <CostForm
         itemName={horizon.name}
+        itemPriority={horizon.priority}
         happensOn={horizon.happensOn}
         takenNames={horizon.costs.map(({ name }) => name)}
         onSave={setAddState}
@@ -445,6 +452,7 @@ function HorizonSheet({
       <CostForm
         isAmountFixed
         itemName={horizon.name}
+        itemPriority={horizon.priority}
         happensOn={horizon.happensOn}
         cost={openCost}
         takenNames={horizon.costs
@@ -800,6 +808,14 @@ function HorizonSheet({
                   key={cost.id}
                   cost={cost}
                   paid={getPaid(cost.id)}
+                  badge={
+                    cost.priority !== null && cost.priority !== horizon.priority
+                      ? cost.priority
+                      : null
+                  }
+                  isFaded={
+                    !isCountedAt(getCostPriority(cost, horizon.priority), dial)
+                  }
                   onOpen={() => {
                     if (cost.becameBillId !== null) {
                       void showOnPlan('bills', {

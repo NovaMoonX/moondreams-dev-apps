@@ -44,10 +44,12 @@ import {
   HORIZON_WORDS,
   MAKE_BILL_WORDS,
   PAY_SHARE_WORDS,
+  PRIORITY_LABELS,
   PURCHASE_COST_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import {
+  getCostPriority,
   getCostShare,
   getLiveCosts,
   getMakeBillBlock,
@@ -62,6 +64,10 @@ import {
 import BillForm from '@apps/runway/forms/BillForm';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
+import {
+  isCountedAt,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
@@ -212,6 +218,7 @@ function CostSheet({
   onCallOff,
   onBringBack,
 }: CostSheetProps) {
+  const { dial } = usePriorityDial();
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -633,6 +640,10 @@ function CostSheet({
                       ? null
                       : formatDateOrdinalUTC(cost.pricedOn),
                     cost.isOutside,
+                    cost.priority !== null && cost.priority !== horizon.priority
+                      ? PRIORITY_LABELS[cost.priority]
+                      : null,
+                    !isCountedAt(getCostPriority(cost, horizon.priority), dial),
                   )
         }
       />
