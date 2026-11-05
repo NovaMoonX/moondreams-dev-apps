@@ -4051,7 +4051,7 @@ export const DEPOSIT_WORDS = {
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
   whichHint: 'Tap the other side to pair them.',
-  pickEnvelope: 'Pick an envelope',
+  pickEnvelope: 'Then choose where it goes',
   pickPay: 'Pick the pay it is',
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
   cardPaymentFrom: (account: string) => `Payment from ${account}`,
@@ -4074,7 +4074,7 @@ export const PAIR_WORDS = {
   notWaiting: 'These are not both waiting in Needs a home anymore.',
   notPaired: 'These are not paired with each other anymore.',
   tooManyPayments: 'Too many payments were saved to this card that day.',
-  lost: 'This was paired with a purchase Runway no longer finds, so it is waiting again. File it or leave it out.',
+  lost: 'Its other side changed or is gone, so it is waiting again. Pair it, file it or leave it out.',
   doorTitle: 'Moves between your accounts',
   screenTitle: 'Account moves',
   doorShort: 'Account moves',

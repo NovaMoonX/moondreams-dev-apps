@@ -399,6 +399,8 @@ async function tickMove(
   uid: string,
   encryption: RunwayEncryption,
   into: OpenPurchase,
+  /** The day a lost pair's own tick was on, which its pairing just took back though the store may still show it. */
+  untickedDayKey: string | null,
 ): Promise<OpenPurchase> {
   const state = store.getState();
   const account = state.runway.accounts.find(
@@ -406,7 +408,9 @@ async function tickMove(
   );
   if (!account?.isPullAccount) return into;
   const tick = selectMoveTick(state, todayAsUtcDate(), account.id, into.date);
-  if (tick === null || tick.isDone) return into;
+  if (tick === null || (tick.isDone && tick.dayKey !== untickedDayKey)) {
+    return into;
+  }
   try {
     await setLinesDone(uid, tick.dayKey, [tick.lineId], true, tick.doneIds);
   } catch (error) {
@@ -495,7 +499,12 @@ export function usePairAccountsWithUndo() {
           );
           const into =
             pair.kind === 'transfer'
-              ? await tickMove(uid, encryption, paired.into)
+              ? await tickMove(
+                  uid,
+                  encryption,
+                  paired.into,
+                  pair.into.tickedDayKey,
+                )
               : paired.into;
           return [...list, { ...pair, paired: { ...paired, into }, names }];
         } catch (error) {
