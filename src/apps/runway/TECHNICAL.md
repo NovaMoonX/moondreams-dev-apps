@@ -1359,6 +1359,8 @@ Next Steps, after Link. It ships as three pieces in this order, each usable on i
 5. **Security.** The function already unwraps the plan key to seal imports, so this adds no new access; it adds code that runs with it. Logs carry ids, kinds and counts. A failed unwrap raises the same alert as elsewhere and sends nothing.
 6. **Tests.** Emulator fixtures: a webhook payload becomes an assigned purchase and exactly one notification record; the same payload again sends nothing; a purchase the person assigned is untouched; a pending purchase is skipped until it posts; a purchase in a closed month sets `dirtyFrom`; each template contains no value from the fixtures.
 
+**As built: `needsHome` digest.** `sendRunwayNeedsHomeDigest` (scheduled every 30 minutes) pushes "N purchases need a home" once a day to plans with `notify.needsHome` on and at least one `needsHome` purchase. The hour is the person's choice (sealed `notifyHour`, default 19:00, in sealed `notifyTimeZone`, UTC when unset); the day is claimed at `server/{uid}/notified/needsHome_{YYYY-MM-DD}` (create-only) before the send. It goes through `sendBudgetedPush`, so quiet hours (22-08) and the 3-a-day cap apply, and opens `/runway?view=needsHome`. The text carries the count and nothing else (`check:runway-notify-text`).
+
 Functions added: `reconcileRunwayPurchases` (task-triggered, internal) and `sendRunwayReminders` (scheduled, hourly), with rows in `functions/README.md`. No new secret.
 
 ---
