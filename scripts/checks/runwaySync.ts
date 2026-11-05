@@ -62,6 +62,20 @@ assert.equal(
   'Shell',
   'the merchant falls back to the name',
 );
+assert.equal(
+  normalizeTransaction({
+    id: 'z',
+    pendingId: null,
+    accountId: 'x',
+    date: '2026-10-05',
+    amount: 0.001,
+    merchantName: 'Shell',
+    name: null,
+    isPending: false,
+  }),
+  null,
+  'a zero-amount charge is never a purchase',
+);
 
 const planKey = Buffer.alloc(32, 7);
 const subkey = dedupeSubkey(planKey);

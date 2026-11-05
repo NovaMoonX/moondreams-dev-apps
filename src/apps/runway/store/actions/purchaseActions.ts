@@ -324,7 +324,7 @@ async function setCostMark(
   return paid;
 }
 
-/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
+/** Reads the plan and each envelope named, and refuses a day outside tracking or an envelope that is gone; `known` envelopes (already on the purchase) may be archived since. `isDateStored` skips both day checks for a purchase from the bank, whose date is the bank's and can be before tracking began. `keptDate` is the day an edited purchase already has: keeping it is allowed even when that day is in an earlier stretch, which is listed but never counted, while moving to such a day is refused like adding one. */
 async function checkDayAndEnvelopes(
   transaction: Transaction,
   uid: string,
@@ -333,6 +333,7 @@ async function checkDayAndEnvelopes(
   known: ReadonlySet<string>,
   keptDate: DateOnly | null,
   isDayExempt = false,
+  isDateStored = false,
 ): Promise<Partial<PlanDoc> | undefined> {
   const envelopeIds = [
     ...new Set(
@@ -354,14 +355,18 @@ async function checkDayAndEnvelopes(
   const planData = plan.data() as Partial<PlanDoc> | undefined;
   const periods = planData?.trackingPeriods ?? [];
   if (isDayExempt) return planData;
-  if (!isInTrackingPeriods(periods, date)) {
+  if (!isDateStored && !isInTrackingPeriods(periods, date)) {
     throw new Error(
       `Tracking was not on for ${formatDateOrdinalUTC(date)}. Pick a day you were tracking.`,
     );
   }
   const countedFrom = getCountedFrom(periods);
   const isKept = keptDate === date && countedFrom !== null;
-  if (!isKept && (countedFrom === null || date < countedFrom)) {
+  if (
+    !isDateStored &&
+    !isKept &&
+    (countedFrom === null || date < countedFrom)
+  ) {
     throw new Error(
       countedFrom === null
         ? 'Tracking is off, probably from another device. Reopen Runway to see where it stands.'
@@ -529,6 +534,7 @@ export async function assignPurchase(
       new Set(),
       previous.date,
       lines.length === 0,
+      previous.source === 'link',
     );
     const now = Math.max(Date.now(), previous.updatedAt + 1);
     markLedgerWrite(transaction, uid, plan, [previous.date]);

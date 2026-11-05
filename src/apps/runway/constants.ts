@@ -3938,12 +3938,13 @@ export const NEEDS_HOME_WORDS = {
       ? '1 purchase from your bank is waiting'
       : `${count} purchases from your bank are waiting`,
   intro:
-    'Purchases from your bank wait here until you say which envelope they came out of. They already count against Free to Spend.',
+    'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
   empty:
     'Nothing is waiting. New purchases from your bank show up here on their own.',
   loading: 'Getting your purchases.',
   pending: 'Pending',
   fromBank: 'from your bank',
+  untitled: 'Purchase',
   moneyIn: 'Money in',
   moneyInHelp:
     'Deposits from your bank. Matching them to your pay comes later, so for now you can leave them out of spending.',
@@ -4036,6 +4037,7 @@ export const LINK_WORDS = {
   refreshing: 'Asking your bank\u2026',
   refreshHelp: 'Bring in new purchases and the latest balance',
   refreshed: 'Up to date with your bank.',
+  refreshNothing: 'Nothing new from your bank yet.',
   refreshFailed: 'Your bank did not answer. Try again in a few minutes.',
   needsAttention: 'Your bank needs you to sign in again.',
   syncing: 'Purchases from the last 30 days are on their way to Needs a home.',

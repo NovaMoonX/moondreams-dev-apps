@@ -67,6 +67,7 @@ export function normalizeTransaction(
 ): NormalizedTransaction | null {
   const date = toDateOnly(raw.date);
   if (date === null || !Number.isFinite(raw.amount)) return null;
+  if (toTransactionCents(raw.amount) === 0) return null;
   const result: NormalizedTransaction = {
     providerTransactionId: raw.id,
     pendingTransactionId: raw.pendingId || null,

@@ -1,8 +1,13 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 
-import { isGateOpenFor, type GateRollout, type GateSetting } from './gateLogic.js';
+import {
+  isGateOpenFor,
+  type GateRollout,
+  type GateSetting,
+} from './gateLogic.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -23,11 +28,39 @@ export async function assertGateOpen(
 ) {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Sign in first.');
   const snapshot = await getFirestore().doc(`featureGates/${appId}`).get();
-  const setting = (snapshot.data()?.gates as Record<string, GateSetting> | undefined)?.[gateId];
+  const setting = (
+    snapshot.data()?.gates as Record<string, GateSetting> | undefined
+  )?.[gateId];
   const isAdmin =
     request.auth.token.admin === true ||
-    (request.auth.token.email?.trim().toLowerCase() === ADMIN_EMAIL && request.auth.token.email_verified === true);
-  if (!isGateOpenFor(setting, defaultRollout, { uid: request.auth.uid, isAdmin })) {
+    (request.auth.token.email?.trim().toLowerCase() === ADMIN_EMAIL &&
+      request.auth.token.email_verified === true);
+  if (
+    !isGateOpenFor(setting, defaultRollout, { uid: request.auth.uid, isAdmin })
+  ) {
     throw new HttpsError('permission-denied', message);
   }
+}
+
+/** True when `uid` is let through a feature switch; for work with no caller (a webhook, a schedule). Admin status is read from the account. */
+export async function isGateOpenForUid(
+  uid: string,
+  appId: string,
+  gateId: string,
+  defaultRollout: GateRollout,
+) {
+  const [snapshot, user] = await Promise.all([
+    getFirestore().doc(`featureGates/${appId}`).get(),
+    getAuth()
+      .getUser(uid)
+      .catch(() => null),
+  ]);
+  const setting = (
+    snapshot.data()?.gates as Record<string, GateSetting> | undefined
+  )?.[gateId];
+  const isAdmin =
+    user?.customClaims?.admin === true ||
+    (user?.email?.trim().toLowerCase() === ADMIN_EMAIL &&
+      user.emailVerified === true);
+  return isGateOpenFor(setting, defaultRollout, { uid, isAdmin });
 }

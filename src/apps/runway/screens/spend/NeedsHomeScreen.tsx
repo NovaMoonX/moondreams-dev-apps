@@ -127,7 +127,7 @@ function NeedsHomeRow({
   const title =
     purchase.label?.trim() ||
     purchase.merchant?.trim() ||
-    (isIn ? NEEDS_HOME_WORDS.moneyIn : 'Purchase');
+    (isIn ? NEEDS_HOME_WORDS.moneyIn : NEEDS_HOME_WORDS.untitled);
   const detail = [
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),

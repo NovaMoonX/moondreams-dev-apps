@@ -64,7 +64,8 @@ function toProviderError(code: string): ProviderError {
     code === 'INSTITUTION_DOWN' ||
     code === 'INSTITUTION_NOT_RESPONDING' ||
     code === 'INTERNAL_SERVER_ERROR' ||
-    code === 'PRODUCT_NOT_READY'
+    code === 'PRODUCT_NOT_READY' ||
+    code === 'TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION'
   ) {
     return new ProviderError(
       'unavailable',
@@ -255,11 +256,24 @@ export interface WebhookKey {
   expired_at?: number | null;
 }
 
-/** The public key Plaid signed a webhook with; null when Plaid does not know the id. */
+const KEY_TTL_MS = 24 * 60 * 60 * 1000;
+const MISS_TTL_MS = 60 * 1000;
+const keyCache = new Map<string, { key: WebhookKey | null; until: number }>();
+
+/** The public key Plaid signed a webhook with; null when Plaid does not know the id. Kept per instance, a miss for a minute. */
 export async function getWebhookKey(keyId: string): Promise<WebhookKey | null> {
+  const now = Date.now();
+  const cached = keyCache.get(keyId);
+  if (cached && cached.until > now) return cached.key;
   const response = await call<{ key: WebhookKey }>(
     '/webhook_verification_key/get',
     { key_id: keyId },
   ).catch(() => null);
-  return response?.key ?? null;
+  const key = response?.key ?? null;
+  const isLive = key !== null && key.expired_at == null;
+  keyCache.set(keyId, {
+    key,
+    until: now + (isLive ? KEY_TTL_MS : MISS_TTL_MS),
+  });
+  return key;
 }

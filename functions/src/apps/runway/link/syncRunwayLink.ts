@@ -1,10 +1,12 @@
 import {
   type DocumentReference,
   type Firestore,
+  type Timestamp,
   type WriteBatch,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
+import { isGateOpenForUid } from '../../../gates/assertGateOpen.js';
 import {
   openWithKey,
   sealWithKey,
@@ -12,7 +14,13 @@ import {
   type Keyring,
   type SealedPayload,
 } from '../planKey.js';
-import { grantsPath, openGrant, type ProviderGrantDoc } from './grant.js';
+import {
+  grantsPath,
+  itemIndexPath,
+  openGrant,
+  type ItemIndexDoc,
+  type ProviderGrantDoc,
+} from './grant.js';
 import {
   planDocPath,
   provider,
@@ -108,18 +116,27 @@ async function readExisting(
   ).flat();
   const unreadable = new Set<string>();
   const existing = new Map<string, PurchaseState>();
+  const updateTimes = new Map<string, Timestamp>();
   snapshots.forEach((snapshot) => {
     if (!snapshot.exists) return;
     const state = toState(snapshot.id, snapshot.data() ?? {}, planKey);
-    if (state) existing.set(snapshot.id, state);
-    else unreadable.add(snapshot.id);
+    if (state) {
+      existing.set(snapshot.id, state);
+      if (snapshot.updateTime)
+        updateTimes.set(snapshot.id, snapshot.updateTime);
+    } else unreadable.add(snapshot.id);
   });
-  return { existing, unreadable };
+  return { existing, unreadable, updateTimes };
 }
 
 type Write =
   | { kind: 'set'; ref: DocumentReference; data: Record<string, unknown> }
-  | { kind: 'update'; ref: DocumentReference; data: Record<string, unknown> }
+  | {
+      kind: 'update';
+      ref: DocumentReference;
+      data: Record<string, unknown>;
+      lastUpdateTime: Timestamp | null;
+    }
   | { kind: 'delete'; ref: DocumentReference };
 
 function toWrites(
@@ -128,6 +145,7 @@ function toWrites(
   outcome: SyncOutcome,
   planKey: PlanKey,
   unreadable: ReadonlySet<string>,
+  updateTimes: ReadonlyMap<string, Timestamp>,
   now: number,
 ): Write[] {
   return [...outcome.writes].flatMap(([docId, state]): Write[] => {
@@ -163,6 +181,7 @@ function toWrites(
           {
             kind: 'update',
             ref,
+            lastUpdateTime: updateTimes.get(docId) ?? null,
             data: {
               date: state.date,
               status: state.status,
@@ -186,8 +205,13 @@ async function commitWrites(firestore: Firestore, writes: readonly Write[]) {
         const batch: WriteBatch = firestore.batch();
         group.forEach((write) => {
           if (write.kind === 'set') batch.set(write.ref, write.data);
-          else if (write.kind === 'update') batch.update(write.ref, write.data);
-          else batch.delete(write.ref);
+          else if (write.kind === 'update') {
+            if (write.lastUpdateTime) {
+              batch.update(write.ref, write.data, {
+                lastUpdateTime: write.lastUpdateTime,
+              });
+            } else batch.update(write.ref, write.data);
+          } else batch.delete(write.ref);
         });
         await batch.commit();
       }),
@@ -241,14 +265,20 @@ async function syncPurchases(
     return made;
   };
 
-  const totals = { created: 0, updated: 0, removed: 0, dropped: 0 };
+  const totals = {
+    created: 0,
+    updated: 0,
+    removed: 0,
+    dropped: 0,
+    unreadable: 0,
+  };
   const round = async (
     cursor: string | null,
     rounds: number,
   ): Promise<void> => {
     const page = await provider.syncTransactions(grant, cursor);
     const changed = [...page.added, ...page.modified];
-    const { existing, unreadable } = await readExisting(
+    const { existing, unreadable, updateTimes } = await readExisting(
       firestore,
       uid,
       neededDocIds(keyOf, changed, page.removed),
@@ -266,13 +296,14 @@ async function syncPurchases(
     await markClosedMonths(firestore, uid, outcome.touchedDates, now);
     await commitWrites(
       firestore,
-      toWrites(firestore, uid, outcome, planKey, unreadable, now),
+      toWrites(firestore, uid, outcome, planKey, unreadable, updateTimes, now),
     );
     await grantRef.update({ cursor: page.nextCursor });
     totals.created += outcome.created;
     totals.updated += outcome.updated;
     totals.removed += outcome.removed;
     totals.dropped += outcome.dropped;
+    totals.unreadable += unreadable.size;
     if (page.hasMore && rounds + 1 < MAX_ROUNDS) {
       await round(page.nextCursor, rounds + 1);
     }
@@ -338,9 +369,14 @@ export async function syncRunwayLink(
   ) {
     return { ...empty, state: 'skipped' };
   }
+  if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
+    return { ...empty, state: 'skipped' };
+  }
 
   try {
     const grantDoc = grantSnapshot.data() as ProviderGrantDoc;
+    const index: ItemIndexDoc = { uid, linkId };
+    await firestore.doc(itemIndexPath(grantDoc.providerItemId)).set(index);
     const grant = openGrant(keyring, uid, grantDoc);
     const planKey = await unwrapPlanKey(firestore, keyring, uid);
     const link = openWithKey(
@@ -375,6 +411,7 @@ export async function syncRunwayLink(
       updated: totals.updated,
       removed: totals.removed,
       dropped: totals.dropped,
+      unreadable: totals.unreadable,
     });
     return {
       ...empty,
