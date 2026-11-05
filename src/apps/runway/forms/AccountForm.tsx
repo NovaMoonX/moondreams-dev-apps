@@ -160,7 +160,8 @@ const parseApy = (text: string) =>
   parsePercentToBps(text, { maxBps: MAX_APY_BPS, stepBps: 1 });
 
 /** "0" reads as no interest, like an empty field. */
-const isNoApy = (text: string) => text === '' || /^0*(\.0*)?%?$/.test(text);
+const isNoApy = (text: string) =>
+  text === '' || /^(0+(\.0*)?|\.0+)%?$/.test(text);
 
 const parseInterestDay = (text: string) => {
   const day = /^\d{1,2}$/.test(text.trim()) ? Number(text) : null;
