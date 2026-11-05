@@ -2357,17 +2357,20 @@ export const NOTIFY_WORDS = {
   rowLabel: 'Notifications',
   rowOff: 'Off',
   rowOn: (hour: string) => `Purchases waiting, at ${hour}`,
+  rowOnDeviceOff: (hour: string) => `On at ${hour}, not on this device`,
   sectionCaption: 'Reminders',
-  group: 'Daily note',
+  group: 'Daily reminder',
   switchLabel: 'Purchases waiting for a home',
   switchHelp: 'Once a day, only when something is waiting.',
-  hourLabel: 'Send it at',
+  hourLabel: 'Remind me at',
   zone: (abbreviation: string) => `Your time zone: ${abbreviation}`,
+  zoneSaved: (abbreviation: string) => `Set in ${abbreviation} time`,
+  switchZone: (abbreviation: string) => `Use ${abbreviation}`,
   dismissed:
     'Nothing changed. Allow notifications when your browser asks, then switch this on again.',
   saveFailed: 'That did not save. Nothing was changed.',
   deviceOff: 'Not on this device yet',
-  deviceOffSub: 'Get the daily note here too',
+  deviceOffSub: 'Get the daily reminder here too',
 } as const;
 
 export const DELETE_PLAN_PHRASE = 'delete my plan';

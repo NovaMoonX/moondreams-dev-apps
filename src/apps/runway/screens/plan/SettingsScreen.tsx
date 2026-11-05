@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import InlineNotice from '@/components/InlineNotice';
 import {
   Activity,
@@ -18,6 +19,7 @@ import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
+import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -136,6 +138,11 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const open = getOpenPeriod(periods);
   const [error, setError] = useState<string | null>(null);
   const canLink = useCanLinkBank();
+  const isDeviceOn =
+    useQuery({
+      ...devicePushQueryOptions(user?.uid ?? ''),
+      enabled: canLink && user !== null,
+    }).data !== 'off';
   const plan = useAppSelector((state) => state.runway.plan);
   const links = useAppSelector((state) => state.runway.links);
   const unfinished = links.filter(isUnfinishedLink);
@@ -254,7 +261,9 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
               label={NOTIFY_WORDS.rowLabel}
               value={
                 plan?.notify?.needsHome
-                  ? NOTIFY_WORDS.rowOn(
+                  ? (isDeviceOn
+                      ? NOTIFY_WORDS.rowOn
+                      : NOTIFY_WORDS.rowOnDeviceOff)(
                       formatNotifyHour(plan.notifyHour ?? DEFAULT_NOTIFY_HOUR),
                     )
                   : NOTIFY_WORDS.rowOff

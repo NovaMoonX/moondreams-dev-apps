@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Bell, Smartphone } from 'lucide-react';
-import { Select } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import ActionRow from '@/components/ActionRow';
@@ -65,8 +65,12 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
 
   const isOn = plan?.notify?.needsHome ?? false;
   const hour = plan?.notifyHour ?? DEFAULT_NOTIFY_HOUR;
-  const zone = plan?.notifyTimeZone ?? getDeviceTimeZone();
+  const deviceZone = getDeviceTimeZone();
+  const zone = plan?.notifyTimeZone ?? deviceZone;
   const zoneName = getZoneAbbreviation(zone, now);
+  const deviceZoneName = getZoneAbbreviation(deviceZone, now);
+  const isZoneElsewhere =
+    deviceZone !== null && zone !== deviceZone && deviceZoneName !== '';
   const stuckState =
     device === 'blocked' || device === 'unsupported' ? device : null;
 
@@ -97,6 +101,10 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
     if (isSwitching) return;
     setIsSwitching(true);
     setMessage(null);
+    if (isChecked && stuckState !== null) {
+      setMessage(getDeviceNotificationsText(stuckState));
+      return;
+    }
     try {
       if (isChecked && device !== 'on' && !(await askDevice())) return;
       await save({
@@ -137,7 +145,7 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
               <AppToggle
                 aria-label={NOTIFY_WORDS.switchLabel}
                 checked={isOn}
-                disabled={isSwitching || (stuckState !== null && !isOn)}
+                disabled={isSwitching}
                 onCheckedChange={(isChecked) => void handleSwitch(isChecked)}
               />
             }
@@ -158,10 +166,25 @@ function NotificationsScreen({ onClose }: NotificationsScreenProps) {
                     })
                   }
                 />
-                {zoneName !== '' && (
-                  <p className='text-muted-foreground text-xs'>
-                    {NOTIFY_WORDS.zone(zoneName)}
-                  </p>
+                {isZoneElsewhere ? (
+                  <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+                    <p className='text-muted-foreground text-xs'>
+                      {NOTIFY_WORDS.zoneSaved(zoneName || zone || '')}
+                    </p>
+                    <Button
+                      variant='tertiary'
+                      size='sm'
+                      onClick={() => void save({ timeZone: deviceZone })}
+                    >
+                      {NOTIFY_WORDS.switchZone(deviceZoneName)}
+                    </Button>
+                  </div>
+                ) : (
+                  zoneName !== '' && (
+                    <p className='text-muted-foreground text-xs'>
+                      {NOTIFY_WORDS.zone(zoneName)}
+                    </p>
+                  )
                 )}
               </div>
             )}

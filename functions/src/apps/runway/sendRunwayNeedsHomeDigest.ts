@@ -88,7 +88,7 @@ async function digestForPlan(
     body: needsHomeBody(waiting),
     url,
   }).catch(async (error: unknown) => {
-    await claim.delete();
+    await claim.delete().catch(() => undefined);
     throw error;
   });
   if (report.isFailure) {
