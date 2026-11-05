@@ -1,6 +1,6 @@
 import { useAppSelector } from '@/store';
 import { getEffectiveSplits } from '@apps/runway/engine/correct';
-import { planGoalContributions } from '@apps/runway/engine/pace';
+import { isSavingFor, planGoalContributions } from '@apps/runway/engine/pace';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import {
   getPriorDays,
@@ -44,10 +44,7 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
       .filter((line) => line.itemId === goalId)
       .reduce((sum, line) => sum + line.cents, 0),
   }));
-  const isPlanned =
-    goal.state !== 'paused' &&
-    goal.funding.cadence.kind !== 'none' &&
-    goal.funding.amount.kind !== 'rest';
+  const isPlanned = isSavingFor(goal) && goal.funding.amount.kind !== 'rest';
   const contributions = isPlanned
     ? planGoalContributions(
         { ...goal, heldCents },

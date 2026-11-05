@@ -1132,9 +1132,9 @@ export const CHANGE_WORDS = {
     'Saved, but the changes you made for one pay could not be cleared. They are still on those pays.',
   changedElsewhere:
     'This changed somewhere else. What it does now is shown below. Check it, then save again.',
-  fromHeading: 'From when',
+  fromHeading: 'When it starts',
   fromNow: 'From now on',
-  fromDate: 'From a date ahead',
+  fromDate: 'From a later date',
   dateLabel: 'Starts on',
   dateBlocker: 'Pick a day after today, within ten years.',
   previewHeading: 'What this changes',
@@ -1159,11 +1159,11 @@ export const CHANGE_WORDS = {
   change: 'Change',
   scheduled: 'From',
   fromDay: 'From this income day on',
-  dayOnly: 'This income day only',
-  stretch: 'For a stretch',
+  dayOnly: 'Just this income day',
+  stretch: 'For a while, then back',
   dayPick: 'Which income day',
   stretchHeading: 'How long',
-  stretchCount: 'By income days',
+  stretchCount: 'For a number of income days',
   stretchDate: 'Until a date',
   stretchCountLabel: 'How many income days',
   stretchDateLabel: 'Last day of the change',
@@ -1180,9 +1180,9 @@ export const CHANGE_WORDS = {
 export const LIFECYCLE_WORDS = {
   addReason: 'Add a reason',
   removeReason: 'Remove the reason',
-  pause: 'Pause saving',
+  pause: 'Stop saving for now',
   pauseSub: 'Nothing new goes in. The balance and history stay.',
-  resume: 'Start saving again',
+  resume: 'Start saving',
   resumeSub: 'It gets money again from the next income day.',
   end: 'End it',
   endSub: 'It stops after the last day you pick. Its history stays.',
@@ -1195,10 +1195,9 @@ export const LIFECYCLE_WORDS = {
   endBlocker: 'Pick the last day, from today to ten years ahead.',
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
-  pauseConfirm: 'Pause',
-  resumeConfirm: 'Start again',
+  pauseConfirm: 'Stop saving',
+  resumeConfirm: 'Start saving',
   whyEnd: 'Why is it ending?',
-  paused: 'Paused',
   endsAfter: 'Ends after',
   backAfter: 'then it goes back',
   until: 'Until',
@@ -1324,8 +1323,8 @@ export const DRAFT_WORDS = {
 
 export const PACE_WORDS = {
   rest: 'Takes what is left of each funded day, so there is no fixed pace.',
-  paused: 'Paused. Nothing is added until you start saving again.',
   completed: 'Completed',
+  notReached: 'not reached in the next year at this amount',
 } as const;
 
 /** Names in a sentence: "A", "A and B", "A, B and C", then three and "N more". */
@@ -2373,6 +2372,7 @@ export const ITEM_SHEET_WORDS = {
   paidFromSetAside: 'It comes out of what is set aside',
   paidFromFree: 'not set aside yet comes out of Free to Spend',
   stopHeading: 'Stop or pause',
+  startHeading: 'Start or stop',
   lineHeading: 'This income day',
   topUpSub: 'Takes what it is short from what this day has left',
   leaveShortSub: 'It waits for a later income day',
@@ -2769,6 +2769,7 @@ export const ITEM_SHEET_R2_WORDS = {
   firstDateNote: 'Nothing is set aside for it until it has a date.',
   pauseSub: 'Nothing new goes in',
   resumeSub: 'Money goes in again from the next income day',
+  startSavingSub: 'Pick how often and how much goes in',
   endSub: 'It stops after the day you pick',
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
@@ -2857,7 +2858,7 @@ export const HOW_OFTEN_WORDS = {
   goalTitle: 'How often does money go in?',
   caption: 'How often',
   paycheck: 'From a paycheck',
-  none: 'Not adding to it',
+  none: 'Not saving for it yet',
   perPeriodLabel: 'Amount',
   paycheckAmountTitle: 'How much from each pay?',
   fromWhich: 'Which pay',
@@ -2869,9 +2870,9 @@ export const HOW_OFTEN_WORDS = {
   restTitle: 'Whatever is left of each pay',
   restHelp:
     'What is left of that pay after your bills and the envelopes above this one in priority.',
-  noAddingSummary: 'Not being added to',
+  noAddingSummary: 'Not saving for it yet',
   noAddingHint:
-    'Nothing goes into it. You can start adding to it whenever you like.',
+    'Nothing goes into it. Start saving for it from its sheet whenever you like.',
   needsIncome: 'Add an income source first, so there are pays to count.',
   badAmount: 'Enter an amount above $0, like 600.00.',
   currentTitle: 'How much is in it now?',
@@ -2879,7 +2880,7 @@ export const HOW_OFTEN_WORDS = {
   currentHint: 'Leave it at $0 if you are starting from nothing.',
   holdingNotRecorded: (name: string) =>
     `${name} was added, but what is in it now did not record. Add it under Where things stand.`,
-  notBeingAdded: 'Not being added to',
+  notBeingAdded: 'Not saving for it yet',
 } as const;
 
 /** Round 4, package C: Home, Days, Plan and Spend screens. */
@@ -3188,6 +3189,8 @@ export const GROUP_WORDS = {
   saved: 'saved',
   goalsHelpTitle: 'What your goals add up to',
   savingToward: (amount: string) => `Saving toward ${amount} in all.`,
+  notSavingFor: (count: number) =>
+    `${count} ${count === 1 ? 'goal' : 'goals'} you are not saving for yet`,
   monthLabel: 'Together, each month',
   openLabel: (name: string) => `${name}, open`,
   rename: (name: string) => `Rename ${name}`,
@@ -3417,7 +3420,7 @@ export const MOVED_DAY_WORDS = {
 export const PAIRING_STOP_WORDS = {
   archived: 'Archived, so it gets nothing from this pay',
   ended: (date: string) => `Ended ${date}, so it gets nothing from this pay`,
-  paused: 'Paused, so it gets nothing from this pay',
+  notSaving: 'Not saving for it yet, so it gets nothing from this pay',
   stops: (names: readonly string[]) =>
     names.length === 1
       ? `${names[0]} stops paying it first, so that money stays with the pay.`

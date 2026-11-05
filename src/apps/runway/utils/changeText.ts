@@ -14,6 +14,7 @@ import {
 } from '@apps/runway/constants';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import {
   describeCostWhen,
@@ -404,6 +405,10 @@ const MONEYLESS_KEYS = [
   'accountId',
   'spillTo',
 ];
+
+/** A goal nothing goes into: paused or not being saved for yet. */
+export const isIdleGoal = (payload: ItemPayload | null | undefined) =>
+  !!payload && 'targetCents' in payload && !isSavingFor(payload);
 
 /** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {

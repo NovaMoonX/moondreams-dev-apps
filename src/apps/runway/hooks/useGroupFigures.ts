@@ -1,6 +1,6 @@
 import { useAppSelector } from '@/store';
 import { DAY_MS } from '@apps/runway/engine/dates';
-import { getMonthlyPaceCents } from '@apps/runway/engine/pace';
+import { getMonthlyPaceCents, isSavingFor } from '@apps/runway/engine/pace';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   getIncomeDaysPerMonth,
@@ -113,8 +113,7 @@ export function usePlanTotals(
 
 /** A goal adds a monthly amount only while it is active and money goes into it. */
 const isFundedGoal = ({ version }: ResolvedGoal) =>
-  version.payload.state !== 'paused' &&
-  version.payload.funding.cadence.kind !== 'none';
+  isSavingFor(version.payload);
 
 /** What the goals counted at `dial` take in a usual month: a goal with a date at the pace that finishes it on time, one without at what its rule puts in. */
 export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
@@ -122,9 +121,8 @@ export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const payLines = useResolvedPayLines(today);
   const live = goals.filter(
-    ({ version }) =>
-      version.payload.state !== 'paused' &&
-      isCountedAt(version.payload.priority, dial),
+    (goal) =>
+      isFundedGoal(goal) && isCountedAt(goal.version.payload.priority, dial),
   );
   const heldOf = ({ item }: ResolvedGoal) =>
     Math.max(0, assignedByItem[item.id] ?? 0);
@@ -135,7 +133,7 @@ export function useGoalsMonthly(today: number, dial: Priority): MoneyRange {
     version.payload.targetDate !== null && version.payload.targetDate >= today;
   const dated = open.filter(isDated);
   // No date, or one already past: what the goal's rule puts in is the honest monthly figure.
-  const undated = open.filter((goal) => !isDated(goal) && isFundedGoal(goal));
+  const undated = open.filter((goal) => !isDated(goal));
   const paceCents = dated.reduce(
     (sum, { item, version }) =>
       sum +
