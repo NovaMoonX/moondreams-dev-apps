@@ -29,6 +29,7 @@ import HomeScreen from '@apps/runway/screens/home/HomeScreen';
 import AccountsScreen from '@apps/runway/screens/plan/AccountsScreen';
 import ChangeLogScreen from '@apps/runway/screens/plan/ChangeLogScreen';
 import DeletePlanScreen from '@apps/runway/screens/plan/DeletePlanScreen';
+import NotificationsScreen from '@apps/runway/screens/plan/NotificationsScreen';
 import TrackingScreen from '@apps/runway/screens/plan/TrackingScreen';
 import SettingsScreen from '@apps/runway/screens/plan/SettingsScreen';
 import PrioritiesScreen from '@apps/runway/screens/plan/PrioritiesScreen';
@@ -60,6 +61,7 @@ import {
 import { usePlaceByRules } from '@apps/runway/hooks/useRuleMatch';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
+import { useSyncOnReturn } from '@apps/runway/hooks/useSyncOnReturn';
 import { useRunwaySync } from '@apps/runway/useRunwaySync';
 import type { RunwayTab } from '@apps/runway/types';
 import { setOpenItemRequest } from '@apps/runway/utils/openItemRequest';
@@ -221,6 +223,7 @@ function RunwayContent() {
   useTrackAppUsage('runway', user?.uid ?? null);
   useLoadFeatureGates('runway', user?.uid ?? null);
   useRunwaySync(user?.uid ?? null, attempt);
+  useSyncOnReturn();
   useMatchBankPurchases(user?.uid ?? null);
   useMatchDeposits(user?.uid ?? null);
   useMatchAccountPairs(user?.uid ?? null);
@@ -419,6 +422,9 @@ function RunwayContent() {
         <SettingsScreen onClose={closeMoreEntry} />
         {settingsView === 'tracking' && (
           <TrackingScreen onClose={closeSettingsView} />
+        )}
+        {settingsView === 'notifications' && (
+          <NotificationsScreen onClose={closeSettingsView} />
         )}
       </div>
     );

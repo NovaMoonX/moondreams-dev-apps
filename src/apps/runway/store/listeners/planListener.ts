@@ -18,7 +18,11 @@ async function openPlan(
 ): Promise<OpenPlan> {
   const fields = plan.sealed
     ? await openJson<PlanSealedFields>(plan.sealed, encryption)
-    : { currencyCode: DEFAULT_CURRENCY_CODE };
+    : {
+        currencyCode: DEFAULT_CURRENCY_CODE,
+        notifyHour: null,
+        notifyTimeZone: null,
+      };
   const result: OpenPlan = {
     uid: plan.uid,
     createdAt: plan.createdAt,
@@ -30,8 +34,11 @@ async function openPlan(
       linkedFrom: period.linkedFrom ?? null,
     })),
     dirtyFrom: plan.dirtyFrom ?? null,
+    notify: plan.notify ?? null,
     keyId: plan.keyId ?? null,
     currencyCode: fields.currencyCode,
+    notifyHour: fields.notifyHour ?? null,
+    notifyTimeZone: fields.notifyTimeZone ?? null,
   };
   return result;
 }

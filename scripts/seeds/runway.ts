@@ -200,6 +200,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     startDate: startOfUtcDay(context.now) - 45 * DAY_MS,
     trackingPeriods: [],
     dirtyFrom: null,
+    notify: { needsHome: false },
     keyId: data.keyId,
     sealed,
   });
@@ -3149,6 +3150,7 @@ async function seedTrackingPlan(
       { from: startDate, to: null, linkedFrom: startOfUtcDay(createdAt) },
     ],
     dirtyFrom: null,
+    notify: { needsHome: false },
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
@@ -3298,6 +3300,7 @@ async function seedUnlinkedPlan(
     stance: 'conservative',
     startDate,
     trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
+    notify: { needsHome: false },
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });

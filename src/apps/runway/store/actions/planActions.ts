@@ -13,7 +13,7 @@ import {
   stopTrackingPeriod,
   unlinkTrackingPeriod,
 } from '@apps/runway/engine/level';
-import { sealJson } from '@apps/runway/security';
+import { openJson, sealJson } from '@apps/runway/security';
 import { getLedgerMark } from '@apps/runway/store/actions/closingActions';
 import {
   getStartMoveId,
@@ -25,6 +25,7 @@ import type {
   DateOnly,
   MoveDoc,
   PlanDoc,
+  PlanSealedFields,
   RunwayEncryption,
   Stance,
   StartSealed,
@@ -35,7 +36,11 @@ import type {
 export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
   const planRef = doc(db, 'apps', 'runway', 'plans', uid);
   const sealed = await sealJson(
-    { currencyCode: DEFAULT_CURRENCY_CODE },
+    {
+      currencyCode: DEFAULT_CURRENCY_CODE,
+      notifyHour: null,
+      notifyTimeZone: null,
+    } satisfies PlanSealedFields,
     encryption,
   );
 
@@ -52,6 +57,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       startDate: null,
       trackingPeriods: [],
       dirtyFrom: null,
+      notify: { needsHome: false },
       keyId: encryption.keyId,
       sealed,
     };
@@ -64,6 +70,46 @@ export async function setStance(uid: string, stance: Stance) {
   await updateDoc(doc(db, 'apps', 'runway', 'plans', uid), {
     stance,
     updatedAt: Date.now(),
+  });
+}
+
+export interface NotifyPatch {
+  needsHome?: boolean;
+  hour?: number;
+  timeZone?: string | null;
+}
+
+/** Saves the push choices: the switch in `notify` and the hour and zone re-sealed with the plan's other sealed fields, in one write that reads the plan fresh so a second device's change is kept. */
+export async function setNotify(
+  uid: string,
+  encryption: RunwayEncryption,
+  patch: NotifyPatch,
+) {
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const plan = snapshot.data() as PlanDoc;
+    const current: Partial<PlanSealedFields> = plan.sealed
+      ? await openJson<PlanSealedFields>(plan.sealed, encryption)
+      : {};
+    const sealed = await sealJson(
+      {
+        currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
+        notifyHour:
+          patch.hour === undefined ? (current.notifyHour ?? null) : patch.hour,
+        notifyTimeZone:
+          patch.timeZone === undefined
+            ? (current.notifyTimeZone ?? null)
+            : patch.timeZone,
+      } satisfies PlanSealedFields,
+      encryption,
+    );
+    transaction.update(ref, {
+      sealed,
+      notify: { needsHome: patch.needsHome ?? plan.notify?.needsHome ?? false },
+      updatedAt: Date.now(),
+    });
   });
 }
 

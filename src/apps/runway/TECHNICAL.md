@@ -384,9 +384,9 @@ interface PlanDoc {
   trackingPeriods: { from: DateOnly; to: DateOnly | null }[];   // Track is on while the last period has to = null
   dirtyFrom: string | null;                 // 'yyyy-mm': first closing that is stale; absent on a plan written before closings
   planTogetherDays: number | null;          // plan together income days within N days of each other
-  notify: { moneyArrived: boolean; billPaid: boolean; billDue: boolean; incomeToday: boolean };   // Next Steps; all false until turned on
+  notify: { needsHome: boolean } | null;    // readable: the sending Function reads it; false until turned on in Settings → Notifications, null on a plan made before
   keyId: string | null;                     // which data key sealed this plan
-  sealed: Sealed | null;                    // { currencyCode, displayPrefs, notifyTimeZone, notifyHour }
+  sealed: Sealed | null;                    // { currencyCode, displayPrefs, notifyHour: number | null (0-23, local; null reads as 19), notifyTimeZone: string | null (IANA); a blob sealed before them lacks both and reads null }
 }
 ```
 
@@ -1358,6 +1358,8 @@ Next Steps, after Link. It ships as three pieces in this order, each usable on i
 4. **Cost and load.** One pass per burst, reading a few hundred small documents for one plan, not its whole history. Measured in the spike with the scale seed's largest plan. The hourly reminder function reads only plans with a schedule switch on.
 5. **Security.** The function already unwraps the plan key to seal imports, so this adds no new access; it adds code that runs with it. Logs carry ids, kinds and counts. A failed unwrap raises the same alert as elsewhere and sends nothing.
 6. **Tests.** Emulator fixtures: a webhook payload becomes an assigned purchase and exactly one notification record; the same payload again sends nothing; a purchase the person assigned is untouched; a pending purchase is skipped until it posts; a purchase in a closed month sets `dirtyFrom`; each template contains no value from the fixtures.
+
+**As built: `needsHome` digest.** `sendRunwayNeedsHomeDigest` (scheduled every 30 minutes) pushes "N purchases need a home" once a day to plans with `notify.needsHome` on and at least one `needsHome` purchase. The hour is the person's choice (sealed `notifyHour`, default 19:00, in sealed `notifyTimeZone`, UTC when unset); the day is claimed at `server/{uid}/notified/needsHome_{YYYY-MM-DD}` (create-only) before the send and released when the send fails, so the next run retries. It goes through `sendPushReport`, since the person chose the hour (the picker offers 8 am to 9 pm), and opens `/runway?view=needsHome`. The text carries the count and nothing else (`check:runway-notify-text`).
 
 Functions added: `reconcileRunwayPurchases` (task-triggered, internal) and `sendRunwayReminders` (scheduled, hourly), with rows in `functions/README.md`. No new secret.
 

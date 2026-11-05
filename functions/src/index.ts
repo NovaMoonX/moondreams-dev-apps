@@ -47,4 +47,5 @@ export { settlePipelineAsk } from './pipeline/answerPipelineQuestions.js';
 export { recordPipelineEvent } from './pipeline/recordPipelineEvent.js';
 export { claimDeviceToken } from './notifications/claimDeviceToken.js';
 export { sendScheduledReminders } from './notifications/sendScheduledReminders.js';
+export { sendRunwayNeedsHomeDigest } from './apps/runway/sendRunwayNeedsHomeDigest.js';
 export { sendDueBundledPushes } from './notifications/sendDueBundledPushes.js';
