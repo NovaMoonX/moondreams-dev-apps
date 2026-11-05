@@ -8,6 +8,7 @@ import type {
   HorizonState,
   HorizonStored,
   MoneyRange,
+  Priority,
   Schedule,
   Stance,
 } from '@apps/runway/types';
@@ -17,6 +18,8 @@ import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS } from './dates';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
+
+const MONTH_MS = (365.25 / 12) * DAY_MS;
 
 /** A cost's payment marked paid and not undone. */
 export interface CostPaidEntry {
@@ -121,6 +124,47 @@ export const sumCostSpent = (paid: readonly CostPaidEntry[]): Cents =>
     0,
   );
 
+/** The priority a cost is counted at: its own, else its item's. */
+export const getCostPriority = (
+  cost: Pick<HorizonCost, 'priority'>,
+  itemPriority: Priority,
+): Priority => cost.priority ?? itemPriority;
+
+/** How far a plan's uncovered payments fall short, counting only the costs in `countedIds`; none when the rest is not decided later. */
+export const sumCountedShortCents = (
+  plan: Pick<HorizonPlan, 'covers' | 'shortfall'>,
+  countedIds: ReadonlySet<string>,
+): Cents =>
+  plan.shortfall === null
+    ? 0
+    : plan.covers
+        .filter(({ costId }) => countedIds.has(costId))
+        .reduce(
+          (sum, { coveredCents, totalCents }) =>
+            sum + totalCents - coveredCents,
+          0,
+        );
+
+/** The steady amount a month that meets every uncovered payment of the costs in `countedIds` on its due date, the pace a dated goal is held to; a payment already due asks all of itself now. */
+export const getHorizonPaceCents = (
+  covers: readonly HorizonCover[],
+  countedIds: ReadonlySet<string>,
+  today: DateOnly,
+): Cents =>
+  covers
+    .filter(({ costId }) => countedIds.has(costId))
+    .reduce<{ shortCents: Cents; paceCents: Cents }>(
+      (walk, { dueOn, coveredCents, totalCents }) => {
+        const shortCents = walk.shortCents + totalCents - coveredCents;
+        const months = Math.max(1, (dueOn - today) / MONTH_MS);
+        return {
+          shortCents,
+          paceCents: Math.max(walk.paceCents, Math.ceil(shortCents / months)),
+        };
+      },
+      { shortCents: 0, paceCents: 0 },
+    ).paceCents;
+
 /** The payments of costs paid outside the plan that nobody has marked, soonest first. Until each is marked the item is not ready to finish, whatever its date. */
 export const listUnmarkedOutside = (
   costs: readonly HorizonCost[],
@@ -147,6 +191,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
     endsAfter: cost.endsAfter ?? null,
     becameBillId: cost.becameBillId ?? null,
     becameBillOn: cost.becameBillOn ?? null,
+    priority: cost.priority ?? null,
   })),
   state: stored.state ?? 'open',
   stateOn: stored.stateOn ?? null,
@@ -275,10 +320,10 @@ export const setCostPrice = (
 /** The cost fields a cost's Change form owns; its price, the day it was priced and where it ended stay as they are. */
 export type CostChange = Pick<
   HorizonCost,
-  'name' | 'schedule' | 'ending' | 'isOutside'
+  'name' | 'schedule' | 'ending' | 'isOutside' | 'priority'
 >;
 
-/** The item with one cost's name, schedule, ending and paid-outside answer replaced; null when the cost is no longer in it. */
+/** The item with one cost's name, schedule, ending, paid-outside answer and priority replaced; null when the cost is no longer in it. */
 export const changeCost = (
   horizon: HorizonSealed,
   costId: string,
@@ -295,6 +340,7 @@ export const changeCost = (
                 schedule: fields.schedule,
                 ending: fields.ending,
                 isOutside: fields.isOutside,
+                priority: fields.priority,
               }
             : cost,
         ),

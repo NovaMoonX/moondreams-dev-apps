@@ -11,6 +11,10 @@ import { formatCentsShort } from '@/utils/moneyUtils';
 import { PAID_FROM_WORDS } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
+import {
+  NOTICE_MAIN_BUTTON,
+  NOTICE_QUIET_BUTTON,
+} from '@apps/runway/components/noticeButtonClasses';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -206,8 +210,9 @@ function BillPaidFromNotice({
     <div className='mt-2 flex flex-wrap gap-2'>
       <Button
         type='button'
-        variant='secondary'
+        variant='outline'
         size='sm'
+        className={NOTICE_MAIN_BUTTON.warning}
         disabled={isBusy}
         onClick={() => void spread()}
       >
@@ -215,8 +220,9 @@ function BillPaidFromNotice({
       </Button>
       <Button
         type='button'
-        variant='secondary'
+        variant='tertiary'
         size='sm'
+        className={NOTICE_QUIET_BUTTON}
         disabled={isBusy}
         onClick={onPickAnother}
       >

@@ -335,6 +335,7 @@ async function writeSeedHorizon(
     endsAfter: null,
     becameBillId: null,
     becameBillOn: null,
+    priority: null,
     note: null,
   });
   const feb1 = nextCalendarDay(today, 1, 1);
@@ -364,7 +365,10 @@ async function writeSeedHorizon(
             jan15 - DAY_MS,
             true,
           ),
-          cost('seed-cost-movers', 'Movers', 60_000, 80_000, jan15),
+          {
+            ...cost('seed-cost-movers', 'Movers', 60_000, 80_000, jan15),
+            priority: 'must' as const,
+          },
           cost(
             'seed-cost-deposit',
             'Deposit',

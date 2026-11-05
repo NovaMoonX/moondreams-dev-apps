@@ -10,6 +10,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
+import HelpTip from '@/components/HelpTip';
 import Pill from '@/components/Pill';
 import { PillRow } from '@/components/PillGroup';
 import SegmentedControl from '@/components/SegmentedControl';
@@ -1004,7 +1005,8 @@ function PlanOverview({ sections, current, onSelect }: PlanOverviewProps) {
     <p className='text-muted-foreground text-sm text-balance'>
       {WORDS.priorityTotal(priority.counted)}
       <Figure segments={[priority.total]} isWhole />
-      {WORDS.priorityRest}
+      {WORDS.priorityRest}{' '}
+      <HelpTip title={WORDS.priorityHelpTitle}>{WORDS.priorityHelp}</HelpTip>
     </p>
   ) : null;
 

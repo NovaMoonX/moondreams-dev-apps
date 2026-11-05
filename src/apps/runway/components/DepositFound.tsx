@@ -3,6 +3,7 @@ import { Undo2 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
@@ -12,6 +13,7 @@ import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { NOTICE_MAIN_BUTTON } from '@apps/runway/components/noticeButtonClasses';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CORRECT_WORDS,
@@ -78,9 +80,9 @@ export function DepositFound({
           )}
           {onCorrect !== null && (
             <Button
-              variant='secondary'
+              variant='outline'
               size='sm'
-              className="relative mt-2 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              className={join('mt-2', NOTICE_MAIN_BUTTON.info)}
               onClick={onCorrect}
             >
               {CORRECT_WORDS.door}

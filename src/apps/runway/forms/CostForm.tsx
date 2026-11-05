@@ -24,10 +24,12 @@ import {
   HORIZON_WORDS,
   LOOKAHEAD_MONTHS,
   MAX_NAME_LENGTH,
+  PRIORITIES,
+  PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import RepeatFields from '@apps/runway/forms/RepeatFields';
-import type { HorizonCost } from '@apps/runway/types';
+import type { HorizonCost, Priority } from '@apps/runway/types';
 import { describeCostTiming } from '@apps/runway/utils/horizonText';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import {
@@ -53,7 +55,13 @@ interface CostFormData {
   date: string;
   repeat: RepeatDraft;
   isOutside: boolean;
+  priority: Priority;
 }
+
+const PRIORITY_OPTIONS = PRIORITIES.map((value) => ({
+  value,
+  label: PRIORITY_LABELS[value],
+}));
 
 const MODE_OPTIONS = [
   {
@@ -82,6 +90,8 @@ const getSuggestions = (itemName: string, takenNames: readonly string[]) => {
 interface CostFormProps {
   /** The event the cost belongs to, which decides the names offered. */
   itemName: string;
+  /** The event's own priority, which a cost follows unless it says otherwise. */
+  itemPriority: Priority;
   /** The event's day: a new cost starts due then, while that day is still valid for a cost. */
   happensOn: number;
   /** Names the event's other costs already have, which are not offered again. */
@@ -101,6 +111,7 @@ const toDraftData = (
   happensOn: number,
   today: number,
   lastDate: number,
+  itemPriority: Priority,
 ): CostFormData => {
   if (cost) {
     return {
@@ -112,6 +123,7 @@ const toDraftData = (
           : toDateInputValue(cost.schedule.anchor),
       repeat: toRepeatDraft(cost.schedule, cost.ending),
       isOutside: cost.isOutside,
+      priority: cost.priority ?? itemPriority,
     };
   }
   return {
@@ -123,12 +135,14 @@ const toDraftData = (
         : '',
     repeat: ONCE_REPEAT_DRAFT,
     isOutside: false,
+    priority: itemPriority,
   };
 };
 
 /** Add a cost, or change one: the amount first, what it is, then when it is due. */
 function CostForm({
   itemName,
+  itemPriority,
   happensOn,
   cost,
   takenNames = [],
@@ -140,7 +154,7 @@ function CostForm({
   const today = todayAsUtcDate();
   const lastDate = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const [initialData] = useState(() =>
-    toDraftData(cost, happensOn, today, lastDate),
+    toDraftData(cost, happensOn, today, lastDate, itemPriority),
   );
   const [formData, setFormData] = useState<CostFormData>(initialData);
   const set = (patch: Partial<CostFormData>) =>
@@ -308,6 +322,43 @@ function CostForm({
         </div>
       ),
     },
+    {
+      id: 'priority',
+      title: FORM_FLOW_WORDS.priorityTitle,
+      summaryLabel: FORM_FLOW_WORDS.priority,
+      summaryValue:
+        formData.priority === itemPriority
+          ? PRIORITY_LABELS[formData.priority]
+          : HORIZON_WORDS.costPrioritySummary(
+              PRIORITY_LABELS[formData.priority],
+              itemName,
+              PRIORITY_LABELS[itemPriority],
+            ),
+      isAnswered: true,
+      isPreAnswered: true,
+      render: ({ moveOn }) => (
+        <div className='space-y-2'>
+          <PillGroup
+            label={FORM_FLOW_WORDS.priority}
+            options={PRIORITY_OPTIONS}
+            value={formData.priority}
+            onChange={(priority) => {
+              set({ priority });
+              moveOn();
+            }}
+          />
+          {formData.priority !== itemPriority && (
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_WORDS.costPriorityDiffers(
+                itemName,
+                PRIORITY_LABELS[itemPriority],
+                PRIORITY_LABELS[formData.priority],
+              )}
+            </p>
+          )}
+        </div>
+      ),
+    },
   ];
   const { isHidden } = useValuesHidden();
   const questions = useQuestionFlow({
@@ -340,6 +391,7 @@ function CostForm({
       endsAfter: cost?.endsAfter ?? null,
       becameBillId: cost?.becameBillId ?? null,
       becameBillOn: cost?.becameBillOn ?? null,
+      priority: formData.priority === itemPriority ? null : formData.priority,
       note: cost?.note ?? null,
     });
   };

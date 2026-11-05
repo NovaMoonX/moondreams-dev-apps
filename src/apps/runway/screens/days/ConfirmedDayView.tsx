@@ -13,11 +13,13 @@ import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
 import Subview from '@/components/Subview';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
+import { NOTICE_MAIN_BUTTON } from '@apps/runway/components/noticeButtonClasses';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import CoverageHeadline from '@apps/runway/components/CoverageHeadline';
 import RecordLineRow from '@apps/runway/components/RecordLineRow';
@@ -200,9 +202,9 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
           <InlineNotice tone='info'>
             <p>{DAYS_WORDS.readOnlyNote(describeBoundary(recentFrom))}</p>
             <Button
-              variant='secondary'
+              variant='outline'
               size='sm'
-              className="relative mt-2 gap-1 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              className={join('mt-2 gap-1', NOTICE_MAIN_BUTTON.info)}
               onClick={() => {
                 onClose();
                 showDaysMonth(null);

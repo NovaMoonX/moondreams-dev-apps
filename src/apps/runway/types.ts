@@ -448,6 +448,7 @@ export type HorizonStored = Omit<
     | 'endsAfter'
     | 'becameBillId'
     | 'becameBillOn'
+    | 'priority'
   > & {
     isOutside?: boolean;
     ending?: Ending;
@@ -455,6 +456,7 @@ export type HorizonStored = Omit<
     endsAfter?: DateOnly | null;
     becameBillId?: string | null;
     becameBillOn?: DateOnly | null;
+    priority?: Priority | null;
   })[];
 };
 
@@ -477,6 +479,8 @@ export interface HorizonCost {
   becameBillId: string | null;
   /** The bill's first due date; the cost plans nothing from it on. */
   becameBillOn: DateOnly | null;
+  /** Null follows the Horizon item's own priority. */
+  priority: Priority | null;
   note: string | null;
 }
 
