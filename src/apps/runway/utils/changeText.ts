@@ -4,7 +4,9 @@ import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   ACCOUNT_WORDS,
+  COST_PAID_WORDS,
   GROUP_WORDS,
+  HORIZON_WORDS,
   PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
@@ -12,12 +14,20 @@ import {
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { describeFunding } from '@apps/runway/utils/fundingText';
+import {
+  describeCostWhen,
+  formatDateRangeOrdinalUTC,
+} from '@apps/runway/utils/horizonText';
 import { formatRange } from '@apps/runway/utils/rangeText';
 import type {
   BillSealed,
+  CostPaidMark,
   EnvelopeSealed,
+  HorizonSealed,
   GoalSealed,
   GroupSealed,
+  HorizonCost,
+  MoneyRange,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
@@ -48,7 +58,8 @@ export type ItemPayload =
   | EnvelopeSealed
   | BillSealed
   | GoalSealed
-  | GroupSealed;
+  | GroupSealed
+  | HorizonSealed;
 
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
@@ -59,7 +70,8 @@ const describeAccountId: AccountNamer = (accountId) =>
 
 const same = isSameValue;
 
-type Part = [label: string, before: string, after: string] | null;
+/** A label with its before and after, or a whole phrase when the change does not read "label from to". */
+type Part = [label: string, before: string, after: string] | string | null;
 
 const diff = <T>(
   label: string,
@@ -71,6 +83,94 @@ const diff = <T>(
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
+const describeHorizonRest = (value: HorizonSealed['rest']) =>
+  value.kind === 'pays'
+    ? 'my pays before each cost'
+    : value.kind === 'onePay'
+      ? 'one pay you picked'
+      : value.kind === 'outside'
+        ? 'outside the plan'
+        : "I'll decide later";
+
+/** "$600.00–$800.00" for a range, so "to" in a change line is only the change. */
+const formatRangeDash = (range: MoneyRange) =>
+  range.lowCents === range.highCents
+    ? formatCents(range.lowCents)
+    : `${formatCents(range.lowCents)}–${formatCents(range.highCents)}`;
+
+const describeAmountMove = (cost: HorizonCost, old: MoneyRange): Part =>
+  same(old, cost.amount)
+    ? null
+    : HORIZON_WORDS.changeFromTo(
+        cost.name,
+        formatRangeDash(old),
+        formatRangeDash(cost.amount),
+      );
+
+const describeTimingMove = (cost: HorizonCost, old: HorizonCost): Part => {
+  if (
+    same(
+      { schedule: old.schedule, ending: old.ending },
+      { schedule: cost.schedule, ending: cost.ending },
+    )
+  ) {
+    return null;
+  }
+  const from = describeCostWhen(old.schedule, old.ending);
+  const to = describeCostWhen(cost.schedule, cost.ending);
+  return old.schedule.kind === 'once' && cost.schedule.kind === 'once'
+    ? HORIZON_WORDS.changeMoved(cost.name, from, to)
+    : HORIZON_WORDS.changeFromTo(cost.name, from, to);
+};
+
+/** What changed in an event: its own fields, then each cost it still has (a priced cost is named, its figures from and to). */
+const getHorizonParts = (
+  before: HorizonSealed,
+  after: HorizonSealed,
+): Part[] => [
+  diff('Name', before.name, after.name, (value) => value),
+  diff(
+    'Matters',
+    before.priority,
+    after.priority,
+    (value) => PRIORITY_LABELS[value],
+  ),
+  diff(
+    'Date',
+    { from: before.happensOn, until: before.happensUntil },
+    { from: after.happensOn, until: after.happensUntil },
+    ({ from, until }) =>
+      until === null
+        ? formatDateOrdinalUTC(from)
+        : formatDateRangeOrdinalUTC(from, until),
+  ),
+  diff('The rest', before.rest, after.rest, describeHorizonRest),
+  ...after.costs
+    .filter((cost) => !before.costs.some(({ id }) => id === cost.id))
+    .map((cost): Part =>
+      HORIZON_WORDS.changeAdded(
+        cost.name,
+        formatRangeDash(cost.amount),
+        describeCostWhen(cost.schedule, cost.ending),
+      ),
+    ),
+  ...before.costs
+    .filter((cost) => !after.costs.some(({ id }) => id === cost.id))
+    .map((cost): Part => HORIZON_WORDS.changeRemoved(cost.name)),
+  ...after.costs.flatMap((cost): Part[] => {
+    const old = before.costs.find(({ id }) => id === cost.id);
+    if (!old) return [];
+    return [
+      diff('Cost name', old.name, cost.name, (value) => value),
+      describeAmountMove(cost, old.amount),
+      describeTimingMove(cost, old),
+      diff(`${cost.name} paid`, old.isOutside, cost.isOutside, (value) =>
+        value ? 'outside the plan' : 'like the rest',
+      ),
+    ];
+  }),
+];
+
 const getParts = (
   before: ItemPayload,
   after: ItemPayload,
@@ -79,6 +179,9 @@ const getParts = (
   payNameOf?: PayNamer,
   accountNameOf: AccountNamer = describeAccountId,
 ): Part[] => {
+  if ('costs' in before && 'costs' in after) {
+    return getHorizonParts(before, after);
+  }
   const base: Part[] = [
     diff('Name', before.name, after.name, (value) => value),
   ];
@@ -86,9 +189,21 @@ const getParts = (
     return [
       ...base,
       diff(
-        'Starting priority',
+        'Bill priority',
         before.startingPriority,
         after.startingPriority,
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
+      ),
+      diff(
+        'Envelope priority',
+        before.envelopePriority ?? before.startingPriority,
+        after.envelopePriority ?? after.startingPriority,
+        (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
+      ),
+      diff(
+        'Goal priority',
+        before.goalPriority ?? null,
+        after.goalPriority ?? null,
         (value) => (value === null ? 'None' : PRIORITY_LABELS[value]),
       ),
       diff(
@@ -225,16 +340,12 @@ const getParts = (
         { funding: goalAfter.funding, extras: getExtras(goalAfter) },
         (value) => describeFunding(value.funding, value.extras),
       ),
-      ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
-        ? [
-            diff(
-              GROUP_WORDS.changeLabel,
-              (goalBefore as EnvelopeSealed).groupId ?? null,
-              (goalAfter as EnvelopeSealed).groupId ?? null,
-              (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
-            ),
-          ]
-        : []),
+      diff(
+        GROUP_WORDS.changeLabel,
+        (goalBefore as EnvelopeSealed | GoalSealed).groupId ?? null,
+        (goalAfter as EnvelopeSealed | GoalSealed).groupId ?? null,
+        (value) => (value === null ? GROUP_WORDS.none : groupName(value)),
+      ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
             diff(
@@ -306,7 +417,9 @@ export function describeChange(
     accountNameOf,
   )
     .flatMap((part) => (part === null ? [] : [part]))
-    .map(([label, from, to]) => `${label} ${from} to ${to}`)
+    .map((part) =>
+      typeof part === 'string' ? part : `${part[0]} ${part[1]} to ${part[2]}`,
+    )
     .join('; ');
   return result;
 }
@@ -327,3 +440,56 @@ export function describeReplaced(
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
+
+/** The change-log line for a cost's payment marked paid: "Marked Movers paid on Moving: $600.00 due Jan 15th." */
+export const describeCostPaid = (
+  cost: string,
+  item: string,
+  dueOn: number,
+  amountCents: number,
+  mark: CostPaidMark,
+) =>
+  (mark === 'outside'
+    ? COST_PAID_WORDS.outsideSummary
+    : COST_PAID_WORDS.summary)(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    formatCents(amountCents),
+  );
+
+/** Where a taken-back payment's money returns, one part for each place that gets any ("Moving gets $50.00 back and $470.00 goes back to Free to Spend"); a payment made by a purchase adds that the purchase is removed. Null when nothing moves. */
+export const describeCostGivesBack = (
+  item: string,
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) => {
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const free = mark === 'outside' ? 0 : fromFreeCents;
+  const parts = [
+    fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
+    free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
+    mark === 'purchase' && COST_PAID_WORDS.purchaseRemoved,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return parts.length > 2
+    ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`
+    : parts.join(' and ');
+};
+
+/** The sentence that says what taking a cost's payment back restores, for the toast and the log. */
+export const describeCostTakenBack = (
+  cost: string,
+  item: string,
+  dueOn: number,
+  amountCents: number,
+  fromFreeCents: number,
+  mark: CostPaidMark,
+) =>
+  COST_PAID_WORDS.undoText(
+    cost,
+    item,
+    formatDateOrdinalUTC(dueOn),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+  );

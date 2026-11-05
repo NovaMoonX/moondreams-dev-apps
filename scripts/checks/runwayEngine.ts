@@ -69,6 +69,8 @@ import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
   OpenAccount,
+  HorizonCost,
+  HorizonSealed,
   OpenDay,
   Pairing,
 } from '../../src/apps/runway/types.ts';
@@ -134,6 +136,7 @@ import { layerVersion } from '../../src/apps/runway/engine/whatIf.ts';
 import {
   previewBillShareView,
   previewChange,
+  previewItemShorts,
 } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
@@ -201,6 +204,7 @@ import {
   countUnresolvedHolds,
   getFreeAfterArrival,
   sumConfirmedByItem,
+  toRecordLines,
 } from '../../src/apps/runway/engine/confirm.ts';
 import {
   applyLineEdits,
@@ -223,19 +227,48 @@ import {
 import {
   buildDemands,
   planBillPayments,
+  planCostShares,
   type DraftBillInput,
   type DraftGoalInput,
 } from '../../src/apps/runway/engine/demands.ts';
 import {
   buildDraft,
   pickPairings,
+  type Draft,
   type DraftInput,
 } from '../../src/apps/runway/engine/draft.ts';
+import { getCostNameKey } from '../../src/apps/runway/engine/parts.ts';
+import {
+  openPurchase,
+  withLineDefaults,
+} from '../../src/apps/runway/store/listeners/openLedger.ts';
+import { describeCostGivesBack } from '../../src/apps/runway/utils/changeText.ts';
 import {
   getStanceCushion,
   lookahead,
+  type LookaheadCarry,
   type LookaheadDraft,
 } from '../../src/apps/runway/engine/lookahead.ts';
+import {
+  changeCost,
+  getLiveCosts,
+  listCostPayments,
+  listHorizonPayments,
+  listUnmarkedOutside,
+  needsCostAmount,
+  planHorizon,
+  readHorizon,
+  removeCost,
+  restoreCost,
+  setCostPrice,
+  getPurchaseMarkFigures,
+  settleCostPaid,
+  getHorizonFigures,
+  sumCostPayments,
+  sumCostSpent,
+  type CostPaidEntry,
+} from '../../src/apps/runway/engine/horizon.ts';
+import { formatDateRangeOrdinalUTC } from '../../src/apps/runway/utils/horizonText.ts';
 import { computeLookahead } from '../../src/apps/runway/store/selectors/lookaheadSelectors.ts';
 import {
   collectStarted,
@@ -3782,6 +3815,9 @@ const version = (
           cents,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          costName: null,
+          repaysFree: false,
         },
       ],
     },
@@ -3806,6 +3842,9 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [{ dayId: 'd', cents }],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const confirmed: OpenRecord = {
     id: 'd_confirmed',
@@ -4044,6 +4083,9 @@ const version = (
           cents: 10_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          costName: null,
+          repaysFree: false,
         },
         {
           lineId: 'd:food',
@@ -4055,6 +4097,9 @@ const version = (
           cents: 25_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          costName: null,
+          repaysFree: false,
         },
       ],
     },
@@ -5097,6 +5142,9 @@ const version = (
           cents: 30_000,
           shortBy: 0,
           paidBy: [],
+          costId: null,
+          costName: null,
+          repaysFree: false,
         },
       ],
     },
@@ -5349,6 +5397,173 @@ const version = (
   );
 }
 
+// Horizon cost lines on the effects card and the short note (Issue 82).
+{
+  const today = utc(2026, 10, 23);
+  const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const never = { onDate: null, afterCount: null };
+  const weekly: Schedule = { kind: 'weekly', anchor: today, monthDays: [] };
+  const dueOn = today + 24 * DAY_MS;
+  const planItems: PlanItemDoc[] = [
+    item('pay', 1, { kind: 'payLine', parentId: 'src' }),
+    item('src', 1),
+  ];
+  const base: OpenVersion[] = [
+    {
+      id: 'vsrc',
+      itemId: 'src',
+      kind: 'source',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: { name: 'Acme', pairings: [] },
+    },
+    {
+      id: 'vpay',
+      itemId: 'pay',
+      kind: 'payLine',
+      createdAt: 1,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Paycheck',
+        schedule: weekly,
+        amount: exactRange(10_000),
+        ending: never,
+        stanceOverride: null,
+        pairings: [],
+      },
+    },
+  ];
+  const inputs = {
+    items: planItems,
+    versions: base,
+    openDays: [],
+    stance: 'conservative' as const,
+    today,
+    heldByItem: {},
+    settledKey: '',
+    billProgress: {},
+  };
+  const surgery = (
+    priority: 'must' | 'should',
+    extraCosts: {
+      id: string;
+      name: string;
+      cents: number;
+      dueOn: number;
+    }[] = [],
+  ) => ({
+    kind: 'addItem' as const,
+    item: item('surgery', 2, { kind: 'horizon' }),
+    version: {
+      itemId: 'surgery',
+      kind: 'horizon' as const,
+      effectiveFrom: today,
+      effectiveUntil: null,
+      changeId: 'what-if',
+      payload: {
+        name: "Miso's surgery",
+        emoji: null,
+        happensOn: dueOn,
+        happensUntil: null,
+        priority,
+        orderIndex: 1,
+        rest: { kind: 'pays' as const },
+        note: null,
+        costs: [
+          {
+            id: 'surg',
+            name: 'Surgery',
+            amount: exactRange(60_000),
+            schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+            ending: never,
+            isOutside: false,
+            pricedOn: null,
+            endsAfter: null,
+            note: null,
+          },
+          ...extraCosts.map((extra) => ({
+            id: extra.id,
+            name: extra.name,
+            amount: exactRange(extra.cents),
+            schedule: {
+              kind: 'once' as const,
+              anchor: extra.dueOn,
+              monthDays: [],
+            },
+            ending: never,
+            isOutside: false,
+            pricedOn: null,
+            endsAfter: null,
+            note: null,
+          })),
+        ],
+      },
+    },
+    heldCents: 0,
+  });
+  const should = previewItemShorts(inputs, surgery('should'), 'surgery');
+  assert.ok(should.payCount >= 3, 'every pay before the cost has a share');
+  assert.ok(should.shorts.length > 0, 'a pay too small for its share is short');
+  assert.ok(
+    should.roomCount <= should.payCount,
+    'the pays with room are some of the pays asked',
+  );
+  assert.ok(
+    should.askedCents - should.carriedCents >=
+      should.shorts.reduce((sum, entry) => sum + entry.cents, 0),
+    'what stays short is at least what the rows say they are short',
+  );
+  const lastPay = previewChange(inputs, surgery('should'))
+    .map((day) => day.on)
+    .filter((on) => on < dueOn)
+    .pop();
+  assert.ok(
+    lastPay !== undefined &&
+      should.shorts.every((entry) => entry.on !== lastPay),
+    "the short on the last pay before the due date is the lookahead's, so the note leaves it out",
+  );
+  // A second cost due between two pays is flagged by the lookahead on the earlier pay: left out of the shorts, still counted in the totals.
+  const vetDue = today + 10 * DAY_MS;
+  const two = previewItemShorts(
+    inputs,
+    surgery('should', [
+      { id: 'vet', name: 'Vet', cents: 200_000, dueOn: vetDue },
+    ]),
+    'surgery',
+  );
+  assert.equal(
+    two.askedCents,
+    should.askedCents + 200_000,
+    'the flagged cost is still asked of the pays, so the note counts every cost',
+  );
+  assert.ok(
+    two.askedCents - two.carriedCents >
+      two.shorts.reduce((sum, entry) => sum + entry.cents, 0),
+    'and the flagged short is in what stays short but not in the shorts the lookahead already warns about',
+  );
+  const must = previewItemShorts(inputs, surgery('must'), 'surgery');
+  assert.deepEqual(
+    must.shorts,
+    [],
+    "a Must's shortfall is warned about by the lookahead, so the note counts none",
+  );
+
+  const effect = previewChange(inputs, surgery('should'))[0]?.effect;
+  assert.ok(effect, 'the new cost moves the first pay');
+  assert.ok(
+    effect.lines.every((line) => line.key === 'surgery:cost:surg'),
+    'a cost line keys the card by its cost, not by its item',
+  );
+  assert.ok(
+    effect.lines.every((line) => line.itemId === 'surgery'),
+    'and still names its item',
+  );
+}
+
 // Lookahead: how far the plan holds (Issue 21).
 {
   const today = utc(2026, 10, 23);
@@ -5410,6 +5625,193 @@ const version = (
   );
   assert.equal(run([]).problems.length, 0);
   assert.equal(run([]).hasBills, false);
+
+  // Horizon in the lookahead: a `later` shortfall is listed, never a problem; outside costs raise nothing; a fronted payment warns only when Free to Spend falls below zero on its due date.
+  {
+    const once = (id: string, name: string, cents: number, anchor: number) => ({
+      id,
+      name,
+      amount: exact(cents),
+      schedule: { kind: 'once' as const, anchor, monthDays: [] },
+      ending: never,
+      isOutside: false,
+      pricedOn: null,
+      endsAfter: null,
+      note: null,
+    });
+    const dec19 = today + 57 * DAY_MS;
+    const wedding = {
+      id: 'wedding',
+      name: "Sam's wedding",
+      rest: { kind: 'later' as const },
+      costs: [once('venue', 'Venue', 143_000, dec19)],
+      heldCents: 120_000,
+    };
+    const weeks = weekly.slice(0, 10);
+    const bare = run(weeks);
+    const withShort = run(weeks, { horizonItems: [wedding] });
+    assert.deepEqual(withShort.horizonShort, [
+      {
+        kind: 'later',
+        itemId: 'wedding',
+        name: "Sam's wedding",
+        dueOn: dec19,
+        shortCents: 23_000,
+      },
+    ]);
+    assert.equal(withShort.holdsThrough, bare.holdsThrough);
+    assert.deepEqual(withShort.problems, bare.problems);
+    assert.deepEqual(bare.horizonShort, []);
+    assert.deepEqual(
+      run(weeks, {
+        horizonItems: [{ ...wedding, heldCents: 143_000 }],
+      }).horizonShort,
+      [],
+      'a covered payment raises nothing',
+    );
+
+    assert.deepEqual(
+      run(weeks, {
+        horizonItems: [
+          { ...wedding, rest: { kind: 'outside' as const } },
+          { ...wedding, id: 'w2', rest: { kind: 'pays' as const } },
+          {
+            ...wedding,
+            id: 'w3',
+            costs: [{ ...wedding.costs[0], isOutside: true }],
+          },
+        ],
+      }).horizonShort,
+      [],
+      'outside items, outside costs and pays items add nothing',
+    );
+
+    const pick = weekly[5];
+    const movers = {
+      id: 'movers',
+      name: 'Movers',
+      rest: { kind: 'onePay' as const, dayKey: pick.dayKey },
+      costs: [once('movers', 'Movers', 60_000, today + 20 * DAY_MS)],
+      heldCents: 0,
+    };
+    const freeEach = (cents: number) => () => ({
+      draft: {
+        ...emptyDraft(),
+        freeToSpend: { cents, bySource: [] },
+      },
+      names: {},
+    });
+    const fronted = (freeNow: number | null, over = {}, each = 10_000) =>
+      run(weekly.slice(0, 10), {
+        horizonItems: [movers],
+        freeToSpendCents: freeNow,
+        draftOf: freeEach(each),
+        ...over,
+      });
+    assert.deepEqual(fronted(25_000).horizonShort, [
+      {
+        kind: 'fronted',
+        itemId: 'movers',
+        name: 'Movers',
+        dueOn: today + 20 * DAY_MS,
+        shortCents: 5_000,
+        payOn: pick.on,
+      },
+    ]);
+    assert.deepEqual(
+      fronted(35_000).horizonShort,
+      [],
+      'three pays by the due date lift Free to Spend to the cost',
+    );
+    assert.deepEqual(
+      fronted(30_000, {}, 10_000).horizonShort,
+      [],
+      'exactly zero left is not below zero',
+    );
+    assert.equal(fronted(-1, {}, 100_000).horizonShort.length, 0);
+    assert.equal(fronted(null).horizonShort.length, 0);
+    assert.equal(
+      fronted(0, { freeToSpendCents: undefined }).horizonShort.length,
+      0,
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          {
+            ...movers,
+            paid: [{ costId: 'movers', dueOn: today + 20 * DAY_MS }],
+          },
+        ],
+      }).horizonShort.length,
+      0,
+      'a payment already marked paid asks nothing',
+    );
+    assert.equal(
+      fronted(0, { horizonItems: [{ ...movers, heldCents: 60_000 }] })
+        .horizonShort.length,
+      0,
+      'a payment its own money covers is not fronted',
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          { ...movers, rest: { kind: 'onePay' as const, dayKey: 'gone' } },
+        ],
+      }).horizonShort.length,
+      0,
+      'a pick that is not coming fronts nothing',
+    );
+    assert.equal(
+      fronted(0, {
+        horizonItems: [
+          { ...movers, costs: [{ ...movers.costs[0], isOutside: true }] },
+        ],
+      }).horizonShort.length,
+      0,
+      'an outside cost is never fronted',
+    );
+    const payShort = fronted(25_000, {
+      draftOf: (onDay: ComingDay) => ({
+        draft: {
+          ...emptyDraft(
+            onDay.dayKey === pick.dayKey
+              ? ([
+                  {
+                    lineId: 'movers',
+                    itemId: 'movers',
+                    cents: 10_000,
+                    shortBy: 50_000,
+                    tier: 'should',
+                    bill: null,
+                    pairing: null,
+                    costId: 'movers',
+                    repaysFree: false,
+                    cost: { costId: 'movers', dueOn: today + 20 * DAY_MS },
+                  },
+                ] as unknown as LookaheadDraft['draft']['lines'])
+              : [],
+          ),
+          freeToSpend: { cents: 10_000, bySource: [] },
+        },
+        names: {},
+      }),
+    });
+    assert.deepEqual(
+      [
+        payShort.horizonShort.length,
+        payShort.problems.filter(
+          (problem) => problem.kind === 'short' && problem.costId === 'movers',
+        ).length,
+      ],
+      [0, 1],
+      'a cost its picked pay is already short on warns once, on that pay',
+    );
+    assert.equal(
+      fronted(0).holdsThrough,
+      run(weekly.slice(0, 10)).holdsThrough,
+      'a fronted warning never moves how far the plan holds',
+    );
+  }
 
   const payment = (dueOn: number, parts: number, fundedCents = 0) =>
     ({
@@ -6905,6 +7307,9 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const pickCents = (max: number) => 100 + Math.floor(random() * max);
 
@@ -7676,6 +8081,9 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const dayRows = [
     {
@@ -7849,7 +8257,9 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     due: [],
+    dueCosts: [],
     undated: [],
+    horizonShort: [],
     steps: [],
   });
   const short = (on: number, name: string, shortBy: number) =>
@@ -7858,6 +8268,7 @@ const version = (
       on,
       dayKey: `k${on}`,
       itemId: name,
+      costId: null,
       name,
       shortBy,
       isBill: true,
@@ -7957,6 +8368,12 @@ const version = (
       ?.tone,
     'info',
     'a change that leaves a problem as it was says so without the success colour',
+  );
+  assert.equal(
+    describeHoldsBlocks(look(day, [rentShort]), look(day, [rentShort]))[0]
+      ?.standingItemId,
+    'Rent',
+    'a standing shortfall carries its item, so a note about another item never hides it',
   );
   assert.equal(
     describeCoverage(look(day, [rentShort]), rentShort.on - 86_400_000).text,
@@ -8579,6 +8996,9 @@ const version = (
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const confirmedDay = (dayId: string, arrived: number, rent: number) =>
     ({
@@ -10451,8 +10871,10 @@ const version = (
     firstShortDay: null,
     incomeEndsOn: null,
     undated: [],
+    horizonShort: [],
     steps: [],
     due: [],
+    dueCosts: [],
   });
   assert.equal(
     describeHoldsBlocks(look([water]), look([water, rent]))
@@ -10488,6 +10910,7 @@ const version = (
     on,
     dayKey: `d${on}`,
     itemId: 'rent',
+    costId: null as string | null,
     name: 'Rent',
     shortBy,
     isBill: true,
@@ -10517,6 +10940,14 @@ const version = (
     created([short(2_000, 5_000)], [short(2_500, 5_000)]).length,
     0,
     'the same shortfall moved later is old',
+  );
+  assert.equal(
+    created(
+      [{ ...short(2_000, 1_000), costId: 'a' }],
+      [{ ...short(2_000, 1_000), costId: 'b' }],
+    ).length,
+    1,
+    "two costs of one item are never each other's old shortfall",
   );
   assert.equal(
     created(
@@ -10645,6 +11076,1191 @@ const version = (
   );
 }
 
+// Horizon: a one-time cost's payment.
+{
+  const jan15 = Date.UTC(2027, 0, 15);
+  const movers = {
+    id: 'movers',
+    name: 'Movers',
+    amount: { lowCents: 60_000, highCents: 80_000 },
+    schedule: { kind: 'once' as const, anchor: jan15, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  };
+  const truck = {
+    ...movers,
+    id: 'truck',
+    name: 'Truck rental',
+    amount: { lowCents: 12_000, highCents: 12_000 },
+    schedule: { kind: 'once' as const, anchor: jan15 - DAY_MS, monthDays: [] },
+  };
+  const end = Date.UTC(2027, 11, 31);
+  assert.deepEqual(
+    listCostPayments(movers, end, 'conservative'),
+    [{ costId: 'movers', dueOn: jan15, totalCents: 80_000, paid: null }],
+    'a range plans at the high end under the default expense stance',
+  );
+  assert.equal(
+    listCostPayments(movers, end, 'optimistic')[0].totalCents,
+    60_000,
+    'an optimistic stance plans a cost at its low end',
+  );
+  assert.equal(
+    listCostPayments(movers, end, 'middle')[0].totalCents,
+    70_000,
+    'the middle stance plans halfway',
+  );
+  assert.equal(
+    listCostPayments(truck, end, 'conservative')[0].totalCents,
+    12_000,
+    'an exact cost plans at its amount',
+  );
+  assert.equal(
+    listCostPayments(movers, jan15 - DAY_MS, 'conservative').length,
+    0,
+    'a cost after the horizon is not listed',
+  );
+  const storage = {
+    ...movers,
+    id: 'storage',
+    name: 'Storage unit',
+    amount: { lowCents: 10_000, highCents: 10_000 },
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: Date.UTC(2027, 1, 1),
+      monthDays: [1],
+    },
+  };
+  const datesOf = (cost: HorizonCost) =>
+    listCostPayments(cost, end, 'conservative').map(({ dueOn }) => dueOn);
+  assert.deepEqual(
+    datesOf(storage),
+    occurrences(storage.schedule, storage.ending, 0, end),
+    'a repeating cost pays on the dates a bill with the same schedule does',
+  );
+  assert.equal(datesOf(storage).length, 11, 'and goes on to the horizon');
+  assert.deepEqual(
+    datesOf({ ...storage, ending: { onDate: null, afterCount: 3 } }),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1), Date.UTC(2027, 3, 1)],
+    'an ending after a count stops the payments',
+  );
+  assert.deepEqual(
+    datesOf({
+      ...storage,
+      ending: { onDate: Date.UTC(2027, 3, 1), afterCount: null },
+    }),
+    [Date.UTC(2027, 1, 1), Date.UTC(2027, 2, 1), Date.UTC(2027, 3, 1)],
+    'an ending on a date keeps that day and stops after it',
+  );
+  const walked = planHorizon(
+    { rest: { kind: 'later' }, costs: [movers, storage] },
+    80_000 + 20_000,
+    listHorizonPayments([storage, movers], end, 'conservative'),
+  );
+  assert.deepEqual(
+    walked.covers.slice(0, 3).map(({ costId, dueOn }) => [costId, dueOn]),
+    [
+      ['movers', jan15],
+      ['storage', Date.UTC(2027, 1, 1)],
+      ['storage', Date.UTC(2027, 2, 1)],
+    ],
+    'the walk pays Movers, then the storage payments, in date order',
+  );
+  assert.equal(
+    walked.coveredUntil,
+    Date.UTC(2027, 3, 1),
+    'and the first storage payment the money cannot cover is where it runs out',
+  );
+  const payments = listHorizonPayments([movers, truck], end, 'conservative');
+  assert.deepEqual(
+    payments.map(({ costId }) => costId),
+    ['truck', 'movers'],
+    'payments come in date order whatever order the costs were listed',
+  );
+  assert.equal(
+    sumCostPayments(payments),
+    92_000,
+    'the planned total adds the stance figures',
+  );
+  const nb = (text: string) => text.replaceAll(' ', '\u00a0');
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 1, 15), utc(2027, 1, 17)),
+    nb('Jan 15th') + ' to 17th,' + nb(' 2027'),
+    'two days of one month name the month and year once',
+  );
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 1, 30), utc(2027, 2, 2)),
+    nb('Jan 30th') + ' to ' + nb('Feb 2nd') + ',' + nb(' 2027'),
+    'two months of one year name the year once',
+  );
+  assert.equal(
+    formatDateRangeOrdinalUTC(utc(2027, 12, 30), utc(2028, 1, 2)),
+    nb('Dec 30th') +
+      ',' +
+      nb(' 2027') +
+      ' to ' +
+      nb('Jan 2nd') +
+      ',' +
+      nb(' 2028'),
+    'two years keep both',
+  );
+}
+
+// Horizon: the walk over the money held, and what a Horizon item holds in the balances.
+{
+  const jan15 = Date.UTC(2027, 0, 15);
+  const end = Date.UTC(2027, 11, 31);
+  const cost = (
+    id: string,
+    lowCents: number,
+    highCents: number,
+    dueOn: number,
+    isOutside = false,
+  ) => ({
+    id,
+    name: id,
+    amount: { lowCents, highCents },
+    schedule: { kind: 'once' as const, anchor: dueOn, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  });
+  const costs = [
+    cost('c-movers', 60_000, 80_000, jan15),
+    cost('a-deposit', 25_000, 25_000, jan15 - 5 * DAY_MS),
+    cost('b-truck', 12_000, 12_000, jan15 - DAY_MS),
+  ];
+  const later = { rest: { kind: 'later' as const }, costs };
+  const paymentsOf = (list: typeof costs) =>
+    listHorizonPayments(list, end, 'conservative');
+
+  const walk = planHorizon(later, 40_000, paymentsOf(costs));
+  assert.deepEqual(
+    walk.covers.map(({ costId, coveredCents }) => [costId, coveredCents]),
+    [
+      ['a-deposit', 25_000],
+      ['b-truck', 12_000],
+      ['c-movers', 3_000],
+    ],
+    'the money pays in due order and the last payment takes what is left',
+  );
+  assert.equal(
+    walk.covers.reduce((sum, { coveredCents }) => sum + coveredCents, 0),
+    40_000,
+    'the walk never covers more than is held',
+  );
+  assert.equal(
+    walk.coveredUntil,
+    jan15,
+    'it is covered until the first payment not covered in full',
+  );
+  assert.deepEqual(
+    walk.shortfall,
+    {
+      costId: 'c-movers',
+      paymentCents: 80_000,
+      availableCents: 3_000,
+      dueOn: jan15,
+      shortCents: 77_000,
+      totalShortCents: 77_000,
+    },
+    'a later item names the first payment that lacks money and the total lacking',
+  );
+  assert.equal(
+    planHorizon(later, -500, paymentsOf(costs)).covers.every(
+      ({ coveredCents }) => coveredCents === 0,
+    ),
+    true,
+    'money below zero covers nothing',
+  );
+
+  const shuffled = [...paymentsOf(costs)].reverse();
+  assert.deepEqual(
+    planHorizon(later, 40_000, shuffled),
+    walk,
+    'shuffling the payments changes nothing',
+  );
+  const sameDay = [
+    cost('z', 1_000, 1_000, jan15),
+    cost('y', 1_000, 1_000, jan15),
+  ];
+  assert.deepEqual(
+    planHorizon(later, 1_000, paymentsOf(sameDay)).covers.map(
+      ({ costId }) => costId,
+    ),
+    ['y', 'z'],
+    'payments on one day are ordered by cost id',
+  );
+
+  const covered = planHorizon(later, 200_000, paymentsOf(costs));
+  assert.equal(
+    covered.coveredUntil,
+    null,
+    'when everything is covered nothing is short',
+  );
+  assert.equal(covered.shortfall, null);
+
+  const outside = planHorizon(
+    { rest: { kind: 'outside' }, costs },
+    0,
+    paymentsOf(costs),
+  );
+  assert.equal(
+    outside.shortfall,
+    null,
+    'an item whose rest is outside the plan never warns',
+  );
+  assert.notEqual(outside.coveredUntil, null);
+
+  const withOutsideCost = [
+    cost('a-deposit', 25_000, 25_000, jan15 - 5 * DAY_MS, true),
+    cost('c-movers', 60_000, 80_000, jan15),
+  ];
+  const skipped = planHorizon(
+    { rest: { kind: 'later' }, costs: withOutsideCost },
+    80_000,
+    paymentsOf(withOutsideCost),
+  );
+  assert.deepEqual(
+    skipped.covers.map(({ costId }) => costId),
+    ['c-movers'],
+    'a cost paid outside the plan is never covered',
+  );
+  assert.equal(skipped.shortfall, null, 'and never short');
+  assert.equal(
+    planHorizon(
+      { rest: { kind: 'later' }, costs: withOutsideCost },
+      0,
+      paymentsOf(withOutsideCost),
+    ).shortfall?.totalShortCents,
+    80_000,
+    'with nothing held only the costs inside the plan are short',
+  );
+
+  const read = readHorizon({
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    note: null,
+    costs: [
+      {
+        id: 'c',
+        name: 'Movers',
+        amount: { lowCents: 1, highCents: 1 },
+        schedule: { kind: 'once', anchor: jan15, monthDays: [] },
+        note: null,
+      },
+    ],
+  });
+  assert.deepEqual(
+    read.rest,
+    { kind: 'later' },
+    'a version sealed before rest reads as decide later',
+  );
+  assert.equal(
+    read.costs[0].isOutside,
+    false,
+    'and a cost before isOutside reads as inside the plan',
+  );
+  assert.deepEqual(
+    read.costs[0].ending,
+    { onDate: null, afterCount: null },
+    'and a cost before ending reads as never ends',
+  );
+
+  const start = Date.UTC(2026, 9, 1);
+  const startMove = (
+    id: string,
+    refId: string | null,
+    cents: number,
+    holding: string,
+  ) =>
+    ({
+      id,
+      kind: 'start',
+      date: start,
+      refId,
+      reversesMoveId: null,
+      createdAt: start,
+      payload: { amountCents: cents, holding },
+    }) as unknown as OpenMove;
+  const toHorizon = (cents: number) =>
+    ({
+      id: 'transfer_h',
+      kind: 'transfer',
+      date: start + DAY_MS,
+      refId: 'moving',
+      reversesMoveId: null,
+      createdAt: start + DAY_MS,
+      payload: {
+        fromId: null,
+        toId: 'moving',
+        cents,
+        note: null,
+        isOutside: false,
+      },
+    }) as unknown as OpenMove;
+  const input = {
+    startDate: start,
+    moves: [
+      startMove('s-money', null, 100_000, 'money'),
+      startMove('s-food', 'food', 10_000, 'envelope'),
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { food: 'envelope', moving: 'horizon' } as const,
+  };
+  const before = deriveBalances(input);
+  const after = deriveBalances({
+    ...input,
+    moves: [...input.moves, toHorizon(80_000)],
+  });
+  assert.equal(
+    after.freeToSpendCents,
+    before.freeToSpendCents - 80_000,
+    'Free to Spend falls by what was put toward a Horizon item',
+  );
+  assert.equal(after.assignedToHorizonCents, 80_000);
+  assert.equal(after.assignedByItem.moving, 80_000);
+  assert.equal(
+    after.assignedToEnvelopesCents +
+      after.assignedToGoalsCents +
+      after.assignedToBillsCents +
+      after.assignedToHorizonCents +
+      after.freeToSpendCents,
+    after.moneyOnHandCents,
+    'and everything held plus Free to Spend still adds up to the money on hand',
+  );
+  assert.equal(
+    after.moneyOnHandCents,
+    before.moneyOnHandCents,
+    'moving money does not change what is on hand',
+  );
+  const released = deriveBalances({
+    ...input,
+    moves: [...input.moves, toHorizon(80_000)],
+    releasedFrom: { moving: start + 2 * DAY_MS },
+    asOf: start + 3 * DAY_MS,
+  });
+  assert.equal(
+    released.assignedToHorizonCents,
+    0,
+    'a released Horizon item no longer holds money',
+  );
+  assert.equal(released.freeToSpendCents, before.freeToSpendCents);
+  const rebased = deriveBalances({
+    ...input,
+    startDate: start + 2 * DAY_MS,
+    moves: [
+      toHorizon(80_000),
+      startMove('s2-money', null, 100_000, 'money'),
+      startMove('s2-moving', 'moving', 80_000, 'horizon'),
+    ].map((move) =>
+      move.kind === 'start' ? { ...move, date: start + 2 * DAY_MS } : move,
+    ),
+  });
+  assert.equal(
+    rebased.assignedByItem.moving,
+    80_000,
+    'a start move for a Horizon item holds its money across a new starting day',
+  );
+  assert.equal(rebased.assignedToHorizonCents, 80_000);
+  assert.equal(rebased.freeToSpendCents, 20_000);
+}
+
+// Horizon: set the price, remove a cost, and a cost that ends.
+{
+  const jan15 = utc(2027, 0, 15);
+  const feb1 = utc(2027, 1, 1);
+  const end = utc(2027, 11, 31);
+  const range = (lowCents: number, highCents: number) => ({
+    lowCents,
+    highCents,
+  });
+  const cost = (
+    id: string,
+    amount: ReturnType<typeof range>,
+    anchor: number,
+    kind: 'once' | 'monthly' = 'once',
+  ): HorizonCost => ({
+    id,
+    name: id,
+    amount,
+    schedule:
+      kind === 'once'
+        ? { kind, anchor, monthDays: [] }
+        : { kind, anchor, monthDays: [1] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  });
+  const movers = cost('movers', range(60_000, 80_000), jan15);
+  const storage = cost('storage', range(10_000, 10_000), feb1, 'monthly');
+  const moving: HorizonSealed = {
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should' as const,
+    orderIndex: 1,
+    rest: { kind: 'later' as const },
+    note: null,
+    costs: [movers, storage],
+  };
+  const coveredUntil = (item: HorizonSealed, heldCents: number) =>
+    planHorizon(
+      item,
+      heldCents,
+      listHorizonPayments(item.costs, end, 'conservative'),
+    ).coveredUntil;
+  const heldCents = 90_000;
+  const before = coveredUntil(moving, heldCents);
+  const lowered = setCostPrice(moving, 'movers', range(60_000, 70_000), jan15);
+  const after = coveredUntil(lowered, heldCents);
+  assert.ok(
+    before !== null && (after === null || after >= before),
+    'pricing a range lower never moves coveredUntil earlier',
+  );
+  const exactPrice = setCostPrice(
+    moving,
+    'movers',
+    range(60_000, 60_000),
+    jan15,
+  );
+  assert.ok(
+    (coveredUntil(exactPrice, heldCents) ?? Infinity) >= (before ?? 0),
+    'and so does an exact price at the low end',
+  );
+  assert.deepEqual(
+    exactPrice.costs.map(({ pricedOn }) => pricedOn),
+    [jan15, null],
+    'Set the price stamps the day on that cost only',
+  );
+  assert.equal(
+    exactPrice.costs[0].amount.highCents,
+    60_000,
+    'and sets its whole amount',
+  );
+
+  assert.deepEqual(
+    removeCost(moving, 'storage', jan15, false)?.costs.map(({ id }) => id),
+    ['movers'],
+    'a cost with no paid payment is removed from the next version',
+  );
+  assert.equal(
+    removeCost({ ...moving, costs: [movers] }, 'movers', jan15, false),
+    null,
+    "removing an item's last cost is refused",
+  );
+  assert.equal(
+    removeCost(moving, 'nope', jan15, false),
+    null,
+    'and so is removing one the item does not have',
+  );
+  const ended = removeCost(moving, 'storage', feb1, true);
+  assert.equal(
+    ended?.costs.find(({ id }) => id === 'storage')?.endsAfter,
+    feb1,
+    'a cost with a paid payment stays and ends after today',
+  );
+
+  const earlyEnd = { ...movers, endsAfter: jan15 - 5 * 86_400_000 };
+  const earlyMark: CostPaidEntry = {
+    moveId: 'paid_early',
+    costId: 'movers',
+    dueOn: jan15,
+    amountCents: 70_000,
+    paidOn: jan15 - 6 * 86_400_000,
+    fromFreeCents: 0,
+    mark: 'item',
+    purchaseId: null,
+  };
+  assert.deepEqual(
+    listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative', [
+      earlyMark,
+    ]).map(({ dueOn, paid }) => [dueOn, paid?.moveId ?? null]),
+    [[jan15, 'paid_early']],
+    'a payment marked paid before the cost ended stays listed, with its mark',
+  );
+  assert.deepEqual(
+    listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative'),
+    [],
+    'and an unpaid one past the end is dropped',
+  );
+
+  const onlyEnded = removeCost(
+    { ...moving, costs: [movers, { ...storage, endsAfter: jan15 }] },
+    'movers',
+    jan15,
+    false,
+  );
+  assert.equal(
+    onlyEnded,
+    null,
+    'a cost that already ended is not a live one, so the last live cost stays',
+  );
+  assert.deepEqual(
+    getLiveCosts({ costs: [movers, { ...storage, endsAfter: jan15 }] }).map(
+      ({ id }) => id,
+    ),
+    ['movers'],
+    'only costs with no endsAfter are live',
+  );
+  const restoredAt = restoreCost({ ...moving, costs: [storage] }, movers, 0);
+  assert.deepEqual(
+    restoredAt?.costs.map(({ id }) => id),
+    ['movers', 'storage'],
+    'Undo puts a removed cost back at its place',
+  );
+  assert.equal(
+    restoreCost(moving, movers, 0),
+    null,
+    'and does nothing when the cost is already there',
+  );
+  const renamed = changeCost(
+    { ...moving, costs: [{ ...movers, pricedOn: jan15 }, storage] },
+    'movers',
+    {
+      name: 'Truck',
+      schedule: movers.schedule,
+      ending: movers.ending,
+      isOutside: true,
+    },
+  );
+  assert.equal(
+    renamed?.costs[0].name === 'Truck' &&
+      renamed.costs[0].isOutside &&
+      renamed.costs[0].pricedOn === jan15 &&
+      renamed.costs[0].amount.highCents === 80_000,
+    true,
+    "a cost's Change keeps its live price and day priced",
+  );
+  assert.equal(
+    changeCost(moving, 'nope', {
+      name: 'x',
+      schedule: movers.schedule,
+      ending: movers.ending,
+      isOutside: false,
+    }),
+    null,
+    'a cost taken out meanwhile gives no candidate',
+  );
+
+  const line = (after: HorizonSealed, before: HorizonSealed = moving) =>
+    describeChange(before, after, () => '');
+  const catering = cost('catering', range(12_000, 12_000), utc(2027, 11, 2));
+  assert.equal(
+    line({ ...moving, costs: [movers, storage, catering] }),
+    `added catering $120.00, ${formatDateOrdinalUTC(catering.schedule.anchor ?? 0)}`,
+    'an added cost reads by name, amount and day',
+  );
+  assert.equal(
+    line(
+      { ...moving, costs: [catering, movers, storage] },
+      {
+        ...moving,
+        costs: [movers, storage],
+      },
+    ),
+    `added catering $120.00, ${formatDateOrdinalUTC(catering.schedule.anchor ?? 0)}`,
+    'and keeps the costs in their own order, not by id',
+  );
+  assert.equal(
+    line({
+      ...moving,
+      costs: [
+        movers,
+        {
+          ...storage,
+          schedule: { ...storage.schedule, anchor: utc(2027, 1, 15) },
+        },
+      ],
+    }),
+    `storage monthly from ${formatDateOrdinalUTC(feb1)} to monthly from ${formatDateOrdinalUTC(utc(2027, 1, 15))}`,
+    'a repeat that moves reads by its date words',
+  );
+  const oneTime = {
+    ...moving,
+    costs: [movers, cost('truck', range(5_000, 5_000), feb1)],
+  };
+  assert.equal(
+    line(
+      {
+        ...oneTime,
+        costs: [
+          movers,
+          {
+            ...oneTime.costs[1],
+            schedule: {
+              ...oneTime.costs[1].schedule,
+              anchor: utc(2027, 1, 15),
+            },
+          },
+        ],
+      },
+      oneTime,
+    ),
+    `truck from ${formatDateOrdinalUTC(feb1)} to ${formatDateOrdinalUTC(utc(2027, 1, 15))}`,
+    'a one-time cost that moves reads "from" and "to" its days',
+  );
+  assert.equal(
+    line(setCostPrice(moving, 'movers', range(60_000, 60_000), jan15)),
+    'movers $600.00–$800.00 to $600.00',
+    'a range going exact keeps its dash, so "to" is only the change',
+  );
+  assert.equal(
+    line(setCostPrice(moving, 'storage', range(10_000, 19_000), jan15)),
+    'storage $100.00 to $100.00–$190.00',
+    'and so does an exact price becoming a range',
+  );
+
+  const stopped = { ...storage, endsAfter: utc(2027, 3, 1) };
+  assert.deepEqual(
+    listCostPayments(stopped, end, 'conservative').map(({ dueOn }) => dueOn),
+    [feb1, utc(2027, 2, 1), utc(2027, 3, 1)],
+    'endsAfter stops the payments after that day, and keeps the day itself',
+  );
+  assert.equal(
+    listCostPayments(storage, end, 'conservative').length,
+    12,
+    'a cost with no endsAfter keeps asking',
+  );
+  const readOld = readHorizon({
+    ...moving,
+    costs: [
+      {
+        id: 'c',
+        name: 'Movers',
+        amount: range(1, 1),
+        schedule: movers.schedule,
+        note: null,
+      },
+    ],
+  });
+  assert.equal(
+    readOld.costs[0].pricedOn === null && readOld.costs[0].endsAfter === null,
+    true,
+    'a cost sealed before pricedOn and endsAfter reads both as null',
+  );
+}
+
+// Mark a cost paid: what a mark settles, what balances and closings read, and the outside mark.
+{
+  const jan1 = utc(2027, 0, 1);
+  const jan15 = utc(2027, 0, 15);
+  const end = utc(2027, 11, 31);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const movers: HorizonCost = {
+    id: 'movers',
+    name: 'Movers',
+    amount: exact(60_000),
+    schedule: { kind: 'once', anchor: jan15, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  };
+  const truck: HorizonCost = {
+    ...movers,
+    id: 'truck',
+    name: 'Truck rental',
+    amount: exact(30_000),
+    isOutside: true,
+  };
+  const varies: HorizonCost = {
+    ...movers,
+    amount: { lowCents: 60_000, highCents: 80_000 },
+  };
+  const moving: HorizonSealed = {
+    name: 'Moving',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    rest: { kind: 'later' },
+    note: null,
+    costs: [movers, truck],
+  };
+  const entry = (
+    id: string,
+    costId: string,
+    amountCents: number,
+    fromFreeCents: number,
+    mark: 'item' | 'outside' | 'purchase' = 'item',
+  ): CostPaidEntry => ({
+    moveId: id,
+    costId,
+    dueOn: jan15,
+    amountCents,
+    paidOn: jan15,
+    fromFreeCents,
+    mark,
+    purchaseId: null,
+  });
+  const markMove = (paid: CostPaidEntry): OpenMove => ({
+    id: paid.moveId,
+    kind: 'costPaid',
+    date: paid.dueOn,
+    refId: 'moving',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: {
+      costId: paid.costId,
+      dueOn: paid.dueOn,
+      amountCents: paid.amountCents,
+      paidOn: paid.paidOn,
+      fromFreeCents: paid.fromFreeCents,
+      mark: paid.mark,
+      purchaseId: paid.purchaseId,
+    },
+  });
+  const starts: OpenMove[] = [
+    {
+      id: 's1',
+      kind: 'start',
+      date: jan1,
+      refId: null,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 200_000, holding: 'money' },
+    },
+    {
+      id: 's2',
+      kind: 'start',
+      date: jan1,
+      refId: 'moving',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 50_000, holding: 'bill' },
+    },
+  ];
+  const balancesWith = (moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...starts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+    });
+  const none = balancesWith([]);
+
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000),
+    { fromItemCents: 50_000, fromFreeCents: 10_000 },
+    'fromFreeCents is the excess over what the item held',
+  );
+  assert.deepEqual(
+    settleCostPaid(40_000, 50_000),
+    { fromItemCents: 40_000, fromFreeCents: 0 },
+    'less than planned comes wholly from the item',
+  );
+  assert.deepEqual(
+    settleCostPaid(60_000, 50_000, 'outside'),
+    { fromItemCents: 0, fromFreeCents: 0 },
+    'an outside mark takes nothing from anywhere',
+  );
+  assert.equal(needsCostAmount(movers), false, 'an exact cost asks nothing');
+  assert.equal(needsCostAmount(varies), true, 'a range asks what it came to');
+
+  const itemMark = entry('paid_moving_movers_1', 'movers', 60_000, 10_000);
+  const marked = balancesWith([markMove(itemMark)]);
+  assert.equal(
+    marked.assignedByItem.moving,
+    0,
+    'a mark uses up what the item held',
+  );
+  assert.equal(
+    marked.freeToSpendCents,
+    none.freeToSpendCents - 10_000,
+    'and the part beyond it draws Free to Spend',
+  );
+  assert.equal(
+    marked.costPaidByItem.moving,
+    60_000,
+    'a mark from the item is in Spent',
+  );
+
+  assert.equal(
+    marked.costFromFreeByItem.moving,
+    10_000,
+    'the part Free to Spend fronted is kept apart',
+  );
+  assert.deepEqual(
+    getHorizonFigures(0, 60_000, 10_000),
+    {
+      setAsideCents: 50_000,
+      spentCents: 60_000,
+      fromFreeCents: 10_000,
+      leftCents: 0,
+    },
+    'set aside counts only what was put in, not the part Free to Spend fronted',
+  );
+  const overFront = balancesWith([
+    markMove(entry('paid_moving_movers_3', 'movers', 30_000, 90_000)),
+  ]);
+  assert.equal(
+    overFront.costFromFreeByItem.moving,
+    30_000,
+    "a mark's Free to Spend part is clamped to what it came to",
+  );
+
+  const lessMark = entry('paid_moving_movers_2', 'movers', 40_000, 0);
+  assert.equal(
+    balancesWith([markMove(lessMark)]).assignedByItem.moving,
+    10_000,
+    'less than planned stays in the item',
+  );
+
+  const outsideMark = entry(
+    'paid_moving_truck_1',
+    'truck',
+    30_000,
+    0,
+    'outside',
+  );
+  const outside = balancesWith([markMove(outsideMark)]);
+  assert.equal(
+    outside.assignedByItem.moving,
+    none.assignedByItem.moving,
+    'an outside mark moves nothing from the item',
+  );
+  assert.equal(
+    outside.freeToSpendCents,
+    none.freeToSpendCents,
+    'and nothing from Free to Spend',
+  );
+  assert.equal(outside.costPaidByItem.moving ?? 0, 0, 'and is not in Spent');
+  assert.equal(
+    balancesWith([
+      markMove(itemMark),
+      {
+        ...markMove(itemMark),
+        id: 'unpaid_paid_moving_movers_1',
+        reversesMoveId: itemMark.moveId,
+        createdAt: 6,
+      },
+    ]).assignedByItem.moving,
+    50_000,
+    'taking a mark back gives the item its money again',
+  );
+
+  const payments = listHorizonPayments(moving.costs, end, 'conservative', [
+    itemMark,
+  ]);
+  const movePayment = payments.find(({ costId }) => costId === 'movers');
+  assert.equal(
+    movePayment?.paid?.moveId,
+    itemMark.moveId,
+    'a payment carries the mark that settled it',
+  );
+  assert.equal(
+    planHorizon(moving, 50_000, payments).covers.some(
+      ({ costId }) => costId === 'movers',
+    ),
+    false,
+    'a paid payment asks nothing of the plan',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative').map(
+      ({ costId }) => costId,
+    ),
+    ['truck'],
+    'an unmarked outside cost is what keeps its item from finishing',
+  );
+  assert.deepEqual(
+    listUnmarkedOutside(moving.costs, end, 'conservative', [outsideMark]),
+    [],
+    'and a marked one no longer does',
+  );
+  assert.equal(
+    sumCostSpent([itemMark, outsideMark]),
+    60_000,
+    'Spent counts only marks made from the item',
+  );
+
+  const closed = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...starts, markMove(itemMark)],
+    purchases: [],
+    billIds: new Set(),
+  });
+  assert.equal(
+    closed.costPaid.moving?.length,
+    1,
+    'a closing carries the marks of its month',
+  );
+  const sealed = encodeClosing(closed);
+  assert.equal(
+    decodeClosing(toMonthKey(jan1), sealed).costPaid.moving?.[0].amountCents,
+    60_000,
+    'and reads them back',
+  );
+  const legacy = { ...sealed, costPaid: undefined };
+  assert.deepEqual(
+    decodeClosing(toMonthKey(jan1), legacy).costPaid,
+    {},
+    'a closing written before costs could be paid reads costPaid as {}',
+  );
+
+  // Add what you paid: a purchase against the item moves the money, and the purchase mark only marks the payment.
+  const heldStarts: OpenMove[] = starts.map((move) =>
+    move.id === 's2' && move.kind === 'start'
+      ? { ...move, payload: { ...move.payload, amountCents: 80_000 } }
+      : move,
+  );
+  const purchaseOf = (id: string, cents: number): OpenPurchase => ({
+    id,
+    date: jan15,
+    source: 'manual',
+    needsHome: false,
+    expenseId: null,
+    createdAt: 6,
+    updatedAt: 6,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: [{ envelopeId: 'moving', cents, via: 'chosen' }],
+    refundOfId: null,
+    paidByCardId: 'card',
+    link: null,
+    receiptText: null,
+    costRef: { itemId: 'moving', costId: 'movers', dueOn: jan15 },
+  });
+  const purchaseMark: CostPaidEntry = {
+    ...entry('paid_moving_movers_4', 'movers', 60_000, 0, 'purchase'),
+    purchaseId: 'p1',
+  };
+  const edited = getPurchaseMarkFigures(
+    purchaseMark,
+    { amountCents: 65_000, date: jan15 + DAY_MS },
+    5_000,
+  );
+  assert.deepEqual(
+    [edited.amountCents, edited.paidOn, edited.fromFreeCents],
+    [65_000, jan15 + DAY_MS, 5_000],
+    'an edited purchase shows its own amount, day and the part past what the item held',
+  );
+  assert.equal(
+    getPurchaseMarkFigures(purchaseMark, null, 5_000),
+    purchaseMark,
+    'a purchase that is not loaded leaves the mark as written',
+  );
+  const withPurchase = (moves: OpenMove[], purchases: OpenPurchase[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...heldStarts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+      purchases,
+    });
+  const untouched = withPurchase([], []);
+  const bought = withPurchase([], [purchaseOf('p1', 60_000)]);
+  const boughtAndMarked = withPurchase(
+    [markMove(purchaseMark)],
+    [purchaseOf('p1', 60_000)],
+  );
+  assert.equal(
+    bought.assignedByItem.moving,
+    20_000,
+    'a purchase against the item lowers what it has left',
+  );
+  assert.equal(
+    boughtAndMarked.assignedByItem.moving,
+    bought.assignedByItem.moving,
+    'and its mark lowers it no further: the item is charged once, not by the purchase and the mark',
+  );
+  assert.equal(
+    boughtAndMarked.freeToSpendCents,
+    untouched.freeToSpendCents,
+    'a purchase the item covers leaves Free to Spend as it was',
+  );
+  assert.equal(
+    boughtAndMarked.costPaidByItem.moving,
+    60_000,
+    'the purchase counts in Spent once',
+  );
+  assert.deepEqual(
+    getHorizonFigures(
+      boughtAndMarked.assignedByItem.moving,
+      boughtAndMarked.costPaidByItem.moving,
+      boughtAndMarked.costFromFreeByItem.moving ?? 0,
+    ),
+    {
+      setAsideCents: 80_000,
+      spentCents: 60_000,
+      fromFreeCents: 0,
+      leftCents: 20_000,
+    },
+    '$200 left, $800 set aside, $600 spent',
+  );
+  assert.deepEqual(
+    settleCostPaid(60_000, 80_000, 'purchase'),
+    { fromItemCents: 0, fromFreeCents: 0 },
+    'a purchase mark takes no money of its own',
+  );
+  const purchasePayments = listHorizonPayments(
+    moving.costs,
+    end,
+    'conservative',
+    [purchaseMark],
+  );
+  assert.equal(
+    purchasePayments.find(({ costId }) => costId === 'movers')?.paid?.mark,
+    'purchase',
+    'a purchase-marked payment settles',
+  );
+  assert.equal(
+    planHorizon(moving, 20_000, purchasePayments).covers.some(
+      ({ costId }) => costId === 'movers',
+    ),
+    false,
+    'and asks nothing more of the item',
+  );
+  const over = withPurchase([], [purchaseOf('p2', 90_000)]);
+  assert.equal(
+    over.assignedByItem.moving,
+    -10_000,
+    'a larger purchase is over',
+  );
+  assert.equal(
+    over.assignedToHorizonCents,
+    0,
+    'an item that is over holds nothing',
+  );
+  assert.equal(
+    over.freeToSpendCents,
+    untouched.freeToSpendCents - 10_000,
+    'and the rest comes out of Free to Spend',
+  );
+  assert.equal(over.costFromFreeByItem.moving, 10_000, 'kept apart as fronted');
+  assert.equal(
+    getHorizonFigures(
+      0,
+      over.costPaidByItem.moving,
+      over.costFromFreeByItem.moving,
+    ).setAsideCents,
+    80_000,
+    'set aside is still only what was put in',
+  );
+  const takenBack = withPurchase(
+    [
+      markMove(purchaseMark),
+      {
+        ...markMove(purchaseMark),
+        id: 'unpaid_paid_moving_movers_4',
+        reversesMoveId: purchaseMark.moveId,
+        createdAt: 7,
+      },
+    ],
+    [],
+  );
+  assert.equal(
+    takenBack.assignedByItem.moving,
+    untouched.assignedByItem.moving,
+    'removing the purchase and taking its mark back restores the item',
+  );
+  assert.equal(
+    takenBack.costPaidByItem.moving ?? 0,
+    0,
+    'and takes it out of Spent',
+  );
+  assert.equal(
+    withPurchase([], [purchaseOf('p3', 25_000)]).assignedByItem.moving,
+    55_000,
+    'a purchase that pays no cost still lowers what the item has left',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 0, 'purchase'),
+    'Moving gets $600.00 back and the purchase is removed from Spend',
+    'taking back a purchase mark says the purchase goes',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 10_000, 'purchase'),
+    'Moving gets $500.00 back, $100.00 goes back to Free to Spend and the purchase is removed from Spend',
+    'and lists each place that gets money',
+  );
+  assert.equal(
+    describeCostGivesBack('Moving', 60_000, 0, 'item'),
+    'Moving gets $600.00 back',
+    'a plain mark does not mention a purchase',
+  );
+  const closedPurchase = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...heldStarts, markMove(purchaseMark)],
+    purchases: [purchaseOf('p1', 60_000)],
+    billIds: new Set(),
+  });
+  assert.equal(
+    closedPurchase.spentByItem.moving,
+    60_000,
+    'a closing carries the purchase against the item',
+  );
+  assert.equal(
+    deriveBalances({
+      startDate: jan1,
+      moves: heldStarts,
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { moving: 'horizon' },
+      closing: closedPurchase,
+    }).assignedByItem.moving,
+    20_000,
+    'and the balances read from it match',
+  );
+  void openPurchase(
+    {
+      id: 'old',
+      date: jan15,
+      source: 'manual',
+      needsHome: false,
+      expenseId: null,
+      createdAt: 1,
+      updatedAt: 1,
+      sealed: {
+        nonce: '',
+        value: '',
+        keyId: '',
+        keyVersion: 1,
+        algorithm: 'AES-256-GCM',
+      },
+    },
+    (async () => ({
+      amountCents: 100,
+      merchant: null,
+      label: null,
+      note: null,
+      lines: [],
+      refundOfId: null,
+      link: null,
+      receiptText: null,
+    })) as never,
+  ).then((opened) =>
+    assert.equal(
+      opened.costRef,
+      null,
+      'an older purchase reads costRef as null',
+    ),
+  );
+}
+
 console.log('runway engine: ok');
 
 // Round 7, package G8: money that arrives short. Cover from Free to Spend, then what gets less.
@@ -10659,6 +12275,9 @@ console.log('runway engine: ok');
     cents: 0,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   };
   const line = (
     lineId: string,
@@ -10892,6 +12511,9 @@ console.log('runway engine: ok');
     cents,
     shortBy: 0,
     paidBy: [],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const day20 = {
     id: 'd20_confirmed',
@@ -11202,6 +12824,9 @@ console.log('runway engine: ok');
     cents,
     shortBy: 0,
     paidBy: [{ dayId: 'g9', cents }],
+    costId: null,
+    costName: null,
+    repaysFree: false,
   });
   const confirmedOf = (arrivedCents: number): OpenRecord => {
     const lines = [
@@ -12870,6 +14495,607 @@ console.log('runway engine: ok');
       .unassignedCents,
     null,
     'no balance means no unassigned figure',
+  );
+}
+
+// Horizon: the pays carry what the item's money does not cover.
+{
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const cost = (
+    id: string,
+    name: string,
+    cents: number,
+    anchor: number,
+    schedule: 'once' | 'monthly' = 'once',
+  ): HorizonCost => ({
+    id,
+    name,
+    amount: exact(cents),
+    schedule:
+      schedule === 'once'
+        ? { kind: 'once', anchor, monthDays: [] }
+        : {
+            kind: 'monthly',
+            anchor,
+            monthDays: [new Date(anchor).getUTCDate()],
+          },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    note: null,
+  });
+  const jan15 = utc(2027, 0, 15);
+  const jan31 = utc(2027, 0, 31);
+  const feb1 = utc(2027, 1, 1);
+  const storage = cost('storage', 'Storage unit', 10_000, feb1, 'monthly');
+  const days = [
+    jan15,
+    jan31,
+    utc(2027, 1, 14),
+    utc(2027, 1, 28),
+    utc(2027, 2, 14),
+  ].map((on) => ({
+    dayKey: toDayKey('pay', on),
+    sourceId: 'src',
+    on,
+    amount: exact(200_000),
+  }));
+  const item = (
+    rest: Parameters<typeof planCostShares>[0]['rest'],
+    costs: HorizonCost[],
+    heldCents = 0,
+    extra: Partial<Parameters<typeof planCostShares>[0]> = {},
+  ) => ({
+    itemId: 'moving',
+    createdAt: 1_000,
+    priority: 'should' as const,
+    orderIndex: 1,
+    rest,
+    costs,
+    heldCents,
+    ...extra,
+  });
+  const draftOn = (
+    on: number,
+    horizonItem: ReturnType<typeof item>,
+    upcoming = days,
+  ) =>
+    buildDraft({
+      days: upcoming.filter((entry) => entry.on === on),
+      plan: {
+        envelopes: [],
+        bills: [],
+        goals: [],
+        horizonItems: [horizonItem],
+        horizon: utc(2027, 11, 31),
+        incomeDays: upcoming,
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+  const costLines = (draft: ReturnType<typeof draftOn>) =>
+    draft.lines.filter((line) => line.costId);
+
+  const paysItem = item({ kind: 'pays' }, [storage]);
+  assert.deepEqual(
+    [jan15, jan31].map((on) =>
+      costLines(draftOn(on, paysItem)).map((line) => line.cents),
+    ),
+    [[5_000], [5_000]],
+    "a repeating cost's first payment spreads over the pays before it: Jan 15th and Jan 31st for Feb 1st",
+  );
+  assert.deepEqual(
+    costLines(draftOn(utc(2027, 1, 14), paysItem)).map((line) => line.cents),
+    [5_000],
+    'and the next payment spreads over the pays after the first one',
+  );
+  const plans = planCostShares(
+    paysItem,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  );
+  assert.ok(
+    plans.slice(0, 3).every((plan) => plan.parts.length > 0),
+    'every payment with pays before it has pays to carry it',
+  );
+
+  const held = item({ kind: 'pays' }, [storage], 3_000);
+  const heldPlan = planCostShares(
+    held,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  )[0];
+  assert.equal(
+    heldPlan.coveredCents + heldPlan.parts.reduce((sum, p) => sum + p.cents, 0),
+    heldPlan.totalCents,
+    'covered plus the days demands equals the payment total',
+  );
+  assert.equal(heldPlan.coveredCents, 3_000);
+
+  const confirmedUp = item({ kind: 'pays' }, [storage], 8_000);
+  const laterShare = (horizonItem: ReturnType<typeof item>) =>
+    costLines(draftOn(jan31, horizonItem))[0]?.cents ?? 0;
+  assert.ok(
+    laterShare(confirmedUp) < laterShare(paysItem),
+    'a confirmed day raises what the item holds and lowers the later days shares',
+  );
+  assert.equal(laterShare(confirmedUp), 1_000);
+
+  const onePay = item({ kind: 'onePay', dayKey: days[1].dayKey }, [storage]);
+  assert.deepEqual(
+    [jan15, jan31].map((on) =>
+      costLines(draftOn(on, onePay)).map((line) => line.cents),
+    ),
+    [[], [10_000]],
+    'the picked pay carries the first payment of a repeating cost',
+  );
+  const laterPayments = planCostShares(
+    onePay,
+    days,
+    utc(2027, 11, 31),
+    'conservative',
+  );
+  assert.deepEqual(
+    laterPayments[1].parts.map((part) => part.day.on),
+    [utc(2027, 1, 14), utc(2027, 1, 28)],
+    'a later payment of a repeating cost spreads as the pays between the last payment and its own',
+  );
+
+  const movers = cost('movers', 'Movers', 60_000, utc(2027, 0, 10));
+  const early = [
+    {
+      dayKey: toDayKey('pay', utc(2027, 0, 5)),
+      sourceId: 'src',
+      on: utc(2027, 0, 5),
+      amount: exact(200_000),
+    },
+    ...days,
+  ];
+  const fronted = item(
+    { kind: 'onePay', dayKey: days[0].dayKey },
+    [movers],
+    0,
+    {
+      paid: [
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
+      ],
+    },
+  );
+  assert.deepEqual(
+    costLines(draftOn(utc(2027, 0, 5), fronted, early)),
+    [],
+    'a payment due before the picked pay asks no earlier day',
+  );
+  const repaying = costLines(draftOn(jan15, fronted, early));
+  assert.equal(repaying.length, 1);
+  assert.equal(repaying[0].repaysFree, true);
+  assert.equal(
+    repaying[0].cents,
+    60_000,
+    "the picked day repaysFree equals the payment's fromFreeCents",
+  );
+  const goneFronted = item(
+    { kind: 'onePay', dayKey: 'pay:gone' },
+    [movers],
+    0,
+    {
+      paid: [
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
+      ],
+    },
+  );
+  const goneRepays = costLines(draftOn(jan15, goneFronted));
+  assert.equal(goneRepays.length, 1);
+  assert.equal(
+    goneRepays[0].repaysFree,
+    true,
+    'a fronted payment is given back on the first coming pay when the picked pay is gone',
+  );
+  assert.equal(goneRepays[0].cents, 60_000);
+  assert.deepEqual(
+    costLines(draftOn(jan31, goneFronted)),
+    [],
+    'and on that pay alone',
+  );
+  const earlyGone = costLines(draftOn(utc(2027, 0, 5), goneFronted, early));
+  assert.deepEqual(
+    earlyGone,
+    [],
+    'a payment paid on the first coming pay is not repaid by it',
+  );
+  const givenBack = item(
+    { kind: 'onePay', dayKey: 'pay:confirmed' },
+    [movers],
+    0,
+    {
+      paid: [
+        {
+          costId: 'movers',
+          dueOn: utc(2027, 0, 10),
+          paidOn: utc(2027, 0, 5),
+          fromFreeCents: 60_000,
+        },
+      ],
+      repaid: [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    },
+  );
+  assert.deepEqual(
+    costLines(draftOn(jan15, givenBack)),
+    [],
+    'a give-back a confirmed day already carries is not asked again by the next pay',
+  );
+  assert.deepEqual(
+    planCostShares(givenBack, days, utc(2027, 11, 31), 'conservative').filter(
+      (plan) => plan.repays !== null,
+    ),
+    [],
+    'and the plan has no repays line for it',
+  );
+  assert.equal(
+    costLines(
+      draftOn(
+        jan15,
+        item({ kind: 'onePay', dayKey: 'pay:confirmed' }, [movers], 0, {
+          paid: givenBack.paid,
+          repaid: [{ costId: 'movers', on: utc(2027, 0, 4) }],
+        }),
+      ),
+    ).length,
+    1,
+    'a give-back dated before the mark does not count as repaying it',
+  );
+  const goneSpread = costLines(
+    draftOn(jan15, item({ kind: 'onePay', dayKey: 'pay:gone' }, [storage], 0)),
+  );
+  assert.equal(
+    goneSpread[0]?.reason.cadence,
+    'horizonPays',
+    'a pick that is gone reads as the pays, not as the pay you picked',
+  );
+  const withoutRepay = draftOn(
+    jan15,
+    item({ kind: 'onePay', dayKey: days[0].dayKey }, [movers], 0),
+    early,
+  );
+  const withRepay = draftOn(jan15, fronted, early);
+  assert.equal(
+    withRepay.freeToSpend.cents,
+    withoutRepay.freeToSpend.cents + 60_000,
+    'a repays line goes back to Free to Spend, not to the item',
+  );
+  const sealed = toRecordLines(withRepay, {
+    moving: { name: 'Moving', emoji: null },
+    'moving:cost:movers': { name: 'Movers', emoji: null },
+  });
+  const sealedLine = sealed.find((line) => line.costId === 'movers');
+  assert.equal(
+    sealedLine?.repaysFree,
+    true,
+    'a record line seals its cost and what it gives back',
+  );
+  assert.equal(sealedLine?.name, 'Moving');
+  assert.equal(sealedLine?.costName, 'Movers');
+  assert.ok(
+    sealed
+      .filter((line) => !line.costId)
+      .every((line) => line.costName === null),
+    'a line that is not a cost has no cost name',
+  );
+  const sealedDay = [
+    {
+      id: 'r',
+      dayId: 'd',
+      createdAt: 1,
+      kind: 'confirmed' as const,
+      payload: {
+        fingerprint: 'x',
+        stance: 'conservative' as const,
+        arrivedCents: 200_000,
+        expectedCents: 200_000,
+        freeToSpendCents: 0,
+        lines: sealed,
+        differences: [],
+      },
+    },
+  ];
+  const sealedDays = [
+    { id: 'd', expectedOn: utc(2027, 0, 8), arrivedOn: utc(2027, 0, 8) },
+  ];
+  const sealedClosing = buildClosing('2027-01', null, {
+    startDate: utc(2027, 0, 1),
+    days: sealedDays,
+    records: sealedDay,
+    moves: [],
+    purchases: [],
+    billIds: new Set(),
+  });
+  const reread = decodeClosing('2027-01', encodeClosing(sealedClosing));
+  assert.deepEqual(
+    reread.repaid.moving,
+    [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    'a closing seals the day that gave a fronted payment back and reads it again',
+  );
+  const closedProgress = deriveBillProgress(
+    [],
+    new Map(),
+    [],
+    utc(2027, 0, 1),
+    reread,
+  );
+  assert.deepEqual(
+    closedProgress.moving?.repaid,
+    [{ costId: 'movers', on: utc(2027, 0, 8) }],
+    'and the progress read from a closing carries it',
+  );
+  assert.deepEqual(
+    costLines(
+      draftOn(
+        jan15,
+        item({ kind: 'onePay', dayKey: 'pay:confirmed' }, [movers], 0, {
+          paid: givenBack.paid,
+          repaid: closedProgress.moving?.repaid,
+        }),
+      ),
+    ),
+    [],
+    'a mark and its give-back sealed into a closing leave the next draft asking nothing',
+  );
+  const { repaid: dropped, ...beforeRepaid } = encodeClosing(sealedClosing);
+  assert.ok(dropped !== undefined);
+  assert.deepEqual(
+    decodeClosing('2027-01', beforeRepaid).repaid,
+    {},
+    'a closing written before give-backs were sealed reads repaid as {}',
+  );
+  assert.deepEqual(
+    sumConfirmedByItem([
+      {
+        id: 'r',
+        dayId: 'd',
+        createdAt: 1,
+        kind: 'confirmed',
+        payload: {
+          fingerprint: 'x',
+          stance: 'conservative',
+          arrivedCents: 200_000,
+          expectedCents: 200_000,
+          freeToSpendCents: 0,
+          lines: sealed,
+          differences: [],
+        },
+      },
+    ]),
+    {},
+    'a line that gives back to Free to Spend adds nothing to the item',
+  );
+
+  const moving = [
+    cost('truck', 'Truck rental', 12_000, utc(2027, 0, 14)),
+    { ...cost('movers', 'Movers', 60_000, jan15) },
+    cost('deposit', 'Deposit', 25_000, utc(2027, 0, 10)),
+    storage,
+  ];
+  const seeded = item({ kind: 'pays' }, moving, 80_000);
+  const sheet = planHorizon(
+    seeded,
+    80_000,
+    listHorizonPayments(moving, utc(2027, 11, 31), 'conservative'),
+  );
+  assert.deepEqual(
+    planCostShares(seeded, days, utc(2027, 11, 31), 'conservative').map(
+      (plan) => [plan.costId, plan.dueOn, plan.needCents],
+    ),
+    sheet.covers
+      .filter((cover) => cover.coveredCents < cover.totalCents)
+      .map((cover) => [
+        cover.costId,
+        cover.dueOn,
+        cover.totalCents - cover.coveredCents,
+      ]),
+    "the pays' figures are the item sheet's covers line",
+  );
+
+  // A fronted payment is given back by the picked pay when it was paid before it, whenever it fell due.
+  const dueAfterPick = cost('late', 'Late fee', 30_000, utc(2027, 0, 20));
+  const frontedLate = (paidOn: number) =>
+    planCostShares(
+      item({ kind: 'onePay', dayKey: days[0].dayKey }, [dueAfterPick], 0, {
+        paid: [
+          {
+            costId: 'late',
+            dueOn: utc(2027, 0, 20),
+            paidOn,
+            fromFreeCents: 30_000,
+          },
+        ],
+      }),
+      early,
+      utc(2027, 11, 31),
+      'conservative',
+    ).filter((plan) => plan.repays !== null);
+  assert.equal(
+    frontedLate(utc(2027, 0, 5)).length,
+    1,
+    'due after the picked pay but paid before it: the pick repays it',
+  );
+  assert.equal(
+    frontedLate(utc(2027, 0, 16)).length,
+    0,
+    'paid after the picked pay: nothing to give back',
+  );
+
+  // The cost's pays that are not set by the person share what the set ones leave.
+  const surgery = cost('surgery', 'Surgery', 90_000, jan31);
+  const threePays = [early[0], days[0], days[1]];
+  const pinned = (fixed: Record<string, number>) =>
+    planCostShares(
+      item({ kind: 'pays' }, [surgery], 0, { fixed: { surgery: fixed } }),
+      threePays,
+      utc(2027, 11, 31),
+      'conservative',
+    )[0].parts.map((part) => part.cents);
+  assert.deepEqual(
+    pinned({ [days[0].dayKey]: 60_000 }),
+    [15_000, 60_000, 15_000],
+    'the rest of a pinned cost is spread over its other pays, not lumped on one',
+  );
+  assert.deepEqual(
+    pinned({
+      [early[0].dayKey]: 30_000,
+      [days[0].dayKey]: 30_000,
+      [days[1].dayKey]: 10_000,
+    }),
+    [30_000, 30_000, 10_000],
+    'with every pay set, what they leave stays unfunded',
+  );
+
+  // A picked pay that is no longer coming falls back to the pays.
+  assert.deepEqual(
+    planCostShares(
+      item({ kind: 'onePay', dayKey: 'pay:gone' }, [storage]),
+      days,
+      utc(2027, 11, 31),
+      'conservative',
+    ).map((plan) => plan.parts.map((part) => part.cents)),
+    plans.map((plan) => plan.parts.map((part) => part.cents)),
+    'a picked pay that has gone funds like the pays do, not nobody',
+  );
+
+  // One pay carries a repeating cost's payments that both reach it: one line, the figures added.
+  const lateOnePay = costLines(
+    draftOn(
+      utc(2027, 1, 14),
+      item({ kind: 'onePay', dayKey: days[2].dayKey }, [storage]),
+    ),
+  );
+  assert.equal(lateOnePay.length, 1, 'two payments on one pay are one line');
+  assert.equal(lateOnePay[0].cents, 15_000);
+  assert.equal(lateOnePay[0].cost?.totalCents, 20_000);
+
+  // Several costs due on one day give one line each.
+  const twoCosts = costLines(
+    draftOn(
+      jan15,
+      item({ kind: 'pays' }, [
+        cost('a', 'Alpha', 4_000, jan31),
+        cost('b', 'Beta', 6_000, jan31),
+      ]),
+    ),
+  );
+  assert.deepEqual(
+    twoCosts.map((line) => [line.costId, line.cents]),
+    [
+      ['a', 2_000],
+      ['b', 3_000],
+    ],
+    'each cost on a day has its own line',
+  );
+
+  // A record sealed before costs opens with the new keys, and a repays line takes nothing from the money.
+  const oldLine = {
+    lineId: 'l',
+    itemId: 'i',
+    name: 'Rent',
+    emoji: null,
+    tier: 'must',
+    cents: 500,
+    shortBy: 0,
+  } as unknown as RecordLine;
+  const opened = withLineDefaults({ lines: [oldLine] }).lines[0];
+  assert.equal(opened.costId, null);
+  assert.equal(opened.repaysFree, false);
+  assert.equal(opened.costName, null, 'a legacy line opens with no cost name');
+  assert.equal(
+    sumLines([opened, { ...opened, cents: 900, repaysFree: true }]),
+    500,
+    'sumLines skips a line that gives back to Free to Spend',
+  );
+
+  // The lookahead carries nothing forward from a repays line, and flags a short cost line due before the next pay.
+  const lookDay = (on: number): ComingDay => ({
+    dayKey: `pay:${on}`,
+    payLineId: 'pay',
+    sourceId: 'src',
+    on,
+    sourceName: 'Acme',
+    payLineName: 'Paycheck',
+    amount: exact(200_000),
+    stanceOverride: null,
+  });
+  const costLine = (
+    costId: string,
+    over: Record<string, unknown> = {},
+  ): Draft['lines'][number] =>
+    ({
+      lineId: costId,
+      itemId: 'moving',
+      cents: 1_000,
+      shortBy: 0,
+      tier: 'should',
+      bill: null,
+      pairing: null,
+      costId,
+      repaysFree: false,
+      cost: { costId, dueOn: jan31 },
+      ...over,
+    }) as unknown as Draft['lines'][number];
+  const carries: LookaheadCarry[] = [];
+  const looked = lookahead({
+    today: utc(2027, 0, 1),
+    horizon: utc(2027, 2, 1),
+    days: [lookDay(jan15), lookDay(utc(2027, 1, 14))],
+    bills: [],
+    payments: {},
+    draftOf: (_, carry) => {
+      carries.push(carry);
+      return {
+        draft: {
+          days: [],
+          moneyCents: 0,
+          heldCents: 0,
+          freeToSpend: { cents: 0, bySource: [] },
+          lines: [
+            costLine('repaid', { repaysFree: true }),
+            costLine('a', { shortBy: 200 }),
+            costLine('b', { shortBy: 300 }),
+            costLine('x', { itemId: 'trip', shortBy: 100 }),
+          ],
+        } as unknown as Draft,
+        names: {
+          moving: { name: 'Moving' },
+          [getCostNameKey('moving', 'a')]: { name: 'Alpha' },
+          [getCostNameKey('moving', 'b')]: { name: 'Beta' },
+          trip: { name: 'Trip' },
+          [getCostNameKey('trip', 'x')]: { name: 'Alpha' },
+        },
+      };
+    },
+  });
+  assert.deepEqual(
+    carries[1].added,
+    {},
+    'a cost line adds nothing to the carry: its share already spreads what is left over every pay, and a repays line gives back to Free to Spend',
+  );
+
+  assert.deepEqual(
+    looked.problems
+      .filter((problem) => problem.on === jan15)
+      .map((problem) => problem.kind === 'short' && problem.name),
+    ['Alpha\u00A0· Moving', 'Alpha\u00A0· Trip', 'Beta'],
+    "a short cost line due before the next pay is flagged by its cost, whatever its tier, and joined with its item only when another item's cost shares the name",
   );
 }
 

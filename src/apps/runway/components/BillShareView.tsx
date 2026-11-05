@@ -23,9 +23,11 @@ import {
   ActionSection,
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
+import ClearOfFooter from '@/components/ClearOfFooter';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import {
+  CHANGE_WORDS,
   DRAFT_WORDS,
   MAX_PURCHASE_CENTS,
   PAY_SHARE_WORDS,
@@ -849,7 +851,7 @@ function BillShareView({
       <div className='[@media(min-height:720px)]:bg-popover flex flex-col gap-3 pb-1 [@media(min-height:720px)]:sticky [@media(min-height:720px)]:top-0 [@media(min-height:720px)]:z-10'>
         <BackLink onBack={onBack} />
         <ActionTitle>{PAY_SHARE_WORDS.title(bill.name)}</ActionTitle>
-        <div onBlurCapture={snapToCap}>
+        <ClearOfFooter onBlurCapture={snapToCap}>
           <AmountHero
             label={PAY_SHARE_WORDS.amount}
             value={amount}
@@ -857,10 +859,10 @@ function BillShareView({
             disabled={isSaving}
             hint={getHint()}
           />
-        </div>
+        </ClearOfFooter>
       </div>
       {isHidden && isChanged && (
-        <ActionSection caption={PAY_SHARE_WORDS.changes}>
+        <ActionSection caption={CHANGE_WORDS.previewHeading}>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
             <li className='px-3 py-2 text-sm'>
               <p className='flex items-baseline justify-between gap-3'>
@@ -876,7 +878,7 @@ function BillShareView({
         </ActionSection>
       )}
       {!isHidden && billRows.length > 0 && (
-        <ActionSection caption={PAY_SHARE_WORDS.changes}>
+        <ActionSection caption={CHANGE_WORDS.previewHeading}>
           {restCarrier && (
             <InlineNotice tone='info'>
               <MaskedText>

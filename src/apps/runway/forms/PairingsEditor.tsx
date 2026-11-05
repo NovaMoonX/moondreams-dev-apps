@@ -459,12 +459,7 @@ function PairingsEditor({
                   </div>
                 )}
               {note && <p className='text-muted-foreground text-xs'>{note}</p>}
-              {day && !change && (
-                <EffectPreview
-                  changeJson={dayChangeJson}
-                  caption={PAY_SHARE_WORDS.changes}
-                />
-              )}
+              {day && !change && <EffectPreview changeJson={dayChangeJson} />}
             </div>
           </>
         );

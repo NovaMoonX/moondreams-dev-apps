@@ -10,6 +10,7 @@ import {
   closingBefore,
   joinCardPaid,
   joinCents,
+  joinCostPaid,
   joinPaid,
   sumChargedByCard,
   type ClosingState,
@@ -19,6 +20,7 @@ import { START_DAY_KEY } from '@apps/runway/constants';
 
 import {
   collectCardPaid,
+  collectCostPaid,
   collectFunded,
   collectPaid,
   collectStarted,
@@ -36,8 +38,10 @@ export interface BalancesInput {
   arrivedOn: ReadonlyMap<string, DateOnly>;
   /** Each day's scheduled date, by day id, which places what it set aside for a bill against that bill's payments; `arrivedOn` stands in when it is left out. */
   expectedOn?: ReadonlyMap<string, DateOnly>;
-  /** Which plan items are goals, bills and envelopes, and which ids are cards. */
-  kinds: Readonly<Record<string, 'goal' | 'bill' | 'envelope' | 'card'>>;
+  /** Which plan items are goals, bills, envelopes and Horizon items, and which ids are cards. */
+  kinds: Readonly<
+    Record<string, 'goal' | 'bill' | 'envelope' | 'horizon' | 'card'>
+  >;
   /** The day each item that stopped for good (archived, or ended) no longer holds money, by item id: what it held is Free to Spend from then. */
   releasedFrom?: Readonly<Record<string, DateOnly>>;
   /** The day the figures are for, which `releasedFrom` is read against; every release counts when it is left out. */
@@ -61,6 +65,8 @@ export interface Balances {
   assignedByItem: Record<string, Cents>;
   assignedToBillsCents: Cents;
   assignedToGoalsCents: Cents;
+  /** What Horizon items still hold; one that is over holds nothing, as an envelope. */
+  assignedToHorizonCents: Cents;
   /** What envelopes still hold; an envelope that is over holds nothing, and its overspend has already left the money on hand. */
   assignedToEnvelopesCents: Cents;
   /** What each card owes and waits to be paid: what it owed on the starting day, plus what was charged to it, less what was paid off; below zero when it was overpaid. */
@@ -74,6 +80,10 @@ export interface Balances {
   startMoneyCents: Cents;
   arrivedCents: Cents;
   paidCents: Cents;
+  /** What each Horizon item has spent since the starting point: payments marked from its own money plus its purchases, whatever cost they pay; a payment outside the plan is not in it. */
+  costPaidByItem: Record<string, Cents>;
+  /** The part of that spending that came out of Free to Spend, by item. */
+  costFromFreeByItem: Record<string, Cents>;
   /** What was spent since the starting point, less refunds. */
   spentCents: Cents;
 }
@@ -143,13 +153,44 @@ export function deriveBalances(input: BalancesInput): Balances {
       charged: counted.filter((p) => p.cardId !== null),
     };
   });
-  const paidCents = paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0);
-  const consumed = Object.fromEntries(
-    paidByBill.map((bill) => [
+  const costMarks = Object.entries(
+    joinCostPaid(base, collectCostPaid(input.moves)),
+  ).map(([itemId, entries]) => {
+    const counted = entries.filter(
+      (entry) =>
+        startDate !== null &&
+        entry.paidOn >= startDate &&
+        entry.mark === 'item',
+    );
+    return {
+      itemId,
+      amountCents: counted.reduce((sum, entry) => sum + entry.amountCents, 0),
+      fromFreeCents: counted.reduce(
+        (sum, entry) =>
+          sum + Math.min(Math.max(0, entry.fromFreeCents), entry.amountCents),
+        0,
+      ),
+    };
+  });
+  const markedByItem = Object.fromEntries(
+    costMarks.map((mark) => [mark.itemId, mark.amountCents]),
+  );
+  const markedFromFreeByItem = Object.fromEntries(
+    costMarks.map((mark) => [mark.itemId, mark.fromFreeCents]),
+  );
+  const paidCents =
+    paidByBill.reduce((sum, bill) => sum + bill.amountCents, 0) +
+    costMarks.reduce((sum, mark) => sum + mark.amountCents, 0);
+  const consumed = Object.fromEntries([
+    ...costMarks.map((mark): [string, Cents] => [
+      mark.itemId,
+      mark.amountCents - mark.fromFreeCents,
+    ]),
+    ...paidByBill.map((bill): [string, Cents] => [
       bill.billId,
       bill.amountCents - bill.fromFreeCents,
     ]),
-  );
+  ]);
 
   const counted =
     startDate === null
@@ -185,6 +226,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       ...Object.keys(started.byItem),
       ...Object.keys(spentByItem),
       ...Object.keys(transfers),
+      ...costMarks.map((mark) => mark.itemId),
     ].filter((id) => !isCard(id)),
   );
   const assignedByItem = Object.fromEntries(
@@ -197,20 +239,39 @@ export function deriveBalances(input: BalancesInput): Balances {
         (transfers[id] ?? 0),
     ]),
   );
+  const horizonSpentByItem = Object.fromEntries(
+    Object.entries(spentByItem)
+      .filter(([id]) => input.kinds[id] === 'horizon')
+      .map(([id, cents]) => [id, Math.max(0, cents)]),
+  );
+  const costPaidByItem = joinCents(markedByItem, horizonSpentByItem);
+  const costFromFreeByItem = joinCents(
+    markedFromFreeByItem,
+    Object.fromEntries(
+      Object.entries(horizonSpentByItem).map(([id, cents]) => [
+        id,
+        Math.min(cents, Math.max(0, -(assignedByItem[id] ?? 0))),
+      ]),
+    ),
+  );
   const isReleased = (id: string) =>
     Object.hasOwn(input.releasedFrom ?? {}, id) &&
     (input.releasedFrom?.[id] ?? 0) <= (input.asOf ?? Infinity);
-  const sumKind = (kind: 'goal' | 'bill' | 'envelope') =>
+  const sumKind = (kind: 'goal' | 'bill' | 'envelope' | 'horizon') =>
     Object.entries(assignedByItem)
       .filter(([id]) => input.kinds[id] === kind && !isReleased(id))
       .reduce(
         (sum, [, cents]) =>
-          sum + (kind === 'envelope' ? Math.max(0, cents) : cents),
+          sum +
+          (kind === 'envelope' || kind === 'horizon'
+            ? Math.max(0, cents)
+            : cents),
         0,
       );
   const assignedToBillsCents = sumKind('bill');
   const assignedToGoalsCents = sumKind('goal');
   const assignedToEnvelopesCents = sumKind('envelope');
+  const assignedToHorizonCents = sumKind('horizon');
 
   const isCountingCards = input.isCountingCards ?? true;
   const allCharged = joinCents(
@@ -269,6 +330,7 @@ export function deriveBalances(input: BalancesInput): Balances {
     assignedByItem,
     assignedToBillsCents,
     assignedToGoalsCents,
+    assignedToHorizonCents,
     assignedToEnvelopesCents,
     reserveByCard,
     assignedToCardsCents,
@@ -279,11 +341,14 @@ export function deriveBalances(input: BalancesInput): Balances {
       moneyOnHandCents -
       assignedToBillsCents -
       assignedToGoalsCents -
+      assignedToHorizonCents -
       assignedToEnvelopesCents -
       assignedToCardsCents,
     startMoneyCents,
     arrivedCents,
     paidCents,
+    costPaidByItem,
+    costFromFreeByItem,
     spentCents,
   };
   return result;
@@ -311,7 +376,8 @@ export function deriveBalancesBefore(
   const dropped = new Set(
     input.moves.flatMap((move) =>
       !move.reversesMoveId &&
-      ((move.kind === 'billPaid' && move.payload.paidOn >= day) ||
+      (((move.kind === 'billPaid' || move.kind === 'costPaid') &&
+        move.payload.paidOn >= day) ||
         (move.kind === 'cardPayment' && move.date >= day) ||
         (move.kind === 'transfer' && move.date >= day))
         ? [move.id]

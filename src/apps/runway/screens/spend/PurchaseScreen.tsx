@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import {
+  HandCoins,
   ImagePlus,
   Layers,
   Pencil,
@@ -8,15 +9,18 @@ import {
   Undo2,
 } from 'lucide-react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import CameraTile from '@/components/forms/CameraTile';
 import ExternalLinkText from '@/components/ExternalLinkText';
 import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { maskFigures } from '@apps/runway/utils/maskText';
 import {
@@ -31,6 +35,7 @@ import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   MAX_RECEIPTS_PER_PURCHASE,
+  PURCHASE_COST_WORDS,
   RECEIPT_TEXT_LINES_SHOWN,
   RECEIPT_TEXT_MIN_HIDDEN,
   SPEND_WORDS,
@@ -54,12 +59,17 @@ import {
   addReceiptImages,
   removeReceiptImagesOf,
 } from '@apps/runway/store/actions/receiptActions';
+import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import SheetHead from '@apps/runway/components/SheetHead';
 import { useExpensePurchases } from '@apps/runway/hooks/useExpensePurchases';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { deletePurchase } from '@apps/runway/store/actions/purchaseActions';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  selectCostPaid,
   selectExpenses,
+  selectHorizonItems,
+  selectStance,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -120,12 +130,19 @@ function PurchaseScreen({
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const looks = useAppSelector(selectItemLooks);
   const expenses = useAppSelector(selectExpenses);
+  const costMarks = useAppSelector(selectCostPaid);
+  const horizons = useAppSelector((state) =>
+    selectHorizonItems(state, todayAsUtcDate()),
+  );
+  const stance = useAppSelector(selectStance);
+  const [isCostOpen, setIsCostOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<{
     key: number;
     purchase: OpenPurchase;
   } | null>(null);
   const [groupViewFor, setGroupViewFor] = useState<string | null>(null);
   const receiptChooser = useRef<ReceiptChooser>(null);
+  const canTakePhoto = useCanTakePhoto();
   const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
   const sheetBody = useRef<HTMLDivElement>(null);
   const scrollBeforeReceipt = useRef<number | null>(null);
@@ -166,6 +183,8 @@ function PurchaseScreen({
   const receipts =
     receiptsResult.status === 'loaded' ? receiptsResult.images : [];
   const isReceiptsLoaded = receiptsResult.status === 'loaded';
+  const isCameraFirst =
+    canTakePhoto && receiptsResult.status !== 'failed' && receipts.length === 0;
   const viewedReceipt =
     receipts.find((entry) => entry.id === receiptViewId) ?? null;
   const nameOf = (envelopeId: string) =>
@@ -216,8 +235,38 @@ function PurchaseScreen({
   const link = purchase.link?.trim() || null;
   const linkHost = link === null ? null : getWebLinkHost(link);
 
+  const getCostMark = () => {
+    const ref = purchase.costRef ?? null;
+    if (ref === null) return null;
+    const paid =
+      (costMarks[ref.itemId] ?? []).find(
+        (entry) => entry.purchaseId === purchase.id,
+      ) ?? null;
+    return {
+      paid: paid === null ? null : { ...paid, itemId: ref.itemId },
+      names: {
+        item: nameOf(ref.itemId),
+        cost:
+          horizons
+            .find(({ item }) => item.id === ref.itemId)
+            ?.version.payload.costs.find(({ id }) => id === ref.costId)?.name ??
+          '',
+      },
+    };
+  };
+
+  const paysRef = purchase.costRef ?? null;
+  const paysHorizon =
+    paysRef === null
+      ? null
+      : (horizons.find(({ item }) => item.id === paysRef.itemId)?.version
+          .payload ?? null);
+  const paysCostName =
+    paysHorizon?.costs.find(({ id }) => id === paysRef?.costId)?.name ?? null;
+
   const remove = async () => {
     if (!user || isBusy) return;
+    const costMark = getCostMark();
     const names = purchase.lines.map((line) =>
       line.envelopeId === null
         ? SPEND_WORDS.freeToSpend
@@ -236,6 +285,12 @@ function PurchaseScreen({
           receipts.length > 0
             ? SPEND_WORDS.receiptsRemovedWithPurchase(receipts.length)
             : null,
+          costMark === null
+            ? null
+            : PURCHASE_COST_WORDS.removeAlsoUnpays(
+                costMark.names.cost,
+                costMark.names.item,
+              ),
           'It stays in the change log.',
         ]
           .filter(Boolean)
@@ -254,6 +309,7 @@ function PurchaseScreen({
         encryption,
         purchase,
         describePurchaseRemoval(purchase, nameOf),
+        costMark,
       );
       const hasLeftovers = await removeReceiptImagesOf(
         user.uid,
@@ -398,6 +454,17 @@ function PurchaseScreen({
 
   return (
     <>
+      {isCostOpen && paysRef !== null && paysHorizon !== null && (
+        <HorizonSheet
+          itemId={paysRef.itemId}
+          horizon={paysHorizon}
+          today={todayAsUtcDate()}
+          stance={stance}
+          openCostId={paysRef.costId}
+          returnLabel={title}
+          onClose={() => setIsCostOpen(false)}
+        />
+      )}
       <FormSheet
         isOpen
         isDrawerWhenShort
@@ -491,7 +558,37 @@ function PurchaseScreen({
             </p>
           )}
           {receipts.length > 0 && (
-            <ReceiptsBlock images={receipts} onOpen={openReceipt} />
+            <ReceiptsBlock
+              images={receipts}
+              onOpen={openReceipt}
+              onTakePhoto={
+                canTakePhoto && receipts.length < MAX_RECEIPTS_PER_PURCHASE
+                  ? () => receiptChooser.current?.open({ isCamera: true })
+                  : undefined
+              }
+              isAddDisabled={!isReceiptsLoaded || isAddingReceipt}
+            />
+          )}
+          {isCameraFirst && (
+            <div className='space-y-2'>
+              <CameraTile
+                title={SPEND_WORDS.takeReceiptPhoto}
+                isDisabled={!isReceiptsLoaded || isAddingReceipt}
+                onClick={() => receiptChooser.current?.open({ isCamera: true })}
+              />
+              <Button
+                type='button'
+                variant='tertiary'
+                className='border-border h-11 w-full gap-2 border whitespace-nowrap'
+                disabled={!isReceiptsLoaded || isAddingReceipt}
+                onClick={() => receiptChooser.current?.open()}
+              >
+                <ImagePlus className='h-4 w-4 shrink-0' aria-hidden='true' />
+                {isAddingReceipt
+                  ? SPEND_WORDS.receiptAdding
+                  : SPEND_WORDS.readReceiptChoose}
+              </Button>
+            </div>
           )}
           <ActionGroup isRoomy>
             <ActionRow
@@ -509,25 +606,47 @@ function PurchaseScreen({
                 }));
               }}
             />
-            <ActionRow
-              isGrouped
-              isRoomy
-              icon={<ImagePlus />}
-              label={SPEND_WORDS.addReceipt}
-              subtitle={
-                isAddingReceipt
-                  ? SPEND_WORDS.receiptAdding
-                  : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-                    ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
-                    : SPEND_WORDS.addReceiptSub
-              }
-              isDisabled={
-                !isReceiptsLoaded ||
-                isAddingReceipt ||
-                receipts.length >= MAX_RECEIPTS_PER_PURCHASE
-              }
-              onClick={() => receiptChooser.current?.open()}
-            />
+            {paysRef !== null &&
+              paysHorizon !== null &&
+              paysCostName !== null && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<HandCoins />}
+                  label={PURCHASE_COST_WORDS.paysFact(
+                    paysCostName,
+                    paysHorizon.name,
+                  )}
+                  subtitle={PURCHASE_COST_WORDS.paysSub}
+                  onClick={() => setIsCostOpen(true)}
+                />
+              )}
+            {!isCameraFirst && (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<ImagePlus />}
+                label={
+                  canTakePhoto
+                    ? SPEND_WORDS.chooseReceiptPhoto
+                    : SPEND_WORDS.addReceipt
+                }
+                subtitle={
+                  isAddingReceipt
+                    ? SPEND_WORDS.receiptAdding
+                    : receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                      ? SPEND_WORDS.receiptLimit(MAX_RECEIPTS_PER_PURCHASE)
+                      : SPEND_WORDS.addReceiptSub
+                }
+                isDisabled={
+                  !isReceiptsLoaded ||
+                  isAddingReceipt ||
+                  receipts.length >= MAX_RECEIPTS_PER_PURCHASE
+                }
+                onClick={() => receiptChooser.current?.open()}
+              />
+            )}
             <ReceiptFileInput
               chooser={receiptChooser}
               onFiles={(files) => void addReceipts(files)}

@@ -41,6 +41,7 @@ import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
 import GoalRow from '@apps/runway/components/GoalRow';
+import HorizonRow from '@apps/runway/components/HorizonRow';
 import type { ItemRowReorder } from '@apps/runway/components/ItemRow';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import {
@@ -82,6 +83,7 @@ import {
   selectEnvelopes,
   selectGoals,
   selectHeldByItem,
+  selectHorizonItems,
   selectIsMovesLoaded,
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
@@ -136,7 +138,7 @@ interface SavedOrder {
 
 type RankedVersion = Extract<
   OpenVersion,
-  { kind: 'bill' | 'envelope' | 'goal' }
+  { kind: 'bill' | 'envelope' | 'goal' | 'horizon' }
 >;
 
 interface Entry {
@@ -195,6 +197,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const bills = useAppSelector((state) => selectBills(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const horizons = useAppSelector((state) => selectHorizonItems(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const balances = useAppSelector(selectBalances);
@@ -366,6 +369,23 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
         ),
       ),
     ),
+    ...horizons.map(({ item, version }): [string, Entry] => [
+      item.id,
+      {
+        name: version.payload.name,
+        render: (reorder, isHighlighted) => (
+          <HorizonRow
+            key={item.id}
+            itemId={item.id}
+            horizon={version.payload}
+            today={today}
+            stance={stance}
+            reorder={reorder}
+            isHighlighted={isHighlighted}
+          />
+        ),
+      },
+    ]),
     ...goals.flatMap(({ item, version }) =>
       toPartEntries(
         item.id,
@@ -396,6 +416,15 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
       createdAt: item.createdAt,
       isRest: false,
       isDueFirst: getDueFirst(item.id).isFirst,
+    })),
+    ...horizons.map(({ item, version }) => ({
+      itemId: item.id,
+      kind: 'horizon' as const,
+      tier: version.payload.priority,
+      orderIndex: version.payload.orderIndex,
+      createdAt: item.createdAt,
+      isRest: false,
+      isDueFirst: false,
     })),
     ...[...envelopes, ...goals].flatMap(({ item, version }) => [
       {

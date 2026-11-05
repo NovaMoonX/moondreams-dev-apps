@@ -34,7 +34,16 @@ import {
   listMonths,
   toMonthKey,
 } from '../../src/apps/runway/engine/closings.ts';
-import { getPaidMoveId } from '../../src/apps/runway/engine/progress.ts';
+import {
+  getCostPaidMoveId,
+  getPaidMoveId,
+} from '../../src/apps/runway/engine/progress.ts';
+import {
+  describeCostPaid,
+  describeCostTakenBack,
+} from '../../src/apps/runway/utils/changeText.ts';
+import { settleCostPaid } from '../../src/apps/runway/engine/horizon.ts';
+import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
 import type {
@@ -50,6 +59,7 @@ import type {
   ChangeSealed,
   ClosingDoc,
   BillPaidSealed,
+  CostPaidSealed,
   BillSealed,
   ConfirmedSealed,
   DayOverrideSealed,
@@ -58,12 +68,15 @@ import type {
   EnvelopeSealed,
   GoalSealed,
   GroupSealed,
+  HorizonCost,
+  HorizonSealed,
   IncomeDayDoc,
   MoveDoc,
   PayLineSealed,
   PurchaseDoc,
   PurchaseLine,
   PurchaseSealed,
+  CostRef,
   SourceSealed,
   StartHolding,
   StartSealed,
@@ -183,6 +196,11 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   );
   const billDocuments = await writeSeedBills(context, owner.uid, encryption);
   const goalDocuments = await writeSeedGoals(context, owner.uid, encryption);
+  const horizonDocuments = await writeSeedHorizon(
+    context,
+    owner.uid,
+    encryption,
+  );
   const lifecycleDocuments = await writeSeedLifecycle(
     context,
     owner.uid,
@@ -230,6 +248,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       envelopeDocuments +
       billDocuments +
       goalDocuments +
+      horizonDocuments +
       lifecycleDocuments +
       keptDocuments +
       startDocuments +
@@ -237,6 +256,394 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
       masterKeyIds.length,
   };
 }
+
+/** The next time a month and day comes round, as a date-only value. */
+const nextCalendarDay = (today: number, month: number, day: number) => {
+  const thisYear = Date.UTC(new Date(today).getUTCFullYear(), month, day);
+  return thisYear >= today
+    ? thisYear
+    : Date.UTC(new Date(today).getUTCFullYear() + 1, month, day);
+};
+
+/** Three Horizon items: Moving around the next Jan 15th with a truck and a deposit paid outside the plan, movers (a range) covered by the $800 put toward it and a $100 storage unit from Feb 1st that repeats monthly, Miso's surgery in December (with a $35 monthly medication) with nothing put toward it, taking what it does not cover from the pays before each cost is due, and Sam's wedding, whose $1,200 leaves its venue $230 short. Each is a header, a first version and an "Added" change; the money put toward Moving and the wedding is a transfer from Free to Spend with its move change. The surgery's Surgery payment is marked paid at $520.00 (the $50.00 its confirmed day's Surgery line set aside, the other $470.00 from Free to Spend) and Moving's truck is marked paid outside the plan, each with its mark move and payment change. */
+async function writeSeedHorizon(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  isTrack = false,
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - 3 * DAY_MS;
+  const jan15 = nextCalendarDay(today, 0, 15);
+  const dec18 = nextCalendarDay(today, 11, 18);
+  const dec19 = nextCalendarDay(today, 11, 19);
+  const cost = (
+    id: string,
+    name: string,
+    lowCents: number,
+    highCents: number,
+    anchor: number,
+    isOutside = false,
+    isMonthly = false,
+    pricedOn: number | null = null,
+  ): HorizonCost => ({
+    id,
+    name,
+    amount: { lowCents, highCents },
+    schedule: isMonthly
+      ? {
+          kind: 'monthly' as const,
+          anchor,
+          monthDays: [new Date(anchor).getUTCDate()],
+        }
+      : { kind: 'once' as const, anchor, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside,
+    pricedOn,
+    endsAfter: null,
+    note: null,
+  });
+  const feb1 = nextCalendarDay(today, 1, 1);
+  const dec20 = nextCalendarDay(today, 11, 20);
+
+  const allItems: { id: string; payload: HorizonSealed }[] = [
+    {
+      id: 'seed-horizon-moving',
+      payload: {
+        name: 'Moving',
+        emoji: '📦',
+        happensOn: jan15,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 20,
+        rest: { kind: 'outside' },
+        note: null,
+        costs: [
+          cost(
+            'seed-cost-truck',
+            'Truck rental',
+            12_000,
+            12_000,
+            jan15 - DAY_MS,
+            true,
+          ),
+          cost('seed-cost-movers', 'Movers', 60_000, 80_000, jan15),
+          cost(
+            'seed-cost-deposit',
+            'Deposit',
+            25_000,
+            25_000,
+            jan15 - 5 * DAY_MS,
+            true,
+          ),
+          cost(
+            'seed-cost-storage',
+            'Storage unit',
+            10_000,
+            10_000,
+            feb1,
+            false,
+            true,
+            today - 2 * DAY_MS,
+          ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-surgery',
+      payload: {
+        name: "Miso's surgery",
+        emoji: '🐱',
+        happensOn: dec18,
+        happensUntil: null,
+        priority: 'must',
+        orderIndex: 21,
+        rest: { kind: 'pays' },
+        note: null,
+        costs: [
+          cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
+          cost(
+            'seed-cost-follow-up',
+            'Follow-up visit',
+            12_000,
+            12_000,
+            dec18 + 14 * DAY_MS,
+          ),
+          cost(
+            'seed-cost-medication',
+            'Medication',
+            3_500,
+            3_500,
+            dec20,
+            false,
+            true,
+          ),
+        ],
+      },
+    },
+    {
+      id: 'seed-horizon-wedding',
+      payload: {
+        name: "Sam's wedding",
+        emoji: '💍',
+        happensOn: dec19 + 42 * DAY_MS,
+        happensUntil: null,
+        priority: 'should',
+        orderIndex: 22,
+        rest: { kind: 'later' },
+        note: null,
+        costs: [
+          cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
+          cost(
+            'seed-cost-photographer',
+            'Photographer',
+            80_000,
+            80_000,
+            dec19 + 42 * DAY_MS,
+          ),
+        ],
+      },
+    },
+  ];
+  // Track's plan holds only Moving, whose Movers are paid by a purchase.
+  const items = isTrack ? allItems.slice(0, 1) : allItems;
+  const movedOn = today - 2 * DAY_MS;
+  const toward: { itemId: string; cents: number; summary: string }[] = [
+    {
+      itemId: 'seed-horizon-moving',
+      cents: 80_000,
+      summary: 'Put $800.00 toward Moving from Free to Spend.',
+    },
+    {
+      itemId: 'seed-horizon-wedding',
+      cents: 120_000,
+      summary: "Put $1,200.00 toward Sam's wedding from Free to Spend.",
+    },
+  ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
+
+  const [sealed, addedChanges] = await Promise.all([
+    Promise.all(items.map(({ payload }) => sealJson(payload, encryption))),
+    Promise.all(
+      items.map(({ payload }) =>
+        sealJson(
+          { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+          encryption,
+        ),
+      ),
+    ),
+  ]);
+
+  const transfers = await Promise.all(
+    toward.map(async ({ itemId, cents, summary }) => {
+      const transfer: TransferSealed = {
+        fromId: null,
+        toId: itemId,
+        cents,
+        note: null,
+        isOutside: false,
+      };
+      return {
+        itemId,
+        transfer,
+        sealed: await sealJson(transfer, encryption),
+        change: await sealJson(
+          { summary, note: null } satisfies ChangeSealed,
+          encryption,
+        ),
+      };
+    }),
+  );
+
+  const marked: {
+    itemId: string;
+    cost: HorizonCost;
+    amountCents: number;
+    fromFreeCents: number;
+    paidOn: number;
+    mark: CostPaidSealed['mark'];
+    purchaseId?: string;
+  }[] = isTrack
+    ? [
+        {
+          itemId: 'seed-horizon-moving',
+          cost: items[0].payload.costs[1],
+          amountCents: 60_000,
+          fromFreeCents: 0,
+          paidOn: today - 4 * DAY_MS,
+          mark: 'purchase',
+          purchaseId: MOVERS_PURCHASE_ID,
+        },
+      ]
+    : [
+        {
+          itemId: 'seed-horizon-surgery',
+          cost: items[1].payload.costs[0],
+          amountCents: 52_000,
+          fromFreeCents: settleCostPaid(52_000, 5_000).fromFreeCents,
+          paidOn: today - 2 * DAY_MS,
+          mark: 'item',
+        },
+        {
+          itemId: 'seed-horizon-moving',
+          cost: items[0].payload.costs[0],
+          amountCents: 12_000,
+          fromFreeCents: 0,
+          paidOn: today - DAY_MS,
+          mark: 'outside',
+        },
+      ];
+  const marks = await Promise.all(
+    marked.map(async ({ itemId, cost: paidCost, ...paid }) => {
+      const itemName =
+        items.find(({ id }) => id === itemId)?.payload.name ?? itemId;
+      const dueOn = paidCost.schedule.anchor ?? today;
+      const moveId = getCostPaidMoveId(itemId, paidCost.id, dueOn, 0);
+      const payload: CostPaidSealed = {
+        costId: paidCost.id,
+        dueOn,
+        amountCents: paid.amountCents,
+        paidOn: paid.paidOn,
+        fromFreeCents: paid.fromFreeCents,
+        mark: paid.mark,
+        purchaseId: paid.purchaseId ?? null,
+      };
+      const undoText = describeCostTakenBack(
+        paidCost.name,
+        itemName,
+        dueOn,
+        paid.amountCents,
+        paid.fromFreeCents,
+        paid.mark,
+      );
+      return {
+        itemId,
+        moveId,
+        dueOn,
+        paidOn: paid.paidOn,
+        sealed: await sealJson(payload, encryption),
+        change: await sealJson(
+          {
+            summary: describeCostPaid(
+              paidCost.name,
+              itemName,
+              dueOn,
+              paid.amountCents,
+              paid.mark,
+            ),
+            note: null,
+            move: {
+              moveId,
+              date: dueOn,
+              fromId: null,
+              toId: null,
+              cents: paid.amountCents,
+              note: null,
+              isOutside: false,
+              undoText,
+              isUndo: false,
+              bill: null,
+              cost: {
+                itemId,
+                itemName,
+                costId: paidCost.id,
+                name: paidCost.name,
+                dueOn,
+                paidOn: paid.paidOn,
+                amountCents: paid.amountCents,
+                fromFreeCents: paid.fromFreeCents,
+                mark: paid.mark,
+                purchaseId: paid.purchaseId ?? null,
+              },
+            },
+          } satisfies ChangeSealed,
+          encryption,
+        ),
+      };
+    }),
+  );
+
+  const batch = context.firestore.batch();
+  marks.forEach(
+    ({ itemId, moveId, dueOn, paidOn, sealed: markSealed, change }) => {
+      const createdAt = paidOn + 10 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'costPaid',
+        date: dueOn,
+        refId: itemId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: markSealed,
+      } satisfies MoveDoc);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-${moveId}`),
+        {
+          id: `seed-change-${moveId}`,
+          kind: 'paymentChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [itemId],
+          sealed: change,
+        } satisfies ChangeDoc,
+      );
+    },
+  );
+  transfers.forEach(
+    ({ itemId, transfer, sealed: moveSealed, change: moveChange }) => {
+      const moveId = `transfer_seed-toward-${itemId}`;
+      const createdAt = movedOn + 10 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'transfer',
+        date: movedOn,
+        refId: transfer.toId,
+        reversesMoveId: null,
+        createdAt,
+        sealed: moveSealed,
+      } satisfies MoveDoc);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-toward-${itemId}`),
+        {
+          id: `seed-change-toward-${itemId}`,
+          kind: 'moveChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [itemId],
+          sealed: moveChange,
+        } satisfies ChangeDoc,
+      );
+    },
+  );
+  items.forEach(({ id }, index) => {
+    const createdAt = addedAt + index * 1000;
+    const changeId = `seed-change-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/items/${id}`),
+      header(id, 'horizon', null, createdAt),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+      version(
+        `seed-version-${id}`,
+        id,
+        'horizon',
+        createdAt,
+        today,
+        changeId,
+        sealed[index],
+      ),
+    );
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, createdAt, today, [id], addedChanges[index]),
+    );
+  });
+  await batch.commit();
+  return items.length * 3 + transfers.length * 2 + marks.length * 2;
+}
+
+const MOVERS_PURCHASE_ID = 'seed-purchase-movers';
 
 const KEPT_ENVELOPE_ID = 'seed-envelope-concert';
 
@@ -378,6 +785,7 @@ async function writeSeedLifecycle(
     targetDate: null,
     funding: funding(10_000),
     state: 'paused',
+    groupId: null,
   };
 
   const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
@@ -1144,6 +1552,9 @@ export const seedLine = (
   cents,
   shortBy: 0,
   paidBy: [{ dayId, cents }],
+  costId: null,
+  costName: null,
+  repaysFree: false,
 });
 
 /** Two paydays that already arrived, sealed the way a confirmation seals them: one as expected, one with more than expected and a note. The first funds the emergency cushion, so that goal starts partly held. */
@@ -1162,6 +1573,7 @@ async function writeSeedConfirmedDays(
       note: null,
       withCushion: true,
       withBills: true,
+      withCost: true,
     },
     {
       on: when.today - 25 * DAY_MS,
@@ -1169,6 +1581,7 @@ async function writeSeedConfirmedDays(
       note: 'Overtime',
       withCushion: false,
       withBills: false,
+      withCost: false,
     },
     {
       on: when.today - 39 * DAY_MS,
@@ -1176,6 +1589,7 @@ async function writeSeedConfirmedDays(
       note: 'Bonus from the quarter',
       withCushion: false,
       withBills: false,
+      withCost: false,
       edits: {
         'seed-envelope-groceries': 12_000,
         'seed-goal-vacation': 40_000,
@@ -1191,7 +1605,8 @@ async function writeSeedConfirmedDays(
   ];
   const docs = await Promise.all(
     days.map(async (entry) => {
-      const { on, arrivedCents, note, withCushion, withBills } = entry;
+      const { on, arrivedCents, note, withCushion, withBills, withCost } =
+        entry;
       const byLine = (
         values: Record<string, never> | Record<string, number | string | null>,
       ) =>
@@ -1229,6 +1644,28 @@ async function writeSeedConfirmedDays(
                 'want',
                 6_000,
               ),
+            ]
+          : []),
+        ...(withCost
+          ? [
+              {
+                ...seedLine(
+                  dayId,
+                  'seed-horizon-surgery',
+                  "Miso's surgery",
+                  '🐱',
+                  'must',
+                  5_000,
+                ),
+                lineId: getCostLineId(
+                  dayId,
+                  'seed-horizon-surgery',
+                  'seed-cost-surgery',
+                ),
+                costId: 'seed-cost-surgery',
+                costName: 'Surgery',
+                repaysFree: false,
+              },
             ]
           : []),
         seedLine(
@@ -1448,7 +1885,7 @@ async function writeSeedEnvelopes(
         emoji: '🛒',
         priority: 'must',
         orderIndex: 1,
-        groupId: null,
+        groupId: 'seed-group-home',
         maxCents: null,
         funding: { amount: exact(15_000), cadence: { kind: 'everyIncomeDay' } },
         extras: [{ tier: 'want', cents: 5_000, orderIndex: 9 }],
@@ -1859,15 +2296,50 @@ async function writeSeedBills(
       22,
       'seed-group-subscriptions',
     ),
+    ...(
+      [
+        ['seed-bill-gym', 'Gym', 4_900],
+        ['seed-bill-renters', "Renter's insurance", 1_800],
+      ] as const
+    ).map(([id, name, cents], index) => ({
+      id,
+      payload: {
+        name,
+        emoji: null,
+        priority: 'should' as const,
+        orderIndex: 10 + index,
+        amount: exact(cents),
+        timing: {
+          kind: 'date' as const,
+          schedule: { kind: 'monthly' as const, anchor: null, monthDays: [] },
+        },
+        ending: never,
+        fundedBy: { kind: 'suggested' as const },
+        stanceOverride: null,
+        groupId: null,
+      },
+    })),
   ];
   const groups: { id: string; payload: GroupSealed }[] = [
     {
       id: 'seed-group-home',
-      payload: { name: 'Home', startingPriority: 'must', emoji: '🏠' },
+      payload: {
+        name: 'Home',
+        startingPriority: 'must',
+        envelopePriority: 'must',
+        goalPriority: 'should',
+        emoji: '🏠',
+      },
     },
     {
       id: 'seed-group-subscriptions',
-      payload: { name: 'Subscriptions', startingPriority: 'want', emoji: null },
+      payload: {
+        name: 'Subscriptions',
+        startingPriority: 'want',
+        envelopePriority: 'want',
+        goalPriority: null,
+        emoji: null,
+      },
     },
   ];
 
@@ -2016,6 +2488,7 @@ async function writeSeedGoals(
         targetCents: 180_000,
         targetDate: today + 50 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(30_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2029,6 +2502,7 @@ async function writeSeedGoals(
         targetCents: 60_000,
         targetDate: null,
         state: 'active',
+        groupId: null,
         funding: {
           amount: exact(15_000),
           cadence: { kind: 'everyNth', n: 2, anchorDayKey: paydayKey(0) },
@@ -2046,6 +2520,7 @@ async function writeSeedGoals(
         targetCents: 20_000,
         targetDate: today + 30 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(20_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2059,6 +2534,7 @@ async function writeSeedGoals(
         targetCents: 200_000,
         targetDate: null,
         state: 'active',
+        groupId: 'seed-group-home',
         funding: {
           amount: { kind: 'percent', bps: 500, of: 'dayMoney' },
           cadence: { kind: 'everyIncomeDay' },
@@ -2076,6 +2552,7 @@ async function writeSeedGoals(
         targetDate: null,
         funding: { amount: exact(0), cadence: { kind: 'none' } },
         state: 'active',
+        groupId: null,
       },
     },
     {
@@ -2088,6 +2565,7 @@ async function writeSeedGoals(
         targetCents: 60_000,
         targetDate: today + 20 * DAY_MS,
         state: 'active',
+        groupId: null,
         funding: { amount: exact(10_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
@@ -2242,6 +2720,12 @@ async function seedTrackingPlan(
     startBatch,
   );
   await startBatch.commit();
+  const horizonDocuments = await writeSeedHorizon(
+    context,
+    owner.uid,
+    encryption,
+    true,
+  );
   const purchaseDocuments = await writeSeedPurchases(
     context,
     owner.uid,
@@ -2263,6 +2747,7 @@ async function seedTrackingPlan(
     startDocuments +
     cardDocuments +
     accountDocuments +
+    horizonDocuments +
     purchaseDocuments
   );
 }
@@ -2297,6 +2782,7 @@ async function writeSeedPurchases(
     link?: string;
     receiptText?: string;
     expenseId?: string;
+    costRef?: CostRef;
   }[] = [
     {
       id: 'seed-purchase-safeway',
@@ -2366,6 +2852,18 @@ async function writeSeedPurchases(
       expenseId: SEED_BIRTHDAY_EXPENSE,
     },
     {
+      id: MOVERS_PURCHASE_ID,
+      daysAgo: 4,
+      merchant: 'Bay Movers',
+      note: null,
+      lines: [line('seed-horizon-moving', 60_000)],
+      costRef: {
+        itemId: 'seed-horizon-moving',
+        costId: 'seed-cost-movers',
+        dueOn: nextCalendarDay(today, 0, 15),
+      },
+    },
+    {
       id: 'seed-purchase-market',
       daysAgo: 24,
       merchant: 'Farmers market',
@@ -2399,6 +2897,7 @@ async function writeSeedPurchases(
             paidByCardId: entry.paidByCardId ?? null,
             link: entry.link ?? null,
             receiptText: entry.receiptText ?? null,
+            costRef: entry.costRef ?? null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -2454,7 +2953,7 @@ async function writeSeedPurchases(
 /**
  * Writes the closings the app would build for a seeded plan: every month from the starting day's through
  * the last one that may be closed, read back from the emulator and summed by the same code the app runs.
- * Emulators only. Returns how many it wrote.
+ * Closings left by an earlier run go first, since one for a later month would hide the seeded moves. Emulators only. Returns how many it wrote.
  */
 export async function seedClosings(
   context: SeedContext,
@@ -2464,6 +2963,8 @@ export async function seedClosings(
 ): Promise<number> {
   const plan = `apps/runway/plans/${uid}`;
   const target = getLastClosableMonth(startOfUtcDay(context.now));
+  const kept = await context.firestore.collection(`${plan}/closings`).get();
+  await Promise.all(kept.docs.map((entry) => entry.ref.delete()));
   if (toMonthKey(startDate) > target) return 0;
   const items = await context.firestore.collection(`${plan}/items`).get();
   const billIds = new Set(

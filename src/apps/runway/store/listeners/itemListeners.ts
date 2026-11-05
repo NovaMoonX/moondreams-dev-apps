@@ -7,6 +7,7 @@ import type {
   BillSealed,
   EnvelopeSealed,
   GoalSealed,
+  HorizonStored,
   Cents,
   GroupSealed,
   OpenVersion,
@@ -17,6 +18,7 @@ import type {
   RunwayEncryption,
   SourceSealed,
 } from '@apps/runway/types';
+import { readHorizon } from '@apps/runway/engine/horizon';
 import { normalizeFunding } from '@apps/runway/utils/fundingText';
 import { readHeldReleasedOn } from '@apps/runway/engine/endings';
 
@@ -99,17 +101,32 @@ async function openVersion(
       payload: {
         ...payload,
         startingPriority: payload.startingPriority ?? null,
+        envelopePriority:
+          payload.envelopePriority === undefined
+            ? (payload.startingPriority ?? null)
+            : payload.envelopePriority,
+        goalPriority: payload.goalPriority ?? null,
         emoji: payload.emoji ?? null,
       },
     };
   }
   if (version.kind === 'goal') {
-    const payload = await read<GoalSealed>(version.sealed);
+    const payload = await read<
+      Omit<GoalSealed, 'groupId'> & { groupId?: string | null }
+    >(version.sealed);
     return {
       ...base,
       kind: 'goal',
-      payload: { ...payload, funding: normalizeFunding(payload.funding) },
+      payload: {
+        ...payload,
+        funding: normalizeFunding(payload.funding),
+        groupId: payload.groupId ?? null,
+      },
     };
+  }
+  if (version.kind === 'horizon') {
+    const payload = await read<HorizonStored>(version.sealed);
+    return { ...base, kind: 'horizon', payload: readHorizon(payload) };
   }
   return null;
 }

@@ -126,6 +126,8 @@ function CatDetailsModalContent({
           disabled={isSubmitting}
           loading={photoUpload.isPreparing}
           showPreview={false}
+          canTakePhoto
+          uploadLabel='Choose a photo'
           onSelect={(file) => void photoUpload.pick(file)}
           onRemove={photoUpload.clear}
         />

@@ -9,6 +9,7 @@ import type {
   CardPaymentSealed,
   ConfirmedSealed,
   CorrectionSealed,
+  CostPaidSealed,
   DateOnly,
   DayRecordDoc,
   IncomeDayDoc,
@@ -16,6 +17,7 @@ import type {
   OpenMove,
   OpenPurchase,
   OpenRecord,
+  RecordLine,
   ProposedSealed,
   PurchaseDoc,
   PurchaseSealed,
@@ -56,6 +58,14 @@ export async function openMove(
       payload: { ...payload, isOutside: payload.isOutside ?? false },
     };
   }
+  if (entry.kind === 'costPaid') {
+    const payload = await read<CostPaidSealed>(entry.sealed);
+    return {
+      ...base,
+      kind: 'costPaid',
+      payload: { ...payload, purchaseId: payload.purchaseId ?? null },
+    };
+  }
   const payload = await read<BillPaidSealed>(entry.sealed);
   return {
     ...base,
@@ -64,17 +74,34 @@ export async function openMove(
   };
 }
 
+/** A line sealed before Horizon costs has no cost and gives nothing back to Free to Spend. */
+export const withLineDefaults = <T extends { lines: RecordLine[] }>(
+  payload: T,
+): T => ({
+  ...payload,
+  lines: payload.lines.map((line) => ({
+    ...line,
+    costId: line.costId ?? null,
+    costName: line.costName ?? null,
+    repaysFree: line.repaysFree ?? false,
+  })),
+});
+
 export async function openRecord(
   entry: DayRecordDoc,
   encryption: RunwayEncryption,
 ): Promise<OpenRecord> {
   const base = { id: entry.id, dayId: entry.dayId, createdAt: entry.createdAt };
   if (entry.kind === 'proposed') {
-    const payload = await openJson<ProposedSealed>(entry.sealed, encryption);
+    const payload = withLineDefaults(
+      await openJson<ProposedSealed>(entry.sealed, encryption),
+    );
     return { ...base, kind: 'proposed', payload };
   }
   if (entry.kind === 'correction') {
-    const payload = await openJson<CorrectionSealed>(entry.sealed, encryption);
+    const payload = withLineDefaults(
+      await openJson<CorrectionSealed>(entry.sealed, encryption),
+    );
     return {
       ...base,
       kind: 'correction',
@@ -82,7 +109,9 @@ export async function openRecord(
       payload,
     };
   }
-  const payload = await openJson<ConfirmedSealed>(entry.sealed, encryption);
+  const payload = withLineDefaults(
+    await openJson<ConfirmedSealed>(entry.sealed, encryption),
+  );
   return { ...base, kind: 'confirmed', payload };
 }
 
@@ -110,6 +139,7 @@ export async function openPurchase(
     paidByCardId: payload.paidByCardId ?? null,
     link: payload.link ?? null,
     receiptText: payload.receiptText ?? null,
+    costRef: payload.costRef ?? null,
   };
   return result;
 }
@@ -163,7 +193,8 @@ export async function openMonthEntries(
           (entry) =>
             entry.kind === 'billPaid' ||
             entry.kind === 'cardPayment' ||
-            entry.kind === 'transfer',
+            entry.kind === 'transfer' ||
+            entry.kind === 'costPaid',
         )
         .map((entry) => openMove(entry, read)),
     ),

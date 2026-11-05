@@ -16,14 +16,19 @@ import {
   formatTime,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { describeCostGivesBack } from '@apps/runway/utils/changeText';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
   CHANGE_KIND_LABELS,
+  COST_PAID_WORDS,
   MOVE_WORDS,
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { useUndoTransfer } from '@apps/runway/hooks/useUndoTransfer';
+import {
+  useLiveCostMove,
+  useUndoTransfer,
+} from '@apps/runway/hooks/useUndoTransfer';
 import type { OpenChange } from '@apps/runway/types';
 
 interface ChangeRowProps {
@@ -45,26 +50,42 @@ function ChangeRow({
   const { confirm } = useActionModal();
   const mask = useMaskedText();
   const undoMove = useUndoTransfer();
-  const move = change.move !== null && !change.move.isUndo ? change.move : null;
+  const toLive = useLiveCostMove();
+  const move =
+    change.move !== null && !change.move.isUndo ? toLive(change.move) : null;
   const isUndone = move !== null && (undoneMoveIds?.has(move.moveId) ?? false);
   const canUndo = move !== null && !isUndone;
-  const words = move?.bill ? PAID_HISTORY_WORDS : MOVE_WORDS;
+  const words = move?.bill || move?.cost ? PAID_HISTORY_WORDS : MOVE_WORDS;
   const [isOpen, setIsOpen] = useState(false);
   const takeBack = async () => {
     if (move === null) return;
     const isConfirmed = await confirm({
       title: words.undoTitle,
-      message: move.bill
+      message: move.cost
         ? mask(
-            PAID_HISTORY_WORDS.confirm(
-              move.bill.name,
-              formatDateOrdinalUTC(move.bill.dueOn),
-              move.bill.fromFreeCents > 0
-                ? formatCents(move.bill.fromFreeCents)
-                : null,
+            COST_PAID_WORDS.confirm(
+              move.cost.name,
+              move.cost.itemName,
+              formatDateOrdinalUTC(move.cost.dueOn),
+              describeCostGivesBack(
+                move.cost.itemName,
+                move.cost.amountCents,
+                move.cost.fromFreeCents,
+                move.cost.mark,
+              ),
             ),
           )
-        : mask(`${move.undoText}.`),
+        : move.bill
+          ? mask(
+              PAID_HISTORY_WORDS.confirm(
+                move.bill.name,
+                formatDateOrdinalUTC(move.bill.dueOn),
+                move.bill.fromFreeCents > 0
+                  ? formatCents(move.bill.fromFreeCents)
+                  : null,
+              ),
+            )
+          : mask(`${move.undoText}.`),
       confirmText: words.undoThis,
     });
     if (isConfirmed) await undoMove(move);
@@ -147,7 +168,11 @@ function ChangeRow({
           isOpen
           isDrawerWhenShort
           onClose={() => setIsOpen(false)}
-          title={move?.bill ? PAID_HISTORY_WORDS.title : MOVE_WORDS.moveTitle}
+          title={
+            move?.bill || move?.cost
+              ? PAID_HISTORY_WORDS.title
+              : MOVE_WORDS.moveTitle
+          }
           actions={<ValuesEyeButton />}
         >
           <div className='space-y-4 pb-4'>

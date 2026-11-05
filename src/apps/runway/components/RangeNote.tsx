@@ -13,6 +13,8 @@ interface RangeNoteProps {
   side: RangeSide;
   /** True when the item plans at its own stance rather than the plan's. */
   isOwnStance?: boolean;
+  /** Names the end and its figure without repeating the range, for a head that shows the range itself. */
+  isShort?: boolean;
   className?: string;
 }
 
@@ -22,9 +24,10 @@ function RangeNote({
   stance,
   side,
   isOwnStance = false,
+  isShort = false,
   className,
 }: RangeNoteProps) {
-  const text = describeRange(range, stance, side, isOwnStance);
+  const text = describeRange(range, stance, side, isOwnStance, isShort);
   if (text === null) return null;
 
   return (

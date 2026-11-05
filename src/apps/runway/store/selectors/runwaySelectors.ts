@@ -38,9 +38,15 @@ import {
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
+import { getCostNameKey, getCostShareKey } from '@apps/runway/engine/parts';
 import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
+import {
+  listHorizonPayments,
+  type CostPaidEntry,
+  type CostPayment,
+} from '@apps/runway/engine/horizon';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
@@ -70,6 +76,7 @@ import type {
   GoalSealed,
   GoalVersion,
   GroupVersion,
+  HorizonVersion,
   OpenVersion,
   PayLineVersion,
   PlanItemDoc,
@@ -641,6 +648,48 @@ export const selectGoals = createSelector(
   },
 );
 
+export interface ResolvedHorizon {
+  item: PlanItemDoc;
+  version: HorizonVersion;
+}
+
+const isHorizon = (version: OpenVersion): version is HorizonVersion =>
+  version.kind === 'horizon';
+
+const getNextCostOn = (version: HorizonVersion, on: number) =>
+  Math.min(
+    Number.MAX_SAFE_INTEGER,
+    ...version.payload.costs.flatMap(({ schedule, endsAfter }) =>
+      schedule.anchor !== null &&
+      schedule.anchor >= on &&
+      (endsAfter === null || schedule.anchor <= endsAfter)
+        ? [schedule.anchor]
+        : [],
+    ),
+  );
+
+/** The Horizon items in the plan on a date, soonest next cost first, then the event's own date. */
+export const selectHorizonItems = createSelector(
+  [selectItems, selectVersions, selectOn],
+  (items, versions, on): ResolvedHorizon[] => {
+    const horizonVersions = versions.filter(isHorizon);
+    const result = items
+      .filter((item) => item.kind === 'horizon' && isListed(item, on))
+      .flatMap((item) => {
+        const version = resolveCurrentOrNext(horizonVersions, item.id, on);
+        return version ? [{ item, version }] : [];
+      })
+      .sort(
+        (a, b) =>
+          getNextCostOn(a.version, on) - getNextCostOn(b.version, on) ||
+          a.version.payload.happensOn - b.version.payload.happensOn ||
+          a.item.createdAt - b.item.createdAt ||
+          a.item.id.localeCompare(b.item.id),
+      );
+    return result;
+  },
+);
+
 export interface DraftView {
   day: ComingDay;
   /** What the person changed for this day, or null while the day follows the plan. */
@@ -662,6 +711,57 @@ export interface DraftView {
 /** The plan's stance; an unknown or missing one reads as conservative. */
 export const selectStance = (state: RootState) =>
   readStance(state.runway.plan?.stance);
+/** Every Horizon item's cost payments through the lookahead's end, each with the mark that settled it, keyed by item id. */
+export const selectCostPayments = createSelector(
+  [selectHorizonItems, selectBillProgress, selectStance, selectOn],
+  (items, progress, stance, today): Record<string, CostPayment[]> => {
+    const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
+    return Object.fromEntries(
+      items.map(({ item, version }) => [
+        item.id,
+        listHorizonPayments(
+          version.payload.costs,
+          horizon,
+          stance,
+          progress[item.id]?.costPaid ?? [],
+        ),
+      ]),
+    );
+  },
+);
+
+/** Each Horizon item's payments marked paid and not undone, by item id. */
+export const selectCostPaid = createSelector(
+  [selectBillProgress],
+  (progress): Record<string, CostPaidEntry[]> =>
+    Object.fromEntries(
+      Object.entries(progress).flatMap(([id, entry]) =>
+        entry.costPaid ? [[id, entry.costPaid]] : [],
+      ),
+    ),
+);
+
+/** Each item's payments of costs paid outside the plan that nobody has marked: until they are, the item cannot finish, whatever the date. */
+export const selectUnmarkedOutside = createSelector(
+  [selectHorizonItems, selectCostPayments],
+  (items, payments): Record<string, CostPayment[]> =>
+    Object.fromEntries(
+      items.map(({ item, version }) => {
+        const outside = new Set(
+          version.payload.costs
+            .filter(({ isOutside }) => isOutside)
+            .map(({ id }) => id),
+        );
+        return [
+          item.id,
+          (payments[item.id] ?? []).filter(
+            ({ costId, paid }) => outside.has(costId) && paid === null,
+          ),
+        ];
+      }),
+    ),
+);
+
 const selectDays = (state: RootState) => state.runway.days;
 const selectDayKey = (_state: RootState, dayKey: string) => dayKey;
 const selectToday = (_state: RootState, _dayKey: string, today: number) =>
@@ -760,6 +860,11 @@ export function computeDraftView(
     versions.filter(isGoal),
     day.on,
   ).filter(({ version }) => (version.payload.state ?? 'active') === 'active');
+  const resolvedHorizon = resolve(
+    items.filter((item) => item.kind === 'horizon'),
+    versions.filter(isHorizon),
+    day.on,
+  );
   const horizon = addUtcMonths(today, LOOKAHEAD_MONTHS);
   const override =
     openDays.find((entry) => entry.id === dayKey)?.override ?? null;
@@ -811,6 +916,11 @@ export function computeDraftView(
           resolvedBills.map(({ version }) => version.id),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
+          resolvedHorizon.map(({ item, version }) => [
+            version.id,
+            heldByItem[item.id] ?? 0,
+            hashProgress(billProgress[item.id]),
+          ]),
           resolved.map(({ item, version }) =>
             version.payload.maxCents === null ? 0 : (heldByItem[item.id] ?? 0),
           ),
@@ -872,6 +982,23 @@ export function computeDraftView(
     oneTimePayLineIds,
     progress: billProgress[item.id] ?? NO_PROGRESS,
   }));
+  const horizonItems = resolvedHorizon.map(({ item, version }) => ({
+    itemId: item.id,
+    createdAt: item.createdAt,
+    priority: version.payload.priority,
+    orderIndex: version.payload.orderIndex,
+    rest: version.payload.rest,
+    costs: version.payload.costs,
+    heldCents: heldByItem[item.id] ?? 0,
+    paid: billProgress[item.id]?.costPaid ?? [],
+    repaid: billProgress[item.id]?.repaid,
+    fixed: Object.fromEntries(
+      version.payload.costs.flatMap((cost) => {
+        const pinned = fixedByBill.get(getCostShareKey(item.id, cost.id));
+        return pinned ? [[cost.id, pinned]] : [];
+      }),
+    ),
+  }));
   const goals = resolvedGoals.map(({ item, version }) => {
     const payload = payloadOf(item.id, version.payload);
     return {
@@ -900,6 +1027,7 @@ export function computeDraftView(
       envelopes,
       bills,
       goals,
+      horizonItems,
       horizon,
       returns: [...returning].map((itemId) => `${dayKey}:${itemId}`),
       incomeDays: days.map((entry) => ({
@@ -960,14 +1088,24 @@ export function computeDraftView(
       payloads: override?.payloads,
       billCents: override?.billCents,
     }),
-    items: Object.fromEntries(
-      [...resolved, ...resolvedBills, ...resolvedGoals].map(
+    items: Object.fromEntries([
+      ...[...resolved, ...resolvedBills, ...resolvedGoals].map(
         ({ item, version }) => [
           item.id,
           { name: version.payload.name, emoji: version.payload.emoji },
         ],
       ),
-    ),
+      ...resolvedHorizon.flatMap(({ item, version }) => [
+        [item.id, { name: version.payload.name, emoji: version.payload.emoji }],
+        ...version.payload.costs.map((cost) => [
+          getCostNameKey(item.id, cost.id),
+          {
+            name: cost.name,
+            emoji: version.payload.emoji,
+          },
+        ]),
+      ]),
+    ]),
     sourceNames,
     leftOut,
   };
@@ -990,6 +1128,14 @@ export const selectDraftHeldByItem = createSelector(
           item.heldReleasedOn !== null && item.heldReleasedOn <= today
             ? 0
             : Math.max(0, balances.assignedByItem[item.id] ?? 0),
+        ]),
+    ),
+    ...Object.fromEntries(
+      items
+        .filter((item) => item.kind === 'horizon')
+        .map((item) => [
+          item.id,
+          Math.max(0, balances.assignedByItem[item.id] ?? 0),
         ]),
     ),
   }),

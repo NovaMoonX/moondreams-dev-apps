@@ -49,6 +49,7 @@ import type {
   OpenDay,
   OpenVersion,
   Pairing,
+  PlanItemDoc,
   Stance,
 } from '@apps/runway/types';
 
@@ -71,6 +72,13 @@ export type PreviewVersion = Parameters<typeof layerVersion<OpenVersion>>[1];
 export type PreviewChange =
   | { kind: 'version'; version: PreviewVersion; unpin?: PreviewUnpin }
   | { kind: 'versions'; versions: PreviewVersion[]; unpin?: PreviewUnpin }
+  | {
+      /** An item that is not saved yet, with what it will hold the day it is added. */
+      kind: 'addItem';
+      item: PlanItemDoc;
+      version: PreviewVersion;
+      heldCents: number;
+    }
   | { kind: 'end'; itemId: string; endedAt: number }
   | { kind: 'archive'; itemId: string; archivedAt: number }
   | {
@@ -190,6 +198,13 @@ const layerPlan = (
       openDays: unpin(openDays, change.unpin),
     };
   }
+  if (change.kind === 'addItem') {
+    return {
+      items: [...items, change.item],
+      versions: layerVersion<OpenVersion>(versions, change.version),
+      openDays,
+    };
+  }
   if (change.kind === 'end') {
     return {
       items: items.map((item) =>
@@ -234,6 +249,7 @@ const emptyEffect = (
   moneyBeforeCents: side === 'before' ? moneyCents : 0,
   moneyAfterCents: side === 'after' ? moneyCents : 0,
   lines: [],
+  shortened: [],
 });
 
 /**
@@ -256,6 +272,10 @@ export function previewChange(
     buildComingDays(source.items, source.versions, today).filter(
       (day) => !settled.has(day.dayKey),
     );
+  const heldWith =
+    change.kind === 'addItem'
+      ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
+      : inputs.heldByItem;
   const draftOf = (source: typeof layered, dayKey: string) =>
     computeDraftView(
       source.items,
@@ -264,7 +284,7 @@ export function previewChange(
       source.openDays,
       dayKey,
       today,
-      inputs.heldByItem,
+      source === layered ? heldWith : inputs.heldByItem,
       inputs.settledKey,
       inputs.billProgress,
     );
@@ -345,6 +365,75 @@ export function previewChange(
   return result;
 }
 
+export interface ItemShortsReading {
+  shorts: { on: number; cents: number }[];
+  carriedCents: number;
+  askedCents: number;
+  /** Pays in the window that were asked for something. */
+  payCount: number;
+  /** Pays in the window that put in something. */
+  roomCount: number;
+}
+
+/** What one item's cost lines ask of each coming pay and get from it, leaving a short the lookahead already warns about out of `shorts` only, so the two never warn twice while the totals still count every cost. */
+export function previewItemShorts(
+  inputs: PreviewInputs,
+  change: PreviewChange,
+  itemId: string,
+): ItemShortsReading {
+  const { stance, today } = inputs;
+  const layered = layerPlan(inputs, change);
+  const settled = new Set(
+    inputs.settledKey === '' ? [] : inputs.settledKey.split(','),
+  );
+  const heldWith =
+    change.kind === 'addItem'
+      ? { ...inputs.heldByItem, [change.item.id]: change.heldCents }
+      : inputs.heldByItem;
+  const allComing = buildComingDays(layered.items, layered.versions, today);
+  const coming = allComing.filter((day) => !settled.has(day.dayKey));
+  const rows = coming.slice(0, MAX_PREVIEW_DAYS).map((day) => {
+    const view = computeDraftView(
+      layered.items,
+      layered.versions,
+      stance,
+      layered.openDays,
+      day.dayKey,
+      today,
+      heldWith,
+      inputs.settledKey,
+      inputs.billProgress,
+    );
+    const nextOn =
+      allComing.find((next) => next.on > day.on)?.on ??
+      Number.POSITIVE_INFINITY;
+    const lines = (view?.draft.lines ?? []).filter(
+      (line) => line.itemId === itemId && line.cost && !line.repaysFree,
+    );
+    const isFlagged = (line: (typeof lines)[number]) =>
+      line.shortBy > 0 &&
+      (line.tier === 'must' || (line.cost?.dueOn ?? nextOn) < nextOn);
+    return {
+      on: day.on,
+      short: lines.reduce(
+        (sum, line) => (isFlagged(line) ? sum : sum + line.shortBy),
+        0,
+      ),
+      asked: lines.reduce((sum, line) => sum + line.cents + line.shortBy, 0),
+      carried: lines.reduce((sum, line) => sum + line.cents, 0),
+    };
+  });
+  return {
+    shorts: rows
+      .filter((row) => row.short > 0)
+      .map(({ on, short }) => ({ on, cents: short })),
+    carriedCents: rows.reduce((sum, row) => sum + row.carried, 0),
+    askedCents: rows.reduce((sum, row) => sum + row.asked, 0),
+    payCount: rows.filter((row) => row.asked > 0).length,
+    roomCount: rows.filter((row) => row.carried > 0).length,
+  };
+}
+
 /** How far the plan holds as it stands and with the change layered over it, from the same lookahead Home reads. */
 export function previewLookahead(
   state: RootState,
@@ -365,7 +454,13 @@ export function previewLookahead(
   };
   const result = {
     before: selectLookahead(state, today),
-    after: selectLookahead(layeredState, today),
+    after: selectLookahead(
+      layeredState,
+      today,
+      change.kind === 'addItem'
+        ? { [change.item.id]: change.heldCents }
+        : undefined,
+    ),
   };
   return result;
 }

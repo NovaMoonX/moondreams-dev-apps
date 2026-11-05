@@ -59,7 +59,7 @@ The reading also filled "Keeping it" from "keeps 4 days in the fridge and freeze
 | Way | Path | Taps | Notes |
 |---|---|---|---|
 | Link from a chat | Recipes (1) → **Ideas** pill (2) → **New idea** (3) → From a link (4) → +paste "Saw this in the group chat: https://www.bbcgoodfood.com/… try it!" → lookup (≤6 s; failed here) → +type a title → **Save idea** (5) | **5** +paste (+title) | The link was pulled out of the words (good). The field keeps showing the whole paste, though (`27-idea-link-titled.png`). The new row tops the list (`28-idea-saved.png`) |
-| Photo | Ideas (2) → New idea (3) → From a photo (4) → Choose a picture (5) → +type title → Save (6) | 6 | `61-idea-photo-way.png`, `62-idea-photo-filled.png` |
+| Photo | Ideas (2) → New idea (3) → From a photo (4) → Choose a photo (5) → +type title → Save (6) | 6 | `61-idea-photo-way.png`, `62-idea-photo-filled.png` |
 | A few words | Ideas (2) → New idea (3) → Jot it down (4) → +type → Save (5) | 5 | Title focused on open (good) (`63-idea-jot.png`) |
 | **Offline** (in a shop) | as "a few words", offline | 5, then stuck | The idea appears in the list behind at once, but the sheet keeps a spinning Save with **Cancel disabled** for as long as the phone is offline (12 s+ observed). Only the ✕ gets out. Nothing says the idea is safe. It synced when the connection came back (`68-offline-save-12s.png`, `69-back-online.png`, `80-offline-closed.png`) |
 

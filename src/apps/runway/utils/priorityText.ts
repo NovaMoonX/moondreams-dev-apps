@@ -113,7 +113,26 @@ export function readMove(
     .flatMap((day) =>
       day.kind !== 'changed'
         ? []
-        : day.effect.lines.map((line) => ({
+        : Object.values(
+            day.effect.lines.reduce<
+              Record<
+                string,
+                { itemId: string; beforeCents: number; afterCents: number }
+              >
+            >(
+              (acc, line) => ({
+                ...acc,
+                [line.itemId]: {
+                  itemId: line.itemId,
+                  beforeCents:
+                    (acc[line.itemId]?.beforeCents ?? 0) + line.beforeCents,
+                  afterCents:
+                    (acc[line.itemId]?.afterCents ?? 0) + line.afterCents,
+                },
+              }),
+              {},
+            ),
+          ).map((line) => ({
             ...line,
             on: day.on,
             name: day.names[line.itemId]?.name ?? 'An item',

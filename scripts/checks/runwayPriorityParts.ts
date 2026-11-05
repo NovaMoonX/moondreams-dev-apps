@@ -15,6 +15,11 @@ import {
   getPartRows,
   orderPriorities,
 } from '../../src/apps/runway/engine/priorities.ts';
+import {
+  getSectionPick,
+  planGroupPriority,
+  withSectionPick,
+} from '../../src/apps/runway/utils/groupPriority.ts';
 import type { DraftEnvelopeInput } from '../../src/apps/runway/engine/demands.ts';
 import type { FundingRule } from '../../src/apps/runway/types.ts';
 
@@ -345,6 +350,202 @@ assert.deepEqual(
     [{ tier: 'want', cents: 3_000, orderIndex: 1 }],
   ],
   'a later stretch with only a Want extra keeps it',
+);
+
+const member = (
+  itemId: string,
+  kind: 'bill' | 'envelope' | 'goal',
+  priority: 'must' | 'should' | 'want',
+  extras?: { tier: 'should' | 'want'; cents: number; orderIndex: number }[],
+) => ({
+  itemId,
+  name: itemId,
+  kind,
+  stretches: [
+    {
+      effectiveFrom: 1,
+      effectiveUntil: null,
+      payload: {
+        name: itemId,
+        priority,
+        orderIndex: 3,
+        ...(kind !== 'bill'
+          ? {
+              funding: {
+                amount: { kind: 'exact', cents: 2_000 },
+                cadence: { kind: 'everyIncomeDay' },
+              },
+              extras: extras ?? [],
+            }
+          : {}),
+      },
+    },
+  ],
+});
+const groupPlan = planGroupPriority(
+  [
+    member('a', 'bill', 'should'),
+    member('b', 'bill', 'want'),
+    member('c', 'envelope', 'should', [
+      { tier: 'want', cents: 500, orderIndex: 1 },
+    ]),
+    member('d', 'bill', 'must'),
+    member('e', 'envelope', 'want'),
+  ] as never,
+  'want',
+  10,
+);
+assert.deepEqual(
+  groupPlan.map(({ itemId, written, wasPriority }) => [
+    itemId,
+    written[0].payload.priority,
+    written[0].payload.orderIndex,
+    wasPriority,
+  ]),
+  [
+    ['a', 'want', 10, 'should'],
+    ['c', 'want', 11, 'should'],
+    ['d', 'want', 12, 'must'],
+  ],
+  'a group at Want moves the others, ranked after the level, and leaves the ones already there with one amount',
+);
+const folded = groupPlan.find(({ itemId }) => itemId === 'c');
+assert.deepEqual(
+  [
+    (folded?.written[0].payload as { funding: { amount: unknown } }).funding
+      .amount,
+    (folded?.written[0].payload as { extras: unknown }).extras,
+    folded?.folded?.totalCents,
+  ],
+  [{ kind: 'exact', cents: 2_500 }, null, 2_500],
+  'an extra folds into the main amount at the new level',
+);
+const atLevel = planGroupPriority(
+  [
+    member('g', 'envelope', 'must', [
+      { tier: 'should', cents: 1_000, orderIndex: 1 },
+    ]),
+  ] as never,
+  'must',
+  50,
+);
+assert.deepEqual(
+  atLevel.map(({ written, wasPriority, folded: parts }) => [
+    written[0].payload.orderIndex,
+    wasPriority,
+    parts?.cents,
+    parts?.totalCents,
+  ]),
+  [[3, null, 2_000, 3_000]],
+  'an envelope already at the level keeps its rank and only folds its extra in (Groceries $200 Must + $100 Should is $300 Must)',
+);
+
+const today = member('h', 'bill', 'want');
+const laterStretch = planGroupPriority(
+  [
+    {
+      ...today,
+      stretches: [
+        today.stretches[0],
+        {
+          ...today.stretches[0],
+          payload: { ...today.stretches[0].payload, priority: 'must' },
+        },
+      ],
+    },
+  ] as never,
+  'want',
+  20,
+);
+assert.deepEqual(
+  laterStretch.map(({ written, wasPriority }) => [
+    written.map(({ payload }) => payload.priority),
+    wasPriority,
+  ]),
+  [[['want'], 'must']],
+  'a bill at the level today but not in a later stretch rewrites only that stretch, and moves from its priority, never a made-up one',
+);
+
+const mixedEnvelope = member('i', 'envelope', 'must', [
+  { tier: 'should', cents: 1_000, orderIndex: 1 },
+]);
+const mixedStretches = planGroupPriority(
+  [
+    {
+      ...mixedEnvelope,
+      stretches: [
+        mixedEnvelope.stretches[0],
+        {
+          ...mixedEnvelope.stretches[0],
+          payload: { ...mixedEnvelope.stretches[0].payload, priority: 'want' },
+        },
+      ],
+    },
+  ] as never,
+  'must',
+  40,
+);
+assert.deepEqual(
+  mixedStretches[0].written.map(({ payload }) => payload.orderIndex),
+  [3, 40],
+  'a stretch already at the level keeps its rank while a later stretch that moves is ranked after the level',
+);
+
+const goalPlan = planGroupPriority(
+  [
+    member('j', 'goal', 'should', [
+      { tier: 'want', cents: 500, orderIndex: 1 },
+    ]),
+    member('k', 'goal', 'want'),
+    member('l', 'envelope', 'must'),
+  ] as never,
+  'want',
+  60,
+);
+assert.deepEqual(
+  goalPlan.map(({ itemId, kind, written, wasPriority }) => [
+    itemId,
+    kind,
+    written[0].payload.priority,
+    written[0].payload.orderIndex,
+    wasPriority,
+  ]),
+  [
+    ['j', 'goal', 'want', 60, 'should'],
+    ['l', 'envelope', 'want', 61, 'must'],
+  ],
+  'a goal in a group moves with the bills and envelopes, ranked after the level, and one already there is left alone',
+);
+assert.deepEqual(
+  [
+    (goalPlan[0].written[0].payload as { funding: { amount: unknown } }).funding
+      .amount,
+    (goalPlan[0].written[0].payload as { extras: unknown }).extras,
+    goalPlan[0].folded?.totalCents,
+  ],
+  [{ kind: 'exact', cents: 2_500 }, null, 2_500],
+  'a goal folds its extra into the main amount like an envelope',
+);
+
+const picked = withSectionPick(
+  {
+    name: 'Home',
+    startingPriority: null,
+    envelopePriority: 'must',
+    goalPriority: null,
+    emoji: null,
+  },
+  ['goal'],
+  'should',
+);
+assert.deepEqual(
+  [
+    getSectionPick(picked, 'bill'),
+    getSectionPick(picked, 'envelope'),
+    getSectionPick(picked, 'goal'),
+  ],
+  [null, 'must', 'should'],
+  "a goals pick changes only the goals' priority",
 );
 
 console.log('runway priority parts: ok');

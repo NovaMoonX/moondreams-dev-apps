@@ -13,6 +13,7 @@ import {
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
+import { selectFreeToSpend } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   computeDraftView,
@@ -21,6 +22,7 @@ import {
   selectBills,
   selectComingDays,
   selectDraftHeldByItem,
+  selectHorizonItems,
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -43,7 +45,7 @@ const withCarry = (
     (acc, id) => ({
       ...acc,
       [id]: {
-        paid: (progress[id] ?? NO_PROGRESS).paid,
+        ...(progress[id] ?? NO_PROGRESS),
         funded: [...(progress[id] ?? NO_PROGRESS).funded, ...carry.funded[id]],
       },
     }),
@@ -80,6 +82,10 @@ export function computeLookahead(
     comingDays: ReturnType<typeof selectComingDays>;
     bills: ReturnType<typeof selectBills>;
     payments: ReturnType<typeof selectBillPayments>;
+    /** The Horizon items in the plan; their payments are read against what each holds. */
+    horizonItems?: ReturnType<typeof selectHorizonItems>;
+    /** Free to Spend now; a payment fronted by it is checked against it. */
+    freeToSpendCents?: number | null;
   },
 ): Lookahead {
   const { items, versions, openDays } = plan;
@@ -100,6 +106,16 @@ export function computeLookahead(
       ),
     })),
     payments: inputs.payments,
+    stance,
+    freeToSpendCents: inputs.freeToSpendCents ?? null,
+    horizonItems: (inputs.horizonItems ?? []).map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+      rest: version.payload.rest,
+      costs: version.payload.costs,
+      heldCents: heldByItem[item.id] ?? 0,
+      paid: billProgress[item.id]?.costPaid ?? [],
+    })),
     draftOf: (day, carry) => {
       const view = computeDraftView(
         items,
@@ -135,6 +151,10 @@ export const selectLookahead = createSelector(
     selectComingDays,
     selectBills,
     selectBillPayments,
+    selectHorizonItems,
+    selectFreeToSpend,
+    (_state: RootState, _today?: number, extraHeld?: Record<string, number>) =>
+      extraHeld,
   ],
   (
     items,
@@ -150,13 +170,16 @@ export const selectLookahead = createSelector(
     comingDays,
     bills,
     payments,
+    horizonItems,
+    freeToSpendCents,
+    extraHeld,
   ) =>
     computeLookahead(
       { items, versions, openDays },
       {
         stance,
         today,
-        heldByItem,
+        heldByItem: extraHeld ? { ...heldByItem, ...extraHeld } : heldByItem,
         settledKey,
         billProgress,
         startDate,
@@ -164,6 +187,8 @@ export const selectLookahead = createSelector(
         comingDays,
         bills,
         payments,
+        horizonItems,
+        freeToSpendCents,
       },
     ),
 );

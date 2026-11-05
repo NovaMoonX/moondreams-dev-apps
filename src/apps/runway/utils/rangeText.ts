@@ -3,24 +3,28 @@ import { RANGE_END_WORDS } from '@apps/runway/constants';
 import { getRangeEnd, pick, type RangeSide } from '@apps/runway/engine/stance';
 import type { MoneyRange, Stance } from '@apps/runway/types';
 
-/** "Planned at the low end, $140 of $140 to $180"; null for an exact amount, which needs no note. */
+/** "Planned at the low end, $140 of $140 to $180"; null for an exact amount, which needs no note. `isShort` leaves the range out for a place that already shows it: "Planned at the low end, $140". */
 export function describeRange(
   range: MoneyRange,
   stance: Stance,
   side: RangeSide,
   isOwnStance = false,
+  isShort = false,
 ): string | null {
   if (range.lowCents === range.highCents) return null;
   const end = RANGE_END_WORDS[getRangeEnd(stance, side)];
+  if (isShort) {
+    return `Planned at ${end}, ${formatCents(pick(stance, range, side))}${isOwnStance ? ', its own setting' : ''}`;
+  }
   const result = `Planned at ${end}, ${formatCents(pick(stance, range, side))} of ${formatCents(range.lowCents)} to ${formatCents(range.highCents)}${isOwnStance ? ', its own setting' : ''}`;
   return result;
 }
 
-/** "$140 to $180", the way a range reads in a field's summary. */
+/** "$140 to $180", the way a range reads in a field's summary, never breaking before its second figure. */
 export const formatRange = (range: MoneyRange) =>
   range.lowCents === range.highCents
     ? formatCents(range.lowCents)
-    : `${formatCents(range.lowCents)} to ${formatCents(range.highCents)}`;
+    : `${formatCents(range.lowCents)} to\u00A0${formatCents(range.highCents)}`;
 
 /** One line for the standing ranges behind a figure: "Any range of pay is planned at the low end and of bills at the high end." */
 export function describeRangeBasis(

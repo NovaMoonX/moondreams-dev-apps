@@ -189,6 +189,12 @@ export interface RecordLine {
   cents: Cents;
   shortBy: Cents;
   paidBy: { dayId: string; cents: Cents }[];
+  /** The Horizon cost this line saves toward; null elsewhere, and on a record sealed before Horizon costs. */
+  costId: string | null;
+  /** The cost's own name when this line saves toward a Horizon cost ("Surgery"; `name` stays the item's); null on every other line. */
+  costName: string | null;
+  /** True when the line gives back to Free to Spend what a fronted payment took; an older record reads false. */
+  repaysFree: boolean;
 }
 
 export interface ProposedSealed {
@@ -343,12 +349,16 @@ export interface BillSealed {
   accountId?: string | null;
 }
 
-/** A named collection of bills; its bills carry its id, so archiving it rewrites none of them. */
+/** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
 export interface GroupSealed {
   name: string;
-  /** The priority a new bill in this group starts with; null leaves it to the bill. */
+  /** The priority the group's bills are at, and a new bill starts with; null leaves it to each bill. */
   startingPriority: Priority | null;
-  /** The emoji its bills and envelopes wear unless they have their own; a version written before it existed reads as null. */
+  /** The same for its envelopes; a version written before it existed reads as `startingPriority`, which then covered both. */
+  envelopePriority: Priority | null;
+  /** The same for its goals; a version written before goals could join reads as null. */
+  goalPriority: Priority | null;
+  /** The emoji its bills, envelopes and goals wear unless they have their own; a version written before it existed reads as null. */
   emoji: string | null;
 }
 
@@ -367,6 +377,64 @@ export interface GoalSealed {
   state: GoalState;
   /** Extras at lower priorities, on the same days as its contribution; a version written before they existed has none. */
   extras?: PriorityExtra[] | null;
+  /** The group that lists this goal; a version written before goals had groups reads as null. */
+  groupId: string | null;
+}
+
+/** What an event's costs fall back on once the money put toward it runs out. */
+export type HorizonRest =
+  | { kind: 'pays' }
+  | { kind: 'onePay'; dayKey: string }
+  | { kind: 'outside' }
+  | { kind: 'later' };
+
+/** One event's costs. */
+export interface HorizonSealed {
+  name: string;
+  emoji: string | null;
+  /** "Around Jan 15th"; display only. */
+  happensOn: DateOnly;
+  /** Null for a single day. */
+  happensUntil: DateOnly | null;
+  priority: Priority;
+  /** A fractional rank inside the priority tier. */
+  orderIndex: number;
+  /** Where what the money put toward it does not cover comes from. */
+  rest: HorizonRest;
+  note: string | null;
+  costs: HorizonCost[];
+}
+
+/** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
+export type HorizonStored = Omit<HorizonSealed, 'rest' | 'costs'> & {
+  rest?: HorizonRest | null;
+  costs: (Omit<
+    HorizonCost,
+    'isOutside' | 'ending' | 'pricedOn' | 'endsAfter'
+  > & {
+    isOutside?: boolean;
+    ending?: Ending;
+    pricedOn?: DateOnly | null;
+    endsAfter?: DateOnly | null;
+  })[];
+};
+
+export interface HorizonCost {
+  /** Stable across versions. */
+  id: string;
+  name: string;
+  /** Equal ends for an exact amount. */
+  amount: MoneyRange;
+  schedule: Schedule;
+  /** When a repeating cost stops; never for a cost paid once. */
+  ending: Ending;
+  /** Paid outside the plan: listed, never covered, never short. */
+  isOutside: boolean;
+  /** The day Set the price last ran; null while the first estimate stands. */
+  pricedOn: DateOnly | null;
+  /** Set when a cost with paid payments is removed: it asks for nothing after this day. */
+  endsAfter: DateOnly | null;
+  note: string | null;
 }
 
 export interface PlanItemDoc {
@@ -524,6 +592,19 @@ export interface ChangeMove {
     fromFreeCents: Cents;
     cardId: string | null;
   } | null;
+  /** Set when the entry is a Horizon cost's payment marked paid; null elsewhere and read as null on older entries. */
+  cost: {
+    itemId: string;
+    itemName: string;
+    costId: string;
+    name: string;
+    dueOn: DateOnly;
+    paidOn: DateOnly;
+    amountCents: Cents;
+    fromFreeCents: Cents;
+    mark: CostPaidMark;
+    purchaseId: string | null;
+  } | null;
 }
 
 export interface ChangeSealed {
@@ -531,7 +612,12 @@ export interface ChangeSealed {
   /** The person's reason; a change written before notes existed has none. */
   note?: string | null;
   /** A move written before outside moves existed has no `isOutside`. */
-  move?: (Omit<ChangeMove, 'isOutside'> & { isOutside?: boolean }) | null;
+  move?:
+    | (Omit<ChangeMove, 'isOutside' | 'cost'> & {
+        isOutside?: boolean;
+        cost?: ChangeMove['cost'];
+      })
+    | null;
 }
 
 export interface ChangeDoc {
@@ -571,7 +657,8 @@ export type OpenVersion =
   | (OpenVersionBase & { kind: 'envelope'; payload: EnvelopeSealed })
   | (OpenVersionBase & { kind: 'bill'; payload: BillSealed })
   | (OpenVersionBase & { kind: 'goal'; payload: GoalSealed })
-  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed });
+  | (OpenVersionBase & { kind: 'group'; payload: GroupSealed })
+  | (OpenVersionBase & { kind: 'horizon'; payload: HorizonSealed });
 
 export type PayLineVersion = Extract<OpenVersion, { kind: 'payLine' }>;
 export type SourceVersion = Extract<OpenVersion, { kind: 'source' }>;
@@ -579,6 +666,7 @@ export type EnvelopeVersion = Extract<OpenVersion, { kind: 'envelope' }>;
 export type BillVersion = Extract<OpenVersion, { kind: 'bill' }>;
 export type GoalVersion = Extract<OpenVersion, { kind: 'goal' }>;
 export type GroupVersion = Extract<OpenVersion, { kind: 'group' }>;
+export type HorizonVersion = Extract<OpenVersion, { kind: 'horizon' }>;
 
 export type MoveKind = (typeof MOVE_KINDS)[number];
 
@@ -601,6 +689,24 @@ export interface BillPaidSealed {
   fromFreeCents: Cents;
   /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
   cardId?: string | null;
+}
+
+/** How a Horizon cost's payment was marked: out of the item's money, by a purchase (which moved the money), or outside the plan (which moves nothing). */
+export type CostPaidMark = 'item' | 'purchase' | 'outside';
+
+/** A Horizon cost's payment marked paid: `refId` is the item, `date` the payment's due date. */
+export interface CostPaidSealed {
+  costId: string;
+  dueOn: DateOnly;
+  /** What it came to: the exact amount, or what the person said for a range. */
+  amountCents: Cents;
+  /** The day the person marked it paid. */
+  paidOn: DateOnly;
+  /** The part beyond what the item held, which came out of Free to Spend. */
+  fromFreeCents: Cents;
+  mark: CostPaidMark;
+  /** The purchase that moved the money when `mark` is `purchase`; null otherwise. */
+  purchaseId: string | null;
 }
 
 /** A card paid off: `refId` is the card, `date` the day it was paid. */
@@ -646,6 +752,7 @@ interface OpenMoveBase {
 
 export type OpenMove =
   | (OpenMoveBase & { kind: 'billPaid'; payload: BillPaidSealed })
+  | (OpenMoveBase & { kind: 'costPaid'; payload: CostPaidSealed })
   | (OpenMoveBase & { kind: 'start'; payload: StartSealed })
   | (OpenMoveBase & { kind: 'trackingChange'; payload: TrackingChangeSealed })
   | (OpenMoveBase & { kind: 'cardPayment'; payload: CardPaymentSealed })
@@ -663,6 +770,13 @@ export interface PurchaseLine {
   /** Negative on a refund. */
   cents: Cents;
   via: PurchaseLineVia;
+}
+
+/** The Horizon cost payment a purchase pays: the item (also the purchase's one line), the cost and the payment's due date. */
+export interface CostRef {
+  itemId: string;
+  costId: string;
+  dueOn: DateOnly;
 }
 
 export interface PurchaseSealed {
@@ -683,6 +797,8 @@ export interface PurchaseSealed {
   link: string | null;
   /** The items read from a receipt, one per line; null (or missing on an older purchase) when none were read. */
   receiptText: string | null;
+  /** The cost payment this purchase marks paid; null (or missing on an older purchase) when it pays none. */
+  costRef?: CostRef | null;
 }
 
 /** `date` is the spending day, date-only; `createdAt` is the instant it was added. */
@@ -730,6 +846,22 @@ export interface ClosingSealed {
   cardPaid: Record<string, [number, Cents, string][]>;
   /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
   transfers: [number, string | null, string | null, Cents, string, boolean][];
+  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
+  costPaid?: Record<
+    string,
+    [
+      string,
+      number,
+      Cents,
+      number,
+      Cents,
+      CostPaidMark,
+      string | null,
+      string,
+    ][]
+  >;
+  /** `[costId, day]` for each confirmed day that gave back a fronted payment, by item id; missing on a closing written before it. */
+  repaid?: Record<string, [string, number][]>;
 }
 
 /** A month's closing: a cache that is rebuilt whenever the ledger it summed changes. The id is the month, `yyyy-mm`. */

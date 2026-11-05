@@ -135,6 +135,16 @@ def main():
             admin([put(path, doc)])
             check(f'{c} write twice by id [{a}]', commit(tok, [put(path, doc)]), a == 'o' and 'update' in ops)
 
+    # A paid cost is a move with a deterministic id: one create, never a second on that id, never an update.
+    paid = f'{base}/moves/paid_item-1_cost-1_{time.strftime("%Y%m%d", time.gmtime(TODAY / 1000))}'
+    pdoc = dict(id=paid.rsplit('/', 1)[1], kind='costPaid', date=TODAY, refId='item-1', reversesMoveId=None, createdAt=NOW, sealed=SEAL)
+    for a, tok in actors.items():
+        admin([rm(paid)])
+        check(f'costPaid create [{a}]', commit(tok, [put_new(paid, pdoc)]), a == 'o')
+        admin([put(paid, pdoc)])
+        check(f'costPaid second create on the same id [{a}]', commit(tok, [put_new(paid, pdoc)]), False)
+        check(f'costPaid update [{a}]', commit(tok, [put(paid, dict(pdoc, sealed=dict(SEAL, value='y')))]), False)
+
     other = f'{base}/unlisted/doc-1'
     for a, tok in actors.items():
         admin([rm(other)])

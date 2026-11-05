@@ -46,6 +46,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
+import { toBillAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
 import {
   ActionSection,
   ActionTitle,
@@ -143,6 +144,7 @@ import type {
   EnvelopeSealed,
   EnvelopeVersion,
   GoalSealed,
+  GoalVersion,
   ItemKind,
   OpenVersion,
   PayLineSealed,
@@ -349,7 +351,8 @@ function ItemSheet({
   });
   const [isAskingPaid, setIsAskingPaid] = useState(false);
 
-  if (!version || version.kind === 'group') return null;
+  if (!version || version.kind === 'group' || version.kind === 'horizon')
+    return null;
   const payload = version.payload;
   const paidWithCard =
     level === 'track' && payment
@@ -480,9 +483,10 @@ function ItemSheet({
     id: item.id,
     name: version.payload.name,
   }));
-  const isGroupable = itemKind === 'bill' || itemKind === 'envelope';
+  const isGroupable =
+    itemKind === 'bill' || itemKind === 'envelope' || itemKind === 'goal';
   const savedGroupId = isGroupable
-    ? (payload as BillSealed | EnvelopeSealed).groupId
+    ? (payload as BillSealed | EnvelopeSealed | GoalSealed).groupId
     : null;
   const currentGroupId = groupOptions.some(({ id }) => id === savedGroupId)
     ? savedGroupId
@@ -510,10 +514,10 @@ function ItemSheet({
     if (
       isSavingRef.current ||
       !user ||
-      (itemKind !== 'bill' && itemKind !== 'envelope')
+      (itemKind !== 'bill' && itemKind !== 'envelope' && itemKind !== 'goal')
     )
       return;
-    const bill = payload as BillSealed | EnvelopeSealed;
+    const bill = payload as BillSealed | EnvelopeSealed | GoalSealed;
     isSavingRef.current = true;
     setError(null);
     setIsSaving(true);
@@ -535,18 +539,21 @@ function ItemSheet({
           (id) =>
             groupOptions.find((option) => option.id === id)?.name ??
             pickedGroup.name,
-        )}, from ${formatDateOrdinalUTC(today)}.`,
+        )}.`,
         note: null,
         effectiveFrom: today,
+        changeEffectiveFrom: null,
         newGroup: pickedGroup.newGroup,
         stretches: getVersionStretches<
-          BillVersion | EnvelopeVersion,
-          BillSealed | EnvelopeSealed
+          BillVersion | EnvelopeVersion | GoalVersion,
+          BillSealed | EnvelopeSealed | GoalSealed
         >(
           store
             .getState()
             .runway.versions.filter(
-              (version): version is BillVersion | EnvelopeVersion =>
+              (
+                version,
+              ): version is BillVersion | EnvelopeVersion | GoalVersion =>
                 version.kind === itemKind,
             ),
           itemId,
@@ -952,9 +959,7 @@ function ItemSheet({
         )}
         {isAskingPaid && payment && (
           <PaidAmountSheet
-            billId={itemId}
-            billName={payload.name}
-            payment={payment}
+            payment={toBillAmountPayment(payload.name, payment, paidWithCard)}
             onMark={paid.mark}
             onClose={() => setIsAskingPaid(false)}
           />

@@ -48,7 +48,10 @@ const toBalanceInputs =
     asOf: today,
     kinds: Object.fromEntries([
       ...items.flatMap((item) =>
-        item.kind === 'goal' || item.kind === 'bill' || item.kind === 'envelope'
+        item.kind === 'goal' ||
+        item.kind === 'bill' ||
+        item.kind === 'envelope' ||
+        item.kind === 'horizon'
           ? [[item.id, item.kind] as const]
           : [],
       ),

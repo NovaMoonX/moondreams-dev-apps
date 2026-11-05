@@ -5,6 +5,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronLeft, Inbox, Store, Tag } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import CopyTextButton from '@/components/CopyTextButton';
 import EmptyCard from '@/components/EmptyCard';
 import IconBadge from '@/components/IconBadge';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,6 +25,7 @@ import {
   CREATE_SALES_GATE_ID,
   GOING_ONCE_TAB_LABELS,
   GOING_ONCE_TABS,
+  SALE_PAGE_PATH,
 } from '@apps/going-once/constants';
 import { useGoingOnceSync } from '@apps/going-once/hooks/useGoingOnceSync';
 import { useGoingOnceTheme } from '@apps/going-once/hooks/useGoingOnceTheme';
@@ -268,6 +270,14 @@ function GoingOnce() {
                   </p>
                 )}
               </div>
+              {sale.publicLinkId !== null && activeTab !== 'sale' && (
+                <CopyTextButton
+                  text={`${window.location.origin}${SALE_PAGE_PATH}${sale.publicLinkId}`}
+                  label='Copy link'
+                  variant='secondary'
+                  className="relative ml-auto h-9 shrink-0 rounded-full! px-3! whitespace-nowrap after:absolute after:-inset-0.5 after:content-[''] max-[359px]:w-9 max-[359px]:px-0! max-[359px]:[&>span]:sr-only"
+                />
+              )}
             </header>
             <CoSellerIntro
               sale={sale}
