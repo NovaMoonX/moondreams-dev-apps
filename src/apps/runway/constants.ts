@@ -604,6 +604,9 @@ export const MAKE_BILL_WORDS = {
   bringLabel: 'Money from the event',
   yesCovers: (dates: string) => `Yes, it covers ${dates}`,
   yesPart: (date: string) => `Yes, it goes toward ${date}`,
+  madeFrom: (item: string, cost: string) => `Made from ${cost} in ${item}`,
+  covers: (item: string, money: string, dates: string) =>
+    `${item}'s ${money} covers ${dates}`,
   yesBody: (money: string, bill: string) => `${money} moves to ${bill}`,
   noLeave: (item: string) => `No, leave it with ${item}`,
   noLeaveBody: (item: string, money: string) => `${item} keeps ${money}`,
@@ -722,6 +725,7 @@ export const HORIZON_END_WORDS = {
   opensAgain: (name: string) => `${name} opens again.`,
   calledOffTakeBack: (name: string) =>
     `${name} is called off. Bring it back first to take a payment back.`,
+  calledOffHere: 'Bring it back first to take a payment back.',
   calledOffRemovePurchase: (name: string) =>
     `${name} is called off. Bring it back first to remove this purchase.`,
   tapToTakeBack: 'Tap the payment to take it back.',
@@ -781,8 +785,6 @@ export const HORIZON_END_WORDS = {
   bringQuestion: (amount: string) => `What happens to the ${amount}?`,
   bringPartial: (sent: string, place: string, left: string) =>
     `${sent} went to ${place}. Only ${left} is still there to bring back.`,
-  startFromPays: (names: readonly string[], more: number) =>
-    `${listNamesAndMore(names, more)} ${names.length + more === 1 ? 'comes' : 'come'} from your pays again.`,
   bringYes: (amount: string) => `Bring the ${amount} back`,
   bringYesFree: 'It comes back from Free to Spend.',
   bringYesPlace: (place: string) => `It comes back from ${place}.`,

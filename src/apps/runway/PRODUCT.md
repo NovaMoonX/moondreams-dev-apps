@@ -316,7 +316,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 
 **Where it shows**
 
-- **Plan > 🗓️ Horizon**, after Goals: open items, soonest next date first, each with one line (a gap, else the next cost due, else "Nothing due yet") and its left. Done folds below.
+- **Plan > 🗓️ Horizon**, after Goals: open items, soonest next date first, each with one line (a gap, else the next cost due, else the soonest unpaid payment however far off or outside the plan, else "Nothing due yet") and its left. Done folds below.
 - **Days > Add expected money:** "A bill or one-time cost" (the old "An expense coming up") and "Something with several costs", which opens Add to your horizon.
 - **Income days:** each cost a pay funds is a draft line named "Movers · Moving" with its reason ("Moving's $800 goes to the movers at the high end, so this pay starts on Storage."), steerable like a bill's line. A cost the item's own money covers never appears on a pay.
 - **Lookahead:** each payment on its date and, under "I'll decide later", where the money stops.

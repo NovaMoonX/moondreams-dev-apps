@@ -1,6 +1,7 @@
 import { useDeferredValue, useMemo, useState, type ReactNode } from 'react';
 import { useStore } from 'react-redux';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import InlineNotice from '@/components/InlineNotice';
@@ -16,6 +17,7 @@ import {
   CHANGE_WORDS,
   COMPACT_MOVE_WORDS,
   EFFECT_FOLD_WORDS,
+  FIX_WORDS,
   FORM_FLOW_WORDS,
   MOVED_DAY_WORDS,
   PREVIEW_SHOWN,
@@ -45,6 +47,7 @@ import {
   selectSettledKey,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useOpenIncomeFix } from '@apps/runway/hooks/useOpenIncomeFix';
 import { getOneTimeNotes } from '@apps/runway/utils/payFrom';
 
 const MAX_LINES_SHOWN = 3;
@@ -254,6 +257,7 @@ function EffectPreview({
   const [isEvery, setIsEvery] = useState(false);
   const [expandedKeys, setExpandedKeys] = useState<readonly string[]>([]);
   const { isHidden } = useValuesHidden();
+  const incomeFix = useOpenIncomeFix();
   const settledJson = useDeferredValue(changeJson);
   const settledVirtual = useMemo<PreviewChange | null>(
     () => (settledJson === null ? null : JSON.parse(settledJson)),
@@ -637,6 +641,19 @@ function EffectPreview({
               <InlineNotice tone={block.isStanding ? 'warning' : block.tone}>
                 {renderFigure(block)}
               </InlineNotice>
+              {block.isIncomeFix && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className="relative mt-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
+                  onClick={incomeFix.open}
+                >
+                  {incomeFix.hasEndingPay
+                    ? FIX_WORDS.openIncomeEnd
+                    : FIX_WORDS.addIncome}
+                </Button>
+              )}
             </div>
           ),
         )}

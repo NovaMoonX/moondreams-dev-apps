@@ -138,8 +138,12 @@ export function useRunwayUrlState() {
   const closeFixes = () => setRequestedFixes(null, { history: 'replace' });
 
   const requestedOpenItem = useOpenItemRequest();
-  const openItemAt = (itemId: string, step: string | null = null) => {
-    setOpenItemRequest({ itemId, step });
+  const openItemAt = (
+    itemId: string,
+    step: string | null = null,
+    returnTo: PlanSection | null = null,
+  ) => {
+    setOpenItemRequest({ itemId, step, returnTo });
     return Promise.resolve();
   };
   const openDueBill = (billId: string) => openItemAt(billId, 'due');
@@ -292,7 +296,9 @@ export function useRunwayUrlState() {
   /** The tab's history entry is written before the item's, so Back closes the sheet before it leaves the tab. */
   const showOnPlan = async (
     section: PlanSection,
-    target: { itemId: string; step?: string } | 'undatedBills',
+    target:
+      | { itemId: string; step?: string; returnTo?: PlanSection }
+      | 'undatedBills',
   ) => {
     if (requestedDay !== null) {
       await setRequestedDay(null, { history: 'replace' });
@@ -304,7 +310,11 @@ export function useRunwayUrlState() {
       return;
     }
     revealItem(target.itemId);
-    await openItemAt(target.itemId, target.step ?? null);
+    await openItemAt(
+      target.itemId,
+      target.step ?? null,
+      target.returnTo ?? null,
+    );
   };
 
   const openDay = (dayKey: string) =>

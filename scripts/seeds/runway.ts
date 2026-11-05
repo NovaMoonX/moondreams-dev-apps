@@ -9,7 +9,11 @@ import {
   wrapDataKey,
 } from '../../functions/src/apps/runway/planKey.ts';
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
-import { DEFAULT_CURRENCY_CODE } from '../../src/apps/runway/constants.ts';
+import {
+  DEFAULT_CURRENCY_CODE,
+  HORIZON_END_WORDS,
+} from '../../src/apps/runway/constants.ts';
+import { formatCents } from '../../src/utils/moneyUtils.ts';
 import {
   DAY_MS,
   startOfUtcDay,
@@ -597,15 +601,11 @@ async function writeSeedHorizon(
     }),
   );
 
-  const returned: { itemId: string; cents: number; summary: string }[] = [
-    {
-      itemId: 'seed-horizon-ski',
-      cents: 40_000,
-      summary: 'Called off Ski weekend. $400.00 went to Free to Spend.',
-    },
+  const returned: { itemId: string; cents: number }[] = [
+    { itemId: 'seed-horizon-ski', cents: 40_000 },
   ].filter(({ itemId }) => items.some(({ id }) => id === itemId));
   const returns = await Promise.all(
-    returned.map(async ({ itemId, cents, summary }) => ({
+    returned.map(async ({ itemId, cents }) => ({
       itemId,
       moveId: `transfer_seed-calloff-${itemId}`,
       sealed: await sealJson(
@@ -618,11 +618,36 @@ async function writeSeedHorizon(
         } satisfies TransferSealed,
         encryption,
       ),
-      change: await sealJson(
-        { summary, note: null } satisfies ChangeSealed,
-        encryption,
-      ),
     })),
+  );
+  const ended = await Promise.all(
+    items.flatMap(({ id, payload }) =>
+      payload.state === 'open' || payload.stateOn === null
+        ? []
+        : [
+            sealJson(
+              {
+                summary: HORIZON_END_WORDS.endSummary(
+                  payload.name,
+                  payload.state,
+                  payload.stateMoney === null
+                    ? null
+                    : {
+                        kind: payload.stateMoney.kind,
+                        cents: formatCents(payload.stateMoney.cents),
+                        place: null,
+                      },
+                ),
+                note: null,
+              } satisfies ChangeSealed,
+              encryption,
+            ).then((endSealed) => ({
+              id,
+              on: payload.stateOn ?? 0,
+              sealed: endSealed,
+            })),
+          ],
+    ),
   );
 
   const marked: {
@@ -817,31 +842,24 @@ async function writeSeedHorizon(
       );
     },
   );
-  returns.forEach(
-    ({ itemId, moveId, sealed: moveSealed, change: moveChange }) => {
-      const createdAt = movedOn + 11 * 3_600_000;
-      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
-        id: moveId,
-        kind: 'transfer',
-        date: movedOn,
-        refId: itemId,
-        reversesMoveId: null,
-        createdAt,
-        sealed: moveSealed,
-      } satisfies MoveDoc);
-      batch.set(
-        context.firestore.doc(`${plan}/changes/seed-change-calloff-${itemId}`),
-        {
-          id: `seed-change-calloff-${itemId}`,
-          kind: 'moveChange',
-          createdAt,
-          effectiveFrom: null,
-          itemIds: [itemId],
-          sealed: moveChange,
-        } satisfies ChangeDoc,
-      );
-    },
-  );
+  returns.forEach(({ itemId, moveId, sealed: moveSealed }) => {
+    batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+      id: moveId,
+      kind: 'transfer',
+      date: movedOn,
+      refId: itemId,
+      reversesMoveId: null,
+      createdAt: movedOn + 11 * 3_600_000,
+      sealed: moveSealed,
+    } satisfies MoveDoc);
+  });
+  ended.forEach(({ id, on, sealed: endSealed }) => {
+    const changeId = `seed-change-end-${id}`;
+    batch.set(
+      context.firestore.doc(`${plan}/changes/${changeId}`),
+      change(changeId, on + 10 * 3_600_000, on, [id], endSealed),
+    );
+  });
   items.forEach(({ id }, index) => {
     const createdAt = addedAt + index * 1000;
     const changeId = `seed-change-${id}`;

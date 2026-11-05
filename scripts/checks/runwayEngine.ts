@@ -259,6 +259,8 @@ import {
   listEndlessCosts,
   getMadeBillId,
   getMakeBillBlock,
+  getNextUnpaidPayment,
+  getNextVersionId,
   hasOtherOpenCost,
   listCostPayments,
   listHorizonPayments,
@@ -12533,6 +12535,18 @@ const version = (
     getHorizonStage(calledOff, today, 'conservative', []),
     'calledOff',
   );
+  assert.equal(
+    getNextUnpaidPayment([movers], today, 'conservative', [])?.dueOn,
+    dueOn,
+    'the next unpaid payment is found however far off',
+  );
+  assert.equal(
+    getNextUnpaidPayment([movers], today, 'conservative', [paidMovers]),
+    null,
+    'nothing unpaid is nothing next',
+  );
+  assert.equal(getNextVersionId('v', 0), 'v~1');
+  assert.equal(getNextVersionId('v~1', 2), 'v~2_2');
   assert.deepEqual(
     listOpenCosts(open, today, 'conservative', [paidMovers]).map(
       ({ id }) => id,

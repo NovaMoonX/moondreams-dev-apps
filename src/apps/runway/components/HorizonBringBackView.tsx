@@ -363,16 +363,6 @@ function HorizonBringBackView({
           <ChoiceCards options={options} value={answer} onChange={setAnswer} />
         </ActionSection>
       )}
-      {answer === 'start' && !isNothingToPlan && (
-        <p className='text-muted-foreground text-sm'>
-          <MaskedText>
-            {HORIZON_END_WORDS.startFromPays(
-              comes.slice(0, 2).map(({ cost }) => cost.name),
-              comes.length - 2,
-            )}
-          </MaskedText>
-        </p>
-      )}
       {changeJson !== null && (!isNothingToPlan || bringCents > 0) && (
         <EffectPreview
           changeJson={changeJson}
