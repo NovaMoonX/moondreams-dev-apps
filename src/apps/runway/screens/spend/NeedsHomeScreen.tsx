@@ -11,9 +11,14 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import DepositOffer from '@apps/runway/components/DepositOffer';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import PairOffer from '@apps/runway/components/PairOffer';
 import ItemRow from '@apps/runway/components/ItemRow';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { DEPOSIT_WORDS, NEEDS_HOME_WORDS } from '@apps/runway/constants';
+import {
+  DEPOSIT_WORDS,
+  NEEDS_HOME_WORDS,
+  PAIR_WORDS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
@@ -64,6 +69,12 @@ function MoneyInSheet({
         />
         {purchase.incomeDayId !== null && (
           <p className='text-muted-foreground text-sm'>{DEPOSIT_WORDS.lost}</p>
+        )}
+        {purchase.pairedWithId !== null && (
+          <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
+        )}
+        {purchase.status === 'posted' && (
+          <PairOffer purchase={purchase} onDone={onClose} />
         )}
         {purchase.status === 'posted' && (
           <DepositOffer deposit={purchase} onDone={onClose} />

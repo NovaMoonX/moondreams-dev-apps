@@ -3200,7 +3200,7 @@ async function seedTrackingPlan(
 
 const SEED_BIRTHDAY_EXPENSE = 'seed-expense-birthday';
 
-/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Seven more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment) and a Sweetgreen lunch on the Venture X. The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
+/** Jamie's spending: ordinary purchases, a dinner that leaves Dining out $18 over, a $100 split between Groceries and gifts with a $20 refund of it returned in the same 60/40, eleven rows in all so the Spend tab shows its search, and one expense group ("Sam's birthday") holding two of them. Eleven more came in from the bank link and wait in Needs a home: a pending coffee on the Venture X, two posted debits from Checking A, three deposits (a Venmo cash out, a payroll deposit and a client payment), a Sweetgreen lunch on the Venture X, and two pairs that are a move between Jamie's own accounts ($250.00 from Checking A to Checking B, and a $480.00 payment from Checking A to the Venture X), each the only match for its other side, so Runway pairs them when it opens. The payroll deposit is a few dollars under Jamie's next paycheck and three days early, so it links to that income day when Runway opens; the client payment fits no day closely, so it asks which pay it is. Two of the typed ones are the bank's too: CVS is the same amount as Checking A's pharmacy debit a day apart, so it merges when Runway opens, and the Sweetgreen lunch was typed before its tip, so it is offered. */
 async function writeSeedPurchases(
   context: SeedContext,
   uid: string,
@@ -3365,6 +3365,9 @@ async function writeSeedPurchases(
             notSameAs: null,
             incomeDayId: null,
             assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
           } satisfies PurchaseSealed,
           encryption,
         ),
@@ -3426,6 +3429,42 @@ async function writeSeedPurchases(
       cardId: null,
     },
     {
+      id: 'seed-link-transfer-out',
+      daysAgo: 2,
+      merchant: 'Transfer to Checking B',
+      amountCents: 25_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-transfer-in',
+      daysAgo: 1,
+      merchant: 'Transfer from Checking A',
+      amountCents: -25_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-b',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-card-payment-out',
+      daysAgo: 1,
+      merchant: 'Venture X payment',
+      amountCents: 48_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+    },
+    {
+      id: 'seed-link-card-payment-in',
+      daysAgo: 0,
+      merchant: 'Payment thank you',
+      amountCents: -48_000,
+      status: 'posted',
+      accountId: null,
+      cardId: SEED_VENTURE_CARD,
+    },
+    {
       id: 'seed-link-deposit-pay',
       daysAgo: 0,
       merchant: 'Northwind Studio payroll',
@@ -3477,6 +3516,9 @@ async function writeSeedPurchases(
             notSameAs: null,
             incomeDayId: null,
             assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
           } satisfies PurchaseSealed,
           encryption,
         ),

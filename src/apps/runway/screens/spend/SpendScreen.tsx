@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { ChevronRight, Layers, ShoppingBag, Wallet } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  ChevronRight,
+  Layers,
+  ShoppingBag,
+  Wallet,
+} from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
@@ -22,6 +28,7 @@ import {
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
   SPEND_PERIODS,
+  PAIR_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   SPEND_WORDS,
 } from '@apps/runway/constants';
@@ -42,6 +49,7 @@ import {
   selectExpenses,
   selectItemLooks,
   selectIsMovesLoaded,
+  selectAccountPairs,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
@@ -85,7 +93,9 @@ function SpendScreen() {
     isGroupsOpen,
     openGroups,
     closeGroups,
+    openView,
   } = useRunwayUrlState();
+  const pairCount = useAppSelector(selectAccountPairs).length;
   const expenseCount = useAppSelector(selectExpenses).length;
   const today = todayAsUtcDate(useNow(60_000));
   const periodFor = useAppSelector((state) => state.runway.periodFor);
@@ -303,6 +313,26 @@ function SpendScreen() {
             </span>
             <span className='text-muted-foreground flex items-center gap-1'>
               {expenseCount}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </span>
+          </Button>
+        )}
+        {pairCount > 0 && (
+          <Button
+            type='button'
+            variant='tertiary'
+            onClick={() => openView('accountMoves')}
+            className='border-border text-foreground! h-10 w-full justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+          >
+            <span className='flex items-center gap-2'>
+              <ArrowLeftRight
+                className='text-muted-foreground h-4 w-4'
+                aria-hidden='true'
+              />
+              {PAIR_WORDS.doorTitle}
+            </span>
+            <span className='text-muted-foreground flex items-center gap-1'>
+              {pairCount}
               <ChevronRight className='h-4 w-4' aria-hidden='true' />
             </span>
           </Button>

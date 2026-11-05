@@ -4,6 +4,7 @@ import type {
   DateOnly,
   MoneyRange,
   OpenPurchase,
+  PurchasePairKind,
 } from '@apps/runway/types';
 
 const MATCH_DAYS = 3;
@@ -238,6 +239,101 @@ export function findDepositDays(
         .map((day) => day.dayKey);
       return offered.length > 0 ? [[deposit.id, offered]] : [];
     }),
+  );
+  return { clear, offers };
+}
+
+/** The two sides of a move between the person's own accounts are paired only this close in date. */
+export const PAIR_DAYS = 3;
+
+export interface AccountPair {
+  inId: string;
+  kind: PurchasePairKind;
+}
+
+export interface AccountPairMatches {
+  /** Money-out purchase id → the one money-in purchase it clearly is the other side of. */
+  clear: Map<string, AccountPair>;
+  /** Purchase id (either side) → the purchases it may be paired with, nearest day first, for each purchase not in a clear pair. */
+  offers: Map<string, { otherId: string; kind: PurchasePairKind }[]>;
+}
+
+const isPairCandidate = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  purchase.needsHome &&
+  purchase.status === 'posted' &&
+  purchase.assignedBy === null &&
+  purchase.pairedWithId === null &&
+  purchase.cardPaymentMoveId === null &&
+  purchase.incomeDayId === null;
+
+/** Money out of a linked account and the same amount in to another linked account (a transfer) or a linked card (a card payment), never money out of a card. */
+const getPairKind = (
+  out: OpenPurchase,
+  into: OpenPurchase,
+): PurchasePairKind | null => {
+  if (
+    out.amountCents <= 0 ||
+    out.amountCents !== -into.amountCents ||
+    Math.abs(out.date - into.date) > PAIR_DAYS * DAY_MS ||
+    out.accountId === null ||
+    (out.paidByCardId ?? null) !== null
+  ) {
+    return null;
+  }
+  if ((into.paidByCardId ?? null) !== null) return 'cardPayment';
+  return into.accountId !== null && into.accountId !== out.accountId
+    ? 'transfer'
+    : null;
+};
+
+/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out; otherwise both sides are offered each other, nearest day first. Pending purchases, ones the person already answered and ones already paired or linked to a pay day never pair. The result does not depend on the order of the input. */
+export function findAccountPairs(
+  waiting: readonly OpenPurchase[],
+): AccountPairMatches {
+  const candidates = waiting
+    .filter(isPairCandidate)
+    .sort((a, b) => compareKeys(a.id, b.id));
+  const outs = candidates.filter((purchase) => purchase.amountCents > 0);
+  const ins = candidates.filter((purchase) => purchase.amountCents < 0);
+  const links = outs.flatMap((out) =>
+    ins.flatMap((into) => {
+      const kind = getPairKind(out, into);
+      return kind === null ? [] : [{ out, into, kind }];
+    }),
+  );
+  const clear = new Map(
+    links.flatMap(({ out, into, kind }): [string, AccountPair][] =>
+      links.filter((link) => link.out.id === out.id).length === 1 &&
+      links.filter((link) => link.into.id === into.id).length === 1
+        ? [[out.id, { inId: into.id, kind }]]
+        : [],
+    ),
+  );
+  const taken = new Set([
+    ...clear.keys(),
+    ...[...clear.values()].map(({ inId }) => inId),
+  ]);
+  const sides = links
+    .filter(({ out, into }) => !taken.has(out.id) && !taken.has(into.id))
+    .flatMap(({ out, into, kind }) => {
+      const gap = Math.abs(out.date - into.date);
+      return [
+        { id: out.id, otherId: into.id, kind, gap },
+        { id: into.id, otherId: out.id, kind, gap },
+      ];
+    });
+  const grouped = sides.reduce(
+    (byId, side) => byId.set(side.id, [...(byId.get(side.id) ?? []), side]),
+    new Map<string, typeof sides>(),
+  );
+  const offers = new Map(
+    [...grouped].map(([id, list]) => [
+      id,
+      [...list]
+        .sort((a, b) => a.gap - b.gap || compareKeys(a.otherId, b.otherId))
+        .map(({ otherId, kind }) => ({ otherId, kind })),
+    ]),
   );
   return { clear, offers };
 }

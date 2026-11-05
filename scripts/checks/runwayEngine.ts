@@ -6,6 +6,7 @@ import {
   sealJson,
 } from '../../src/apps/runway/security.ts';
 import {
+  findAccountPairs,
   findDepositDays,
   findPurchaseMatches,
   type DepositDay,
@@ -6913,6 +6914,9 @@ const version = (
       notSameAs: null,
       incomeDayId: null,
       assignedBy: null,
+      pairedWithId: null,
+      pairKind: null,
+      cardPaymentMoveId: null,
       needsHome: false,
       createdAt: on,
       updatedAt: on,
@@ -7284,6 +7288,9 @@ const version = (
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
     needsHome: false,
     createdAt: 1,
     updatedAt: 1,
@@ -7680,6 +7687,9 @@ const version = (
       notSameAs: null,
       incomeDayId: null,
       assignedBy: null,
+      pairedWithId: null,
+      pairKind: null,
+      cardPaymentMoveId: null,
       needsHome: false,
       createdAt: date,
       updatedAt: date,
@@ -9597,6 +9607,9 @@ const version = (
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
     needsHome: false,
     createdAt: on,
     updatedAt: on,
@@ -10084,6 +10097,7 @@ const version = (
     lines: toChosenLines([{ envelopeId: 'food', cents: 400 }]),
     refundOfId: null,
     paidByCardId: 'a',
+    pairedWithId: null,
   } as OpenPurchase;
   const history = collectCardHistory(
     'a',
@@ -10138,6 +10152,9 @@ const version = (
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
     ...extra,
   });
 
@@ -10289,6 +10306,9 @@ const version = (
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
     ...extra,
   });
   const payDay = (
@@ -10549,6 +10569,254 @@ const version = (
     [[...forward.clear].sort(), [...forward.offers].sort()],
     [[...backward.clear].sort(), [...backward.offers].sort()],
     'the same deposits and days in any order give the same links and offers',
+  );
+}
+
+// Money out of one linked account and the same money in to another account or a card: when it is a move between the person's own accounts, and when it asks.
+{
+  const day = 86_400_000;
+  const base = 20_000 * day;
+  const side = (
+    id: string,
+    cents: number,
+    dayOffset: number,
+    extra: Partial<OpenPurchase> = {},
+  ): OpenPurchase => ({
+    id,
+    date: base + dayOffset * day,
+    source: 'link',
+    status: 'posted',
+    accountId: cents > 0 ? 'checking' : 'savings',
+    needsHome: true,
+    expenseId: null,
+    createdAt: 1,
+    updatedAt: 1,
+    amountCents: cents,
+    merchant: null,
+    label: null,
+    note: null,
+    lines: cents > 0 ? [{ envelopeId: null, cents, via: 'free' }] : [],
+    refundOfId: null,
+    paidByCardId: null,
+    link: null,
+    receiptText: null,
+    costRef: null,
+    notSameAs: null,
+    incomeDayId: null,
+    assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
+    ...extra,
+  });
+  const onCard = { accountId: null, paidByCardId: 'venture' };
+  const none = (matches: ReturnType<typeof findAccountPairs>) =>
+    matches.clear.size + matches.offers.size;
+
+  const transfer = findAccountPairs([
+    side('out', 25_000, 0),
+    side('in', -25_000, 1),
+  ]);
+  assert.deepEqual(
+    [...transfer.clear],
+    [['out', { inId: 'in', kind: 'transfer' }]],
+    'the same amount out of one account and into another, a day apart, is a transfer',
+  );
+  assert.equal(transfer.offers.size, 0, 'a clear pair is offered nothing');
+
+  const payment = findAccountPairs([
+    side('out', 48_000, 0),
+    side('in', -48_000, 2, onCard),
+  ]);
+  assert.deepEqual(
+    [...payment.clear],
+    [['out', { inId: 'in', kind: 'cardPayment' }]],
+    'the same amount out of an account and into a card is a card payment',
+  );
+
+  const equalCandidates = [
+    side('out', 25_000, 0),
+    side('inA', -25_000, 1),
+    side('inB', -25_000, 1, { accountId: 'brokerage' }),
+  ];
+  const forward = findAccountPairs(equalCandidates);
+  const backward = findAccountPairs([...equalCandidates].reverse());
+  assert.equal(
+    forward.clear.size,
+    0,
+    'two equal candidates are never paired on their own',
+  );
+  assert.deepEqual(
+    forward.offers.get('out'),
+    [
+      { otherId: 'inA', kind: 'transfer' },
+      { otherId: 'inB', kind: 'transfer' },
+    ],
+    'the money out is offered both, nearest day then id',
+  );
+  assert.deepEqual(
+    forward.offers.get('inA'),
+    [{ otherId: 'out', kind: 'transfer' }],
+    'each candidate is offered the money out',
+  );
+  assert.deepEqual(
+    [[...forward.clear].sort(), [...forward.offers].sort()],
+    [[...backward.clear].sort(), [...backward.offers].sort()],
+    'the same purchases in any order give the same pairs and offers',
+  );
+
+  const shared = findAccountPairs([
+    side('outA', 25_000, 0),
+    side('outB', 25_000, 0, { accountId: 'brokerage' }),
+    side('in', -25_000, 0, { accountId: 'savings' }),
+  ]);
+  assert.equal(
+    shared.clear.size,
+    0,
+    'a money in two moneys out could be the other side of is not paired',
+  );
+  assert.deepEqual(
+    [shared.offers.get('outA')?.length, shared.offers.get('in')?.length],
+    [1, 2],
+    'both sides of an ambiguous pair are offered',
+  );
+
+  assert.equal(
+    none(
+      findAccountPairs([
+        side('out', 25_000, 0, { status: 'pending' }),
+        side('in', -25_000, 0),
+      ]),
+    ),
+    0,
+    'a pending purchase never pairs',
+  );
+  assert.equal(
+    none(
+      findAccountPairs([
+        side('out', 25_000, 0),
+        side('in', -25_000, 0, { accountId: 'checking' }),
+      ]),
+    ),
+    0,
+    'money out and in on the same account never pairs',
+  );
+  assert.equal(
+    none(
+      findAccountPairs([
+        side('out', 25_000, 0, onCard),
+        side('in', -25_000, 0),
+      ]),
+    ),
+    0,
+    'money out on a card with money in on an account never pairs',
+  );
+  assert.equal(
+    none(findAccountPairs([side('out', 25_000, 0), side('in', -25_000, 4)])),
+    0,
+    'four days apart never pairs',
+  );
+  assert.equal(
+    findAccountPairs([side('out', 25_000, 0), side('in', -25_000, 3)]).clear
+      .size,
+    1,
+    'three days apart still pairs',
+  );
+  assert.equal(
+    none(findAccountPairs([side('out', 25_000, 0), side('in', -24_900, 0)])),
+    0,
+    'a different amount never pairs',
+  );
+  assert.equal(
+    none(
+      findAccountPairs([
+        side('out', 25_000, 0, { assignedBy: 'person' }),
+        side('in', -25_000, 0),
+      ]),
+    ),
+    0,
+    'a purchase the person already answered is not paired again',
+  );
+  assert.equal(
+    none(
+      findAccountPairs([
+        side('out', 25_000, 0, { pairedWithId: 'other', pairKind: 'transfer' }),
+        side('in', -25_000, 0),
+        side('manual', -25_000, 0, { source: 'manual', accountId: null }),
+        side('linked', -25_000, 0, { incomeDayId: 'pay_a' }),
+      ]),
+    ),
+    0,
+    'a purchase already paired, typed by hand or linked to a pay day never pairs',
+  );
+
+  const start = Date.UTC(2026, 9, 1);
+  const balanceBase = {
+    startDate: start,
+    moves: [
+      {
+        id: 's-money',
+        kind: 'start',
+        date: start,
+        refId: null,
+        reversesMoveId: null,
+        createdAt: start,
+        payload: { amountCents: 100_000, holding: 'money' },
+      } as unknown as OpenMove,
+    ],
+    records: [],
+    arrivedOn: new Map<string, number>(),
+    kinds: { card: 'card' } as const,
+  };
+  const dated = (purchase: OpenPurchase): OpenPurchase => ({
+    ...purchase,
+    date: start + day,
+  });
+  const out = dated(side('out', 25_000, 0));
+  const into = dated(side('in', -25_000, 0));
+  const before = deriveBalances(balanceBase);
+  const waiting = deriveBalances({
+    ...balanceBase,
+    purchases: [out, into],
+  });
+  assert.equal(
+    waiting.freeToSpendCents,
+    before.freeToSpendCents - 25_000,
+    'the money out waiting in Needs a home still counts against Free to Spend',
+  );
+  const paired = deriveBalances({
+    ...balanceBase,
+    purchases: [
+      {
+        ...out,
+        lines: [],
+        needsHome: false,
+        pairedWithId: 'in',
+        pairKind: 'transfer',
+      },
+      {
+        ...into,
+        lines: [],
+        needsHome: false,
+        pairedWithId: 'out',
+        pairKind: 'transfer',
+      },
+    ],
+  });
+  assert.deepEqual(
+    [
+      paired.moneyOnHandCents,
+      paired.freeToSpendCents,
+      paired.spentCents,
+      paired.assignedByItem,
+    ],
+    [
+      before.moneyOnHandCents,
+      before.freeToSpendCents,
+      before.spentCents,
+      before.assignedByItem,
+    ],
+    'a transfer between two accounts leaves money on hand and Free to Spend unchanged and lands in no envelope',
   );
 }
 
@@ -12675,6 +12943,9 @@ const version = (
     notSameAs: null,
     incomeDayId: null,
     assignedBy: null,
+    pairedWithId: null,
+    pairKind: null,
+    cardPaymentMoveId: null,
     needsHome: false,
     expenseId: null,
     createdAt: 6,

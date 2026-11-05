@@ -51,6 +51,7 @@ import ReceiptFileInput, {
 } from '@apps/runway/components/ReceiptFileInput';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import NeedsHomeAssign from '@apps/runway/components/NeedsHomeAssign';
+import PairOffer from '@apps/runway/components/PairOffer';
 import SameAsOffer from '@apps/runway/components/SameAsOffer';
 import ReceiptsBlock from '@apps/runway/components/ReceiptsBlock';
 import ReceiptViewer from '@apps/runway/components/ReceiptViewer';
@@ -628,6 +629,11 @@ function PurchaseScreen({
           {purchase.needsHome && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
+          {purchase.needsHome &&
+            purchase.amountCents > 0 &&
+            purchase.status === 'posted' && (
+              <PairOffer purchase={purchase} onDone={onClose} />
+            )}
           {purchase.needsHome && purchase.amountCents > 0 && (
             <NeedsHomeAssign purchase={purchase} onDone={onClose} />
           )}

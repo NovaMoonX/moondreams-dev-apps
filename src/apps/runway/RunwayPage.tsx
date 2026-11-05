@@ -16,6 +16,7 @@ import PriorityDial from '@apps/runway/components/PriorityDial';
 import RunwayBottomNav from '@apps/runway/components/RunwayBottomNav';
 import IncomeDayScreen from '@apps/runway/screens/days/IncomeDayScreen';
 import DaysScreen from '@apps/runway/screens/days/DaysScreen';
+import AccountMovesScreen from '@apps/runway/screens/spend/AccountMovesScreen';
 import NeedsHomeScreen from '@apps/runway/screens/spend/NeedsHomeScreen';
 import FreeToSpendScreen from '@apps/runway/screens/home/FreeToSpendScreen';
 import DraftHandoff from '@apps/runway/screens/start/DraftHandoff';
@@ -52,6 +53,7 @@ import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
 import {
   useMatchBankPurchases,
+  useMatchAccountPairs,
   useMatchDeposits,
 } from '@apps/runway/hooks/useBankMatch';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
@@ -219,6 +221,7 @@ function RunwayContent() {
   useRunwaySync(user?.uid ?? null, attempt);
   useMatchBankPurchases(user?.uid ?? null);
   useMatchDeposits(user?.uid ?? null);
+  useMatchAccountPairs(user?.uid ?? null);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),
@@ -342,6 +345,14 @@ function RunwayContent() {
     return (
       <div>
         <StartingOutScreen />
+      </div>
+    );
+  }
+
+  if (view === 'accountMoves' && isTrackingLevel(level)) {
+    return (
+      <div>
+        <AccountMovesScreen onClose={closeView} />
       </div>
     );
   }

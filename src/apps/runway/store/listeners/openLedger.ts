@@ -145,6 +145,9 @@ export async function openPurchase(
     notSameAs: payload.notSameAs ?? null,
     incomeDayId: payload.incomeDayId ?? null,
     assignedBy: payload.assignedBy ?? null,
+    pairedWithId: payload.pairedWithId ?? null,
+    pairKind: payload.pairKind ?? null,
+    cardPaymentMoveId: payload.cardPaymentMoveId ?? null,
   };
   return result;
 }

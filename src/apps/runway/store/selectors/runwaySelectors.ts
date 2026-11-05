@@ -61,7 +61,7 @@ import {
   PRIORITIES,
 } from '@apps/runway/constants';
 import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
-import type { DepositDay } from '@apps/runway/engine/matching';
+import { PAIR_DAYS, type DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
   BillVersion,
@@ -77,6 +77,7 @@ import type {
   GoalSealed,
   MoneyRange,
   OpenPurchase,
+  PurchasePairKind,
   GoalVersion,
   GroupVersion,
   HorizonVersion,
@@ -1428,6 +1429,7 @@ export const selectSpendPurchases = createSelector(
       .filter(
         (purchase) =>
           purchase.incomeDayId === null &&
+          purchase.pairedWithId === null &&
           !(purchase.needsHome && purchase.amountCents < 0),
       )
       .sort(
@@ -1522,14 +1524,81 @@ export const selectLostDeposits = createSelector(
 
 const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
+export interface AccountPairEntry {
+  out: OpenPurchase;
+  into: OpenPurchase;
+  kind: PurchasePairKind;
+}
+
+/** Purchases paired as a move between the person's own accounts whose two sides both point at each other, newest first. */
+export const selectAccountPairs = createSelector(
+  [selectPurchases, selectPeriodPurchases],
+  (purchases, periodPurchases): AccountPairEntry[] => {
+    const all = new Map(
+      [...periodPurchases, ...purchases].map((purchase) => [
+        purchase.id,
+        purchase,
+      ]),
+    );
+    const result = [...all.values()]
+      .flatMap((out) => {
+        const into =
+          out.pairedWithId === null ? undefined : all.get(out.pairedWithId);
+        return out.amountCents > 0 &&
+          out.pairKind !== null &&
+          into !== undefined &&
+          into.pairedWithId === out.id
+          ? [{ out, into, kind: out.pairKind }]
+          : [];
+      })
+      .sort(
+        (a, b) =>
+          Math.max(b.out.date, b.into.date) -
+            Math.max(a.out.date, a.into.date) ||
+          (a.out.id < b.out.id ? -1 : a.out.id > b.out.id ? 1 : 0),
+      );
+    return result;
+  },
+);
+
+/** Purchases paired with one that is gone or no longer points back (a sync removed it, or another device paired it elsewhere). They wait in Needs a home again, to be filed or left out; nothing paired is ever left on no screen. */
+export const selectLostPairs = createSelector(
+  [
+    selectPurchases,
+    selectPeriodPurchases,
+    selectWaitingList,
+    (state: RootState) => state.runway.purchasesFrom,
+  ],
+  (purchases, periodPurchases, waiting, purchasesFrom): OpenPurchase[] => {
+    if (purchasesFrom === null) return [];
+    const all = new Map(
+      [...periodPurchases, ...waiting, ...purchases].map((purchase) => [
+        purchase.id,
+        purchase,
+      ]),
+    );
+    const result = [...all.values()].filter((purchase) => {
+      if (purchase.pairedWithId === null) return false;
+      const other = all.get(purchase.pairedWithId);
+      return other === undefined
+        ? purchase.date - PAIR_DAYS * DAY_MS >= purchasesFrom
+        : other.pairedWithId !== purchase.id;
+    });
+    return result;
+  },
+);
+
 /** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */
 export const selectNeedsHome = createSelector(
-  [selectWaitingList, selectLostDeposits],
-  (waitingList, lost) => {
+  [selectWaitingList, selectLostDeposits, selectLostPairs],
+  (waitingList, lostDeposits, lostPairs) => {
+    const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
       ...lost.filter(
-        (deposit) => !waitingList.some((entry) => entry.id === deposit.id),
+        (entry, index) =>
+          !waitingList.some((other) => other.id === entry.id) &&
+          lost.findIndex((other) => other.id === entry.id) === index,
       ),
     ];
     const sorted = [...waiting].sort(
