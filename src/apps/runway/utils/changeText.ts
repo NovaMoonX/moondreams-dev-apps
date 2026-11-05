@@ -3,6 +3,7 @@ import { getChangedKeys, isSameValue } from '@apps/runway/engine/resolve';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  ACCOUNT_WORDS,
   COST_PAID_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
@@ -63,6 +64,10 @@ export type ItemPayload =
 
 /** The name of a group by its id, from the plan's groups. */
 export type GroupNamer = (groupId: string) => string;
+export type AccountNamer = (accountId: string | null) => string;
+
+const describeAccountId: AccountNamer = (accountId) =>
+  accountId === null ? ACCOUNT_WORDS.payFromNone : 'another account';
 
 const same = isSameValue;
 
@@ -173,6 +178,7 @@ const getParts = (
   cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer,
   payNameOf?: PayNamer,
+  accountNameOf: AccountNamer = describeAccountId,
 ): Part[] => {
   if ('costs' in before && 'costs' in after) {
     return getHorizonParts(before, after);
@@ -299,6 +305,12 @@ const getParts = (
         cardNameOf,
       ),
       diff(
+        ACCOUNT_WORDS.payFromLabel,
+        billBefore.accountId ?? null,
+        billAfter.accountId ?? null,
+        accountNameOf,
+      ),
+      diff(
         'Emoji',
         billBefore.emoji,
         billAfter.emoji,
@@ -369,9 +381,15 @@ const getParts = (
   return base;
 };
 
-const MONEYLESS_KEYS = ['name', 'emoji', 'groupId', 'paidByCardId'];
+const MONEYLESS_KEYS = [
+  'name',
+  'emoji',
+  'groupId',
+  'paidByCardId',
+  'accountId',
+];
 
-/** A change to only a name, emoji, group or card: it moves no money on any income day. */
+/** A change to only a name, emoji, group, card or account: it moves no money on any income day. */
 export const isMoneylessChange = (before: ItemPayload, after: ItemPayload) => {
   const changed = getChangedKeys(before, after) as string[];
   return (
@@ -389,8 +407,16 @@ export function describeChange(
   cardNameOf: (cardId: string | null) => string,
   groupName: GroupNamer = () => 'a group',
   payNameOf?: PayNamer,
+  accountNameOf: AccountNamer = describeAccountId,
 ) {
-  const result = getParts(before, after, cardNameOf, groupName, payNameOf)
+  const result = getParts(
+    before,
+    after,
+    cardNameOf,
+    groupName,
+    payNameOf,
+    accountNameOf,
+  )
     .flatMap((part) => (part === null ? [] : [part]))
     .map((part) =>
       typeof part === 'string' ? part : `${part[0]} ${part[1]} to ${part[2]}`,

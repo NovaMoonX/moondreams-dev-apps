@@ -40,6 +40,8 @@ import {
   BILL_PAID_FROMS,
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
+  ACCOUNT_WORDS,
+  BILL_PAY_WORDS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -92,6 +94,7 @@ import {
   isTextList,
   keptChangeChecks,
   readDraftFields,
+  withDraftDefaults,
   type KeptChange,
 } from '@apps/runway/forms/draftParse';
 import type { DraftSink } from '@apps/runway/forms/draftSink';
@@ -129,8 +132,15 @@ import {
   type AmountDraft,
 } from '@apps/runway/utils/rangeInput';
 import { getCardName } from '@apps/runway/utils/cardText';
+import { describeAccountLine } from '@apps/runway/utils/accountText';
+import {
+  getPullAccounts,
+  keepPullAccountId,
+} from '@apps/runway/engine/accounts';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectAccounts,
+  selectIsAccountsLoaded,
   selectAllCards,
   selectBills,
   selectComingDays,
@@ -163,7 +173,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import DateInput from '@/components/DateInput';
 
-const CASH_VALUE = 'cash';
+const NO_PAY_WAY_VALUE = 'none';
 
 type Frequency = (typeof BILL_FREQUENCIES)[number];
 type Funding = (typeof BILL_FUNDINGS)[number];
@@ -197,6 +207,8 @@ interface BillFormData {
   group: { choice: string; newText: string };
   /** The card it is usually charged to; null for cash or debit. */
   paidByCardId: string | null;
+  /** The account it is paid from; null follows the plan's one pull account. */
+  accountId: string | null;
 }
 
 interface BillDraft extends KeptChange {
@@ -211,26 +223,30 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
     ...keptChangeChecks,
   });
   const formData = draft
-    ? readDraftFields<BillFormData>(draft.formData, {
-        name: isText,
-        amount: isAmountDraft,
-        priority: isOneOf(PRIORITIES),
-        startDate: isText,
-        frequency: isNullableOneOf(BILL_FREQUENCIES),
-        everyCount: isText,
-        everyUnit: isOneOf(BILL_EVERY_UNITS),
-        endKind: isOneOf(INCOME_ENDINGS),
-        endDate: isText,
-        endCount: isText,
-        funding: isOneOf(BILL_FUNDINGS),
-        dayKeys: isTextList,
-        paidFrom: isOneOf(BILL_PAID_FROMS),
-        payValue: isText,
-        emoji: isNullableText,
-        group: isPickOrCreate,
-        paidByCardId: isNullableText,
-        isLater: isFlag,
-      })
+    ? readDraftFields<BillFormData>(
+        withDraftDefaults(draft.formData, { accountId: null }),
+        {
+          name: isText,
+          amount: isAmountDraft,
+          priority: isOneOf(PRIORITIES),
+          startDate: isText,
+          frequency: isNullableOneOf(BILL_FREQUENCIES),
+          everyCount: isText,
+          everyUnit: isOneOf(BILL_EVERY_UNITS),
+          endKind: isOneOf(INCOME_ENDINGS),
+          endDate: isText,
+          endCount: isText,
+          funding: isOneOf(BILL_FUNDINGS),
+          dayKeys: isTextList,
+          paidFrom: isOneOf(BILL_PAID_FROMS),
+          payValue: isText,
+          emoji: isNullableText,
+          group: isPickOrCreate,
+          paidByCardId: isNullableText,
+          accountId: isNullableText,
+          isLater: isFlag,
+        },
+      )
     : null;
   return draft && formData ? { ...draft, formData } : null;
 };
@@ -281,7 +297,7 @@ export type BillStepId =
   | 'funding'
   | 'priority'
   | 'group'
-  | 'paidBy'
+  | 'paidWith'
   | 'emoji';
 
 const EMPTY_BILL: BillSealed = {
@@ -299,6 +315,7 @@ const EMPTY_BILL: BillSealed = {
   stanceOverride: null,
   groupId: null,
   paidByCardId: null,
+  accountId: null,
 };
 
 const priorityOptions = PRIORITIES.map((value) => ({
@@ -551,6 +568,7 @@ const getEditingData = (
     emoji: payload.emoji,
     group: { choice: payload.groupId ?? '', newText: '' },
     paidByCardId: payload.paidByCardId ?? null,
+    accountId: payload.accountId ?? null,
   };
 };
 
@@ -620,6 +638,8 @@ function BillFormBody({
     label: name,
   }));
   const allCards = useAppSelector(selectAllCards);
+  const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const isTracking = useAppSelector(selectLevel) === 'track';
   const [startData] = useState<BillFormData>(() =>
     editing || draft?.initial || fromCost
@@ -644,6 +664,11 @@ function BillFormBody({
                 : EMPTY_BILL)) as BillSealed,
             editing === undefined,
           ),
+          accountId: keepPullAccountId(
+            (editing?.payload ?? draft?.initial)?.accountId,
+            openAccounts,
+            isAccountsLoaded,
+          ),
           ...(draft?.forName
             ? { group: toGroupAnswer(draft.forName.current, groupChoices) }
             : {}),
@@ -667,6 +692,7 @@ function BillFormBody({
           emoji: null,
           group: { choice: presetGroupId ?? '', newText: '' },
           paidByCardId: null,
+          accountId: null,
         },
   );
   const startsChosen =
@@ -809,6 +835,30 @@ function BillFormBody({
     const found = allCards.find((card) => card.id === id);
     return found ? getCardName(found, allCards) : CARD_WORDS.cashOrDebit;
   };
+
+  const accountOptions = getPullAccounts(openAccounts);
+  const accountId = keepPullAccountId(
+    formData.accountId,
+    openAccounts,
+    isAccountsLoaded,
+  );
+  const shownCards = isTracking ? cardOptions : [];
+  const shownAccounts = accountOptions.length >= 2 ? accountOptions : [];
+  const noPayWayLabel =
+    shownAccounts.length > 0
+      ? ACCOUNT_WORDS.payFromNone
+      : BILL_PAY_WORDS.fromBank;
+  const payWay =
+    shownCards.find((card) => card.id === formData.paidByCardId)?.id ??
+    shownAccounts.find((account) => account.id === accountId)?.id ??
+    NO_PAY_WAY_VALUE;
+  const nameOfPayWay = (id: string) =>
+    id === NO_PAY_WAY_VALUE
+      ? noPayWayLabel
+      : shownCards.some((card) => card.id === id)
+        ? nameOfCard(id)
+        : (shownAccounts.find((account) => account.id === id)?.name ??
+          noPayWayLabel);
 
   const startMin = editing ? undefined : toDateInputValue(today);
   const dayOptions = dueDays.map((day) => ({
@@ -1322,28 +1372,45 @@ function BillFormBody({
         />
       ),
     },
-    ...(isTracking && cardOptions.length > 0
+    ...(shownCards.length > 0 || shownAccounts.length > 0
       ? [
           {
-            id: 'paidBy',
-            title: CARD_WORDS.paidByTitle,
-            summaryLabel: CARD_WORDS.paidBy,
-            summaryValue: nameOfCard(formData.paidByCardId),
+            id: 'paidWith',
+            title: BILL_PAY_WORDS.title,
+            summaryLabel: BILL_PAY_WORDS.label,
+            summaryValue: nameOfPayWay(payWay),
             isAnswered: true,
             isPreAnswered: true,
             render: ({ moveOn }: QuestionControls) => (
               <PillGroup
-                label={CARD_WORDS.paidBy}
+                label={BILL_PAY_WORDS.label}
                 options={[
-                  { value: CASH_VALUE, label: CARD_WORDS.cashOrDebit },
-                  ...cardOptions.map((card) => ({
+                  { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
+                  ...shownCards.map((card) => ({
                     value: card.id,
                     label: getCardName(card, allCards),
+                    detail: BILL_PAY_WORDS.cardDetail,
+                  })),
+                  ...shownAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    detail: describeAccountLine(account),
                   })),
                 ]}
-                value={formData.paidByCardId ?? CASH_VALUE}
+                value={payWay}
                 onChange={(value) => {
-                  set({ paidByCardId: value === CASH_VALUE ? null : value });
+                  const isCard = shownCards.some((card) => card.id === value);
+                  const isAccount = shownAccounts.some(
+                    (account) => account.id === value,
+                  );
+                  set({
+                    ...(isTracking
+                      ? { paidByCardId: isCard ? value : null }
+                      : {}),
+                    ...(shownAccounts.length > 0
+                      ? { accountId: isAccount ? value : null }
+                      : {}),
+                  });
                   moveOn();
                 }}
               />
@@ -1445,6 +1512,11 @@ function BillFormBody({
       stanceOverride: getStanceOverride(data.amount),
       groupId: draft ? null : (groupId ?? (newGroup ? NEW_GROUP_ID : null)),
       paidByCardId: data.paidByCardId,
+      accountId: keepPullAccountId(
+        data.accountId,
+        openAccounts,
+        isAccountsLoaded,
+      ),
     };
     return result;
   };
@@ -1528,6 +1600,11 @@ function BillFormBody({
       ? {
           ...editing.payload,
           paidByCardId: editing.payload.paidByCardId ?? null,
+          accountId: keepPullAccountId(
+            editing.payload.accountId,
+            openAccounts,
+            isAccountsLoaded,
+          ),
         }
       : EMPTY_BILL,
     candidate,

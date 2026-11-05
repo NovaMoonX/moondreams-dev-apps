@@ -15,7 +15,11 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
-import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
+import {
+  useQuestionFlow,
+  type QuestionControls,
+  type QuestionStep,
+} from '@/hooks/useQuestionFlow';
 import { useAppSelector } from '@/store';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -31,18 +35,34 @@ import {
 import {
   isFlag,
   isNullableOneOf,
+  isNullableText,
   isText,
   isWholeNumber,
   readDraftFields,
+  withDraftDefaults,
 } from '@apps/runway/forms/draftParse';
 import {
   withStartOver,
   type StartOverProps,
 } from '@apps/runway/forms/withStartOver';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  getPullAccounts,
+  keepPullAccountId,
+} from '@apps/runway/engine/accounts';
+import LastFourField from '@apps/runway/forms/LastFourField';
+import {
+  describeAccountLine,
+  isLastFour,
+} from '@apps/runway/utils/accountText';
 import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
-import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
-import type { OpenCard } from '@apps/runway/types';
+import {
+  selectAccounts,
+  selectIsAccountsLoaded,
+  selectAllAccounts,
+  selectAllCards,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import type { OpenAccount, OpenCard } from '@apps/runway/types';
 import {
   describeCardAdded,
   describeCardChanged,
@@ -56,6 +76,7 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const OTHER_VALUE = 'other';
+const NO_ACCOUNT_VALUE = 'none';
 const DUE_DAYS = Array.from({ length: LAST_DAY }, (_, index) => index + 1);
 
 interface CardFormData {
@@ -68,6 +89,10 @@ interface CardFormData {
   /** The day of the month it is due, when one was picked. */
   dueDay: number | null;
   hasNoDueDay: boolean;
+  lastFour: string;
+  hasNoLastFour: boolean;
+  /** The account that pays it; null until one is picked. */
+  payFromAccountId: string | null;
 }
 
 interface CardFormProps {
@@ -83,22 +108,36 @@ const isOfflineFailure = (error: unknown) =>
   !navigator.onLine ||
   /offline|unavailable/i.test(error instanceof Error ? error.message : '');
 
-const parseCardDraft = (stored: unknown) => {
-  const data = readDraftFields<CardFormData>(stored, {
-    issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
-    otherIssuer: isText,
-    name: isText,
-    hasNoName: isFlag,
-    owed: isText,
-    dueDay: (value) =>
-      value === null ||
-      (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
-    hasNoDueDay: isFlag,
-  });
+const parseCardDraft = (stored: unknown, isEditing: boolean) => {
+  const data = readDraftFields<CardFormData>(
+    withDraftDefaults(stored, {
+      lastFour: '',
+      hasNoLastFour: isEditing,
+      payFromAccountId: null,
+    }),
+    {
+      issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
+      otherIssuer: isText,
+      name: isText,
+      hasNoName: isFlag,
+      owed: isText,
+      dueDay: (value) =>
+        value === null ||
+        (isWholeNumber(value) && DUE_DAYS.includes(value as number)),
+      hasNoDueDay: isFlag,
+      lastFour: isText,
+      hasNoLastFour: isFlag,
+      payFromAccountId: isNullableText,
+    },
+  );
   return data;
 };
 
-const getInitialData = (editing: OpenCard | undefined): CardFormData => {
+const getInitialData = (
+  editing: OpenCard | undefined,
+  pullAccounts: readonly OpenAccount[],
+  isAccountsLoaded: boolean,
+): CardFormData => {
   if (!editing) {
     return {
       issuerPick: null,
@@ -108,6 +147,9 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
       owed: '',
       dueDay: null,
       hasNoDueDay: false,
+      lastFour: '',
+      hasNoLastFour: false,
+      payFromAccountId: null,
     };
   }
   const known = CARD_ISSUERS.find((issuer) => issuer === editing.issuer);
@@ -119,6 +161,13 @@ const getInitialData = (editing: OpenCard | undefined): CardFormData => {
     owed: '',
     dueDay: editing.dueDay,
     hasNoDueDay: editing.dueDay === null,
+    lastFour: editing.lastFour ?? '',
+    hasNoLastFour: !editing.lastFour,
+    payFromAccountId: keepPullAccountId(
+      editing.payFromAccountId,
+      pullAccounts,
+      isAccountsLoaded,
+    ),
   };
 };
 
@@ -137,17 +186,23 @@ function CardFormBody({
   const maskNote = (note: string | null) => (note ? mask(note) : null);
   const isMounted = useRef(true);
   const cards = useAppSelector(selectAllCards);
+  const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
+  const allAccounts = useAppSelector(selectAllAccounts);
+  const pullAccounts = getPullAccounts(openAccounts);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
-  const [startData] = useState(() => getInitialData(editing));
+  const [startData] = useState(() =>
+    getInitialData(editing, pullAccounts, isAccountsLoaded),
+  );
   const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
   const draft = useFormDraft({
     key: draftKey,
     base: draftBase,
-    parse: parseCardDraft,
+    parse: (stored) => parseCardDraft(stored, editing !== undefined),
   });
   const [formData, setFormData] = useState<CardFormData>(
     draft.restored ?? startData,
@@ -194,6 +249,16 @@ function CardFormBody({
     owedCents !== null && owedCents >= 0 && owedCents <= MAX_PURCHASE_CENTS;
   const asksOwed = editing === undefined && startDate !== null;
   const isDueAnswered = formData.dueDay !== null || formData.hasNoDueDay;
+  const isLastFourAnswered =
+    formData.hasNoLastFour || isLastFour(formData.lastFour);
+  const payFromAccountId = keepPullAccountId(
+    formData.payFromAccountId,
+    pullAccounts,
+    isAccountsLoaded,
+  );
+  const payFromName =
+    pullAccounts.find((account) => account.id === payFromAccountId)?.name ??
+    CARD_WORDS.payFromNone;
   const hasOther = hasUnnamedCardFrom(issuer, cards, editing?.id ?? null);
 
   const steps: QuestionStep[] = [
@@ -266,6 +331,31 @@ function CardFormBody({
             </RevealChip>
           </div>
         </div>
+      ),
+    },
+    {
+      id: 'lastFour',
+      title: CARD_WORDS.lastFourTitle,
+      summaryLabel: CARD_WORDS.lastFourLabel,
+      summaryValue: formData.hasNoLastFour
+        ? CARD_WORDS.lastFourNone
+        : isLastFour(formData.lastFour)
+          ? `••${formData.lastFour}`
+          : '',
+      isAnswered: isLastFourAnswered,
+      blocker: CARD_WORDS.needsFourDigits,
+      render: ({ moveOn }) => (
+        <LastFourField
+          label={CARD_WORDS.lastFourLabel}
+          hint={CARD_WORDS.lastFourHint}
+          skipLabel={CARD_WORDS.lastFourSkip}
+          value={formData.lastFour}
+          onChange={(value) => set({ lastFour: value, hasNoLastFour: false })}
+          onSkip={() => {
+            set({ lastFour: '', hasNoLastFour: true });
+            moveOn();
+          }}
+        />
       ),
     },
     ...(asksOwed
@@ -341,6 +431,38 @@ function CardFormBody({
         </div>
       ),
     },
+    ...(pullAccounts.length >= 2
+      ? [
+          {
+            id: 'payFrom',
+            title: CARD_WORDS.payFromTitle,
+            summaryLabel: CARD_WORDS.payFromLabel,
+            summaryValue: payFromName,
+            isAnswered: true,
+            isPreAnswered: true,
+            render: ({ moveOn }: QuestionControls) => (
+              <PillGroup
+                label={CARD_WORDS.payFromLabel}
+                options={[
+                  { value: NO_ACCOUNT_VALUE, label: CARD_WORDS.payFromNone },
+                  ...pullAccounts.map((account) => ({
+                    value: account.id,
+                    label: account.name,
+                    detail: describeAccountLine(account),
+                  })),
+                ]}
+                value={payFromAccountId ?? NO_ACCOUNT_VALUE}
+                onChange={(value) => {
+                  set({
+                    payFromAccountId: value === NO_ACCOUNT_VALUE ? null : value,
+                  });
+                  moveOn();
+                }}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]
+      : []),
   ];
   const questions = useQuestionFlow({
     steps: maskSummaries(steps, isHidden),
@@ -373,11 +495,13 @@ function CardFormBody({
       ? CARD_WORDS.needsIssuer
       : !hasName && !formData.hasNoName
         ? CARD_WORDS.needsName
-        : !isOwedValid
-          ? FORM_FLOW_WORDS.badAmount
-          : !isDueAnswered
-            ? CARD_WORDS.needsDue
-            : null;
+        : !isLastFourAnswered
+          ? CARD_WORDS.needsFourDigits
+          : !isOwedValid
+            ? FORM_FLOW_WORDS.badAmount
+            : !isDueAnswered
+              ? CARD_WORDS.needsDue
+              : null;
 
   const handleSave = async () => {
     if (!user || blocker !== null) return;
@@ -389,12 +513,20 @@ function CardFormBody({
         issuer,
         name: hasName ? name : null,
         dueDay: formData.dueDay,
+        lastFour: formData.hasNoLastFour ? null : formData.lastFour || null,
+        payFromAccountId:
+          pullAccounts.length >= 2
+            ? payFromAccountId
+            : (editing?.payFromAccountId ?? null),
       };
       if (editing) {
         const summary = describeCardChanged(
           getCardName(editing, cards),
           editing,
           sealed,
+          (id) =>
+            allAccounts.find((account) => account.id === id)?.name ??
+            CARD_WORDS.payFromNone,
         );
         if (summary !== null) {
           await updateCard(user.uid, encryption, editing.id, sealed, summary);

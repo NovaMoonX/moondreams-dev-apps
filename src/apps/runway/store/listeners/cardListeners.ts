@@ -42,6 +42,8 @@ export function startCardsListener(
               issuer: payload.issuer,
               name: payload.name ?? null,
               dueDay: payload.dueDay ?? null,
+              lastFour: payload.lastFour ?? null,
+              payFromAccountId: payload.payFromAccountId ?? null,
             };
           }),
         );

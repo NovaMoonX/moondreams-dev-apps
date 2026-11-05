@@ -4,6 +4,7 @@ import { resetAllState } from '@/store/actions/globalActions';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
   DateOnly,
+  OpenAccount,
   OpenCard,
   OpenExpense,
   OpenChange,
@@ -33,6 +34,10 @@ export interface RunwayState {
   cards: OpenCard[];
   /** The cards have been read once, so a card's figures are not mistaken for none. */
   isCardsLoaded: boolean;
+  /** Every account, archived ones too. */
+  accounts: OpenAccount[];
+  /** The accounts have been read once, so an account's figures are not mistaken for none. */
+  isAccountsLoaded: boolean;
   /** Every expense group. */
   expenses: OpenExpense[];
   /** The purchases of the recent window. */
@@ -81,6 +86,8 @@ const initialState: RunwayState = {
   moves: [],
   cards: [],
   isCardsLoaded: false,
+  accounts: [],
+  isAccountsLoaded: false,
   expenses: [],
   purchases: [],
   daysFrom: null,
@@ -155,6 +162,10 @@ export const runwaySlice = createSlice({
     setCards: (state, action: PayloadAction<OpenCard[]>) => {
       state.cards = action.payload;
       state.isCardsLoaded = true;
+    },
+    setAccounts: (state, action: PayloadAction<OpenAccount[]>) => {
+      state.accounts = action.payload;
+      state.isAccountsLoaded = true;
     },
     setMoves: (
       state,
@@ -240,6 +251,7 @@ export const {
   setRecords,
   setMoves,
   setCards,
+  setAccounts,
   setExpenses,
   setPurchases,
   setPeriodPurchases,
