@@ -823,7 +823,7 @@ function PurchaseScreen({
                 hasChevron
                 icon={<Repeat />}
                 label={RULE_WORDS.yourRule}
-                subtitle={RULE_WORDS.heldSub(describeRuleSentence(heldRule))}
+                subtitle={RULE_WORDS.heldSub}
                 onClick={() => openRuleStep('edit', heldRule.id)}
               />
             )}
@@ -831,28 +831,28 @@ function PurchaseScreen({
               (merchantRule === null
                 ? heldRule === null
                 : merchantRule.id !== heldRule?.id) && (
-              <ActionRow
-                isGrouped
-                isRoomy
-                hasChevron
-                icon={<Repeat />}
-                label={
-                  merchantRule === null
-                    ? RULE_WORDS.alwaysDo
-                    : RULE_WORDS.yourRule
-                }
-                subtitle={
-                  merchantRule === null
-                    ? RULE_WORDS.alwaysDoSub
-                    : describeRuleSentence(merchantRule)
-                }
-                onClick={() =>
-                  merchantRule === null
-                    ? openRuleStep('make', null)
-                    : openRuleStep('edit', merchantRule.id)
-                }
-              />
-            )}
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Repeat />}
+                  label={
+                    merchantRule === null
+                      ? RULE_WORDS.alwaysDo
+                      : RULE_WORDS.yourRule
+                  }
+                  subtitle={
+                    merchantRule === null
+                      ? RULE_WORDS.alwaysDoSub
+                      : describeRuleSentence(merchantRule)
+                  }
+                  onClick={() =>
+                    merchantRule === null
+                      ? openRuleStep('make', null)
+                      : openRuleStep('edit', merchantRule.id)
+                  }
+                />
+              )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow
