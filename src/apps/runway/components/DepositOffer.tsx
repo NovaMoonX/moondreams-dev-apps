@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -25,6 +26,7 @@ interface DepositOfferProps {
 /** The pay days a waiting deposit may be, when none is clearly it: tapping one links the deposit to that day. */
 function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const { user } = useAuth();
+  const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector((state) => selectLostDeposits(state, today));
@@ -78,19 +80,26 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
           {offered.map(({ day, named }) => {
             const { lowCents, highCents } = day.amount;
             const difference = received - lowCents;
-            const detail = [
-              formatDateOrdinalUTC(day.arrivedOn ?? day.expectedOn),
-              lowCents !== highCents
-                ? null
+            const fit = isHidden
+              ? null
+              : lowCents !== highCents
+                ? received >= lowCents && received <= highCents
+                  ? DEPOSIT_WORDS.inRange
+                  : null
                 : difference === 0
                   ? DEPOSIT_WORDS.dayRow(null)
                   : difference > 0
                     ? DEPOSIT_WORDS.moreThan(formatCents(difference))
-                    : DEPOSIT_WORDS.lessThan(formatCents(-difference)),
+                    : DEPOSIT_WORDS.lessThan(formatCents(-difference));
+            const detail = [
+              formatDateOrdinalUTC(day.arrivedOn ?? day.expectedOn),
+              fit,
             ]
               .filter(Boolean)
               .join(' · ');
-            const name = named.sourceName ?? named.payLineName;
+            const name = named.sourceName
+              ? `${named.sourceName}, ${named.payLineName}`
+              : named.payLineName;
             return (
               <ItemRow
                 key={day.dayKey}

@@ -115,6 +115,8 @@ const DEPOSIT_DAYS = 3;
 const OFFER_DAYS = 14;
 /** An exact amount this close to the deposit (overtime, a changed deduction) still matches. */
 const DEPOSIT_SHARE = 0.15;
+/** A pay day further than this from the deposit's amount is never offered: it cannot be that pay. */
+const OFFER_SHARE = 0.5;
 
 /** An income day a deposit may be: coming or confirmed, never one marked not arrived. A confirmed day's amount is the one it was confirmed at, as a range of one figure. */
 export interface DepositDay {
@@ -127,7 +129,7 @@ export interface DepositDay {
 export interface DepositMatches {
   /** Deposit id → the one income day it clearly is. */
   clear: Map<string, string>;
-  /** Deposit id → pay days it may be, nearest first; only for a deposit without a clear day. */
+  /** Deposit id → pay days it may be, those the amount fits first, then nearest; a day more than half its pay away is left out. Only for a deposit without a clear day. */
   offers: Map<string, string[]>;
 }
 
@@ -166,7 +168,7 @@ const compareRanks = (a: readonly number[], b: readonly number[]): number =>
 
 const compareKeys = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered. A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. The result does not depend on the order of the input. */
+/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered (those the amount fits first, none more than half its pay away). A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. The result does not depend on the order of the input. */
 export function findDepositDays(
   waiting: readonly OpenPurchase[],
   days: readonly DepositDay[],
@@ -220,8 +222,19 @@ export function findDepositDays(
   const offers = new Map(
     deposits.flatMap((deposit): [string, string[]][] => {
       if (clear.has(deposit.id)) return [];
+      const cents = -deposit.amountCents;
       const offered = nearest(deposit, OFFER_DAYS)
-        .filter((day) => !taken.has(day.dayKey))
+        .filter(
+          (day) =>
+            !taken.has(day.dayKey) &&
+            getAmountGap(cents, day.amount) <=
+              day.amount.highCents * OFFER_SHARE,
+        )
+        .sort(
+          (a, b) =>
+            Number(!fitsAmount(cents, a.amount)) -
+            Number(!fitsAmount(cents, b.amount)),
+        )
         .map((day) => day.dayKey);
       return offered.length > 0 ? [[deposit.id, offered]] : [];
     }),

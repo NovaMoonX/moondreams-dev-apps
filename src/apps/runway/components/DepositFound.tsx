@@ -7,6 +7,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
 import { useAuth } from '@/hooks/useAuth';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -26,6 +27,8 @@ interface DepositFoundProps {
   dayKey: string;
   /** What a confirmed day stands on; null while the day is still coming. */
   confirmedCents: number | null;
+  /** A coming day's exact planned amount, compared when no confirmed amount is given; null for a range. */
+  plannedCents: number | null;
   /** Opens the day's correction, offered beside a difference; null when the day cannot be corrected. */
   onCorrect: (() => void) | null;
 }
@@ -34,8 +37,10 @@ interface DepositFoundProps {
 export function DepositFound({
   dayKey,
   confirmedCents,
+  plannedCents,
   onCorrect,
 }: DepositFoundProps) {
+  const { isHidden } = useValuesHidden();
   const deposit = useAppSelector((state) => selectLinkedDeposit(state, dayKey));
   const accounts = useAppSelector((state) => state.runway.accounts);
   if (deposit === null) return null;
@@ -43,7 +48,12 @@ export function DepositFound({
   const account =
     accounts.find((entry) => entry.id === deposit.accountId)?.name ??
     NEEDS_HOME_WORDS.fromBank;
-  const difference = confirmedCents === null ? 0 : received - confirmedCents;
+  const compared = confirmedCents ?? plannedCents;
+  const difference = compared === null ? 0 : received - compared;
+  const toWords =
+    confirmedCents !== null
+      ? DEPOSIT_WORDS.foundDifferent
+      : DEPOSIT_WORDS.foundFromPlan;
   return (
     <InlineNotice tone='info'>
       <p>
@@ -57,15 +67,15 @@ export function DepositFound({
       </p>
       {difference !== 0 && (
         <>
-          <p>
-            <MaskedText>
-              {DEPOSIT_WORDS.foundDifferent(
+          {!isHidden && (
+            <p>
+              {toWords(
                 difference > 0
                   ? DEPOSIT_WORDS.moreThan(formatCents(difference))
                   : DEPOSIT_WORDS.lessThan(formatCents(-difference)),
               )}
-            </MaskedText>
-          </p>
+            </p>
+          )}
           {onCorrect !== null && (
             <Button
               variant='secondary'

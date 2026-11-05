@@ -10330,6 +10330,26 @@ const version = (
     ['pay_a'],
     'a deposit past 15% is still offered the day to pick by hand',
   );
+  assert.equal(
+    share(150_000).offers.get('d1')?.length,
+    1,
+    'a deposit half the pay away is still offered',
+  );
+  assert.equal(
+    share(150_001).offers.size,
+    0,
+    'a deposit more than half the pay away is never offered that day',
+  );
+  const fitFirst = findDepositDays(
+    [deposit('d1', 15_000, 5)],
+    [payDay('pay_near', 4, 25_000), payDay('pay_range', 9, 12_000, 18_000)],
+    [],
+  );
+  assert.deepEqual(
+    fitFirst.offers.get('d1'),
+    ['pay_range', 'pay_near'],
+    'a day the amount fits is offered before a nearer one it does not',
+  );
 
   const ranged = (cents: number) =>
     findDepositDays(

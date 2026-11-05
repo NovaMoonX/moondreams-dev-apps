@@ -191,6 +191,7 @@ function ConfirmedDayView({ day, onClose }: ConfirmedDayViewProps) {
         <DepositFound
           dayKey={day.dayKey}
           confirmedCents={record?.arrivedCents ?? null}
+          plannedCents={null}
           onCorrect={
             isCorrectable && record ? () => setIsCorrecting(true) : null
           }

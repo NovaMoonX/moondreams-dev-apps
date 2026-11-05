@@ -4015,7 +4015,7 @@ export const NEEDS_HOME_WORDS = {
 
 export const DEPOSIT_WORDS = {
   whichTitle: 'Which pay is this?',
-  whichHint: 'Tap the pay it belongs to. Nothing else changes.',
+  whichHint: 'Tap the pay it belongs to.',
   noneNear:
     'No pay day is close to this one. You can leave it out of spending for now.',
   dayRow: (differs: string | null) =>
@@ -4030,8 +4030,11 @@ export const DEPOSIT_WORDS = {
   found: (amount: string, account: string, date: string) =>
     `Deposit found: ${amount} from ${account} on ${date}`,
   foundDifferent: (difference: string) =>
-    `That is ${difference} from what you confirmed.`,
-  unlink: 'Not this pay',
+    `That is ${difference} than what you confirmed.`,
+  foundFromPlan: (difference: string) => `That is ${difference} than planned.`,
+  foundStatus: 'Arrived. Confirm it to use what came in.',
+  inRange: 'In your range',
+  unlink: 'Not this deposit',
   unlinkSub: 'Send the deposit back to Needs a home',
   unlinked: 'The deposit is back in Needs a home',
   unlinkFailed: 'That did not save. Nothing was changed.',
