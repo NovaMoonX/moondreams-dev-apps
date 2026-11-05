@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
@@ -12,7 +12,12 @@ interface Page {
   goBack: () => Promise<unknown>;
   goForward: () => Promise<unknown>;
   waitForTimeout: (ms: number) => Promise<void>;
-  evaluate: <T>(fn: () => T) => Promise<T>;
+  waitForFunction: (
+    fn: (arg: string) => boolean,
+    arg: string,
+    options: { timeout: number },
+  ) => Promise<unknown>;
+  evaluate: <T, A = undefined>(fn: (arg: A) => T, arg?: A) => Promise<T>;
 }
 interface Context {
   newPage: () => Promise<Page>;
@@ -50,8 +55,30 @@ const buildInto = (name: string) => {
   );
   return outDir;
 };
-const before = buildInto('before');
-const after = buildInto('after');
+// Removes the builds when a build itself fails, since the cleanup below is never reached.
+const buildOrClean = (name: string) => {
+  try {
+    return buildInto(name);
+  } catch (error) {
+    execFileSync('rm', ['-rf', root]);
+    throw error;
+  }
+};
+const before = buildOrClean('before');
+const after = buildOrClean('after');
+const newScript = (
+  await readFile(path.join(after, 'index.html'), 'utf8')
+).match(/assets\/index-[^"]+\.js/)?.[0];
+assert.ok(newScript, 'The second build has no entry script');
+const runwayChunk = (dir: string) =>
+  readdir(path.join(dir, 'assets')).then((names) =>
+    names.find((name) => /^RunwayPage-.*\.js$/.test(name)),
+  );
+const oldRunway = await runwayChunk(before);
+assert.ok(
+  oldRunway !== undefined && oldRunway !== (await runwayChunk(after)),
+  "The second build kept the first build's Runway file, so nothing would be missing",
+);
 
 const types: Record<string, string> = {
   '.js': 'text/javascript',
@@ -90,6 +117,8 @@ interface Landing {
   isOldPage: boolean;
   script: string;
   text: string;
+  stamp: string | null;
+  presetStamp: string;
 }
 
 const browser = await chromium.launch();
@@ -102,13 +131,23 @@ const openAfterDeploy = async (isRetry: boolean) => {
   });
   const page = await context.newPage();
   await page.goto(`${origin}/`);
-  await page.waitForTimeout(2500);
+  // The old build has to be running before the deploy; a page that never booted proves nothing.
+  await page.waitForFunction(
+    () =>
+      (document.getElementById('root')?.childElementCount ?? 0) > 0 &&
+      !document.body.innerText.includes('something went wrong'),
+    '',
+    { timeout: 20000 },
+  );
+  await page.waitForTimeout(1500);
   await page.evaluate(() => {
     (window as unknown as { isOldPage: boolean }).isOldPage = true;
   });
+  const presetStamp = String(Date.now());
   if (isRetry) {
-    await page.evaluate(() =>
-      window.sessionStorage.setItem('staleChunkReloadAt', String(Date.now())),
+    await page.evaluate(
+      (stamp) => window.sessionStorage.setItem('staleChunkReloadAt', stamp),
+      presetStamp,
     );
   }
   served = after;
@@ -123,7 +162,17 @@ const openAfterDeploy = async (isRetry: boolean) => {
   await page.goBack();
   await page.waitForTimeout(500);
   await page.goForward();
-  await page.waitForTimeout(5000);
+  // Settled once the new build runs, or the old page shows its error screen.
+  await page.waitForFunction(
+    (script) =>
+      document
+        .querySelector<HTMLScriptElement>('script[type=module]')
+        ?.src.endsWith(script) === true ||
+      document.body.innerText.includes('something went wrong'),
+    newScript,
+    { timeout: 20000 },
+  );
+  await page.waitForTimeout(1500);
   const landing = await page.evaluate(() => ({
     pathname: window.location.pathname,
     isOldPage: Boolean(
@@ -133,14 +182,12 @@ const openAfterDeploy = async (isRetry: boolean) => {
       document.querySelector<HTMLScriptElement>('script[type=module]')?.src ??
       '',
     text: document.body.innerText,
+    stamp: window.sessionStorage.getItem('staleChunkReloadAt'),
   }));
   await context.close();
-  return landing as Landing;
+  return { ...landing, presetStamp } as Landing;
 };
 
-const newScript = (
-  await readFile(path.join(after, 'index.html'), 'utf8')
-).match(/assets\/index-[^"]+\.js/)?.[0];
 const failures: string[] = [];
 const report = (label: string, isRight: boolean, landing: Landing) => {
   if (!isRight) {
@@ -151,28 +198,36 @@ const report = (label: string, isRight: boolean, landing: Landing) => {
   console.log(`${isRight ? 'ok  ' : 'FAIL'} ${label}`);
 };
 
-const fresh = await openAfterDeploy(false);
+const runBoth = async () => {
+  try {
+    const fresh = await openAfterDeploy(false);
+    const retry = await openAfterDeploy(true);
+    return { fresh, retry };
+  } finally {
+    await browser.close();
+    server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+};
+const { fresh, retry } = await runBoth();
 report(
   'a deploy, then a screen not yet loaded: reloads into the new version on that screen',
   fresh.pathname === '/runway' &&
     !fresh.isOldPage &&
-    newScript !== undefined &&
     fresh.script.endsWith(newScript) &&
-    !fresh.text.includes('something went wrong'),
+    !fresh.text.includes('something went wrong') &&
+    fresh.stamp !== null,
   fresh,
 );
-const retry = await openAfterDeploy(true);
 report(
   'a second miss within half a minute: the error screen with Restart, no reload',
   retry.isOldPage &&
     retry.text.includes('something went wrong') &&
-    retry.text.includes('Restart'),
+    retry.text.includes('Restart') &&
+    retry.stamp === retry.presetStamp,
   retry,
 );
 
-await browser.close();
-server.close();
-await rm(root, { recursive: true, force: true });
 assert.deepEqual(
   failures,
   [],
