@@ -297,6 +297,7 @@ function AppFeaturesTab({ app, users }: AppFeaturesTabProps) {
                 {gate.warning && (
                   <TriangleAlert
                     className='text-warning h-4 w-4 shrink-0'
+                    role='img'
                     aria-label='Read before changing'
                   />
                 )}
@@ -479,7 +480,7 @@ function GateControls({
           <Textarea
             value={draft.reason ?? ''}
             maxLength={REASON_MAX_LENGTH}
-            rows={2}
+            rows={3}
             placeholder='Optional, for whoever changes this next'
             onChange={(event) =>
               onDraftChange({
