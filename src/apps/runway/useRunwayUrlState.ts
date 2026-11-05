@@ -5,6 +5,7 @@ import {
   parseAsStringLiteral,
   useQueryState,
 } from 'nuqs';
+import { createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -32,8 +33,12 @@ import {
 } from '@apps/runway/utils/openItemRequest';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
 
+/** True inside a view drawn only as a preview (the next Plan view under a swiping finger), which must never act on what the URL asks for. */
+export const RunwayPreviewContext = createContext(false);
+
 /** Runway's open tab and income day, kept in the URL so a reload and a return from another app land on the same tab. */
 export function useRunwayUrlState() {
+  const isPreview = useContext(RunwayPreviewContext);
   const navigate = useNavigate();
   const [requestedTab, setRequestedTab] = useQueryState(
     'tab',
@@ -356,7 +361,7 @@ export function useRunwayUrlState() {
     showTab(tab);
   };
 
-  return {
+  const state = {
     activeTab,
     addRequest: requestedAdd,
     showAddOnTab,
@@ -421,5 +426,24 @@ export function useRunwayUrlState() {
     setLogSpan,
     setLogPage,
     setLogItem,
+  };
+  if (!isPreview) return state;
+  return {
+    ...state,
+    addRequest: null,
+    view: null,
+    startMethod: null,
+    spendEnvelope: null,
+    purchaseId: null,
+    checkEnvelope: null,
+    openDayKey: null,
+    settingsView: null,
+    moreEntry: null,
+    isFixesOpen: false,
+    openItem: null,
+    isUndatedBillsOnly: false,
+    isAllDueOpen: false,
+    isGroupsOpen: false,
+    logItem: null,
   };
 }

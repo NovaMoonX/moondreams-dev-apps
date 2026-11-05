@@ -135,9 +135,11 @@ function OverviewTile({
 function RefreshRing({
   progress,
   isSpinning,
+  isReady,
 }: {
   progress: number;
   isSpinning: boolean;
+  isReady: boolean;
 }) {
   return (
     <svg
@@ -152,7 +154,7 @@ function RefreshRing({
         fill='none'
         strokeWidth='3'
         strokeLinecap='round'
-        className='stroke-primary'
+        className={isReady ? 'stroke-primary-foreground' : 'stroke-primary'}
         strokeDasharray={RING_LENGTH}
         strokeDashoffset={RING_LENGTH * (1 - (isSpinning ? 0.75 : progress))}
       />
@@ -189,8 +191,7 @@ const FALLBACK: Measures = {
 
 const ROW_CLASS =
   'relative flex [scrollbar-width:none] gap-2 overflow-x-auto overscroll-x-contain pb-1';
-const ROW_TILE_CLASS =
-  'w-[44%] shrink-0 lg:w-[calc((100%-1rem)/3)]';
+const ROW_TILE_CLASS = 'w-[44%] shrink-0 lg:w-[calc((100%-1rem)/3)]';
 const GRID_CLASS =
   'relative grid auto-rows-fr grid-cols-2 gap-2 lg:grid-cols-3 max-lg:[&>*:last-child:nth-child(odd)]:col-span-2';
 
@@ -243,9 +244,7 @@ function PullFrame({
   onRefresh,
 }: PullFrameProps) {
   const [measures, setMeasures] = useState<Measures>(FALLBACK);
-  const [tween, setTween] = useState<{ key: number; at: number } | null>(
-    null,
-  );
+  const [tween, setTween] = useState<{ key: number; at: number } | null>(null);
   const clipRef = useRef<HTMLDivElement>(null);
   const measureRefs = useRef<{
     closed: HTMLDivElement | null;
@@ -360,7 +359,10 @@ function PullFrame({
     const fold = () => {
       const clip = clipRef.current;
       if (!clip || clip.getBoundingClientRect().bottom >= 0) return;
-      pendingShiftRef.current = Math.max(0, clip.offsetHeight - measures.closed);
+      pendingShiftRef.current = Math.max(
+        0,
+        clip.offsetHeight - measures.closed,
+      );
       onSettle(0, null);
     };
     window.addEventListener('scroll', fold, { passive: true });
@@ -541,8 +543,10 @@ function PullFrame({
       >
         <div
           className={join(
-            'bg-card flex items-center justify-center rounded-full border shadow-md',
-            progress >= 1 || isRefreshing ? 'border-primary' : 'border-border',
+            'flex items-center justify-center rounded-full border shadow-md',
+            progress >= 1 && !isRefreshing
+              ? 'bg-primary border-primary'
+              : 'bg-card border-border',
             !isPulling && 'transition-transform duration-200',
           )}
           style={{
@@ -551,7 +555,11 @@ function PullFrame({
             transform: `translateY(${isCircleShown ? circleY : -CIRCLE_PX - 8}px)`,
           }}
         >
-          <RefreshRing progress={progress} isSpinning={isRefreshing} />
+          <RefreshRing
+            progress={progress}
+            isSpinning={isRefreshing}
+            isReady={progress >= 1 && !isRefreshing}
+          />
         </div>
         {isCircleShown && (
           <span className='sr-only'>

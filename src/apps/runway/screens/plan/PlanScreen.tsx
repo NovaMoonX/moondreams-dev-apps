@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { Settings2 } from 'lucide-react';
 
 import EntryTile from '@/components/EntryTile';
@@ -16,7 +22,10 @@ import IncomeScreen from '@apps/runway/screens/plan/IncomeScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectHasEverHadIncome } from '@apps/runway/store/selectors/runwaySelectors';
 import type { PlanSection } from '@apps/runway/types';
-import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import {
+  RunwayPreviewContext,
+  useRunwayUrlState,
+} from '@apps/runway/useRunwayUrlState';
 
 const viewSections = PLAN_SECTIONS.filter((value) => value !== 'more');
 
@@ -50,6 +59,19 @@ const makeGhost = (body: HTMLElement) => {
     transition: 'none',
   });
   return ghost;
+};
+
+const placeBeside = (
+  element: HTMLElement,
+  body: HTMLElement,
+  offset: number,
+  direction: 1 | -1,
+  transition: string,
+) => {
+  element.style.transition = transition;
+  element.style.top = `${body.offsetTop}px`;
+  element.style.width = `${body.offsetWidth}px`;
+  element.style.left = `${offset + direction * body.offsetWidth}px`;
 };
 
 function SectionView({ section }: { section: PlanSection }) {
@@ -86,7 +108,17 @@ function PlanScreen() {
     direction: 1 | -1;
   } | null>(null);
   const peekRef = useRef<HTMLDivElement | null>(null);
+  const peekTimerRef = useRef(0);
   const dragRef = useRef(0);
+  const attachPeek = useCallback(
+    (element: HTMLDivElement | null) => {
+      peekRef.current = element;
+      const body = bodyRef.current;
+      if (element && body && peek)
+        placeBeside(element, body, dragRef.current, peek.direction, 'none');
+    },
+    [peek],
+  );
   const sections = isTracking ? trackedSections : untrackedSections;
   const getIndex = (section: PlanSection) =>
     sections.findIndex((value) => value === section);
@@ -107,6 +139,7 @@ function PlanScreen() {
     body.style.transition = 'none';
     body.style.left = '0px';
     body.style.minHeight = '';
+    delete body.dataset.moving;
   };
 
   // A copy of the leaving view slides out beside the arriving one, so the two move together like a carousel. The body moves by its own offset (not a transform, which would carry a floating add button with it).
@@ -156,6 +189,7 @@ function PlanScreen() {
   useEffect(
     () => () => {
       const slide = slideRef.current;
+      window.clearTimeout(peekTimerRef.current);
       if (!slide) return;
       window.clearTimeout(slide.timer);
       slide.ghost.remove();
@@ -174,14 +208,6 @@ function PlanScreen() {
     if (from < 0 || to < 0) showPlanSection(section);
     else slideTo(section, to > from ? 1 : -1);
   };
-  const placePeek = (element: HTMLDivElement | null, transition: string) => {
-    const body = bodyRef.current;
-    if (!element || !body || !peek) return;
-    element.style.transition = transition;
-    element.style.top = `${body.offsetTop}px`;
-    element.style.width = `${body.offsetWidth}px`;
-    element.style.left = `${dragRef.current + peek.direction * body.offsetWidth}px`;
-  };
   const followFinger = (dx: number, isEnd: boolean) => {
     const body = bodyRef.current;
     if (!body || slideRef.current || (!isEnd && isCovered())) return;
@@ -192,13 +218,18 @@ function PlanScreen() {
     dragRef.current = isEnd ? 0 : dx * damping;
     body.style.transition = transition;
     body.style.left = `${dragRef.current}px`;
+    window.clearTimeout(peekTimerRef.current);
     if (isEnd) {
-      placePeek(peekRef.current, transition);
-      window.setTimeout(() => {
+      delete body.dataset.moving;
+      if (peekRef.current && peek)
+        placeBeside(peekRef.current, body, 0, peek.direction, transition);
+      peekTimerRef.current = window.setTimeout(() => {
         if (!slideRef.current) setPeek(null);
       }, SLIDE_MS);
       return;
     }
+    // Floating buttons belong to one view, so they step aside while two views share the screen.
+    body.dataset.moving = '';
     const isReduced = window.matchMedia(
       '(prefers-reduced-motion: reduce)',
     ).matches;
@@ -207,7 +238,14 @@ function PlanScreen() {
       return;
     }
     if (peek?.section !== next) setPeek({ section: next, direction });
-    else placePeek(peekRef.current, transition);
+    else if (peekRef.current)
+      placeBeside(
+        peekRef.current,
+        body,
+        dragRef.current,
+        direction,
+        transition,
+      );
   };
 
   return (
@@ -225,18 +263,20 @@ function PlanScreen() {
       )}
       {peek && (
         <div
-          ref={(element) => {
-            peekRef.current = element;
-            placePeek(element, 'none');
-          }}
+          ref={attachPeek}
           className='pointer-events-none absolute space-y-4 [&_.fixed]:hidden!'
           aria-hidden='true'
           inert
         >
-          <SectionView section={peek.section} />
+          <RunwayPreviewContext.Provider value>
+            <SectionView section={peek.section} />
+          </RunwayPreviewContext.Provider>
         </div>
       )}
-      <div ref={bodyRef} className='relative space-y-4'>
+      <div
+        ref={bodyRef}
+        className='relative space-y-4 [&_.fixed]:transition-opacity data-moving:[&_.fixed]:opacity-0'
+      >
         {planSection === 'envelopes' && <EnvelopesScreen />}
         {isMore && <MoreScreen />}
         {planSection === 'goals' && <GoalsScreen />}
