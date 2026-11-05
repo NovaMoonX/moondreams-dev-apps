@@ -100,7 +100,6 @@ function RulesScreen({ onClose }: RulesScreenProps) {
           </div>
         ) : (
           <>
-            <p className='text-muted-foreground text-sm'>{RULE_WORDS.intro}</p>
             {rules.length >= RUNWAY_SEARCH_THRESHOLD && (
               <SearchInput
                 value={query}

@@ -160,12 +160,7 @@ function NeedsHomeAssign({
   if (likely.length === 0) return null;
   return (
     <div className='space-y-2'>
-      <div>
-        <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
-        <p className='text-muted-foreground text-xs'>
-          {NEEDS_HOME_WORDS.likelyHint(purchase.merchant?.trim() ?? '')}
-        </p>
-      </div>
+      <p className='text-sm font-medium'>{NEEDS_HOME_WORDS.whichTitle}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {likely.map((id) => (
           <ItemRow

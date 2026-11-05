@@ -797,11 +797,6 @@ function PurchaseScreen({
               />
             </PairOffer>
           )}
-          {heldRule !== null && (
-            <p className='text-muted-foreground text-sm'>
-              {RULE_WORDS.heldByOffer(describeRuleSentence(heldRule))}
-            </p>
-          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -821,29 +816,43 @@ function PurchaseScreen({
                 }));
               }}
             />
-            {canMakeRule && (merchantRule !== null || heldRule === null) && (
+            {heldRule !== null && (
               <ActionRow
                 isGrouped
                 isRoomy
                 hasChevron
                 icon={<Repeat />}
-                label={
-                  merchantRule === null
-                    ? RULE_WORDS.alwaysDo
-                    : RULE_WORDS.yourRule
-                }
-                subtitle={
-                  merchantRule === null
-                    ? RULE_WORDS.alwaysDoSub
-                    : describeRuleSentence(merchantRule)
-                }
-                onClick={() =>
-                  merchantRule === null
-                    ? openRuleStep('make', null)
-                    : openRuleStep('edit', merchantRule.id)
-                }
+                label={RULE_WORDS.yourRule}
+                subtitle={RULE_WORDS.heldSub}
+                onClick={() => openRuleStep('edit', heldRule.id)}
               />
             )}
+            {canMakeRule &&
+              (merchantRule === null
+                ? heldRule === null
+                : merchantRule.id !== heldRule?.id) && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Repeat />}
+                  label={
+                    merchantRule === null
+                      ? RULE_WORDS.alwaysDo
+                      : RULE_WORDS.yourRule
+                  }
+                  subtitle={
+                    merchantRule === null
+                      ? RULE_WORDS.alwaysDoSub
+                      : describeRuleSentence(merchantRule)
+                  }
+                  onClick={() =>
+                    merchantRule === null
+                      ? openRuleStep('make', null)
+                      : openRuleStep('edit', merchantRule.id)
+                  }
+                />
+              )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow

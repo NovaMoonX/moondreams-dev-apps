@@ -77,11 +77,11 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
     <div className='space-y-2'>
       <div>
         <p className='text-sm font-medium'>{DEPOSIT_WORDS.whichTitle}</p>
-        <p className='text-muted-foreground text-xs'>
-          {offered.length > 0
-            ? DEPOSIT_WORDS.whichHint
-            : DEPOSIT_WORDS.noneNear}
-        </p>
+        {offered.length === 0 && (
+          <p className='text-muted-foreground text-xs'>
+            {DEPOSIT_WORDS.noneNear}
+          </p>
+        )}
       </div>
       {offered.length > 0 && (
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>

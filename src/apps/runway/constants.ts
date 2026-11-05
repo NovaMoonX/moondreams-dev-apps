@@ -3833,24 +3833,24 @@ export const ACCOUNT_WORDS = {
   interestDayValue: (day: number) => `Day ${day}`,
   apyFact: (percent: string) => `${percent}% APY`,
   apyValue: (percent: string) => `${percent}%`,
-  interestCaption: 'Interest',
   interestEstimate: (amount: string, day: string) =>
     `About ${amount} interest on ${day} (estimate)`,
   interestActual: (amount: string, day: string) =>
     `${amount} interest on ${day}`,
   goalInterestActual: (amount: string, day: string) =>
     `Earned ${amount} on ${day}, its share of the interest`,
+  interestTitle: (account: string) => `Interest in ${account}`,
+  interestUncountedChip: (amount: string) =>
+    `Interest ~${amount} · update the balance`,
+  interestChip: (amount: string, day: string, isActual: boolean) =>
+    `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
+  goalBankTitle: (account: string) => `What ${account} shows`,
+  goalBankChip: (signed: string) => `Bank ${signed}`,
   goalActual: (
     amount: string,
-    compare: {
-      difference: string;
-      direction: 'more' | 'less';
-      saved: string;
-    } | null,
+    compare: { difference: string; direction: 'more' | 'less'; saved: string },
   ) =>
-    compare === null
-      ? `The bank shows about ${amount} as its share`
-      : `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
+    `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
   goalInterest: (amount: string, day: string) =>
@@ -4090,6 +4090,7 @@ export const LINK_BANKS_GATE_ID = 'link-banks';
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',
+  countedChip: 'Counted in Free to Spend',
   intro:
     'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
   empty:
@@ -4106,7 +4107,6 @@ export const NEEDS_HOME_WORDS = {
   leaveOutMoneyInSub: 'It will not count as income or spending',
   leftOut: 'Left out of spending',
   whichTitle: 'Which envelope?',
-  likelyHint: (merchant: string) => `Where you put ${merchant} before`,
   sendHere: 'Send it here',
   moreOptions: 'Pick an envelope',
   moreOptionsSub: 'Or split it across several',
@@ -4116,10 +4116,9 @@ export const NEEDS_HOME_WORDS = {
   alreadySent: (name: string) => `Your rule already sent this to ${name}`,
   failed: 'That did not save. Nothing was changed.',
   sameTitle: 'Did you already add this?',
-  sameHint:
-    'Tap the one you added. It takes the bank’s amount, so it is counted once',
   sameRow: (difference: string | null) =>
     difference === null ? 'Same amount' : `The bank’s is ${difference}`,
+  sameVerb: 'It’s this one',
   notSame: 'None of these',
   notSameSub: 'Keep them apart and don’t ask again',
   notSameDone: 'They stay apart. You won’t be asked about these again.',
@@ -4133,7 +4132,6 @@ export const NEEDS_HOME_WORDS = {
 
 export const DEPOSIT_WORDS = {
   whichTitle: 'Which pay is this?',
-  whichHint: 'Tap the pay it belongs to.',
   noneNear:
     'No pay day is close to this one. You can leave it out of spending for now.',
   dayRow: (differs: string | null) =>
@@ -4167,7 +4165,7 @@ export const DEPOSIT_WORDS = {
 
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
-  whichHint: 'Tap the other side to pair them.',
+  pairVerb: 'Pair them',
   pickEnvelope: 'Then choose where it goes',
   pickPay: 'Pick the pay it is',
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
@@ -4413,10 +4411,7 @@ export const CATEGORY_PRIMARIES = [
 export const RULE_WORDS = {
   title: 'Rules',
   doorLabel: 'Rules',
-  intro:
-    'Each rule sends a purchase from your bank to an envelope on its own. Anything it doesn’t fit still waits in Needs a home.',
-  empty:
-    'No rules yet. Make one from a purchase in Needs a home: tap “Always do this”.',
+  empty: 'No rules yet. Make one from a purchase with “Always do this”.',
   loading: 'Getting your rules.',
   anyCard: 'Any card',
   removedCard: 'A card that was removed',
@@ -4446,8 +4441,7 @@ export const RULE_WORDS = {
   changesFuture: (envelope: string) =>
     `Changes future purchases. This one stays in ${envelope}.`,
   yourRule: 'Your rule',
-  heldByOffer: (sentence: string) =>
-    `Your rule, ${sentence}, waits until you answer the offer above.`,
+  heldSub: 'Waits for your answer above',
   notNow: 'Not now',
   pickOne: 'Tick at least one thing for the rule to catch.',
   pickEnvelope: 'Pick an envelope',
