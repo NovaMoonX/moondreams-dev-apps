@@ -20,6 +20,8 @@ interface SwipeAreaProps {
 function SwipeArea({ children, onSwipe, onDrag, className }: SwipeAreaProps) {
   const swipeStart = useRef<{ x: number; y: number } | null>(null);
   const isDragging = useRef(false);
+  // A touch that starts down or up stays vertical, so a pull or a scroll that drifts sideways never turns into a swipe.
+  const axis = useRef<'x' | 'y' | null>(null);
 
   const endDrag = () => {
     if (!isDragging.current) return;
@@ -29,21 +31,15 @@ function SwipeArea({ children, onSwipe, onDrag, className }: SwipeAreaProps) {
 
   const handlePointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const start = swipeStart.current;
-    if (
-      !start ||
-      !onDrag ||
-      (window.visualViewport?.scale ?? 1) > ZOOMED_SCALE
-    ) {
-      return;
-    }
+    if (!start || (window.visualViewport?.scale ?? 1) > ZOOMED_SCALE) return;
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
-    if (
-      Math.abs(dx) < SWIPE_SLOP_PX ||
-      Math.abs(dx) < Math.abs(dy) * SWIPE_AXIS_RATIO
-    ) {
-      return;
+    if (axis.current === null) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_SLOP_PX) return;
+      axis.current =
+        Math.abs(dx) >= Math.abs(dy) * SWIPE_AXIS_RATIO ? 'x' : 'y';
     }
+    if (axis.current === 'y' || !onDrag) return;
     isDragging.current = true;
     onDrag(dx, false);
   };
@@ -56,6 +52,7 @@ function SwipeArea({ children, onSwipe, onDrag, className }: SwipeAreaProps) {
       event.pointerType === 'mouse' || !event.isPrimary || isOptedOut
         ? null
         : { x: event.clientX, y: event.clientY };
+    axis.current = null;
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLDivElement>) => {
@@ -69,6 +66,7 @@ function SwipeArea({ children, onSwipe, onDrag, className }: SwipeAreaProps) {
     const dx = event.clientX - start.x;
     const dy = event.clientY - start.y;
     if (
+      axis.current !== 'y' &&
       Math.abs(dx) >= SWIPE_MIN_PX &&
       Math.abs(dx) >= Math.abs(dy) * SWIPE_AXIS_RATIO
     ) {

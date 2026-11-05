@@ -35,7 +35,7 @@ const untrackedSections = viewSections.filter((value) => value !== 'cards');
 const END_DAMPING = 0.15;
 const SLIDE_MS = 200;
 /** The page shows between two views while they move, so their edges never touch. */
-const VIEW_GAP_PX = 16;
+const VIEW_GAP_PX = 24;
 
 const isCovered = () =>
   Array.from(document.querySelectorAll('[role="dialog"]')).some(
