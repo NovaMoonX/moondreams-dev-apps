@@ -129,7 +129,7 @@ export function useLinkHistory(uid: string | null) {
       return opened.filter(
         (purchase) =>
           !purchase.needsHome &&
-          purchase.assignedBy !== 'person' &&
+          purchase.assignedBy === 'auto' &&
           isLinkHistory(purchase) &&
           isStillCounted(purchase),
       );
