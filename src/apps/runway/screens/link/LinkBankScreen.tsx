@@ -160,7 +160,7 @@ function LinkBankScreen({
   const [message, setMessage] = useState<string | null>(null);
   const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [isAskingHeld, setIsAskingHeld] = useState(false);
-  const { isWorthAsking } = useHoldsPrompt();
+  const { isAfterLink } = useHoldsPrompt();
   const [settled, setSettled] = useState<
     Readonly<Record<string, 'used' | 'kept'>>
   >({});
@@ -634,14 +634,14 @@ function LinkBankScreen({
           </div>
           <ModalFooterActions
             cancelAction={
-              isWorthAsking ? (
+              isAfterLink ? (
                 <Button type='button' variant='secondary' onClick={onClose}>
                   {LINK_WORDS.finish}
                 </Button>
               ) : undefined
             }
             rightActions={
-              isWorthAsking ? (
+              isAfterLink ? (
                 <Button type='button' onClick={() => setIsAskingHeld(true)}>
                   {HOLDS_PROMPT_WORDS.next}
                 </Button>

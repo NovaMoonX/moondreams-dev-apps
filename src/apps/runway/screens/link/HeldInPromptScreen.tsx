@@ -21,6 +21,27 @@ import { describeAccountLine } from '@apps/runway/utils/accountText';
 
 const NO_ACCOUNT = 'none';
 
+interface SaveOutcome {
+  written: WrittenHolds[];
+  savedCount: number;
+  error: unknown;
+}
+
+/** Undo checks each account once, so two writes to one account fold into its first before and last after. */
+function mergeWrittenByAccount(written: WrittenHolds[]): WrittenHolds[] {
+  const byAccount = written.reduce<Record<string, WrittenHolds>>(
+    (merged, entry) => {
+      const earlier = merged[entry.accountId];
+      return {
+        ...merged,
+        [entry.accountId]: earlier ? { ...earlier, after: entry.after } : entry,
+      };
+    },
+    {},
+  );
+  return Object.values(byAccount);
+}
+
 interface HeldInPromptScreenProps {
   onClose: () => void;
 }
@@ -49,35 +70,48 @@ function HeldInPromptScreen({ onClose }: HeldInPromptScreenProps) {
     if (!user || isSaving || chosen.length === 0) return;
     setIsSaving(true);
     setError(null);
-    const written: WrittenHolds[] = [];
-    try {
-      const encryption = await getRunwayEncryption(user.uid);
-      const accountIds = Array.from(
-        new Set(chosen.map((entry) => entry.accountId)),
-      );
-      for (const accountId of accountIds) {
+    const accountIds = Array.from(
+      new Set(chosen.map((entry) => entry.accountId)),
+    );
+    const outcome = await accountIds.reduce<Promise<SaveOutcome>>(
+      async (prior, accountId) => {
+        const done = await prior;
+        if (done.error !== null) return done;
         const ids = chosen
           .filter((entry) => entry.accountId === accountId)
           .map((entry) => entry.item.id);
-        const result = await setAccountHolds(
-          user.uid,
-          encryption,
-          accountId,
-          (current) => Array.from(new Set([...current, ...ids])),
-          accounts,
-          (id) => unheld.find((item) => item.id === id)?.name ?? '',
-        );
-        written.push(...result);
-      }
-      toastHoldsSaved(HOLDS_PROMPT_WORDS.saved(chosen.length), written);
-      onClose();
-    } catch (saveError) {
-      toastHoldsSaved(HOLDS_PROMPT_WORDS.saved(written.length), written);
-      setError(
-        `${HOLDS_PROMPT_WORDS.failed}. ${getErrorMessage(saveError, ACCOUNT_WORDS.failed)}`,
-      );
-      setIsSaving(false);
+        try {
+          const result = await setAccountHolds(
+            user.uid,
+            await getRunwayEncryption(user.uid),
+            accountId,
+            (current) => Array.from(new Set([...current, ...ids])),
+            accounts,
+            (id) => unheld.find((item) => item.id === id)?.name ?? '',
+          );
+          return {
+            written: [...done.written, ...result],
+            savedCount: done.savedCount + ids.length,
+            error: null,
+          };
+        } catch (saveError) {
+          return { ...done, error: saveError };
+        }
+      },
+      Promise.resolve({ written: [], savedCount: 0, error: null }),
+    );
+    const written = mergeWrittenByAccount(outcome.written);
+    if (outcome.savedCount > 0) {
+      toastHoldsSaved(HOLDS_PROMPT_WORDS.saved(outcome.savedCount), written);
     }
+    if (outcome.error === null) {
+      onClose();
+      return;
+    }
+    setError(
+      `${HOLDS_PROMPT_WORDS.failed}. ${getErrorMessage(outcome.error, ACCOUNT_WORDS.failed)}`,
+    );
+    setIsSaving(false);
   };
 
   const skip = async (isForGood: boolean) => {

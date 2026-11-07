@@ -4126,7 +4126,6 @@ export const CARD_WORDS = {
 /** The feature switch for linking a bank (`FEATURE_GATES`). */
 export const LINK_BANKS_GATE_ID = 'link-banks';
 
-/** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
 /** Days "Ask me later" hides Home's "where are they kept" row. */
 export const HOLDS_ASK_LATER_DAYS = 3;
 
@@ -4150,6 +4149,7 @@ export const HOLDS_PROMPT_WORDS = {
   discardMessage: 'Nothing is saved until you tap Save.',
 } as const;
 
+/** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',

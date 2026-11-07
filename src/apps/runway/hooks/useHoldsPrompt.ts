@@ -50,5 +50,6 @@ export function useHoldsPrompt() {
     accounts: pickable,
     isWorthAsking,
     isOnHome: isWorthAsking && !isHidden,
+    isAfterLink: isWorthAsking && choice?.isOff !== true,
   };
 }
