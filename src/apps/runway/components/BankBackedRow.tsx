@@ -45,7 +45,7 @@ function BankBackedRow() {
   const [error, setError] = useState<string | null>(null);
 
   const isOnHome = isReady && isUnseen && backing.isBacked;
-  if (!isOnHome && !isOpen) return null;
+  if (!isOnHome && !(isOpen && backing.isBacked)) return null;
 
   const afterCents = balances.freeToSpendCents;
   const beforeCents = afterCents - backing.cents;

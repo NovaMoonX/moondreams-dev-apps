@@ -33,7 +33,7 @@ import {
   selectRecentFrom,
 } from '@apps/runway/store/selectors/historySelectors';
 import {
-  selectBalanceInputs,
+  selectLedgerBalanceInputs,
   selectTrackBalanceInputs,
 } from '@apps/runway/store/selectors/balanceSelectors';
 import {
@@ -59,7 +59,7 @@ function LineUpScreen({ onClose }: LineUpScreenProps) {
   const today = todayAsUtcDate(useNow(60_000));
   const plan = useAppSelector((state) => state.runway.plan);
   const { confirm } = useActionModal();
-  const balanceInputs = useAppSelector(selectBalanceInputs);
+  const balanceInputs = useAppSelector(selectLedgerBalanceInputs);
   const trackInputs = useAppSelector(selectTrackBalanceInputs);
   const cards = useAppSelector(selectAllCards);
   const moves = useAppSelector((state) => state.runway.moves);

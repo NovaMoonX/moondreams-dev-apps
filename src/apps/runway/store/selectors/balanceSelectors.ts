@@ -62,7 +62,7 @@ const toBalanceInputs =
   });
 
 /** What the ledger alone sums from, at the level the plan is at, before any match to the account balances. */
-const selectLedgerBalanceInputs = createSelector(
+export const selectLedgerBalanceInputs = createSelector(
   [
     (state: RootState) => state.runway.plan?.startDate ?? null,
     (state: RootState) => state.runway.moves,
@@ -100,7 +100,8 @@ const selectLedgerBalanceInputs = createSelector(
     ),
 );
 
-const selectLedgerBalances = createSelector(
+/** The balances from the ledger alone: what a check against the bank compares with. */
+export const selectLedgerBalances = createSelector(
   [selectLedgerBalanceInputs],
   deriveBalances,
 );
