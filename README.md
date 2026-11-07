@@ -166,6 +166,13 @@ Despite that, there is only **one Workbox service worker** for the whole origin 
 
 Problems we've hit before, so we don't hit them again.
 
+### No offline strip on a plane's Wi-Fi, and Runway won't open there
+
+- **Symptom:** on in-flight Wi-Fi with no internet behind it, the site showed no "You're offline" strip, and opening Runway showed "Your plan cannot be opened right now".
+- **Cause:** the strip only checked the connection when the browser fired `offline` or reported `navigator.onLine` false, and a joined Wi-Fi with no internet (a plane, a hotel portal) does neither. Runway is separate: its data is sealed, and the key that opens it comes from the `getRunwayKey` callable on every launch and is deliberately never kept on the device, so a cold start without internet cannot open the plan. A Runway tab that was already open keeps working offline, since the key stays in memory and Firestore answers from its cache.
+- **Fix:** the connection is now probed on load, whenever the tab comes back into view and every 30 seconds while it is visible, and a failed probe is confirmed once more before the strip says offline. Runway's failure card says it needs a connection when the strip says offline.
+- **Telling it apart:** `navigator.onLine` is `true` while `HEAD /favicon.svg` fails. Runway opening offline after a cold start would need the key kept on the device, which is a privacy decision, not a bug.
+
 ### The merge deploy fails with `Release … cloud.firestore already exists`
 
 - **Symptom:** "Deploy to Firebase Hosting on merge" stops in "Deploy Firebase resources" with `Error: Request to https://firebaserules.googleapis.com/v1/projects/…/releases had HTTP Error: 409, Release projects/…/releases/cloud.firestore already exists.`, after the log has already shown the Database and Storage rules released. Re-running fails identically, so Hosting and Functions never deploy, and the app can call a Function or a rule that the merge expected. The Firestore indexes, uploaded earlier, did deploy.
