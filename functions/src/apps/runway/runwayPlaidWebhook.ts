@@ -49,7 +49,10 @@ export const runwayPlaidWebhook = onRequest(
       webhook_type?: unknown;
       webhook_code?: unknown;
       item_id?: unknown;
+      error?: { error_code?: unknown } | null;
     };
+    const asLabel = (value: unknown) =>
+      typeof value === 'string' && /^[A-Z_]{1,64}$/.test(value) ? value : null;
     if (
       body.webhook_type === 'TRANSACTIONS' &&
       body.webhook_code === 'SYNC_UPDATES_AVAILABLE' &&
@@ -81,6 +84,12 @@ export const runwayPlaidWebhook = onRequest(
       } else {
         logger.warn('runway.webhook.unknownItem');
       }
+    } else {
+      logger.info('runway.webhook.other', {
+        type: asLabel(body.webhook_type),
+        code: asLabel(body.webhook_code),
+        errorCode: asLabel(body.error?.error_code),
+      });
     }
     response.status(200).send('ok');
   },

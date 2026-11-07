@@ -426,7 +426,10 @@ export async function syncRunwayLink(
         if (error instanceof ProviderError && error.kind === 'needsAttention') {
           throw error;
         }
-        logger.warn('runway.sync.balancesFailed', { linkId });
+        logger.warn('runway.sync.balancesFailed', {
+          linkId,
+          code: error instanceof ProviderError ? error.code : null,
+        });
       },
     );
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
@@ -452,12 +455,13 @@ export async function syncRunwayLink(
       await writeUnlessRevoked(firestore, linkRef, (transaction) =>
         transaction.update(linkRef, { status: 'needsAttention' }),
       );
-      logger.warn('runway.sync.needsAttention', { linkId });
+      logger.warn('runway.sync.needsAttention', { linkId, code: error.code });
       return { ...empty, state: 'needsAttention' };
     }
     logger.error('runway.sync.failed', {
       linkId,
       kind: error instanceof ProviderError ? error.kind : 'internal',
+      code: error instanceof ProviderError ? error.code : null,
     });
     return { ...empty, state: 'failed' };
   }

@@ -45,12 +45,18 @@ export interface ProviderGrant {
 export type ProviderErrorKind =
   'unavailable' | 'rejected' | 'needsAttention' | 'limit';
 
-/** A provider failure with a sentence that is safe to show the person. */
+/** A provider failure with a sentence that is safe to show the person, and the provider's own error code for the logs. */
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
-  constructor(kind: ProviderErrorKind, message: string) {
+  readonly code: string | null;
+  constructor(
+    kind: ProviderErrorKind,
+    message: string,
+    code: string | null = null,
+  ) {
     super(message);
     this.kind = kind;
+    this.code = code;
   }
 }
 
