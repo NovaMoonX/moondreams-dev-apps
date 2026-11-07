@@ -321,7 +321,7 @@ function SetHeldView({
                 aria-pressed={isChosen}
                 aria-label={
                   option.isLocked
-                    ? `${option.title}, not available. ${option.body}`
+                    ? `${option.title}, not available${isHidden ? '' : `. ${option.body}`}`
                     : undefined
                 }
                 disabled={isSaving}
