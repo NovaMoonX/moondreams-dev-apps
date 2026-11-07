@@ -4142,8 +4142,9 @@ export const NEEDS_HOME_WORDS = {
   moneyInHelp:
     'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
   maybeTwice: 'Might be in twice',
+  inEnvelope: (name: string) => `In ${name}`,
   maybeTwiceHelp:
-    'These came in from your bank for days before you linked it, and you put them in an envelope. Each looks like a purchase you had already added, so it may be counted twice. Open one to say whether it is the same.',
+    'You put these in an envelope, so they count there. Each looks like one you added yourself before linking your bank, so it may be in twice. Nothing is removed unless you say so: open one to say if it’s the same.',
   leaveOut: 'Leave it out of spending',
   leaveOutSub: 'Free to Spend gets it back',
   leaveOutMoneyInSub: 'It will not count as income or spending',
@@ -4167,10 +4168,11 @@ export const NEEDS_HOME_WORDS = {
   sameTitle: 'Did you already add this?',
   sameRow: (difference: string | null) =>
     difference === null ? 'Same amount' : `The bank’s is ${difference}`,
-  sameVerb: 'It’s this one',
+  sameVerb: 'Same one, kept once at the bank’s amount',
   notSame: 'None of these',
-  notSameSub: 'Keep them apart and don’t ask again',
-  notSameDone: 'They stay apart. You won’t be asked about these again.',
+  notSameSub: 'They’re separate and both still count',
+  notSameDone:
+    'They stay separate and both still count. You won’t be asked again.',
   matchedOne: (name: string) => `${name} matched the one you added`,
   matchedMany: (count: number) =>
     `${count} purchases from your bank matched ones you added`,

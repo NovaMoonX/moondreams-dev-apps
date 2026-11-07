@@ -24,6 +24,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
+  selectItemLooks,
   selectIsNeedsHomeLoaded,
   selectNeedsHome,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -94,10 +95,12 @@ function MoneyInSheet({
 function NeedsHomeRow({
   purchase,
   sourceName,
+  place = null,
   onOpen,
 }: {
   purchase: OpenPurchase;
   sourceName: string;
+  place?: string | null;
   onOpen: () => void;
 }) {
   const { isHidden } = useValuesHidden();
@@ -110,6 +113,7 @@ function NeedsHomeRow({
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
     sourceName,
+    ...(place === null ? [] : [place]),
   ].join(' · ');
   const amount = isIn
     ? `+${formatCents(-purchase.amountCents)}`
@@ -134,6 +138,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   );
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const sourceNameOf = useSourceName();
+  const looks = useAppSelector(selectItemLooks);
   const [openId, setOpenId] = useState<string | null>(null);
   const [sent, setSent] = useState<OpenPurchase | null>(null);
   const opened =
@@ -142,13 +147,24 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
     ) ?? null;
   const isMoneyIn = opened !== null && opened.amountCents < 0;
 
-  const renderRows = (rows: readonly OpenPurchase[]) => (
+  const placeOf = (purchase: OpenPurchase) =>
+    NEEDS_HOME_WORDS.inEnvelope(
+      purchase.lines
+        .map((line) =>
+          line.envelopeId === null
+            ? null
+            : (looks.get(line.envelopeId)?.name ?? null),
+        )
+        .find((name) => name !== null) ?? 'an envelope',
+    );
+  const renderRows = (rows: readonly OpenPurchase[], isPlaced = false) => (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
       {rows.map((purchase) => (
         <NeedsHomeRow
           key={purchase.id}
           purchase={purchase}
           sourceName={sourceNameOf(purchase)}
+          place={isPlaced ? placeOf(purchase) : null}
           onOpen={() => setOpenId(purchase.id)}
         />
       ))}
@@ -191,7 +207,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
                     </HelpTip>
                   }
                 />
-                {renderRows(maybeTwice)}
+                {renderRows(maybeTwice, true)}
               </div>
             )}
             {moneyIn.length > 0 && (
