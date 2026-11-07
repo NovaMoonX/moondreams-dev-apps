@@ -4266,6 +4266,10 @@ export const LINK_WORDS = {
   reconnectNote:
     'It stopped syncing. Your purchases and balances wait until you do.',
   reconnectDone: (bank: string) => `${bank} is syncing again`,
+  reconnectNewAccounts: (bank: string, count: number) =>
+    count === 1
+      ? `Synced ${bank}. 1 account you picked is new and isn't added yet.`
+      : `Synced ${bank}. ${count} accounts you picked are new and aren't added yet.`,
   reconnectStillStuck: (bank: string) =>
     `${bank} still needs you to reconnect. Try again in a moment.`,
   reconnectFailed: (bank: string) =>

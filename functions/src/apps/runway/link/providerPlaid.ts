@@ -71,6 +71,13 @@ function toProviderError(code: string): ProviderError {
       asProviderCode(code),
     );
   }
+  if (code === 'ITEM_NOT_FOUND' || code === 'INVALID_ACCESS_TOKEN') {
+    return new ProviderError(
+      'needsAttention',
+      'This bank connection is no longer valid. Remove it and link your bank again.',
+      asProviderCode(code),
+    );
+  }
   if (NEEDS_PERSON_CODES.has(code)) {
     return new ProviderError(
       'needsAttention',

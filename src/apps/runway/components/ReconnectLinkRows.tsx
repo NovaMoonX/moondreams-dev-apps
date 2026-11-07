@@ -25,9 +25,11 @@ function ReconnectLinkRows() {
       if (result === null) return;
       addToast({
         title:
-          result.state === 'ok'
-            ? LINK_WORDS.reconnectDone(bank)
-            : LINK_WORDS.reconnectStillStuck(bank),
+          result.state !== 'ok'
+            ? LINK_WORDS.reconnectStillStuck(bank)
+            : result.newAccounts > 0
+              ? LINK_WORDS.reconnectNewAccounts(bank, result.newAccounts)
+              : LINK_WORDS.reconnectDone(bank),
         type: result.state === 'ok' ? 'success' : 'info',
       });
     } catch (error) {

@@ -52,10 +52,10 @@ const createSessionCallable = httpsCallable<
   { linkId?: string },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
-const reconnectCallable = httpsCallable<{ linkId: string }, LinkSyncResult>(
-  functions,
-  'reconnectRunwayLink',
-);
+const reconnectCallable = httpsCallable<
+  { linkId: string },
+  LinkSyncResult & { newAccounts: number }
+>(functions, 'reconnectRunwayLink');
 const exchangeCallable = httpsCallable<
   { publicToken: string; institutionName: string | null },
   LinkSession
@@ -114,7 +114,7 @@ export async function syncLinks(
 /** Signs in again at a bank that stopped syncing and syncs it; null when the person closed the bank's window. Plaid's update mode hands back no new grant, so nothing is exchanged. */
 export async function reconnectLink(
   linkId: string,
-): Promise<LinkSyncResult | null> {
+): Promise<(LinkSyncResult & { newAccounts: number }) | null> {
   const session = await createSessionCallable({ linkId });
   const opened = await openBankLink(session.data.linkToken);
   if (opened === null) return null;
