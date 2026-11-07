@@ -853,6 +853,9 @@ function PurchaseScreen({
                   }
                 />
               )}
+            {isWaiting && purchase.amountCents > 0 && (
+              <LeaveOutRow isKeepFree purchase={purchase} onDone={onClose} />
+            )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow

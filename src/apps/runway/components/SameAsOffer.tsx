@@ -14,7 +14,10 @@ import { findPurchaseMatches } from '@apps/runway/engine/matching';
 import { useMergeWithUndo } from '@apps/runway/hooks/useBankMatch';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { markNotSamePurchase } from '@apps/runway/store/actions/purchaseActions';
-import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectItemLooks,
+  selectLinkWaiting,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
@@ -27,7 +30,7 @@ interface SameAsOfferProps {
 function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const looks = useAppSelector(selectItemLooks);
   const merge = useMergeWithUndo();

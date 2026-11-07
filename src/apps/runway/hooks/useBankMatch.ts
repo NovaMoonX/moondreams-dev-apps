@@ -42,6 +42,7 @@ import {
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
   selectItemLooks,
+  selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   CardPaymentCovers,
@@ -143,11 +144,11 @@ export function useMergeWithUndo() {
 }
 
 /** Older charges are left to the offer on their own sheet, so a first link never merges weeks of purchases at once. */
-const AUTO_MATCH_DAYS = 14;
+export const AUTO_MATCH_DAYS = 14;
 
 /** Once both lists are read, merges each recent bank charge waiting in Needs a home with the one purchase typed by hand that it clearly is. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchBankPurchases(uid: string | null) {
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const isWaitingLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const isPurchasesLoaded = useAppSelector(
@@ -306,7 +307,7 @@ export function useLinkDepositsWithUndo() {
 
 /** Once the days and Needs a home are read, links each recent posted deposit to the income day it clearly is. Each pair is tried once per version of the deposit, so a refusal is not retried in a loop. */
 export function useMatchDeposits(uid: string | null) {
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const days = useAppSelector((state) =>
     selectDepositDays(state, todayAsUtcDate()),

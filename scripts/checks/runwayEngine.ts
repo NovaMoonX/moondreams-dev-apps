@@ -22,6 +22,11 @@ import {
   unlinkTrackingPeriod,
 } from '../../src/apps/runway/engine/level.ts';
 import {
+  getPairSideIds,
+  isStillCounted,
+  makeIsLinkHistory,
+} from '../../src/apps/runway/engine/linkHistory.ts';
+import {
   deriveBalances,
   deriveBalancesBefore,
   getFreeToSpendFigure,
@@ -97,6 +102,8 @@ import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import type {
   BillFundedBy,
   OpenAccount,
+  OpenCard,
+  OpenLink,
   HorizonCost,
   HorizonSealed,
   OpenDay,
@@ -14599,6 +14606,121 @@ const version = (
     }).isActual,
     false,
     'a rise over twice the estimate is a deposit, so the estimate stays',
+  );
+}
+
+{
+  const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+  const linkedAt = new Date(2026, 10, 5, 21, 30).getTime();
+  const isHistory = makeIsLinkHistory(
+    [{ id: 'l1', createdAt: linkedAt } as unknown as OpenLink],
+    [{ id: 'a1', linkId: 'l1' } as unknown as OpenAccount],
+    [{ id: 'c1', linkId: 'l1' } as unknown as OpenCard],
+  );
+  const bank = (over: Partial<OpenPurchase>) =>
+    ({
+      source: 'link',
+      accountId: 'a1',
+      paidByCardId: null,
+      createdAt: linkedAt + 60_000,
+      date: day('2026-10-20'),
+      needsHome: true,
+      lines: [],
+      pairedWithId: null,
+      ...over,
+    }) as OpenPurchase;
+  assert.equal(
+    isHistory(bank({})),
+    true,
+    'a purchase from before the link day is history',
+  );
+  assert.equal(
+    isHistory(bank({ date: day('2026-11-05') })),
+    false,
+    'a purchase on the local day of the link still counts',
+  );
+  assert.equal(
+    isHistory(bank({ date: day('2026-11-04') })),
+    true,
+    'the day before the link, in the local day, is history',
+  );
+  assert.equal(
+    isHistory(bank({ accountId: null, paidByCardId: 'c1' })),
+    true,
+    "a card charge follows its card's link",
+  );
+  assert.equal(
+    isHistory(bank({ createdAt: linkedAt - 1 })),
+    false,
+    "a purchase an earlier link brought in is never this link's history",
+  );
+  assert.equal(
+    isHistory(bank({ source: 'manual' })),
+    false,
+    'a typed purchase is never history',
+  );
+  assert.equal(
+    isHistory(bank({ accountId: 'a-other' })),
+    false,
+    'an unlinked account has no history',
+  );
+  assert.equal(
+    isStillCounted(bank({ needsHome: false, lines: [] })),
+    false,
+    'left out counts nowhere',
+  );
+  assert.equal(
+    isStillCounted(bank({ needsHome: false, pairedWithId: 'x' })),
+    false,
+    'a pair is left alone',
+  );
+  assert.equal(
+    isStillCounted(
+      bank({
+        needsHome: false,
+        lines: [{ envelopeId: 'e', cents: 100, via: 'chosen' }],
+      }),
+    ),
+    true,
+    'a placed purchase still counts',
+  );
+  const leg = (id: string, over: Partial<OpenPurchase>) =>
+    bank({
+      id,
+      status: 'posted',
+      assignedBy: null,
+      incomeDayId: null,
+      amountCents: 5000,
+      ...over,
+    });
+  const transfer = [
+    leg('out', { date: day('2026-11-04') }),
+    leg('in', { accountId: 'a2', amountCents: -5000, date: day('2026-11-05') }),
+  ];
+  assert.deepEqual(
+    [...getPairSideIds(transfer, day('2026-10-25'))].sort(),
+    ['in', 'out'],
+    'both sides of a clear transfer across the link day are left to the pairing pass',
+  );
+  assert.equal(
+    getPairSideIds(transfer, day('2026-11-05')).size,
+    0,
+    'a pair the pairing pass no longer looks at is not held back from history',
+  );
+  assert.equal(
+    getPairSideIds(
+      [
+        ...transfer,
+        leg('in-2', {
+          accountId: 'a3',
+          amountCents: -5000,
+          date: day('2026-11-05'),
+        }),
+      ],
+      day('2026-10-01'),
+    ).size,
+    0,
+    'an unclear pair is not held back from history',
   );
 }
 

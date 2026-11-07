@@ -9,6 +9,7 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { makeIsLinkHistory } from '@apps/runway/engine/linkHistory';
 import {
   getAccountHoldings,
   getHolderById,
@@ -1522,7 +1523,31 @@ export const selectLostDeposits = createSelector(
   },
 );
 
-const selectWaitingList = (state: RootState) => state.runway.needsHome;
+/** Tells a bank purchase its link brought in as history (dated before the bank was linked) from one that came after. */
+export const selectIsLinkHistory = createSelector(
+  [
+    (state: RootState) => state.runway.links,
+    (state: RootState) => state.runway.accounts,
+    (state: RootState) => state.runway.cards,
+  ],
+  makeIsLinkHistory,
+);
+
+/** What waits for a home, leaving out what a link brought in from before it was made: history is never asked about or placed by a pass. */
+export const selectLinkWaiting = createSelector(
+  [
+    (state: RootState) => state.runway.needsHome,
+    selectIsLinkHistory,
+    (state: RootState) =>
+      state.runway.isLinksLoaded &&
+      state.runway.isAccountsLoaded &&
+      state.runway.isCardsLoaded,
+  ],
+  (waiting, isLinkHistory, isReady) =>
+    isReady ? waiting.filter((purchase) => !isLinkHistory(purchase)) : [],
+);
+
+const selectWaitingList = selectLinkWaiting;
 
 export interface AccountPairEntry {
   out: OpenPurchase;
@@ -1607,7 +1632,10 @@ export const selectNeedsHome = createSelector(
 );
 
 export const selectIsNeedsHomeLoaded = (state: RootState) =>
-  state.runway.isNeedsHomeLoaded;
+  state.runway.isNeedsHomeLoaded &&
+  state.runway.isLinksLoaded &&
+  state.runway.isAccountsLoaded &&
+  state.runway.isCardsLoaded;
 
 const selectCardList = (state: RootState) => state.runway.cards;
 
