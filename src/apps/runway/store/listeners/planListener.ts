@@ -22,6 +22,7 @@ async function openPlan(
         currencyCode: DEFAULT_CURRENCY_CODE,
         notifyHour: null,
         notifyTimeZone: null,
+        holdsPrompt: null,
       };
   const result: OpenPlan = {
     uid: plan.uid,
@@ -39,6 +40,7 @@ async function openPlan(
     currencyCode: fields.currencyCode,
     notifyHour: fields.notifyHour ?? null,
     notifyTimeZone: fields.notifyTimeZone ?? null,
+    holdsPrompt: fields.holdsPrompt ?? null,
   };
   return result;
 }

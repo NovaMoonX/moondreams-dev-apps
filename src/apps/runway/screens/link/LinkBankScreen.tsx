@@ -16,7 +16,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import BankBalanceChoice from '@apps/runway/components/BankBalanceChoice';
 import ReconnectRow from '@apps/runway/components/ReconnectRow';
-import { LINK_WORDS } from '@apps/runway/constants';
+import { HOLDS_PROMPT_WORDS, LINK_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   matchLinkRows,
@@ -25,6 +25,7 @@ import {
 } from '@apps/runway/engine/linkMatch';
 import { openBankLink } from '@apps/runway/lib/bankLink';
 import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
+import { useHoldsPrompt } from '@apps/runway/hooks/useHoldsPrompt';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -42,6 +43,7 @@ import {
 } from '@apps/runway/store/actions/linkActions';
 import { moveToLink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import HeldInPromptScreen from '@apps/runway/screens/link/HeldInPromptScreen';
 import LinkMatchView from '@apps/runway/screens/link/LinkMatchView';
 import type { NormalizedAccount, OpenLink } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -157,6 +159,8 @@ function LinkBankScreen({
   const isWorking = isBusy || busyId !== null;
   const [message, setMessage] = useState<string | null>(null);
   const [isLevelStuck, setIsLevelStuck] = useState(false);
+  const [isAskingHeld, setIsAskingHeld] = useState(false);
+  const { isAfterLink } = useHoldsPrompt();
   const [settled, setSettled] = useState<
     Readonly<Record<string, 'used' | 'kept'>>
   >({});
@@ -629,10 +633,23 @@ function LinkBankScreen({
             )}
           </div>
           <ModalFooterActions
+            cancelAction={
+              isAfterLink ? (
+                <Button type='button' variant='secondary' onClick={onClose}>
+                  {LINK_WORDS.finish}
+                </Button>
+              ) : undefined
+            }
             rightActions={
-              <Button type='button' onClick={onClose}>
-                {LINK_WORDS.finish}
-              </Button>
+              isAfterLink ? (
+                <Button type='button' onClick={() => setIsAskingHeld(true)}>
+                  {HOLDS_PROMPT_WORDS.next}
+                </Button>
+              ) : (
+                <Button type='button' onClick={onClose}>
+                  {LINK_WORDS.finish}
+                </Button>
+              )
             }
           />
         </div>
@@ -649,6 +666,9 @@ function LinkBankScreen({
       headerAction={<ValuesEyeButton />}
     >
       {getBody()}
+      {isAskingHeld && (
+        <HeldInPromptScreen onClose={() => setIsAskingHeld(false)} />
+      )}
     </Subview>
   );
 }

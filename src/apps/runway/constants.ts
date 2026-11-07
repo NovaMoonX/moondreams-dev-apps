@@ -4126,6 +4126,29 @@ export const CARD_WORDS = {
 /** The feature switch for linking a bank (`FEATURE_GATES`). */
 export const LINK_BANKS_GATE_ID = 'link-banks';
 
+/** Days "Ask me later" hides Home's "where are they kept" row. */
+export const HOLDS_ASK_LATER_DAYS = 3;
+
+export const HOLDS_PROMPT_WORDS = {
+  title: 'Where are your goals and envelopes kept?',
+  subtitle: 'So Runway can check them against your bank.',
+  next: 'Choose where they are kept',
+  accountLabel: (name: string) => `Account for ${name}`,
+  notSure: 'Not sure yet',
+  screenTitle: 'Where they are kept',
+  save: 'Save',
+  saved: (count: number) =>
+    count === 1 ? 'Saved where 1 is kept' : `Saved where ${count} are kept`,
+  failed: 'Some were not saved',
+  askLater: 'Ask me later',
+  askLaterNote: `Home asks again in ${HOLDS_ASK_LATER_DAYS} days.`,
+  dontAsk: "Don't ask again",
+  dontAskNote: 'You can still set it from each goal or envelope.',
+  skipFailed: 'That did not save. Nothing was changed.',
+  discardTitle: 'Discard your picks?',
+  discardMessage: 'Nothing is saved until you tap Save.',
+} as const;
+
 /** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
