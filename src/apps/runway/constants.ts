@@ -1856,6 +1856,7 @@ export const RECEIPT_MAX_DIMENSION = 2400;
 
 export const SPEND_WORDS = {
   title: 'Purchases',
+  bankName: (name: string) => `On your statement as ${name}`,
   newPurchase: 'Add a purchase',
   envelopeAdd: 'Add a purchase',
   sheetTitle: 'Purchase',

@@ -24,6 +24,8 @@ export interface NormalizedTransaction {
   merchant: string | null;
   /** An https link to the merchant's logo; null when the provider has none. */
   merchantLogo: string | null;
+  /** The bank's own description of the charge, when it differs from `merchant`; null otherwise. */
+  bankName: string | null;
   /** The provider's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null when it gives none. */
   category: string | null;
   isPending: boolean;
@@ -71,10 +73,11 @@ export interface ProviderInstitution {
   logo: string | null;
 }
 
-export interface MerchantLogo {
+export interface TransactionDetails {
   providerTransactionId: string;
   pendingTransactionId: string | null;
-  merchantLogo: string;
+  merchantLogo: string | null;
+  bankName: string | null;
 }
 
 export interface BankDataProvider {
@@ -85,12 +88,12 @@ export interface BankDataProvider {
   /** Every account under the grant, with live balances. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;
-  /** Each transaction's merchant logo between two `YYYY-MM-DD` days, for purchases brought in before logos were kept. */
-  listMerchantLogos(
+  /** Each transaction's merchant logo and bank name between two `YYYY-MM-DD` days, for purchases brought in before they were kept. */
+  listTransactionDetails(
     grant: ProviderGrant,
     startDate: string,
     endDate: string,
-  ): Promise<MerchantLogo[]>;
+  ): Promise<TransactionDetails[]>;
   /** One page of changes since `cursor` (null for the first sync). */
   syncTransactions(
     grant: ProviderGrant,

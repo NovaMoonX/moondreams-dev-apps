@@ -392,13 +392,13 @@ async function keepLogo(
   });
 }
 
-const LOGO_HISTORY_DAYS = 730;
+const DETAILS_HISTORY_DAYS = 730;
 
 /**
- * Adds the merchant's logo to purchases this link brought in before logos were kept. Only existing purchases that
- * lack one change, and only that field; nothing is created. True once every page was read and written.
+ * Adds the merchant's logo and the bank's own name to purchases this link brought in before they were kept. Only
+ * existing purchases missing one change, and only those fields; nothing is created. True once every page was written.
  */
-async function fillMerchantLogos(
+async function fillTransactionDetails(
   firestore: Firestore,
   uid: string,
   linkId: string,
@@ -407,53 +407,58 @@ async function fillMerchantLogos(
 ) {
   const now = Date.now();
   const toDay = (at: number) => new Date(at).toISOString().slice(0, 10);
-  const logos = await provider.listMerchantLogos(
+  const details = await provider.listTransactionDetails(
     grant,
-    toDay(now - LOGO_HISTORY_DAYS * 86_400_000),
+    toDay(now - DETAILS_HISTORY_DAYS * 86_400_000),
     toDay(now),
   );
   const subkey = dedupeSubkey(planKey.key);
   const idOf = (providerTransactionId: string) =>
     purchaseIdFor(makeDedupeKey(subkey, linkId, providerTransactionId));
-  const candidates = logos.map((entry) => ({
-    ids: [
-      idOf(entry.providerTransactionId),
-      ...(entry.pendingTransactionId === null
-        ? []
-        : [idOf(entry.pendingTransactionId)]),
-    ],
-    merchantLogo: entry.merchantLogo,
-  }));
+  const byId = new Map(
+    details.flatMap((entry) =>
+      [
+        entry.providerTransactionId,
+        ...(entry.pendingTransactionId === null
+          ? []
+          : [entry.pendingTransactionId]),
+      ].map((id) => [idOf(id), entry] as const),
+    ),
+  );
   const { existing, updateTimes } = await readExisting(
     firestore,
     uid,
-    [...new Set(candidates.flatMap((entry) => entry.ids))],
+    [...byId.keys()],
     planKey,
   );
-  const logoById = new Map(
-    candidates.flatMap((entry) =>
-      entry.ids
-        .filter((id) => {
-          const state = existing.get(id);
-          return state !== undefined && !state.payload.merchantLogo;
-        })
-        .map((id) => [id, entry.merchantLogo] as const),
-    ),
-  );
-  const writes: Write[] = [...logoById].map(([docId, merchantLogo]) => ({
-    kind: 'update',
-    ref: firestore.doc(planDocPath(uid, 'purchases', docId)),
-    lastUpdateTime: updateTimes.get(docId) ?? null,
-    data: {
-      sealed: sealWithKey(
-        planKey,
-        { ...existing.get(docId)?.payload, merchantLogo },
-        SEALED_SCHEMA_VERSION,
-      ),
-    },
-  }));
+  const writes = [...existing].flatMap(([docId, state]): Write[] => {
+    const entry = byId.get(docId);
+    if (!entry) return [];
+    const merchantLogo = state.payload.merchantLogo || entry.merchantLogo;
+    const bankName = state.payload.bankName || entry.bankName;
+    if (
+      merchantLogo === (state.payload.merchantLogo ?? null) &&
+      bankName === (state.payload.bankName ?? null)
+    ) {
+      return [];
+    }
+    return [
+      {
+        kind: 'update',
+        ref: firestore.doc(planDocPath(uid, 'purchases', docId)),
+        lastUpdateTime: updateTimes.get(docId) ?? null,
+        data: {
+          sealed: sealWithKey(
+            planKey,
+            { ...state.payload, merchantLogo, bankName },
+            SEALED_SCHEMA_VERSION,
+          ),
+        },
+      },
+    ];
+  });
   await commitWrites(firestore, writes);
-  logger.info('runway.sync.logosFilled', { linkId, filled: writes.length });
+  logger.info('runway.sync.detailsFilled', { linkId, filled: writes.length });
   return true;
 }
 
@@ -532,21 +537,25 @@ export async function syncRunwayLink(
         });
       },
     );
-    const wereLogosFilled =
-      typeof linkSnapshot.data()?.merchantLogosFilledAt === 'number';
-    const logosFilledNow =
-      !wereLogosFilled &&
-      (await fillMerchantLogos(firestore, uid, linkId, grant, planKey).catch(
-        () => {
-          logger.warn('runway.sync.logosFillFailed', { linkId });
-          return false;
-        },
-      ));
+    const wereDetailsFilled =
+      typeof linkSnapshot.data()?.detailsFilledAt === 'number';
+    const detailsFilledNow =
+      !wereDetailsFilled &&
+      (await fillTransactionDetails(
+        firestore,
+        uid,
+        linkId,
+        grant,
+        planKey,
+      ).catch(() => {
+        logger.warn('runway.sync.detailsFillFailed', { linkId });
+        return false;
+      }));
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
       transaction.update(linkRef, {
         lastSyncAt: Date.now(),
         status: 'active',
-        ...(logosFilledNow ? { merchantLogosFilledAt: Date.now() } : {}),
+        ...(detailsFilledNow ? { detailsFilledAt: Date.now() } : {}),
       }),
     );
     logger.info('runway.sync.done', {

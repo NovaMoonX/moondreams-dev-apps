@@ -73,6 +73,20 @@ export const toHttpsUrl = (value: string | null | undefined) => {
   }
 };
 
+/** The bank's description, only when a merchant name stands in front of it and says something else. */
+export const toBankName = (
+  merchantName: string | null | undefined,
+  name: string | null | undefined,
+) => {
+  const merchant = merchantName?.trim() || null;
+  const bank = name?.trim().slice(0, 200) || null;
+  return merchant !== null &&
+    bank !== null &&
+    merchant.toLowerCase() !== bank.toLowerCase()
+    ? bank
+    : null;
+};
+
 export function normalizeTransaction(
   raw: RawTransaction,
 ): NormalizedTransaction | null {
@@ -87,6 +101,7 @@ export function normalizeTransaction(
     amountCents: toTransactionCents(raw.amount),
     merchant: raw.merchantName?.trim() || raw.name?.trim() || null,
     merchantLogo: toHttpsUrl(raw.logoUrl),
+    bankName: toBankName(raw.merchantName, raw.name),
     category: raw.category?.trim().toUpperCase() || null,
     isPending: raw.isPending,
   };

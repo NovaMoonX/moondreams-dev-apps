@@ -3,6 +3,7 @@ import { defineSecret } from 'firebase-functions/params';
 import {
   normalizeAccount,
   normalizeTransaction,
+  toBankName,
   toHttpsUrl,
   type RawAccount,
 } from './normalize.js';
@@ -12,7 +13,7 @@ import {
   type BankDataProvider,
   type NormalizedTransaction,
   type ProviderGrant,
-  type MerchantLogo,
+  type TransactionDetails,
   type ProviderInstitution,
   type TransactionSync,
 } from './provider.js';
@@ -240,11 +241,11 @@ export const plaidProvider: BankDataProvider = {
     await call('/item/remove', { access_token: grant.credential });
   },
 
-  async listMerchantLogos(grant, startDate, endDate) {
+  async listTransactionDetails(grant, startDate, endDate) {
     const read = async (
       offset: number,
-      carried: MerchantLogo[],
-    ): Promise<MerchantLogo[]> => {
+      carried: TransactionDetails[],
+    ): Promise<TransactionDetails[]> => {
       const page = await call<{
         transactions: PlaidTransaction[];
         total_transactions: number;
@@ -254,14 +255,16 @@ export const plaidProvider: BankDataProvider = {
         end_date: endDate,
         options: { count: SYNC_PAGE_SIZE, offset },
       });
-      const logos = page.transactions.flatMap((entry): MerchantLogo[] => {
+      const logos = page.transactions.flatMap((entry): TransactionDetails[] => {
         const merchantLogo = toHttpsUrl(entry.logo_url);
-        return merchantLogo
+        const bankName = toBankName(entry.merchant_name, entry.name);
+        return merchantLogo || bankName
           ? [
               {
                 providerTransactionId: entry.transaction_id,
                 pendingTransactionId: entry.pending_transaction_id || null,
                 merchantLogo,
+                bankName,
               },
             ]
           : [];

@@ -4,6 +4,7 @@ import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { getDirtyFrom as appDirtyFrom } from '../../src/apps/runway/engine/closings.ts';
 import {
   normalizeTransaction,
+  toBankName,
   toTransactionCents,
 } from '../../functions/src/apps/runway/link/normalize.ts';
 import type {
@@ -33,6 +34,17 @@ assert.equal(
   toTransactionCents(0.1 + 0.2),
   30,
   'floating dollars round to cents',
+);
+assert.equal(toBankName('Amazon', 'AMZN Mktp US*2K4'), 'AMZN Mktp US*2K4');
+assert.equal(
+  toBankName('Starbucks', 'STARBUCKS'),
+  null,
+  'the same name in other case is not repeated',
+);
+assert.equal(
+  toBankName(null, 'CHECK 1042'),
+  null,
+  'with no merchant the name is the merchant',
 );
 const withLogo = (logoUrl: string) =>
   normalizeTransaction({
@@ -151,6 +163,7 @@ const tx = (
   amountCents: cents,
   merchant: 'Cafe',
   merchantLogo: null,
+  bankName: null,
   category: null,
   isPending: false,
   ...extra,

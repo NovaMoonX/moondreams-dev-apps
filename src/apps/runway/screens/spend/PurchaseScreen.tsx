@@ -342,6 +342,12 @@ function PurchaseScreen({
         : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
+  const bankName =
+    purchase.bankName?.trim() &&
+    purchase.bankName.trim() !== title &&
+    purchase.bankName.trim() !== purchase.merchant?.trim()
+      ? purchase.bankName.trim()
+      : null;
   const receiptText = purchase.receiptText?.trim() || null;
   const receiptRows = receiptText?.split('\n') ?? [];
   const totalRow = isReceiptTotalRow(receiptRows.at(-1) ?? '')
@@ -644,6 +650,9 @@ function PurchaseScreen({
             label={SPEND_WORDS.detailTitle}
             figure={refund ? `+${amount}` : amount}
             fact={fact}
+            secondFact={
+              bankName === null ? null : SPEND_WORDS.bankName(bankName)
+            }
           />
           {(note !== null ||
             receiptText !== null ||

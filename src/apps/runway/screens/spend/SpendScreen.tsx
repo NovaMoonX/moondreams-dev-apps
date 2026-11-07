@@ -242,7 +242,7 @@ function SpendScreen() {
       (filterId === null ||
         purchase.lines.some((line) => line.envelopeId === filterId)) &&
       (needle === '' ||
-        `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.label ?? ''} ${purchase.merchant ?? ''} ${purchase.note ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
+        `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.label ?? ''} ${purchase.merchant ?? ''} ${purchase.bankName ?? ''} ${purchase.note ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
           .toLowerCase()
           .includes(needle)),
   );
