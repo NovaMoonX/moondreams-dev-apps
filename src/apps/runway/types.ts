@@ -47,6 +47,8 @@ export interface PlanSealedFields {
   notifyTimeZone: string | null;
   /** The person's answer to "Where are your goals and envelopes kept?": when to ask again, or never. Null until they answer; a plan sealed before it existed lacks the key. */
   holdsPrompt: HoldsPromptChoice | null;
+  /** Epoch ms the person read why Free to Spend now comes from their account balances; null until then. A plan sealed before it existed lacks the key. */
+  bankBackedSeenAt: number | null;
 }
 
 export interface HoldsPromptChoice {

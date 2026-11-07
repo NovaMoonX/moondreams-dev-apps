@@ -4175,6 +4175,27 @@ const version = (
     kind: 'amount',
     cents: 50_000,
   });
+  const banked = deriveBalances({
+    startDate: start,
+    moves,
+    records: [],
+    arrivedOn: new Map(),
+    kinds,
+    bankAdjustCents: -12_000,
+  });
+  assert.equal(
+    banked.moneyOnHandCents,
+    88_000,
+    'a bank adjustment lands in the money on hand',
+  );
+  assert.equal(
+    banked.freeToSpendCents,
+    38_000,
+    'and in Free to Spend, never in what has a job',
+  );
+  assert.deepEqual(banked.assignedByItem, none.assignedByItem);
+  assert.equal(banked.bankAdjustCents, -12_000);
+  assert.equal(none.bankAdjustCents, 0, 'no adjustment when left out');
   const confirmedRecord = {
     id: 'd_confirmed',
     dayId: 'd',

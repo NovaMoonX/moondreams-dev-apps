@@ -61,8 +61,8 @@ const toBalanceInputs =
     ]),
   });
 
-/** What the balances are summed from, at the level the plan is at. */
-export const selectBalanceInputs = createSelector(
+/** What the ledger alone sums from, at the level the plan is at, before any match to the account balances. */
+const selectLedgerBalanceInputs = createSelector(
   [
     (state: RootState) => state.runway.plan?.startDate ?? null,
     (state: RootState) => state.runway.moves,
@@ -100,45 +100,15 @@ export const selectBalanceInputs = createSelector(
     ),
 );
 
-/** The same sums as tracking counts them, spending and cards included, whatever level the plan is at now: what tracking that starts again carries forward. */
-export const selectTrackBalanceInputs = createSelector(
-  [
-    (state: RootState) => state.runway.plan?.startDate ?? null,
-    (state: RootState) => state.runway.moves,
-    (state: RootState) => state.runway.records,
-    (state: RootState) => state.runway.days,
-    (state: RootState) => state.runway.items,
-    (state: RootState) => state.runway.purchases,
-    (state: RootState) => state.runway.cards,
-    selectClosingBase,
-    () => todayAsUtcDate(),
-  ],
-  toBalanceInputs('track'),
-);
-
-/** Every balance, summed from the ledger since the starting point and never stored. */
-export const selectBalances = createSelector(
-  [selectBalanceInputs],
+const selectLedgerBalances = createSelector(
+  [selectLedgerBalanceInputs],
   deriveBalances,
 );
-
-export const selectFreeToSpend = (state: RootState) =>
-  selectBalances(state).freeToSpendCents;
-
-/** What one envelope has been assigned since the starting point. */
-export const selectEnvelopeFigure = (state: RootState, itemId: string) =>
-  selectBalances(state).assignedByItem[itemId] ?? 0;
-
-/** What a place holds now; null is Free to Spend. */
-export const selectHeldBy = (state: RootState, placeId: string | null) =>
-  placeId === null
-    ? selectFreeToSpend(state)
-    : selectEnvelopeFigure(state, placeId);
 
 /** Where the cash in the accounts that count goes, at Link. Raw lists are read here: the account selectors live in a file that imports this one. */
 export const selectCashPosition = createSelector(
   [
-    selectBalances,
+    selectLedgerBalances,
     (state: RootState) => state.runway.accounts,
     (state: RootState) => state.runway.accountBalances,
     (state: RootState) => state.runway.items,
@@ -175,3 +145,69 @@ export const selectCashPosition = createSelector(
       ],
     }),
 );
+
+/** At Link, whether Free to Spend comes from the account balances, and what they hold beyond (or short of) what the ledger counts. Typed balances stand in for accounts with no link; nothing changes while an account that counts has no balance at all. */
+export const selectBankBacking = createSelector(
+  [selectLevel, selectLedgerBalances, selectCashPosition],
+  (level, ledger, position) => {
+    const isBacked =
+      level === 'link' &&
+      ledger.hasMoney &&
+      position.cashCents !== null &&
+      position.accounts.some((account) => account.isBank);
+    return {
+      isBacked,
+      hasTyped: position.accounts.some((account) => !account.isBank),
+      cents: isBacked
+        ? (position.freeCents ?? 0) -
+          position.overAssignedCents -
+          ledger.freeToSpendCents
+        : 0,
+    };
+  },
+);
+
+/** What the balances are summed from, at the level the plan is at, matched to the account balances at Link. */
+export const selectBalanceInputs = createSelector(
+  [selectLedgerBalanceInputs, selectBankBacking],
+  (inputs, backing): BalancesInput => ({
+    ...inputs,
+    bankAdjustCents: backing.cents,
+  }),
+);
+
+/** The same sums as tracking counts them, spending and cards included, whatever level the plan is at now: what tracking that starts again carries forward. */
+export const selectTrackBalanceInputs = createSelector(
+  [
+    (state: RootState) => state.runway.plan?.startDate ?? null,
+    (state: RootState) => state.runway.moves,
+    (state: RootState) => state.runway.records,
+    (state: RootState) => state.runway.days,
+    (state: RootState) => state.runway.items,
+    (state: RootState) => state.runway.purchases,
+    (state: RootState) => state.runway.cards,
+    selectClosingBase,
+    () => todayAsUtcDate(),
+  ],
+  toBalanceInputs('track'),
+);
+
+/** Every balance, summed from the ledger since the starting point and never stored. */
+export const selectBalances = createSelector(
+  [selectBalanceInputs],
+  deriveBalances,
+);
+
+export const selectFreeToSpend = (state: RootState) =>
+  selectBalances(state).freeToSpendCents;
+
+/** What one envelope has been assigned since the starting point. */
+export const selectEnvelopeFigure = (state: RootState, itemId: string) =>
+  selectBalances(state).assignedByItem[itemId] ?? 0;
+
+/** What a place holds now; null is Free to Spend. */
+export const selectHeldBy = (state: RootState, placeId: string | null) =>
+  placeId === null
+    ? selectFreeToSpend(state)
+    : selectEnvelopeFigure(state, placeId);
+

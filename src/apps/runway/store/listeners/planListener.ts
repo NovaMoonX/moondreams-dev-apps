@@ -23,6 +23,7 @@ async function openPlan(
         notifyHour: null,
         notifyTimeZone: null,
         holdsPrompt: null,
+        bankBackedSeenAt: null,
       };
   const result: OpenPlan = {
     uid: plan.uid,
@@ -41,6 +42,7 @@ async function openPlan(
     notifyHour: fields.notifyHour ?? null,
     notifyTimeZone: fields.notifyTimeZone ?? null,
     holdsPrompt: fields.holdsPrompt ?? null,
+    bankBackedSeenAt: fields.bankBackedSeenAt ?? null,
   };
   return result;
 }

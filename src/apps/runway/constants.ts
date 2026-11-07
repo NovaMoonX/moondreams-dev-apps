@@ -4149,6 +4149,26 @@ export const HOLDS_PROMPT_WORDS = {
   discardMessage: 'Nothing is saved until you tap Save.',
 } as const;
 
+export const BANK_BACKED_WORDS = {
+  title: 'Free to Spend now comes from your bank',
+  subtitle: 'See what changed and why.',
+  intro:
+    'Runway now starts from what your accounts hold, then sets aside your bills, goals, cards, pending charges and envelopes. What is left is Free to Spend.',
+  typedNote: "Accounts you haven't linked count with the balance you typed.",
+  before: 'From what you entered',
+  after: 'From your accounts',
+  more: (amount: string) =>
+    `Your accounts hold ${amount} more than Runway had counted, so it is now in Free to Spend.`,
+  less: (amount: string) =>
+    `Your accounts hold ${amount} less than Runway had counted, often spending not added yet, so Free to Spend is lower.`,
+  same: 'Your accounts match what Runway had counted, so nothing moved.',
+  hidden: 'Show amounts to see how they differ.',
+  gotIt: 'Got it',
+  failed: 'That did not save. Try again in a moment.',
+  sumHelp:
+    'At Link this matches what your accounts hold, so it can differ from what you entered.',
+} as const;
+
 /** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',

@@ -53,6 +53,8 @@ export interface BalancesInput {
   isCountingCards?: boolean;
   /** What the ledger before the records, moves and purchases above summed to, counted from the same starting day; its spending is left out by the caller when spending is not counted. */
   closing?: ClosingState | null;
+  /** At Link, what the account balances hold beyond (or short of) what the ledger counts, added to the money on hand so Free to Spend matches the banks. Zero when left out. */
+  bankAdjustCents?: Cents;
 }
 
 export interface Balances {
@@ -78,6 +80,8 @@ export interface Balances {
   uncountedCardCashCents: Cents;
   /** Money on hand less everything assigned; below zero when more is assigned than is held. */
   freeToSpendCents: Cents;
+  /** The part of the money on hand that comes from matching the account balances at Link rather than from the ledger. */
+  bankAdjustCents: Cents;
   startMoneyCents: Cents;
   arrivedCents: Cents;
   paidCents: Cents;
@@ -325,7 +329,8 @@ export function deriveBalances(input: BalancesInput): Balances {
     spentCents +
     sumValues(charged) -
     sumValues(cardPaid) +
-    sumOutsideTransfers(transferEntries);
+    sumOutsideTransfers(transferEntries) +
+    (input.bankAdjustCents ?? 0);
   const result: Balances = {
     isStarted: startDate !== null,
     hasMoney: started.money !== null,
@@ -347,6 +352,7 @@ export function deriveBalances(input: BalancesInput): Balances {
       assignedToHorizonCents -
       assignedToEnvelopesCents -
       assignedToCardsCents,
+    bankAdjustCents: input.bankAdjustCents ?? 0,
     startMoneyCents,
     arrivedCents,
     paidCents,
