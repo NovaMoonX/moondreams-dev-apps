@@ -45,6 +45,7 @@ import { fromDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import AccountPicker from '@apps/runway/components/AccountPicker';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import { toBillAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
@@ -134,7 +135,6 @@ import {
   selectGroups,
   selectPairedBy,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import { describeAccountLine } from '@apps/runway/utils/accountText';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { resolveSpill } from '@apps/runway/engine/spill';
@@ -1509,16 +1509,10 @@ function ItemSheet({
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
       <ActionTitle>{ACCOUNT_WORDS.whichAccountTitle}</ActionTitle>
-      <PillGroup
+      <AccountPicker
         label={ACCOUNT_WORDS.whichAccountLabel}
-        options={[
-          { value: NO_ACCOUNT, label: ACCOUNT_WORDS.notInAccount },
-          ...openAccounts.map((account) => ({
-            value: account.id,
-            label: account.name,
-            detail: describeAccountLine(account),
-          })),
-        ]}
+        accounts={openAccounts}
+        none={{ value: NO_ACCOUNT, label: ACCOUNT_WORDS.notInAccount }}
         value={accountChoice}
         onChange={setAccountChoice}
       />

@@ -6,10 +6,7 @@ import { openBankLink } from '@apps/runway/lib/bankLink';
 import { LINK_WORDS } from '@apps/runway/constants';
 import type { LinkChoice } from '@apps/runway/engine/linkMatch';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import {
-  createAccount,
-  setAccountBalance,
-} from '@apps/runway/store/actions/accountActions';
+import { createAccount } from '@apps/runway/store/actions/accountActions';
 import { createCard } from '@apps/runway/store/actions/cardActions';
 import type {
   AccountKind,
@@ -209,20 +206,4 @@ export async function linkChosenAccounts(
     choices: sent,
   });
   return { ...response.data, sent, created };
-}
-
-/** Makes a linked account's balance the bank's figure, as of today. */
-export async function applyBankBalance(
-  uid: string,
-  encryption: RunwayEncryption,
-  accountId: string,
-  bankCents: Cents,
-): Promise<void> {
-  await setAccountBalance(
-    uid,
-    encryption,
-    accountId,
-    bankCents,
-    todayAsUtcDate(),
-  );
 }

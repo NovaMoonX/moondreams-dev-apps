@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
+import { withBankBalances } from '@apps/runway/engine/accounts';
 import type { ClosingState } from '@apps/runway/engine/closings';
 import type {
   DateOnly,
@@ -39,6 +40,8 @@ export interface RunwayState {
   isCardsLoaded: boolean;
   /** Every account, archived ones too. */
   accounts: OpenAccount[];
+  /** The accounts as stored, before a linked account takes the bank's figure. */
+  savedAccounts: OpenAccount[];
   /** The accounts have been read once, so an account's figures are not mistaken for none. */
   isAccountsLoaded: boolean;
   /** Every link a bank sign-in made, and what the bank last said each linked account or card holds. */
@@ -104,6 +107,7 @@ const initialState: RunwayState = {
   cards: [],
   isCardsLoaded: false,
   accounts: [],
+  savedAccounts: [],
   isAccountsLoaded: false,
   links: [],
   isLinksLoaded: false,
@@ -194,7 +198,8 @@ export const runwaySlice = createSlice({
       state.isCardsLoaded = true;
     },
     setAccounts: (state, action: PayloadAction<OpenAccount[]>) => {
-      state.accounts = action.payload;
+      state.savedAccounts = action.payload;
+      state.accounts = withBankBalances(action.payload, state.accountBalances);
       state.isAccountsLoaded = true;
     },
     setLinks: (state, action: PayloadAction<OpenLink[]>) => {
@@ -206,6 +211,7 @@ export const runwaySlice = createSlice({
       action: PayloadAction<OpenAccountBalance[]>,
     ) => {
       state.accountBalances = action.payload;
+      state.accounts = withBankBalances(state.savedAccounts, action.payload);
       state.isAccountBalancesLoaded = true;
     },
     setMoves: (

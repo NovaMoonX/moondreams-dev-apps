@@ -1401,6 +1401,8 @@ export const ACCOUNT_MOVE_WORDS = {
     `${account}'s balance was last updated ${date}, before this pay, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
   noBalance: (account: string) =>
     `${account} has no balance yet, so the move counts all of it. Enter what it holds today and the amount to move shrinks.`,
+  staleBankBalance: (account: string, date: string) =>
+    `${account}'s balance from your bank is from ${date}, before this pay, so the move counts all of it. It updates the next time the bank syncs.`,
   updateBalance: (account: string) => `Update ${account}'s balance`,
   updateBalanceSub: 'What it holds today',
   warnTitle: 'Money to move',
@@ -3780,6 +3782,7 @@ export const ACCOUNT_WORDS = {
   unknownSub: 'Add a balance to every account above to see it',
   leftOut: (names: string) => `Not counted: ${names}`,
   balanceOn: (day: string) => `As of ${day}`,
+  bankBalanceOn: (day: string) => `From your bank, ${day}`,
   holdsTitle: 'What it holds',
   holdsEmpty: 'Nothing is held here yet.',
   notYetGivenAJob: 'Not yet given a job',
@@ -3882,17 +3885,14 @@ export const ACCOUNT_WORDS = {
   interestTitle: (account: string) => `Interest in ${account}`,
   interestUncountedChip: (amount: string) =>
     `Interest ~${amount} · update the balance`,
+  interestUncountedBankChip: (amount: string) =>
+    `Interest ~${amount} · next bank update`,
   interestChip: (amount: string, day: string, isActual: boolean) =>
     `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
-  goalBankTitle: (account: string) => `What ${account} shows`,
-  goalBankChip: (signed: string) => `Bank ${signed}`,
-  goalActual: (
-    amount: string,
-    compare: { difference: string; direction: 'more' | 'less'; saved: string },
-  ) =>
-    `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
+  interestUncountedBank: (amount: string, day: string) =>
+    `About ${amount} interest came in by ${day} (estimate). It counts once your bank sends its next balance.`,
   goalInterest: (amount: string, day: string) =>
     `Earns about ${amount} on ${day}, its share of the interest (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,
@@ -4309,6 +4309,10 @@ export const LINK_WORDS = {
   reconnectNote:
     'It stopped syncing. Your purchases and balances wait until you do.',
   reconnectDone: (bank: string) => `${bank} is syncing again`,
+  reconnectingTitle: (bank: string) => `Reconnecting ${bank}\u2026`,
+  reconnectingNote: 'Finish signing in at your bank. This can take a moment.',
+  reconnectedTitle: (bank: string) => `${bank} is reconnected`,
+  reconnectedNote: 'Bringing in your purchases and balances now.',
   reconnectNewAccounts: (bank: string, count: number) =>
     count === 1
       ? `Synced ${bank}. 1 account you picked is new. Pick where it goes in Settings, under ${bank}.`
@@ -4391,20 +4395,6 @@ export const LINK_WORDS = {
   kindDepository: 'Account',
   kindCredit: 'Card',
   kindOther: 'Other',
-  useBankTitle: 'Use the bank\u2019s balance?',
-  useBankHelp: 'These differ from what Runway has.',
-  useBankLater: 'Not sure yet? You can choose later from the account.',
-  yours: 'Yours',
-  bank: 'Bank',
-  useBanks: 'Use the bank\u2019s',
-  keepMine: 'Keep mine',
-  noneTyped: 'Nothing typed',
-  updated: (name: string) => `${name} now matches the bank.`,
-  kept: (name: string) => `Kept your figure for ${name}.`,
-  updateFailed: 'That balance did not save. Nothing was changed.',
-  useBankRow: 'Use the bank\u2019s balance',
-  bankSays: (amount: string, date: string) =>
-    `Bank says ${amount}, as of ${date}`,
   done: 'Linked',
   doneCount: (count: number) =>
     count === 1 ? '1 account is linked.' : `${count} accounts are linked.`,
