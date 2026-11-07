@@ -10,6 +10,7 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { LINK_WORDS } from '@apps/runway/constants';
+import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { unlinkLink } from '@apps/runway/store/actions/linkActions';
 import { recordUnlink } from '@apps/runway/store/actions/planActions';
@@ -47,6 +48,7 @@ function BankSheet({
       (entry) => entry.id !== linkId && isLiveLink(entry),
     ),
   );
+  const { reconnect, busyId } = useReconnectLink();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isBankPending, setIsBankPending] = useState(false);
@@ -142,6 +144,8 @@ function BankSheet({
         </section>
         {link.status === 'needsAttention' && (
           <ReconnectRow
+            busyId={busyId}
+            onReconnect={(id, bank) => void reconnect(id, bank)}
             linkId={link.id}
             bank={link.institutionName || LINK_WORDS.yourBank}
           />

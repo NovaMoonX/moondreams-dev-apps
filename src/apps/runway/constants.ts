@@ -4297,7 +4297,10 @@ export const LINK_WORDS = {
   signIn: 'Sign in at your bank',
   signInAgain: 'Sign in at your bank again',
   addToIntro: (bank: string) =>
-    `Sign in at ${bank} again and tick the new accounts. They join the link you already have.`,
+    `Sign in at ${bank} again and tick the new accounts. Keep the accounts you already linked ticked. They join the link you already have.`,
+  stoppedAccounts: (bank: string, count: number) =>
+    `${count === 1 ? '1 account' : `${count} accounts`} at ${bank} ${count === 1 ? 'wasn\u2019t' : 'weren\u2019t'} shared this time and will stop updating. Add accounts again and keep ${count === 1 ? 'it' : 'them'} ticked.`,
+  notNow: 'Not now',
   pickEveryAccount:
     'Pick every account you have at this bank now. Linking the same bank a second time can disconnect the first link.',
   addToLinkedRow: (bank: string) => `Add accounts to ${bank}`,

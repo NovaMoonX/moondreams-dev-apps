@@ -33,6 +33,7 @@ if (getApps().length === 0) {
 type ReconnectResult = LinkSyncResult & {
   newAccounts: number;
   added: ProviderAccountSealed[];
+  stopped: number;
 };
 
 /** What the bank returns now; null when it could not be asked for a reason that should not stop the sync. */
@@ -51,7 +52,7 @@ async function listReturned(grant: ProviderGrant) {
 }
 
 /**
- * `{ linkId }` → `LinkSyncResult & { newAccounts, added }` (`added` is the new unbound accounts): after the person signed in again at their bank, folds the accounts they picked into the link, sets their `needsAttention` link back to `active` and syncs it. A sync that still needs attention, or that is skipped, sets it back. Safe to repeat.
+ * `{ linkId }` → `LinkSyncResult & { newAccounts, added, stopped }` (`added` is the new unbound accounts, `stopped` the bound ones the bank no longer shares): after the person signed in again at their bank, folds the accounts they picked into the link, sets their `needsAttention` link back to `active` and syncs it. A sync that still needs attention, or that is skipped, sets it back. Safe to repeat.
  */
 export const reconnectRunwayLink = onCall(
   {
@@ -108,11 +109,12 @@ export const reconnectRunwayLink = onCall(
         removed: 0,
         newAccounts: 0,
         added: [],
+        stopped: 0,
       };
       return result;
     }
 
-    const { newAccounts, added } = await firestore.runTransaction(
+    const { newAccounts, added, stopped } = await firestore.runTransaction(
       async (transaction) => {
         const [link, grant] = await Promise.all([
           transaction.get(linkRef),
@@ -154,6 +156,7 @@ export const reconnectRunwayLink = onCall(
         return {
           newAccounts: remapped?.newAccounts ?? 0,
           added: remapped?.added ?? [],
+          stopped: remapped?.stopped ?? 0,
         };
       },
     );
@@ -168,7 +171,7 @@ export const reconnectRunwayLink = onCall(
         }
       });
     }
-    const reply: ReconnectResult = { ...result, newAccounts, added };
+    const reply: ReconnectResult = { ...result, newAccounts, added, stopped };
     return reply;
   },
 );

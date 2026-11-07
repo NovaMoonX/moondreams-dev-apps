@@ -37,6 +37,7 @@ interface AttachResult {
 
 export type LinkReconnectResult = LinkSyncResult & {
   newAccounts: number;
+  stopped: number;
   added: Omit<NormalizedAccount, 'subtype'>[];
 };
 

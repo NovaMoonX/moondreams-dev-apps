@@ -8,9 +8,8 @@ import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 
 /** One row per bank that stopped syncing and is waiting on the person: a tap signs in again at the bank and syncs it. */
 function ReconnectLinkRows() {
-  const waiting = useAppSelector((state) =>
-    state.runway.links.filter((link) => link.status === 'needsAttention'),
-  );
+  const links = useAppSelector((state) => state.runway.links);
+  const waiting = links.filter((link) => link.status === 'needsAttention');
   const { reconnect } = useReconnectLink();
 
   if (waiting.length === 0) return null;

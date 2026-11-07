@@ -17,6 +17,12 @@ export function useReconnectLink() {
     try {
       const result = await reconnectLink(linkId);
       if (result === null) return;
+      if (result.stopped > 0) {
+        addToast({
+          title: LINK_WORDS.stoppedAccounts(bank, result.stopped),
+          type: 'warning',
+        });
+      }
       addToast({
         title:
           result.state !== 'ok'

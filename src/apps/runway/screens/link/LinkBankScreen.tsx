@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Landmark } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionRow from '@/components/ActionRow';
 import InlineNotice from '@/components/InlineNotice';
@@ -24,6 +24,7 @@ import {
   type MatchTargetKind,
 } from '@apps/runway/engine/linkMatch';
 import { openBankLink } from '@apps/runway/lib/bankLink';
+import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -131,11 +132,13 @@ function LinkBankScreen({
 }: LinkBankScreenProps) {
   const { user } = useAuth();
   const mask = useMaskedText();
-  const joinable = useAppSelector((state) =>
-    state.runway.links.filter(
-      (link) => link.status === 'active' || link.status === 'needsAttention',
-    ),
+  const links = useAppSelector((state) => state.runway.links);
+  const joinable = links.filter(
+    (link) => link.status === 'active' || link.status === 'needsAttention',
   );
+  const { addToast } = useToast();
+  const { reconnect, busyId } = useReconnectLink();
+  const owedRef = useRef(0);
   const { confirm } = useActionModal();
   const applyBankBalance = useApplyBankBalance();
   const [session, setSession] = useState<LinkSession | null>(() =>
@@ -151,11 +154,21 @@ function LinkBankScreen({
   );
   const [isOnExistingLink, setIsOnExistingLink] = useState(resume !== null);
   const [isBusy, setIsBusy] = useState(false);
+  const isWorking = isBusy || busyId !== null;
   const [message, setMessage] = useState<string | null>(null);
   const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [settled, setSettled] = useState<
     Readonly<Record<string, 'used' | 'kept'>>
   >({});
+  const isPartialLink =
+    isOnExistingLink &&
+    (links
+      .find((link) => link.id === session?.linkId)
+      ?.providerAccounts.some(
+        (entry) =>
+          entry.accountId !== null || entry.cardId !== null || entry.isSkipped,
+      ) ??
+      false);
   const startedName = getStartedName(startedFrom);
   const isChanged =
     step.kind === 'match' &&
@@ -206,16 +219,30 @@ function LinkBankScreen({
         setMessage(LINK_WORDS.notLinked);
         return;
       }
-      if (result.added.length === 0) {
-        setMessage(LINK_WORDS.noNewAccounts(bank));
-        return;
+      if (result.stopped > 0) {
+        addToast({
+          title: LINK_WORDS.stoppedAccounts(bank, result.stopped),
+          type: 'warning',
+        });
       }
+      const waiting = store
+        .getState()
+        .runway.links.find((entry) => entry.id === link.id);
       const next: LinkSession = {
         linkId: link.id,
         institutionName: link.institutionName,
-        accounts: toSessionAccounts(result.added),
+        accounts:
+          result.added.length > 0
+            ? toSessionAccounts(result.added)
+            : waiting
+              ? toResumedSession(waiting).accounts
+              : [],
       };
-      const preset = presetChoices(next, startedFrom);
+      if (next.accounts.length === 0) {
+        setMessage(LINK_WORDS.noNewAccounts(bank));
+        return;
+      }
+      const preset = presetChoices(next, null);
       setSession(next);
       setChoices(preset);
       setBaseline(preset);
@@ -282,10 +309,15 @@ function LinkBankScreen({
         encryption,
         session,
         choices,
-        (index, created) =>
+        (index, created) => {
+          const row = session.accounts[index];
+          if (created.kind === 'existing' && created.target === 'card') {
+            owedRef.current += Math.max(0, row?.balanceCents ?? 0);
+          }
           setChoices((current) =>
             current.map((choice, at) => (at === index ? created : choice)),
-          ),
+          );
+        },
       );
       if (result.attached > 0 && selectLevel(store.getState()) === 'track') {
         await moveToLink(user.uid, encryption, todayAsUtcDate()).catch(() =>
@@ -298,13 +330,7 @@ function LinkBankScreen({
         );
       }
       const { accounts } = store.getState().runway;
-      const owedCents = session.accounts.reduce(
-        (sum, row, index) =>
-          choices[index]?.kind === 'new' && row.kind === 'credit'
-            ? sum + Math.max(0, row.balanceCents ?? 0)
-            : sum,
-        0,
-      );
+      const owedCents = owedRef.current;
       const offers = result.balances.flatMap((balance): BalanceOffer[] => {
         if (result.created.includes(balance.targetId)) return [];
         const sent = result.sent.find(
@@ -411,6 +437,11 @@ function LinkBankScreen({
                           {link.status === 'needsAttention' ? (
                             <ReconnectRow
                               isGrouped
+                              busyId={busyId}
+                              isDisabled={isBusy}
+                              onReconnect={(id, name) =>
+                                void reconnect(id, name)
+                              }
                               linkId={link.id}
                               bank={bank}
                             />
@@ -421,7 +452,7 @@ function LinkBankScreen({
                               icon={<Landmark />}
                               label={LINK_WORDS.addToLinkedRow(bank)}
                               subtitle={LINK_WORDS.addToLinkedHelp}
-                              isDisabled={isBusy}
+                              isDisabled={isWorking}
                               onClick={() => void addAccounts(link)}
                             />
                           )}
@@ -443,7 +474,7 @@ function LinkBankScreen({
               <Button
                 type='button'
                 loading={isBusy}
-                disabled={isBusy}
+                disabled={isWorking}
                 onClick={() => void (addTo ? addAccounts(addTo) : signIn())}
               >
                 {addTo ? LINK_WORDS.signInAgain : LINK_WORDS.signIn}
@@ -483,11 +514,11 @@ function LinkBankScreen({
             <Button
               type='button'
               variant='tertiary'
-              className='text-destructive! w-full'
+              className={isPartialLink ? 'w-full' : 'text-destructive! w-full'}
               disabled={isBusy}
-              onClick={() => void discard()}
+              onClick={() => (isPartialLink ? requestClose() : void discard())}
             >
-              {LINK_WORDS.discard}
+              {isPartialLink ? LINK_WORDS.notNow : LINK_WORDS.discard}
             </Button>
           </div>
           <ModalFooterActions
