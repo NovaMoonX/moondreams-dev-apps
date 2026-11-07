@@ -4141,6 +4141,9 @@ export const NEEDS_HOME_WORDS = {
   moneyIn: 'Money in',
   moneyInHelp:
     'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
+  maybeTwice: 'Might be in twice',
+  maybeTwiceHelp:
+    'These came in from your bank for days before you linked it, and you put them in an envelope. Each looks like a purchase you had already added, so it may be counted twice. Open one to say whether it is the same.',
   leaveOut: 'Leave it out of spending',
   leaveOutSub: 'Free to Spend gets it back',
   leaveOutMoneyInSub: 'It will not count as income or spending',

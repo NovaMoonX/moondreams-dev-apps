@@ -56,6 +56,7 @@ import { setKeyStatus } from '@apps/runway/store/runwaySlice';
 import { useClosings } from '@apps/runway/hooks/useClosings';
 import {
   useMatchBankPurchases,
+  useMatchLinkHistory,
   useMatchAccountPairs,
   useMatchDeposits,
 } from '@apps/runway/hooks/useBankMatch';
@@ -232,6 +233,7 @@ function RunwayContent() {
   useMatchAccountPairs(user?.uid ?? null);
   usePlaceByRules(user?.uid ?? null);
   useLinkHistory(user?.uid ?? null);
+  useMatchLinkHistory(user?.uid ?? null);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
     isDeletingPlan ? null : (user?.uid ?? null),

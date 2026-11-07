@@ -1,5 +1,9 @@
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { findAccountPairs } from '@apps/runway/engine/matching';
+import {
+  findAccountPairs,
+  findPurchaseMatches,
+  type PurchaseMatches,
+} from '@apps/runway/engine/matching';
 import type {
   OpenAccount,
   OpenCard,
@@ -49,6 +53,28 @@ export function makeIsLinkHistory(
 export const isStillCounted = (purchase: OpenPurchase): boolean =>
   purchase.pairedWithId === null &&
   (purchase.needsHome || purchase.lines.length > 0);
+
+/** A bank purchase the person put in an envelope by hand: placed, not by a rule, and not part of a pair. */
+export const isPlacedByHand = (purchase: OpenPurchase): boolean =>
+  purchase.source === 'link' &&
+  !purchase.needsHome &&
+  purchase.assignedBy !== 'auto' &&
+  purchase.lines.length > 0 &&
+  purchase.pairedWithId === null &&
+  purchase.amountCents > 0;
+
+/** History purchases the person placed by hand that look like a purchase they had typed for it, so they may be counted twice. */
+export const findHistoryDuplicates = (
+  purchases: readonly OpenPurchase[],
+  isLinkHistory: (purchase: OpenPurchase) => boolean,
+): PurchaseMatches =>
+  findPurchaseMatches(
+    purchases.filter(
+      (purchase) => isLinkHistory(purchase) && isPlacedByHand(purchase),
+    ),
+    purchases,
+    isPlacedByHand,
+  );
 
 /** The ids of both sides of each clear pair between the person's own accounts dated from `since`, which the pairing pass settles instead. */
 export function getPairSideIds(

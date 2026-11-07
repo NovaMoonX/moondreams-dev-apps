@@ -129,7 +129,7 @@ function NeedsHomeRow({
 /** Purchases that came in from a linked bank and wait for an envelope; money in waits apart, and a deposit that is not clearly a pay day asks which one. */
 function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const today = todayAsUtcDate();
-  const { spending, moneyIn } = useAppSelector((state) =>
+  const { spending, moneyIn, maybeTwice } = useAppSelector((state) =>
     selectNeedsHome(state, today),
   );
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
@@ -137,7 +137,9 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [sent, setSent] = useState<OpenPurchase | null>(null);
   const opened =
-    [...spending, ...moneyIn].find((entry) => entry.id === openId) ?? null;
+    [...spending, ...moneyIn, ...maybeTwice].find(
+      (entry) => entry.id === openId,
+    ) ?? null;
   const isMoneyIn = opened !== null && opened.amountCents < 0;
 
   const renderRows = (rows: readonly OpenPurchase[]) => (
@@ -164,7 +166,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           <p className='text-muted-foreground text-sm'>
             {NEEDS_HOME_WORDS.loading}
           </p>
-        ) : spending.length + moneyIn.length === 0 ? (
+        ) : spending.length + moneyIn.length + maybeTwice.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {NEEDS_HOME_WORDS.empty}
           </p>
@@ -179,6 +181,19 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
               </HelpTip>
             </div>
             {spending.length > 0 && renderRows(spending)}
+            {maybeTwice.length > 0 && (
+              <div className='space-y-2'>
+                <SectionDivider
+                  label={NEEDS_HOME_WORDS.maybeTwice}
+                  trailing={
+                    <HelpTip title={NEEDS_HOME_WORDS.maybeTwice}>
+                      <p>{NEEDS_HOME_WORDS.maybeTwiceHelp}</p>
+                    </HelpTip>
+                  }
+                />
+                {renderRows(maybeTwice)}
+              </div>
+            )}
             {moneyIn.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider

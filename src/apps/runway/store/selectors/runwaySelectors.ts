@@ -9,7 +9,10 @@ import {
   type ComingDay,
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { makeIsLinkHistory } from '@apps/runway/engine/linkHistory';
+import {
+  findHistoryDuplicates,
+  makeIsLinkHistory,
+} from '@apps/runway/engine/linkHistory';
 import {
   getAccountHoldings,
   getHolderById,
@@ -1547,6 +1550,25 @@ export const selectLinkWaiting = createSelector(
     isReady ? waiting.filter((purchase) => !isLinkHistory(purchase)) : [],
 );
 
+/** The recent window's purchases and the ones read around the days banks were linked, which may be older; the window's copy wins. */
+export const selectHistoryPurchases = createSelector(
+  [selectPurchases, (state: RootState) => state.runway.linkHistoryPurchases],
+  (purchases, linkHistory): OpenPurchase[] => [
+    ...new Map(
+      [...(linkHistory ?? []), ...purchases].map((purchase) => [
+        purchase.id,
+        purchase,
+      ]),
+    ).values(),
+  ],
+);
+
+/** History purchases the person placed by hand that look like one they typed: clear ones to merge, the rest to ask about. */
+export const selectHistoryDuplicates = createSelector(
+  [selectHistoryPurchases, selectIsLinkHistory],
+  findHistoryDuplicates,
+);
+
 // The list keeps history until it is turned, so a charge that still counts is never on no screen.
 const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
@@ -1605,10 +1627,16 @@ export const selectLostPairs = createSelector(
         ),
 );
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */
+/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. */
 export const selectNeedsHome = createSelector(
-  [selectWaitingList, selectLostDeposits, selectLostPairs],
-  (waitingList, lostDeposits, lostPairs) => {
+  [
+    selectWaitingList,
+    selectLostDeposits,
+    selectLostPairs,
+    selectHistoryPurchases,
+    selectHistoryDuplicates,
+  ],
+  (waitingList, lostDeposits, lostPairs, historyPurchases, duplicates) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
@@ -1624,10 +1652,21 @@ export const selectNeedsHome = createSelector(
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const result = {
-      spending: sorted.filter((purchase) => purchase.amountCents >= 0),
-      moneyIn: sorted.filter((purchase) => purchase.amountCents < 0),
-    };
+    const spending = sorted.filter((purchase) => purchase.amountCents >= 0);
+    const moneyIn = sorted.filter((purchase) => purchase.amountCents < 0);
+    const listed = new Set(sorted.map((purchase) => purchase.id));
+    const maybeTwice = historyPurchases
+      .filter(
+        (purchase) =>
+          duplicates.offers.has(purchase.id) && !listed.has(purchase.id),
+      )
+      .sort(
+        (a, b) =>
+          b.date - a.date ||
+          b.createdAt - a.createdAt ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+    const result = { spending, moneyIn, maybeTwice };
     return result;
   },
 );

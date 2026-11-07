@@ -22,6 +22,7 @@ import {
   unlinkTrackingPeriod,
 } from '../../src/apps/runway/engine/level.ts';
 import {
+  findHistoryDuplicates,
   getPairSideIds,
   isStillCounted,
   makeIsLinkHistory,
@@ -14721,6 +14722,65 @@ const version = (
     ).size,
     0,
     'an unclear pair is not held back from history',
+  );
+  const placed = (id: string, over: Partial<OpenPurchase> = {}) =>
+    bank({
+      id,
+      needsHome: false,
+      assignedBy: 'person',
+      status: 'posted',
+      amountCents: 4_200,
+      lines: [{ envelopeId: 'e', cents: 4_200, via: 'chosen' }],
+      ...over,
+    });
+  const typedTwin = (id: string, over: Partial<OpenPurchase> = {}) =>
+    ({
+      id,
+      source: 'manual',
+      needsHome: false,
+      paidByCardId: null,
+      amountCents: 4_200,
+      date: day('2026-10-19'),
+      createdAt: linkedAt - 86_400_000,
+      lines: [{ envelopeId: 'e', cents: 4_200, via: 'chosen' }],
+      refundOfId: null,
+      costRef: null,
+      notSameAs: null,
+      pairedWithId: null,
+      ...over,
+    }) as OpenPurchase;
+  const dupes = (list: OpenPurchase[]) =>
+    findHistoryDuplicates(list, isHistory);
+  assert.deepEqual(
+    [...dupes([placed('p'), typedTwin('t')]).clear],
+    [['p', 't']],
+    'a history charge placed by hand with one typed twin is merged on its own',
+  );
+  const unsure = dupes([placed('p'), typedTwin('t1'), typedTwin('t2')]);
+  assert.equal(unsure.clear.size, 0, 'two typed candidates are never merged');
+  assert.deepEqual(
+    unsure.offers.get('p'),
+    ['t1', 't2'],
+    'two typed candidates are offered',
+  );
+  const none = (list: OpenPurchase[], why: string) => {
+    const found = dupes(list);
+    assert.equal(found.clear.size + found.offers.size, 0, why);
+  };
+  none(
+    [placed('p', { assignedBy: 'auto' }), typedTwin('t')],
+    'a purchase a rule placed is left to the history sweep',
+  );
+  none(
+    [placed('p'), typedTwin('t', { notSameAs: ['p'] })],
+    'a typed purchase said not to be it is never offered',
+  );
+  none(
+    [
+      placed('p', { date: day('2026-11-05') }),
+      typedTwin('t', { date: day('2026-11-05') }),
+    ],
+    'a purchase from the link day on is not history',
   );
 }
 
