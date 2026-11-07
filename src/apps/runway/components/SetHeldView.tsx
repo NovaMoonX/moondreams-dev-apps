@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -43,9 +43,41 @@ interface SetHeldViewProps {
   name: string;
   /** What the envelope or goal holds now. */
   heldCents: Cents;
+  /** The account that holds it, with what in it is not set aside (null when its balance is not known). */
+  account: {
+    name: string;
+    isCounted: boolean;
+    spareCents: Cents | null;
+  } | null;
   today: number;
   onBack: () => void;
 }
+
+type Source = 'account' | 'outside' | 'free';
+
+const describeAccountIn = (
+  spareCents: Cents | null,
+  cents: Cents,
+  isCounted: boolean,
+) => {
+  if (spareCents === null)
+    return { body: SET_HELD_WORDS.accountIn.unknown, isLocked: true };
+  if (spareCents <= 0)
+    return { body: SET_HELD_WORDS.accountIn.none, isLocked: true };
+  if (spareCents < cents)
+    return {
+      body: SET_HELD_WORDS.accountIn.short(formatCents(spareCents)),
+      isLocked: true,
+    };
+  return {
+    body: SET_HELD_WORDS.accountIn.body(
+      formatCents(cents),
+      formatCents(spareCents),
+      isCounted,
+    ),
+    isLocked: false,
+  };
+};
 
 /** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
 function SetHeldView({
@@ -53,6 +85,7 @@ function SetHeldView({
   kind,
   name,
   heldCents,
+  account,
   today,
   onBack,
 }: SetHeldViewProps) {
@@ -69,7 +102,7 @@ function SetHeldView({
   const isSavingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<{
-    choice: 'outside' | 'free';
+    choice: Source;
     isRaising: boolean;
   } | null>(null);
 
@@ -84,25 +117,39 @@ function SetHeldView({
   const source = picked?.isRaising === isRaising ? picked.choice : null;
   const fromId = isRaising ? null : itemId;
   const toId = isRaising ? itemId : null;
-  const isOutside = source === 'outside';
-  const amountBlocker =
-    target === null
-      ? SET_HELD_WORDS.needsAmount
-      : difference === 0
-        ? SET_HELD_WORDS.unchanged
-        : null;
-  const blocker =
-    amountBlocker ??
-    (source === null
-      ? isRaising
-        ? SET_HELD_WORDS.needsSourceRaise
-        : SET_HELD_WORDS.needsSourceLower
-      : null);
+  const isOutside =
+    source === 'outside' || (source === 'account' && !account?.isCounted);
   const money = formatCents(cents);
-  const options = [
+  const options: {
+    choice: Source;
+    title: string;
+    body: string;
+    isLocked: boolean;
+  }[] = [
+    ...(account === null
+      ? []
+      : [
+          isRaising
+            ? {
+                choice: 'account' as const,
+                title: SET_HELD_WORDS.accountIn.title(account.name),
+                ...describeAccountIn(
+                  account.spareCents,
+                  cents,
+                  account.isCounted,
+                ),
+              }
+            : {
+                choice: 'account' as const,
+                title: SET_HELD_WORDS.accountOut.title(account.name),
+                body: SET_HELD_WORDS.accountOut.body(money, account.isCounted),
+                isLocked: false,
+              },
+        ]),
     {
       choice: 'outside' as const,
       ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
+      isLocked: false,
     },
     {
       choice: 'free' as const,
@@ -112,8 +159,24 @@ function SetHeldView({
       body: (isRaising ? SET_HELD_WORDS.freeOut : SET_HELD_WORDS.freeIn).body(
         money,
       ),
+      isLocked: false,
     },
   ];
+  const isSourceLocked =
+    options.find((option) => option.choice === source)?.isLocked ?? false;
+  const amountBlocker =
+    target === null
+      ? SET_HELD_WORDS.needsAmount
+      : difference === 0
+        ? SET_HELD_WORDS.unchanged
+        : null;
+  const blocker =
+    amountBlocker ??
+    (source === null || isSourceLocked
+      ? isRaising
+        ? SET_HELD_WORDS.needsSourceRaise
+        : SET_HELD_WORDS.needsSourceLower
+      : null);
 
   const before = deriveBalances(inputs);
   const after =
@@ -170,15 +233,19 @@ function SetHeldView({
       setError(MOVE_WORDS.offline);
       return;
     }
-    const free = MOVE_WORDS.freeToSpend;
+    const free =
+      source === 'account' && account !== null
+        ? account.name
+        : MOVE_WORDS.freeToSpend;
+    const isNamed = source !== 'outside';
     const fromName = isRaising ? free : name;
     const toName = isRaising ? name : free;
-    const undoText = !isOutside
+    const undoText = isNamed
       ? MOVE_WORDS.undone(money, fromName, toName)
       : isRaising
         ? SET_HELD_WORDS.undoneOutsideIn(money, name)
         : SET_HELD_WORDS.undoneOutsideOut(money, name);
-    const summary = !isOutside
+    const summary = isNamed
       ? MOVE_WORDS.summary(money, fromName, toName)
       : isRaising
         ? SET_HELD_WORDS.summaryOutsideIn(money, name)
@@ -245,36 +312,53 @@ function SetHeldView({
       {amountBlocker === null && (
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
           {options.map((option) => {
-            const isChosen = source === option.choice;
+            const isChosen = source === option.choice && !option.isLocked;
             return (
               <Button
                 key={option.choice}
                 type='button'
                 variant='tertiary'
                 aria-pressed={isChosen}
+                aria-disabled={option.isLocked || undefined}
                 disabled={isSaving}
                 className={join(
                   'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-4! py-3! text-left font-normal whitespace-normal',
                   isChosen &&
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
                 )}
-                onClick={() => setPicked({ choice: option.choice, isRaising })}
+                onClick={() =>
+                  option.isLocked
+                    ? undefined
+                    : setPicked({ choice: option.choice, isRaising })
+                }
               >
                 <span className='flex w-full items-start justify-between gap-2'>
-                  <span className='text-[15px] leading-[1.125rem] font-medium'>
-                    {option.title}
-                  </span>
                   <span
-                    aria-hidden='true'
                     className={join(
-                      'grid size-5 shrink-0 place-items-center rounded-full border',
-                      isChosen
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border',
+                      'text-[15px] leading-[1.125rem] font-medium',
+                      option.isLocked && 'text-muted-foreground',
                     )}
                   >
-                    {isChosen && <Check className='size-3.5' />}
+                    {option.title}
                   </span>
+                  {option.isLocked ? (
+                    <Lock
+                      className='text-muted-foreground size-4 shrink-0'
+                      aria-hidden='true'
+                    />
+                  ) : (
+                    <span
+                      aria-hidden='true'
+                      className={join(
+                        'grid size-5 shrink-0 place-items-center rounded-full border',
+                        isChosen
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border',
+                      )}
+                    >
+                      {isChosen && <Check className='size-3.5' />}
+                    </span>
+                  )}
                 </span>
                 <span className='text-muted-foreground mt-1 block text-[13px] leading-[1.125rem]'>
                   <MaskedText>{option.body}</MaskedText>
