@@ -49,7 +49,7 @@ const VARIANTS: Record<
   notice: {
     icon: Info,
     label: '',
-    className: 'bg-foreground text-background',
+    className: 'bg-primary text-primary-foreground',
   },
   update: {
     icon: RefreshCw,
@@ -108,7 +108,7 @@ function OfflineBanner() {
         <Button
           size='sm'
           variant='base'
-          className='bg-background! text-foreground! hover:bg-background/85! focus-visible:outline-background! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
+          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
           onClick={shownNotice.onAction}
         >
           {shownNotice.actionLabel}

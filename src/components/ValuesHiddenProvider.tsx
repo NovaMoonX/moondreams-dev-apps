@@ -13,7 +13,7 @@ import {
 import { setMoneyScramble } from '@/utils/moneyScramble';
 
 const AWAY_LIMIT_MS = 5 * 60 * 1000;
-const MADE_UP_NOTICE = 'Made-up amounts are on';
+const MADE_UP_NOTICE = 'Showing made-up amounts';
 const TURN_OFF = 'Turn off';
 
 interface ValuesHiddenProviderProps {
