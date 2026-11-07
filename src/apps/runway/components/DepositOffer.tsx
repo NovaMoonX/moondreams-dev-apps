@@ -16,6 +16,7 @@ import {
   selectListedDays,
   selectLostDeposits,
   selectLostPairs,
+  selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -29,7 +30,7 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const { user } = useAuth();
   const { isHidden } = useValuesHidden();
   const today = todayAsUtcDate();
-  const waitingList = useAppSelector((state) => state.runway.needsHome);
+  const waitingList = useAppSelector(selectLinkWaiting);
   const lost = useAppSelector((state) => selectLostDeposits(state, today));
   const lostPairs = useAppSelector(selectLostPairs);
   const purchases = useAppSelector((state) => state.runway.purchases);

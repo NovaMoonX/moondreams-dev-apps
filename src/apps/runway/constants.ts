@@ -4131,7 +4131,7 @@ export const NEEDS_HOME_WORDS = {
   homeSub: 'From your bank',
   countedChip: 'Counted in Free to Spend',
   intro:
-    'Purchases from your bank wait here until you say which envelope they came out of. New ones already count against Free to Spend.',
+    "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",
   empty:
     'Nothing is waiting. New purchases from your bank show up here on their own.',
   loading: 'Getting your purchases.',
@@ -4141,10 +4141,21 @@ export const NEEDS_HOME_WORDS = {
   moneyIn: 'Money in',
   moneyInHelp:
     'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
+  maybeTwice: 'Might be in twice',
+  inEnvelope: (name: string) => `In ${name}`,
+  maybeTwiceHelp:
+    'You put these in an envelope, so they count there. Each looks like one you added yourself before linking your bank, so it may be in twice. Nothing is removed unless you say so: open one to say if it’s the same.',
   leaveOut: 'Leave it out of spending',
   leaveOutSub: 'Free to Spend gets it back',
   leaveOutMoneyInSub: 'It will not count as income or spending',
   leftOut: 'Left out of spending',
+  keepFree: 'Keep in Free to Spend',
+  keepFreeSub: 'Still counts, with no envelope',
+  keptFree: 'Kept in Free to Spend',
+  historyOne: 'A purchase from before you linked is history now',
+  historyMany: (count: number) =>
+    `${count} purchases from before you linked are history now`,
+  historySub: 'They are not counted in Free to Spend or your envelopes.',
   whichTitle: 'Which envelope?',
   sendHere: 'Send it here',
   moreOptions: 'Pick an envelope',
@@ -4156,11 +4167,12 @@ export const NEEDS_HOME_WORDS = {
   failed: 'That did not save. Nothing was changed.',
   sameTitle: 'Did you already add this?',
   sameRow: (difference: string | null) =>
-    difference === null ? 'Same amount' : `The bank’s is ${difference}`,
-  sameVerb: 'It’s this one',
+    difference === null ? 'Same amount' : `Bank’s is ${difference}`,
+  sameVerb: 'Kept once at the bank’s amount',
   notSame: 'None of these',
-  notSameSub: 'Keep them apart and don’t ask again',
-  notSameDone: 'They stay apart. You won’t be asked about these again.',
+  notSameSub: 'They’re separate and both still count',
+  notSameDone:
+    'They stay separate and both still count. You won’t be asked again.',
   matchedOne: (name: string) => `${name} matched the one you added`,
   matchedMany: (count: number) =>
     `${count} purchases from your bank matched ones you added`,

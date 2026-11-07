@@ -10,8 +10,8 @@ import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 function NeedsHomeDoor() {
   const today = todayAsUtcDate();
   const count = useAppSelector((state) => {
-    const { spending, moneyIn } = selectNeedsHome(state, today);
-    return spending.length + moneyIn.length;
+    const { spending, moneyIn, maybeTwice } = selectNeedsHome(state, today);
+    return spending.length + moneyIn.length + maybeTwice.length;
   });
   const { openView } = useRunwayUrlState();
   if (count === 0) return null;

@@ -24,6 +24,7 @@ import {
   selectIsRulesLoaded,
   selectItemLooks,
   selectRules,
+  selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpilledLines } from '@apps/runway/store/selectors/spillSelectors';
 import type { OpenPurchase, OpenRule, PurchaseLine } from '@apps/runway/types';
@@ -74,7 +75,7 @@ const getBatchLines = (works: readonly Omit<RuleWork, 'lines'>[]) => {
 export function usePlaceByRules(uid: string | null) {
   const { addToast } = useToast();
   const level = useAppSelector(selectLevel);
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const rules = useAppSelector(selectRules);
   const today = todayAsUtcDate();

@@ -18,7 +18,8 @@ export interface PurchaseMatches {
   offers: Map<string, string[]>;
 }
 
-const isWaitingCharge = (purchase: OpenPurchase) =>
+/** A bank charge waiting in Needs a home. */
+export const isWaitingCharge = (purchase: OpenPurchase) =>
   purchase.source === 'link' && purchase.needsHome && purchase.amountCents > 0;
 
 /** A typed purchase can stand in for a bank one only when nothing else points at it: no cost it pays, no refund of or for it. */
@@ -47,13 +48,14 @@ const byNearest = (bank: OpenPurchase) => (a: OpenPurchase, b: OpenPurchase) =>
   a.createdAt - b.createdAt ||
   (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
-/** Pairs bank charges waiting in Needs a home with purchases typed by hand on the same card (or off any card) within three days. A bank charge is clearly one typed purchase when that is its only one at the same amount and no other bank charge has it too; otherwise the same-amount ones, or failing those the near-amount ones, are offered. The result does not depend on the order of the input. */
+/** Pairs bank charges waiting in Needs a home (or the ones `isBank` picks) with purchases typed by hand on the same card (or off any card) within three days. A bank charge is clearly one typed purchase when that is its only one at the same amount and no other bank charge has it too; otherwise the same-amount ones, or failing those the near-amount ones, are offered. The result does not depend on the order of the input. */
 export function findPurchaseMatches(
   waiting: readonly OpenPurchase[],
   purchases: readonly OpenPurchase[],
+  isBank: (purchase: OpenPurchase) => boolean = isWaitingCharge,
 ): PurchaseMatches {
   const typed = getTypedCandidates(purchases);
-  const banks = waiting.filter(isWaitingCharge);
+  const banks = waiting.filter(isBank);
   const nearby = new Map(
     banks.map((bank) => [
       bank.id,

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban } from 'lucide-react';
+import { Ban, Wallet } from 'lucide-react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -15,16 +15,30 @@ import {
 import type { OpenPurchase } from '@apps/runway/types';
 import {
   describePurchaseAssigned,
+  describePurchaseKeptFree,
   describePurchaseReturned,
 } from '@apps/runway/utils/purchaseText';
+
+const getSubtitle = (purchase: OpenPurchase, isKeepFree: boolean) => {
+  if (isKeepFree) return NEEDS_HOME_WORDS.keepFreeSub;
+  return purchase.amountCents > 0
+    ? NEEDS_HOME_WORDS.leaveOutSub
+    : NEEDS_HOME_WORDS.leaveOutMoneyInSub;
+};
 
 interface LeaveOutRowProps {
   purchase: OpenPurchase;
   onDone: () => void;
+  /** Keeps a charge counted in Free to Spend with no envelope, instead of taking it out of spending. */
+  isKeepFree?: boolean;
 }
 
-/** Takes a waiting purchase out of spending, whether it is money in or a charge; a failure reads in the row's own subtitle. */
-function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
+/** Takes a waiting purchase out of spending, whether it is money in or a charge, or keeps a charge in Free to Spend; a failure reads in the row's own subtitle. */
+function LeaveOutRow({
+  purchase,
+  onDone,
+  isKeepFree = false,
+}: LeaveOutRowProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [isBusy, setIsBusy] = useState(false);
@@ -36,16 +50,27 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
     setError(null);
     try {
       const uid = user.uid;
+      const lines = isKeepFree
+        ? [
+            {
+              envelopeId: null,
+              cents: purchase.amountCents,
+              via: 'free' as const,
+            },
+          ]
+        : [];
       const updatedAt = await assignPurchase(
         uid,
         await getRunwayEncryption(uid),
         purchase,
-        [],
-        describePurchaseAssigned(purchase, [], () => ''),
+        lines,
+        isKeepFree
+          ? describePurchaseKeptFree(purchase, () => '')
+          : describePurchaseAssigned(purchase, [], () => ''),
       );
       const leftOut = {
         ...purchase,
-        lines: [],
+        lines,
         needsHome: false,
         incomeDayId: null,
         pairedWithId: null,
@@ -55,7 +80,9 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
         updatedAt,
       };
       addToast({
-        title: NEEDS_HOME_WORDS.leftOut,
+        title: isKeepFree
+          ? NEEDS_HOME_WORDS.keptFree
+          : NEEDS_HOME_WORDS.leftOut,
         type: 'success',
         action: {
           label: NEEDS_HOME_WORDS.undo,
@@ -90,14 +117,9 @@ function LeaveOutRow({ purchase, onDone }: LeaveOutRowProps) {
     <ActionRow
       isGrouped
       isRoomy
-      icon={<Ban />}
-      label={NEEDS_HOME_WORDS.leaveOut}
-      subtitle={
-        error ??
-        (purchase.amountCents > 0
-          ? NEEDS_HOME_WORDS.leaveOutSub
-          : NEEDS_HOME_WORDS.leaveOutMoneyInSub)
-      }
+      icon={isKeepFree ? <Wallet /> : <Ban />}
+      label={isKeepFree ? NEEDS_HOME_WORDS.keepFree : NEEDS_HOME_WORDS.leaveOut}
+      subtitle={error ?? getSubtitle(purchase, isKeepFree)}
       isDisabled={isBusy}
       onClick={() => void leaveOut()}
     />

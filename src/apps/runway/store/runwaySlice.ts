@@ -61,6 +61,8 @@ export interface RunwayState {
   daysFrom: DateOnly | null;
   movesFrom: DateOnly | null;
   purchasesFrom: DateOnly | null;
+  /** The purchases dated around the days banks were linked, which may be older than the recent window; null until read. */
+  linkHistoryPurchases: OpenPurchase[] | null;
   /** The newest closing that applied when it was read, and the `dirtyFrom` the read was for ('none' when the plan had none). */
   closing: ClosingState | null;
   closingFor: string | null;
@@ -116,6 +118,7 @@ const initialState: RunwayState = {
   daysFrom: null,
   movesFrom: null,
   purchasesFrom: null,
+  linkHistoryPurchases: null,
   closing: null,
   closingFor: null,
   loadDay: null,
@@ -219,6 +222,12 @@ export const runwaySlice = createSlice({
       state.purchases = action.payload.purchases;
       state.purchasesFrom = action.payload.from;
     },
+    setLinkHistoryPurchases: (
+      state,
+      action: PayloadAction<OpenPurchase[] | null>,
+    ) => {
+      state.linkHistoryPurchases = action.payload;
+    },
     setNeedsHome: (state, action: PayloadAction<OpenPurchase[]>) => {
       state.needsHome = action.payload;
       state.isNeedsHomeLoaded = true;
@@ -299,6 +308,7 @@ export const {
   setExpenses,
   setRules,
   setPurchases,
+  setLinkHistoryPurchases,
   setPeriodPurchases,
   setNeedsHome,
   clearPeriodPurchases,

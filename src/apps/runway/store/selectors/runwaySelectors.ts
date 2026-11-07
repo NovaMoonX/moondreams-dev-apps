@@ -10,6 +10,10 @@ import {
 } from '@apps/runway/engine/comingDays';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
+  findHistoryDuplicates,
+  makeIsLinkHistory,
+} from '@apps/runway/engine/linkHistory';
+import {
   getAccountHoldings,
   getHolderById,
 } from '@apps/runway/engine/accounts';
@@ -60,7 +64,12 @@ import {
   OVERDUE_DAYS,
   PRIORITIES,
 } from '@apps/runway/constants';
-import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
+import {
+  addUtcDays,
+  addUtcMonths,
+  DAY_MS,
+  toDayKey,
+} from '@apps/runway/engine/dates';
 import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
@@ -1522,6 +1531,76 @@ export const selectLostDeposits = createSelector(
   },
 );
 
+/** Tells a bank purchase its link brought in as history (dated before the bank was linked) from one that came after. */
+export const selectIsLinkHistory = createSelector(
+  [
+    (state: RootState) => state.runway.links,
+    (state: RootState) => state.runway.accounts,
+    (state: RootState) => state.runway.cards,
+  ],
+  makeIsLinkHistory,
+);
+
+/** What waits for a home, leaving out what a link brought in from before it was made: history is never asked about or placed by a pass. */
+export const selectLinkWaiting = createSelector(
+  [
+    (state: RootState) => state.runway.needsHome,
+    selectIsLinkHistory,
+    (state: RootState) =>
+      state.runway.isLinksLoaded &&
+      state.runway.isAccountsLoaded &&
+      state.runway.isCardsLoaded,
+  ],
+  (waiting, isLinkHistory, isReady) =>
+    isReady ? waiting.filter((purchase) => !isLinkHistory(purchase)) : [],
+);
+
+// A bank sends about a month before the link day, and a typed twin can sit three days earlier still.
+const LINK_HISTORY_DAYS_BEFORE = 37;
+const LINK_HISTORY_DAYS_AFTER = 4;
+
+/** The date ranges to read around each day a bank was linked, as `from:to` pairs joined by commas, kept before the recent window and merged where they overlap; empty when there is nothing to read. */
+export const selectLinkHistoryRanges = (state: RootState): string => {
+  const windowFrom = state.runway.purchasesFrom;
+  if (state.runway.links.length === 0 || windowFrom === null) return '';
+  const ranges = state.runway.links
+    .map((link) => todayAsUtcDate(link.createdAt))
+    .sort((a, b) => a - b)
+    .map((day): [number, number] => [
+      addUtcDays(day, -LINK_HISTORY_DAYS_BEFORE),
+      Math.min(addUtcDays(day, LINK_HISTORY_DAYS_AFTER), windowFrom),
+    ])
+    .filter(([from, to]) => from < to)
+    .reduce<[number, number][]>((merged, range) => {
+      const last = merged.at(-1);
+      if (last && range[0] <= last[1]) {
+        return [...merged.slice(0, -1), [last[0], Math.max(last[1], range[1])]];
+      }
+      return [...merged, range];
+    }, []);
+  return ranges.map(([from, to]) => `${from}:${to}`).join(',');
+};
+
+/** The recent window's purchases and the ones read around the days banks were linked, which may be older; the window's copy wins. */
+export const selectHistoryPurchases = createSelector(
+  [selectPurchases, (state: RootState) => state.runway.linkHistoryPurchases],
+  (purchases, linkHistory): OpenPurchase[] => [
+    ...new Map(
+      [...(linkHistory ?? []), ...purchases].map((purchase) => [
+        purchase.id,
+        purchase,
+      ]),
+    ).values(),
+  ],
+);
+
+/** History purchases the person placed by hand that look like one they typed: clear ones to merge, the rest to ask about. */
+export const selectHistoryDuplicates = createSelector(
+  [selectHistoryPurchases, selectIsLinkHistory],
+  findHistoryDuplicates,
+);
+
+// The list keeps history until it is turned, so a charge that still counts is never on no screen.
 const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
 export interface AccountPairEntry {
@@ -1579,10 +1658,16 @@ export const selectLostPairs = createSelector(
         ),
 );
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, and money in set apart under its own heading (lost deposits with it). */
+/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. */
 export const selectNeedsHome = createSelector(
-  [selectWaitingList, selectLostDeposits, selectLostPairs],
-  (waitingList, lostDeposits, lostPairs) => {
+  [
+    selectWaitingList,
+    selectLostDeposits,
+    selectLostPairs,
+    selectHistoryPurchases,
+    selectHistoryDuplicates,
+  ],
+  (waitingList, lostDeposits, lostPairs, historyPurchases, duplicates) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
@@ -1598,16 +1683,30 @@ export const selectNeedsHome = createSelector(
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const result = {
-      spending: sorted.filter((purchase) => purchase.amountCents >= 0),
-      moneyIn: sorted.filter((purchase) => purchase.amountCents < 0),
-    };
+    const spending = sorted.filter((purchase) => purchase.amountCents >= 0);
+    const moneyIn = sorted.filter((purchase) => purchase.amountCents < 0);
+    const listed = new Set(sorted.map((purchase) => purchase.id));
+    const maybeTwice = historyPurchases
+      .filter(
+        (purchase) =>
+          duplicates.offers.has(purchase.id) && !listed.has(purchase.id),
+      )
+      .sort(
+        (a, b) =>
+          b.date - a.date ||
+          b.createdAt - a.createdAt ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+    const result = { spending, moneyIn, maybeTwice };
     return result;
   },
 );
 
 export const selectIsNeedsHomeLoaded = (state: RootState) =>
-  state.runway.isNeedsHomeLoaded;
+  state.runway.isNeedsHomeLoaded &&
+  state.runway.isLinksLoaded &&
+  state.runway.isAccountsLoaded &&
+  state.runway.isCardsLoaded;
 
 const selectCardList = (state: RootState) => state.runway.cards;
 

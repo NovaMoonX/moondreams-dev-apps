@@ -1334,7 +1334,7 @@ export async function mergeBankPurchase(
   return { bank, typed, images, updatedAt: now };
 }
 
-/** Undoes a merge: the typed purchase comes back as it was, marked as not this bank purchase so it is never matched to it again, and the bank's waits in Needs a home again. Refused when the merged purchase changed since. */
+/** Undoes a merge: the typed purchase comes back as it was, marked as not this bank purchase so it is never matched to it again, and the bank's goes back to how it was. Refused when the merged purchase changed since. */
 export async function splitBankPurchase(
   uid: string,
   encryption: RunwayEncryption,
@@ -1388,7 +1388,7 @@ export async function splitBankPurchase(
       sealed: typedSealed,
     } satisfies PurchaseDoc);
     transaction.update(purchaseRef(uid, bank.id), {
-      needsHome: true,
+      needsHome: bank.needsHome,
       expenseId: bank.expenseId,
       updatedAt: now,
       sealed: bankSealed,

@@ -14,7 +14,12 @@ import { findPurchaseMatches } from '@apps/runway/engine/matching';
 import { useMergeWithUndo } from '@apps/runway/hooks/useBankMatch';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { markNotSamePurchase } from '@apps/runway/store/actions/purchaseActions';
-import { selectItemLooks } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectHistoryDuplicates,
+  selectHistoryPurchases,
+  selectItemLooks,
+  selectLinkWaiting,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
 
@@ -23,12 +28,16 @@ interface SameAsOfferProps {
   onDone: () => void;
 }
 
-/** The purchases typed by hand that a waiting bank charge may be, when none is clearly it: tapping one makes them one purchase, and "None of these" stops offering them. */
+/** The purchases typed by hand that a waiting bank charge (or a history one the person placed) may be, when none is clearly it: tapping one makes them one purchase, and "None of these" stops offering them. */
 function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const waiting = useAppSelector((state) => state.runway.needsHome);
-  const purchases = useAppSelector((state) => state.runway.purchases);
+  const waiting = useAppSelector(selectLinkWaiting);
+  const windowPurchases = useAppSelector((state) => state.runway.purchases);
+  const purchases = useAppSelector(selectHistoryPurchases);
+  const historyOffers = useAppSelector(
+    (state) => selectHistoryDuplicates(state).offers,
+  );
   const looks = useAppSelector(selectItemLooks);
   const merge = useMergeWithUndo();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -36,9 +45,13 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
-  const offered = (
-    findPurchaseMatches(waiting, purchases).offers.get(purchase.id) ?? []
-  ).flatMap((id) => purchases.filter((entry) => entry.id === id));
+  const offeredIds =
+    findPurchaseMatches(waiting, windowPurchases).offers.get(purchase.id) ??
+    historyOffers.get(purchase.id) ??
+    [];
+  const offered = offeredIds.flatMap((id) =>
+    purchases.filter((entry) => entry.id === id),
+  );
 
   const pick = async (typed: OpenPurchase) => {
     if (!user || busyId !== null) return;

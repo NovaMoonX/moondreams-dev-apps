@@ -24,6 +24,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
+  selectItemLooks,
   selectIsNeedsHomeLoaded,
   selectNeedsHome,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -94,10 +95,12 @@ function MoneyInSheet({
 function NeedsHomeRow({
   purchase,
   sourceName,
+  place = null,
   onOpen,
 }: {
   purchase: OpenPurchase;
   sourceName: string;
+  place?: string | null;
   onOpen: () => void;
 }) {
   const { isHidden } = useValuesHidden();
@@ -110,6 +113,7 @@ function NeedsHomeRow({
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
     sourceName,
+    ...(place === null ? [] : [place]),
   ].join(' · ');
   const amount = isIn
     ? `+${formatCents(-purchase.amountCents)}`
@@ -129,24 +133,38 @@ function NeedsHomeRow({
 /** Purchases that came in from a linked bank and wait for an envelope; money in waits apart, and a deposit that is not clearly a pay day asks which one. */
 function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const today = todayAsUtcDate();
-  const { spending, moneyIn } = useAppSelector((state) =>
+  const { spending, moneyIn, maybeTwice } = useAppSelector((state) =>
     selectNeedsHome(state, today),
   );
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const sourceNameOf = useSourceName();
+  const looks = useAppSelector(selectItemLooks);
   const [openId, setOpenId] = useState<string | null>(null);
   const [sent, setSent] = useState<OpenPurchase | null>(null);
   const opened =
-    [...spending, ...moneyIn].find((entry) => entry.id === openId) ?? null;
+    [...spending, ...moneyIn, ...maybeTwice].find(
+      (entry) => entry.id === openId,
+    ) ?? null;
   const isMoneyIn = opened !== null && opened.amountCents < 0;
 
-  const renderRows = (rows: readonly OpenPurchase[]) => (
+  const placeOf = (purchase: OpenPurchase) =>
+    NEEDS_HOME_WORDS.inEnvelope(
+      purchase.lines
+        .map((line) =>
+          line.envelopeId === null
+            ? null
+            : (looks.get(line.envelopeId)?.name ?? null),
+        )
+        .find((name) => name !== null) ?? 'an envelope',
+    );
+  const renderRows = (rows: readonly OpenPurchase[], isPlaced = false) => (
     <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
       {rows.map((purchase) => (
         <NeedsHomeRow
           key={purchase.id}
           purchase={purchase}
           sourceName={sourceNameOf(purchase)}
+          place={isPlaced ? placeOf(purchase) : null}
           onOpen={() => setOpenId(purchase.id)}
         />
       ))}
@@ -164,7 +182,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           <p className='text-muted-foreground text-sm'>
             {NEEDS_HOME_WORDS.loading}
           </p>
-        ) : spending.length + moneyIn.length === 0 ? (
+        ) : spending.length + moneyIn.length + maybeTwice.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {NEEDS_HOME_WORDS.empty}
           </p>
@@ -179,6 +197,19 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
               </HelpTip>
             </div>
             {spending.length > 0 && renderRows(spending)}
+            {maybeTwice.length > 0 && (
+              <div className='space-y-2'>
+                <SectionDivider
+                  label={NEEDS_HOME_WORDS.maybeTwice}
+                  trailing={
+                    <HelpTip title={NEEDS_HOME_WORDS.maybeTwice}>
+                      <p>{NEEDS_HOME_WORDS.maybeTwiceHelp}</p>
+                    </HelpTip>
+                  }
+                />
+                {renderRows(maybeTwice, true)}
+              </div>
+            )}
             {moneyIn.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider
