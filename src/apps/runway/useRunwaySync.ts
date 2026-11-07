@@ -9,7 +9,7 @@ import {
 } from '@apps/runway/utils/changeWindow';
 import { startChangesListener } from '@apps/runway/store/listeners/changeListeners';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { addUtcDays, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -54,8 +54,10 @@ import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectLinkHistoryRanges,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { OpenPurchase } from '@apps/runway/types';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   setChanges,
@@ -280,23 +282,18 @@ export function useRunwaySync(uid: string | null, attempt: number) {
   }, [uid, keyStatus, recentFrom, dispatch]);
 
   const level = useAppSelector(selectLevel);
-  const linkHistoryRange = useAppSelector((state) => {
-    if (selectLevel(state) !== 'link' || state.runway.links.length === 0) {
-      return '';
-    }
-    const days = state.runway.links.map((link) =>
-      todayAsUtcDate(link.createdAt),
-    );
-    return `${addUtcDays(Math.min(...days), -34)}:${addUtcDays(Math.max(...days), 4)}`;
-  });
+  const linkHistoryRanges = useAppSelector(selectLinkHistoryRanges);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || level !== 'link') return;
-    if (linkHistoryRange === '') return;
+    if (linkHistoryRanges === '') return;
 
-    const stop: { current: (() => void) | null } = { current: null };
+    const stops: (() => void)[] = [];
     const run = { isCurrent: true };
-    const [from, to] = linkHistoryRange.split(':').map(Number);
+    const ranges = linkHistoryRanges
+      .split(',')
+      .map((range) => range.split(':').map(Number));
+    const read = new Map<number, OpenPurchase[]>();
     // Only the check for purchases in twice reads this, so a failure skips that check instead of closing the plan.
     const skipHistoryRead = (error: unknown) => {
       if (!run.isCurrent) return;
@@ -307,23 +304,31 @@ export function useRunwaySync(uid: string | null, attempt: number) {
     getRunwayEncryption(uid)
       .then((encryption) => {
         if (!run.isCurrent) return;
-        stop.current = startPurchasesListener(
-          uid,
-          encryption,
-          from,
-          (purchases) => dispatch(setLinkHistoryPurchases(purchases)),
-          skipHistoryRead,
-          to,
-        );
+        ranges.forEach(([from, to], index) => {
+          stops.push(
+            startPurchasesListener(
+              uid,
+              encryption,
+              from,
+              (purchases) => {
+                read.set(index, purchases);
+                if (read.size < ranges.length) return;
+                dispatch(setLinkHistoryPurchases([...read.values()].flat()));
+              },
+              skipHistoryRead,
+              to,
+            ),
+          );
+        });
       })
       .catch(skipHistoryRead);
 
     return () => {
       run.isCurrent = false;
-      stop.current?.();
+      stops.forEach((stop) => stop());
       dispatch(setLinkHistoryPurchases(null));
     };
-  }, [uid, keyStatus, level, linkHistoryRange, dispatch]);
+  }, [uid, keyStatus, level, linkHistoryRanges, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || confirmedDayIds === null) return;

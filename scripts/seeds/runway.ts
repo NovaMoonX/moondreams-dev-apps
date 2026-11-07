@@ -4105,8 +4105,82 @@ async function seedRules(
       } satisfies PurchaseDoc);
     }),
   );
+  const twice: {
+    id: string;
+    source: 'link' | 'manual';
+    daysAgo: number;
+    amountCents: number;
+    merchant: string;
+  }[] = [
+    {
+      id: 'seed-link-history-placed',
+      source: 'link',
+      daysAgo: 16,
+      amountCents: 6_210,
+      merchant: 'Trader Joe’s',
+    },
+    {
+      id: 'seed-typed-before-link',
+      source: 'manual',
+      daysAgo: 17,
+      amountCents: 5_400,
+      merchant: 'Trader Joe’s',
+    },
+  ];
+  await Promise.all(
+    twice.map(async (entry) => {
+      const at = today - entry.daysAgo * DAY_MS;
+      // The bank's copy arrived with the link, after the day it is dated.
+      const createdAt =
+        entry.source === 'link'
+          ? context.now - 14 * DAY_MS + 3_600_000
+          : at + 12 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date: at,
+        source: entry.source,
+        status: 'posted',
+        needsHome: false,
+        accountId: null,
+        expenseId: null,
+        dedupeKey: entry.source === 'link' ? `${entry.id}-dedupe` : null,
+        createdAt,
+        updatedAt: createdAt,
+        sealed: await sealJson(
+          {
+            amountCents: entry.amountCents,
+            merchant: entry.merchant,
+            category: null,
+            ruleId: null,
+            label: null,
+            note: null,
+            lines: [
+              {
+                envelopeId: 'seed-envelope-groceries',
+                cents: entry.amountCents,
+                via: 'chosen',
+              },
+            ],
+            refundOfId: null,
+            paidByCardId: SEED_VENTURE_CARD,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
   await batch.commit();
-  return rules.length + 4;
+  return rules.length + 4 + twice.length;
 }
 
 /**

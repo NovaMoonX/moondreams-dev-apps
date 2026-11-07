@@ -2,6 +2,7 @@ import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   findAccountPairs,
   findPurchaseMatches,
+  isWaitingCharge,
   type PurchaseMatches,
 } from '@apps/runway/engine/matching';
 import type {
@@ -63,18 +64,37 @@ export const isPlacedByHand = (purchase: OpenPurchase): boolean =>
   purchase.pairedWithId === null &&
   purchase.amountCents > 0;
 
-/** History purchases the person placed by hand that look like a purchase they had typed for it, so they may be counted twice. */
-export const findHistoryDuplicates = (
+/** History purchases the person placed by hand that look like a purchase they had typed for it, so they may be counted twice. Charges still waiting compete for the same typed purchases, so a typed purchase two bank charges could be is never clear. `offers` also holds each clear pair, so one whose merge is refused is still shown. */
+export function findHistoryDuplicates(
   purchases: readonly OpenPurchase[],
   isLinkHistory: (purchase: OpenPurchase) => boolean,
-): PurchaseMatches =>
-  findPurchaseMatches(
-    purchases.filter(
-      (purchase) => isLinkHistory(purchase) && isPlacedByHand(purchase),
-    ),
+): PurchaseMatches {
+  const isHistoryPlaced = (purchase: OpenPurchase) =>
+    isLinkHistory(purchase) && isPlacedByHand(purchase);
+  const matches = findPurchaseMatches(
     purchases,
-    isPlacedByHand,
+    purchases,
+    (purchase) =>
+      isHistoryPlaced(purchase) ||
+      (isWaitingCharge(purchase) && !isLinkHistory(purchase)),
   );
+  const historyIds = new Set(
+    purchases.filter(isHistoryPlaced).map((purchase) => purchase.id),
+  );
+  const clear = new Map(
+    [...matches.clear].filter(([bankId]) => historyIds.has(bankId)),
+  );
+  return {
+    clear,
+    offers: new Map([
+      ...[...matches.offers].filter(([bankId]) => historyIds.has(bankId)),
+      ...[...clear].map(([bankId, typedId]): [string, string[]] => [
+        bankId,
+        [typedId],
+      ]),
+    ]),
+  };
+}
 
 /** The ids of both sides of each clear pair between the person's own accounts dated from `since`, which the pairing pass settles instead. */
 export function getPairSideIds(

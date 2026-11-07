@@ -33,6 +33,7 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const waiting = useAppSelector(selectLinkWaiting);
+  const windowPurchases = useAppSelector((state) => state.runway.purchases);
   const purchases = useAppSelector(selectHistoryPurchases);
   const historyOffers = useAppSelector(
     (state) => selectHistoryDuplicates(state).offers,
@@ -45,7 +46,7 @@ function SameAsOffer({ purchase, onDone }: SameAsOfferProps) {
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
   const offeredIds =
-    findPurchaseMatches(waiting, purchases).offers.get(purchase.id) ??
+    findPurchaseMatches(waiting, windowPurchases).offers.get(purchase.id) ??
     historyOffers.get(purchase.id) ??
     [];
   const offered = offeredIds.flatMap((id) =>

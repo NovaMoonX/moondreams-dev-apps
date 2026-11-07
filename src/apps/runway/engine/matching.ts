@@ -18,7 +18,8 @@ export interface PurchaseMatches {
   offers: Map<string, string[]>;
 }
 
-const isWaitingCharge = (purchase: OpenPurchase) =>
+/** A bank charge waiting in Needs a home. */
+export const isWaitingCharge = (purchase: OpenPurchase) =>
   purchase.source === 'link' && purchase.needsHome && purchase.amountCents > 0;
 
 /** A typed purchase can stand in for a bank one only when nothing else points at it: no cost it pays, no refund of or for it. */

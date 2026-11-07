@@ -38,6 +38,7 @@ import {
   selectDepositDays,
   selectHistoryDuplicates,
   selectHistoryPurchases,
+  selectLinkHistoryRanges,
   selectIsAccountsLoaded,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
@@ -218,7 +219,8 @@ export function useMatchLinkHistory(uid: string | null) {
     (state) =>
       selectIsNeedsHomeLoaded(state) &&
       state.runway.purchasesFrom !== null &&
-      state.runway.linkHistoryPurchases !== null,
+      (state.runway.linkHistoryPurchases !== null ||
+        selectLinkHistoryRanges(state) === ''),
   );
   const merge = useMergeWithUndo();
   const mergeRef = useRef(merge);

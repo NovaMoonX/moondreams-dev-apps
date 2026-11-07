@@ -64,7 +64,12 @@ import {
   OVERDUE_DAYS,
   PRIORITIES,
 } from '@apps/runway/constants';
-import { addUtcMonths, DAY_MS, toDayKey } from '@apps/runway/engine/dates';
+import {
+  addUtcDays,
+  addUtcMonths,
+  DAY_MS,
+  toDayKey,
+} from '@apps/runway/engine/dates';
 import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
@@ -1549,6 +1554,32 @@ export const selectLinkWaiting = createSelector(
   (waiting, isLinkHistory, isReady) =>
     isReady ? waiting.filter((purchase) => !isLinkHistory(purchase)) : [],
 );
+
+// A bank sends about a month before the link day, and a typed twin can sit three days earlier still.
+const LINK_HISTORY_DAYS_BEFORE = 37;
+const LINK_HISTORY_DAYS_AFTER = 4;
+
+/** The date ranges to read around each day a bank was linked, as `from:to` pairs joined by commas, kept before the recent window and merged where they overlap; empty when there is nothing to read. */
+export const selectLinkHistoryRanges = (state: RootState): string => {
+  const windowFrom = state.runway.purchasesFrom;
+  if (state.runway.links.length === 0 || windowFrom === null) return '';
+  const ranges = state.runway.links
+    .map((link) => todayAsUtcDate(link.createdAt))
+    .sort((a, b) => a - b)
+    .map((day): [number, number] => [
+      addUtcDays(day, -LINK_HISTORY_DAYS_BEFORE),
+      Math.min(addUtcDays(day, LINK_HISTORY_DAYS_AFTER), windowFrom),
+    ])
+    .filter(([from, to]) => from < to)
+    .reduce<[number, number][]>((merged, range) => {
+      const last = merged.at(-1);
+      if (last && range[0] <= last[1]) {
+        return [...merged.slice(0, -1), [last[0], Math.max(last[1], range[1])]];
+      }
+      return [...merged, range];
+    }, []);
+  return ranges.map(([from, to]) => `${from}:${to}`).join(',');
+};
 
 /** The recent window's purchases and the ones read around the days banks were linked, which may be older; the window's copy wins. */
 export const selectHistoryPurchases = createSelector(

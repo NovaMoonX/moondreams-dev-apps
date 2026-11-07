@@ -14782,6 +14782,26 @@ const version = (
     ],
     'a purchase from the link day on is not history',
   );
+  assert.deepEqual(
+    dupes([placed('p'), typedTwin('t')]).offers.get('p'),
+    ['t'],
+    'a clear pair is offered too, so a refused merge is still shown',
+  );
+  const contested = dupes([
+    placed('p', { date: day('2026-11-03') }),
+    typedTwin('t', { date: day('2026-11-04') }),
+    bank({ id: 'w', amountCents: 4_200, date: day('2026-11-05') }),
+  ]);
+  assert.equal(
+    contested.clear.size,
+    0,
+    'a typed purchase a waiting charge could also be is never merged into history',
+  );
+  assert.deepEqual(
+    [...contested.offers.keys()],
+    ['p'],
+    'only history purchases are offered from the history check',
+  );
 }
 
 console.log('runway engine: ok');
