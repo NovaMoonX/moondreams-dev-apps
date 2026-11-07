@@ -27,8 +27,8 @@ interface ReceiptThumbProps {
 }
 
 function ReceiptThumb({ image, onOpen }: ReceiptThumbProps) {
-  const { isHidden } = useValuesHidden();
-  const { url } = useReceiptImageUrl(image, !isHidden);
+  const { isHidden, isScrambled } = useValuesHidden();
+  const { url } = useReceiptImageUrl(image, !isHidden && !isScrambled);
 
   return (
     <Button

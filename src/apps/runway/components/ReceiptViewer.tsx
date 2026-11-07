@@ -11,7 +11,7 @@ import FallbackImage from '@/components/FallbackImage';
 import { useAuth } from '@/hooks/useAuth';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { SPEND_WORDS } from '@apps/runway/constants';
+import { MADE_UP_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import {
   forgetReceiptImage,
   useReceiptImageUrl,
@@ -25,13 +25,14 @@ interface ReceiptViewerProps {
   onBack: () => void;
 }
 
-/** One receipt, opened on this device: the picture fitted to the width, a download, and the way to remove it. While amounts are hidden it is a neutral tile that shows them. */
+/** One receipt, opened on this device: the picture fitted to the width, a download, and the way to remove it. While amounts are hidden it is a neutral tile that shows them, and while they are made up a tile that says why. */
 function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const { addToast } = useToast();
-  const { isHidden, toggle } = useValuesHidden();
-  const { url, isFailed } = useReceiptImageUrl(image, !isHidden);
+  const { isHidden, isScrambled, toggle } = useValuesHidden();
+  const isPictureHidden = isHidden || isScrambled;
+  const { url, isFailed } = useReceiptImageUrl(image, !isPictureHidden);
   const root = useRef<HTMLDivElement>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +76,12 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
     <div ref={root} className='space-y-4'>
       <BackLink onBack={onBack} />
       <div data-sensitive=''>
-        {isHidden ? (
+        {isScrambled ? (
+          <div className='bg-muted text-muted-foreground flex min-h-48 w-full flex-col items-center justify-center gap-2 rounded-2xl p-4 text-center'>
+            <ReceiptText className='size-8' aria-hidden='true' />
+            <span className='text-sm'>{MADE_UP_WORDS.receiptHidden}</span>
+          </div>
+        ) : isHidden ? (
           <Button
             type='button'
             variant='tertiary'
@@ -104,7 +110,7 @@ function ReceiptViewer({ image, onBack }: ReceiptViewerProps) {
           />
         )}
       </div>
-      {!isHidden && (
+      {!isPictureHidden && (
         <ActionGroup isRoomy>
           <ActionRow
             isGrouped

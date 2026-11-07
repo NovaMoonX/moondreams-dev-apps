@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { MaskedText } from '@apps/runway/components/MaskedText';
-import { FIGURE, maskFigures } from '@apps/runway/utils/maskText';
+import { FIGURE, maskForMode } from '@apps/runway/utils/maskText';
 
 interface SummaryStep {
   summaryValue: ReactNode;
@@ -20,7 +20,7 @@ export function maskSummaries<S extends SummaryStep>(
     const masked: S = {
       ...step,
       summaryValue: <MaskedText>{value}</MaskedText>,
-      summaryText: isHidden ? maskFigures(value) : value,
+      summaryText: maskForMode(value, isHidden),
     };
     return masked;
   });

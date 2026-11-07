@@ -23,7 +23,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { maskFigures } from '@apps/runway/utils/maskText';
+import { maskForMode } from '@apps/runway/utils/maskText';
 import {
   isReceiptTotalRow,
   splitReceiptRow,
@@ -148,7 +148,7 @@ function PurchaseScreen({
   const { confirm } = useActionModal();
   const { isHidden } = useValuesHidden();
   const [isItemsOpen, setIsItemsOpen] = useState(false);
-  const mask = (text: string) => (isHidden ? maskFigures(text) : text);
+  const mask = (text: string) => maskForMode(text, isHidden);
   const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
   const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
