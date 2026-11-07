@@ -6,6 +6,7 @@ import {
   type RawAccount,
 } from './normalize.js';
 import {
+  asProviderCode,
   ProviderError,
   type BankDataProvider,
   type NormalizedTransaction,
@@ -51,12 +52,14 @@ function toProviderError(code: string): ProviderError {
     return new ProviderError(
       'needsAttention',
       'Your bank needs you to sign in again.',
+      asProviderCode(code),
     );
   }
   if (code === 'INVALID_PUBLIC_TOKEN' || code === 'INVALID_LINK_TOKEN') {
     return new ProviderError(
       'rejected',
       'That bank sign-in expired. Start again.',
+      asProviderCode(code),
     );
   }
   if (
@@ -70,17 +73,20 @@ function toProviderError(code: string): ProviderError {
     return new ProviderError(
       'unavailable',
       'Your bank is not answering right now. Try again in a few minutes.',
+      asProviderCode(code),
     );
   }
   if (code === 'ITEM_LIMIT_EXCEEDED' || code === 'USER_PERMISSION_REVOKED') {
     return new ProviderError(
       'limit',
       'This bank connection cannot be added right now.',
+      asProviderCode(code),
     );
   }
   return new ProviderError(
     'unavailable',
     'The bank connection did not work. Try again in a few minutes.',
+    asProviderCode(code),
   );
 }
 
