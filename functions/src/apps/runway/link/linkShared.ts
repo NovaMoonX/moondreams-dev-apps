@@ -82,7 +82,10 @@ export async function withProvider<T>(work: () => Promise<T>) {
     return await work();
   } catch (error) {
     if (error instanceof ProviderError) {
-      logger.warn('runway.link.providerFailed', { kind: error.kind });
+      logger.warn('runway.link.providerFailed', {
+        kind: error.kind,
+        code: error.code,
+      });
       throw new HttpsError(
         error.kind === 'unavailable' ? 'unavailable' : 'failed-precondition',
         error.message,
