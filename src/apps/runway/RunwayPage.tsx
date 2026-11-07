@@ -210,7 +210,9 @@ function RunwayContent() {
     requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
-  const isOffline = useNetworkStatus() === 'offline';
+  const networkStatus = useNetworkStatus();
+  const isOffline =
+    networkStatus === 'offline' || networkStatus === 'reconnecting';
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
   const [attempt, setAttempt] = useState(0);
   const startDraft = useStartDraft();

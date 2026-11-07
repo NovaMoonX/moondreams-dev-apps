@@ -79,7 +79,7 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     phaseRef.current = phase;
   }, [phase]);
 
-  const verifyConnection = useCallback((isSilent = false) => {
+  const verifyConnection = useCallback((isSilent = false, isBrowserOffline = false) => {
     const token = ++probeTokenRef.current;
 
     if (!isSilent) {
@@ -89,7 +89,7 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     // One failed probe while everything looked fine may be a blip; check again before saying offline.
     probeWithTimeout()
       .then((ok) =>
-        ok || phaseRef.current !== 'online'
+        ok || isBrowserOffline || phaseRef.current !== 'online'
           ? ok
           : wait(CONFIRM_OFFLINE_DELAY_MS).then(probeWithTimeout),
       )
@@ -103,16 +103,14 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     function handleOffline() {
-      verifyConnection(true);
+      verifyConnection(true, true);
     }
 
     function handleOnline() {
       verifyConnection();
     }
 
-    if (!navigator.onLine) {
-      verifyConnection(true);
-    }
+    verifyConnection(true, !navigator.onLine);
 
     window.addEventListener('offline', handleOffline);
     window.addEventListener('online', handleOnline);
@@ -120,11 +118,13 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     return () => {
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('online', handleOnline);
+      // Any probe still running finds its token stale and dispatches nothing.
+      probeTokenRef.current += 1;
     };
   }, [verifyConnection]);
 
   // Wi-Fi with no internet behind it (a plane, a hotel portal) never fires 'offline' and keeps
-  // navigator.onLine true, so check the real connection on open, on return and now and then.
+  // navigator.onLine true, so check the real connection on return and now and then.
   useEffect(() => {
     if (phase !== 'online') {
       return;
@@ -134,7 +134,6 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
       if (document.visibilityState === 'visible') verifyConnection(true);
     }
 
-    checkIfVisible();
     const interval = setInterval(checkIfVisible, ONLINE_CHECK_INTERVAL_MS);
     document.addEventListener('visibilitychange', checkIfVisible);
 
