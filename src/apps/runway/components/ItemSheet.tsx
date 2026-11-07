@@ -129,6 +129,7 @@ import {
 } from '@apps/runway/engine/endings';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectAccountHoldings,
   selectAccounts,
   selectEnvelopes,
   selectAllCards,
@@ -351,6 +352,9 @@ function ItemSheet({
   const [groupText, setGroupText] = useState('');
   const [accountChoice, setAccountChoice] = useState(NO_ACCOUNT);
   const openAccounts = useAppSelector(selectAccounts);
+  const holdings = useAppSelector((state) =>
+    selectAccountHoldings(state, today),
+  );
   const toastHoldsSaved = useHoldsUndo();
   const groups = useAppSelector((state) => selectGroups(state, today));
   const [isReleasing, setIsReleasing] = useState(false);
@@ -712,6 +716,8 @@ function ItemSheet({
     openAccounts.find(
       (account) => account.id === getHolderById(openAccounts)[itemId],
     ) ?? null;
+  const holderSpareCents =
+    holder === null ? null : (holdings[holder.id]?.unassignedCents ?? null);
   const chosenAccount =
     openAccounts.find((account) => account.id === accountChoice) ?? null;
   const isHeldInUnchanged =
@@ -1500,6 +1506,15 @@ function ItemSheet({
       kind={itemKind === 'goal' ? 'goal' : 'envelope'}
       name={payload.name}
       heldCents={heldCents}
+      account={
+        holder === null
+          ? null
+          : {
+              name: holder.name,
+              isCounted: holder.countedTowardTotal,
+              spareCents: holderSpareCents,
+            }
+      }
       today={today}
       onBack={() => goTo('menu')}
     />
