@@ -90,6 +90,7 @@ import {
   selectExpenses,
   selectAllHorizonItems,
   selectStance,
+  selectHistoryDuplicates,
   selectIsMovesLoaded,
   selectItemLooks,
   selectSpendPurchases,
@@ -220,6 +221,9 @@ function PurchaseScreen({
     lostPair ??
     (fallback?.id === purchaseId ? fallback : null);
   const isWaiting = (purchase?.needsHome ?? false) || lostPair !== null;
+  const isMaybeTwice = useAppSelector((state) =>
+    selectHistoryDuplicates(state).offers.has(purchaseId),
+  );
   const group =
     expenses.find((entry) => entry.id === purchase?.expenseId) ?? null;
   const groupRead = useExpensePurchases(group?.id ?? null);
@@ -781,7 +785,7 @@ function PurchaseScreen({
           {lostPair !== null && (
             <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
           )}
-          {isWaiting && purchase.amountCents > 0 && (
+          {(isWaiting || isMaybeTwice) && purchase.amountCents > 0 && (
             <SameAsOffer purchase={purchase} onDone={onClose} />
           )}
           {isWaiting && purchase.amountCents > 0 && (
@@ -853,6 +857,9 @@ function PurchaseScreen({
                   }
                 />
               )}
+            {isWaiting && purchase.amountCents > 0 && (
+              <LeaveOutRow isKeepFree purchase={purchase} onDone={onClose} />
+            )}
             {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow

@@ -205,6 +205,23 @@ export function describePurchaseAssigned(
   return `${kind} ${where}: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.${spills.join('')}`;
 }
 
+/** The change-log sentence for keeping a purchase from the bank in Free to Spend, with no envelope. */
+export function describePurchaseKeptFree(
+  purchase: OpenPurchase,
+  nameOf: (envelopeId: string) => string,
+): string {
+  return `Purchase kept in Free to Spend: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+}
+
+/** The change-log sentence for a bank purchase dated before its bank was linked, which is history and not counted. */
+export function describePurchaseHistory(
+  purchase: OpenPurchase,
+  nameOf: (envelopeId: string) => string,
+): string {
+  const kind = isRefund(purchase) ? 'Money in' : 'Purchase';
+  return `${kind} from before the bank was linked, so it is not counted: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+}
+
 /** The change-log sentence for putting a sent purchase back in Needs a home. */
 export function describePurchaseReturned(
   purchase: OpenPurchase,

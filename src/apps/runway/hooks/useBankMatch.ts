@@ -31,10 +31,14 @@ import {
   type PairedPurchases,
 } from '@apps/runway/store/actions/purchaseActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { selectMoveTick } from '@apps/runway/store/selectors/moveSelectors';
 import {
   selectAllCards,
   selectDepositDays,
+  selectHistoryDuplicates,
+  selectHistoryPurchases,
+  selectLinkHistoryRanges,
   selectIsAccountsLoaded,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
@@ -42,6 +46,7 @@ import {
   selectIsPlanItemsLoaded,
   selectIsRecordsReady,
   selectItemLooks,
+  selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
   CardPaymentCovers,
@@ -143,11 +148,11 @@ export function useMergeWithUndo() {
 }
 
 /** Older charges are left to the offer on their own sheet, so a first link never merges weeks of purchases at once. */
-const AUTO_MATCH_DAYS = 14;
+export const AUTO_MATCH_DAYS = 14;
 
 /** Once both lists are read, merges each recent bank charge waiting in Needs a home with the one purchase typed by hand that it clearly is. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchBankPurchases(uid: string | null) {
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const isWaitingLoaded = useAppSelector(selectIsNeedsHomeLoaded);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const isPurchasesLoaded = useAppSelector(
@@ -203,6 +208,65 @@ export function useMatchBankPurchases(uid: string | null) {
     };
     void run();
   }, [uid, waiting, purchases, isWaitingLoaded, isPurchasesLoaded, runs]);
+}
+
+/** Once the link-history range is read, merges each history purchase the person placed by hand with the one typed purchase it clearly is, at any age. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
+export function useMatchLinkHistory(uid: string | null) {
+  const level = useAppSelector(selectLevel);
+  const duplicates = useAppSelector(selectHistoryDuplicates);
+  const purchases = useAppSelector(selectHistoryPurchases);
+  const isReady = useAppSelector(
+    (state) =>
+      selectIsNeedsHomeLoaded(state) &&
+      state.runway.purchasesFrom !== null &&
+      (state.runway.linkHistoryPurchases !== null ||
+        selectLinkHistoryRanges(state) === ''),
+  );
+  const merge = useMergeWithUndo();
+  const mergeRef = useRef(merge);
+  const tried = useRef(new Set<string>());
+  const isRunning = useRef(false);
+  const isWaitingToRun = useRef(false);
+  const [runs, setRuns] = useState(0);
+
+  useEffect(() => {
+    mergeRef.current = merge;
+  });
+
+  useEffect(() => {
+    if (uid === null || !isReady || level !== 'link') return;
+    if (isRunning.current) {
+      isWaitingToRun.current = true;
+      return;
+    }
+    const byId = new Map(purchases.map((purchase) => [purchase.id, purchase]));
+    const pairs = [...duplicates.clear].flatMap(([bankId, typedId]) => {
+      const bank = byId.get(bankId);
+      const typed = byId.get(typedId);
+      if (!bank || !typed) return [];
+      const key = `${bank.id}:${bank.updatedAt}:${typed.id}:${typed.updatedAt}`;
+      return tried.current.has(key) ? [] : [{ bank, typed, key }];
+    });
+    if (pairs.length === 0) return;
+    pairs.forEach(({ key }) => tried.current.add(key));
+    isRunning.current = true;
+    const run = async () => {
+      try {
+        await mergeRef.current(uid, pairs);
+      } catch (error) {
+        // The vault or the network failed before any pair was tried, so they may be tried again.
+        pairs.forEach(({ key }) => tried.current.delete(key));
+        console.error('Purchases from before a link were not matched', error);
+      } finally {
+        isRunning.current = false;
+        if (isWaitingToRun.current) {
+          isWaitingToRun.current = false;
+          setRuns((count) => count + 1);
+        }
+      }
+    };
+    void run();
+  }, [uid, duplicates, purchases, isReady, level, runs]);
 }
 
 interface DepositPair {
@@ -306,7 +370,7 @@ export function useLinkDepositsWithUndo() {
 
 /** Once the days and Needs a home are read, links each recent posted deposit to the income day it clearly is. Each pair is tried once per version of the deposit, so a refusal is not retried in a loop. */
 export function useMatchDeposits(uid: string | null) {
-  const waiting = useAppSelector((state) => state.runway.needsHome);
+  const waiting = useAppSelector(selectLinkWaiting);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const days = useAppSelector((state) =>
     selectDepositDays(state, todayAsUtcDate()),

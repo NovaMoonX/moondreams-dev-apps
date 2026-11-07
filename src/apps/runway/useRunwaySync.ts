@@ -49,12 +49,15 @@ import {
   selectRecentFrom,
   toClosingKey,
 } from '@apps/runway/store/selectors/historySelectors';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectConfirmedDayIds,
   selectIsDaysLoaded,
   selectIsPlanItemsLoaded,
+  selectLinkHistoryRanges,
   selectReachedEndingsKey,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import type { OpenPurchase } from '@apps/runway/types';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   setChanges,
@@ -77,6 +80,7 @@ import {
   setHistoryDays,
   setHistoryFailed,
   setHistoryRecords,
+  setLinkHistoryPurchases,
   setPeriodFailed,
   setPeriodPurchases,
   setPlan,
@@ -276,6 +280,55 @@ export function useRunwaySync(uid: string | null, attempt: number) {
       stops.current.forEach((stop) => stop());
     };
   }, [uid, keyStatus, recentFrom, dispatch]);
+
+  const level = useAppSelector(selectLevel);
+  const linkHistoryRanges = useAppSelector(selectLinkHistoryRanges);
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || level !== 'link') return;
+    if (linkHistoryRanges === '') return;
+
+    const stops: (() => void)[] = [];
+    const run = { isCurrent: true };
+    const ranges = linkHistoryRanges
+      .split(',')
+      .map((range) => range.split(':').map(Number));
+    const read = new Map<number, OpenPurchase[]>();
+    // Only the check for purchases in twice reads this, so a failure skips that check instead of closing the plan.
+    const skipHistoryRead = (error: unknown) => {
+      if (!run.isCurrent) return;
+      console.error('Purchases from before a link were not read', error);
+      dispatch(setLinkHistoryPurchases([]));
+    };
+
+    getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (!run.isCurrent) return;
+        ranges.forEach(([from, to], index) => {
+          stops.push(
+            startPurchasesListener(
+              uid,
+              encryption,
+              from,
+              (purchases) => {
+                read.set(index, purchases);
+                if (read.size < ranges.length) return;
+                dispatch(setLinkHistoryPurchases([...read.values()].flat()));
+              },
+              skipHistoryRead,
+              to,
+            ),
+          );
+        });
+      })
+      .catch(skipHistoryRead);
+
+    return () => {
+      run.isCurrent = false;
+      stops.forEach((stop) => stop());
+      dispatch(setLinkHistoryPurchases(null));
+    };
+  }, [uid, keyStatus, level, linkHistoryRanges, dispatch]);
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || confirmedDayIds === null) return;
