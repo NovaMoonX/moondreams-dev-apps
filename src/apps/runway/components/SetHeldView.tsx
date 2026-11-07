@@ -319,7 +319,11 @@ function SetHeldView({
                 type='button'
                 variant='tertiary'
                 aria-pressed={isChosen}
-                aria-disabled={option.isLocked || undefined}
+                aria-label={
+                  option.isLocked
+                    ? `${option.title}, not available. ${option.body}`
+                    : undefined
+                }
                 disabled={isSaving}
                 className={join(
                   'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-4! py-3! text-left font-normal whitespace-normal',
