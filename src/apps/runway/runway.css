@@ -149,3 +149,44 @@ html.runway-theme.dark {
   --runway-warning-soft: color-mix(in oklab, var(--color-warning) 14%, var(--color-background));
   --runway-warning-ink: var(--color-amber-300);
 }
+
+/* A bank that came back: its check pops in once. */
+@keyframes runway-pop {
+  0% {
+    transform: scale(0.4);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+html.runway-theme .runway-pop {
+  animation: runway-pop 360ms ease-out both;
+}
+
+/* A row waiting on the bank breathes its edge, so a slow sign-in still reads as working. */
+@keyframes runway-busy-edge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--color-warning) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--color-warning) 28%, transparent);
+  }
+}
+
+html.runway-theme .runway-busy-edge {
+  animation: runway-busy-edge 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.runway-theme .runway-pop,
+  html.runway-theme .runway-busy-edge {
+    animation: none;
+  }
+}

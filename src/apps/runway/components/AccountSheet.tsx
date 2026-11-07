@@ -38,7 +38,6 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
-import BankBalanceRow from '@apps/runway/components/BankBalanceRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
@@ -49,6 +48,7 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
+import { hasBankBalance } from '@apps/runway/engine/accounts';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { useAccountInterest } from '@apps/runway/hooks/useAccountInterest';
@@ -104,6 +104,9 @@ function AccountSheet({
   const assignedByItem = useAppSelector(selectBalances).assignedByItem;
   const looks = useAppSelector(selectItemLooks);
   const [search, setSearch] = useState('');
+  const isBankBalance = useAppSelector((state) =>
+    hasBankBalance(account, state.runway.accountBalances),
+  );
   const [view, setView] = useState<'menu' | 'balance' | 'holds'>(startView);
   // An old figure saved untouched would read as checked today and shrink a move to nothing.
   const [balanceText, setBalanceText] = useState(() =>
@@ -151,7 +154,9 @@ function AccountSheet({
   const facts = [
     account.balanceOn === null
       ? null
-      : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
+      : isBankBalance
+        ? ACCOUNT_WORDS.bankBalanceOn(formatDateOrdinalUTC(account.balanceOn))
+        : ACCOUNT_WORDS.balanceOn(formatDateOrdinalUTC(account.balanceOn)),
     account.apyBps === null
       ? null
       : ACCOUNT_WORDS.apyFact(formatApy(account.apyBps)),
@@ -320,7 +325,7 @@ function AccountSheet({
     : holdLines.slice(0, MAX_HOLD_LINES);
 
   const getBody = () => {
-    if (view === 'balance') {
+    if (view === 'balance' && !isBankBalance) {
       return (
         <div className='space-y-4'>
           {viewTitle(ACCOUNT_WORDS.balanceTitle)}
@@ -569,14 +574,16 @@ function AccountSheet({
         </ActionSection>
         {errorNotice}
         <ActionGroup>
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<Wallet />}
-            label={ACCOUNT_WORDS.updateBalance}
-            subtitle={ACCOUNT_WORDS.updateBalanceSub}
-            onClick={() => goTo('balance')}
-          />
+          {!isBankBalance && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Wallet />}
+              label={ACCOUNT_WORDS.updateBalance}
+              subtitle={ACCOUNT_WORDS.updateBalanceSub}
+              onClick={() => goTo('balance')}
+            />
+          )}
           <ActionRow
             isGrouped
             hasChevron
@@ -593,7 +600,6 @@ function AccountSheet({
             linkId={account.linkId}
             onOpen={() => setIsLinking(true)}
           />
-          <BankBalanceRow target={{ kind: 'account', id: account.id }} />
           <ActionRow
             isGrouped
             hasChevron

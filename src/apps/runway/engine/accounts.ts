@@ -1,4 +1,33 @@
-import type { Cents, OpenAccount } from '@apps/runway/types';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import type {
+  Cents,
+  OpenAccount,
+  OpenAccountBalance,
+} from '@apps/runway/types';
+
+/** Whether a linked account has a figure from its bank, which is then its balance. */
+export const hasBankBalance = (
+  account: Pick<OpenAccount, 'id' | 'linkId'>,
+  balances: readonly OpenAccountBalance[],
+) =>
+  account.linkId !== null && balances.some((entry) => entry.id === account.id);
+
+/** Each linked account with a figure from its bank takes it as its balance, dated the day the bank gave it; the bank is the source of truth once linked. */
+export const withBankBalances = (
+  accounts: readonly OpenAccount[],
+  balances: readonly OpenAccountBalance[],
+): OpenAccount[] => {
+  const byId = new Map(balances.map((entry) => [entry.id, entry]));
+  return accounts.map((account) => {
+    const bank = account.linkId === null ? undefined : byId.get(account.id);
+    if (bank === undefined) return account;
+    return {
+      ...account,
+      balanceCents: bank.cents,
+      balanceOn: todayAsUtcDate(bank.asOf),
+    };
+  });
+};
 
 /** The accounts cards and bills pull from, open ones only. */
 export const getPullAccounts = (accounts: readonly OpenAccount[]) =>

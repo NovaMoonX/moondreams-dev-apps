@@ -8,12 +8,14 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { useAppSelector } from '@/store';
 import AccountSheets, {
   type OpenedAccount,
 } from '@apps/runway/components/AccountSheets';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { ACCOUNT_MOVE_WORDS } from '@apps/runway/constants';
+import { hasBankBalance } from '@apps/runway/engine/accounts';
 import type { AccountMove } from '@apps/runway/engine/moves';
 import type { OpenAccount } from '@apps/runway/types';
 import { describeMoveBy, getMoveNames } from '@apps/runway/utils/moveText';
@@ -35,6 +37,11 @@ function MoveRow({ move, accounts, isDone, onDone }: MoveRowProps) {
   const by = describeMoveBy(move);
   const target = accounts.find((entry) => entry.id === move.accountId);
   const balanceDate = target?.balanceOn ?? null;
+  const isBankBalance = useAppSelector(
+    (state) =>
+      target !== undefined &&
+      hasBankBalance(target, state.runway.accountBalances),
+  );
 
   return (
     <>
@@ -101,6 +108,11 @@ function MoveRow({ move, accounts, isDone, onDone }: MoveRowProps) {
             ) : (target?.balanceCents ?? null) === null ||
               balanceDate === null ? (
               ACCOUNT_MOVE_WORDS.noBalance(to)
+            ) : isBankBalance ? (
+              ACCOUNT_MOVE_WORDS.staleBankBalance(
+                to,
+                formatDateOrdinalUTC(balanceDate),
+              )
             ) : (
               ACCOUNT_MOVE_WORDS.staleBalance(
                 to,
@@ -108,18 +120,20 @@ function MoveRow({ move, accounts, isDone, onDone }: MoveRowProps) {
               )
             )}
           </p>
-          <ActionGroup>
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Wallet />}
-              label={ACCOUNT_MOVE_WORDS.updateBalance(to)}
-              subtitle={ACCOUNT_MOVE_WORDS.updateBalanceSub}
-              onClick={() =>
-                setAccount({ accountId: move.accountId, view: 'balance' })
-              }
-            />
-          </ActionGroup>
+          {!isBankBalance && (
+            <ActionGroup>
+              <ActionRow
+                isGrouped
+                hasChevron
+                icon={<Wallet />}
+                label={ACCOUNT_MOVE_WORDS.updateBalance(to)}
+                subtitle={ACCOUNT_MOVE_WORDS.updateBalanceSub}
+                onClick={() =>
+                  setAccount({ accountId: move.accountId, view: 'balance' })
+                }
+              />
+            </ActionGroup>
+          )}
         </div>
       </DetailSheet>
       <AccountSheets

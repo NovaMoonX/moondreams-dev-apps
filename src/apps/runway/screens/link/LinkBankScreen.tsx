@@ -14,7 +14,6 @@ import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import BankBalanceChoice from '@apps/runway/components/BankBalanceChoice';
 import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { HOLDS_PROMPT_WORDS, LINK_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -28,10 +27,6 @@ import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { useHoldsPrompt } from '@apps/runway/hooks/useHoldsPrompt';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import {
-  useApplyBankBalance,
-  type BalanceTarget,
-} from '@apps/runway/hooks/useBankBalance';
 import {
   createLinkSession,
   discardLink,
@@ -58,17 +53,9 @@ interface LinkBankScreenProps {
   addTo?: OpenLink | null;
 }
 
-interface BalanceOffer {
-  target: BalanceTarget;
-  name: string;
-  yoursCents: number | null;
-  bankCents: number;
-}
-
 type Step =
   | { kind: 'explain' }
   | { kind: 'match' }
-  | { kind: 'offers'; offers: BalanceOffer[]; count: number; owedCents: number }
   | { kind: 'done'; count: number; owedCents: number };
 
 const toSessionAccounts = (
@@ -142,7 +129,6 @@ function LinkBankScreen({
   const { reconnect, busyId } = useReconnectLink();
   const owedRef = useRef(0);
   const { confirm } = useActionModal();
-  const applyBankBalance = useApplyBankBalance();
   const [session, setSession] = useState<LinkSession | null>(() =>
     resume ? toResumedSession(resume) : null,
   );
@@ -161,9 +147,6 @@ function LinkBankScreen({
   const [isLevelStuck, setIsLevelStuck] = useState(false);
   const [isAskingHeld, setIsAskingHeld] = useState(false);
   const { isAfterLink } = useHoldsPrompt();
-  const [settled, setSettled] = useState<
-    Readonly<Record<string, 'used' | 'kept'>>
-  >({});
   const isPartialLink =
     isOnExistingLink &&
     (links
@@ -333,36 +316,11 @@ function LinkBankScreen({
           console.error('The first sync did not run', error),
         );
       }
-      const { accounts } = store.getState().runway;
-      const owedCents = owedRef.current;
-      const offers = result.balances.flatMap((balance): BalanceOffer[] => {
-        if (result.created.includes(balance.targetId)) return [];
-        const sent = result.sent.find(
-          (entry) => entry.accountId === balance.targetId,
-        );
-        if (!sent) return [];
-        const yours =
-          accounts.find((account) => account.id === balance.targetId)
-            ?.balanceCents ?? null;
-        if (yours === balance.cents) return [];
-        const name =
-          session.accounts.find(
-            (entry) => entry.providerAccountId === sent.providerAccountId,
-          )?.name ?? '';
-        return [
-          {
-            target: { kind: 'account', id: balance.targetId },
-            name,
-            yoursCents: yours,
-            bankCents: balance.cents,
-          },
-        ];
+      setStep({
+        kind: 'done',
+        count: result.attached,
+        owedCents: owedRef.current,
       });
-      setStep(
-        offers.length > 0
-          ? { kind: 'offers', offers, count: result.attached, owedCents }
-          : { kind: 'done', count: result.attached, owedCents },
-      );
     } catch (error) {
       setMessage(getErrorMessage(error, LINK_WORDS.attachFailed));
     } finally {
@@ -387,19 +345,6 @@ function LinkBankScreen({
     } catch (error) {
       setMessage(getErrorMessage(error, LINK_WORDS.discardFailed));
       setIsBusy(false);
-    }
-  };
-
-  const answerOffer = async (offer: BalanceOffer, isUsingBanks: boolean) => {
-    setMessage(null);
-    try {
-      if (isUsingBanks) await applyBankBalance(offer.target, offer.bankCents);
-      setSettled((current) => ({
-        ...current,
-        [offer.target.id]: isUsingBanks ? 'used' : 'kept',
-      }));
-    } catch (error) {
-      setMessage(getErrorMessage(error, LINK_WORDS.updateFailed));
     }
   };
 
@@ -535,69 +480,6 @@ function LinkBankScreen({
                 onClick={() => void linkThese()}
               >
                 {LINK_WORDS.linkThese}
-              </Button>
-            }
-          />
-        </div>
-      );
-    }
-    if (step.kind === 'offers') {
-      return (
-        <div className='flex flex-1 flex-col'>
-          <div className='space-y-4'>
-            <div className='space-y-1'>
-              <h2 className='text-2xl font-semibold'>
-                {LINK_WORDS.useBankTitle}
-              </h2>
-              <p className='text-muted-foreground text-sm'>
-                {LINK_WORDS.useBankHelp}
-              </p>
-            </div>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {step.offers.map((offer) => (
-                <li key={offer.target.id} className='p-3'>
-                  {settled[offer.target.id] ? (
-                    <p className='text-muted-foreground text-sm' role='status'>
-                      {settled[offer.target.id] === 'used'
-                        ? LINK_WORDS.updated(offer.name)
-                        : LINK_WORDS.kept(offer.name)}
-                    </p>
-                  ) : (
-                    <BankBalanceChoice
-                      name={offer.name}
-                      yoursCents={offer.yoursCents}
-                      bankCents={offer.bankCents}
-                      onUseBanks={() => void answerOffer(offer, true)}
-                      onKeepMine={() => void answerOffer(offer, false)}
-                    />
-                  )}
-                </li>
-              ))}
-            </ul>
-            {message && (
-              <p className='text-destructive text-sm' role='alert'>
-                {message}
-              </p>
-            )}
-          </div>
-          <ModalFooterActions
-            note={
-              step.offers.some((offer) => !settled[offer.target.id])
-                ? LINK_WORDS.useBankLater
-                : undefined
-            }
-            rightActions={
-              <Button
-                type='button'
-                onClick={() =>
-                  setStep({
-                    kind: 'done',
-                    count: step.count,
-                    owedCents: step.owedCents,
-                  })
-                }
-              >
-                {LINK_WORDS.finish}
               </Button>
             }
           />
