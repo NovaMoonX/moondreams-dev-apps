@@ -2,7 +2,7 @@
 
 How Runway is laid out and how a person moves through it. The product vision is in `README.md`. The screens themselves are drawn on the **Runway UX** canvas (an artifact); this file holds what a picture cannot: the sitemap, the rules behind each screen, the component list, the journeys and the form fields.
 
-The canvas has one clickable screen set (Home, Days, Plan, Spend) with a Tweak that switches the level between Plan, Track and Link, plus static screens grouped by journey. The app as built has Plan and Track only; Link is drawn for the plan.
+The canvas has one clickable screen set (Home, Days, Plan, Spend) with a Tweak that switches the level between Plan, Track and Link, plus static screens grouped by journey. The app as built has Plan, Track and Link (Link behind the `link-banks` switch).
 
 Horizon (Plan > 🗓️ Horizon) has its own canvas, "Runway UX: Horizon": https://claude.ai/artifact/8NrXzdaLvjj9B4GAMDSXiN (see "Horizon canvas" below).
 

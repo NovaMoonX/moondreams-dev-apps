@@ -6,7 +6,9 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionRow from '@/components/ActionRow';
 import { useAppSelector } from '@/store';
 import { LINK_WORDS } from '@apps/runway/constants';
+import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 import { syncLinks } from '@apps/runway/store/actions/linkActions';
 
 interface LinkToBankRowProps {
@@ -20,12 +22,24 @@ function LinkToBankRow({ linkId, onOpen }: LinkToBankRowProps) {
   const { addToast } = useToast();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const canLink = useCanLinkBank();
-  const isUnlinked = useAppSelector(
-    (state) =>
-      state.runway.links.find((entry) => entry.id === linkId)?.status ===
-      'revoked',
+  const { reconnect, busyId } = useReconnectLink();
+  const link = useAppSelector(
+    (state) => state.runway.links.find((entry) => entry.id === linkId) ?? null,
   );
+  const isUnlinked = link?.status === 'revoked';
   if (!canLink) return null;
+
+  if (linkId !== null && link?.status === 'needsAttention') {
+    return (
+      <ReconnectRow
+        isGrouped
+        busyId={busyId}
+        onReconnect={(id, bank) => void reconnect(id, bank)}
+        linkId={linkId}
+        bank={link.institutionName || LINK_WORDS.yourBank}
+      />
+    );
+  }
 
   if (linkId === null || isUnlinked) {
     return (

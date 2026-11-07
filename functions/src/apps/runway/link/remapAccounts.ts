@@ -3,12 +3,17 @@ import type { NormalizedAccount } from './provider.js';
 
 /**
  * Settles a link's bank accounts against what the bank returns after a reconnect: kept ids stay, a replaced
- * account (same mask and kind, old id gone) takes over its predecessor's bindings, anything else new is added unbound.
+ * account (same mask and kind, old id gone) takes over its predecessor's bindings, anything else new is added unbound. A bound account the bank no longer returns is counted as stopped.
  */
 export function remapAccounts(
   current: readonly ProviderAccountSealed[],
   returned: readonly NormalizedAccount[],
-): { providerAccounts: ProviderAccountSealed[]; newAccounts: number } {
+): {
+  providerAccounts: ProviderAccountSealed[];
+  newAccounts: number;
+  added: ProviderAccountSealed[];
+  stopped: number;
+} {
   const returnedIds = new Set(returned.map((a) => a.providerAccountId));
   const knownIds = new Set(current.map((entry) => entry.providerAccountId));
   const vanished = current.filter(
@@ -62,5 +67,11 @@ export function remapAccounts(
   return {
     providerAccounts: [...remapped, ...added],
     newAccounts: added.length,
+    added,
+    stopped: vanished.filter(
+      (entry) =>
+        !takeovers.has(entry.providerAccountId) &&
+        (entry.accountId !== null || entry.cardId !== null),
+    ).length,
   };
 }

@@ -4,6 +4,7 @@ import FormSheet from '@/components/FormSheet';
 import { PillGroup } from '@/components/PillGroup';
 import SummaryRow from '@/components/SummaryRow';
 import { useAppSelector } from '@/store';
+import { formatCents } from '@/utils/moneyUtils';
 import { LINK_WORDS } from '@apps/runway/constants';
 import {
   getTargetKind,
@@ -15,6 +16,7 @@ import {
   selectAllAccounts,
   selectAllCards,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import type { NormalizedAccount } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
 
@@ -64,6 +66,7 @@ function LinkMatchView({
 }: LinkMatchViewProps) {
   const cards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAllAccounts);
+  const mask = useMaskedText();
   const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const getPickWords = (choice: LinkChoice) => {
@@ -139,17 +142,25 @@ function LinkMatchView({
   return (
     <>
       <ul className='space-y-2'>
-        {rows.map((row, index) => (
-          <li key={row.providerAccountId}>
-            <SummaryRow
-              label={`${row.name}${row.mask ? ` ••${row.mask}` : ''}`}
-              ariaLabel={`${row.name}: ${LINK_WORDS.matchTitle}`}
-              onClick={() => setOpenIndex(index)}
-            >
-              {getPickWords(choices[index] ?? { kind: 'skip' })}
-            </SummaryRow>
-          </li>
-        ))}
+        {rows.map((row, index) => {
+          const owed = row.kind === 'credit' ? (row.balanceCents ?? 0) : 0;
+          return (
+            <li key={row.providerAccountId}>
+              <SummaryRow
+                label={`${row.name}${row.mask ? ` ••${row.mask}` : ''}`}
+                ariaLabel={`${row.name}: ${LINK_WORDS.matchTitle}`}
+                onClick={() => setOpenIndex(index)}
+              >
+                {getPickWords(choices[index] ?? { kind: 'skip' })}
+              </SummaryRow>
+              {choices[index]?.kind === 'new' && owed > 0 && (
+                <p className='text-muted-foreground px-1 pt-1 text-[13px]'>
+                  {mask(LINK_WORDS.cardStartsOwing(formatCents(owed)))}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ul>
       {openRow !== null && openIndex !== null && (
         <FormSheet

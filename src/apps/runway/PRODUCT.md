@@ -56,13 +56,13 @@ Every change names the person it serves and is walked as that person. Each perso
 
 ### Levels, In Detail
 
-Runway is one app with three levels. Nothing from a level shows until you use it. Plan and Track are built; Link is in Next Steps.
+Runway is one app with three levels. Nothing from a level shows until you use it. All three are built; Link needs the `link-banks` switch.
 
 | Level | What you do | What it needs | What you get |
 |---|---|---|---|
 | **Plan** | Income, bills, envelopes, goals, lookahead, changes and history, the priorities view, Horizon (what-ifs come later) | Nothing | A draft for every income day, what each envelope is assigned, Free to Spend, how far ahead the plan holds |
 | **Track** | Add purchases by hand, import a CSV, attach notes, links and receipts, group purchases, check a balance | What you type or import | Envelopes that go down as you spend ("left"), check an amount, card reserves, a record of what each purchase was for |
-| **Link** *(not built yet)* | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
+| **Link** | Link accounts | A link to your accounts | Purchases that arrive on their own, "safe to spend" backed by real cash |
 
 A person who only plans never sees a purchase, a bank screen or an import button. Notes, receipts and groups never change a balance. Horizon is fully usable on Plan: costs are marked paid, never logged as purchases. Anything that moves money, such as assigning a purchase to an envelope or splitting it, belongs to Track and Link.
 
@@ -370,6 +370,7 @@ Several costs that belong to one event, some once and some repeating, paid from 
 - **Pending becomes posted in place.** A pending charge shows as pending, and when it posts it settles into the same purchase, never counted twice.
 - **Deposits are matched to income days.** A deposit that fits a coming income day (the amount within its range, the date near it, early or late) is offered as that day's money. One that does not fit asks where it came from: a pay line, or one-time income.
 - **Everything applied can be changed.** Reassign a purchase, split it, or mark it a refund, and the envelopes recalculate.
+- **Reconnect, add accounts, and one link per bank.** A bank that stopped syncing shows Reconnect (on Home, in the card's or account's sheet and in its Settings sheet) instead of Refresh, never both. Before Plaid opens, the screen says to pick every account at that bank now, because linking the same bank a second time can disconnect the first link; a bank already linked is listed there with "Add accounts to" it (or Reconnect when it needs that). Adding accounts to a live link, from there or from the bank's Settings sheet, asks only about the new ones on "Is this one of yours?"; any left unplaced are offered later as "Pick where 2 new accounts go". Adding a credit card as new says it starts owing its balance, which comes out of Free to Spend, and the end screen totals it.
 - **Unlinking** stops new data and keeps what already came in. Your plan keeps working.
 
 ### Credit Cards, In Detail
@@ -457,7 +458,7 @@ Free to Spend is the money nobody has claimed. Home shows it, and tapping it sho
 | = | **Free to Spend** | |
 
 - **Until you say what you have, it reads "Not set yet"**, never $0. Below zero it reads "Over-assigned $X": more is held than you have. Nothing is blocked either way.
-- **Plan and Track count differently.** At Plan nothing you spend is recorded, so envelopes only fill and money on hand is a planning figure, not your bank balance. At Track every purchase since tracking started lowers money on hand and its envelope. Moving up to Track starts the count again from the day you pick, with what each envelope holds then, so purchases before it are never counted. Link, where real balances would back the figure, is not built yet.
+- **Plan and Track count differently.** At Plan nothing you spend is recorded, so envelopes only fill and money on hand is a planning figure, not your bank balance. At Track every purchase since tracking started lowers money on hand and its envelope. Moving up to Track starts the count again from the day you pick, with what each envelope holds then, so purchases before it are never counted. Link, where real balances back the figure, starts from the day you link.
 - **An overspent envelope lowers Free to Spend by exactly the overspend.** The purchase took the money from what you have, and the envelope counts as $0 rather than less than nothing, so the difference comes out of Free to Spend. Nothing refills the envelope on its own yet.
 - **A bill paid before it was fully set aside** takes the missing part from Free to Spend; marking it from the bill's sheet says how much first.
 - **Money an item no longer needs goes where you choose.** Archiving or ending a bill, envelope or goal that holds money asks what to do with it, with nothing chosen for you: "Make it Free to Spend" (from the archive day, or the day after its last day) or "Keep it held". A kept item is listed under "Stopped, still holding money" at the end of its Plan view, and its sheet offers "Release what it holds" (with an Undo) whenever you are ready. Moving the money straight to another envelope or goal is not offered yet: no move records it. An item archived or ended before this choice existed reads as released, as it did then. A paused goal keeps its money.

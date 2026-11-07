@@ -35,6 +35,12 @@ interface AttachResult {
   balances: { targetId: string; cents: Cents }[];
 }
 
+export type LinkReconnectResult = LinkSyncResult & {
+  newAccounts: number;
+  stopped: number;
+  added: Omit<NormalizedAccount, 'subtype'>[];
+};
+
 export interface LinkSyncResult {
   linkId: string;
   state: 'ok' | 'needsAttention' | 'failed' | 'skipped';
@@ -54,7 +60,7 @@ const createSessionCallable = httpsCallable<
 >(functions, 'createRunwayLinkSession');
 const reconnectCallable = httpsCallable<
   { linkId: string },
-  LinkSyncResult & { newAccounts: number }
+  LinkReconnectResult
 >(functions, 'reconnectRunwayLink');
 const exchangeCallable = httpsCallable<
   { publicToken: string; institutionName: string | null },
@@ -111,10 +117,10 @@ export async function syncLinks(
   return response.data.results;
 }
 
-/** Signs in again at a bank that stopped syncing and syncs it; null when the person closed the bank's window. Plaid's update mode hands back no new grant, so nothing is exchanged. */
+/** Opens the bank's window on a link with account selection (to sign in again after it stopped syncing, or to add accounts to a live one), folds in what the person picked and syncs it; whatever is new comes back unbound in `added`. Null when the person closed the bank's window. Plaid's update mode hands back no new grant, so nothing is exchanged. */
 export async function reconnectLink(
   linkId: string,
-): Promise<(LinkSyncResult & { newAccounts: number }) | null> {
+): Promise<LinkReconnectResult | null> {
   const session = await createSessionCallable({ linkId });
   const opened = await openBankLink(session.data.linkToken);
   if (opened === null) return null;

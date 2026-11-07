@@ -4268,8 +4268,8 @@ export const LINK_WORDS = {
   reconnectDone: (bank: string) => `${bank} is syncing again`,
   reconnectNewAccounts: (bank: string, count: number) =>
     count === 1
-      ? `Synced ${bank}. 1 account you picked is new and isn't added yet.`
-      : `Synced ${bank}. ${count} accounts you picked are new and aren't added yet.`,
+      ? `Synced ${bank}. 1 account you picked is new. Pick where it goes in Settings, under ${bank}.`
+      : `Synced ${bank}. ${count} accounts you picked are new. Pick where they go in Settings, under ${bank}.`,
   reconnectStillStuck: (bank: string) =>
     `${bank} still needs you to reconnect. Try again in a moment.`,
   reconnectFailed: (bank: string) =>
@@ -4295,6 +4295,28 @@ export const LINK_WORDS = {
     'Purchases from the last 30 days follow, and new ones keep arriving.',
   ],
   signIn: 'Sign in at your bank',
+  signInAgain: 'Sign in at your bank again',
+  addToIntro: (bank: string) =>
+    `Sign in at ${bank} again and tick the new accounts. Keep the accounts you already linked ticked. They join the link you already have.`,
+  stoppedAccounts: (bank: string, count: number) =>
+    `${count === 1 ? '1 account' : `${count} accounts`} at ${bank} ${count === 1 ? 'wasn\u2019t' : 'weren\u2019t'} shared this time and will stop updating. Add accounts again and keep ${count === 1 ? 'it' : 'them'} ticked.`,
+  notNow: 'Not now',
+  pickEveryAccount:
+    'Pick every account you have at this bank now. Linking the same bank a second time can disconnect the first link.',
+  addToLinkedRow: (bank: string) => `Add accounts to ${bank}`,
+  addToLinkedHelp: 'Already linked? Add them there, not as a second link.',
+  addMoreRow: (bank: string) => `Add more accounts from ${bank}`,
+  addMoreHelp: 'Sign in again and pick the new ones',
+  pickNewRow: (count: number) =>
+    count === 1
+      ? 'Pick where 1 new account goes'
+      : `Pick where ${count} new accounts go`,
+  pickNewHelp: 'The bank sent these. Say which of yours each one is.',
+  noNewAccounts: (bank: string) => `No new accounts from ${bank}`,
+  cardStartsOwing: (amount: string) =>
+    `Starts owing ${amount}, which comes out of Free to Spend`,
+  cardsStartedOwing: (amount: string) =>
+    `The new cards started owing ${amount} in all, which came out of Free to Spend.`,
   notLinked: 'Nothing was linked.',
   sessionFailed: 'Your bank\u2019s window did not open. Nothing was linked.',
   exchangeFailed: 'Runway could not read your accounts. Nothing was linked.',
