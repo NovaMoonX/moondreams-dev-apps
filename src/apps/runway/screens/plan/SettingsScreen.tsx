@@ -155,9 +155,10 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const now = useNow(60_000);
   const { isScrambled, setScrambled } = useValuesHidden();
   const [openBankId, setOpenBankId] = useState<string | null>(null);
-  const [linking, setLinking] = useState<{ resume: OpenLink | null } | null>(
-    null,
-  );
+  const [linking, setLinking] = useState<{
+    resume: OpenLink | null;
+    addTo: OpenLink | null;
+  } | null>(null);
 
   const choose = async (next: Stance) => {
     if (!user) return;
@@ -227,7 +228,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   icon={<Link2 />}
                   label={LINK_WORDS.unfinishedRow(link.institutionName)}
                   value={describeUnfinishedLink(link)}
-                  onOpen={() => setLinking({ resume: link })}
+                  onOpen={() => setLinking({ resume: link, addTo: null })}
                 />
               ))}
               {finished.map((link) => (
@@ -265,7 +266,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 icon={<Landmark />}
                 label={LINK_WORDS.settingsRow}
                 value={LINK_WORDS.settingsRowHelp}
-                onOpen={() => setLinking({ resume: null })}
+                onOpen={() => setLinking({ resume: null, addTo: null })}
               />
             </div>
           </ActionSection>
@@ -321,13 +322,22 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
           onClose={() => setOpenBankId(null)}
           onLinkAgain={() => {
             setOpenBankId(null);
-            setLinking({ resume: null });
+            setLinking({ resume: null, addTo: null });
+          }}
+          onAddMore={(link) => {
+            setOpenBankId(null);
+            setLinking({ resume: null, addTo: link });
+          }}
+          onPickNew={(link) => {
+            setOpenBankId(null);
+            setLinking({ resume: link, addTo: null });
           }}
         />
       )}
       {linking && (
         <LinkBankScreen
           resume={linking.resume}
+          addTo={linking.addTo}
           onClose={() => setLinking(null)}
         />
       )}

@@ -4,14 +4,18 @@ import { Landmark } from 'lucide-react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
+import ActionRow from '@/components/ActionRow';
+import InlineNotice from '@/components/InlineNotice';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { store } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import BankBalanceChoice from '@apps/runway/components/BankBalanceChoice';
+import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { LINK_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -20,6 +24,7 @@ import {
   type MatchTargetKind,
 } from '@apps/runway/engine/linkMatch';
 import { openBankLink } from '@apps/runway/lib/bankLink';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   useApplyBankBalance,
@@ -30,13 +35,14 @@ import {
   discardLink,
   exchangeLink,
   linkChosenAccounts,
+  reconnectLink,
   syncLinks,
   type LinkSession,
 } from '@apps/runway/store/actions/linkActions';
 import { moveToLink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import LinkMatchView from '@apps/runway/screens/link/LinkMatchView';
-import type { OpenLink } from '@apps/runway/types';
+import type { NormalizedAccount, OpenLink } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
 
 interface LinkBankScreenProps {
@@ -45,6 +51,8 @@ interface LinkBankScreenProps {
   startedFrom?: { target: MatchTargetKind; id: string } | null;
   /** A link whose accounts were never matched: opens straight on the match step. */
   resume?: OpenLink | null;
+  /** A live link to add accounts to: the sign-in goes straight to that bank's account choice. */
+  addTo?: OpenLink | null;
 }
 
 interface BalanceOffer {
@@ -57,20 +65,30 @@ interface BalanceOffer {
 type Step =
   | { kind: 'explain' }
   | { kind: 'match' }
-  | { kind: 'offers'; offers: BalanceOffer[]; count: number }
-  | { kind: 'done'; count: number };
+  | { kind: 'offers'; offers: BalanceOffer[]; count: number; owedCents: number }
+  | { kind: 'done'; count: number; owedCents: number };
 
-const toResumedSession = (link: OpenLink): LinkSession => ({
-  linkId: link.id,
-  institutionName: link.institutionName,
-  accounts: link.providerAccounts.map((entry) => ({
+const toSessionAccounts = (
+  entries: readonly Omit<NormalizedAccount, 'subtype'>[],
+): NormalizedAccount[] =>
+  entries.map((entry) => ({
     providerAccountId: entry.providerAccountId,
     name: entry.name,
     kind: entry.kind,
     subtype: null,
     mask: entry.mask,
     balanceCents: entry.balanceCents,
-  })),
+  }));
+
+const toResumedSession = (link: OpenLink): LinkSession => ({
+  linkId: link.id,
+  institutionName: link.institutionName,
+  accounts: toSessionAccounts(
+    link.providerAccounts.filter(
+      (entry) =>
+        entry.accountId === null && entry.cardId === null && !entry.isSkipped,
+    ),
+  ),
 });
 
 const presetChoices = (
@@ -109,8 +127,15 @@ function LinkBankScreen({
   onClose,
   startedFrom = null,
   resume = null,
+  addTo = null,
 }: LinkBankScreenProps) {
   const { user } = useAuth();
+  const mask = useMaskedText();
+  const joinable = useAppSelector((state) =>
+    state.runway.links.filter(
+      (link) => link.status === 'active' || link.status === 'needsAttention',
+    ),
+  );
   const { confirm } = useActionModal();
   const applyBankBalance = useApplyBankBalance();
   const [session, setSession] = useState<LinkSession | null>(() =>
@@ -124,6 +149,7 @@ function LinkBankScreen({
   const [step, setStep] = useState<Step>(
     resume ? { kind: 'match' } : { kind: 'explain' },
   );
+  const [isOnExistingLink, setIsOnExistingLink] = useState(resume !== null);
   const [isBusy, setIsBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isLevelStuck, setIsLevelStuck] = useState(false);
@@ -169,6 +195,39 @@ function LinkBankScreen({
     }
   };
 
+  const addAccounts = async (link: OpenLink) => {
+    if (!user || isBusy) return;
+    setIsBusy(true);
+    setMessage(null);
+    const bank = link.institutionName || LINK_WORDS.yourBank;
+    try {
+      const result = await reconnectLink(link.id);
+      if (result === null) {
+        setMessage(LINK_WORDS.notLinked);
+        return;
+      }
+      if (result.added.length === 0) {
+        setMessage(LINK_WORDS.noNewAccounts(bank));
+        return;
+      }
+      const next: LinkSession = {
+        linkId: link.id,
+        institutionName: link.institutionName,
+        accounts: toSessionAccounts(result.added),
+      };
+      const preset = presetChoices(next, startedFrom);
+      setSession(next);
+      setChoices(preset);
+      setBaseline(preset);
+      setIsOnExistingLink(true);
+      setStep({ kind: 'match' });
+    } catch (error) {
+      setMessage(getErrorMessage(error, LINK_WORDS.reconnectFailed(bank)));
+    } finally {
+      setIsBusy(false);
+    }
+  };
+
   const picked = choices.filter((choice) => choice.kind !== 'skip').length;
 
   const getConfirmLines = (linking: LinkSession) => {
@@ -208,7 +267,7 @@ function LinkBankScreen({
     });
     if (!isConfirmed) return;
     const isLinkGone =
-      resume !== null &&
+      isOnExistingLink &&
       !store.getState().runway.links.some((link) => link.id === session.linkId);
     if (isLinkGone) {
       setMessage(LINK_WORDS.linkReplaced);
@@ -239,6 +298,13 @@ function LinkBankScreen({
         );
       }
       const { accounts } = store.getState().runway;
+      const owedCents = session.accounts.reduce(
+        (sum, row, index) =>
+          choices[index]?.kind === 'new' && row.kind === 'credit'
+            ? sum + Math.max(0, row.balanceCents ?? 0)
+            : sum,
+        0,
+      );
       const offers = result.balances.flatMap((balance): BalanceOffer[] => {
         if (result.created.includes(balance.targetId)) return [];
         const sent = result.sent.find(
@@ -264,8 +330,8 @@ function LinkBankScreen({
       });
       setStep(
         offers.length > 0
-          ? { kind: 'offers', offers, count: result.attached }
-          : { kind: 'done', count: result.attached },
+          ? { kind: 'offers', offers, count: result.attached, owedCents }
+          : { kind: 'done', count: result.attached, owedCents },
       );
     } catch (error) {
       setMessage(getErrorMessage(error, LINK_WORDS.attachFailed));
@@ -317,14 +383,55 @@ function LinkBankScreen({
                 {LINK_WORDS.introFor(startedName)}
               </p>
             )}
-            <div className='border-border bg-card space-y-3 rounded-2xl border p-4'>
-              <p>{LINK_WORDS.intro}</p>
-              <ul className='text-muted-foreground list-disc space-y-1.5 pl-5 text-sm'>
-                {LINK_WORDS.points.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-            </div>
+            {addTo ? (
+              <p className='text-muted-foreground'>
+                {LINK_WORDS.addToIntro(
+                  addTo.institutionName || LINK_WORDS.yourBank,
+                )}
+              </p>
+            ) : (
+              <>
+                <div className='border-border bg-card space-y-3 rounded-2xl border p-4'>
+                  <p>{LINK_WORDS.intro}</p>
+                  <ul className='text-muted-foreground list-disc space-y-1.5 pl-5 text-sm'>
+                    {LINK_WORDS.points.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+                <InlineNotice tone='warning'>
+                  {LINK_WORDS.pickEveryAccount}
+                </InlineNotice>
+                {joinable.length > 0 && (
+                  <ul className='border-border divide-border divide-y overflow-hidden rounded-2xl border'>
+                    {joinable.map((link) => {
+                      const bank = link.institutionName || LINK_WORDS.yourBank;
+                      return (
+                        <li key={link.id}>
+                          {link.status === 'needsAttention' ? (
+                            <ReconnectRow
+                              isGrouped
+                              linkId={link.id}
+                              bank={bank}
+                            />
+                          ) : (
+                            <ActionRow
+                              isGrouped
+                              hasChevron
+                              icon={<Landmark />}
+                              label={LINK_WORDS.addToLinkedRow(bank)}
+                              subtitle={LINK_WORDS.addToLinkedHelp}
+                              isDisabled={isBusy}
+                              onClick={() => void addAccounts(link)}
+                            />
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
             {message && (
               <p className='text-muted-foreground text-sm' role='status'>
                 {message}
@@ -337,9 +444,9 @@ function LinkBankScreen({
                 type='button'
                 loading={isBusy}
                 disabled={isBusy}
-                onClick={() => void signIn()}
+                onClick={() => void (addTo ? addAccounts(addTo) : signIn())}
               >
-                {LINK_WORDS.signIn}
+                {addTo ? LINK_WORDS.signInAgain : LINK_WORDS.signIn}
               </Button>
             }
           />
@@ -447,7 +554,13 @@ function LinkBankScreen({
             rightActions={
               <Button
                 type='button'
-                onClick={() => setStep({ kind: 'done', count: step.count })}
+                onClick={() =>
+                  setStep({
+                    kind: 'done',
+                    count: step.count,
+                    owedCents: step.owedCents,
+                  })
+                }
               >
                 {LINK_WORDS.finish}
               </Button>
@@ -468,6 +581,13 @@ function LinkBankScreen({
             <p className='text-muted-foreground'>
               {LINK_WORDS.doneCount(step.count)}
             </p>
+            {step.owedCents > 0 && (
+              <p className='text-muted-foreground'>
+                {mask(
+                  LINK_WORDS.cardsStartedOwing(formatCents(step.owedCents)),
+                )}
+              </p>
+            )}
             {step.count > 0 && (
               <p className='text-muted-foreground'>{LINK_WORDS.syncing}</p>
             )}

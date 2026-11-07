@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Landmark, Unlink } from 'lucide-react';
+import { Landmark, Link2, Unlink } from 'lucide-react';
 
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -8,24 +8,34 @@ import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import ReconnectRow from '@apps/runway/components/ReconnectRow';
 import { LINK_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { unlinkLink } from '@apps/runway/store/actions/linkActions';
 import { recordUnlink } from '@apps/runway/store/actions/planActions';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import type { OpenLink } from '@apps/runway/types';
 import { isLiveLink, isUnlinkedLink } from '@apps/runway/utils/linkText';
 
 interface BankSheetProps {
   linkId: string;
   onClose: () => void;
   onLinkAgain: () => void;
+  onAddMore: (link: OpenLink) => void;
+  onPickNew: (link: OpenLink) => void;
 }
 
 const toRowLabel = (row: { name: string; mask: string | null }) =>
   `${row.name}${row.mask ? ` ••${row.mask}` : ''}`;
 
 /** One linked bank: what it brought in and, while it is linked, Unlink. Unlinking the last bank moves the plan from Link to Track. */
-function BankSheet({ linkId, onClose, onLinkAgain }: BankSheetProps) {
+function BankSheet({
+  linkId,
+  onClose,
+  onLinkAgain,
+  onAddMore,
+  onPickNew,
+}: BankSheetProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
   const link = useAppSelector(
@@ -46,6 +56,9 @@ function BankSheet({ linkId, onClose, onLinkAgain }: BankSheetProps) {
   const isLevelStuck = isUnlinked && level === 'link' && !hasOtherLiveLink;
   const isLastBank = level === 'link' && !hasOtherLiveLink;
   const broughtIn = link.providerAccounts.filter((row) => !row.isSkipped);
+  const unplaced = link.providerAccounts.filter(
+    (row) => row.accountId === null && row.cardId === null && !row.isSkipped,
+  );
   const leftOut = link.providerAccounts.filter((row) => row.isSkipped);
 
   const unlink = async () => {
@@ -127,6 +140,32 @@ function BankSheet({ linkId, onClose, onLinkAgain }: BankSheetProps) {
             </p>
           )}
         </section>
+        {link.status === 'needsAttention' && (
+          <ReconnectRow
+            linkId={link.id}
+            bank={link.institutionName || LINK_WORDS.yourBank}
+          />
+        )}
+        {link.status === 'active' && (
+          <ActionRow
+            isRoomy
+            hasChevron
+            icon={<Landmark />}
+            label={LINK_WORDS.addMoreRow(link.institutionName)}
+            subtitle={LINK_WORDS.addMoreHelp}
+            onClick={() => onAddMore(link)}
+          />
+        )}
+        {!isUnlinked && unplaced.length > 0 && (
+          <ActionRow
+            isRoomy
+            hasChevron
+            icon={<Link2 />}
+            label={LINK_WORDS.pickNewRow(unplaced.length)}
+            subtitle={LINK_WORDS.pickNewHelp}
+            onClick={() => onPickNew(link)}
+          />
+        )}
         {(!isUnlinked || isLevelStuck) && (
           <div className='space-y-2'>
             <ActionRow

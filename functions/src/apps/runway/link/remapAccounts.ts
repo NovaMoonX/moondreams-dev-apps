@@ -8,7 +8,11 @@ import type { NormalizedAccount } from './provider.js';
 export function remapAccounts(
   current: readonly ProviderAccountSealed[],
   returned: readonly NormalizedAccount[],
-): { providerAccounts: ProviderAccountSealed[]; newAccounts: number } {
+): {
+  providerAccounts: ProviderAccountSealed[];
+  newAccounts: number;
+  added: ProviderAccountSealed[];
+} {
   const returnedIds = new Set(returned.map((a) => a.providerAccountId));
   const knownIds = new Set(current.map((entry) => entry.providerAccountId));
   const vanished = current.filter(
@@ -62,5 +66,6 @@ export function remapAccounts(
   return {
     providerAccounts: [...remapped, ...added],
     newAccounts: added.length,
+    added,
   };
 }

@@ -1,46 +1,17 @@
-import { useState } from 'react';
 import { ChevronRight, Landmark } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import { LINK_WORDS } from '@apps/runway/constants';
-import { reconnectLink } from '@apps/runway/store/actions/linkActions';
+import { useReconnectLink } from '@apps/runway/hooks/useReconnectLink';
 
 /** One row per bank that stopped syncing and is waiting on the person: a tap signs in again at the bank and syncs it. */
 function ReconnectLinkRows() {
-  const { addToast } = useToast();
   const waiting = useAppSelector((state) =>
     state.runway.links.filter((link) => link.status === 'needsAttention'),
   );
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  const reconnect = async (linkId: string, bank: string) => {
-    if (busyId !== null) return;
-    setBusyId(linkId);
-    try {
-      const result = await reconnectLink(linkId);
-      if (result === null) return;
-      addToast({
-        title:
-          result.state !== 'ok'
-            ? LINK_WORDS.reconnectStillStuck(bank)
-            : result.newAccounts > 0
-              ? LINK_WORDS.reconnectNewAccounts(bank, result.newAccounts)
-              : LINK_WORDS.reconnectDone(bank),
-        type: result.state === 'ok' ? 'success' : 'info',
-      });
-    } catch (error) {
-      addToast({
-        title: getErrorMessage(error, LINK_WORDS.reconnectFailed(bank)),
-        type: 'error',
-      });
-    } finally {
-      setBusyId(null);
-    }
-  };
+  const { reconnect } = useReconnectLink();
 
   if (waiting.length === 0) return null;
   return (

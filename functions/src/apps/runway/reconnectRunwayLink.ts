@@ -14,6 +14,7 @@ import {
   requireLinkCaller,
   SEALED_SCHEMA_VERSION,
   type LinkSealed,
+  type ProviderAccountSealed,
 } from './link/linkShared.js';
 import { ProviderError, type ProviderGrant } from './link/provider.js';
 import { remapAccounts } from './link/remapAccounts.js';
@@ -29,7 +30,10 @@ if (getApps().length === 0) {
   initializeApp();
 }
 
-type ReconnectResult = LinkSyncResult & { newAccounts: number };
+type ReconnectResult = LinkSyncResult & {
+  newAccounts: number;
+  added: ProviderAccountSealed[];
+};
 
 /** What the bank returns now; null when it could not be asked for a reason that should not stop the sync. */
 async function listReturned(grant: ProviderGrant) {
@@ -47,7 +51,7 @@ async function listReturned(grant: ProviderGrant) {
 }
 
 /**
- * `{ linkId }` → `LinkSyncResult & { newAccounts }`: after the person signed in again at their bank, folds the accounts they picked into the link, sets their `needsAttention` link back to `active` and syncs it. A sync that still needs attention, or that is skipped, sets it back. Safe to repeat.
+ * `{ linkId }` → `LinkSyncResult & { newAccounts, added }` (`added` is the new unbound accounts): after the person signed in again at their bank, folds the accounts they picked into the link, sets their `needsAttention` link back to `active` and syncs it. A sync that still needs attention, or that is skipped, sets it back. Safe to repeat.
  */
 export const reconnectRunwayLink = onCall(
   {
@@ -103,48 +107,56 @@ export const reconnectRunwayLink = onCall(
         updated: 0,
         removed: 0,
         newAccounts: 0,
+        added: [],
       };
       return result;
     }
 
-    const newAccounts = await firestore.runTransaction(async (transaction) => {
-      const [link, grant] = await Promise.all([
-        transaction.get(linkRef),
-        transaction.get(grantRef),
-      ]);
-      const status = link.data()?.status;
-      if (
-        !grant.exists ||
-        (status !== 'needsAttention' && status !== 'active')
-      ) {
-        throw notWaiting();
-      }
-      const sealed = openWithKey(
-        planKey.key,
-        link.data()?.sealed as SealedPayload,
-      ) as unknown as LinkSealed;
-      const remapped =
-        listed === null ? null : remapAccounts(sealed.providerAccounts, listed);
-      const hasChanged =
-        remapped !== null &&
-        JSON.stringify(remapped.providerAccounts) !==
-          JSON.stringify(sealed.providerAccounts);
-      if (status === 'needsAttention' || hasChanged) {
-        transaction.update(linkRef, {
-          status: 'active',
-          ...(hasChanged
-            ? {
-                sealed: sealWithKey(
-                  planKey,
-                  { ...sealed, providerAccounts: remapped.providerAccounts },
-                  SEALED_SCHEMA_VERSION,
-                ),
-              }
-            : {}),
-        });
-      }
-      return remapped?.newAccounts ?? 0;
-    });
+    const { newAccounts, added } = await firestore.runTransaction(
+      async (transaction) => {
+        const [link, grant] = await Promise.all([
+          transaction.get(linkRef),
+          transaction.get(grantRef),
+        ]);
+        const status = link.data()?.status;
+        if (
+          !grant.exists ||
+          (status !== 'needsAttention' && status !== 'active')
+        ) {
+          throw notWaiting();
+        }
+        const sealed = openWithKey(
+          planKey.key,
+          link.data()?.sealed as SealedPayload,
+        ) as unknown as LinkSealed;
+        const remapped =
+          listed === null
+            ? null
+            : remapAccounts(sealed.providerAccounts, listed);
+        const hasChanged =
+          remapped !== null &&
+          JSON.stringify(remapped.providerAccounts) !==
+            JSON.stringify(sealed.providerAccounts);
+        if (status === 'needsAttention' || hasChanged) {
+          transaction.update(linkRef, {
+            status: 'active',
+            ...(hasChanged
+              ? {
+                  sealed: sealWithKey(
+                    planKey,
+                    { ...sealed, providerAccounts: remapped.providerAccounts },
+                    SEALED_SCHEMA_VERSION,
+                  ),
+                }
+              : {}),
+          });
+        }
+        return {
+          newAccounts: remapped?.newAccounts ?? 0,
+          added: remapped?.added ?? [],
+        };
+      },
+    );
     logger.info('runway.link.reconnected');
 
     const result = await syncRunwayLink(firestore, keyring, uid, linkId);
@@ -156,7 +168,7 @@ export const reconnectRunwayLink = onCall(
         }
       });
     }
-    const reply: ReconnectResult = { ...result, newAccounts };
+    const reply: ReconnectResult = { ...result, newAccounts, added };
     return reply;
   },
 );

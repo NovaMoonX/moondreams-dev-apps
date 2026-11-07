@@ -34,7 +34,7 @@ const readLinkId = (data: unknown): string | null => {
   return linkId;
 };
 
-/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` link opens that connection again so the person can sign in and pick accounts. */
+/** `{}` → `{ linkToken }`: a short-lived token the bank window opens with. `{ linkId }` of the caller's `needsAttention` or `active` link opens that connection again so the person can sign in and pick accounts. */
 export const createRunwayLinkSession = onCall(
   {
     region: 'us-central1',
@@ -59,10 +59,11 @@ export const createRunwayLinkSession = onCall(
       firestore.doc(planDocPath(uid, 'links', linkId)).get(),
       firestore.doc(`${grantsPath(uid)}/${linkId}`).get(),
     ]);
-    if (linkSnapshot.data()?.status !== 'needsAttention') {
+    const status = linkSnapshot.data()?.status;
+    if (status !== 'needsAttention' && status !== 'active') {
       throw new HttpsError(
         'failed-precondition',
-        'That bank is not waiting for a reconnect.',
+        'That bank is not linked right now.',
       );
     }
     if (!grantSnapshot.exists) {
