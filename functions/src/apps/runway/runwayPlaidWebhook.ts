@@ -6,6 +6,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import { itemIndexPath, type ItemIndexDoc } from './link/grant.js';
 import { LINK_SECRETS } from './link/linkShared.js';
+import { asProviderCode } from './link/provider.js';
 import { getWebhookKey } from './link/providerPlaid.js';
 import { syncRunwayLink } from './link/syncRunwayLink.js';
 import { verifyPlaidWebhook } from './link/webhookVerify.js';
@@ -51,8 +52,6 @@ export const runwayPlaidWebhook = onRequest(
       item_id?: unknown;
       error?: { error_code?: unknown } | null;
     };
-    const asLabel = (value: unknown) =>
-      typeof value === 'string' && /^[A-Z_]{1,64}$/.test(value) ? value : null;
     if (
       body.webhook_type === 'TRANSACTIONS' &&
       body.webhook_code === 'SYNC_UPDATES_AVAILABLE' &&
@@ -84,11 +83,14 @@ export const runwayPlaidWebhook = onRequest(
       } else {
         logger.warn('runway.webhook.unknownItem');
       }
-    } else {
+    } else if (
+      body.webhook_type !== 'TRANSACTIONS' ||
+      asProviderCode(body.error?.error_code) !== null
+    ) {
       logger.info('runway.webhook.other', {
-        type: asLabel(body.webhook_type),
-        code: asLabel(body.webhook_code),
-        errorCode: asLabel(body.error?.error_code),
+        type: asProviderCode(body.webhook_type),
+        code: asProviderCode(body.webhook_code),
+        errorCode: asProviderCode(body.error?.error_code),
       });
     }
     response.status(200).send('ok');

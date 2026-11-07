@@ -45,6 +45,10 @@ export interface ProviderGrant {
 export type ProviderErrorKind =
   'unavailable' | 'rejected' | 'needsAttention' | 'limit';
 
+/** A provider's error code when it looks like one, so a log never holds free text. */
+export const asProviderCode = (value: unknown): string | null =>
+  typeof value === 'string' && /^[A-Z_]{1,64}$/.test(value) ? value : null;
+
 /** A provider failure with a sentence that is safe to show the person, and the provider's own error code for the logs. */
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
