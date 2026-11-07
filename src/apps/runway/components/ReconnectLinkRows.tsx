@@ -25,7 +25,7 @@ function ReconnectLinkRows() {
   >({});
 
   const start = async (linkId: string, bank: string) => {
-    const isBack = await reconnect(linkId, bank);
+    const isBack = await reconnect(linkId, bank, { isQuietWhenBack: true });
     if (!isBack) return;
     setReconnected((current) => ({
       ...current,
@@ -50,7 +50,8 @@ function ReconnectLinkRows() {
   const waiting = links
     .filter(
       (link) =>
-        link.status === 'needsAttention' && reconnected[link.id] === undefined,
+        (link.status === 'needsAttention' || busyId === link.id) &&
+        reconnected[link.id] === undefined,
     )
     .map((link) => ({
       id: link.id,

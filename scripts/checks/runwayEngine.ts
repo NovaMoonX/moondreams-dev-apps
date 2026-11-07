@@ -55,7 +55,6 @@ import {
   getUncountedInterest,
   shareInterest,
 } from '../../src/apps/runway/engine/interest.ts';
-import { getGoalActual } from '../../src/apps/runway/engine/goalActual.ts';
 import { matchLinkRows } from '../../src/apps/runway/engine/linkMatch.ts';
 import { getAccountMoves } from '../../src/apps/runway/engine/moves.ts';
 import {
@@ -14532,41 +14531,6 @@ const version = (
   assert.notEqual(
     followed.byId.a,
     shareInterest(estimate.cents, goals, 1_200_000).byId.a,
-  );
-
-  const actual = getGoalActual('a', goals, 400_000, 412_000);
-  assert.deepEqual(
-    actual,
-    { plannedCents: 100_000, actualCents: 103_000, differenceCents: 3_000 },
-    'a goal holding a quarter of the account gets a quarter of the bank’s $120 more',
-  );
-  assert.equal(
-    getGoalActual('a', goals, 400_000, 396_800).differenceCents,
-    -800,
-    'the bank saying less gives a negative difference',
-  );
-  assert.equal(
-    getGoalActual('b', goals, 400_000, 400_000).differenceCents,
-    0,
-    'a matching balance has no difference',
-  );
-  [412_001, 399_999, 400_001, 250_000].forEach((bank) => {
-    const total = goals.reduce(
-      (sum, goal) =>
-        sum + getGoalActual(goal.id, goals, 400_000, bank).differenceCents,
-      0,
-    );
-    const rest = shareInterest(bank - 400_000, goals, 400_000).restCents;
-    assert.equal(
-      total + rest,
-      bank - 400_000,
-      `goal shares and the rest add to the account’s difference: ${bank}`,
-    );
-  });
-  assert.equal(
-    getGoalActual('zzz', goals, 400_000, 412_000).plannedCents,
-    0,
-    'a goal the account does not hold plans nothing',
   );
 
   const shownBase = {

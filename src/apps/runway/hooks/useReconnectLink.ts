@@ -11,7 +11,11 @@ export function useReconnectLink() {
   const { addToast } = useToast();
   const [busyId, setBusyId] = useState<string | null>(null);
 
-  const reconnect = async (linkId: string, bank: string) => {
+  const reconnect = async (
+    linkId: string,
+    bank: string,
+    { isQuietWhenBack = false }: { isQuietWhenBack?: boolean } = {},
+  ) => {
     if (busyId !== null) return false;
     setBusyId(linkId);
     try {
@@ -23,15 +27,19 @@ export function useReconnectLink() {
           type: 'warning',
         });
       }
-      addToast({
-        title:
-          result.state !== 'ok'
-            ? LINK_WORDS.reconnectStillStuck(bank)
-            : result.newAccounts > 0
-              ? LINK_WORDS.reconnectNewAccounts(bank, result.newAccounts)
-              : LINK_WORDS.reconnectDone(bank),
-        type: result.state === 'ok' ? 'success' : 'info',
-      });
+      const isBackAndShown =
+        isQuietWhenBack && result.state === 'ok' && result.newAccounts === 0;
+      if (!isBackAndShown) {
+        addToast({
+          title:
+            result.state !== 'ok'
+              ? LINK_WORDS.reconnectStillStuck(bank)
+              : result.newAccounts > 0
+                ? LINK_WORDS.reconnectNewAccounts(bank, result.newAccounts)
+                : LINK_WORDS.reconnectDone(bank),
+          type: result.state === 'ok' ? 'success' : 'info',
+        });
+      }
       return result.state === 'ok';
     } catch (error) {
       addToast({

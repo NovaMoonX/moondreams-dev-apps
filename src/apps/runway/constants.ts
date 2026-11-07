@@ -3887,13 +3887,6 @@ export const ACCOUNT_WORDS = {
     `Interest ~${amount} · update the balance`,
   interestChip: (amount: string, day: string, isActual: boolean) =>
     `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
-  goalBankTitle: (account: string) => `What ${account} shows`,
-  goalBankChip: (signed: string) => `Bank ${signed}`,
-  goalActual: (
-    amount: string,
-    compare: { difference: string; direction: 'more' | 'less'; saved: string },
-  ) =>
-    `The bank shows about ${amount} as its share, ${compare.difference} ${compare.direction} than the ${compare.saved} saved here`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
   goalInterest: (amount: string, day: string) =>
