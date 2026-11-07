@@ -7,6 +7,7 @@ export interface SiteNotice {
 }
 
 let notice: SiteNotice | null = null;
+let lastNotice: SiteNotice | null = null;
 const listeners = new Set<() => void>();
 
 const subscribe = (listener: () => void) => {
@@ -20,6 +21,7 @@ const subscribe = (listener: () => void) => {
 export const setSiteNotice = (next: SiteNotice | null) => {
   if (next === notice) return;
   notice = next;
+  lastNotice = next ?? lastNotice;
   listeners.forEach((listener) => listener());
 };
 
@@ -30,3 +32,6 @@ export const useSiteNotice = () =>
     () => notice,
     () => null,
   );
+
+/** The last notice raised, kept after it clears so the strip can slide it away without repainting. */
+export const getLastSiteNotice = () => lastNotice;

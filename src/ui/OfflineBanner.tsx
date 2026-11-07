@@ -15,7 +15,7 @@ import {
   type NetworkBannerState,
 } from '@hooks/useNetworkStatus';
 import { useRestartApp } from '@hooks/useRestartApp';
-import { useSiteNotice } from '@hooks/useSiteNotice';
+import { getLastSiteNotice, useSiteNotice } from '@hooks/useSiteNotice';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 
 type Variant = Exclude<NetworkBannerState, null> | 'notice' | 'update';
@@ -58,7 +58,7 @@ const VARIANTS: Record<
   },
 };
 
-/** The top strip: connection problems first, then a page's notice (`setSiteNotice`) with its action, otherwise a tappable restart prompt when an installed app has a newer version. Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
+/** The top strip: connection problems first, then a tappable restart prompt when an installed app has a newer version, otherwise a page's notice (`setSiteNotice`) with its action. Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
 function OfflineBanner() {
   const networkStatus = useNetworkStatus();
   const isUpdateReady = useUpdateReady();
@@ -66,8 +66,8 @@ function OfflineBanner() {
   const notice = useSiteNotice();
   const getStatus = (): Variant | null => {
     if (networkStatus) return networkStatus;
-    if (notice) return 'notice';
-    return isUpdateReady ? 'update' : null;
+    if (isUpdateReady) return 'update';
+    return notice ? 'notice' : null;
   };
   const status = getStatus();
   // Keeps the last shown variant while sliding out, so a cleared status doesn't repaint it.
@@ -77,10 +77,7 @@ function OfflineBanner() {
   if (status && status !== shownVariant) {
     setShownVariant(status);
   }
-  const [shownNotice, setShownNotice] = useState(notice);
-  if (notice && notice !== shownNotice) {
-    setShownNotice(notice);
-  }
+  const shownNotice = notice ?? getLastSiteNotice();
   const variant = VARIANTS[shownVariant];
   const Icon = variant.icon;
 
