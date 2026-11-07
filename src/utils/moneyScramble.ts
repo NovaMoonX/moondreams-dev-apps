@@ -11,6 +11,7 @@ const topSegment = (path: string) => `/${path.split('/')[1] ?? ''}`;
 
 /** Turns made-up amounts on for every money formatter (a seed) or off (null), only while the page stays under the current path's first segment; one seed always gives the same amounts. */
 export const setMoneyScramble = (seed: number | null) => {
+  if (seed === scramble?.seed) return;
   scramble =
     seed === null
       ? null

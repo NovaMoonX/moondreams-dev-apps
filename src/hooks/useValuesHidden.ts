@@ -25,9 +25,7 @@ const read = (key: string) => {
   if (cached !== undefined) return cached;
   const stored = readStored(key);
   const result =
-    stored === SHOWN ||
-    stored?.startsWith(SCRAMBLED) ||
-    stored?.startsWith(SCRAMBLED_HIDDEN)
+    stored === SHOWN || (stored !== null && toSeed(stored) !== null)
       ? stored
       : HIDDEN;
   cache.set(key, result);
