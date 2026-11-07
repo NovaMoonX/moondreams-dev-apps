@@ -1547,7 +1547,8 @@ export const selectLinkWaiting = createSelector(
     isReady ? waiting.filter((purchase) => !isLinkHistory(purchase)) : [],
 );
 
-const selectWaitingList = selectLinkWaiting;
+// The list keeps history until it is turned, so a charge that still counts is never on no screen.
+const selectWaitingList = (state: RootState) => state.runway.needsHome;
 
 export interface AccountPairEntry {
   out: OpenPurchase;

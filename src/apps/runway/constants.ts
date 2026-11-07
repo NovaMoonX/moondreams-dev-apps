@@ -4131,7 +4131,7 @@ export const NEEDS_HOME_WORDS = {
   homeSub: 'From your bank',
   countedChip: 'Counted in Free to Spend',
   intro:
-    'Purchases from your bank wait here until you say where they belong. New ones already count against Free to Spend, so nothing is off while they wait.',
+    "You don't have to sort these. Each one already counts against Free to Spend; putting it in an envelope just makes that envelope's number exact.",
   empty:
     'Nothing is waiting. New purchases from your bank show up here on their own.',
   loading: 'Getting your purchases.',
@@ -4146,7 +4146,7 @@ export const NEEDS_HOME_WORDS = {
   leaveOutMoneyInSub: 'It will not count as income or spending',
   leftOut: 'Left out of spending',
   keepFree: 'Keep in Free to Spend',
-  keepFreeSub: 'Counted, just without an envelope',
+  keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
   historyOne: 'A purchase from before you linked is history now',
   historyMany: (count: number) =>

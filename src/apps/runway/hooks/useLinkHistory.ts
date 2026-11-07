@@ -91,10 +91,11 @@ export function useLinkHistory(uid: string | null) {
         isStillCounted(purchase) &&
         !tried.current.has(`${purchase.id}:${purchase.updatedAt}`),
     );
-    if (fresh.length === 0 && unswept.length === 0) return;
-    const toSweep = unswept.filter(
-      (link) => !tried.current.has(`swept:${link.id}`),
-    );
+    const toSweep =
+      startDate === null
+        ? []
+        : unswept.filter((link) => !tried.current.has(`swept:${link.id}`));
+    if (fresh.length === 0 && toSweep.length === 0) return;
     toSweep.forEach((link) => tried.current.add(`swept:${link.id}`));
     fresh.forEach((purchase) =>
       tried.current.add(`${purchase.id}:${purchase.updatedAt}`),
@@ -128,6 +129,7 @@ export function useLinkHistory(uid: string | null) {
       return opened.filter(
         (purchase) =>
           !purchase.needsHome &&
+          purchase.assignedBy !== 'person' &&
           isLinkHistory(purchase) &&
           isStillCounted(purchase),
       );
@@ -136,11 +138,11 @@ export function useLinkHistory(uid: string | null) {
     const run = async () => {
       const encryption = await getRunwayEncryption(uid);
       const placed = await findPlaced().catch((error: unknown) => {
-        toSweep.forEach((link) => tried.current.delete(`swept:${link.id}`));
         console.error('Purchases from before a link were not read', error);
         return null;
       });
       const work = [...fresh, ...(placed ?? [])];
+      const placedIds = new Set((placed ?? []).map((purchase) => purchase.id));
       const outcomes = await work.reduce(
         async (previous, purchase) => {
           const done = await previous;
@@ -157,9 +159,11 @@ export function useLinkHistory(uid: string | null) {
             return { ...done, turned: done.turned + 1 };
           } catch (error) {
             const message = error instanceof Error ? error.message : '';
+            // A placed one changed meanwhile is found only by the sweep, so it runs again.
             const isSettled =
-              message === SPEND_WORDS.changedElsewhere ||
-              message === SPEND_WORDS.notFound;
+              message === SPEND_WORDS.notFound ||
+              (message === SPEND_WORDS.changedElsewhere &&
+                !placedIds.has(purchase.id));
             if (!isSettled) {
               tried.current.delete(`${purchase.id}:${purchase.updatedAt}`);
               console.error(
@@ -174,6 +178,8 @@ export function useLinkHistory(uid: string | null) {
       );
       if (placed !== null && outcomes.failed === 0) {
         toSweep.forEach((link) => keepSwept(`${uid}:${link.id}`));
+      } else {
+        toSweep.forEach((link) => tried.current.delete(`swept:${link.id}`));
       }
       if (outcomes.turned === 0) return;
       latest.current.addToast({
