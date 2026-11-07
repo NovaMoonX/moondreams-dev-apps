@@ -6,7 +6,8 @@ import {
   normalizeAppEncryption,
 } from '@lib/security';
 
-import { SEALED_SCHEMA_VERSION } from '@apps/runway/constants';
+import { hasScrambledMoney } from '@/utils/moneyScramble';
+import { MADE_UP_WORDS, SEALED_SCHEMA_VERSION } from '@apps/runway/constants';
 import type { RunwayEncryption, Sealed } from '@apps/runway/types';
 
 export class UnsupportedSealedVersion extends Error {
@@ -27,6 +28,8 @@ export async function sealJson<T extends object>(
   encryption: RunwayEncryption,
 ): Promise<Sealed> {
   const text = JSON.stringify({ v: SEALED_SCHEMA_VERSION, ...fields });
+  // A summary written while amounts are made up would keep the made-up figure for good.
+  if (hasScrambledMoney(text)) throw new Error(MADE_UP_WORDS.cannotSave);
   const result = await encryptValue(
     text,
     encryption.key,
@@ -93,7 +96,8 @@ export function createDraftSealer(encryption: RunwayEncryption) {
         sealed as Sealed,
         encryption,
       );
-      if (typeof draft !== 'string') throw new Error('A sealed draft did not open.');
+      if (typeof draft !== 'string')
+        throw new Error('A sealed draft did not open.');
       return draft;
     },
   };

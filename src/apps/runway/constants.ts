@@ -3569,6 +3569,16 @@ export const SETTINGS_GROUP_WORDS = {
     'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
 } as const;
 
+export const MADE_UP_WORDS = {
+  caption: 'Showing the app',
+  label: 'Made-up amounts',
+  help: 'Every figure is swapped for a believable one, so you can show Runway off without showing your money.',
+  receiptHidden: 'Receipts stay hidden while amounts are made up',
+  cannotSave:
+    'Amounts are made up right now. Turn off Made-up amounts in Settings to save this.',
+  eyeLabel: 'Amounts are made up. Hide them',
+} as const;
+
 /** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */
 export const HELD_WORDS = {
   caption: (amount: string) => `The ${amount} it holds`,

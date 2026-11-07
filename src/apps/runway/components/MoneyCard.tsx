@@ -13,7 +13,7 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getNiceMoneyAxis } from '@/utils/chartUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatAxisCentsShort, formatCents } from '@/utils/moneyUtils';
 import {
   HOME_WORDS,
   MONEY_CHART_MIN_DAYS,
@@ -224,7 +224,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
             curve='linear'
             hasDots={false}
             formatX={formatDay}
-            formatY={formatCentsShort}
+            formatY={formatAxisCentsShort}
             yDomain={axis.domain}
             yTicks={axis.ticks}
             dividers={
@@ -244,7 +244,7 @@ function MoneyCard({ today, lookahead, rangeNote, onOpen }: MoneyCardProps) {
                     {
                       x: lowest.on,
                       y: pick(lowest),
-                      label: `${MONEY_CHART_WORDS.lowest} ${formatCentsShort(pick(lowest))} · ${formatDateOrdinalUTC(lowest.on)}`,
+                      label: `${MONEY_CHART_WORDS.lowest} ${formatAxisCentsShort(pick(lowest))} · ${formatDateOrdinalUTC(lowest.on)}`,
                       side: 'left',
                     },
                   ]

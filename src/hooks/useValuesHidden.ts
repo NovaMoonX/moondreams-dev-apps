@@ -1,9 +1,14 @@
 import { createContext, useContext, useSyncExternalStore } from 'react';
 
+import { createScrambleSeed } from '@/utils/moneyScramble';
+
 const STORAGE_PREFIX = 'values-hidden';
 const FALLBACK_KEY = `${STORAGE_PREFIX}:device`;
+const HIDDEN = 'hidden';
+const SHOWN = 'shown';
+const SCRAMBLED = 'scrambled:';
 
-const cache = new Map<string, boolean>();
+const cache = new Map<string, string>();
 const listeners = new Set<() => void>();
 
 const readStored = (key: string) => {
@@ -17,16 +22,18 @@ const readStored = (key: string) => {
 const read = (key: string) => {
   const cached = cache.get(key);
   if (cached !== undefined) return cached;
-  const result = readStored(key) !== 'shown';
+  const stored = readStored(key);
+  const result =
+    stored === SHOWN || stored?.startsWith(SCRAMBLED) ? stored : HIDDEN;
   cache.set(key, result);
   return result;
 };
 
-const write = (key: string, isHidden: boolean) => {
-  if (read(key) === isHidden) return;
-  cache.set(key, isHidden);
+const write = (key: string, mode: string) => {
+  if (read(key) === mode) return;
+  cache.set(key, mode);
   try {
-    localStorage.setItem(key, isHidden ? 'hidden' : 'shown');
+    localStorage.setItem(key, mode);
   } catch {
     // The choice still holds in memory for this visit.
   }
@@ -40,26 +47,48 @@ const subscribe = (listener: () => void) => {
   };
 };
 
+const toSeed = (mode: string) => {
+  if (!mode.startsWith(SCRAMBLED)) return null;
+  const seed = Number(mode.slice(SCRAMBLED.length));
+  return Number.isInteger(seed) && seed > 0 ? seed : null;
+};
+
 /** The storage key the shown-or-hidden choice lives under; `ValuesHiddenProvider` builds it from a scope id and the signed-in uid. */
 export const ValuesHiddenKeyContext = createContext<string>(FALLBACK_KEY);
 
 export const getValuesHiddenKey = (scopeId: string, uid: string | null) =>
   `${STORAGE_PREFIX}:${scopeId}:${uid ?? 'signed-out'}`;
 
-/** Hides the figures again; the provider calls it when the page has been away for a while. */
-export const hideValues = (key: string) => write(key, true);
+/** Hides shown figures again; the provider calls it when the page has been away for a while. Made-up amounts stay made up. */
+export const hideValues = (key: string) => {
+  if (read(key) === SHOWN) write(key, HIDDEN);
+};
 
-/** Whether private figures are masked, shared by everything under one provider. Hidden until the person shows them, kept on this device only. */
-export function useValuesHidden() {
-  const key = useContext(ValuesHiddenKeyContext);
-  const isHidden = useSyncExternalStore(
+/** The seed of the made-up amounts under a key, or null while real ones are hidden or shown. */
+export function useScrambleSeed(key: string) {
+  const mode = useSyncExternalStore(
     subscribe,
     () => read(key),
-    () => true,
+    () => HIDDEN,
   );
-  const toggle = () => write(key, !read(key));
+  return toSeed(mode);
+}
 
-  return { isHidden, toggle };
+/** Whether private figures are masked or made up, shared by everything under one provider. Hidden until the person shows them, kept on this device only. Made-up amounts render like shown ones; `ValuesHiddenProvider` swaps the figures. */
+export function useValuesHidden() {
+  const key = useContext(ValuesHiddenKeyContext);
+  const mode = useSyncExternalStore(
+    subscribe,
+    () => read(key),
+    () => HIDDEN,
+  );
+  const isScrambled = toSeed(mode) !== null;
+  const isHidden = mode === HIDDEN;
+  const toggle = () => write(key, read(key) === HIDDEN ? SHOWN : HIDDEN);
+  const setScrambled = (isOn: boolean) =>
+    write(key, isOn ? `${SCRAMBLED}${createScrambleSeed()}` : HIDDEN);
+
+  return { isHidden, isScrambled, toggle, setScrambled };
 }
 
 export default useValuesHidden;

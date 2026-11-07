@@ -1,19 +1,23 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Shuffle } from 'lucide-react';
 
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const SURFACE = '[role="dialog"], .subview-card, .page';
 
-/** The header's eye: shows or hides every private figure under the same provider, and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
+/** The header's eye: shows or hides every private figure under the same provider (while amounts are made up it shows a shuffle and hides them), and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
 function ValuesEyeButton() {
-  const { isHidden, toggle } = useValuesHidden();
+  const { isHidden, isScrambled, toggle } = useValuesHidden();
   const anchor = useRef<HTMLSpanElement | null>(null);
   const [hasValues, setHasValues] = useState(false);
-  const label = 'Show amounts';
-  const Icon = isHidden ? Eye : EyeOff;
+  const label = isScrambled ? 'Amounts are made up. Hide them' : 'Show amounts';
+  const getIcon = () => {
+    if (isScrambled) return <Shuffle className='size-4' aria-hidden='true' />;
+    if (isHidden) return <Eye className='size-4' aria-hidden='true' />;
+    return <EyeOff className='size-4' aria-hidden='true' />;
+  };
 
   useLayoutEffect(() => {
     const surface = anchor.current?.closest(SURFACE);
@@ -43,11 +47,11 @@ function ValuesEyeButton() {
           rounded='full'
           className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
           aria-label={label}
-          aria-pressed={!isHidden}
+          aria-pressed={isScrambled ? undefined : !isHidden}
           title={label}
           onClick={toggle}
         >
-          <Icon className='size-4' aria-hidden='true' />
+          {getIcon()}
         </Button>
       )}
     </span>

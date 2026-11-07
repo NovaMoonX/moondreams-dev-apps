@@ -5,8 +5,10 @@ import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import {
   getValuesHiddenKey,
   hideValues,
+  useScrambleSeed,
   ValuesHiddenKeyContext,
 } from '@/hooks/useValuesHidden';
+import { setMoneyScramble } from '@/utils/moneyScramble';
 
 const AWAY_LIMIT_MS = 5 * 60 * 1000;
 
@@ -16,7 +18,7 @@ interface ValuesHiddenProviderProps {
   children: ReactNode;
 }
 
-/** Mount once around the screens that blur their figures. The choice is kept per device and per signed-in account, and the figures hide again after the page has been in the background for five minutes. */
+/** Mount once around the screens that mask their figures. The choice is kept per device and per signed-in account, and shown figures hide again after the page has been in the background for five minutes. While made-up amounts are on, every money formatter under it gives made-up figures; screens that cache formatted text remount when that changes. */
 function ValuesHiddenProvider({
   scopeId,
   children,
@@ -24,6 +26,14 @@ function ValuesHiddenProvider({
   const { user } = useAuth();
   const key = getValuesHiddenKey(scopeId, user?.uid ?? null);
   const leftAt = useRef<number | null>(null);
+  const seed = useScrambleSeed(key);
+  // Set during render, not in an effect, so the screens under it format with it from their first render.
+  setMoneyScramble(seed);
+
+  useEffect(() => {
+    setMoneyScramble(seed);
+    return () => setMoneyScramble(null);
+  }, [seed]);
 
   useEffect(() => {
     const note = () => {
