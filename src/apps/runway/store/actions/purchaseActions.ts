@@ -1278,6 +1278,7 @@ export async function mergeBankPurchase(
         ...toSealedPayload(typed),
         amountCents: bank.amountCents,
         merchant: bank.merchant ?? typedMerchant,
+        merchantLogo: bank.merchantLogo ?? null,
         category: bank.category,
         ruleId: null,
         label:
