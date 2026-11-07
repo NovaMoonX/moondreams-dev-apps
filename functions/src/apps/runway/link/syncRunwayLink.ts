@@ -392,7 +392,7 @@ async function keepLogo(
   });
 }
 
-const DETAILS_HISTORY_DAYS = 730;
+const DETAILS_HISTORY_DAYS = 90;
 
 /**
  * Adds the merchant's logo and the bank's own name to purchases this link brought in before they were kept. Only
