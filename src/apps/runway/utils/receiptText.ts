@@ -1,4 +1,5 @@
 import { MAX_RECEIPT_TEXT_LENGTH } from '@apps/runway/constants';
+import { withRealMoney } from '@/utils/moneyScramble';
 import { formatCents } from '@/utils/moneyUtils';
 import type { ReceiptReading } from '@/lib/receipts/receiptTypes';
 
@@ -17,7 +18,7 @@ export function formatReceiptItems(reading: ReceiptReading): string | null {
   const foreign = getForeignCurrency(reading);
   const money = (cents: number) =>
     foreign === null
-      ? formatCents(cents)
+      ? withRealMoney(() => formatCents(cents))
       : `${cents < 0 ? '-' : ''}${foreign} ${(Math.abs(cents) / 100).toFixed(2)}`;
   const priced = (label: string, cents: number | null) =>
     cents === null ? [] : [`${label}  ${money(cents)}`];

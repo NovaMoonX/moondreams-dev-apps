@@ -6,7 +6,7 @@ import {
   normalizeAppEncryption,
 } from '@lib/security';
 
-import { hasScrambledMoney } from '@/utils/moneyScramble';
+import { hasScrambledMoney, isMoneyScrambled } from '@/utils/moneyScramble';
 import { MADE_UP_WORDS, SEALED_SCHEMA_VERSION } from '@apps/runway/constants';
 import type { RunwayEncryption, Sealed } from '@apps/runway/types';
 
@@ -29,7 +29,11 @@ export async function sealJson<T extends object>(
 ): Promise<Sealed> {
   const text = JSON.stringify({ v: SEALED_SCHEMA_VERSION, ...fields });
   // A summary written while amounts are made up would keep the made-up figure for good.
-  if (hasScrambledMoney(text)) throw new Error(MADE_UP_WORDS.cannotSave);
+  if (hasScrambledMoney(text)) {
+    throw new Error(
+      isMoneyScrambled() ? MADE_UP_WORDS.cannotSave : MADE_UP_WORDS.leftOver,
+    );
+  }
   const result = await encryptValue(
     text,
     encryption.key,

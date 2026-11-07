@@ -7,14 +7,19 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const SURFACE = '[role="dialog"], .subview-card, .page';
 
-/** The header's eye: shows or hides every private figure under the same provider (while amounts are made up it shows a shuffle and hides them), and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
+/** The header's eye: shows or hides every private figure under the same provider (while amounts are made up it flips between made-up and masked, never the real ones), and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
 function ValuesEyeButton() {
   const { isHidden, isScrambled, toggle } = useValuesHidden();
   const anchor = useRef<HTMLSpanElement | null>(null);
   const [hasValues, setHasValues] = useState(false);
-  const label = isScrambled ? 'Amounts are made up. Hide them' : 'Show amounts';
+  const getLabel = () => {
+    if (!isScrambled) return 'Show amounts';
+    return isHidden ? 'Show made-up amounts' : 'Hide made-up amounts';
+  };
+  const label = getLabel();
   const getIcon = () => {
-    if (isScrambled) return <Shuffle className='size-4' aria-hidden='true' />;
+    if (isScrambled && !isHidden)
+      return <Shuffle className='size-4' aria-hidden='true' />;
     if (isHidden) return <Eye className='size-4' aria-hidden='true' />;
     return <EyeOff className='size-4' aria-hidden='true' />;
   };
@@ -47,7 +52,7 @@ function ValuesEyeButton() {
           rounded='full'
           className="relative size-7 p-0 after:absolute after:-inset-1.5 after:content-['']"
           aria-label={label}
-          aria-pressed={isScrambled ? undefined : !isHidden}
+          aria-pressed={!isHidden}
           title={label}
           onClick={toggle}
         >

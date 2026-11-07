@@ -7,6 +7,7 @@ const FALLBACK_KEY = `${STORAGE_PREFIX}:device`;
 const HIDDEN = 'hidden';
 const SHOWN = 'shown';
 const SCRAMBLED = 'scrambled:';
+const SCRAMBLED_HIDDEN = 'scrambled-hidden:';
 
 const cache = new Map<string, string>();
 const listeners = new Set<() => void>();
@@ -24,7 +25,11 @@ const read = (key: string) => {
   if (cached !== undefined) return cached;
   const stored = readStored(key);
   const result =
-    stored === SHOWN || stored?.startsWith(SCRAMBLED) ? stored : HIDDEN;
+    stored === SHOWN ||
+    stored?.startsWith(SCRAMBLED) ||
+    stored?.startsWith(SCRAMBLED_HIDDEN)
+      ? stored
+      : HIDDEN;
   cache.set(key, result);
   return result;
 };
@@ -48,9 +53,23 @@ const subscribe = (listener: () => void) => {
 };
 
 const toSeed = (mode: string) => {
-  if (!mode.startsWith(SCRAMBLED)) return null;
-  const seed = Number(mode.slice(SCRAMBLED.length));
+  const prefix = [SCRAMBLED, SCRAMBLED_HIDDEN].find((entry) =>
+    mode.startsWith(entry),
+  );
+  if (prefix === undefined) return null;
+  const seed = Number(mode.slice(prefix.length));
   return Number.isInteger(seed) && seed > 0 ? seed : null;
+};
+
+// While made-up amounts are on, the eye flips between made-up and masked and never reaches the real figures.
+const getToggled = (mode: string) => {
+  const seed = toSeed(mode);
+  if (seed !== null) {
+    return mode.startsWith(SCRAMBLED_HIDDEN)
+      ? `${SCRAMBLED}${seed}`
+      : `${SCRAMBLED_HIDDEN}${seed}`;
+  }
+  return mode === HIDDEN ? SHOWN : HIDDEN;
 };
 
 /** The storage key the shown-or-hidden choice lives under; `ValuesHiddenProvider` builds it from a scope id and the signed-in uid. */
@@ -74,7 +93,7 @@ export function useScrambleSeed(key: string) {
   return toSeed(mode);
 }
 
-/** Whether private figures are masked or made up, shared by everything under one provider. Hidden until the person shows them, kept on this device only. Made-up amounts render like shown ones; `ValuesHiddenProvider` swaps the figures. */
+/** Whether private figures are masked or made up, shared by everything under one provider. Hidden until the person shows them, kept on this device only. Made-up amounts render like shown ones (`ValuesHiddenProvider` swaps the figures), and only `setScrambled(false)` brings the real ones back. */
 export function useValuesHidden() {
   const key = useContext(ValuesHiddenKeyContext);
   const mode = useSyncExternalStore(
@@ -83,8 +102,8 @@ export function useValuesHidden() {
     () => HIDDEN,
   );
   const isScrambled = toSeed(mode) !== null;
-  const isHidden = mode === HIDDEN;
-  const toggle = () => write(key, read(key) === HIDDEN ? SHOWN : HIDDEN);
+  const isHidden = mode === HIDDEN || mode.startsWith(SCRAMBLED_HIDDEN);
+  const toggle = () => write(key, getToggled(read(key)));
   const setScrambled = (isOn: boolean) =>
     write(key, isOn ? `${SCRAMBLED}${createScrambleSeed()}` : HIDDEN);
 

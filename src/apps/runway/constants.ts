@@ -3572,11 +3572,12 @@ export const SETTINGS_GROUP_WORDS = {
 export const MADE_UP_WORDS = {
   caption: 'Showing the app',
   label: 'Made-up amounts',
-  help: 'Every figure is swapped for a believable one, so you can show Runway off without showing your money.',
+  help: 'Show Runway off with believable figures. Names and dates stay real.',
   receiptHidden: 'Receipts stay hidden while amounts are made up',
   cannotSave:
-    'Amounts are made up right now. Turn off Made-up amounts in Settings to save this.',
-  eyeLabel: 'Amounts are made up. Hide them',
+    'Made-up amounts are on, so changes with an amount are not saved. Turn it off in Settings first.',
+  leftOver:
+    'Part of this was written while amounts were made up. Retype the amounts in it and save again.',
 } as const;
 
 /** Round 7 package G9: archiving or ending an item that holds money asks what happens to it. */

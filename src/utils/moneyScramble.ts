@@ -4,12 +4,40 @@ const NEAR = Math.log(1.2);
 const FAR = Math.log(2.2);
 const STEPS = [100_000, 10_000, 1_000, 100];
 
-let activeSeed: number | null = null;
+let scramble: { seed: number; path: string } | null = null;
+let isPaused = false;
 
-/** Turns made-up amounts on for every money formatter (a seed) or off (null); one seed always gives the same amounts. */
+const topSegment = (path: string) => `/${path.split('/')[1] ?? ''}`;
+
+/** Turns made-up amounts on for every money formatter (a seed) or off (null), only while the page stays under the current path's first segment; one seed always gives the same amounts. */
 export const setMoneyScramble = (seed: number | null) => {
-  activeSeed = seed;
+  scramble =
+    seed === null
+      ? null
+      : { seed, path: topSegment(globalThis.location?.pathname ?? '/') };
 };
+
+// A route left for another app renders once before the provider's cleanup runs; the path check keeps that render real.
+const getActiveSeed = () => {
+  if (scramble === null || isPaused) return null;
+  const path = globalThis.location?.pathname;
+  if (path !== undefined && topSegment(path) !== scramble.path) return null;
+  return scramble.seed;
+};
+
+/** Whether made-up amounts are on for the page as it is now. */
+export const isMoneyScrambled = () => getActiveSeed() !== null;
+
+/** Runs `build` with real amounts, for text that is kept (a note written from a reading), never shown as a made-up figure. */
+export function withRealMoney<T>(build: () => T): T {
+  const wasPaused = isPaused;
+  isPaused = true;
+  try {
+    return build();
+  } finally {
+    isPaused = wasPaused;
+  }
+}
 
 /** A new seed for `setMoneyScramble`. */
 export const createScrambleSeed = () =>
@@ -43,19 +71,21 @@ const scale = (cents: number, factor: number) =>
 
 /** The made-up figure for an amount while made-up amounts are on, else the amount. Each amount is changed on its own, so one known price says nothing about the rest. */
 export function scrambleCents(cents: number): number {
-  if (activeSeed === null || cents === 0) return cents;
-  return scale(cents, toFactor(unitHash(activeSeed, Math.abs(cents))));
+  const seed = getActiveSeed();
+  if (seed === null || cents === 0) return cents;
+  return scale(cents, toFactor(unitHash(seed, Math.abs(cents))));
 }
 
 /** Like `scrambleCents` but one factor for every amount, for a chart's axis, so its ticks stay in order. */
 export function scrambleAxisCents(cents: number): number {
-  if (activeSeed === null || cents === 0) return cents;
-  return scale(cents, toFactor(unitHash(activeSeed, AXIS_SALT)));
+  const seed = getActiveSeed();
+  if (seed === null || cents === 0) return cents;
+  return scale(cents, toFactor(unitHash(seed, AXIS_SALT)));
 }
 
 /** Tags formatted money while made-up amounts are on (an invisible character), so a write can refuse text that carries one. */
 export const markScrambled = (text: string) =>
-  activeSeed === null ? text : `${text}${MARK}`;
+  getActiveSeed() === null ? text : `${text}${MARK}`;
 
 /** Whether a string (or a JSON payload) holds a made-up amount. */
 export const hasScrambledMoney = (text: string) => text.includes(MARK);
