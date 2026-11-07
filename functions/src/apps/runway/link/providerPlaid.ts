@@ -52,8 +52,33 @@ interface PlaidFailure {
   error_message?: string;
 }
 
+/** Codes only the person can fix at their bank, so the link waits for a reconnect instead of retrying. */
+const NEEDS_PERSON_CODES = new Set([
+  'ITEM_LOGIN_REQUIRED',
+  'INVALID_CREDENTIALS',
+  'INVALID_MFA',
+  'ITEM_LOCKED',
+  'USER_SETUP_REQUIRED',
+  'ACCESS_NOT_GRANTED',
+  'INSUFFICIENT_CREDENTIALS',
+]);
+
 function toProviderError(code: string): ProviderError {
-  if (code === 'ITEM_LOGIN_REQUIRED') {
+  if (code === 'NO_ACCOUNTS') {
+    return new ProviderError(
+      'needsAttention',
+      'Your bank stopped sharing your accounts. Reconnect to pick them again.',
+      asProviderCode(code),
+    );
+  }
+  if (code === 'ITEM_NOT_FOUND' || code === 'INVALID_ACCESS_TOKEN') {
+    return new ProviderError(
+      'needsAttention',
+      'This bank connection is no longer valid. Remove it and link your bank again.',
+      asProviderCode(code),
+    );
+  }
+  if (NEEDS_PERSON_CODES.has(code)) {
     return new ProviderError(
       'needsAttention',
       'Your bank needs you to sign in again.',
@@ -181,16 +206,23 @@ const toLogoUrl = (logo: string | null | undefined) =>
     : null;
 
 export const plaidProvider: BankDataProvider = {
-  async createLinkSession(uid) {
+  async createLinkSession(uid, update) {
     const { link_token } = await call<{ link_token: string }>(
       '/link/token/create',
       {
         user: { client_user_id: uid },
         client_name: 'Runway',
-        products: ['transactions'],
         country_codes: ['US'],
         language: 'en',
-        transactions: { days_requested: LINK_DAYS_REQUESTED },
+        ...(update
+          ? {
+              access_token: update.accessToken,
+              update: { account_selection_enabled: update.accountSelection },
+            }
+          : {
+              products: ['transactions'],
+              transactions: { days_requested: LINK_DAYS_REQUESTED },
+            }),
         ...(isEmulator() ? {} : { webhook: webhookUrl() }),
       },
     );

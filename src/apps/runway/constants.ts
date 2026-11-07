@@ -4262,6 +4262,18 @@ export const PAIR_WORDS = {
 } as const;
 
 export const LINK_WORDS = {
+  reconnectTitle: (bank: string) => `${bank} needs you to reconnect`,
+  reconnectNote:
+    'It stopped syncing. Your purchases and balances wait until you do.',
+  reconnectDone: (bank: string) => `${bank} is syncing again`,
+  reconnectNewAccounts: (bank: string, count: number) =>
+    count === 1
+      ? `Synced ${bank}. 1 account you picked is new and isn't added yet.`
+      : `Synced ${bank}. ${count} accounts you picked are new and aren't added yet.`,
+  reconnectStillStuck: (bank: string) =>
+    `${bank} still needs you to reconnect. Try again in a moment.`,
+  reconnectFailed: (bank: string) =>
+    `${bank} could not be reconnected. Try again in a few minutes.`,
   yourBank: 'Your bank',
   settingsRow: 'Link a bank',
   settingsRowHelp: 'Bring in your accounts, balances and purchases',

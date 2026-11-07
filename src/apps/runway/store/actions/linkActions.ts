@@ -2,6 +2,7 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@lib/firebase/config';
 
+import { openBankLink } from '@apps/runway/lib/bankLink';
 import { LINK_WORDS } from '@apps/runway/constants';
 import type { LinkChoice } from '@apps/runway/engine/linkMatch';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -43,14 +44,18 @@ export interface LinkSyncResult {
 }
 
 const syncCallable = httpsCallable<
-  Record<string, never>,
+  { staleOnly?: boolean },
   { results: LinkSyncResult[] }
 >(functions, 'syncRunwayLinks');
 
 const createSessionCallable = httpsCallable<
-  Record<string, never>,
+  { linkId?: string },
   { linkToken: string }
 >(functions, 'createRunwayLinkSession');
+const reconnectCallable = httpsCallable<
+  { linkId: string },
+  LinkSyncResult & { newAccounts: number }
+>(functions, 'reconnectRunwayLink');
 const exchangeCallable = httpsCallable<
   { publicToken: string; institutionName: string | null },
   LinkSession
@@ -96,10 +101,25 @@ export async function unlinkLink(linkId: string): Promise<boolean> {
   return response.data.isRevokedAtBank;
 }
 
-/** Asks Functions to bring in what is new from every active bank link; safe to repeat. */
-export async function syncLinks(): Promise<LinkSyncResult[]> {
-  const response = await syncCallable({});
+/** Asks Functions to bring in what is new from every active bank link, or with `staleOnly` only from those not synced for 15 minutes; safe to repeat. */
+export async function syncLinks(
+  options: { staleOnly?: boolean } = {},
+): Promise<LinkSyncResult[]> {
+  const response = await syncCallable(
+    options.staleOnly ? { staleOnly: true } : {},
+  );
   return response.data.results;
+}
+
+/** Signs in again at a bank that stopped syncing and syncs it; null when the person closed the bank's window. Plaid's update mode hands back no new grant, so nothing is exchanged. */
+export async function reconnectLink(
+  linkId: string,
+): Promise<(LinkSyncResult & { newAccounts: number }) | null> {
+  const session = await createSessionCallable({ linkId });
+  const opened = await openBankLink(session.data.linkToken);
+  if (opened === null) return null;
+  const response = await reconnectCallable({ linkId });
+  return response.data;
 }
 
 const toAccountKind = (subtype: string | null): AccountKind => {

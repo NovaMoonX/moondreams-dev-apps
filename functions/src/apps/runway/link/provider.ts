@@ -81,7 +81,11 @@ export interface TransactionDetails {
 }
 
 export interface BankDataProvider {
-  createLinkSession(uid: string): Promise<{ linkToken: string }>;
+  /** With `update`, a token that reopens an existing connection (and lets the person pick accounts again) instead of making a new one. */
+  createLinkSession(
+    uid: string,
+    update?: { accessToken: string; accountSelection: boolean },
+  ): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;

@@ -11,6 +11,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
+import ReconnectLinkRows from '@apps/runway/components/ReconnectLinkRows';
 import NeedsHomeDoor from '@apps/runway/components/NeedsHomeDoor';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
@@ -155,6 +156,7 @@ function HomeScreen() {
           onOpen={() => openView('freeToSpend')}
         />
       </div>
+      <ReconnectLinkRows />
       <LevelGate level='track'>
         <NeedsHomeDoor />
       </LevelGate>

@@ -23,7 +23,8 @@ const pickProvider = () =>
 
 /** The bank data provider; the Functions emulator without keys gets a stand-in bank so linking can be walked locally. */
 export const provider: BankDataProvider = {
-  createLinkSession: (uid) => pickProvider().createLinkSession(uid),
+  createLinkSession: (uid, update) =>
+    pickProvider().createLinkSession(uid, update),
   exchange: (publicToken) => pickProvider().exchange(publicToken),
   getInstitution: (grant) => pickProvider().getInstitution(grant),
   listAccounts: (grant) => pickProvider().listAccounts(grant),
