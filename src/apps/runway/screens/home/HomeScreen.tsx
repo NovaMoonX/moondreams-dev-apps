@@ -13,6 +13,7 @@ import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import ReconnectLinkRows from '@apps/runway/components/ReconnectLinkRows';
 import HoldsPromptRow from '@apps/runway/components/HoldsPromptRow';
+import BankBackedRow from '@apps/runway/components/BankBackedRow';
 import NeedsHomeDoor from '@apps/runway/components/NeedsHomeDoor';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
@@ -158,6 +159,7 @@ function HomeScreen() {
         />
       </div>
       <ReconnectLinkRows />
+      <BankBackedRow />
       <HoldsPromptRow />
       <LevelGate level='track'>
         <NeedsHomeDoor />

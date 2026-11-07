@@ -15,7 +15,7 @@ import {
 } from '@apps/runway/components/ActionSection';
 import { BALANCE_CHECK_WORDS } from '@apps/runway/constants';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectLedgerBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
@@ -30,7 +30,7 @@ interface CheckBalanceBodyProps {
 
 /** Whether what the bank holds matches the money Runway counts on hand. Nothing is saved or changed. */
 export function CheckBalanceBody({ onOpenDays }: CheckBalanceBodyProps) {
-  const balances = useAppSelector(selectBalances);
+  const balances = useAppSelector(selectLedgerBalances);
   const isLedgerReady = useAppSelector(
     (state) => selectIsMovesLoaded(state) && selectIsRecordsReady(state),
   );

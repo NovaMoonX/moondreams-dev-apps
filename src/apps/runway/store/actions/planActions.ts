@@ -45,6 +45,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       notifyHour: null,
       notifyTimeZone: null,
       holdsPrompt: null,
+      bankBackedSeenAt: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -108,6 +109,7 @@ export async function setNotify(
             ? (current.notifyTimeZone ?? null)
             : patch.timeZone,
         holdsPrompt: current.holdsPrompt ?? null,
+        bankBackedSeenAt: current.bankBackedSeenAt ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -119,11 +121,11 @@ export async function setNotify(
   });
 }
 
-/** Saves the answer to the "where are they kept" prompt in the plan's sealed fields, reading the plan fresh so a second device's change to another field is kept. */
-export async function setHoldsPrompt(
+/** Re-seals the plan's sealed fields with one change, reading the plan fresh so a second device's change to another field is kept. */
+async function patchSealedFields(
   uid: string,
   encryption: RunwayEncryption,
-  answer: 'later' | 'never',
+  patch: Partial<Pick<PlanSealedFields, 'holdsPrompt' | 'bankBackedSeenAt'>>,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runTransaction(db, async (transaction) => {
@@ -138,18 +140,39 @@ export async function setHoldsPrompt(
         currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
         notifyHour: current.notifyHour ?? null,
         notifyTimeZone: current.notifyTimeZone ?? null,
-        holdsPrompt: {
-          askAfter:
-            answer === 'later'
-              ? Date.now() + HOLDS_ASK_LATER_DAYS * 24 * 60 * 60 * 1000
-              : null,
-          isOff: answer === 'never',
-        } satisfies HoldsPromptChoice,
+        holdsPrompt: current.holdsPrompt ?? null,
+        bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        ...patch,
       } satisfies PlanSealedFields,
       encryption,
     );
     transaction.update(ref, { sealed, updatedAt: Date.now() });
   });
+}
+
+/** Saves the answer to the "where are they kept" prompt. */
+export async function setHoldsPrompt(
+  uid: string,
+  encryption: RunwayEncryption,
+  answer: 'later' | 'never',
+) {
+  await patchSealedFields(uid, encryption, {
+    holdsPrompt: {
+      askAfter:
+        answer === 'later'
+          ? Date.now() + HOLDS_ASK_LATER_DAYS * 24 * 60 * 60 * 1000
+          : null,
+      isOff: answer === 'never',
+    } satisfies HoldsPromptChoice,
+  });
+}
+
+/** Records that the person read why Free to Spend now comes from their account balances. */
+export async function setBankBackedSeen(
+  uid: string,
+  encryption: RunwayEncryption,
+) {
+  await patchSealedFields(uid, encryption, { bankBackedSeenAt: Date.now() });
 }
 
 const planPath = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);

@@ -24,6 +24,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
 import {
   BALANCE_CHECK_WORDS,
+  BANK_BACKED_WORDS,
   CARD_WORDS,
   CASH_POSITION_WORDS,
   CHECK_WORDS,
@@ -152,7 +153,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       sign: '=',
       name: FREE_SUM_WORDS.total,
       value: formatCents(balances.moneyOnHandCents),
-      help: hasCards ? CARD_WORDS.freeOnHandHelp : undefined,
+      help:
+        balances.bankAdjustCents !== 0
+          ? BANK_BACKED_WORDS.sumHelp
+          : hasCards
+            ? CARD_WORDS.freeOnHandHelp
+            : undefined,
     },
   ];
   const openSection = (section: PlanSection) => {
