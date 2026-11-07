@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { History, Loader, LockKeyhole } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import { useNow } from '@/hooks/useNow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { useAuth } from '@/hooks/useAuth';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
@@ -212,6 +213,7 @@ function RunwayContent() {
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
   const [attempt, setAttempt] = useState(0);
   const startDraft = useStartDraft();
+  const { isScrambled } = useValuesHidden();
 
   useRunwayTheme();
   useEffect(
@@ -241,11 +243,116 @@ function RunwayContent() {
     setAttempt((current) => current + 1);
   };
 
-  if (loading) {
-    return <Loading />;
-  }
+  // Made-up amounts are worked out as each figure is formatted, so the screens mount afresh when they start or stop.
+  const getView = () => {
+    if (loading) {
+      return <Loading />;
+    }
 
-  if (!user) {
+    if (!user) {
+      if (view === 'start') {
+        return (
+          <div>
+            <StartingOutScreen />
+          </div>
+        );
+      }
+      return (
+        <SignedOutLanding
+          onStart={(isContinuing) => {
+            if (isContinuing) setStartMethod('continue');
+            openView('start');
+          }}
+        />
+      );
+    }
+
+    if (isDeletingPlan && keyStatus === 'ready') {
+      return (
+        <div>
+          <SettingsScreen onClose={closeMoreEntry} />
+          <DeletePlanScreen
+            onClose={closeSettingsView}
+            onDeleted={() => {
+              setAttempt((current) => current + 1);
+              leaveAfterSubviewCloses(() => {
+                showTab('home');
+                closeMoreEntry();
+              });
+            }}
+          />
+        </div>
+      );
+    }
+
+    if (keyStatus === 'failed') {
+      return (
+        <div className='page'>
+          <div className='mx-auto max-w-4xl py-6'>
+            <EmptyCard
+              icon={<LockKeyhole className='h-5 w-5' />}
+              action={
+                <Button variant='secondary' size='sm' onClick={tryAgain}>
+                  Try again
+                </Button>
+              }
+            >
+              Your plan cannot be opened right now. Nothing has been changed or
+              lost.
+            </EmptyCard>
+          </div>
+        </div>
+      );
+    }
+
+    if (
+      keyStatus === 'ready' &&
+      isPlanLoaded &&
+      (historyStatus === 'building' || historyStatus === 'failed')
+    ) {
+      return (
+        <div className='page'>
+          <div className='mx-auto max-w-4xl py-6'>
+            {historyStatus === 'building' ? (
+              <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+                <span className='block font-medium'>
+                  {HISTORY_WORDS.updating}
+                </span>
+                <span className='block'>{HISTORY_WORDS.updatingBody}</span>
+              </EmptyCard>
+            ) : (
+              <EmptyCard
+                icon={<History className='h-5 w-5' />}
+                action={
+                  <Button variant='secondary' size='sm' onClick={retryHistory}>
+                    {HISTORY_WORDS.tryAgain}
+                  </Button>
+                }
+              >
+                {HISTORY_WORDS.failed}
+              </EmptyCard>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (keyStatus !== 'ready' || !isPlanLoaded) {
+      return (
+        <div className='page'>
+          <div className='mx-auto max-w-4xl py-6'>
+            <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+              Getting your plan ready.
+            </EmptyCard>
+          </div>
+        </div>
+      );
+    }
+
+    if (startDraft !== null) {
+      return <DraftHandoff draft={startDraft} />;
+    }
+
     if (view === 'start') {
       return (
         <div>
@@ -253,214 +360,116 @@ function RunwayContent() {
         </div>
       );
     }
-    return (
-      <SignedOutLanding
-        onStart={(isContinuing) => {
-          if (isContinuing) setStartMethod('continue');
-          openView('start');
-        }}
-      />
-    );
-  }
 
-  if (isDeletingPlan && keyStatus === 'ready') {
-    return (
-      <div>
-        <SettingsScreen onClose={closeMoreEntry} />
-        <DeletePlanScreen
-          onClose={closeSettingsView}
-          onDeleted={() => {
-            setAttempt((current) => current + 1);
-            leaveAfterSubviewCloses(() => {
-              showTab('home');
-              closeMoreEntry();
-            });
-          }}
-        />
-      </div>
-    );
-  }
-
-  if (keyStatus === 'failed') {
-    return (
-      <div className='page'>
-        <div className='mx-auto max-w-4xl py-6'>
-          <EmptyCard
-            icon={<LockKeyhole className='h-5 w-5' />}
-            action={
-              <Button variant='secondary' size='sm' onClick={tryAgain}>
-                Try again
-              </Button>
-            }
-          >
-            Your plan cannot be opened right now. Nothing has been changed or
-            lost.
-          </EmptyCard>
+    if (view === 'accountMoves' && isTrackingLevel(level)) {
+      return (
+        <div>
+          <AccountMovesScreen onClose={closeView} />
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (
-    keyStatus === 'ready' &&
-    isPlanLoaded &&
-    (historyStatus === 'building' || historyStatus === 'failed')
-  ) {
-    return (
-      <div className='page'>
-        <div className='mx-auto max-w-4xl py-6'>
-          {historyStatus === 'building' ? (
-            <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
-              <span className='block font-medium'>
-                {HISTORY_WORDS.updating}
-              </span>
-              <span className='block'>{HISTORY_WORDS.updatingBody}</span>
-            </EmptyCard>
-          ) : (
-            <EmptyCard
-              icon={<History className='h-5 w-5' />}
-              action={
-                <Button variant='secondary' size='sm' onClick={retryHistory}>
-                  {HISTORY_WORDS.tryAgain}
-                </Button>
-              }
-            >
-              {HISTORY_WORDS.failed}
-            </EmptyCard>
+    if (view === 'rules' && level === 'link') {
+      return (
+        <div>
+          <RulesScreen onClose={closeView} />
+        </div>
+      );
+    }
+
+    if (view === 'needsHome' && isTrackingLevel(level)) {
+      return (
+        <div>
+          <NeedsHomeScreen onClose={closeView} />
+        </div>
+      );
+    }
+
+    if (
+      view === 'freeToSpend' ||
+      ((view === 'checkAmount' || view === 'checkBalance') &&
+        isTrackingLevel(level)) ||
+      (view === 'cashPosition' && level === 'link')
+    ) {
+      return (
+        <div>
+          <FreeToSpendScreen onClose={closeView} />
+        </div>
+      );
+    }
+
+    if (moreEntry === 'priorities') {
+      return (
+        <div>
+          <PrioritiesScreen onClose={closeMoreEntry} />
+        </div>
+      );
+    }
+
+    if (moreEntry === 'accounts') {
+      return (
+        <div>
+          <AccountsScreen onClose={closeMoreEntry} />
+        </div>
+      );
+    }
+
+    if (moreEntry === 'changeLog') {
+      return (
+        <div>
+          <ChangeLogScreen onClose={closeMoreEntry} />
+        </div>
+      );
+    }
+
+    if (moreEntry === 'settings') {
+      return (
+        <div>
+          <SettingsScreen onClose={closeMoreEntry} />
+          {settingsView === 'tracking' && (
+            <TrackingScreen onClose={closeSettingsView} />
+          )}
+          {settingsView === 'notifications' && (
+            <NotificationsScreen onClose={closeSettingsView} />
           )}
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (keyStatus !== 'ready' || !isPlanLoaded) {
-    return (
-      <div className='page'>
-        <div className='mx-auto max-w-4xl py-6'>
-          <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
-            Getting your plan ready.
-          </EmptyCard>
+    // Screens opened from an income day sit above it, so the day is checked last.
+    if (
+      openDayKey !== null &&
+      (hasOpenDay || !isItemsLoaded || isOlderDayLoading)
+    ) {
+      return (
+        <div>
+          <IncomeDayScreen dayKey={openDayKey} onClose={closeOpenDay} />
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (startDraft !== null) {
-    return <DraftHandoff draft={startDraft} />;
-  }
-
-  if (view === 'start') {
-    return (
-      <div>
-        <StartingOutScreen />
-      </div>
-    );
-  }
-
-  if (view === 'accountMoves' && isTrackingLevel(level)) {
-    return (
-      <div>
-        <AccountMovesScreen onClose={closeView} />
-      </div>
-    );
-  }
-
-  if (view === 'rules' && level === 'link') {
-    return (
-      <div>
-        <RulesScreen onClose={closeView} />
-      </div>
-    );
-  }
-
-  if (view === 'needsHome' && isTrackingLevel(level)) {
-    return (
-      <div>
-        <NeedsHomeScreen onClose={closeView} />
-      </div>
-    );
-  }
-
-  if (
-    view === 'freeToSpend' ||
-    ((view === 'checkAmount' || view === 'checkBalance') &&
-      isTrackingLevel(level)) ||
-    (view === 'cashPosition' && level === 'link')
-  ) {
-    return (
-      <div>
-        <FreeToSpendScreen onClose={closeView} />
-      </div>
-    );
-  }
-
-  if (moreEntry === 'priorities') {
-    return (
-      <div>
-        <PrioritiesScreen onClose={closeMoreEntry} />
-      </div>
-    );
-  }
-
-  if (moreEntry === 'accounts') {
-    return (
-      <div>
-        <AccountsScreen onClose={closeMoreEntry} />
-      </div>
-    );
-  }
-
-  if (moreEntry === 'changeLog') {
-    return (
-      <div>
-        <ChangeLogScreen onClose={closeMoreEntry} />
-      </div>
-    );
-  }
-
-  if (moreEntry === 'settings') {
-    return (
-      <div>
-        <SettingsScreen onClose={closeMoreEntry} />
-        {settingsView === 'tracking' && (
-          <TrackingScreen onClose={closeSettingsView} />
-        )}
-        {settingsView === 'notifications' && (
-          <NotificationsScreen onClose={closeSettingsView} />
-        )}
-      </div>
-    );
-  }
-
-  // Screens opened from an income day sit above it, so the day is checked last.
-  if (
-    openDayKey !== null &&
-    (hasOpenDay || !isItemsLoaded || isOlderDayLoading)
-  ) {
-    return (
-      <div>
-        <IncomeDayScreen dayKey={openDayKey} onClose={closeOpenDay} />
-      </div>
-    );
-  }
-
-  if (!isPlanItemsLoaded) {
-    return (
-      <div className='page'>
-        <div className='mx-auto max-w-4xl py-6'>
-          <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
-            Getting your plan ready.
-          </EmptyCard>
+    if (!isPlanItemsLoaded) {
+      return (
+        <div className='page'>
+          <div className='mx-auto max-w-4xl py-6'>
+            <EmptyCard icon={<Loader className='h-5 w-5 animate-spin' />}>
+              Getting your plan ready.
+            </EmptyCard>
+          </div>
         </div>
-      </div>
-    );
-  }
+      );
+    }
 
-  if (setupState !== 'ready') {
-    return <SetupLanding isStarted={setupState === 'started'} />;
-  }
+    if (setupState !== 'ready') {
+      return <SetupLanding isStarted={setupState === 'started'} />;
+    }
 
-  return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+    return <RunwayTabs activeTab={activeTab} onChange={showTab} />;
+  };
+
+  return (
+    <Fragment key={isScrambled ? 'made-up' : 'real'}>{getView()}</Fragment>
+  );
 }
 
 function RunwayPage() {

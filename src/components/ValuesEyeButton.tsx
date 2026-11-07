@@ -1,19 +1,28 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Shuffle } from 'lucide-react';
 
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 
 const SURFACE = '[role="dialog"], .subview-card, .page';
 
-/** The header's eye: shows or hides every private figure under the same provider, and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
+/** The header's eye: shows or hides every private figure under the same provider (while amounts are made up it flips between made-up and masked, never the real ones), and is drawn only while the surface it sits in holds one (a `SensitiveValue`). 28px round with a 40px hit area, like the other header icons. */
 function ValuesEyeButton() {
-  const { isHidden, toggle } = useValuesHidden();
+  const { isHidden, isScrambled, toggle } = useValuesHidden();
   const anchor = useRef<HTMLSpanElement | null>(null);
   const [hasValues, setHasValues] = useState(false);
-  const label = 'Show amounts';
-  const Icon = isHidden ? Eye : EyeOff;
+  const getLabel = () => {
+    if (!isScrambled) return 'Show amounts';
+    return isHidden ? 'Show made-up amounts' : 'Hide made-up amounts';
+  };
+  const label = getLabel();
+  const getIcon = () => {
+    if (isScrambled && !isHidden)
+      return <Shuffle className='size-4' aria-hidden='true' />;
+    if (isHidden) return <Eye className='size-4' aria-hidden='true' />;
+    return <EyeOff className='size-4' aria-hidden='true' />;
+  };
 
   useLayoutEffect(() => {
     const surface = anchor.current?.closest(SURFACE);
@@ -47,7 +56,7 @@ function ValuesEyeButton() {
           title={label}
           onClick={toggle}
         >
-          <Icon className='size-4' aria-hidden='true' />
+          {getIcon()}
         </Button>
       )}
     </span>

@@ -1,3 +1,9 @@
+import {
+  markScrambled,
+  scrambleAxisCents,
+  scrambleCents,
+} from '@/utils/moneyScramble';
+
 /** "12345.67" as money reads, "12,345.67"; anything that isn't plain digits is left as typed. */
 export const groupDigits = (value: string) => {
   const match = /^(\d+)(\.\d*)?$/.exec(value);
@@ -68,16 +74,28 @@ const currencyFormatter = new Intl.NumberFormat('en-US', {
 });
 
 export function formatCents(cents: number): string {
-  const result = currencyFormatter.format(cents / 100);
+  const result = markScrambled(
+    currencyFormatter.format(scrambleCents(cents) / 100),
+  );
   return result;
 }
 
-/** "$600" for a whole amount and "$87.50" otherwise, for a figure inside a short line of text. */
-export function formatCentsShort(cents: number): string {
-  const result =
+const formatShort = (cents: number) =>
+  markScrambled(
     cents % 100 === 0
       ? currencyFormatter.format(cents / 100).replace(/\.00$/, '')
-      : currencyFormatter.format(cents / 100);
+      : currencyFormatter.format(cents / 100),
+  );
+
+/** "$600" for a whole amount and "$87.50" otherwise, for a figure inside a short line of text. */
+export function formatCentsShort(cents: number): string {
+  const result = formatShort(scrambleCents(cents));
+  return result;
+}
+
+/** `formatCentsShort` for a chart's ticks and callouts: while amounts are made up, every one is scaled alike so the axis stays in order. */
+export function formatAxisCentsShort(cents: number): string {
+  const result = formatShort(scrambleAxisCents(cents));
   return result;
 }
 

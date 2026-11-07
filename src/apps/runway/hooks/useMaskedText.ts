@@ -1,8 +1,8 @@
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { maskFigures } from '@apps/runway/utils/maskText';
+import { maskForMode } from '@apps/runway/utils/maskText';
 
-/** Masks the amounts in a line while amounts are hidden; the line is returned as it is once they are shown. */
+/** Masks the amounts in a line while amounts are hidden, and its real amounts while they are made up; the line is returned as it is once they are shown. */
 export function useMaskedText() {
   const { isHidden } = useValuesHidden();
-  return (text: string) => (isHidden ? maskFigures(text) : text);
+  return (text: string) => maskForMode(text, isHidden);
 }

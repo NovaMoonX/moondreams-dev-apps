@@ -8,25 +8,30 @@ import {
   Gauge,
   Landmark,
   Link2,
+  Shuffle,
   Trash2,
 } from 'lucide-react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import AppToggle from '@/components/AppToggle';
 import GatesClosedNote from '@/components/GatesClosedNote';
 import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
+import SettingsRowWithSwitch from '@/components/SettingsRow';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { useNow } from '@/hooks/useNow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   DELETE_PLAN_WORDS,
   LINK_WORDS,
+  MADE_UP_WORDS,
   NOTIFY_WORDS,
   DEFAULT_NOTIFY_HOUR,
   SETTINGS_GROUP_WORDS,
@@ -148,6 +153,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
   const unfinished = links.filter(isUnfinishedLink);
   const finished = links.filter((link) => !isUnfinishedLink(link));
   const now = useNow(60_000);
+  const { isScrambled, setScrambled } = useValuesHidden();
   const [openBankId, setOpenBankId] = useState<string | null>(null);
   const [linking, setLinking] = useState<{ resume: OpenLink | null } | null>(
     null,
@@ -272,6 +278,22 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             />
           </ActionSection>
         )}
+        <ActionSection caption={MADE_UP_WORDS.caption}>
+          <ul className='border-border rounded-2xl border px-3'>
+            <SettingsRowWithSwitch
+              icon={<Shuffle className='size-5' />}
+              title={MADE_UP_WORDS.label}
+              description={MADE_UP_WORDS.help}
+              control={
+                <AppToggle
+                  aria-label={MADE_UP_WORDS.label}
+                  checked={isScrambled}
+                  onCheckedChange={setScrambled}
+                />
+              }
+            />
+          </ul>
+        </ActionSection>
         <ActionSection caption={SETTINGS_GROUP_WORDS.plan}>
           <SettingsRow
             icon={<Trash2 />}

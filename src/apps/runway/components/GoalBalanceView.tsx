@@ -5,7 +5,7 @@ import TrendLineChart from '@/components/TrendLineChart';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { getNiceMoneyAxis } from '@/utils/chartUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import { formatAxisCentsShort, formatCents } from '@/utils/moneyUtils';
 import { GOAL_CHART_WORDS } from '@apps/runway/constants';
 import {
   useGoalSeries,
@@ -71,7 +71,7 @@ function GoalBalanceView(props: GoalBalanceViewProps) {
           curve='linear'
           hasDots={false}
           formatX={formatDateOrdinalUTC}
-          formatY={formatCentsShort}
+          formatY={formatAxisCentsShort}
           formatValue={formatCents}
           referenceY={{ value: goal.targetCents, label: 'Target' }}
           yDomain={axis.domain}

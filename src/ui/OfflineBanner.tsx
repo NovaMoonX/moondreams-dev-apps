@@ -1,13 +1,24 @@
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CheckCircle2, LoaderCircle, RefreshCw, WifiOff, WifiZero } from 'lucide-react';
+import {
+  CheckCircle2,
+  Info,
+  LoaderCircle,
+  RefreshCw,
+  WifiOff,
+  WifiZero,
+} from 'lucide-react';
 import { useState } from 'react';
 
-import { useNetworkStatus, type NetworkBannerState } from '@hooks/useNetworkStatus';
+import {
+  useNetworkStatus,
+  type NetworkBannerState,
+} from '@hooks/useNetworkStatus';
 import { useRestartApp } from '@hooks/useRestartApp';
+import { getLastSiteNotice, useSiteNotice } from '@hooks/useSiteNotice';
 import { useUpdateReady } from '@hooks/useUpdateReady';
 
-type Variant = Exclude<NetworkBannerState, null> | 'update';
+type Variant = Exclude<NetworkBannerState, null> | 'notice' | 'update';
 
 const VARIANTS: Record<
   Variant,
@@ -32,7 +43,13 @@ const VARIANTS: Record<
   reconnected: {
     icon: CheckCircle2,
     label: 'Back online',
-    className: 'bg-emerald-700 text-white dark:bg-success dark:text-success-foreground',
+    className:
+      'bg-emerald-700 text-white dark:bg-success dark:text-success-foreground',
+  },
+  notice: {
+    icon: Info,
+    label: '',
+    className: 'bg-primary text-primary-foreground',
   },
   update: {
     icon: RefreshCw,
@@ -41,17 +58,26 @@ const VARIANTS: Record<
   },
 };
 
-/** The top strip: connection problems first, otherwise a tappable restart prompt when an installed app has a newer version. Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
+/** The top strip: connection problems first, then a tappable restart prompt when an installed app has a newer version, otherwise a page's notice (`setSiteNotice`) with its action. Always mounted; visibility is a transform so sliding away never reflows or squishes the text. */
 function OfflineBanner() {
   const networkStatus = useNetworkStatus();
   const isUpdateReady = useUpdateReady();
   const restart = useRestartApp();
-  const status: Variant | null = networkStatus ?? (isUpdateReady ? 'update' : null);
+  const notice = useSiteNotice();
+  const getStatus = (): Variant | null => {
+    if (networkStatus) return networkStatus;
+    if (isUpdateReady) return 'update';
+    return notice ? 'notice' : null;
+  };
+  const status = getStatus();
   // Keeps the last shown variant while sliding out, so a cleared status doesn't repaint it.
-  const [shownVariant, setShownVariant] = useState<Variant>(status ?? 'offline');
+  const [shownVariant, setShownVariant] = useState<Variant>(
+    status ?? 'offline',
+  );
   if (status && status !== shownVariant) {
     setShownVariant(status);
   }
+  const shownNotice = notice ?? getLastSiteNotice();
   const variant = VARIANTS[shownVariant];
   const Icon = variant.icon;
 
@@ -65,15 +91,27 @@ function OfflineBanner() {
       )}
     >
       <Icon className={join('size-4', variant.spin && 'animate-spin')} />
-      <span>{variant.label}</span>
+      <span>
+        {shownVariant === 'notice' ? shownNotice?.label : variant.label}
+      </span>
       {shownVariant === 'update' && (
         <Button
           size='sm'
           variant='base'
-          className='pointer-events-auto relative h-7 bg-primary-foreground! px-3 text-primary! after:absolute after:-inset-1.5 hover:bg-primary-foreground/85! focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground!'
+          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
           onClick={restart}
         >
           Restart
+        </Button>
+      )}
+      {shownVariant === 'notice' && shownNotice && (
+        <Button
+          size='sm'
+          variant='base'
+          className='bg-primary-foreground! text-primary! hover:bg-primary-foreground/85! focus-visible:outline-primary-foreground! pointer-events-auto relative h-7 px-3 after:absolute after:-inset-1.5 focus-visible:outline-2 focus-visible:outline-offset-2'
+          onClick={shownNotice.onAction}
+        >
+          {shownNotice.actionLabel}
         </Button>
       )}
     </div>
