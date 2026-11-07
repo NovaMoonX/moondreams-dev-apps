@@ -20,7 +20,12 @@ export function useGoalsSaved(today: number) {
   ).length;
   return {
     savedCents: atDial.reduce(
-      (sum, { item }) => sum + Math.max(0, assignedByItem[item.id] ?? 0),
+      (sum, { item, version }) =>
+        sum +
+        Math.min(
+          Math.max(0, assignedByItem[item.id] ?? 0),
+          version.payload.targetCents,
+        ),
       0,
     ),
     targetCents: atDial.reduce(
@@ -28,7 +33,7 @@ export function useGoalsSaved(today: number) {
       0,
     ),
     notSavingCount: atDial.length - savingCount,
-    hasTargets: goals.some(({ version }) => version.payload.targetCents > 0),
+    hasTargets: atDial.some(({ version }) => version.payload.targetCents > 0),
     hasGoals: goals.length > 0,
   };
 }

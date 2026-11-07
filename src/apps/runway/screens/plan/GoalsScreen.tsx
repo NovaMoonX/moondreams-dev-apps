@@ -194,7 +194,10 @@ function GoalsScreen() {
                     (sum, { item, payload }) => ({
                       savedCents:
                         sum.savedCents +
-                        Math.min(heldByItem[item.id] ?? 0, payload.targetCents),
+                        Math.min(
+                          Math.max(0, heldByItem[item.id] ?? 0),
+                          payload.targetCents,
+                        ),
                       targetCents: sum.targetCents + payload.targetCents,
                     }),
                     { savedCents: 0, targetCents: 0 },
