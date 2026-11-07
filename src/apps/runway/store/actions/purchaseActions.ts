@@ -476,6 +476,7 @@ export async function editPurchase(
       {
         amountCents: input.amountCents,
         merchant: input.merchant,
+        merchantLogo: previous.merchantLogo ?? null,
         category: previous.category,
         ruleId: isSameHome ? previous.ruleId : null,
         label: input.label,
@@ -593,6 +594,7 @@ export async function assignPurchase(
       {
         amountCents: previous.amountCents,
         merchant: previous.merchant,
+        merchantLogo: previous.merchantLogo ?? null,
         category: previous.category,
         ruleId: placement?.ruleId ?? null,
         label: previous.label,
@@ -1210,6 +1212,7 @@ const readImages = async (uid: string, purchaseId: string) => {
 const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   amountCents: purchase.amountCents,
   merchant: purchase.merchant,
+  merchantLogo: purchase.merchantLogo ?? null,
   category: purchase.category,
   ruleId: purchase.ruleId,
   label: purchase.label,
@@ -1275,6 +1278,7 @@ export async function mergeBankPurchase(
         ...toSealedPayload(typed),
         amountCents: bank.amountCents,
         merchant: bank.merchant ?? typedMerchant,
+        merchantLogo: bank.merchantLogo ?? null,
         category: bank.category,
         ruleId: null,
         label:

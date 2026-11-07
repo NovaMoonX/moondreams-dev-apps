@@ -134,6 +134,9 @@ export async function openPurchase(
     updatedAt: entry.updatedAt,
     amountCents: payload.amountCents,
     merchant: payload.merchant ?? null,
+    merchantLogo: payload.merchantLogo?.startsWith('https://')
+      ? payload.merchantLogo
+      : null,
     category: payload.category ?? null,
     ruleId: payload.ruleId ?? null,
     label: isNoteName ? (payload.note ?? null) : (payload.label ?? null),

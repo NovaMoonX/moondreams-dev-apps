@@ -22,6 +22,8 @@ export interface NormalizedTransaction {
   date: number;
   amountCents: number;
   merchant: string | null;
+  /** An https link to the merchant's logo; null when the provider has none. */
+  merchantLogo: string | null;
   /** The provider's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null when it gives none. */
   category: string | null;
   isPending: boolean;

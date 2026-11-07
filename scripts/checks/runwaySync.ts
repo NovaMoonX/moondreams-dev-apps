@@ -34,6 +34,32 @@ assert.equal(
   30,
   'floating dollars round to cents',
 );
+const withLogo = (logoUrl: string) =>
+  normalizeTransaction({
+    id: 'l',
+    pendingId: null,
+    accountId: 'x',
+    date: '2026-02-03',
+    amount: 4,
+    merchantName: 'Cafe',
+    logoUrl,
+    name: null,
+    isPending: false,
+  })?.merchantLogo;
+assert.equal(
+  withLogo('https://plaid-merchant-logos.plaid.com/cafe.png'),
+  'https://plaid-merchant-logos.plaid.com/cafe.png',
+);
+assert.equal(
+  withLogo('http://example.com/cafe.png'),
+  null,
+  'a logo that is not https is dropped',
+);
+assert.equal(
+  withLogo('javascript:alert(1)'),
+  null,
+  'a logo that is not a web link is dropped',
+);
 assert.equal(
   normalizeTransaction({
     id: 'a',
@@ -124,6 +150,7 @@ const tx = (
   date: Date.UTC(2026, 10, 1),
   amountCents: cents,
   merchant: 'Cafe',
+  merchantLogo: null,
   category: null,
   isPending: false,
   ...extra,

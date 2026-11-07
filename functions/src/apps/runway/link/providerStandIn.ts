@@ -53,6 +53,7 @@ const transaction = (
   date: daysAgo(days),
   amountCents,
   merchant,
+  merchantLogo: null,
   category,
   isPending: false,
   ...extra,

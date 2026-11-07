@@ -1,4 +1,5 @@
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import FallbackImage from '@/components/FallbackImage';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
@@ -46,11 +47,24 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
     ? `+${formatCents(-purchase.amountCents)}`
     : formatCents(purchase.amountCents);
 
+  const badge = (
+    <ItemBadge name={lead?.name ?? title} emoji={lead?.emoji ?? null} />
+  );
   return (
     <ItemRow
       name={title}
       leading={
-        <ItemBadge name={lead?.name ?? title} emoji={lead?.emoji ?? null} />
+        purchase.merchantLogo ? (
+          <FallbackImage
+            src={purchase.merchantLogo}
+            alt=''
+            aria-hidden='true'
+            className='border-border size-10 shrink-0 rounded-xl border bg-white object-contain p-1'
+            fallback={badge}
+          />
+        ) : (
+          badge
+        )
       }
       detail={detail}
       figure={amount}

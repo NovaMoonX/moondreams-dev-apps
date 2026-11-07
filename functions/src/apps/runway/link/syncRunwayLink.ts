@@ -436,6 +436,12 @@ export async function syncRunwayLink(
       planKey.key,
       linkSnapshot.data()?.sealed as SealedPayload,
     ) as unknown as LinkSealed;
+    // Before the bank is asked for anything, so a bank that is down or needs a new sign-in still gets its logo.
+    if (link.institutionLogo === undefined) {
+      await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
+        logger.warn('runway.sync.logoFailed', { linkId });
+      });
+    }
     const targets = targetsByProviderAccount(link.providerAccounts);
     if (targets.size === 0) return { ...empty, state: 'skipped' };
 
@@ -460,11 +466,6 @@ export async function syncRunwayLink(
         });
       },
     );
-    if (link.institutionLogo === undefined) {
-      await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
-        logger.warn('runway.sync.logoFailed', { linkId });
-      });
-    }
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
       transaction.update(linkRef, { lastSyncAt: Date.now(), status: 'active' }),
     );
