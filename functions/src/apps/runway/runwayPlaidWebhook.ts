@@ -6,6 +6,7 @@ import { onRequest } from 'firebase-functions/v2/https';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import { itemIndexPath, type ItemIndexDoc } from './link/grant.js';
 import { LINK_SECRETS } from './link/linkShared.js';
+import { asProviderCode } from './link/provider.js';
 import { getWebhookKey } from './link/providerPlaid.js';
 import { syncRunwayLink } from './link/syncRunwayLink.js';
 import { verifyPlaidWebhook } from './link/webhookVerify.js';
@@ -49,6 +50,7 @@ export const runwayPlaidWebhook = onRequest(
       webhook_type?: unknown;
       webhook_code?: unknown;
       item_id?: unknown;
+      error?: { error_code?: unknown } | null;
     };
     if (
       body.webhook_type === 'TRANSACTIONS' &&
@@ -81,6 +83,15 @@ export const runwayPlaidWebhook = onRequest(
       } else {
         logger.warn('runway.webhook.unknownItem');
       }
+    } else if (
+      body.webhook_type !== 'TRANSACTIONS' ||
+      asProviderCode(body.error?.error_code) !== null
+    ) {
+      logger.info('runway.webhook.other', {
+        type: asProviderCode(body.webhook_type),
+        code: asProviderCode(body.webhook_code),
+        errorCode: asProviderCode(body.error?.error_code),
+      });
     }
     response.status(200).send('ok');
   },

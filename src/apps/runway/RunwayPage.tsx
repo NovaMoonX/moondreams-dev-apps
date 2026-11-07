@@ -1,9 +1,10 @@
 import { Fragment, useEffect, useLayoutEffect, useState } from 'react';
-import { History, Loader, LockKeyhole } from 'lucide-react';
+import { History, Loader, LockKeyhole, WifiOff } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -211,6 +212,9 @@ function RunwayContent() {
     requestedTab === 'spend' && level === 'plan' ? 'home' : requestedTab;
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.runway.keyStatus);
+  const networkStatus = useNetworkStatus();
+  const isOffline =
+    networkStatus === 'offline' || networkStatus === 'reconnecting';
   const isPlanLoaded = useAppSelector((state) => state.runway.isLoaded);
   const [attempt, setAttempt] = useState(0);
   const startDraft = useStartDraft();
@@ -292,15 +296,22 @@ function RunwayContent() {
         <div className='page'>
           <div className='mx-auto max-w-4xl py-6'>
             <EmptyCard
-              icon={<LockKeyhole className='h-5 w-5' />}
+              icon={
+                isOffline ? (
+                  <WifiOff className='h-5 w-5' />
+                ) : (
+                  <LockKeyhole className='h-5 w-5' />
+                )
+              }
               action={
                 <Button variant='secondary' size='sm' onClick={tryAgain}>
                   Try again
                 </Button>
               }
             >
-              Your plan cannot be opened right now. Nothing has been changed or
-              lost.
+              {isOffline
+                ? 'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost.'
+                : 'Your plan cannot be opened right now. Nothing has been changed or lost.'}
             </EmptyCard>
           </div>
         </div>

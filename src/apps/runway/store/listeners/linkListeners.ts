@@ -73,6 +73,11 @@ export function startLinksListener(
         lastSyncAt: data.lastSyncAt ?? null,
         createdAt: data.createdAt,
         institutionName: payload.institutionName ?? '',
+        institutionLogo: payload.institutionLogo?.startsWith(
+          'data:image/png;base64,',
+        )
+          ? payload.institutionLogo
+          : null,
         providerAccounts: (payload.providerAccounts ?? []).map((entry) => ({
           ...entry,
           mask: entry.mask ?? null,

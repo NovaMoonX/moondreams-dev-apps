@@ -45,20 +45,35 @@ export interface ProviderGrant {
 export type ProviderErrorKind =
   'unavailable' | 'rejected' | 'needsAttention' | 'limit';
 
-/** A provider failure with a sentence that is safe to show the person. */
+/** A provider's error code when it looks like one, so a log never holds free text. */
+export const asProviderCode = (value: unknown): string | null =>
+  typeof value === 'string' && /^[A-Z_]{1,64}$/.test(value) ? value : null;
+
+/** A provider failure with a sentence that is safe to show the person, and the provider's own error code for the logs. */
 export class ProviderError extends Error {
   readonly kind: ProviderErrorKind;
-  constructor(kind: ProviderErrorKind, message: string) {
+  readonly code: string | null;
+  constructor(
+    kind: ProviderErrorKind,
+    message: string,
+    code: string | null = null,
+  ) {
     super(message);
     this.kind = kind;
+    this.code = code;
   }
+}
+
+export interface ProviderInstitution {
+  name: string | null;
+  logo: string | null;
 }
 
 export interface BankDataProvider {
   createLinkSession(uid: string): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
-  /** The institution's name, or null when the provider cannot say. */
-  getInstitutionName(grant: ProviderGrant): Promise<string | null>;
+  /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
+  getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
   /** Every account under the grant, with live balances. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;

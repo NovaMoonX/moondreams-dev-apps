@@ -363,6 +363,34 @@ async function writeUnlessRevoked(
   });
 }
 
+/** Seals the bank's logo into a link made before logos were kept; the next sync retries a miss. */
+async function keepLogo(
+  firestore: Firestore,
+  linkRef: DocumentReference,
+  grant: ProviderGrant,
+  planKey: Awaited<ReturnType<typeof unwrapPlanKey>>,
+) {
+  const institution = await provider.getInstitution(grant);
+  if (!institution) return;
+  await firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(linkRef);
+    if (!snapshot.exists || snapshot.data()?.status === 'revoked') return;
+    const link = openWithKey(
+      planKey.key,
+      snapshot.data()?.sealed as SealedPayload,
+    ) as unknown as Partial<LinkSealed>;
+    if (link.institutionLogo !== undefined) return;
+    const nextLink: LinkSealed = {
+      institutionName: link.institutionName ?? '',
+      institutionLogo: institution.logo,
+      providerAccounts: link.providerAccounts ?? [],
+    };
+    transaction.update(linkRef, {
+      sealed: sealWithKey(planKey, { ...nextLink }, SEALED_SCHEMA_VERSION),
+    });
+  });
+}
+
 /**
  * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
  * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
@@ -426,9 +454,17 @@ export async function syncRunwayLink(
         if (error instanceof ProviderError && error.kind === 'needsAttention') {
           throw error;
         }
-        logger.warn('runway.sync.balancesFailed', { linkId });
+        logger.warn('runway.sync.balancesFailed', {
+          linkId,
+          code: error instanceof ProviderError ? error.code : null,
+        });
       },
     );
+    if (link.institutionLogo === undefined) {
+      await keepLogo(firestore, linkRef, grant, planKey).catch(() => {
+        logger.warn('runway.sync.logoFailed', { linkId });
+      });
+    }
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
       transaction.update(linkRef, { lastSyncAt: Date.now(), status: 'active' }),
     );
@@ -452,12 +488,13 @@ export async function syncRunwayLink(
       await writeUnlessRevoked(firestore, linkRef, (transaction) =>
         transaction.update(linkRef, { status: 'needsAttention' }),
       );
-      logger.warn('runway.sync.needsAttention', { linkId });
+      logger.warn('runway.sync.needsAttention', { linkId, code: error.code });
       return { ...empty, state: 'needsAttention' };
     }
     logger.error('runway.sync.failed', {
       linkId,
       kind: error instanceof ProviderError ? error.kind : 'internal',
+      code: error instanceof ProviderError ? error.code : null,
     });
     return { ...empty, state: 'failed' };
   }

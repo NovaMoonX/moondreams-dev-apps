@@ -1,6 +1,6 @@
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
+import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { ACCOUNT_WORDS } from '@apps/runway/constants';
 import type { OpenAccount } from '@apps/runway/types';
@@ -25,7 +25,7 @@ function AccountRow({ account, unassignedCents, onOpen }: AccountRowProps) {
   return (
     <ItemRow
       name={account.name}
-      leading={<ItemBadge name={account.institution} emoji={null} />}
+      leading={<BankBadge name={account.institution} linkId={account.linkId} />}
       detail={detail}
       isDetailWarning={isShort}
       isDetailInked={isShort}

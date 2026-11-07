@@ -73,19 +73,19 @@ export const exchangeRunwayLink = onCall(
     const grant = await withProvider(() => provider.exchange(publicToken));
     try {
       const accounts = await withProvider(() => provider.listAccounts(grant));
+      const institution = await withProvider(() =>
+        provider.getInstitution(grant),
+      ).catch(() => null);
       const institutionName =
         cleanName(request.data?.institutionName) ??
-        cleanName(
-          await withProvider(() => provider.getInstitutionName(grant)).catch(
-            () => null,
-          ),
-        ) ??
+        cleanName(institution?.name) ??
         FALLBACK_NAME;
 
       const linkId = randomUUID();
       const now = Date.now();
       const linkSealed: LinkSealed = {
         institutionName,
+        institutionLogo: institution?.logo ?? null,
         providerAccounts: accounts.map((account) => ({
           providerAccountId: account.providerAccountId,
           name: account.name,

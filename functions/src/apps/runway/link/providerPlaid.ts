@@ -6,10 +6,12 @@ import {
   type RawAccount,
 } from './normalize.js';
 import {
+  asProviderCode,
   ProviderError,
   type BankDataProvider,
   type NormalizedTransaction,
   type ProviderGrant,
+  type ProviderInstitution,
   type TransactionSync,
 } from './provider.js';
 
@@ -51,12 +53,14 @@ function toProviderError(code: string): ProviderError {
     return new ProviderError(
       'needsAttention',
       'Your bank needs you to sign in again.',
+      asProviderCode(code),
     );
   }
   if (code === 'INVALID_PUBLIC_TOKEN' || code === 'INVALID_LINK_TOKEN') {
     return new ProviderError(
       'rejected',
       'That bank sign-in expired. Start again.',
+      asProviderCode(code),
     );
   }
   if (
@@ -70,17 +74,20 @@ function toProviderError(code: string): ProviderError {
     return new ProviderError(
       'unavailable',
       'Your bank is not answering right now. Try again in a few minutes.',
+      asProviderCode(code),
     );
   }
   if (code === 'ITEM_LIMIT_EXCEEDED' || code === 'USER_PERMISSION_REVOKED') {
     return new ProviderError(
       'limit',
       'This bank connection cannot be added right now.',
+      asProviderCode(code),
     );
   }
   return new ProviderError(
     'unavailable',
     'The bank connection did not work. Try again in a few minutes.',
+    asProviderCode(code),
   );
 }
 
@@ -159,6 +166,14 @@ const toTransactions = (list: PlaidTransaction[]) =>
     return normalized ? [normalized] : [];
   });
 
+/** Plaid sends a base64 PNG; anything else is dropped rather than drawn. */
+const toLogoUrl = (logo: string | null | undefined) =>
+  typeof logo === 'string' &&
+  /^[A-Za-z0-9+/=]+$/.test(logo) &&
+  logo.length < 200_000
+    ? `data:image/png;base64,${logo}`
+    : null;
+
 export const plaidProvider: BankDataProvider = {
   async createLinkSession(uid) {
     const { link_token } = await call<{ link_token: string }>(
@@ -188,17 +203,24 @@ export const plaidProvider: BankDataProvider = {
     return grant;
   },
 
-  async getInstitutionName(grant) {
+  async getInstitution(grant) {
     const { item } = await call<{ item: { institution_id: string | null } }>(
       '/item/get',
       { access_token: grant.credential },
     );
     if (!item.institution_id) return null;
-    const { institution } = await call<{ institution: { name: string } }>(
-      '/institutions/get_by_id',
-      { institution_id: item.institution_id, country_codes: ['US'] },
-    );
-    return institution.name || null;
+    const { institution } = await call<{
+      institution: { name: string; logo?: string | null };
+    }>('/institutions/get_by_id', {
+      institution_id: item.institution_id,
+      country_codes: ['US'],
+      options: { include_optional_metadata: true },
+    });
+    const result: ProviderInstitution = {
+      name: institution.name || null,
+      logo: toLogoUrl(institution.logo),
+    };
+    return result;
   },
 
   async listAccounts(grant) {
