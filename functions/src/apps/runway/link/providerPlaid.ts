@@ -3,6 +3,8 @@ import { defineSecret } from 'firebase-functions/params';
 import {
   normalizeAccount,
   normalizeTransaction,
+  toBankName,
+  toHttpsUrl,
   type RawAccount,
 } from './normalize.js';
 import {
@@ -11,6 +13,7 @@ import {
   type BankDataProvider,
   type NormalizedTransaction,
   type ProviderGrant,
+  type TransactionDetails,
   type ProviderInstitution,
   type TransactionSync,
 } from './provider.js';
@@ -27,6 +30,7 @@ const host = () =>
 const LINK_DAYS_REQUESTED = 30;
 const SYNC_PAGE_SIZE = 500;
 const MAX_PAGES_PER_CALL = 10;
+const MAX_LOGO_PAGES = 20;
 
 const webhookUrl = () =>
   `https://us-central1-${process.env.GCLOUD_PROJECT ?? 'moondreams-dev-apps'}.cloudfunctions.net/runwayPlaidWebhook`;
@@ -235,6 +239,45 @@ export const plaidProvider: BankDataProvider = {
 
   async revoke(grant) {
     await call('/item/remove', { access_token: grant.credential });
+  },
+
+  async listTransactionDetails(grant, startDate, endDate) {
+    const read = async (
+      offset: number,
+      carried: TransactionDetails[],
+    ): Promise<TransactionDetails[]> => {
+      const page = await call<{
+        transactions: PlaidTransaction[];
+        total_transactions: number;
+      }>('/transactions/get', {
+        access_token: grant.credential,
+        start_date: startDate,
+        end_date: endDate,
+        options: { count: SYNC_PAGE_SIZE, offset },
+      });
+      const logos = page.transactions.flatMap((entry): TransactionDetails[] => {
+        const merchantLogo = toHttpsUrl(entry.logo_url);
+        const bankName = toBankName(entry.merchant_name, entry.name);
+        return merchantLogo || bankName
+          ? [
+              {
+                providerTransactionId: entry.transaction_id,
+                pendingTransactionId: entry.pending_transaction_id || null,
+                merchantLogo,
+                bankName,
+              },
+            ]
+          : [];
+      });
+      const next = offset + page.transactions.length;
+      const merged = [...carried, ...logos];
+      return page.transactions.length > 0 &&
+        next < page.total_transactions &&
+        next < SYNC_PAGE_SIZE * MAX_LOGO_PAGES
+        ? read(next, merged)
+        : merged;
+    };
+    return read(0, []);
   },
 
   async syncTransactions(grant, cursor) {

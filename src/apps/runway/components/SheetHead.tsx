@@ -14,6 +14,8 @@ interface SheetHeadProps {
   suffix?: string;
   /** The one short fact under the figure. */
   fact?: string | null;
+  /** A second muted line under the fact, for a detail that only some records carry. */
+  secondFact?: string | null;
   /** A caveat about the figure (which end of a range it is planned at), behind a help icon. */
   help?: ReactNode;
   helpTitle?: string;
@@ -29,6 +31,7 @@ function SheetHead({
   figure,
   suffix,
   fact,
+  secondFact,
   help,
   helpTitle,
   isLabelDroppedWhenShort = false,
@@ -89,6 +92,13 @@ function SheetHead({
         <p className='text-muted-foreground text-sm break-words'>
           <span className='line-clamp-3'>
             <MaskedText>{fact}</MaskedText>
+          </span>
+        </p>
+      )}
+      {secondFact && (
+        <p className='text-muted-foreground text-sm break-words'>
+          <span className='line-clamp-2'>
+            <MaskedText>{secondFact}</MaskedText>
           </span>
         </p>
       )}

@@ -35,6 +35,7 @@ import {
   getDirtyFrom,
   makeDedupeKey,
   neededDocIds,
+  purchaseIdFor,
   targetsByProviderAccount,
   type PurchasePayload,
   type PurchaseState,
@@ -391,6 +392,76 @@ async function keepLogo(
   });
 }
 
+const DETAILS_HISTORY_DAYS = 90;
+
+/**
+ * Adds the merchant's logo and the bank's own name to purchases this link brought in before they were kept. Only
+ * existing purchases missing one change, and only those fields; nothing is created. True once every page was written.
+ */
+async function fillTransactionDetails(
+  firestore: Firestore,
+  uid: string,
+  linkId: string,
+  grant: ProviderGrant,
+  planKey: PlanKey,
+) {
+  const now = Date.now();
+  const toDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const details = await provider.listTransactionDetails(
+    grant,
+    toDay(now - DETAILS_HISTORY_DAYS * 86_400_000),
+    toDay(now),
+  );
+  const subkey = dedupeSubkey(planKey.key);
+  const idOf = (providerTransactionId: string) =>
+    purchaseIdFor(makeDedupeKey(subkey, linkId, providerTransactionId));
+  const byId = new Map(
+    details.flatMap((entry) =>
+      [
+        entry.providerTransactionId,
+        ...(entry.pendingTransactionId === null
+          ? []
+          : [entry.pendingTransactionId]),
+      ].map((id) => [idOf(id), entry] as const),
+    ),
+  );
+  const { existing, updateTimes } = await readExisting(
+    firestore,
+    uid,
+    [...byId.keys()],
+    planKey,
+  );
+  const writes = [...existing].flatMap(([docId, state]): Write[] => {
+    const entry = byId.get(docId);
+    if (!entry) return [];
+    const merchantLogo = state.payload.merchantLogo || entry.merchantLogo;
+    const bankName = state.payload.bankName || entry.bankName;
+    if (
+      merchantLogo === (state.payload.merchantLogo ?? null) &&
+      bankName === (state.payload.bankName ?? null)
+    ) {
+      return [];
+    }
+    return [
+      {
+        kind: 'update',
+        ref: firestore.doc(planDocPath(uid, 'purchases', docId)),
+        lastUpdateTime: updateTimes.get(docId) ?? null,
+        data: {
+          sealed: sealWithKey(
+            planKey,
+            { ...state.payload, merchantLogo, bankName },
+            SEALED_SCHEMA_VERSION,
+          ),
+        },
+      },
+    ];
+  });
+  await commitWrites(firestore, writes);
+  logger.info('runway.sync.detailsFilled', { linkId, filled: writes.length });
+  return true;
+}
+
 /**
  * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
  * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
@@ -466,8 +537,26 @@ export async function syncRunwayLink(
         });
       },
     );
+    const wereDetailsFilled =
+      typeof linkSnapshot.data()?.detailsFilledAt === 'number';
+    const detailsFilledNow =
+      !wereDetailsFilled &&
+      (await fillTransactionDetails(
+        firestore,
+        uid,
+        linkId,
+        grant,
+        planKey,
+      ).catch(() => {
+        logger.warn('runway.sync.detailsFillFailed', { linkId });
+        return false;
+      }));
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
-      transaction.update(linkRef, { lastSyncAt: Date.now(), status: 'active' }),
+      transaction.update(linkRef, {
+        lastSyncAt: Date.now(),
+        status: 'active',
+        ...(detailsFilledNow ? { detailsFilledAt: Date.now() } : {}),
+      }),
     );
     logger.info('runway.sync.done', {
       linkId,
