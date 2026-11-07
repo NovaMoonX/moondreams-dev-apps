@@ -1,6 +1,6 @@
 import { useAppSelector } from '@/store';
 import { formatCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
+import BankBadge from '@apps/runway/components/BankBadge';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { CARD_WORDS } from '@apps/runway/constants';
 import type { DateOnly, OpenCard } from '@apps/runway/types';
@@ -41,7 +41,7 @@ function CardRow({
   return (
     <ItemRow
       name={name}
-      leading={<ItemBadge name={card.issuer} emoji={null} />}
+      leading={<BankBadge name={card.issuer} linkId={card.linkId} />}
       detail={
         describeCardDue(card, today, due) ??
         (reserveCents > 0
