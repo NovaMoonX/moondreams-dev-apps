@@ -45,6 +45,15 @@ export interface PlanSealedFields {
   notifyHour: number | null;
   /** IANA zone the hour is in; null until the person saves an hour. */
   notifyTimeZone: string | null;
+  /** The person's answer to "Where are your goals and envelopes kept?": when to ask again, or never. Null until they answer; a plan sealed before it existed lacks the key. */
+  holdsPrompt: HoldsPromptChoice | null;
+}
+
+export interface HoldsPromptChoice {
+  /** Epoch ms before which Home does not ask; null when no wait was chosen. */
+  askAfter: number | null;
+  /** True after "Don't ask again". */
+  isOff: boolean;
 }
 
 /** Which pushes the person turned on; readable on purpose, since the sending Function needs it and it holds no amount. */

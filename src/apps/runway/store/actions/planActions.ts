@@ -4,7 +4,10 @@ import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
-import { DEFAULT_CURRENCY_CODE } from '@apps/runway/constants';
+import {
+  DEFAULT_CURRENCY_CODE,
+  HOLDS_ASK_LATER_DAYS,
+} from '@apps/runway/constants';
 import { toDayStamp } from '@apps/runway/engine/dates';
 import {
   getLevel,
@@ -23,6 +26,7 @@ import type {
   ChangeDoc,
   ChangeSealed,
   DateOnly,
+  HoldsPromptChoice,
   MoveDoc,
   PlanDoc,
   PlanSealedFields,
@@ -40,6 +44,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       currencyCode: DEFAULT_CURRENCY_CODE,
       notifyHour: null,
       notifyTimeZone: null,
+      holdsPrompt: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -102,6 +107,7 @@ export async function setNotify(
           patch.timeZone === undefined
             ? (current.notifyTimeZone ?? null)
             : patch.timeZone,
+        holdsPrompt: current.holdsPrompt ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -110,6 +116,39 @@ export async function setNotify(
       notify: { needsHome: patch.needsHome ?? plan.notify?.needsHome ?? false },
       updatedAt: Date.now(),
     });
+  });
+}
+
+/** Saves the answer to the "where are they kept" prompt in the plan's sealed fields, reading the plan fresh so a second device's change to another field is kept. */
+export async function setHoldsPrompt(
+  uid: string,
+  encryption: RunwayEncryption,
+  answer: 'later' | 'never',
+) {
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const plan = snapshot.data() as PlanDoc;
+    const current: Partial<PlanSealedFields> = plan.sealed
+      ? await openJson<PlanSealedFields>(plan.sealed, encryption)
+      : {};
+    const sealed = await sealJson(
+      {
+        currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
+        notifyHour: current.notifyHour ?? null,
+        notifyTimeZone: current.notifyTimeZone ?? null,
+        holdsPrompt: {
+          askAfter:
+            answer === 'later'
+              ? Date.now() + HOLDS_ASK_LATER_DAYS * 24 * 60 * 60 * 1000
+              : null,
+          isOff: answer === 'never',
+        } satisfies HoldsPromptChoice,
+      } satisfies PlanSealedFields,
+      encryption,
+    );
+    transaction.update(ref, { sealed, updatedAt: Date.now() });
   });
 }
 
