@@ -3885,10 +3885,14 @@ export const ACCOUNT_WORDS = {
   interestTitle: (account: string) => `Interest in ${account}`,
   interestUncountedChip: (amount: string) =>
     `Interest ~${amount} · update the balance`,
+  interestUncountedBankChip: (amount: string) =>
+    `Interest ~${amount} · next bank update`,
   interestChip: (amount: string, day: string, isActual: boolean) =>
     `Interest ${isActual ? '' : '~'}${amount} · ${day}`,
   interestUncounted: (amount: string, day: string) =>
     `About ${amount} interest came in by ${day} (estimate). Update the balance to count it.`,
+  interestUncountedBank: (amount: string, day: string) =>
+    `About ${amount} interest came in by ${day} (estimate). It counts once your bank sends its next balance.`,
   goalInterest: (amount: string, day: string) =>
     `Earns about ${amount} on ${day}, its share of the interest (estimate)`,
   changeArchived: (name: string) => `Archived the account ${name}`,

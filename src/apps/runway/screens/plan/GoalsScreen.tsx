@@ -42,7 +42,6 @@ import {
   usePriorityDial,
 } from '@apps/runway/hooks/usePriorityDial';
 import { useGoalsSaved } from '@apps/runway/hooks/useGoalsSaved';
-import { isSavingFor } from '@apps/runway/engine/pace';
 import { describePlanTotal } from '@apps/runway/utils/billText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { revealItem } from '@apps/runway/utils/revealItem';
@@ -191,20 +190,15 @@ function GoalsScreen() {
                 <GroupHeading
                   figures={figures}
                   kind='goals'
-                  saved={rows
-                    .filter(({ payload }) => isSavingFor(payload))
-                    .reduce(
-                      (sum, { item, payload }) => ({
-                        savedCents:
-                          sum.savedCents +
-                          Math.min(
-                            heldByItem[item.id] ?? 0,
-                            payload.targetCents,
-                          ),
-                        targetCents: sum.targetCents + payload.targetCents,
-                      }),
-                      { savedCents: 0, targetCents: 0 },
-                    )}
+                  saved={rows.reduce(
+                    (sum, { item, payload }) => ({
+                      savedCents:
+                        sum.savedCents +
+                        Math.min(heldByItem[item.id] ?? 0, payload.targetCents),
+                      targetCents: sum.targetCents + payload.targetCents,
+                    }),
+                    { savedCents: 0, targetCents: 0 },
+                  )}
                   onOpen={() => setOpenGroupId(figures.id)}
                 />
                 {getList(rows)}

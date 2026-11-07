@@ -42,7 +42,10 @@ import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { canChangeStart } from '@apps/runway/utils/startingCorrection';
 import type { PlanSection } from '@apps/runway/types';
-import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  selectBalances,
+  selectBankBacking,
+} from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectIsMovesLoaded,
   selectIsRecordsReady,
@@ -68,6 +71,7 @@ interface SumRow {
 function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const balances = useAppSelector(selectBalances);
   const level = useAppSelector(selectLevel);
+  const isBankBacked = useAppSelector(selectBankBacking).isBacked;
   const {
     view,
     checkEnvelope,
@@ -323,7 +327,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
             </div>
           )}
           <ActionGroup isRoomy>
-            {isStartOpen && (
+            {isStartOpen && !isBankBacked && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -348,7 +352,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 onClick={() => openCheckAmount(null)}
               />
             )}
-            {isTrackingLevel(level) && (
+            {isTrackingLevel(level) && !isBankBacked && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -371,7 +375,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
               />
             </LevelGate>
           </ActionGroup>
-          {!isStartOpen && (
+          {!isStartOpen && !isBankBacked && (
             <p className='text-muted-foreground text-sm'>
               {FREE_SUM_WORDS.laterFix}
             </p>

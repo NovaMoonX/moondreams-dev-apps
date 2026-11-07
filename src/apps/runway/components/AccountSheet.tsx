@@ -138,7 +138,9 @@ function AccountSheet({
     interest === null
       ? null
       : uncounted !== null
-        ? ACCOUNT_WORDS.interestUncounted(
+        ? (isBankBalance
+            ? ACCOUNT_WORDS.interestUncountedBank
+            : ACCOUNT_WORDS.interestUncounted)(
             formatCents(uncounted.cents),
             formatDateOrdinalUTC(uncounted.on),
           )
@@ -505,7 +507,9 @@ function AccountSheet({
                     formatDateOrdinalUTC(interest.on),
                     interest.isActual,
                   )
-                : ACCOUNT_WORDS.interestUncountedChip(
+                : (isBankBalance
+                    ? ACCOUNT_WORDS.interestUncountedBankChip
+                    : ACCOUNT_WORDS.interestUncountedChip)(
                     formatCents(uncounted.cents),
                   ),
             )}
