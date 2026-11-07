@@ -4167,8 +4167,8 @@ export const NEEDS_HOME_WORDS = {
   failed: 'That did not save. Nothing was changed.',
   sameTitle: 'Did you already add this?',
   sameRow: (difference: string | null) =>
-    difference === null ? 'Same amount' : `The bank’s is ${difference}`,
-  sameVerb: 'Same one, kept once at the bank’s amount',
+    difference === null ? 'Same amount' : `Bank’s is ${difference}`,
+  sameVerb: 'Kept once at the bank’s amount',
   notSame: 'None of these',
   notSameSub: 'They’re separate and both still count',
   notSameDone:
