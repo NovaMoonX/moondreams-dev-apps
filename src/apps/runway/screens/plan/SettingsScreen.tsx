@@ -234,7 +234,17 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                 <SettingsRow
                   key={link.id}
                   isMiddle
-                  icon={<Landmark />}
+                  icon={
+                    link.institutionLogo === null ? (
+                      <Landmark />
+                    ) : (
+                      <img
+                        src={link.institutionLogo}
+                        alt=''
+                        className='border-border size-10 rounded-full border bg-white object-contain p-1.5'
+                      />
+                    )
+                  }
                   label={link.institutionName}
                   value={
                     link.status === 'revoked'

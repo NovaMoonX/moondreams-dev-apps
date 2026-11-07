@@ -25,7 +25,7 @@ const pickProvider = () =>
 export const provider: BankDataProvider = {
   createLinkSession: (uid) => pickProvider().createLinkSession(uid),
   exchange: (publicToken) => pickProvider().exchange(publicToken),
-  getInstitutionName: (grant) => pickProvider().getInstitutionName(grant),
+  getInstitution: (grant) => pickProvider().getInstitution(grant),
   listAccounts: (grant) => pickProvider().listAccounts(grant),
   revoke: (grant) => pickProvider().revoke(grant),
   syncTransactions: (grant, cursor) =>
@@ -57,6 +57,8 @@ export interface ProviderAccountSealed {
 
 export interface LinkSealed {
   institutionName: string;
+  /** The bank's logo as a PNG data URL; null when the provider has none. Absent on links sealed before it was kept. */
+  institutionLogo: string | null;
   providerAccounts: ProviderAccountSealed[];
 }
 

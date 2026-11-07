@@ -609,6 +609,8 @@ export interface LinkProviderAccount {
 
 export interface LinkSealed {
   institutionName: string;
+  /** The bank's logo as a PNG data URL; null when the bank sent none. */
+  institutionLogo: string | null;
   providerAccounts: LinkProviderAccount[];
 }
 

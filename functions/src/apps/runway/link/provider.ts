@@ -64,11 +64,16 @@ export class ProviderError extends Error {
   }
 }
 
+export interface ProviderInstitution {
+  name: string | null;
+  logo: string | null;
+}
+
 export interface BankDataProvider {
   createLinkSession(uid: string): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
-  /** The institution's name, or null when the provider cannot say. */
-  getInstitutionName(grant: ProviderGrant): Promise<string | null>;
+  /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
+  getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
   /** Every account under the grant, with live balances. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;

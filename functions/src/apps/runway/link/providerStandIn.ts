@@ -132,7 +132,7 @@ export const standInProvider: BankDataProvider = {
     credential: 'stand-in',
     providerItemId: `stand-in-${randomUUID()}`,
   }),
-  getInstitutionName: async () => 'Chase',
+  getInstitution: async () => ({ name: 'Chase', logo: null }),
   listAccounts: async () => ACCOUNTS,
   revoke: async () => undefined,
   syncTransactions: async (_grant, cursor) => {
