@@ -948,6 +948,8 @@ export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
   merchant: string | null;
+  /** An https link to the merchant's logo the bank sent; null on a purchase typed by hand and on one synced before logos were kept (read as null). */
+  merchantLogo?: string | null;
   /** The bank's detailed kind of place (`FOOD_AND_DRINK_RESTAURANT`); null on a purchase typed by hand and on one saved before it was read (read as null). */
   category: string | null;
   /** The rule that placed it; null when the person did, and on a purchase saved before rules (read as null). */

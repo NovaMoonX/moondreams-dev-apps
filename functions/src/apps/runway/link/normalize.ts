@@ -43,6 +43,7 @@ export interface RawTransaction {
   /** Dollars, positive when money leaves the account (the provider's own sign). */
   amount: number;
   merchantName: string | null;
+  logoUrl?: string | null;
   name: string | null;
   category?: string | null;
   isPending: boolean;
@@ -63,6 +64,15 @@ export function toDateOnly(date: string): number | null {
   return Number.isNaN(value) ? null : value;
 }
 
+const toHttpsUrl = (value: string | null | undefined) => {
+  if (typeof value !== 'string' || value.length > 2048) return null;
+  try {
+    return new URL(value).protocol === 'https:' ? value : null;
+  } catch {
+    return null;
+  }
+};
+
 export function normalizeTransaction(
   raw: RawTransaction,
 ): NormalizedTransaction | null {
@@ -76,6 +86,7 @@ export function normalizeTransaction(
     date,
     amountCents: toTransactionCents(raw.amount),
     merchant: raw.merchantName?.trim() || raw.name?.trim() || null,
+    merchantLogo: toHttpsUrl(raw.logoUrl),
     category: raw.category?.trim().toUpperCase() || null,
     isPending: raw.isPending,
   };

@@ -60,6 +60,7 @@ export interface PurchaseLine {
 export interface PurchasePayload {
   amountCents: number;
   merchant: string | null;
+  merchantLogo?: string | null;
   lines: PurchaseLine[];
   paidByCardId: string | null;
   [key: string]: unknown;
@@ -150,6 +151,7 @@ function upsert(
       payload: {
         amountCents: tx.amountCents,
         merchant: tx.merchant,
+        merchantLogo: tx.merchantLogo,
         category: tx.category,
         ruleId: null,
         label: null,
@@ -174,6 +176,7 @@ function upsert(
       ...current.payload,
       amountCents: tx.amountCents,
       merchant: current.needsHome ? tx.merchant : current.payload.merchant,
+      merchantLogo: tx.merchantLogo ?? current.payload.merchantLogo ?? null,
       category: tx.category ?? current.payload.category ?? null,
       lines: current.needsHome
         ? waitingLines(tx.amountCents)
@@ -189,6 +192,8 @@ function upsert(
     next.status !== current.status ||
     next.payload.amountCents !== current.payload.amountCents ||
     next.payload.merchant !== current.payload.merchant ||
+    (next.payload.merchantLogo ?? null) !==
+      (current.payload.merchantLogo ?? null) ||
     next.payload.category !== current.payload.category ||
     JSON.stringify(next.payload.lines) !==
       JSON.stringify(current.payload.lines);
