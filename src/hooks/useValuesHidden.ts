@@ -81,6 +81,11 @@ export const hideValues = (key: string) => {
   if (read(key) === SHOWN) write(key, HIDDEN);
 };
 
+/** Turns made-up amounts off under a key, back to hidden. */
+export const endMadeUpValues = (key: string) => {
+  if (toSeed(read(key)) !== null) write(key, HIDDEN);
+};
+
 /** The seed of the made-up amounts under a key, or null while real ones are hidden or shown. */
 export function useScrambleSeed(key: string) {
   const mode = useSyncExternalStore(

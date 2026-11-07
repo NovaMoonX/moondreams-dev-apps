@@ -20,6 +20,7 @@ import PostLoginRedirectHandler from '@routes/PostLoginRedirectHandler';
 import AppNavPanel from '@ui/AppNavPanel';
 import AuthAvatar from '@ui/AuthAvatar';
 import OfflineBanner from '@ui/OfflineBanner';
+import { useSiteNotice } from '@hooks/useSiteNotice';
 
 /** Pages a visitor opens from a link: the site's menu and account button have no use there, so the header is left off. */
 const PUBLIC_SHARE_PREFIXES = ['/pinch/shared/', '/going-once/s/'];
@@ -99,7 +100,9 @@ function LocationSync() {
 function Layout() {
   const networkStatus = useNetworkStatus();
   const isUpdateReady = useUpdateReady();
-  const isBannerVisible = networkStatus !== null || isUpdateReady;
+  const siteNotice = useSiteNotice();
+  const isBannerVisible =
+    networkStatus !== null || isUpdateReady || siteNotice !== null;
   const isHeaderHidden = useHideOnScroll();
   const { key: locationKey, pathname } = useLocation();
   const isSiteCanvas =
