@@ -38,6 +38,8 @@ function reducer(phase: Phase, action: Action): Phase {
 const PROBE_TIMEOUT_MS = 5_000;
 const OFFLINE_RETRY_INTERVAL_MS = 8_000;
 const RECONNECTED_DISPLAY_MS = 3_000;
+const ONLINE_CHECK_INTERVAL_MS = 30_000;
+const CONFIRM_OFFLINE_DELAY_MS = 3_000;
 
 /** HEAD request to a same-origin resource — verifies the app can actually reach the network, not just that some interface is up (the browser's own 'online' event is unreliable, e.g. behind a captive portal). */
 async function probeConnectivity(signal: AbortSignal): Promise<boolean> {
@@ -53,6 +55,14 @@ async function probeConnectivity(signal: AbortSignal): Promise<boolean> {
   }
 }
 
+function probeWithTimeout() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+  return probeConnectivity(controller.signal).finally(() => clearTimeout(timeout));
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 type NetworkInformationLike = EventTarget & { effectiveType?: string };
 
 function getConnection(): NetworkInformationLike | undefined {
@@ -64,24 +74,31 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
   const [phase, dispatch] = useReducer(reducer, 'online');
   const [isSlow, setIsSlow] = useState(false);
   const probeTokenRef = useRef(0);
+  const phaseRef = useRef<Phase>(phase);
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
 
   const verifyConnection = useCallback((isSilent = false) => {
     const token = ++probeTokenRef.current;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
 
     if (!isSilent) {
       dispatch({ type: 'verifying' });
     }
 
-    probeConnectivity(controller.signal)
+    // One failed probe while everything looked fine may be a blip; check again before saying offline.
+    probeWithTimeout()
+      .then((ok) =>
+        ok || phaseRef.current !== 'online'
+          ? ok
+          : wait(CONFIRM_OFFLINE_DELAY_MS).then(probeWithTimeout),
+      )
       .then((ok) => {
         if (token !== probeTokenRef.current) {
           return;
         }
         dispatch(ok ? { type: 'verified' } : { type: 'verify-failed' });
-      })
-      .finally(() => clearTimeout(timeout));
+      });
   }, []);
 
   useEffect(() => {
@@ -105,6 +122,27 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
       window.removeEventListener('online', handleOnline);
     };
   }, [verifyConnection]);
+
+  // Wi-Fi with no internet behind it (a plane, a hotel portal) never fires 'offline' and keeps
+  // navigator.onLine true, so check the real connection on open, on return and now and then.
+  useEffect(() => {
+    if (phase !== 'online') {
+      return;
+    }
+
+    function checkIfVisible() {
+      if (document.visibilityState === 'visible') verifyConnection(true);
+    }
+
+    checkIfVisible();
+    const interval = setInterval(checkIfVisible, ONLINE_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', checkIfVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', checkIfVisible);
+    };
+  }, [phase, verifyConnection]);
 
   // The browser's online flag can stay wrong (VPN or network switches, captive portals), so
   // keep re-probing while offline instead of waiting on it.
