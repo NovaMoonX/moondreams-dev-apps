@@ -35,6 +35,7 @@ import {
   getDirtyFrom,
   makeDedupeKey,
   neededDocIds,
+  purchaseIdFor,
   targetsByProviderAccount,
   type PurchasePayload,
   type PurchaseState,
@@ -391,6 +392,71 @@ async function keepLogo(
   });
 }
 
+const LOGO_HISTORY_DAYS = 730;
+
+/**
+ * Adds the merchant's logo to purchases this link brought in before logos were kept. Only existing purchases that
+ * lack one change, and only that field; nothing is created. True once every page was read and written.
+ */
+async function fillMerchantLogos(
+  firestore: Firestore,
+  uid: string,
+  linkId: string,
+  grant: ProviderGrant,
+  planKey: PlanKey,
+) {
+  const now = Date.now();
+  const toDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const logos = await provider.listMerchantLogos(
+    grant,
+    toDay(now - LOGO_HISTORY_DAYS * 86_400_000),
+    toDay(now),
+  );
+  const subkey = dedupeSubkey(planKey.key);
+  const idOf = (providerTransactionId: string) =>
+    purchaseIdFor(makeDedupeKey(subkey, linkId, providerTransactionId));
+  const candidates = logos.map((entry) => ({
+    ids: [
+      idOf(entry.providerTransactionId),
+      ...(entry.pendingTransactionId === null
+        ? []
+        : [idOf(entry.pendingTransactionId)]),
+    ],
+    merchantLogo: entry.merchantLogo,
+  }));
+  const { existing, updateTimes } = await readExisting(
+    firestore,
+    uid,
+    [...new Set(candidates.flatMap((entry) => entry.ids))],
+    planKey,
+  );
+  const logoById = new Map(
+    candidates.flatMap((entry) =>
+      entry.ids
+        .filter((id) => {
+          const state = existing.get(id);
+          return state !== undefined && !state.payload.merchantLogo;
+        })
+        .map((id) => [id, entry.merchantLogo] as const),
+    ),
+  );
+  const writes: Write[] = [...logoById].map(([docId, merchantLogo]) => ({
+    kind: 'update',
+    ref: firestore.doc(planDocPath(uid, 'purchases', docId)),
+    lastUpdateTime: updateTimes.get(docId) ?? null,
+    data: {
+      sealed: sealWithKey(
+        planKey,
+        { ...existing.get(docId)?.payload, merchantLogo },
+        SEALED_SCHEMA_VERSION,
+      ),
+    },
+  }));
+  await commitWrites(firestore, writes);
+  logger.info('runway.sync.logosFilled', { linkId, filled: writes.length });
+  return true;
+}
+
 /**
  * Brings one link's new bank transactions in as purchases waiting in Needs a home, then refreshes the balances and the
  * sync time. One document per bank transaction (its id comes from the dedupe key), so a repeat changes nothing. Logs
@@ -466,8 +532,22 @@ export async function syncRunwayLink(
         });
       },
     );
+    const wereLogosFilled =
+      typeof linkSnapshot.data()?.merchantLogosFilledAt === 'number';
+    const logosFilledNow =
+      !wereLogosFilled &&
+      (await fillMerchantLogos(firestore, uid, linkId, grant, planKey).catch(
+        () => {
+          logger.warn('runway.sync.logosFillFailed', { linkId });
+          return false;
+        },
+      ));
     await writeUnlessRevoked(firestore, linkRef, (transaction) =>
-      transaction.update(linkRef, { lastSyncAt: Date.now(), status: 'active' }),
+      transaction.update(linkRef, {
+        lastSyncAt: Date.now(),
+        status: 'active',
+        ...(logosFilledNow ? { merchantLogosFilledAt: Date.now() } : {}),
+      }),
     );
     logger.info('runway.sync.done', {
       linkId,

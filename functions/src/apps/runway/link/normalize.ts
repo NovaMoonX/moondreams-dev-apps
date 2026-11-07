@@ -64,7 +64,7 @@ export function toDateOnly(date: string): number | null {
   return Number.isNaN(value) ? null : value;
 }
 
-const toHttpsUrl = (value: string | null | undefined) => {
+export const toHttpsUrl = (value: string | null | undefined) => {
   if (typeof value !== 'string' || value.length > 2048) return null;
   try {
     return new URL(value).protocol === 'https:' ? value : null;

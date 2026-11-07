@@ -135,6 +135,7 @@ export const standInProvider: BankDataProvider = {
   }),
   getInstitution: async () => ({ name: 'Chase', logo: null }),
   listAccounts: async () => ACCOUNTS,
+  listMerchantLogos: async () => [],
   revoke: async () => undefined,
   syncTransactions: async (_grant, cursor) => {
     const result: TransactionSync =

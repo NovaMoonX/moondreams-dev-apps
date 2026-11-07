@@ -71,6 +71,12 @@ export interface ProviderInstitution {
   logo: string | null;
 }
 
+export interface MerchantLogo {
+  providerTransactionId: string;
+  pendingTransactionId: string | null;
+  merchantLogo: string;
+}
+
 export interface BankDataProvider {
   createLinkSession(uid: string): Promise<{ linkToken: string }>;
   exchange(publicToken: string): Promise<ProviderGrant>;
@@ -79,6 +85,12 @@ export interface BankDataProvider {
   /** Every account under the grant, with live balances. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;
+  /** Each transaction's merchant logo between two `YYYY-MM-DD` days, for purchases brought in before logos were kept. */
+  listMerchantLogos(
+    grant: ProviderGrant,
+    startDate: string,
+    endDate: string,
+  ): Promise<MerchantLogo[]>;
   /** One page of changes since `cursor` (null for the first sync). */
   syncTransactions(
     grant: ProviderGrant,
