@@ -11,7 +11,7 @@ import { syncLinks } from '@apps/runway/store/actions/linkActions';
 
 const pull = { uid: '', startedAt: 0, isRunning: false };
 
-/** Asks the banks for what is new when the app opens or comes back to the front after 15 minutes or more, quietly: nothing is shown on success or failure. */
+/** Asks the banks for what is new when the app opens or comes back to the front for the links 15 minutes or more behind, quietly: nothing is shown on success or failure. */
 export function useSyncOnReturn() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -19,11 +19,13 @@ export function useSyncOnReturn() {
   const hasActiveLink = useAppSelector((state) =>
     state.runway.links.some((link) => link.status === 'active'),
   );
-  const lastSyncAt = useAppSelector((state) =>
-    state.runway.links.reduce(
-      (latest, link) => Math.max(latest, link.lastSyncAt ?? 0),
-      0,
-    ),
+  const oldestSyncAt = useAppSelector((state) =>
+    state.runway.links
+      .filter((link) => link.status === 'active')
+      .reduce(
+        (oldest, link) => Math.min(oldest, link.lastSyncAt ?? 0),
+        Number.POSITIVE_INFINITY,
+      ),
   );
   const isEnabled = uid !== null && isGateOpen && hasActiveLink;
 
@@ -33,12 +35,12 @@ export function useSyncOnReturn() {
     const pullIfStale = () => {
       if (document.visibilityState !== 'visible' || pull.isRunning) return;
       const lastStart = pull.uid === uid ? pull.startedAt : 0;
-      if (Date.now() - Math.max(lastStart, lastSyncAt) < RETURN_PULL_AFTER_MS)
+      if (Date.now() - Math.max(lastStart, oldestSyncAt) < RETURN_PULL_AFTER_MS)
         return;
       pull.uid = uid;
       pull.startedAt = Date.now();
       pull.isRunning = true;
-      syncLinks()
+      syncLinks({ staleOnly: true })
         .catch((error: unknown) =>
           console.error('The return refresh did not run', error),
         )
@@ -50,5 +52,5 @@ export function useSyncOnReturn() {
     pullIfStale();
     document.addEventListener('visibilitychange', pullIfStale);
     return () => document.removeEventListener('visibilitychange', pullIfStale);
-  }, [isEnabled, uid, lastSyncAt]);
+  }, [isEnabled, uid, oldestSyncAt]);
 }

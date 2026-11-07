@@ -18,6 +18,7 @@ export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';
 export { attachRunwayAccounts } from './apps/runway/attachRunwayAccounts.js';
 export { discardRunwayLink } from './apps/runway/discardRunwayLink.js';
 export { unlinkRunwayAccount } from './apps/runway/unlinkRunwayAccount.js';
+export { reconnectRunwayLink } from './apps/runway/reconnectRunwayLink.js';
 export { syncRunwayLinks } from './apps/runway/syncRunwayLinks.js';
 export { runwayPlaidWebhook } from './apps/runway/runwayPlaidWebhook.js';
 export { syncRunwayAccounts } from './apps/runway/syncRunwayAccounts.js';
