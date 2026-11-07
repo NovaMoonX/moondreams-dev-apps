@@ -58,7 +58,9 @@ async function probeConnectivity(signal: AbortSignal): Promise<boolean> {
 function probeWithTimeout() {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
-  return probeConnectivity(controller.signal).finally(() => clearTimeout(timeout));
+  return probeConnectivity(controller.signal).finally(() =>
+    clearTimeout(timeout),
+  );
 }
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -79,27 +81,30 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
     phaseRef.current = phase;
   }, [phase]);
 
-  const verifyConnection = useCallback((isSilent = false, isBrowserOffline = false) => {
-    const token = ++probeTokenRef.current;
+  const verifyConnection = useCallback(
+    (isSilent = false, isBrowserOffline = false) => {
+      const token = ++probeTokenRef.current;
 
-    if (!isSilent) {
-      dispatch({ type: 'verifying' });
-    }
+      if (!isSilent) {
+        dispatch({ type: 'verifying' });
+      }
 
-    // One failed probe while everything looked fine may be a blip; check again before saying offline.
-    probeWithTimeout()
-      .then((ok) =>
-        ok || isBrowserOffline || phaseRef.current !== 'online'
-          ? ok
-          : wait(CONFIRM_OFFLINE_DELAY_MS).then(probeWithTimeout),
-      )
-      .then((ok) => {
-        if (token !== probeTokenRef.current) {
-          return;
-        }
-        dispatch(ok ? { type: 'verified' } : { type: 'verify-failed' });
-      });
-  }, []);
+      // One failed probe while everything looked fine may be a blip; check again before saying offline.
+      probeWithTimeout()
+        .then((ok) =>
+          ok || isBrowserOffline || phaseRef.current !== 'online'
+            ? ok
+            : wait(CONFIRM_OFFLINE_DELAY_MS).then(probeWithTimeout),
+        )
+        .then((ok) => {
+          if (token !== probeTokenRef.current) {
+            return;
+          }
+          dispatch(ok ? { type: 'verified' } : { type: 'verify-failed' });
+        });
+    },
+    [],
+  );
 
   useEffect(() => {
     function handleOffline() {
@@ -150,7 +155,10 @@ export function NetworkStatusProvider({ children }: PropsWithChildren) {
       return;
     }
 
-    const interval = setInterval(() => verifyConnection(true), OFFLINE_RETRY_INTERVAL_MS);
+    const interval = setInterval(
+      () => verifyConnection(true),
+      OFFLINE_RETRY_INTERVAL_MS,
+    );
 
     return () => clearInterval(interval);
   }, [phase, verifyConnection]);
