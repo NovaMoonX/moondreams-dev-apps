@@ -42,6 +42,8 @@ import {
   keepAccountSession,
   loadAccountSessions,
 } from '@/lib/auth/accountSessions';
+import { forgetDeviceSecretsFor } from '@/lib/security';
+import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
   cacheRememberedPhoto,
   forgetAccount as forgetSavedAccount,
@@ -152,6 +154,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
       previousUserIdRef.current = nextUserId;
       // Signed out from anywhere (another tab, an expired session) starts again from Home, not the app's page.
+      if (previousUserId && !nextUserId) {
+        void forgetDeviceSecretsFor(previousUserId).catch(() => undefined);
+      }
       if (previousUserId && !nextUserId && isLeavingPage) {
         isReloadingRef.current = true;
         dispatch(setCurrentUser(null));
@@ -415,6 +420,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             lastChanges: serverTimestamp(),
           }),
           releaseDevicePush(uid),
+          forgetThisBrowserFor(uid),
         ]),
         new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
       ]);

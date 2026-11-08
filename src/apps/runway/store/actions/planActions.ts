@@ -1,4 +1,9 @@
-import { doc, runTransaction, updateDoc } from 'firebase/firestore';
+import {
+  doc,
+  getDocFromCache,
+  runTransaction,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -35,6 +40,14 @@ import type {
   StartSealed,
   TrackingChangeSealed,
 } from '@apps/runway/types';
+
+/** Whether the plan is in this device's saved copy, so opening it needs no transaction. */
+export async function isPlanCached(uid: string) {
+  const snapshot = await getDocFromCache(
+    doc(db, 'apps', 'runway', 'plans', uid),
+  ).catch(() => null);
+  return snapshot?.exists() ?? false;
+}
 
 /** Creates the plan on first open and leaves an existing one alone, so two tabs opening together make one. */
 export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
