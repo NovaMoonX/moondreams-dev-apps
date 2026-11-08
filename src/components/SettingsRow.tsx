@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 
 interface SettingsRowProps {
   /** An emoji or icon for the round chip at the start. */
@@ -14,6 +15,8 @@ interface SettingsRowProps {
   children?: ReactNode;
   /** Makes the icon and text one tappable button (pick this account, open this item); the control stays its own target. */
   onClick?: () => void;
+  /** With `onClick`, ends the button with a chevron, for a row that opens a list or sheet. */
+  hasChevron?: boolean;
 }
 
 /** One line of a `SettingsGroup`: an icon chip, a title with its description and a control at the end, with the row's own fields beneath. */
@@ -24,6 +27,7 @@ function SettingsRow({
   control,
   children,
   onClick,
+  hasChevron = false,
 }: SettingsRowProps) {
   const iconChip = (
     <span
@@ -56,6 +60,11 @@ function SettingsRow({
           >
             {iconChip}
             {text}
+            {hasChevron && (
+              <span className='flex h-10 shrink-0 items-center'>
+                <ChevronRight className='text-muted-foreground size-5' aria-hidden='true' />
+              </span>
+            )}
           </Button>
           {controlSlot}
         </div>

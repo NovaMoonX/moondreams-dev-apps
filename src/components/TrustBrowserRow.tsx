@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
-  ChevronRight,
   Monitor,
   MonitorSmartphone,
   ShieldCheck,
@@ -30,15 +29,33 @@ const TRUST_BROWSER_WORDS = {
   offFailed: 'This browser is still trusted. Try again.',
   others: 'Other trusted browsers',
   othersIntro: (appName: string) =>
-    `These can open ${appName} without a connection. Remove one you don’t use or no longer have.`,
-  removedWhen: (appName: string) =>
-    `${appName} stops opening there the next time it’s online, or on its own after 30 days offline.`,
+    `These can open ${appName} without a connection. One you remove stops opening it the next time it’s online.`,
+  removedWhen: (appName: string, place: string) =>
+    `${appName} stops opening in ${place} the next time it’s online, or on its own after 30 days offline.`,
   removeOne: (label: string) => `Remove ${label}?`,
   removeAll: 'Remove all',
   removeAllTitle: (count: number) => `Remove all ${count} browsers?`,
 } as const;
 
 const isPhone = (label: string) => /iPhone|iPad|Android/.test(label);
+
+/** "Chrome on Linux ×2": one name per kind of browser, so two alike never read as one listed twice. */
+const mergeLabels = (browsers: TrustedBrowser[]) =>
+  Object.entries(
+    browsers.reduce<Record<string, number>>(
+      (counts, browser) => ({
+        ...counts,
+        [browser.label]: (counts[browser.label] ?? 0) + 1,
+      }),
+      {},
+    ),
+  ).map(([label, count]) => (count > 1 ? `${label} ×${count}` : label));
+
+const summarize = (browsers: TrustedBrowser[]) => {
+  const names = mergeLabels(browsers);
+  if (names.length <= 3) return formatList(names);
+  return formatList([...names.slice(0, 3), `${names.length - 3} more`]);
+};
 
 const describeDay = (timestamp: number) =>
   new Date(timestamp).toDateString() === new Date().toDateString()
@@ -84,7 +101,7 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
   const removeOne = async (browser: TrustedBrowser) => {
     const isConfirmed = await confirm({
       title: TRUST_BROWSER_WORDS.removeOne(browser.label),
-      message: `${describeBrowser(browser)}. ${TRUST_BROWSER_WORDS.removedWhen(appName)}`,
+      message: `${describeBrowser(browser)}. ${TRUST_BROWSER_WORDS.removedWhen(appName, 'that browser')}`,
       confirmText: 'Remove',
       destructive: true,
     });
@@ -96,7 +113,7 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
   const removeAll = async () => {
     const isConfirmed = await confirm({
       title: TRUST_BROWSER_WORDS.removeAllTitle(others.length),
-      message: `${formatList(others.map((browser) => browser.label))}. ${TRUST_BROWSER_WORDS.removedWhen(appName)}`,
+      message: `${formatList(mergeLabels(others))}. ${TRUST_BROWSER_WORDS.removedWhen(appName, 'each one')}`,
       confirmText: TRUST_BROWSER_WORDS.removeAll,
       destructive: true,
     });
@@ -131,14 +148,9 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
           <SettingsRow
             icon={<MonitorSmartphone className='size-5' />}
             title={TRUST_BROWSER_WORDS.others}
-            description={formatList(others.map((browser) => browser.label))}
+            description={summarize(others)}
             onClick={() => setListOpen(true)}
-            control={
-              <ChevronRight
-                className='text-muted-foreground size-5'
-                aria-hidden='true'
-              />
-            }
+            hasChevron
           />
         )}
       </ul>
@@ -169,25 +181,33 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
         </p>
         <ul className='divide-border divide-y'>
           {others.map((browser) => (
-            <SettingsRow
+            <li
               key={browser.browserId}
-              icon={
-                isPhone(browser.label) ? (
+              className='flex items-center gap-3 py-3'
+            >
+              <span
+                className='bg-accent text-accent-foreground flex size-10 shrink-0 items-center justify-center rounded-full'
+                aria-hidden='true'
+              >
+                {isPhone(browser.label) ? (
                   <Smartphone className='size-5' />
                 ) : (
                   <Monitor className='size-5' />
-                )
-              }
-              title={browser.label}
-              description={describeBrowser(browser)}
-              onClick={() => void removeOne(browser)}
-              control={
-                <DeleteIconButton
-                  label={`Remove ${browser.label}`}
-                  onClick={() => void removeOne(browser)}
-                />
-              }
-            />
+                )}
+              </span>
+              <span className='flex min-w-0 flex-1 flex-col'>
+                <span className='text-foreground font-medium'>
+                  {browser.label}
+                </span>
+                <span className='text-muted-foreground text-sm text-pretty'>
+                  {describeBrowser(browser)}
+                </span>
+              </span>
+              <DeleteIconButton
+                label={`Remove ${browser.label}, ${describeBrowser(browser)}`}
+                onClick={() => void removeOne(browser)}
+              />
+            </li>
           ))}
         </ul>
       </DetailSheet>

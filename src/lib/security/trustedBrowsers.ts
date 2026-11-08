@@ -77,13 +77,24 @@ export function getBrowserId() {
   }
 }
 
+const readKeptBrowserId = () => {
+  try {
+    return localStorage.getItem(BROWSER_ID_KEY);
+  } catch {
+    return null;
+  }
+};
+
 const browsersOf = (uid: string) =>
   collection(db, 'trustedBrowsers', uid, 'browsers');
 const browserDoc = (uid: string, name: string, browserId: string) =>
   doc(browsersOf(uid), `${name}:${browserId}`);
 
+/** Fails where the browser can't keep its id: the next visit would not find its own entry. */
 export async function registerTrustedBrowser(uid: string, name: string) {
   const browserId = getBrowserId();
+  if (readKeptBrowserId() !== browserId)
+    throw new Error('This browser cannot keep its id');
   await setDoc(browserDoc(uid, name, browserId), {
     name,
     browserId,

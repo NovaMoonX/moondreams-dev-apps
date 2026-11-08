@@ -187,7 +187,11 @@ export function createTrustedKeyStore<T extends ServerKey>(
         await queueWrite(uid, async () => {
           if (!key) return dropCopy(uid);
           if (queryClient.getQueryData(queryKey) !== true) return;
-          await register(uid);
+          // A timed-out entry still lands when the connection returns, so it is taken back.
+          await register(uid).catch((error: unknown) => {
+            void removeTrustedBrowser(uid, config.name).catch(() => undefined);
+            throw error;
+          });
           await keepDeviceSecret(uid, config.name, JSON.stringify(key)).catch(
             (error: unknown) => {
               void removeTrustedBrowser(uid, config.name).catch(
