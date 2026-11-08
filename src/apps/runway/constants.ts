@@ -3587,6 +3587,15 @@ export const SETTINGS_GROUP_WORDS = {
     'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
 } as const;
 
+export const TRUSTED_DEVICE_WORDS = {
+  caption: 'This device',
+  label: 'Trust this device',
+  help: 'Keep your plan’s key here so Runway opens and saves offline. Leave it off on a shared device.',
+  helpOn: 'Runway opens and saves here without a connection. Signing out removes the key.',
+  onFailed: 'This device could not keep the key. Runway still works online.',
+  offFailed: 'The key could not be removed from this device. Try again.',
+} as const;
+
 export const MADE_UP_WORDS = {
   caption: 'Showing the app',
   label: 'Made-up amounts',

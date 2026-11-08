@@ -310,7 +310,7 @@ function RunwayContent() {
               }
             >
               {isOffline
-                ? 'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost.'
+                ? 'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. To open it offline next time, turn on Trust this device in Settings.'
                 : 'Your plan cannot be opened right now. Nothing has been changed or lost.'}
             </EmptyCard>
           </div>

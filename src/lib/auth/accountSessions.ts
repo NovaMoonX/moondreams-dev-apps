@@ -10,6 +10,7 @@ import {
 } from 'firebase/auth';
 
 import { app, emulatorAuthOrigin } from '@lib/firebase/config';
+import { forgetDeviceSecretsFor } from '@lib/security';
 
 const APP_PREFIX = 'account-session:';
 
@@ -51,10 +52,11 @@ export function getKeptSession(uid: string) {
   return user?.uid === uid ? user : null;
 }
 
-/** Ends this account's kept session on the device. */
+/** Ends this account's kept session on the device, and forgets the secrets it kept here. */
 export async function dropAccountSession(uid: string) {
   const session = openSession(uid);
   sessions.delete(uid);
+  await forgetDeviceSecretsFor(uid).catch(() => undefined);
   await session.ready.catch(() => undefined);
   await signOut(session.auth).catch(() => undefined);
   await deleteApp(session.auth.app).catch(() => undefined);

@@ -13,3 +13,10 @@ export {
   type EncryptedFieldPayload,
   type EncryptionAlgorithm,
 } from './encryption';
+export {
+  canKeepDeviceSecrets,
+  forgetDeviceSecret,
+  forgetDeviceSecretsFor,
+  keepDeviceSecret,
+  readDeviceSecret,
+} from './deviceSecrets';

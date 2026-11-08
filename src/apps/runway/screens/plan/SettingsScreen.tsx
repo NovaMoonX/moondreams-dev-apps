@@ -8,6 +8,7 @@ import {
   Gauge,
   Landmark,
   Link2,
+  ShieldCheck,
   Shuffle,
   Trash2,
 } from 'lucide-react';
@@ -23,6 +24,7 @@ import SettingsRowWithSwitch from '@/components/SettingsRow';
 import SummaryEditor from '@/components/SummaryEditor';
 import { useAuth } from '@/hooks/useAuth';
 import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
+import { canKeepDeviceSecrets } from '@/lib/security';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -39,10 +41,15 @@ import {
   STANCE_LABELS,
   STANCES,
   TRACKING_WORDS,
+  TRUSTED_DEVICE_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import {
+  setTrustedDevice,
+  trustedDeviceQueryOptions,
+} from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
@@ -125,6 +132,43 @@ function SettingsRow({
         aria-hidden='true'
       />
     </Button>
+  );
+}
+
+function TrustedDeviceRow({ uid }: { uid: string }) {
+  const isTrusted = useQuery(trustedDeviceQueryOptions(uid)).data ?? false;
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = (next: boolean) => {
+    setError(null);
+    setTrustedDevice(uid, next).catch((saveError: unknown) => {
+      console.error(saveError);
+      setError(next ? TRUSTED_DEVICE_WORDS.onFailed : TRUSTED_DEVICE_WORDS.offFailed);
+    });
+  };
+
+  return (
+    <ActionSection caption={TRUSTED_DEVICE_WORDS.caption}>
+      <ul className='border-border rounded-2xl border px-3'>
+        <SettingsRowWithSwitch
+          icon={<ShieldCheck className='size-5' />}
+          title={TRUSTED_DEVICE_WORDS.label}
+          description={isTrusted ? TRUSTED_DEVICE_WORDS.helpOn : TRUSTED_DEVICE_WORDS.help}
+          control={
+            <AppToggle
+              aria-label={TRUSTED_DEVICE_WORDS.label}
+              checked={isTrusted}
+              onCheckedChange={choose}
+            />
+          }
+        />
+      </ul>
+      {error && (
+        <p className='text-destructive mt-2 text-sm' role='alert'>
+          {error}
+        </p>
+      )}
+    </ActionSection>
   );
 }
 
@@ -289,6 +333,7 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
             />
           </ActionSection>
         )}
+        {user && canKeepDeviceSecrets() && <TrustedDeviceRow uid={user.uid} />}
         <ActionSection caption={MADE_UP_WORDS.caption}>
           <ul className='border-border rounded-2xl border px-3'>
             <SettingsRowWithSwitch
