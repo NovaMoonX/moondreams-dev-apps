@@ -19,6 +19,8 @@ interface SegmentedControlProps<T extends string> {
   className?: string;
   /** A small track that hugs its words and leans on the accent, for a switch that sits above a figure rather than across a form. */
   isCompact?: boolean;
+  /** Each icon above its word in a taller segment, so four choices fit a narrow track (a side menu) without cutting a word. */
+  isStacked?: boolean;
 }
 
 /** Pick one of two to four settings in a single track of equal segments, the chosen one raised; for a setting, not for switching views. */
@@ -29,6 +31,7 @@ function SegmentedControl<T extends string>({
   onChange,
   className,
   isCompact = false,
+  isStacked = false,
 }: SegmentedControlProps<T>) {
   return (
     <div
@@ -54,9 +57,9 @@ function SegmentedControl<T extends string>({
               aria-label={ariaLabel}
               className={join(
                 "relative min-w-0 gap-1.5 font-medium transition-none after:absolute after:inset-x-0 after:content-[''] focus-visible:outline-2 focus-visible:-outline-offset-2",
-                isCompact
-                  ? 'h-7 rounded-md px-2.5 text-[13px] after:-inset-y-1.5'
-                  : 'h-9 rounded-lg px-2 text-sm after:-inset-y-1',
+                isCompact && 'h-7 rounded-md px-2.5 text-[13px] after:-inset-y-1.5',
+                isStacked && 'h-12 flex-col gap-0.5 rounded-lg px-0.5 text-xs',
+                !isCompact && !isStacked && 'h-9 rounded-lg px-2 text-sm after:-inset-y-1',
                 isSelected && isCompact
                   ? 'bg-background text-primary dark:bg-primary/25 dark:text-foreground shadow-sm'
                   : isSelected
@@ -65,8 +68,19 @@ function SegmentedControl<T extends string>({
               )}
               onClick={() => onChange(optionValue)}
             >
-              {Icon && <Icon className='size-4 shrink-0 @max-3xs:hidden' />}
-              <span className={isCompact ? 'whitespace-nowrap' : 'truncate'}>
+              {Icon && (
+                <Icon
+                  className={join(
+                    'size-4 shrink-0',
+                    !isStacked && '@max-3xs:hidden',
+                  )}
+                />
+              )}
+              <span
+                className={
+                  isCompact || isStacked ? 'whitespace-nowrap' : 'truncate'
+                }
+              >
                 {optionLabel}
               </span>
             </Button>
