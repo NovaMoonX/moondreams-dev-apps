@@ -328,7 +328,7 @@ function SetHeldView({
                 key={option.choice}
                 type='button'
                 variant='tertiary'
-                aria-pressed={isChosen}
+                aria-pressed={option.isLocked ? undefined : isChosen}
                 aria-label={
                   option.isLocked
                     ? `${option.title}, not available${isHidden ? '' : `. ${option.body}`}`
@@ -339,6 +339,7 @@ function SetHeldView({
                   'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-4! py-3! text-left font-normal whitespace-normal',
                   isChosen &&
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+                  option.isLocked && 'border-dashed',
                 )}
                 onClick={() =>
                   option.isLocked
@@ -356,10 +357,12 @@ function SetHeldView({
                     {option.title}
                   </span>
                   {option.isLocked ? (
-                    <Lock
-                      className='text-muted-foreground size-4 shrink-0'
+                    <span
                       aria-hidden='true'
-                    />
+                      className='text-muted-foreground grid size-5 shrink-0 place-items-center'
+                    >
+                      <Lock className='size-4' />
+                    </span>
                   ) : (
                     <span
                       aria-hidden='true'
