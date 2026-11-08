@@ -21,7 +21,7 @@ import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SettingsRowWithSwitch from '@/components/SettingsRow';
 import SummaryEditor from '@/components/SummaryEditor';
-import TrustDeviceRow from '@/components/TrustDeviceRow';
+import TrustBrowserRow from '@/components/TrustBrowserRow';
 import { useAuth } from '@/hooks/useAuth';
 import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
 import { canKeepDeviceSecrets } from '@/lib/security';
@@ -41,7 +41,7 @@ import {
   STANCE_LABELS,
   STANCES,
   TRACKING_WORDS,
-  TRUSTED_DEVICE_WORDS,
+  TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { getOpenPeriod } from '@apps/runway/engine/level';
@@ -294,8 +294,8 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
           </ActionSection>
         )}
         {user && canKeepDeviceSecrets() && (
-          <ActionSection caption={TRUSTED_DEVICE_WORDS.caption}>
-            <TrustDeviceRow
+          <ActionSection caption={TRUSTED_BROWSER_WORDS.caption}>
+            <TrustBrowserRow
               store={runwayKeyStore}
               uid={user.uid}
               appName='Runway'

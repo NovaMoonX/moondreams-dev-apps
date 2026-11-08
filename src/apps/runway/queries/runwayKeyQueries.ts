@@ -15,7 +15,7 @@ const getRunwayKeyCallable = httpsCallable<Record<string, never>, unknown>(
   'getRunwayKey',
 );
 
-/** The plan key: held in memory for the session, and on a device the person trusts, a sealed copy for offline opening. */
+/** The plan key: held in memory for the session, and in a browser the person trusts, a sealed copy for offline opening. */
 export const runwayKeyStore = createTrustedKeyStore({
   name: 'runway-plan-key',
   queryKey: runwayQueryKeys.key,

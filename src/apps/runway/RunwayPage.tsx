@@ -44,7 +44,7 @@ import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
 import {
   HISTORY_WORDS,
   RUNWAY_TAB_LABELS,
-  TRUSTED_DEVICE_WORDS,
+  TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import { canKeepDeviceSecrets } from '@/lib/security';
@@ -86,8 +86,8 @@ function getFailedWords(isOffline: boolean, isTrusted: boolean) {
     return 'Your plan cannot be opened right now. Nothing has been changed or lost.';
   }
   return isTrusted
-    ? TRUSTED_DEVICE_WORDS.offlineNotSaved
-    : TRUSTED_DEVICE_WORDS.offlineUntrusted;
+    ? TRUSTED_BROWSER_WORDS.offlineNotSaved
+    : TRUSTED_BROWSER_WORDS.offlineUntrusted;
 }
 const RESTORE_FRAMES = 40;
 

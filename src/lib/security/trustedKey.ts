@@ -14,7 +14,7 @@ import {
 type ServerKey = { keyId: string; key: string };
 
 type TrustedKeyConfig<T extends ServerKey> = {
-  /** Unique per app, e.g. `runway-plan-key`. */
+  /** Unique per app and key. */
   name: string;
   queryKey: (uid: string) => readonly unknown[];
   fetchServerKey: () => Promise<T>;
@@ -49,10 +49,7 @@ function isUnreachable(error: unknown) {
   );
 }
 
-/**
- * A server-held data key with an opt-in copy on a trusted device: the server is asked first,
- * the copy stands in only when it can't be reached, and the copy is removed whenever the data could be at risk.
- */
+/** A server-held data key with an opt-in copy in a trusted browser, used only when the server can't be reached. */
 export function createTrustedKeyStore<T extends ServerKey>(
   config: TrustedKeyConfig<T>,
 ) {
@@ -92,17 +89,27 @@ export function createTrustedKeyStore<T extends ServerKey>(
   const loadKey = async (uid: string) => {
     const kept = await readKept(uid);
     if (!kept) return config.fetchServerKey();
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject('timeout'), SERVER_WAIT_WITH_KEPT_KEY_MS),
-    );
+    const serverKey = config.fetchServerKey();
+    // A refusal that arrives after the wait still removes the copy.
+    serverKey.catch((error) => {
+      if (REFUSED_CODES.has(readCode(error)))
+        void forget(uid).catch(() => undefined);
+    });
+    const timer = { id: 0 as ReturnType<typeof setTimeout> | 0 };
+    const timeout = new Promise<never>((_, reject) => {
+      timer.id = setTimeout(
+        () => reject('timeout'),
+        SERVER_WAIT_WITH_KEPT_KEY_MS,
+      );
+    });
     try {
-      const fresh = await Promise.race([config.fetchServerKey(), timeout]);
+      const fresh = await Promise.race([serverKey, timeout]);
       const isSame = fresh.keyId === kept.keyId && fresh.key === kept.key;
-      void queueWrite(uid, () =>
-        isSame
-          ? markDeviceSecretChecked(uid, config.name)
-          : keepDeviceSecret(uid, config.name, JSON.stringify(fresh)),
-      ).catch(() => undefined);
+      void queueWrite(uid, async () => {
+        if (isSame) return markDeviceSecretChecked(uid, config.name);
+        if (await readKept(uid))
+          await keepDeviceSecret(uid, config.name, JSON.stringify(fresh));
+      }).catch(() => undefined);
       return fresh;
     } catch (error) {
       if (REFUSED_CODES.has(readCode(error))) {
@@ -112,6 +119,8 @@ export function createTrustedKeyStore<T extends ServerKey>(
       if (!isUnreachable(error)) throw error;
       keptKeysInUse.add(kept);
       return kept;
+    } finally {
+      clearTimeout(timer.id || undefined);
     }
   };
 
@@ -137,7 +146,7 @@ export function createTrustedKeyStore<T extends ServerKey>(
         staleTime: Infinity,
         enabled: canKeepDeviceSecrets(),
       }),
-    /** Keeps the key on this device, or removes it; the switch moves at once and returns if the write fails. */
+    /** Keeps the key in this browser, or removes it; the switch moves at once and returns if the write fails. */
     setTrusted: async (uid: string, isTrusted: boolean) => {
       const queryKey = trustedQueryKey(uid);
       const before = queryClient.getQueryData<boolean>(queryKey);
@@ -149,6 +158,7 @@ export function createTrustedKeyStore<T extends ServerKey>(
             return;
           }
           const key = await getKey(uid);
+          if (auth.currentUser?.uid !== uid) return;
           await keepDeviceSecret(uid, config.name, JSON.stringify(key));
         });
       } catch (error) {

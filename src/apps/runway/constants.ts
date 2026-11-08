@@ -3587,12 +3587,12 @@ export const SETTINGS_GROUP_WORDS = {
     'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
 } as const;
 
-export const TRUSTED_DEVICE_WORDS = {
-  caption: 'This device',
+export const TRUSTED_BROWSER_WORDS = {
+  caption: 'This browser',
   offlineUntrusted:
-    'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this device in Settings so it opens offline next time.',
+    'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this browser in Settings so it opens offline next time.',
   offlineNotSaved:
-    'This device is trusted, but your plan isn’t saved on it yet. Open Runway once with a connection, and it opens offline after that. Nothing has been changed or lost.',
+    'This browser is trusted, but your plan isn’t saved in it yet. Open Runway once with a connection, and it opens offline after that. Nothing has been changed or lost.',
 } as const;
 
 export const MADE_UP_WORDS = {

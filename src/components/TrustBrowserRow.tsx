@@ -7,25 +7,25 @@ import SettingsRow from '@/components/SettingsRow';
 import { canKeepDeviceSecrets } from '@/lib/security';
 import type { TrustedKeyStore } from '@/lib/security/trustedKey';
 
-const TRUST_DEVICE_WORDS = {
-  label: 'Trust this device',
+const TRUST_BROWSER_WORDS = {
+  label: 'Trust this browser',
   help: (appName: string) =>
-    `Open ${appName} here without a connection. Anyone using this browser could open your data, so leave it off on a shared device.`,
+    `Open ${appName} in this browser without a connection. Anyone using it could open your data, so leave it off on a shared device.`,
   helpOn: (appName: string) =>
-    `${appName} opens here without a connection. Signing out turns this off.`,
+    `${appName} opens in this browser without a connection. Signing out turns this off.`,
   onFailed: (appName: string) =>
-    `This device could not keep your data unlocked. ${appName} still works online.`,
-  offFailed: 'This device is still trusted. Try again.',
+    `This browser could not keep your data unlocked. ${appName} still works online.`,
+  offFailed: 'This browser is still trusted. Try again.',
 } as const;
 
-interface TrustDeviceRowProps {
+interface TrustBrowserRowProps {
   store: TrustedKeyStore;
   uid: string;
   appName: string;
 }
 
 /** The one switch an app with a server-held key offers to open offline; draws nothing where the browser can't keep the key. */
-function TrustDeviceRow({ store, uid, appName }: TrustDeviceRowProps) {
+function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
   const isTrusted =
     useQuery({
       ...store.trustedQueryOptions(uid),
@@ -41,8 +41,8 @@ function TrustDeviceRow({ store, uid, appName }: TrustDeviceRowProps) {
       console.error(saveError);
       setError(
         next
-          ? TRUST_DEVICE_WORDS.onFailed(appName)
-          : TRUST_DEVICE_WORDS.offFailed,
+          ? TRUST_BROWSER_WORDS.onFailed(appName)
+          : TRUST_BROWSER_WORDS.offFailed,
       );
     });
   };
@@ -52,15 +52,15 @@ function TrustDeviceRow({ store, uid, appName }: TrustDeviceRowProps) {
       <ul className='border-border rounded-2xl border px-3'>
         <SettingsRow
           icon={<ShieldCheck className='size-5' />}
-          title={TRUST_DEVICE_WORDS.label}
+          title={TRUST_BROWSER_WORDS.label}
           description={
             isTrusted
-              ? TRUST_DEVICE_WORDS.helpOn(appName)
-              : TRUST_DEVICE_WORDS.help(appName)
+              ? TRUST_BROWSER_WORDS.helpOn(appName)
+              : TRUST_BROWSER_WORDS.help(appName)
           }
           control={
             <AppToggle
-              aria-label={TRUST_DEVICE_WORDS.label}
+              aria-label={TRUST_BROWSER_WORDS.label}
               checked={isTrusted}
               onCheckedChange={choose}
             />
@@ -76,4 +76,4 @@ function TrustDeviceRow({ store, uid, appName }: TrustDeviceRowProps) {
   );
 }
 
-export default TrustDeviceRow;
+export default TrustBrowserRow;
