@@ -1,8 +1,7 @@
-import { queryOptions } from '@tanstack/react-query';
 import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@lib/firebase/config';
-import { queryClient } from '@lib/query/queryClient';
+import { createTrustedKeyStore } from '@lib/security/trustedKey';
 
 import { normalizeRunwayEncryption } from '@apps/runway/security';
 
@@ -16,23 +15,20 @@ const getRunwayKeyCallable = httpsCallable<Record<string, never>, unknown>(
   'getRunwayKey',
 );
 
-/** Held in memory for the session and never persisted: no `persist` meta, and the cache is cleared on sign-out. */
-export function runwayKeyQueryOptions(uid: string) {
-  return queryOptions({
-    queryKey: runwayQueryKeys.key(uid),
-    queryFn: async () => {
-      const response = await getRunwayKeyCallable({});
-      const encryption = normalizeRunwayEncryption(response.data);
-      if (!encryption) {
-        throw new Error('The plan key did not arrive in the expected shape.');
-      }
-      return encryption;
-    },
-    staleTime: Infinity,
-    retry: false,
-  });
-}
+/** The plan key: held in memory for the session, and in a browser the person trusts, a sealed copy for offline opening. */
+export const runwayKeyStore = createTrustedKeyStore({
+  name: 'runway-plan-key',
+  queryKey: runwayQueryKeys.key,
+  normalize: normalizeRunwayEncryption,
+  fetchServerKey: async () => {
+    const response = await getRunwayKeyCallable({});
+    const encryption = normalizeRunwayEncryption(response.data);
+    if (!encryption) {
+      throw new Error('The plan key did not arrive in the expected shape.');
+    }
+    return encryption;
+  },
+});
 
-export function getRunwayEncryption(uid: string) {
-  return queryClient.fetchQuery(runwayKeyQueryOptions(uid));
-}
+export const getRunwayEncryption = runwayKeyStore.getKey;
+export const isKeptKey = runwayKeyStore.isKeptKey;

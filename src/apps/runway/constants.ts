@@ -97,7 +97,7 @@ export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
   priorities: 'Which items get their money first when it runs short.',
   accounts: 'Where your money is held, and what each account holds.',
   settings:
-    'How the plan reads a range of pay or a bill, and whether you track spending.',
+    'How the plan reads a range of pay or a bill, whether you track spending, and opening it offline.',
   changeLog: 'Every change to the plan, with the reason you gave.',
 };
 
@@ -3585,6 +3585,14 @@ export const SETTINGS_GROUP_WORDS = {
   plan: 'Your plan',
   rangeNote:
     'A pay or bill with a range can plan at its own end instead. You choose that where you add it.',
+} as const;
+
+export const TRUSTED_BROWSER_WORDS = {
+  caption: 'Trusted browsers',
+  offlineUntrusted:
+    'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this browser in Settings so it opens offline next time.',
+  offlineNotSaved:
+    'This browser is trusted, but your plan isn’t saved in it yet. Open Runway once with a connection, and it opens offline after that. Nothing has been changed or lost.',
 } as const;
 
 export const MADE_UP_WORDS = {
