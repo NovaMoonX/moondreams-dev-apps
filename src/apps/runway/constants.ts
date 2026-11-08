@@ -97,7 +97,7 @@ export const MORE_ENTRY_HELP: Record<(typeof MORE_ENTRIES)[number], string> = {
   priorities: 'Which items get their money first when it runs short.',
   accounts: 'Where your money is held, and what each account holds.',
   settings:
-    'How the plan reads a range of pay or a bill, and whether you track spending.',
+    'How the plan reads a range of pay or a bill, whether you track spending, and opening it offline.',
   changeLog: 'Every change to the plan, with the reason you gave.',
 };
 
@@ -3590,10 +3590,14 @@ export const SETTINGS_GROUP_WORDS = {
 export const TRUSTED_DEVICE_WORDS = {
   caption: 'This device',
   label: 'Trust this device',
-  help: 'Keep your plan’s key here so Runway opens and saves offline. Leave it off on a shared device.',
-  helpOn: 'Runway opens and saves here without a connection. Signing out removes the key.',
-  onFailed: 'This device could not keep the key. Runway still works online.',
-  offFailed: 'The key could not be removed from this device. Try again.',
+  help: 'Open Runway here without a connection. Anyone using this browser could open your plan, so leave it off on a shared device.',
+  helpOn: 'Runway opens here without a connection. Signing out turns this off.',
+  onFailed: 'This device could not keep your plan. Runway still works online.',
+  offFailed: 'This device is still trusted. Try again.',
+  offlineUntrusted:
+    'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this device in Settings so it opens offline next time.',
+  offlineNotSaved:
+    'This device is trusted, but your plan isn’t saved on it yet. Open Runway once with a connection, and it opens offline after that. Nothing has been changed or lost.',
 } as const;
 
 export const MADE_UP_WORDS = {

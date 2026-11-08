@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { httpsCallable } from 'firebase/functions';
 
-import { functions } from '@lib/firebase/config';
+import { auth, functions } from '@lib/firebase/config';
 import { queryClient } from '@lib/query/queryClient';
 import {
   canKeepDeviceSecrets,
@@ -20,11 +20,20 @@ export const runwayQueryKeys = {
 };
 
 const DEVICE_KEY_NAME = 'runway-plan-key';
+const SERVER_WAIT_WITH_KEPT_KEY_MS = 6000;
+const UNREACHABLE_CODES = new Set([
+  'functions/unavailable',
+  'functions/deadline-exceeded',
+  'functions/internal',
+]);
 
 const getRunwayKeyCallable = httpsCallable<Record<string, never>, unknown>(
   functions,
   'getRunwayKey',
 );
+
+const keptKeysInUse = new WeakSet<RunwayEncryption>();
+const trustWrites = new Map<string, Promise<unknown>>();
 
 async function fetchServerKey() {
   const response = await getRunwayKeyCallable({});
@@ -45,29 +54,51 @@ async function readTrustedKey(uid: string) {
   }
 }
 
-// The device copy opens the plan at once (and offline); the server's answer replaces it if the key ever changed.
-function checkTrustedKey(uid: string, kept: RunwayEncryption) {
-  fetchServerKey()
-    .then(async (encryption) => {
-      if (encryption.keyId === kept.keyId && encryption.key === kept.key) return;
-      await keepDeviceSecret(uid, DEVICE_KEY_NAME, JSON.stringify(encryption));
-      queryClient.setQueryData(runwayQueryKeys.key(uid), encryption);
-    })
-    .catch(() => undefined);
+function isUnreachable(error: unknown) {
+  const code = (error as { code?: string } | null)?.code ?? '';
+  return (
+    error === 'timeout' ||
+    UNREACHABLE_CODES.has(code) ||
+    (typeof navigator !== 'undefined' && navigator.onLine === false)
+  );
 }
 
-/** Held in memory for the session, never in the query persister; a trusted device also keeps a sealed copy (`@lib/security` device secrets). */
+// Each account's trust writes run in order, and one that lands after the account left is dropped.
+function queueTrustWrite(uid: string, write: () => Promise<void>) {
+  const previous = trustWrites.get(uid) ?? Promise.resolve();
+  const next = previous
+    .catch(() => undefined)
+    .then(() => (auth.currentUser?.uid === uid ? write() : undefined));
+  trustWrites.set(uid, next);
+  return next;
+}
+
+async function loadKey(uid: string) {
+  const kept = await readTrustedKey(uid);
+  if (!kept) return fetchServerKey();
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject('timeout'), SERVER_WAIT_WITH_KEPT_KEY_MS),
+  );
+  try {
+    const encryption = await Promise.race([fetchServerKey(), timeout]);
+    if (encryption.keyId !== kept.keyId || encryption.key !== kept.key) {
+      void queueTrustWrite(uid, () =>
+        keepDeviceSecret(uid, DEVICE_KEY_NAME, JSON.stringify(encryption)),
+      ).catch(() => undefined);
+    }
+    return encryption;
+  } catch (error) {
+    if (!isUnreachable(error)) throw error;
+    keptKeysInUse.add(kept);
+    return kept;
+  }
+}
+
+/** Held in memory for the session, never in the query persister; on a trusted device a sealed copy stands in when the server can't be reached. */
 export function runwayKeyQueryOptions(uid: string) {
   return queryOptions({
     queryKey: runwayQueryKeys.key(uid),
-    queryFn: async () => {
-      const kept = await readTrustedKey(uid);
-      if (kept) {
-        checkTrustedKey(uid, kept);
-        return kept;
-      }
-      return fetchServerKey();
-    },
+    queryFn: () => loadKey(uid),
     staleTime: Infinity,
     retry: false,
   });
@@ -75,6 +106,11 @@ export function runwayKeyQueryOptions(uid: string) {
 
 export function getRunwayEncryption(uid: string) {
   return queryClient.fetchQuery(runwayKeyQueryOptions(uid));
+}
+
+/** True when this key is the device's copy, used because the server could not be reached; it must never create a plan. */
+export function isKeptKey(encryption: RunwayEncryption) {
+  return keptKeysInUse.has(encryption);
 }
 
 export function trustedDeviceQueryOptions(uid: string) {
@@ -92,12 +128,14 @@ export async function setTrustedDevice(uid: string, isTrusted: boolean) {
   const before = queryClient.getQueryData<boolean>(queryKey);
   queryClient.setQueryData(queryKey, isTrusted);
   try {
-    if (isTrusted) {
+    await queueTrustWrite(uid, async () => {
+      if (!isTrusted) {
+        await forgetDeviceSecret(uid, DEVICE_KEY_NAME);
+        return;
+      }
       const encryption = await getRunwayEncryption(uid);
       await keepDeviceSecret(uid, DEVICE_KEY_NAME, JSON.stringify(encryption));
-    } else {
-      await forgetDeviceSecret(uid, DEVICE_KEY_NAME);
-    }
+    });
   } catch (error) {
     queryClient.setQueryData(queryKey, before ?? !isTrusted);
     throw error;

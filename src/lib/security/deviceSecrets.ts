@@ -48,7 +48,11 @@ const toId = (uid: string, name: string) => `${uid}:${name}`;
 
 // The wrapping key is non-extractable, so page code can use it but never read it out.
 /** Keeps a secret string for one account on this device, sealed under a non-extractable key. */
-export async function keepDeviceSecret(uid: string, name: string, value: string) {
+export async function keepDeviceSecret(
+  uid: string,
+  name: string,
+  value: string,
+) {
   const wrappingKey = await crypto.subtle.generateKey(
     { name: 'AES-GCM', length: 256 },
     false,
@@ -60,12 +64,21 @@ export async function keepDeviceSecret(uid: string, name: string, value: string)
     wrappingKey,
     new TextEncoder().encode(value),
   );
-  const record: KeptSecret = { id: toId(uid, name), uid, wrappingKey, nonce, ciphertext };
+  const record: KeptSecret = {
+    id: toId(uid, name),
+    uid,
+    wrappingKey,
+    nonce,
+    ciphertext,
+  };
   await withStore('readwrite', (store) => store.put(record));
 }
 
 /** The secret kept for this account on this device, or `null` when none is kept or it no longer opens. */
-export async function readDeviceSecret(uid: string, name: string): Promise<string | null> {
+export async function readDeviceSecret(
+  uid: string,
+  name: string,
+): Promise<string | null> {
   if (!canKeepDeviceSecrets()) return null;
   const record = await withStore<KeptSecret | undefined>('readonly', (store) =>
     store.get(toId(uid, name)),
@@ -79,6 +92,7 @@ export async function readDeviceSecret(uid: string, name: string): Promise<strin
     );
     return new TextDecoder().decode(plain);
   } catch {
+    await forgetDeviceSecret(uid, name).catch(() => undefined);
     return null;
   }
 }

@@ -12,9 +12,15 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { FORM_DRAFT_PREFIX } from '@apps/runway/constants';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  getRunwayEncryption,
+  isKeptKey,
+} from '@apps/runway/queries/runwayKeyQueries';
 import { createDraftSealer } from '@apps/runway/security';
-import { ensurePlan } from '@apps/runway/store/actions/planActions';
+import {
+  ensurePlan,
+  isPlanCached,
+} from '@apps/runway/store/actions/planActions';
 import {
   startItemsListener,
   startVersionsListener,
@@ -120,7 +126,12 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           FORM_DRAFT_PREFIX,
           createDraftSealer(encryption),
         );
-        await ensurePlan(uid, encryption);
+        // The device's copy of the key opens a plan already saved here; only the server's key creates one.
+        if (!isKeptKey(encryption)) {
+          await ensurePlan(uid, encryption);
+        } else if (!(await isPlanCached(uid))) {
+          throw new Error('No saved plan to open offline.');
+        }
         if (!run.isCurrent) return;
         dispatch(setLoadDay(todayAsUtcDate()));
         dispatch(setKeyStatus('ready'));

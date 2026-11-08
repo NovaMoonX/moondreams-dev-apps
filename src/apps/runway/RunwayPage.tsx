@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { Fragment, useEffect, useLayoutEffect, useState } from 'react';
 import { History, Loader, LockKeyhole, WifiOff } from 'lucide-react';
 
@@ -40,7 +41,13 @@ import { useRunwayTheme } from '@apps/runway/useRunwayTheme';
 import { getDayKeyMonth } from '@apps/runway/utils/historyWindow';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { leaveAfterSubviewCloses } from '@apps/runway/utils/leaveAfterClose';
-import { HISTORY_WORDS, RUNWAY_TAB_LABELS } from '@apps/runway/constants';
+import {
+  HISTORY_WORDS,
+  RUNWAY_TAB_LABELS,
+  TRUSTED_DEVICE_WORDS,
+} from '@apps/runway/constants';
+import { trustedDeviceQueryOptions } from '@apps/runway/queries/runwayKeyQueries';
+import { canKeepDeviceSecrets } from '@/lib/security';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -73,6 +80,15 @@ import { isRevealPending } from '@apps/runway/utils/revealItem';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 
 const tabScrolls = new Map<RunwayTab, number>();
+
+function getFailedWords(isOffline: boolean, isTrusted: boolean) {
+  if (!isOffline) {
+    return 'Your plan cannot be opened right now. Nothing has been changed or lost.';
+  }
+  return isTrusted
+    ? TRUSTED_DEVICE_WORDS.offlineNotSaved
+    : TRUSTED_DEVICE_WORDS.offlineUntrusted;
+}
 const RESTORE_FRAMES = 40;
 
 const getScreen = (tab: RunwayTab) => {
@@ -160,6 +176,11 @@ function RunwayTabs({ activeTab, onChange }: RunwayTabsProps) {
 
 function RunwayContent() {
   const { user, loading } = useAuth();
+  const isTrusted =
+    useQuery({
+      ...trustedDeviceQueryOptions(user?.uid ?? ''),
+      enabled: canKeepDeviceSecrets() && user !== null,
+    }).data ?? false;
   useClearPriorityDialOnLeave();
   const {
     activeTab: requestedTab,
@@ -309,9 +330,7 @@ function RunwayContent() {
                 </Button>
               }
             >
-              {isOffline
-                ? 'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. To open it offline next time, turn on Trust this device in Settings.'
-                : 'Your plan cannot be opened right now. Nothing has been changed or lost.'}
+              {getFailedWords(isOffline, isTrusted)}
             </EmptyCard>
           </div>
         </div>
