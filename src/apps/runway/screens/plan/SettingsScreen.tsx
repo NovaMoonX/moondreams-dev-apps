@@ -21,8 +21,10 @@ import { PillGroup } from '@/components/PillGroup';
 import Subview from '@/components/Subview';
 import SettingsRowWithSwitch from '@/components/SettingsRow';
 import SummaryEditor from '@/components/SummaryEditor';
+import TrustBrowserRow from '@/components/TrustBrowserRow';
 import { useAuth } from '@/hooks/useAuth';
 import { devicePushQueryOptions } from '@/lib/notifications/notificationsQueries';
+import { canKeepDeviceSecrets } from '@/lib/security';
 import { useNow } from '@/hooks/useNow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
@@ -39,10 +41,12 @@ import {
   STANCE_LABELS,
   STANCES,
   TRACKING_WORDS,
+  TRUSTED_BROWSER_WORDS,
 } from '@apps/runway/constants';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { getOpenPeriod } from '@apps/runway/engine/level';
 import { useCanLinkBank } from '@apps/runway/hooks/useCanLinkBank';
+import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import BankSheet from '@apps/runway/screens/link/BankSheet';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import { formatNotifyHour } from '@apps/runway/utils/notifyTime';
@@ -286,6 +290,15 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   : NOTIFY_WORDS.rowOff
               }
               onOpen={() => openSettingsView('notifications')}
+            />
+          </ActionSection>
+        )}
+        {user && canKeepDeviceSecrets() && (
+          <ActionSection caption={TRUSTED_BROWSER_WORDS.caption}>
+            <TrustBrowserRow
+              store={runwayKeyStore}
+              uid={user.uid}
+              appName='Runway'
             />
           </ActionSection>
         )}
