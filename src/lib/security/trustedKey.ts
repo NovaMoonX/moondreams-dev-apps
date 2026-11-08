@@ -10,6 +10,14 @@ import {
   markDeviceSecretChecked,
   readDeviceSecret,
 } from './deviceSecrets';
+import {
+  type TrustedBrowser,
+  checkInTrustedBrowser,
+  getBrowserId,
+  listTrustedBrowsers,
+  registerTrustedBrowser,
+  removeTrustedBrowser,
+} from './trustedBrowsers';
 
 type ServerKey = { keyId: string; key: string };
 
@@ -25,6 +33,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** A kept key the server has not confirmed for this long is removed: a lost device stops opening the data. */
 export const TRUSTED_KEY_MAX_UNCHECKED_MS = 30 * DAY_MS;
 const SERVER_WAIT_WITH_KEPT_KEY_MS = 6000;
+const REGISTER_WAIT_MS = 10_000;
 const UNREACHABLE_CODES = new Set([
   'functions/unavailable',
   'functions/deadline-exceeded',
@@ -57,6 +66,8 @@ export function createTrustedKeyStore<T extends ServerKey>(
   const writes = new Map<string, Promise<unknown>>();
   const trustedQueryKey = (uid: string) =>
     [...config.queryKey(uid), 'trusted'] as const;
+  const browsersQueryKey = (uid: string) =>
+    [...config.queryKey(uid), 'browsers'] as const;
 
   // Each account's writes run in order, and one that lands after the account left is dropped.
   const queueWrite = (uid: string, write: () => Promise<void>) => {
@@ -81,8 +92,22 @@ export function createTrustedKeyStore<T extends ServerKey>(
     }
   };
 
+  // A Firestore write never settles offline, so the list is updated in the background.
+  const dropCopy = async (uid: string) => {
+    void removeTrustedBrowser(uid, config.name).catch(() => undefined);
+    await forgetDeviceSecret(uid, config.name);
+  };
+
+  const register = (uid: string) =>
+    Promise.race([
+      registerTrustedBrowser(uid, config.name),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Not saved')), REGISTER_WAIT_MS),
+      ),
+    ]);
+
   const forget = async (uid: string) => {
-    await queueWrite(uid, () => forgetDeviceSecret(uid, config.name));
+    await queueWrite(uid, () => dropCopy(uid));
     queryClient.setQueryData(trustedQueryKey(uid), false);
   };
 
@@ -106,6 +131,11 @@ export function createTrustedKeyStore<T extends ServerKey>(
       const fresh = await Promise.race([serverKey, timeout]);
       const isSame = fresh.keyId === kept.keyId && fresh.key === kept.key;
       void queueWrite(uid, async () => {
+        if (!(await checkInTrustedBrowser(uid, config.name))) {
+          await forgetDeviceSecret(uid, config.name);
+          queryClient.setQueryData(trustedQueryKey(uid), false);
+          return;
+        }
         if (isSame) return markDeviceSecretChecked(uid, config.name);
         if (await readKept(uid))
           await keepDeviceSecret(uid, config.name, JSON.stringify(fresh));
@@ -155,9 +185,17 @@ export function createTrustedKeyStore<T extends ServerKey>(
         // Fetched outside the queue: a refused key forgets through the queue and would wait on itself.
         const key = isTrusted ? await getKey(uid) : null;
         await queueWrite(uid, async () => {
-          if (!key) return forgetDeviceSecret(uid, config.name);
+          if (!key) return dropCopy(uid);
           if (queryClient.getQueryData(queryKey) !== true) return;
-          await keepDeviceSecret(uid, config.name, JSON.stringify(key));
+          await register(uid);
+          await keepDeviceSecret(uid, config.name, JSON.stringify(key)).catch(
+            (error: unknown) => {
+              void removeTrustedBrowser(uid, config.name).catch(
+                () => undefined,
+              );
+              throw error;
+            },
+          );
         });
       } catch (error) {
         queryClient.setQueryData(queryKey, before ?? !isTrusted);
@@ -166,10 +204,38 @@ export function createTrustedKeyStore<T extends ServerKey>(
     },
     /** Removes the kept key, for when the data it opens is deleted or replaced. */
     forget,
+    otherBrowsersQueryOptions: (uid: string) =>
+      queryOptions({
+        queryKey: browsersQueryKey(uid),
+        queryFn: async () =>
+          (
+            await listTrustedBrowsers(
+              uid,
+              config.name,
+              TRUSTED_KEY_MAX_UNCHECKED_MS + DAY_MS,
+            )
+          ).filter((browser) => browser.browserId !== getBrowserId()),
+        staleTime: 60_000,
+      }),
+    /** Takes these browsers off the list; each forgets its copy the next time it reaches the server. */
+    removeBrowsers: (uid: string, browserIds: string[]) => {
+      const queryKey = browsersQueryKey(uid);
+      queryClient.setQueryData<TrustedBrowser[]>(queryKey, (browsers) =>
+        browsers?.filter((browser) => !browserIds.includes(browser.browserId)),
+      );
+      void Promise.all(
+        browserIds.map((browserId) =>
+          removeTrustedBrowser(uid, config.name, browserId),
+        ),
+      ).catch(() => queryClient.invalidateQueries({ queryKey }));
+    },
   };
 }
 
 export type TrustedKeyStore = Pick<
   ReturnType<typeof createTrustedKeyStore>,
-  'trustedQueryOptions' | 'setTrusted'
+  | 'trustedQueryOptions'
+  | 'setTrusted'
+  | 'otherBrowsersQueryOptions'
+  | 'removeBrowsers'
 >;

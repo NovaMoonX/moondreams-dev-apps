@@ -43,6 +43,7 @@ import {
   loadAccountSessions,
 } from '@/lib/auth/accountSessions';
 import { forgetDeviceSecretsFor } from '@/lib/security';
+import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
   cacheRememberedPhoto,
   forgetAccount as forgetSavedAccount,
@@ -419,6 +420,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
             lastChanges: serverTimestamp(),
           }),
           releaseDevicePush(uid),
+          forgetThisBrowserFor(uid),
         ]),
         new Promise((resolve) => setTimeout(resolve, RELEASE_PUSH_WAIT_MS)),
       ]);

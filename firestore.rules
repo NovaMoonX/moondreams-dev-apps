@@ -1061,6 +1061,21 @@ service cloud.firestore {
       allow write: if isUser(userId);
     }
 
+    // The browsers keeping a copy of an app's data key for this person: only they see the list or take one off it.
+    match /trustedBrowsers/{userId}/browsers/{entryId} {
+      function isTrustedBrowserShape(data) {
+        return data.keys().hasOnly(['name', 'browserId', 'label', 'trustedAt', 'lastSeenAt'])
+          && data.name is string && data.name.size() <= 64
+          && data.browserId is string && data.browserId.size() <= 64
+          && entryId == data.name + ':' + data.browserId
+          && data.label is string && data.label.size() <= 80
+          && data.trustedAt is timestamp && data.lastSeenAt is timestamp;
+      }
+
+      allow read, delete: if isUser(userId);
+      allow create, update: if isUser(userId) && isTrustedBrowserShape(request.resource.data);
+    }
+
     // Central, cross-app: every app schedules and reads its own reminders. Only the scheduled
     // Function (admin SDK) marks one `sent` or rolls a recurring one forward.
     match /reminders/{reminderId} {

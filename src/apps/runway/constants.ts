@@ -3588,7 +3588,7 @@ export const SETTINGS_GROUP_WORDS = {
 } as const;
 
 export const TRUSTED_BROWSER_WORDS = {
-  caption: 'This browser',
+  caption: 'Trusted browsers',
   offlineUntrusted:
     'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this browser in Settings so it opens offline next time.',
   offlineNotSaved:
