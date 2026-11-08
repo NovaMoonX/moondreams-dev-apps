@@ -114,7 +114,11 @@ function SetHeldView({
   const difference = target === null ? 0 : target - heldCents;
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
-  const source = picked?.isRaising === isRaising ? picked.choice : null;
+  const source =
+    picked?.isRaising === isRaising &&
+    (picked.choice !== 'account' || account !== null)
+      ? picked.choice
+      : null;
   const fromId = isRaising ? null : itemId;
   const toId = isRaising ? itemId : null;
   const isOutside =

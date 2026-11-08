@@ -67,7 +67,7 @@ function toProviderError(code: string): ProviderError {
   if (code === 'NO_ACCOUNTS') {
     return new ProviderError(
       'needsAttention',
-      'Your bank stopped sharing your accounts. Reconnect to pick them again.',
+      'Your bank is not sharing any accounts. Connect again and pick at least one.',
       asProviderCode(code),
     );
   }
