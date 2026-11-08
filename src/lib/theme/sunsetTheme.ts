@@ -105,9 +105,17 @@ const toMinutes = (dayStart: number, coordinates: Coordinates | null): SunsetMin
   if (sunrise === null || sunset === null) {
     return isUpAllDay ? { rise: 0, set: DAY_MINUTES } : { rise: DAY_MINUTES, set: DAY_MINUTES };
   }
-  const clamp = (at: number) =>
-    Math.min(DAY_MINUTES, Math.max(0, Math.round((at - dayStart) / 60_000)));
-  return { rise: clamp(sunrise), set: clamp(sunset) };
+  // Wall-clock minutes, not time elapsed since midnight: a day the clocks change is 23 or 25 hours long.
+  const toWallMinute = (at: number) => {
+    if (at < dayStart) {
+      return 0;
+    }
+    if (at >= startOfLocalDay(dayStart, 1)) {
+      return DAY_MINUTES;
+    }
+    return minutesIntoDay(Math.round(at / 60_000) * 60_000);
+  };
+  return { rise: toWallMinute(sunrise), set: toWallMinute(sunset) };
 };
 
 const isPolar = ({ rise, set }: SunsetMinutes) => set === DAY_MINUTES && (rise === 0 || rise === DAY_MINUTES);

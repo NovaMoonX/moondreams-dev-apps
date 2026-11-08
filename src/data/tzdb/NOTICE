@@ -5,3 +5,5 @@ Source: https://www.iana.org/time-zones
 Licence: the tz database files used here are in the public domain
 ("This file is in the public domain." in each file's header).
 No attribution is required.
+
+Rebuild with: python3 scripts/tzdb/generateZoneCoordinates.py (reads /usr/share/zoneinfo).

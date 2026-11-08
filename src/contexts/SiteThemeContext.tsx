@@ -31,6 +31,7 @@ import {
 } from '@/lib/theme/sunsetTheme';
 import {
   getCurrentCoordinates,
+  LOCATION_DENIED,
   type Coordinates,
 } from '@/utils/geolocationUtils';
 import {
@@ -280,10 +281,15 @@ export function SiteThemeProvider({ children }: { children: ReactNode }) {
       setSunPlace(place);
       return { isGranted: true };
     } catch (error) {
-      storeSunPlace({ kind: 'declined' });
-      setSunPlace({ kind: 'declined' });
+      const isDenied =
+        error instanceof Error && error.cause === LOCATION_DENIED;
+      if (isDenied) {
+        storeSunPlace({ kind: 'declined' });
+        setSunPlace({ kind: 'declined' });
+      }
       return {
         isGranted: false,
+        isDenied,
         reason:
           error instanceof Error
             ? error.message

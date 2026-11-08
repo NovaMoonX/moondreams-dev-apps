@@ -17,8 +17,10 @@ export interface SiteThemeValue {
   sunPlace: SunPlace | null;
   /** The device's time zone, which the estimate falls back to. */
   timeZone: string | null;
-  /** Asks the browser for the position (it prompts) and keeps it rounded; a failure is kept as a no and its sentence returned. Call it from a tap. */
-  requestSunLocation: () => Promise<{ isGranted: true } | { isGranted: false; reason: string }>;
+  /** Asks the browser for the position (it prompts) and keeps it rounded; a refusal is kept as a no (a timeout is not), and the failure's sentence returned. Call it from a tap. */
+  requestSunLocation: () => Promise<
+    { isGranted: true } | { isGranted: false; isDenied: boolean; reason: string }
+  >;
   /** Keeps a no without asking the browser. */
   declineSunLocation: () => void;
 }
