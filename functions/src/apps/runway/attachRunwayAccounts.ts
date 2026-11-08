@@ -145,8 +145,8 @@ export const attachRunwayAccounts = onCall(
     );
 
     const live = await withProvider(() => provider.listAccounts(grant));
-    const centsByProvider = new Map(
-      live.map((account) => [account.providerAccountId, account.balanceCents]),
+    const liveByProvider = new Map(
+      live.map((account) => [account.providerAccountId, account]),
     );
 
     const linkRef = firestore.doc(planDocPath(uid, 'links', linkId));
@@ -225,10 +225,12 @@ export const attachRunwayAccounts = onCall(
 
       const written = choices.flatMap((choice) => {
         const targetId = choice.accountId ?? choice.cardId;
-        const cents = centsByProvider.get(choice.providerAccountId) ?? null;
-        return targetId === null ? [] : [{ choice, targetId, cents }];
+        const reading = liveByProvider.get(choice.providerAccountId);
+        const cents = reading?.balanceCents ?? null;
+        const asOf = Math.min(reading?.balanceAsOf ?? now, now);
+        return targetId === null ? [] : [{ choice, targetId, cents, asOf }];
       });
-      written.forEach(({ choice, targetId, cents }) => {
+      written.forEach(({ choice, targetId, cents, asOf }) => {
         transaction.update(
           choice.accountId
             ? targetRef('accounts', targetId)
@@ -240,7 +242,7 @@ export const attachRunwayAccounts = onCall(
             firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
             {
               id: targetId,
-              asOf: now,
+              asOf,
               sealed: sealWithKey(planKey, { cents }, SEALED_SCHEMA_VERSION),
             },
           );

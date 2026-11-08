@@ -94,7 +94,7 @@ function SetHeldView({
 }: SetHeldViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, toggle: showAmounts } = useValuesHidden();
   const undoMove = useUndoTransfer();
   const inputs = useAppSelector(selectBalanceInputs);
   const [moveId] = useState(newTransferMoveId);
@@ -343,7 +343,7 @@ function SetHeldView({
                 aria-pressed={option.isLocked ? undefined : isChosen}
                 aria-label={
                   option.isLocked
-                    ? `${option.title}, not available${isHidden ? '' : `. ${option.body}`}`
+                    ? `${option.title}${isHidden ? '' : ', not available'}. ${option.body}`
                     : undefined
                 }
                 disabled={isSaving}
@@ -353,11 +353,13 @@ function SetHeldView({
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
                   option.isLocked && 'border-dashed',
                 )}
-                onClick={() =>
-                  option.isLocked
-                    ? undefined
-                    : setPicked({ choice: option.choice, isRaising })
-                }
+                onClick={() => {
+                  if (!option.isLocked) {
+                    setPicked({ choice: option.choice, isRaising });
+                  } else if (isHidden) {
+                    showAmounts();
+                  }
+                }}
               >
                 <span className='flex w-full items-start justify-between gap-2'>
                   <span
