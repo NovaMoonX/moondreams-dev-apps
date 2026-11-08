@@ -18,4 +18,4 @@ Each round the lead gives you a brief path (`planning/<id>/BRIEF.md` in its scra
 Return exactly three short lists:
 - **Changed**: one line per section you drafted or revised.
 - **Needs from the others**: `<track>: <question or constraint>`, only what blocks or reshapes your files.
-- **For the owner**: real choices only (what the conventions, the code or a default can't answer), each with your recommendation first and what changes either way, in plain words. At most three.
+- **For the owner**: real choices only (what the conventions, the code or a default can't answer), each with your recommendation first and what changes either way, in plain words. No cap: raise every choice that passes plan-app's "Which questions reach the owner" test (it turns on what the owner wants and changes what is built, shared, promised, paid for or hard to reverse), and decide the rest yourself, listing each light call you made with its other option.
