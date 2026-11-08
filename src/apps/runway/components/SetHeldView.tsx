@@ -116,7 +116,8 @@ function SetHeldView({
   const isRaising = difference > 0;
   const source =
     picked?.isRaising === isRaising &&
-    (picked.choice !== 'account' || account !== null)
+    (picked.choice !== 'account' || account !== null) &&
+    (picked.choice !== 'free' || !account?.isCounted)
       ? picked.choice
       : null;
   const fromId = isRaising ? null : itemId;
@@ -155,16 +156,21 @@ function SetHeldView({
       ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
       isLocked: false,
     },
-    {
-      choice: 'free' as const,
-      title: isRaising
-        ? SET_HELD_WORDS.freeOut.title
-        : SET_HELD_WORDS.freeIn.title,
-      body: (isRaising ? SET_HELD_WORDS.freeOut : SET_HELD_WORDS.freeIn).body(
-        money,
-      ),
-      isLocked: false,
-    },
+    ...(account?.isCounted
+      ? []
+      : [
+          {
+            choice: 'free' as const,
+            title: isRaising
+              ? SET_HELD_WORDS.freeOut.title
+              : SET_HELD_WORDS.freeIn.title,
+            body: (isRaising
+              ? SET_HELD_WORDS.freeOut
+              : SET_HELD_WORDS.freeIn
+            ).body(money),
+            isLocked: false,
+          },
+        ]),
   ];
   const isSourceLocked =
     options.find((option) => option.choice === source)?.isLocked ?? false;

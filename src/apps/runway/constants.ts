@@ -2607,9 +2607,10 @@ export const SET_HELD_WORDS = {
     title: (account: string) => `From ${account}`,
     body: (amount: string, spare: string, isCounted: boolean) =>
       `Uses ${amount} of the ${spare} in it not set aside. ${isCounted ? `Your spare cash goes down by ${amount}.` : 'Free to Spend stays the same.'}`,
-    short: (spare: string) => `Only ${spare} in it is not set aside.`,
-    none: 'Everything in it is already set aside.',
-    unknown: 'Its balance is not known yet.',
+    short: (spare: string) =>
+      `Only ${spare} in it is not set aside. Lower the amount, or say it came from outside the plan.`,
+    none: 'Everything in it is already set aside. Say it came from outside the plan if you added money.',
+    unknown: 'Its balance is not known yet. Add it on the account to use this.',
   },
   accountOut: {
     title: (account: string) => `Back to ${account}`,
