@@ -67,7 +67,7 @@ function toProviderError(code: string): ProviderError {
   if (code === 'NO_ACCOUNTS') {
     return new ProviderError(
       'needsAttention',
-      'Your bank stopped sharing your accounts. Reconnect to pick them again.',
+      'Your bank is not sharing any accounts. Connect again and pick at least one.',
       asProviderCode(code),
     );
   }
@@ -147,16 +147,20 @@ interface PlaidAccount {
   mask: string | null;
   type: string;
   subtype: string | null;
-  balances: { current: number | null };
+  balances: { current: number | null; last_updated_datetime?: string | null };
 }
 
-const toRaw = (account: PlaidAccount): RawAccount => ({
+const toRaw = (
+  account: PlaidAccount,
+  refreshedAt: string | null,
+): RawAccount => ({
   id: account.account_id,
   name: account.name,
   type: account.type,
   subtype: account.subtype,
   mask: account.mask,
   currentBalance: account.balances.current,
+  balanceUpdatedAt: account.balances.last_updated_datetime ?? refreshedAt,
 });
 
 interface PlaidTransaction {
@@ -262,11 +266,20 @@ export const plaidProvider: BankDataProvider = {
   },
 
   async listAccounts(grant) {
+    // A live balance read makes the bank sign in again on every call, and banks that ask for a code each time then fail it and lock the link until the person reconnects; Plaid's own refreshes keep these balances current, so one without its own time is dated by the Item's last refresh.
     const { accounts } = await call<{ accounts: PlaidAccount[] }>(
-      '/accounts/balance/get',
+      '/accounts/get',
       { access_token: grant.credential },
     );
-    return accounts.map((account) => normalizeAccount(toRaw(account)));
+    if (accounts.length === 0) throw toProviderError('NO_ACCOUNTS');
+    const refreshedAt = await call<{
+      status?: { transactions?: { last_successful_update?: string | null } };
+    }>('/item/get', { access_token: grant.credential })
+      .then((item) => item.status?.transactions?.last_successful_update ?? null)
+      .catch(() => null);
+    return accounts.map((account) =>
+      normalizeAccount(toRaw(account, refreshedAt)),
+    );
   },
 
   async revoke(grant) {

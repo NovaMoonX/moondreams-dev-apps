@@ -12,6 +12,11 @@ const toCents = (amount: number | null | undefined) =>
     ? Math.round(amount * 100)
     : null;
 
+const toEpoch = (iso: string | null) => {
+  const epoch = iso === null ? NaN : Date.parse(iso);
+  return Number.isFinite(epoch) ? epoch : null;
+};
+
 export interface RawAccount {
   id: string;
   name: string;
@@ -19,6 +24,8 @@ export interface RawAccount {
   subtype: string | null;
   mask: string | null;
   currentBalance: number | null;
+  /** ISO time the bank last refreshed the balance; null when the provider does not say. */
+  balanceUpdatedAt: string | null;
 }
 
 /** A credit account's current balance is already what is owed, so both kinds keep the sign the provider reports. */
@@ -30,6 +37,7 @@ export function normalizeAccount(raw: RawAccount): NormalizedAccount {
     subtype: raw.subtype || null,
     mask: raw.mask || null,
     balanceCents: toCents(raw.currentBalance),
+    balanceAsOf: toEpoch(raw.balanceUpdatedAt),
   };
   return result;
 }

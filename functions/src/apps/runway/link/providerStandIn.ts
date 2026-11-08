@@ -17,6 +17,7 @@ const ACCOUNTS: NormalizedAccount[] = [
     subtype: 'credit card',
     mask: '6604',
     balanceCents: 31_275,
+    balanceAsOf: null,
   },
   {
     providerAccountId: 'stand-in-checking',
@@ -25,6 +26,7 @@ const ACCOUNTS: NormalizedAccount[] = [
     subtype: 'checking',
     mask: '2290',
     balanceCents: 182_640,
+    balanceAsOf: null,
   },
 ];
 

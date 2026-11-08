@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import { Check } from 'lucide-react';
+import { Check, Lock } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -43,22 +43,58 @@ interface SetHeldViewProps {
   name: string;
   /** What the envelope or goal holds now. */
   heldCents: Cents;
+  /** The account that holds it, with what in it is not set aside (null when its balance is not known). */
+  account: {
+    name: string;
+    isCounted: boolean;
+    spareCents: Cents | null;
+  } | null;
   today: number;
   onBack: () => void;
 }
 
-/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
+type Source = 'account' | 'outside' | 'free';
+
+const describeAccountIn = (
+  spareCents: Cents | null,
+  cents: Cents,
+  isCounted: boolean,
+  isHidden: boolean,
+) => {
+  if (isHidden)
+    return { body: SET_HELD_WORDS.accountIn.hidden, isLocked: true };
+  if (spareCents === null)
+    return { body: SET_HELD_WORDS.accountIn.unknown, isLocked: true };
+  if (spareCents <= 0)
+    return { body: SET_HELD_WORDS.accountIn.none, isLocked: true };
+  if (spareCents < cents)
+    return {
+      body: SET_HELD_WORDS.accountIn.short(formatCents(spareCents)),
+      isLocked: true,
+    };
+  return {
+    body: SET_HELD_WORDS.accountIn.body(
+      formatCents(cents),
+      formatCents(spareCents),
+      isCounted,
+    ),
+    isLocked: false,
+  };
+};
+
+/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with the account that holds it, Free to Spend, or outside the plan. */
 function SetHeldView({
   itemId,
   kind,
   name,
   heldCents,
+  account,
   today,
   onBack,
 }: SetHeldViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { isHidden } = useValuesHidden();
+  const { isHidden, toggle: showAmounts } = useValuesHidden();
   const undoMove = useUndoTransfer();
   const inputs = useAppSelector(selectBalanceInputs);
   const [moveId] = useState(newTransferMoveId);
@@ -69,7 +105,7 @@ function SetHeldView({
   const isSavingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [picked, setPicked] = useState<{
-    choice: 'outside' | 'free';
+    choice: Source;
     isRaising: boolean;
   } | null>(null);
 
@@ -81,10 +117,75 @@ function SetHeldView({
   const difference = target === null ? 0 : target - heldCents;
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
-  const source = picked?.isRaising === isRaising ? picked.choice : null;
+  const accountIn =
+    account === null
+      ? null
+      : describeAccountIn(
+          account.spareCents,
+          cents,
+          account.isCounted,
+          isHidden,
+        );
+  // A counted account's own spare cash is the same money as Free to Spend, so Free to Spend is offered only once the account can't cover it.
+  const isFreeShown =
+    !account?.isCounted || (isRaising && accountIn?.isLocked === true);
+  const source =
+    picked?.isRaising === isRaising &&
+    (picked.choice !== 'account' || account !== null) &&
+    (picked.choice !== 'free' || isFreeShown)
+      ? picked.choice
+      : null;
   const fromId = isRaising ? null : itemId;
   const toId = isRaising ? itemId : null;
-  const isOutside = source === 'outside';
+  const isOutside =
+    source === 'outside' || (source === 'account' && !account?.isCounted);
+  const money = formatCents(cents);
+  const options: {
+    choice: Source;
+    title: string;
+    body: string;
+    isLocked: boolean;
+  }[] = [
+    ...(account === null
+      ? []
+      : [
+          isRaising
+            ? {
+                choice: 'account' as const,
+                title: SET_HELD_WORDS.accountIn.title(account.name),
+                body: accountIn?.body ?? '',
+                isLocked: accountIn?.isLocked ?? true,
+              }
+            : {
+                choice: 'account' as const,
+                title: SET_HELD_WORDS.accountOut.title(account.name),
+                body: SET_HELD_WORDS.accountOut.body(money, account.isCounted),
+                isLocked: false,
+              },
+        ]),
+    {
+      choice: 'outside' as const,
+      ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
+      isLocked: false,
+    },
+    ...(!isFreeShown
+      ? []
+      : [
+          {
+            choice: 'free' as const,
+            title: isRaising
+              ? SET_HELD_WORDS.freeOut.title
+              : SET_HELD_WORDS.freeIn.title,
+            body: (isRaising
+              ? SET_HELD_WORDS.freeOut
+              : SET_HELD_WORDS.freeIn
+            ).body(money),
+            isLocked: false,
+          },
+        ]),
+  ];
+  const isSourceLocked =
+    options.find((option) => option.choice === source)?.isLocked ?? false;
   const amountBlocker =
     target === null
       ? SET_HELD_WORDS.needsAmount
@@ -93,27 +194,11 @@ function SetHeldView({
         : null;
   const blocker =
     amountBlocker ??
-    (source === null
+    (source === null || isSourceLocked
       ? isRaising
         ? SET_HELD_WORDS.needsSourceRaise
         : SET_HELD_WORDS.needsSourceLower
       : null);
-  const money = formatCents(cents);
-  const options = [
-    {
-      choice: 'outside' as const,
-      ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
-    },
-    {
-      choice: 'free' as const,
-      title: isRaising
-        ? SET_HELD_WORDS.freeOut.title
-        : SET_HELD_WORDS.freeIn.title,
-      body: (isRaising ? SET_HELD_WORDS.freeOut : SET_HELD_WORDS.freeIn).body(
-        money,
-      ),
-    },
-  ];
 
   const before = deriveBalances(inputs);
   const after =
@@ -170,15 +255,19 @@ function SetHeldView({
       setError(MOVE_WORDS.offline);
       return;
     }
-    const free = MOVE_WORDS.freeToSpend;
+    const free =
+      source === 'account' && account !== null
+        ? account.name
+        : MOVE_WORDS.freeToSpend;
+    const isNamed = source !== 'outside';
     const fromName = isRaising ? free : name;
     const toName = isRaising ? name : free;
-    const undoText = !isOutside
+    const undoText = isNamed
       ? MOVE_WORDS.undone(money, fromName, toName)
       : isRaising
         ? SET_HELD_WORDS.undoneOutsideIn(money, name)
         : SET_HELD_WORDS.undoneOutsideOut(money, name);
-    const summary = !isOutside
+    const summary = isNamed
       ? MOVE_WORDS.summary(money, fromName, toName)
       : isRaising
         ? SET_HELD_WORDS.summaryOutsideIn(money, name)
@@ -245,36 +334,62 @@ function SetHeldView({
       {amountBlocker === null && (
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
           {options.map((option) => {
-            const isChosen = source === option.choice;
+            const isChosen = source === option.choice && !option.isLocked;
             return (
               <Button
                 key={option.choice}
                 type='button'
                 variant='tertiary'
-                aria-pressed={isChosen}
+                aria-pressed={option.isLocked ? undefined : isChosen}
+                aria-label={
+                  option.isLocked
+                    ? `${option.title}${isHidden ? '' : ', not available'}. ${option.body}`
+                    : undefined
+                }
                 disabled={isSaving}
                 className={join(
                   'text-foreground! border-border h-auto w-full flex-col items-start justify-start gap-0 rounded-2xl border px-4! py-3! text-left font-normal whitespace-normal',
                   isChosen &&
                     'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
+                  option.isLocked && 'border-dashed',
                 )}
-                onClick={() => setPicked({ choice: option.choice, isRaising })}
+                onClick={() => {
+                  if (!option.isLocked) {
+                    setPicked({ choice: option.choice, isRaising });
+                  } else if (isHidden) {
+                    showAmounts();
+                  }
+                }}
               >
                 <span className='flex w-full items-start justify-between gap-2'>
-                  <span className='text-[15px] leading-[1.125rem] font-medium'>
-                    {option.title}
-                  </span>
                   <span
-                    aria-hidden='true'
                     className={join(
-                      'grid size-5 shrink-0 place-items-center rounded-full border',
-                      isChosen
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border',
+                      'text-[15px] leading-[1.125rem] font-medium',
+                      option.isLocked && 'text-muted-foreground',
                     )}
                   >
-                    {isChosen && <Check className='size-3.5' />}
+                    {option.title}
                   </span>
+                  {option.isLocked ? (
+                    <span
+                      aria-hidden='true'
+                      className='text-muted-foreground grid size-5 shrink-0 place-items-center'
+                    >
+                      <Lock className='size-4' />
+                    </span>
+                  ) : (
+                    <span
+                      aria-hidden='true'
+                      className={join(
+                        'grid size-5 shrink-0 place-items-center rounded-full border',
+                        isChosen
+                          ? 'border-primary bg-primary text-primary-foreground'
+                          : 'border-border',
+                      )}
+                    >
+                      {isChosen && <Check className='size-3.5' />}
+                    </span>
+                  )}
                 </span>
                 <span className='text-muted-foreground mt-1 block text-[13px] leading-[1.125rem]'>
                   <MaskedText>{option.body}</MaskedText>
