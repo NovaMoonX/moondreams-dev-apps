@@ -526,9 +526,12 @@ export async function syncRunwayLink(
       grantRef,
       grantDoc.cursor ?? null,
     );
-    // The purchases just came through, so a failed balance read never sends the person to reconnect on its own.
+    // The purchases just came through, so a failed balance read sends the person to reconnect only when the bank shares no accounts at all.
     await writeBalances(firestore, uid, grant, planKey, targets).catch(
       (error: unknown) => {
+        if (error instanceof ProviderError && error.code === 'NO_ACCOUNTS') {
+          throw error;
+        }
         logger.warn('runway.sync.balancesFailed', {
           linkId,
           kind: error instanceof ProviderError ? error.kind : 'internal',

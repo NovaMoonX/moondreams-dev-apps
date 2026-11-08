@@ -59,7 +59,10 @@ const describeAccountIn = (
   spareCents: Cents | null,
   cents: Cents,
   isCounted: boolean,
+  isHidden: boolean,
 ) => {
+  if (isHidden)
+    return { body: SET_HELD_WORDS.accountIn.hidden, isLocked: true };
   if (spareCents === null)
     return { body: SET_HELD_WORDS.accountIn.unknown, isLocked: true };
   if (spareCents <= 0)
@@ -79,7 +82,7 @@ const describeAccountIn = (
   };
 };
 
-/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with Free to Spend or came from, or left to, outside the plan. */
+/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with the account that holds it, Free to Spend, or outside the plan. */
 function SetHeldView({
   itemId,
   kind,
@@ -114,10 +117,22 @@ function SetHeldView({
   const difference = target === null ? 0 : target - heldCents;
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
+  const accountIn =
+    account === null
+      ? null
+      : describeAccountIn(
+          account.spareCents,
+          cents,
+          account.isCounted,
+          isHidden,
+        );
+  // A counted account's own spare cash is the same money as Free to Spend, so Free to Spend is offered only once the account can't cover it.
+  const isFreeShown =
+    !account?.isCounted || (isRaising && accountIn?.isLocked === true);
   const source =
     picked?.isRaising === isRaising &&
     (picked.choice !== 'account' || account !== null) &&
-    (picked.choice !== 'free' || !account?.isCounted)
+    (picked.choice !== 'free' || isFreeShown)
       ? picked.choice
       : null;
   const fromId = isRaising ? null : itemId;
@@ -138,11 +153,8 @@ function SetHeldView({
             ? {
                 choice: 'account' as const,
                 title: SET_HELD_WORDS.accountIn.title(account.name),
-                ...describeAccountIn(
-                  account.spareCents,
-                  cents,
-                  account.isCounted,
-                ),
+                body: accountIn?.body ?? '',
+                isLocked: accountIn?.isLocked ?? true,
               }
             : {
                 choice: 'account' as const,
@@ -156,7 +168,7 @@ function SetHeldView({
       ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
       isLocked: false,
     },
-    ...(account?.isCounted
+    ...(!isFreeShown
       ? []
       : [
           {
