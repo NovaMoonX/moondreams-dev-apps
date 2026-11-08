@@ -152,13 +152,11 @@ export function createTrustedKeyStore<T extends ServerKey>(
       const before = queryClient.getQueryData<boolean>(queryKey);
       queryClient.setQueryData(queryKey, isTrusted);
       try {
+        // Fetched outside the queue: a refused key forgets through the queue and would wait on itself.
+        const key = isTrusted ? await getKey(uid) : null;
         await queueWrite(uid, async () => {
-          if (!isTrusted) {
-            await forgetDeviceSecret(uid, config.name);
-            return;
-          }
-          const key = await getKey(uid);
-          if (auth.currentUser?.uid !== uid) return;
+          if (!key) return forgetDeviceSecret(uid, config.name);
+          if (queryClient.getQueryData(queryKey) !== true) return;
           await keepDeviceSecret(uid, config.name, JSON.stringify(key));
         });
       } catch (error) {
