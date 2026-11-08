@@ -526,13 +526,12 @@ export async function syncRunwayLink(
       grantRef,
       grantDoc.cursor ?? null,
     );
+    // The purchases just came through, so a failed balance read never sends the person to reconnect on its own.
     await writeBalances(firestore, uid, grant, planKey, targets).catch(
       (error: unknown) => {
-        if (error instanceof ProviderError && error.kind === 'needsAttention') {
-          throw error;
-        }
         logger.warn('runway.sync.balancesFailed', {
           linkId,
+          kind: error instanceof ProviderError ? error.kind : 'internal',
           code: error instanceof ProviderError ? error.code : null,
         });
       },

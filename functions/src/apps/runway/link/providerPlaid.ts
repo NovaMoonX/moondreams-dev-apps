@@ -262,8 +262,9 @@ export const plaidProvider: BankDataProvider = {
   },
 
   async listAccounts(grant) {
+    // A live balance read makes the bank sign in again on every call, and banks that ask for a code each time then fail it and lock the link until the person reconnects; Plaid's own refreshes keep these balances current.
     const { accounts } = await call<{ accounts: PlaidAccount[] }>(
-      '/accounts/balance/get',
+      '/accounts/get',
       { access_token: grant.credential },
     );
     return accounts.map((account) => normalizeAccount(toRaw(account)));
