@@ -40,7 +40,7 @@ const TRUST_BROWSER_WORDS = {
 const isPhone = (label: string) => /iPhone|iPad|Android/.test(label);
 
 /** "Chrome on Linux ×2": one name per kind of browser, so two alike never read as one listed twice. */
-const mergeLabels = (browsers: TrustedBrowser[]) =>
+const countLabels = (browsers: TrustedBrowser[]) =>
   Object.entries(
     browsers.reduce<Record<string, number>>(
       (counts, browser) => ({
@@ -49,12 +49,21 @@ const mergeLabels = (browsers: TrustedBrowser[]) =>
       }),
       {},
     ),
-  ).map(([label, count]) => (count > 1 ? `${label} ×${count}` : label));
+  );
+
+const nameCount = ([label, count]: [string, number]) =>
+  count > 1 ? `${label} ×${count}` : label;
+
+const mergeLabels = (browsers: TrustedBrowser[]) =>
+  countLabels(browsers).map(nameCount);
 
 const summarize = (browsers: TrustedBrowser[]) => {
-  const names = mergeLabels(browsers);
-  if (names.length <= 3) return formatList(names);
-  return formatList([...names.slice(0, 3), `${names.length - 3} more`]);
+  const counted = countLabels(browsers);
+  if (counted.length <= 3) return formatList(counted.map(nameCount));
+  const shown = counted.slice(0, 3);
+  const rest =
+    browsers.length - shown.reduce((sum, [, count]) => sum + count, 0);
+  return formatList([...shown.map(nameCount), `${rest} more`]);
 };
 
 const describeDay = (timestamp: number) =>

@@ -11,6 +11,7 @@ import {
   readDeviceSecret,
 } from './deviceSecrets';
 import {
+  BROWSER_ID_NOT_KEPT,
   type TrustedBrowser,
   checkInTrustedBrowser,
   getBrowserId,
@@ -189,7 +190,10 @@ export function createTrustedKeyStore<T extends ServerKey>(
           if (queryClient.getQueryData(queryKey) !== true) return;
           // A timed-out entry still lands when the connection returns, so it is taken back.
           await register(uid).catch((error: unknown) => {
-            void removeTrustedBrowser(uid, config.name).catch(() => undefined);
+            if (readCode(error) !== BROWSER_ID_NOT_KEPT)
+              void removeTrustedBrowser(uid, config.name).catch(
+                () => undefined,
+              );
             throw error;
           });
           await keepDeviceSecret(uid, config.name, JSON.stringify(key)).catch(

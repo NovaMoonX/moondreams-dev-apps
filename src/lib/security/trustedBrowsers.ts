@@ -17,6 +17,7 @@ import { generateToken } from '@/utils/idUtils';
 
 const BROWSER_ID_KEY = 'trusted-browser-id';
 const DAY_MS = 24 * 60 * 60 * 1000;
+export const BROWSER_ID_NOT_KEPT = 'browser-id-not-kept';
 
 /** A browser that keeps a copy of one app's key for the person, as the list on their other browsers shows it. */
 export type TrustedBrowser = {
@@ -94,7 +95,9 @@ const browserDoc = (uid: string, name: string, browserId: string) =>
 export async function registerTrustedBrowser(uid: string, name: string) {
   const browserId = getBrowserId();
   if (readKeptBrowserId() !== browserId)
-    throw new Error('This browser cannot keep its id');
+    throw Object.assign(new Error('This browser cannot keep its id'), {
+      code: BROWSER_ID_NOT_KEPT,
+    });
   await setDoc(browserDoc(uid, name, browserId), {
     name,
     browserId,
