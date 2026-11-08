@@ -336,7 +336,7 @@ async function writeBalances(
         ref: firestore.doc(planDocPath(uid, 'accountBalances', targetId)),
         data: {
           id: targetId,
-          asOf: now,
+          asOf: Math.min(account.balanceAsOf ?? now, now),
           sealed: sealWithKey(
             planKey,
             { cents: account.balanceCents },

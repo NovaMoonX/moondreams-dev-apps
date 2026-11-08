@@ -10,6 +10,8 @@ export interface NormalizedAccount {
   mask: string | null;
   /** For a credit account, what is owed, as a positive number. */
   balanceCents: number | null;
+  /** When the bank last refreshed the balance; null when the provider does not say. */
+  balanceAsOf: number | null;
 }
 
 /** A bank transaction in the shape the app uses; money out is positive, money in negative. */
@@ -89,7 +91,7 @@ export interface BankDataProvider {
   exchange(publicToken: string): Promise<ProviderGrant>;
   /** The institution's name and logo (a PNG data URL), or null when the provider cannot say. */
   getInstitution(grant: ProviderGrant): Promise<ProviderInstitution | null>;
-  /** Every account under the grant, with live balances. */
+  /** Every account under the grant, with the provider's latest balances; throws `needsAttention` when it shares none. */
   listAccounts(grant: ProviderGrant): Promise<NormalizedAccount[]>;
   revoke(grant: ProviderGrant): Promise<void>;
   /** Each transaction's merchant logo and bank name between two `YYYY-MM-DD` days, for purchases brought in before they were kept. */

@@ -147,7 +147,7 @@ interface PlaidAccount {
   mask: string | null;
   type: string;
   subtype: string | null;
-  balances: { current: number | null };
+  balances: { current: number | null; last_updated_datetime?: string | null };
 }
 
 const toRaw = (account: PlaidAccount): RawAccount => ({
@@ -157,6 +157,7 @@ const toRaw = (account: PlaidAccount): RawAccount => ({
   subtype: account.subtype,
   mask: account.mask,
   currentBalance: account.balances.current,
+  balanceUpdatedAt: account.balances.last_updated_datetime ?? null,
 });
 
 interface PlaidTransaction {
@@ -267,6 +268,7 @@ export const plaidProvider: BankDataProvider = {
       '/accounts/get',
       { access_token: grant.credential },
     );
+    if (accounts.length === 0) throw toProviderError('NO_ACCOUNTS');
     return accounts.map((account) => normalizeAccount(toRaw(account)));
   },
 
