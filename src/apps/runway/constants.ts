@@ -3589,11 +3589,6 @@ export const SETTINGS_GROUP_WORDS = {
 
 export const TRUSTED_DEVICE_WORDS = {
   caption: 'This device',
-  label: 'Trust this device',
-  help: 'Open Runway here without a connection. Anyone using this browser could open your plan, so leave it off on a shared device.',
-  helpOn: 'Runway opens here without a connection. Signing out turns this off.',
-  onFailed: 'This device could not keep your plan. Runway still works online.',
-  offFailed: 'This device is still trusted. Try again.',
   offlineUntrusted:
     'Your plan unlocks with a connection, so it can’t open while you’re offline. Nothing has been changed or lost. Once you’re back online, turn on Trust this device in Settings so it opens offline next time.',
   offlineNotSaved:

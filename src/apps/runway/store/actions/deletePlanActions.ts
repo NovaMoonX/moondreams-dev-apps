@@ -6,8 +6,8 @@ import { queryClient } from '@lib/query/queryClient';
 
 import { DELETE_PLAN_PHRASE, DELETE_PLAN_WORDS } from '@apps/runway/constants';
 import {
+  runwayKeyStore,
   runwayQueryKeys,
-  setTrustedDevice,
 } from '@apps/runway/queries/runwayKeyQueries';
 
 const RECENT_SIGN_IN_MS = 4 * 60 * 1000;
@@ -41,7 +41,7 @@ export async function deleteRunwayPlan(uid: string, phrase: string) {
   try {
     await ensureRecentSignIn();
     const response = await deleteRunwayPlanCallable({ phrase });
-    await setTrustedDevice(uid, false).catch(() => undefined);
+    await runwayKeyStore.forget(uid).catch(() => undefined);
     queryClient.removeQueries({ queryKey: runwayQueryKeys.key(uid) });
     return response.data;
   } catch (error) {

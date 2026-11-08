@@ -18,5 +18,6 @@ export {
   forgetDeviceSecret,
   forgetDeviceSecretsFor,
   keepDeviceSecret,
+  markDeviceSecretChecked,
   readDeviceSecret,
 } from './deviceSecrets';

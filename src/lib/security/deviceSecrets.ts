@@ -8,6 +8,7 @@ type KeptSecret = {
   wrappingKey: CryptoKey;
   nonce: Uint8Array;
   ciphertext: ArrayBuffer;
+  checkedAt: number;
 };
 
 /** Whether this browser can keep a secret on the device: needs IndexedDB and Web Crypto (https only). */
@@ -65,6 +66,7 @@ export async function keepDeviceSecret(
     new TextEncoder().encode(value),
   );
   const record: KeptSecret = {
+    checkedAt: Date.now(),
     id: toId(uid, name),
     uid,
     wrappingKey,
@@ -74,16 +76,21 @@ export async function keepDeviceSecret(
   await withStore('readwrite', (store) => store.put(record));
 }
 
-/** The secret kept for this account on this device, or `null` when none is kept or it no longer opens. */
+/** The secret kept for this account on this device, or `null` when none is kept, it no longer opens, or it went unchecked too long (then it is removed). */
 export async function readDeviceSecret(
   uid: string,
   name: string,
+  maxUncheckedMs = Infinity,
 ): Promise<string | null> {
   if (!canKeepDeviceSecrets()) return null;
   const record = await withStore<KeptSecret | undefined>('readonly', (store) =>
     store.get(toId(uid, name)),
   ).catch(() => undefined);
   if (!record) return null;
+  if (!(Date.now() - record.checkedAt <= maxUncheckedMs)) {
+    await forgetDeviceSecret(uid, name).catch(() => undefined);
+    return null;
+  }
   try {
     const plain = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv: new Uint8Array(record.nonce) },
@@ -95,6 +102,19 @@ export async function readDeviceSecret(
     await forgetDeviceSecret(uid, name).catch(() => undefined);
     return null;
   }
+}
+
+/** Records that the server just confirmed this kept secret, restarting its unchecked clock. */
+export async function markDeviceSecretChecked(uid: string, name: string) {
+  if (!canKeepDeviceSecrets()) return;
+  const id = toId(uid, name);
+  const record = await withStore<KeptSecret | undefined>('readonly', (store) =>
+    store.get(id),
+  );
+  if (!record) return;
+  await withStore('readwrite', (store) =>
+    store.put({ ...record, checkedAt: Date.now() }),
+  );
 }
 
 /** Removes one kept secret from this device. */

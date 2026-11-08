@@ -46,7 +46,7 @@ import {
   RUNWAY_TAB_LABELS,
   TRUSTED_DEVICE_WORDS,
 } from '@apps/runway/constants';
-import { trustedDeviceQueryOptions } from '@apps/runway/queries/runwayKeyQueries';
+import { runwayKeyStore } from '@apps/runway/queries/runwayKeyQueries';
 import { canKeepDeviceSecrets } from '@/lib/security';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import SpendScreen from '@apps/runway/screens/spend/SpendScreen';
@@ -178,7 +178,7 @@ function RunwayContent() {
   const { user, loading } = useAuth();
   const isTrusted =
     useQuery({
-      ...trustedDeviceQueryOptions(user?.uid ?? ''),
+      ...runwayKeyStore.trustedQueryOptions(user?.uid ?? ''),
       enabled: canKeepDeviceSecrets() && user !== null,
     }).data ?? false;
   useClearPriorityDialOnLeave();
