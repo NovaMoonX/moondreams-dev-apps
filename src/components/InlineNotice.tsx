@@ -25,7 +25,7 @@ const TONES = {
   warning: {
     Icon: TriangleAlert,
     box: 'border-warning/50 bg-warning/15',
-    icon: 'text-amber-700 dark:text-warning',
+    icon: 'text-amber-800 dark:text-warning',
   },
   success: {
     Icon: CircleCheck,
