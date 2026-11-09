@@ -51,10 +51,11 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getGoalPaceStretches } from '@apps/runway/engine/goalTimeline';
 import {
-  getGoalStretches,
-  toPaceStretches,
-} from '@apps/runway/engine/goalTimeline';
+  getGoalPaceFunding,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import { getTimelinePace } from '@apps/runway/engine/pace';
 import {
   applyMove,
@@ -224,6 +225,7 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const heldByItem = useAppSelector(selectHeldByItem);
   const stance = useAppSelector(selectStance);
   const planItems = useAppSelector((state) => state.runway.items);
+  const { dial } = usePriorityDial();
   const versions = useAppSelector((state) => state.runway.versions);
   const lookahead = useDeferredLookahead(today, isLoaded);
   const [query, setQuery] = useState('');
@@ -241,26 +243,25 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const hasScrolledRef = useRef(false);
 
   const paces = useMemo(() => {
-    const stretchesByGoal = goals.map(({ item, version }) => {
-      const stretches = getGoalStretches(versions, item, today);
-      return stretches.length > 0
-        ? stretches
-        : [{ payload: version.payload, from: today, until: null }];
-    });
+    const paceStretchesByGoal = goals.map(({ item }) =>
+      getGoalPaceStretches(versions, item, today, (goal) =>
+        getGoalPaceFunding(goal, dial),
+      ),
+    );
     const priorDays = getPriorDays(
       planItems,
       versions,
       today,
       comingDays,
-      stretchesByGoal.flatMap((stretches) =>
-        stretches.map(({ payload }) => payload.funding),
+      paceStretchesByGoal.flatMap((stretches) =>
+        stretches.map(({ goal }) => goal.funding),
       ),
     );
     return Object.fromEntries(
-      goals.map(({ item }, index) => [
+      goals.map(({ item, version }, index) => [
         item.id,
         getTimelinePace(
-          toPaceStretches(stretchesByGoal[index]),
+          paceStretchesByGoal[index],
           heldByItem[item.id] ?? 0,
           comingDays.map((day) => ({
             ...day,
@@ -271,10 +272,11 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
             ),
           })),
           priorDays,
+          version.payload,
         ),
       ]),
     );
-  }, [goals, heldByItem, comingDays, stance, planItems, versions, today]);
+  }, [goals, heldByItem, comingDays, stance, planItems, versions, today, dial]);
 
   const shortDay = lookahead?.firstShortDay ?? null;
   const shortNextOn =

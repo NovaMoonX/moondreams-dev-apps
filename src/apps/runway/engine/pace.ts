@@ -221,19 +221,26 @@ export function planGoalTimeline<D extends PaceDay>(
   return result;
 }
 
+const NO_GOAL: Omit<PaceGoal, 'heldCents'> = {
+  targetCents: 0,
+  targetDate: null,
+  funding: { amount: { kind: 'exact', cents: 0 }, cadence: { kind: 'none' } },
+};
+
 /**
- * Where the plan stands against a goal whose version changes over the coming days: each income day
- * puts in what the stretch in force on it asks, and the target and date it is held to are the ones
- * in force at the end (the last stretch). The days the date allows are counted from the day money
- * first goes in.
+ * Where the plan stands against a goal whose version changes: each income day puts in what its stretch
+ * asks, judged against the last stretch's target and date; with no stretches (ended) nothing goes in.
  */
 export function getTimelinePace(
   stretches: readonly PaceStretch[],
   heldCents: Cents,
   incomeDays: readonly PaceDay[],
   priorDays: readonly PaceDay[] = [],
+  ended: Omit<PaceGoal, 'heldCents'> = NO_GOAL,
 ): Pace {
-  const last = [...stretches].sort((a, b) => b.from - a.from)[0];
+  const last = [...stretches].sort((a, b) => b.from - a.from)[0] ?? {
+    goal: ended,
+  };
   const date = last.goal.targetDate;
   const remaining = Math.max(0, last.goal.targetCents - heldCents);
   const isComplete = remaining === 0;
@@ -296,11 +303,7 @@ export function getTimelinePace(
   return result;
 }
 
-/**
- * What it takes per income day to reach a goal by its date, and where the plan stands against that.
- * Ahead means the target is reached at least one funded day before the date, on pace means on the
- * last funded day that fits, behind means the date comes first.
- */
+/** What it takes per income day to reach a goal by its date, and whether the plan is ahead, on pace or behind. */
 export function getPace(
   goal: PaceGoal,
   incomeDays: readonly PaceDay[],

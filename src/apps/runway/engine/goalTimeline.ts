@@ -54,3 +54,12 @@ export const toPaceStretches = (
     until,
     isSaving: isSavingFor(payload),
   }));
+
+/** The goal's stretches from `today` as the pace reads them; empty when it has ended or been archived, so it puts nothing in ahead. */
+export const getGoalPaceStretches = (
+  versions: readonly { kind: string; itemId: string }[],
+  header: Pick<PlanItemDoc, 'id' | 'endedAt' | 'archivedAt'>,
+  today: number,
+  adjust?: (payload: GoalSealed) => Partial<GoalSealed>,
+): PaceStretch[] =>
+  toPaceStretches(getGoalStretches(versions, header, today), adjust);

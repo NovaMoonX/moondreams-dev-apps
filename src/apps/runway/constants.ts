@@ -793,11 +793,13 @@ export const HORIZON_END_WORDS = {
     [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
   callOffConfirm: 'Call off',
   changesQuestion: 'What happens to its planned changes?',
-  changesCancelTitle: 'Cancel these changes too',
+  changesCancelTitle: (count: number) =>
+    count === 1
+      ? 'Cancel this change too'
+      : `Cancel these ${count} changes too`,
   changesKeepTitle: (event: string) => `Keep them, not part of ${event}`,
   changesKeepBody: 'They stay planned, on their own.',
-  changesCancelBody: (outcomes: readonly string[], more: number) =>
-    listNamesAndMore(outcomes, more),
+  changesCancelBody: 'Each goes back to what it was before.',
   cancelsRow: (line: string) => `Cancelled \u00b7 ${line}`,
   needsChangesChoice: 'Choose what happens to its planned changes.',
   changesStayCancelled: 'Its changes stay cancelled.',
@@ -3328,10 +3330,6 @@ export const COMING_WORDS = {
   cancelEntry: (name: string, what: string, date: string) =>
     `Cancelled: ${name} ${what} from ${date}`,
   cancelEntryStop: (name: string) => `${name} won't end after all`,
-  outcomeStop: (name: string) => `${name} keeps going`,
-  outcomeStart: (name: string) => `${name} does not start`,
-  outcomeStays: (name: string, figure: string) => `${name} stays at ${figure}`,
-  outcomePlain: (name: string) => `${name} stays as it is`,
   cancelled: (name: string) => `Cancelled the change to ${name}`,
   cancelFailed: 'This did not cancel. Nothing was changed.',
   gone: 'That change is no longer there.',

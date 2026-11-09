@@ -220,14 +220,3 @@ export function listCallOffChanges(
     })
     .sort((a, b) => a.change.on - b.change.on);
 }
-
-/** What goes back when a change is cancelled: "Eating out stays at $80", "Streaming keeps going", "Paycheck does not start". */
-export function describeCancelOutcome(change: PlanChange): string {
-  const name = change.after.payload.name;
-  if (change.what === 'stop') return COMING_WORDS.outcomeStop(name);
-  if (change.what === 'start') return COMING_WORDS.outcomeStart(name);
-  const before = getChangeFigure(change.before);
-  return before
-    ? COMING_WORDS.outcomeStays(name, before.text)
-    : COMING_WORDS.outcomePlain(name);
-}

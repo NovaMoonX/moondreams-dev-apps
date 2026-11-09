@@ -1,11 +1,12 @@
 import { useAppSelector } from '@/store';
 import { getEffectiveSplits } from '@apps/runway/engine/correct';
 import { collectTransferEntries } from '@apps/runway/engine/progress';
-import {
-  getGoalStretches,
-  toPaceStretches,
-} from '@apps/runway/engine/goalTimeline';
+import { getGoalPaceStretches } from '@apps/runway/engine/goalTimeline';
 import { planGoalTimeline } from '@apps/runway/engine/pace';
+import {
+  getGoalPaceFunding,
+  usePriorityDial,
+} from '@apps/runway/hooks/usePriorityDial';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import {
   getPriorDays,
@@ -35,6 +36,7 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
   const stance = useAppSelector(selectStance);
   const items = useAppSelector((state) => state.runway.items);
   const versions = useAppSelector((state) => state.runway.versions);
+  const { dial } = usePriorityDial();
 
   const arrivedOn = new Map(
     days.map((day) => [day.id, day.arrivedOn ?? day.expectedOn]),
@@ -55,12 +57,13 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
     ...(entry.fromId === goalId ? [{ on: entry.on, cents: -entry.cents }] : []),
   ]);
   const header = items.find((item) => item.id === goalId);
-  const found = header ? getGoalStretches(versions, header, today) : [];
-  const stretches =
-    found.length > 0 ? found : [{ payload: goal, from: today, until: null }];
-  const end = stretches[stretches.length - 1].payload;
+  const paceStretches = header
+    ? getGoalPaceStretches(versions, header, today, (payload) =>
+        getGoalPaceFunding(payload, dial),
+      )
+    : [];
   const contributions = planGoalTimeline(
-    toPaceStretches(stretches),
+    paceStretches,
     heldCents,
     comingDays.map((day) => ({
       ...day,
@@ -75,9 +78,10 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
       versions,
       today,
       comingDays,
-      stretches.map(({ payload }) => payload.funding),
+      paceStretches.map(({ goal: stretchGoal }) => stretchGoal.funding),
     ),
   ).contributions.map((part) => ({ on: part.day.on, cents: part.cents }));
+  const end = paceStretches.at(-1)?.goal ?? goal;
   const result = getGoalSeries({
     heldCents,
     targetCents: end.targetCents,

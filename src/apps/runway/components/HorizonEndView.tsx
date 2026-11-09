@@ -65,7 +65,6 @@ import {
 import type { HorizonLink, HorizonSealed, Stance } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
-  describeCancelOutcome,
   describeChangeLine,
   listCallOffChanges,
 } from '@apps/runway/utils/comingChangeText';
@@ -73,7 +72,6 @@ import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const MAX_STOPS_SHOWN = 3;
-const MAX_CHANGE_OUTCOMES = 2;
 
 type Choice = 'free' | 'keep' | 'place' | null;
 type ChangesChoice = 'cancel' | 'keep' | null;
@@ -190,14 +188,14 @@ function HorizonEndView({
   };
   const where = getWhere();
   const getBlocker = () => {
+    if (changeRows.length > 0 && changesPick === null)
+      return HORIZON_END_WORDS.needsChangesChoice;
     if (where === null) {
       return pick === 'place'
         ? HORIZON_END_WORDS.needsPlace
         : HORIZON_END_WORDS.needsChoice;
     }
-    return changeRows.length > 0 && changesPick === null
-      ? HORIZON_END_WORDS.needsChangesChoice
-      : null;
+    return null;
   };
   const blocker = getBlocker();
 
@@ -493,6 +491,45 @@ function HorizonEndView({
             : HORIZON_END_WORDS.finishNote}
         </p>
       </div>
+      {changeRows.length > 0 && (
+        <ActionSection caption={HORIZON_END_WORDS.changesQuestion}>
+          <div className='space-y-2'>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {changeRows.map(({ link, change }) => (
+                <li
+                  key={`${link.itemId}-${link.changeId}`}
+                  className='px-3 py-2 text-sm break-words'
+                >
+                  <MaskedText>
+                    {describeChangeLine(change, cardNamer)}
+                  </MaskedText>
+                </li>
+              ))}
+            </ul>
+            <ChoiceCards
+              options={[
+                {
+                  value: 'cancel' as const,
+                  title: HORIZON_END_WORDS.changesCancelTitle(
+                    changeRows.length,
+                  ),
+                  body: HORIZON_END_WORDS.changesCancelBody,
+                },
+                {
+                  value: 'keep' as const,
+                  title: HORIZON_END_WORDS.changesKeepTitle(horizon.name),
+                  body: HORIZON_END_WORDS.changesKeepBody,
+                },
+              ]}
+              value={changesPick}
+              onChange={(choice) => {
+                setChangesPick(choice);
+                setError(null);
+              }}
+            />
+          </div>
+        </ActionSection>
+      )}
       {holdsMoney && (
         <ActionSection
           caption={mask(
@@ -528,50 +565,6 @@ function HorizonEndView({
               setError(null);
             }}
           />
-        </ActionSection>
-      )}
-      {changeRows.length > 0 && (
-        <ActionSection caption={HORIZON_END_WORDS.changesQuestion}>
-          <div className='space-y-2'>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {changeRows.map(({ link, change }) => (
-                <li
-                  key={`${link.itemId}-${link.changeId}`}
-                  className='px-3 py-2 text-sm break-words'
-                >
-                  <MaskedText>
-                    {describeChangeLine(change, cardNamer)}
-                  </MaskedText>
-                </li>
-              ))}
-            </ul>
-            <ChoiceCards
-              options={[
-                {
-                  value: 'cancel' as const,
-                  title: HORIZON_END_WORDS.changesCancelTitle,
-                  body: mask(
-                    HORIZON_END_WORDS.changesCancelBody(
-                      changeRows
-                        .slice(0, MAX_CHANGE_OUTCOMES)
-                        .map(({ change }) => describeCancelOutcome(change)),
-                      Math.max(0, changeRows.length - MAX_CHANGE_OUTCOMES),
-                    ),
-                  ),
-                },
-                {
-                  value: 'keep' as const,
-                  title: HORIZON_END_WORDS.changesKeepTitle(horizon.name),
-                  body: HORIZON_END_WORDS.changesKeepBody,
-                },
-              ]}
-              value={changesPick}
-              onChange={(choice) => {
-                setChangesPick(choice);
-                setError(null);
-              }}
-            />
-          </div>
         </ActionSection>
       )}
       {changeJson !== null && (
