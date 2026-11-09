@@ -19,7 +19,6 @@ FS = f'http://{FS_HOST}/v1/' + ROOT
 NOW = int(time.time() * 1000)
 DAY = 86400000
 TODAY = NOW // DAY * DAY
-SEAL = {'value': 'x', 'nonce': 'n', 'keyId': 'k', 'keyVersion': 1, 'algorithm': 'AES-256-GCM'}
 
 def enc(v):
     if v is None: return {'nullValue': None}

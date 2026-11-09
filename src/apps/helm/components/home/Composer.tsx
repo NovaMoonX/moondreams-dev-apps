@@ -8,10 +8,11 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: Ref<HTMLTextAreaElement>;
+  onFocusChange: (isFocused: boolean) => void;
 }
 
 /** The text field at the foot of home's conversation. It has no Send until a turn can be kept. */
-function Composer({ fieldRef }: ComposerProps) {
+function Composer({ fieldRef, onFocusChange }: ComposerProps) {
   const name = useAssistantName();
 
   return (
@@ -21,7 +22,21 @@ function Composer({ fieldRef }: ComposerProps) {
       rows={2}
       aria-label={HELM_COPY.composerLabel(name)}
       placeholder={HELM_COPY.composerPlaceholder(name)}
-      className='bg-card'
+      className='helm-field'
+      onFocus={(event) => {
+        onFocusChange(true);
+        // The keyboard shrinks the viewport after focus lands, so the field is brought back into view each time it does.
+        const field = event.currentTarget;
+        const keepInView = () => field.scrollIntoView({ block: 'nearest' });
+        window.visualViewport?.addEventListener('resize', keepInView);
+        field.addEventListener(
+          'blur',
+          () =>
+            window.visualViewport?.removeEventListener('resize', keepInView),
+          { once: true },
+        );
+      }}
+      onBlur={() => onFocusChange(false)}
     />
   );
 }

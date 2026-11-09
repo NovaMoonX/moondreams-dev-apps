@@ -1,17 +1,26 @@
 import { parseAsBoolean, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
+import { generateUuid } from '@/utils';
 import type { HelmView } from '@apps/helm/types';
 
 const URL_VIEWS = ['today'] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
+const LOAD_ID = generateUuid();
 
-/** A view or sheet reached from home by an entry of its own, so Back can pop to home; nuqs writes don't tell the router, so the entry carries the marker itself. */
+/** A view or sheet reached from home by an entry of its own, so Back can pop to home. */
 const markStep = () => {
-  window.history.replaceState({ ...window.history.state, [MARKER]: true }, '');
+  window.history.replaceState(
+    { ...window.history.state, [MARKER]: LOAD_ID },
+    '',
+  );
 };
-const isStep = () => Boolean(window.history.state?.[MARKER]);
+// An entry marked before a reload has no home entry of this load beneath it to pop to.
+const isStep = () => window.history.state?.[MARKER] === LOAD_ID;
+const clearStep = () => {
+  window.history.replaceState({ ...window.history.state, [MARKER]: null }, '');
+};
 
 /** Helm's open view and its Browse sheet, kept in the URL so a reload and Back land where the person was. */
 export function useHelmUrlState() {
@@ -22,7 +31,7 @@ export function useHelmUrlState() {
   });
 
   const view: HelmView = requestedView ?? 'home';
-  const isBrowseOpen = browse === true;
+  const isBrowseOpen = browse === true && view === 'home';
 
   const openBrowse = async () => {
     await setUrl({ browse: true }, { history: 'push' });
@@ -41,6 +50,7 @@ export function useHelmUrlState() {
   const showView = async (next: HelmView) => {
     if (next === 'home') {
       await setUrl({ view: null, browse: null }, { history: 'replace' });
+      clearStep();
       return;
     }
     if (isBrowseOpen) {
@@ -48,7 +58,7 @@ export function useHelmUrlState() {
       markStep();
       return;
     }
-    await setUrl({ view: next }, { history: 'push' });
+    await setUrl({ view: next, browse: null }, { history: 'push' });
     markStep();
   };
 

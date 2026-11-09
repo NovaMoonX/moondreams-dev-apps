@@ -1,9 +1,4 @@
-/*
- * Helm's theme: the household's private secretary. Pewter page, white cards, ink navy for the one filled button,
- * a pale pewter tint for the assistant, verdigris only for "your call" and amber only for overdue. Titles are a
- * serif; hairlines, no card shadows. The class sits on <html> (see useHelmTheme) so modals and drawers, which
- * render outside the app's container, pick it up too.
- */
+/* The theme class sits on <html>, so drawers and modals drawn outside the page pick it up too. */
 @font-face {
   font-family: 'Source Serif 4';
   font-style: normal;
@@ -74,10 +69,16 @@ html.helm-theme.dark {
 }
 
 /* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
-html.helm-theme .helm-serif {
+html.helm-theme .helm-serif,
+html.helm-theme [role='dialog'] :is(h1, h2) {
   font-family: var(--helm-serif);
   font-weight: 600;
   letter-spacing: -0.01em;
+}
+
+/* A field sits on the page as a white card; the library's textarea draws no fill of its own. */
+html.helm-theme .helm-field {
+  background-color: var(--color-card);
 }
 
 /* Hairlines, no shadows on cards. */

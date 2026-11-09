@@ -20,12 +20,17 @@ export function useHelmSync(uid: string | null) {
       },
       (error) => console.error('Helm profile listener failed', error),
     );
-    ensureHelmProfile(uid).catch((error: unknown) =>
-      console.error('Helm profile was not created', error),
-    );
+    const ensure = () =>
+      ensureHelmProfile(uid).catch((error: unknown) =>
+        console.error('Helm profile was not created', error),
+      );
+    ensure();
+    // A first open made offline has its transaction refused; it is tried again once the device is back online.
+    window.addEventListener('online', ensure);
 
     return () => {
       isCurrent = false;
+      window.removeEventListener('online', ensure);
       stop();
       dispatch(clearHelm());
     };

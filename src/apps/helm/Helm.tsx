@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
@@ -16,6 +16,7 @@ import { VIEW_KINDS } from '@apps/helm/screen/views';
 function Helm() {
   const { user, loading } = useAuth();
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const [isComposing, setIsComposing] = useState(false);
   const { view, isBrowseOpen, openBrowse, closeBrowse, showView, goHome } =
     useHelmUrlState();
 
@@ -31,7 +32,9 @@ function Helm() {
   return (
     <HelmShell
       dock={
-        isHome && (
+        // The keyboard takes the dock's place while the field is in use, so what is typed stays in view.
+        isHome &&
+        !isComposing && (
           <VoiceDock
             onBrowse={openBrowse}
             onTalk={focusComposer}
@@ -40,7 +43,12 @@ function Helm() {
         )
       }
     >
-      {isHome && <HomeSurface composerRef={composerRef} />}
+      {isHome && (
+        <HomeSurface
+          composerRef={composerRef}
+          onComposerFocusChange={setIsComposing}
+        />
+      )}
       {view === 'today' && <TodayView onBack={goHome} onHome={goHome} />}
       <BrowseSheet
         isOpen={isBrowseOpen && isHome}

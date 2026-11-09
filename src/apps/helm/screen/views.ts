@@ -34,7 +34,7 @@ const TILES = [
   { view: 'today', importance: 'lead', grows: null },
 ] as const satisfies readonly BrowseTile[];
 
-/** More than one lead or three major tiles makes `ValidTiles` `never`, so this `satisfies`, and `npm run typecheck`, fails. */
+// More than one lead or three major tiles fails to typecheck here.
 export const BROWSE_TILES = TILES satisfies ValidTiles<typeof TILES>;
 
 /** Connected apps, Settings and Activity join once their screens exist. */

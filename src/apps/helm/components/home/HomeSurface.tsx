@@ -7,17 +7,18 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
+  onComposerFocusChange: (isFocused: boolean) => void;
 }
 
-/** Home is the conversation: the assistant's name, one quiet line and, before anything is said, one card saying how to begin. */
-function HomeSurface({ composerRef }: HomeSurfaceProps) {
+/** Home is the conversation: the assistant's name, one quiet line and, before anything is said, one card saying how to begin, with the field resting just above the dock. */
+function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const name = useAssistantName();
 
   return (
     <main className='flex flex-1 flex-col gap-8'>
       <div className='flex flex-col items-center gap-2 pt-10 text-center'>
         <div className='flex items-center gap-2'>
-          <AssistantMark name={name} />
+          <AssistantMark name={name} isLarge />
           <h1 className='helm-serif text-[28px] leading-[34px]'>{name}</h1>
         </div>
         <p className='text-muted-foreground text-[15px]'>
@@ -27,7 +28,12 @@ function HomeSurface({ composerRef }: HomeSurfaceProps) {
       <p className='helm-card p-4 text-[15px] text-pretty'>
         {HELM_COPY.firstOpen(name)}
       </p>
-      <Composer fieldRef={composerRef} />
+      <div className='mt-auto'>
+        <Composer
+          fieldRef={composerRef}
+          onFocusChange={onComposerFocusChange}
+        />
+      </div>
     </main>
   );
 }
