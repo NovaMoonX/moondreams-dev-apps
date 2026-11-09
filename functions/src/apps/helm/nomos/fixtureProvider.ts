@@ -30,7 +30,7 @@ const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'];
 
 interface ScreenBlock {
   focus: { alias: string } | null;
-  visible: { alias: string }[];
+  visible: { alias: string; position: number }[];
 }
 
 const readBlock = <T>(message: string, tag: string): T | null => {
@@ -65,16 +65,17 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
     new RegExp(`\\b${word} one is done\\b`, 'i').test(text),
   );
   const span = reading.dates[0];
-  if (/\bmove (this|it|that) to\b/i.test(text) && focus && span) {
-    return [toUpdate(focus, span.id, null)];
+  if (/\bmove (this|it|that) to\b/i.test(text)) {
+    return focus && span ? [toUpdate(focus, span.id, null)] : [];
   }
   const urgentTarget = focus ?? lastMade;
-  if (/\bmake (this|it|that) urgent\b/i.test(text) && urgentTarget) {
-    return [toUpdate(urgentTarget, null, true)];
+  if (/\bmake (this|it|that) urgent\b/i.test(text)) {
+    return urgentTarget ? [toUpdate(urgentTarget, null, true)] : [];
   }
   const target =
     ordinal >= 0
-      ? (screen?.visible[ordinal]?.alias ?? null)
+      ? (screen?.visible.find((entry) => entry.position === ordinal + 1)
+          ?.alias ?? null)
       : /\b(this is done|done with (this|it))\b/i.test(text)
         ? focus
         : null;
@@ -89,7 +90,9 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
           isUrgent: null,
         },
       ]
-    : null;
+    : ordinal >= 0
+      ? []
+      : null;
 }
 
 /** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */

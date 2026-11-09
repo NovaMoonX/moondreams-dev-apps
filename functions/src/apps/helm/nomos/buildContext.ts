@@ -18,7 +18,7 @@ export interface ContextInput {
   screen?: {
     view: string;
     focus: ContextTask | null;
-    visible: ContextTask[];
+    visible: (ContextTask & { position: number })[];
   } | null;
   earlierTurns?: EarlierTurn[];
 }
@@ -93,7 +93,10 @@ export function buildContext(input: ContextInput): {
     ? {
         view: input.screen.view,
         focus: input.screen.focus ? toRef(input.screen.focus) : null,
-        visible: input.screen.visible.map(toRef),
+        visible: input.screen.visible.map((task) => ({
+          position: task.position,
+          ...toRef(task),
+        })),
       }
     : null;
   const earlierTurns = (input.earlierTurns ?? []).map((turn) => ({

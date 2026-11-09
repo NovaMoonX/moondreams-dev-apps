@@ -12,7 +12,8 @@ export const MAX_SCREEN_VISIBLE = 20;
 export interface ScreenRefs {
   view: string;
   focusId: string | null;
-  visibleIds: string[];
+  /** Each kept id with its 1-based place in the list the client sent, so "the second one" still points at the second row once others drop out. */
+  visible: { id: string; position: number }[];
 }
 
 const toTaskId = (value: unknown) =>
@@ -30,12 +31,15 @@ export function sanitizeScreen(raw: unknown): ScreenRefs | null {
   const { view, focus, visible } = raw as Record<string, unknown>;
   if (typeof view !== 'string' || !VIEWS.has(view)) return null;
   const focusId = toTaskId(focus);
-  const visibleIds = [
-    ...new Set(
-      (Array.isArray(visible) ? visible : [])
-        .slice(0, MAX_SCREEN_VISIBLE)
-        .flatMap((entry) => toTaskId(entry) ?? []),
-    ),
-  ].filter((id) => id !== focusId);
-  return { view, focusId, visibleIds };
+  const kept = (Array.isArray(visible) ? visible : [])
+    .slice(0, MAX_SCREEN_VISIBLE)
+    .flatMap((entry, index) => {
+      const id = toTaskId(entry);
+      return id ? [{ id, position: index + 1 }] : [];
+    });
+  const visibleRefs = kept.filter(
+    (entry, index) =>
+      kept.findIndex((other) => other.id === entry.id) === index,
+  );
+  return { view, focusId, visible: visibleRefs };
 }

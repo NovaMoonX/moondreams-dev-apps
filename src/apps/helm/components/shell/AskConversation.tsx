@@ -30,7 +30,9 @@ const withoutPage = (context: ScreenContext): ScreenContext => ({
 });
 
 /** The conversation over a content page: the open session's turns and a composer of its own, with a chip saying what the page tells the assistant. Removing the chip lasts until this closes. */
-function AskConversation({ entry, onClose }: AskConversationProps) {
+function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
+  // Held from the moment it opened: a sheet closing beneath it never changes what the conversation is about.
+  const [entry] = useState(liveEntry);
   const { sessions, openSessionId } = useSession();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const [isChipRemoved, setIsChipRemoved] = useState(false);
@@ -45,7 +47,12 @@ function AskConversation({ entry, onClose }: AskConversationProps) {
   }, []);
 
   return (
-    <Subview overlay title={entry.labels.back} onClose={onClose}>
+    <Subview
+      overlay
+      title={entry.labels.back}
+      onClose={onClose}
+      className='helm-ask-overlay'
+    >
       <div className='flex flex-1 flex-col gap-4'>
         <ConversationThread
           sessions={openSession}
@@ -53,7 +60,7 @@ function AskConversation({ entry, onClose }: AskConversationProps) {
           scroll='container'
           loadsEarlier={false}
         />
-        <div className='form-footer flex flex-col gap-2'>
+        <div className='form-footer flex flex-col gap-3'>
           <div className='flex'>
             <span className='bg-secondary text-secondary-foreground inline-flex h-8 max-w-full items-center gap-1 rounded-full pr-1 pl-3 text-[13px]'>
               <span className='min-w-0 truncate'>{chip}</span>

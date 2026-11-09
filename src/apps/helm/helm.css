@@ -69,7 +69,7 @@ html.helm-theme.dark {
 }
 
 /* The conversation over a page sits above the sheet it was asked from, which stays open beneath it (drawers are z-100). */
-html.helm-theme .subview-backdrop {
+html.helm-theme .subview-backdrop:has(.helm-ask-overlay) {
   z-index: 110;
 }
 

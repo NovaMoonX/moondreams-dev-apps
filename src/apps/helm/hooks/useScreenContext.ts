@@ -11,7 +11,7 @@ import {
 } from '@apps/helm/store/screenSlice';
 import type { HelmView, RecordRef } from '@apps/helm/types';
 
-/** The views `VIEW_KINDS` calls content: the only ones that may be asked about. */
+/** The views the view table calls content: the only ones that may be asked about. */
 export type ContentView = {
   [View in HelmView]: (typeof VIEW_KINDS)[View] extends 'content'
     ? View

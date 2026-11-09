@@ -25,7 +25,6 @@ import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
-import { useLastInputMode } from '@apps/helm/hooks/useLastInputMode';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
@@ -69,7 +68,6 @@ function Composer({
   const name = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [, setLastMode] = useLastInputMode(user?.uid ?? null);
   const { restored } = useFormDraft({
     key: isReady ? draftKey : null,
     base: null,
@@ -190,7 +188,6 @@ function Composer({
         screen,
         ...turn,
       });
-      setLastMode('typed');
       recordSentTurn(uid, turn);
       setText('');
       setDismissed([]);

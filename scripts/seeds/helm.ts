@@ -345,7 +345,7 @@ async function buildUndone(input: {
   };
 }
 
-/** An `updateTask` that moves a task's day: the execution that records it. The task takes the new day and the time of the edit. */
+/** A task edit that moves its day: the execution that records it. The task takes the new day and the time of the edit. */
 async function buildMove(input: {
   movedTitle: string;
   fromDue: TaskDue | null;

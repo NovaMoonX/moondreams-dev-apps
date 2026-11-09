@@ -3,8 +3,6 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 import { resetAllState } from '@/store/actions/globalActions';
 import type { ScreenContext } from '@apps/helm/types';
 
-export type InputMode = 'voice' | 'typed';
-
 /** The words the ask control, its chip and its way back use; held in memory only and never sent. */
 export interface ScreenLabels {
   ask: string;
@@ -25,11 +23,9 @@ export interface ScreenEntry {
 export interface ScreenState {
   /** Oldest first: the latest entry is what is in front, so a sheet's sits over its page's. */
   entries: ScreenEntry[];
-  /** How the conversation over the page was asked for. */
-  askMode: InputMode;
 }
 
-const initialState: ScreenState = { entries: [], askMode: 'typed' };
+const initialState: ScreenState = { entries: [] };
 
 const screenSlice = createSlice({
   name: 'helmScreen',
@@ -47,16 +43,13 @@ const screenSlice = createSlice({
         (entry) => entry.ownerId !== action.payload,
       );
     },
-    setAskMode: (state, action: PayloadAction<InputMode>) => {
-      state.askMode = action.payload;
-    },
   },
   extraReducers: (builder) => {
     builder.addCase(resetAllState, () => initialState);
   },
 });
 
-export const { publishScreen, clearScreen, setAskMode } = screenSlice.actions;
+export const { publishScreen, clearScreen } = screenSlice.actions;
 export const screenReducer = screenSlice.reducer;
 
 export const selectTopScreen = (state: { helmScreen: ScreenState }) =>

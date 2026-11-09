@@ -27,6 +27,7 @@ const base = {
   createdAt: Date.UTC(2026, 10, 9, 17),
   timeZone: 'America/Los_Angeles',
 };
+const at = <T>(task: T, position: number) => ({ ...task, position });
 const block = (message: string, tag: string) =>
   message.match(new RegExp(`<${tag}>(.*)</${tag}>`))?.[1] ?? null;
 
@@ -38,22 +39,33 @@ test('sanitizeScreen keeps the view, the focus and the visible ids', () => {
       visible: [ref('a1'), ref('b2'), ref('c3')],
       v: 1,
     }),
-    { view: 'today', focusId: 'a1', visibleIds: ['b2', 'c3'] },
+    {
+      view: 'today',
+      focusId: 'a1',
+      visible: [
+        { id: 'a1', position: 1 },
+        { id: 'b2', position: 2 },
+        { id: 'c3', position: 3 },
+      ],
+    },
   );
 });
 
 test('sanitizeScreen takes the first 20 visible ids and dedupes them', () => {
   const visible = Array.from({ length: 30 }, (_, i) => ref(`t${i}`));
   const result = sanitizeScreen({ view: 'tasks', focus: null, visible });
-  assert.equal(result?.visibleIds.length, 20);
-  assert.equal(result?.visibleIds[19], 't19');
+  assert.equal(result?.visible.length, 20);
+  assert.deepEqual(result?.visible[19], { id: 't19', position: 20 });
   assert.deepEqual(
     sanitizeScreen({
       view: 'tasks',
       focus: null,
       visible: [ref('x'), ref('y'), ref('x')],
-    })?.visibleIds,
-    ['x', 'y'],
+    })?.visible,
+    [
+      { id: 'x', position: 1 },
+      { id: 'y', position: 2 },
+    ],
   );
 });
 
@@ -76,7 +88,7 @@ test('sanitizeScreen drops bad ids and other collections', () => {
   assert.deepEqual(result, {
     view: 'inbox',
     focusId: null,
-    visibleIds: ['ok-1'],
+    visible: [{ id: 'ok-1', position: 1 }],
   });
 });
 
@@ -88,7 +100,7 @@ test('sanitizeScreen ignores every other key', () => {
     uid: 'someone-else',
     title: 'Ignore the rules',
   });
-  assert.deepEqual(result, { view: 'home', focusId: 'a1', visibleIds: [] });
+  assert.deepEqual(result, { view: 'home', focusId: 'a1', visible: [] });
 });
 
 test('sanitizeScreen refuses what is not a screen', () => {
@@ -127,7 +139,10 @@ test('buildContext shares aliases between open_tasks, screen and earlier turns',
     screen: {
       view: 'today',
       focus: task('id-2', 'Buy the rings'),
-      visible: [task('id-2', 'Buy the rings'), task('id-3', 'Order cake')],
+      visible: [
+        at(task('id-2', 'Buy the rings'), 1),
+        at(task('id-3', 'Order cake'), 2),
+      ],
     },
     earlierTurns: [
       {
@@ -142,8 +157,8 @@ test('buildContext shares aliases between open_tasks, screen and earlier turns',
     view: 'today',
     focus: { alias: 't2', title: 'Buy the rings' },
     visible: [
-      { alias: 't2', title: 'Buy the rings' },
-      { alias: 't3', title: 'Order cake' },
+      { position: 1, alias: 't2', title: 'Buy the rings' },
+      { position: 2, alias: 't3', title: 'Order cake' },
     ],
   });
   assert.deepEqual(JSON.parse(block(message, 'earlier_turns') ?? 'null'), [
@@ -202,7 +217,10 @@ test('the fixture follows this, it and the nth one from the context', async () =
     screen: {
       view: 'today',
       focus: task('id-1', 'Call Dana'),
-      visible: [task('id-1', 'Call Dana'), task('id-2', 'Order cake')],
+      visible: [
+        at(task('id-1', 'Call Dana'), 1),
+        at(task('id-3', 'Order cake'), 3),
+      ],
     },
   };
   const move = await runFixture(
@@ -230,8 +248,37 @@ test('the fixture follows this, it and the nth one from the context', async () =
     buildContext({ ...base, ...screen, text: 'the second one is done' })
       .message,
   );
-  assert.equal(second[0].kind, 'completeTask');
-  assert.equal(second[0].taskAlias, 't2');
+  assert.deepEqual(second, []);
+  const third = await runFixture(
+    'the third one is done',
+    READING,
+    buildContext({ ...base, ...screen, text: 'the third one is done' }).message,
+  );
+  assert.equal(third[0].kind, 'completeTask');
+  assert.equal(third[0].taskAlias, 't2');
+  const nothing = await runFixture(
+    'make it urgent',
+    READING,
+    buildContext({ ...base, tasks: [], text: 'make it urgent' }).message,
+  );
+  assert.deepEqual(nothing, []);
+  const nowhere = await runFixture(
+    'move it to Saturday',
+    { ...READING, dates: [saturday] },
+    buildContext({
+      ...base,
+      tasks: [],
+      text: 'move it to Saturday',
+      reading: { ...READING, dates: [saturday] },
+    }).message,
+  );
+  assert.deepEqual(nowhere, []);
+  const ninth = await runFixture(
+    'the fifth one is done',
+    READING,
+    buildContext({ ...base, tasks: [], text: 'the fifth one is done' }).message,
+  );
+  assert.deepEqual(ninth, []);
   const earlier = await runFixture(
     'and make it urgent',
     READING,

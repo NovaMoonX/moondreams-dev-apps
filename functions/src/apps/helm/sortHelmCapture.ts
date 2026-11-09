@@ -315,7 +315,12 @@ async function readScreenTasks(
   refs: ScreenRefs | null,
 ) {
   const ids = refs
-    ? [...(refs.focusId ? [refs.focusId] : []), ...refs.visibleIds]
+    ? [
+        ...new Set([
+          ...(refs.focusId ? [refs.focusId] : []),
+          ...refs.visible.map((entry) => entry.id),
+        ]),
+      ]
     : [];
   if (!refs || ids.length === 0) return null;
   const snapshots = await firestore.getAll(
@@ -338,7 +343,10 @@ async function readScreenTasks(
   return {
     view: refs.view,
     focus: (refs.focusId && tasks.get(refs.focusId)) || null,
-    visible: refs.visibleIds.flatMap((id) => tasks.get(id) ?? []),
+    visible: refs.visible.flatMap(({ id, position }) => {
+      const task = tasks.get(id);
+      return task ? [{ ...task, position }] : [];
+    }),
   };
 }
 
@@ -375,13 +383,18 @@ async function readEarlierTurns(
           ? openTitle(key, execution.sealed)?.sealed.summary
           : null;
         const refs = Array.isArray(execution?.effectRefs)
-          ? (execution.effectRefs as { docId?: unknown }[])
+          ? (execution.effectRefs as {
+              collection?: unknown;
+              docId?: unknown;
+            }[])
           : [];
         return [
           {
             summary: typeof summary === 'string' ? summary : null,
             ids: refs.flatMap((ref) =>
-              typeof ref?.docId === 'string' ? [ref.docId] : [],
+              ref?.collection === 'tasks' && typeof ref.docId === 'string'
+                ? [ref.docId]
+                : [],
             ),
           },
         ];

@@ -474,7 +474,7 @@ function TaskSheet({
 
   return (
     <>
-      <PublishTaskScreen taskId={task.id} title={shownTitle} screen={screen} />
+      <PublishTaskScreen taskId={task.id} title={titleOf} screen={screen} />
       <DetailSheet
         isOpen
         onClose={requestClose}

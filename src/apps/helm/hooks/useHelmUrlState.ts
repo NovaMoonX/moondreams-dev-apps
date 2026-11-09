@@ -1,7 +1,6 @@
 import { parseAsBoolean, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
-import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { generateUuid } from '@/utils';
 import { VIEW_PARENTS } from '@apps/helm/screen/views';
 import type { HelmView } from '@apps/helm/types';
@@ -33,7 +32,7 @@ const clearStep = () => {
   window.history.replaceState({ ...window.history.state, [MARKER]: null }, '');
 };
 
-/** Helm's open view, its Browse sheet and the conversation over a page, kept in the URL so a reload and Back land where the person was. */
+/** The open view, its Browse sheet and the conversation over a page, kept in the URL so a reload and Back land where the person was. */
 export function useHelmUrlState() {
   const navigate = useNavigate();
   const [{ view: requestedView, browse, ask }, setUrl] = useQueryStates({
@@ -80,10 +79,6 @@ export function useHelmUrlState() {
     markStep(view);
   };
 
-  /** Leaves the conversation and the sheets over it first, so Back from the next view returns to the page that was asked about. */
-  const showViewFromAsk = (next: HelmView) =>
-    afterBackLayersClose(() => void showView(next));
-
   const goHome = () => {
     if (isStep()) {
       navigate(-1);
@@ -114,7 +109,6 @@ export function useHelmUrlState() {
     isAskRequested,
     openAsk,
     closeAsk,
-    showViewFromAsk,
     openBrowse,
     closeBrowse,
     showView,

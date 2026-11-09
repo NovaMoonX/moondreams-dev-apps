@@ -106,8 +106,6 @@ export const HELM_COPY = {
   chipAnything: 'About anything',
   chipRemove: (chip: string) => `Remove ${chip}`,
   backToTask: 'Back to this task',
-  askByVoice: 'Ask by voice',
-  askByTyping: 'Ask by typing',
   firstOpen: (name: string) =>
     `Tap Talk and tell ${name} the first thing on your mind. A task, a date, a name: ${name} sorts it.`,
   composerPlaceholder: (name: string) => `Type to ${name}`,

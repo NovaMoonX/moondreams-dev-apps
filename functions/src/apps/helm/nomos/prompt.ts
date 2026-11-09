@@ -13,7 +13,8 @@ How to file:
 - Dates come only from the reading. To give a task a day, set dueSpanId to the id of a date span in <reading> that belongs to that task. Never write a date, a day name or a time yourself, and leave dueSpanId null when no span belongs to it.
 - isUrgent is true only when the reading says the capture is urgent or the person says it of that task.
 - To change or finish a task that already exists, use updateTask or completeTask with its alias from <open_tasks>. When the person may mean a task that is not listed, call search_tasks first. Never invent an alias. Do not make a task that <open_tasks> already holds.
-- With a <screen>, "this", "it" and "that" mean its focus, and "these", "the second one" and "all of these" mean its visible records in the order listed. Use their aliases like those of <open_tasks>.
+- With a <screen>, "this", "it" and "that" mean its focus, and "these" and "all of these" mean its visible records, and "the second one" the visible record at position 2 (a position with no record is gone; never pick another in its place). Use their aliases like those of <open_tasks>.
+- A word that points ("this", "it", "the fifth one") with nothing it can point at files nothing: never turn the sentence itself into a task.
 - <earlier_turns> are what was already said and done in this conversation, oldest first. Use them to follow a follow-up: "and make it urgent" means the record the last turn made or changed. Never file them again.
 - List the commands in the order the person said them, at most ${MAX_EFFECTS}. The first ${MAX_COMMANDS} are filed now and the person can ask for the rest. When nothing in the capture can be made into a task, send no commands. Up to ${MAX_CONTEXT_TASKS} open tasks are listed.`;
 

@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { createRoot } from 'react-dom/client';
 
+import Subview from '@/components/Subview';
 import {
   afterBackLayersClose,
   keepEntryFor,
@@ -18,7 +19,7 @@ const subscribe = (listener: () => void) => {
     listeners.delete(listener);
   };
 };
-// Whether the open page has published what it shows (Helm's ask conversation opens only once it has).
+// Whether the open page has published what it shows (an ask conversation opens only once it has).
 const published = { isOn: false };
 const useAddress = () =>
   useSyncExternalStore(
@@ -105,9 +106,8 @@ const openAdd = () => {
 
 function AskOverlay() {
   const close = () => writeParams({ ask: null });
-  usePageHistory(close);
   return (
-    <section>
+    <Subview overlay title='Ask' onClose={close}>
       <p>Ask open</p>
       <button type='button' onClick={close}>
         Close ask
@@ -122,12 +122,20 @@ function AskOverlay() {
       >
         Follow link
       </button>
-    </section>
+    </Subview>
   );
 }
 
 function TaskSheet({ onClose }: { onClose: () => void }) {
   const { dialogId, onDialogClose } = useSheetHistory(true, onClose);
+  // Closes on Escape from the document, as a library drawer does, after any layer above has had it.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onDialogClose();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [onDialogClose]);
   return (
     <div role='dialog' id={dialogId}>
       <p>Sheet of one record</p>
@@ -141,7 +149,7 @@ function TaskSheet({ onClose }: { onClose: () => void }) {
   );
 }
 
-// Like Helm's content page: it publishes on mount, the ask overlay opens over it, and a task sheet is local state.
+// Like an app's content page: it publishes on mount, the ask overlay opens over it, and a task sheet is local state.
 function AskPage() {
   const [isTaskOpen, setIsTaskOpen] = useState(false);
   useEffect(() => {

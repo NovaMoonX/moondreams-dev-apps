@@ -14,7 +14,7 @@ interface HelmShellProps {
   isAskAvailable: boolean;
 }
 
-/** The page every Helm view sits in: one column, with the dock fixed at the foot of home and the ask bar at the foot of a content page. */
+/** The page every view sits in: one column, with the dock fixed at the foot of home and the ask bar at the foot of a content page. */
 function HelmShell({ children, dock, isAskAvailable }: HelmShellProps) {
   const entry = useAppSelector(selectTopScreen);
   const hasAskBar = isAskAvailable && entry !== null;

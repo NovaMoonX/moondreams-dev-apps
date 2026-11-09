@@ -15,7 +15,11 @@ import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
-import { HELM_COPY, OPEN_TASKS_LIMIT } from '@apps/helm/constants';
+import {
+  HELM_COPY,
+  OPEN_TASKS_LIMIT,
+  SCREEN_VISIBLE_CAP,
+} from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
@@ -102,9 +106,10 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
     collection: 'tasks' as const,
     id: task.id,
   }));
+  const sentCount = Math.min(rows.length, SCREEN_VISIBLE_CAP);
   useScreenContext('tasks', null, visibleRefs, {
-    ask: HELM_COPY.askTasks(rows.length),
-    chip: HELM_COPY.chipTasks(rows.length),
+    ask: HELM_COPY.askTasks(sentCount),
+    chip: HELM_COPY.chipTasks(sentCount),
     back: HELM_COPY.backToTasks,
   });
   const openTask = openId

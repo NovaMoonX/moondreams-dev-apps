@@ -9,6 +9,7 @@ interface Page {
   goto: (url: string) => Promise<unknown>;
   reload: () => Promise<unknown>;
   goBack: () => Promise<unknown>;
+  keyboard: { press: (key: string) => Promise<void> };
   waitForTimeout: (ms: number) => Promise<void>;
   url: () => string;
   evaluate: <T>(fn: () => T) => Promise<T>;
@@ -65,6 +66,10 @@ const tap =
   };
 const back: Step = async (page) => {
   await page.goBack();
+  await page.waitForTimeout(600);
+};
+const escape: Step = async (page) => {
+  await page.keyboard.press('Escape');
   await page.waitForTimeout(600);
 };
 // An update's restart reloads the page with entries a long session left: kept markers written by an earlier load on the app's own entries.
@@ -224,6 +229,15 @@ const askJourneys: {
   {
     name: 'ask from a sheet, Back lands on the sheet',
     steps: [tap('Open record sheet'), tap('Ask this one'), back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Sheet of one record') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask from a sheet, Escape closes only the ask',
+    steps: [tap('Open record sheet'), tap('Ask this one'), escape],
     isRight: ({ path, hasAsk, text }) =>
       path === '/helm' &&
       !hasAsk &&
