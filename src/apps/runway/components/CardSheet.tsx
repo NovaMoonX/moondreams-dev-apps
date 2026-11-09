@@ -8,21 +8,35 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import {
+  formatDateOrdinalUTC,
+  formatRelativeDayUTC,
+} from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { ActionSection } from '@apps/runway/components/ActionSection';
+import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
-import { CARD_WORDS } from '@apps/runway/constants';
+import { AUTO_PAY_WORDS, CARD_WORDS } from '@apps/runway/constants';
+import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { archiveCard } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
+import {
+  selectAllCards,
+  selectBillPayments,
+  selectBills,
+} from '@apps/runway/store/selectors/runwaySelectors';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import type { OpenCard } from '@apps/runway/types';
 import { useNow } from '@/hooks/useNow';
 import CardHistoryView from '@apps/runway/components/CardHistoryView';
@@ -39,6 +53,80 @@ interface CardSheetProps {
   onClose: () => void;
   onPay: () => void;
   onChange: () => void;
+}
+
+/** Bills past this many sit behind a quiet "Show more" row. */
+const SHOWN_BILLS = 3;
+
+interface CardBillsProps {
+  cardId: string;
+  today: number;
+  onClose: () => void;
+}
+
+/** The live bills charged to a card, so a card's sheet says what will land on it; each opens the bill. Draws nothing when none is. */
+function CardBills({ cardId, today, onClose }: CardBillsProps) {
+  const { showOnPlan } = useRunwayUrlState();
+  const emojiOf = useLiveEmojiResolver();
+  const bills = useAppSelector((state) => selectBills(state, today));
+  const payments = useAppSelector((state) => selectBillPayments(state, today));
+  const selfPaying = useAppSelector((state) =>
+    selectSelfPayingBills(state, today),
+  );
+  const [isAll, setIsAll] = useState(false);
+  const onCard = bills.filter(
+    ({ version }) => (version.payload.paidByCardId ?? null) === cardId,
+  );
+  if (onCard.length === 0) return null;
+  const shown = isAll ? onCard : onCard.slice(0, SHOWN_BILLS);
+
+  return (
+    <ActionSection caption={AUTO_PAY_WORDS.cardBills}>
+      <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+        {shown.map(({ item, version }) => {
+          const payment =
+            (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ??
+            null;
+          const isSelf =
+            payment !== null &&
+            selfPaying[item.id] !== undefined &&
+            !selfPaying[item.id].undoneDueOn.includes(payment.dueOn);
+          const due =
+            payment === null
+              ? AUTO_PAY_WORDS.cardBillNoDue
+              : AUTO_PAY_WORDS.cardBillLine(
+                  formatRelativeDayUTC(
+                    payment.dueOn,
+                    today,
+                    formatDateOrdinalUTC,
+                  ),
+                  isSelf,
+                );
+          return (
+            <ItemRow
+              key={item.id}
+              name={version.payload.name}
+              emoji={emojiOf(version.payload.emoji, version.payload.groupId)}
+              detail={due}
+              figure={payment === null ? null : formatCents(payment.totalCents)}
+              ariaLabel={`${version.payload.name}. ${due}. Open`}
+              onOpen={() => {
+                onClose();
+                void showOnPlan('bills', { itemId: item.id });
+              }}
+            />
+          );
+        })}
+      </ul>
+      {onCard.length > SHOWN_BILLS && (
+        <ShowMoreButton isOpen={isAll} onClick={() => setIsAll(!isAll)}>
+          {isAll
+            ? AUTO_PAY_WORDS.cardBillsFewer
+            : AUTO_PAY_WORDS.cardBillsMore(onCard.length - SHOWN_BILLS)}
+        </ShowMoreButton>
+      )}
+    </ActionSection>
+  );
 }
 
 /** What a card row opens: what it waits for as the figure, then paying it off, changing it, archiving it and its history. */
@@ -199,6 +287,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
               onClick={() => setView('history')}
             />
           </ActionGroup>
+          <CardBills cardId={card.id} today={today} onClose={onClose} />
         </div>
       )}
     </FormSheet>

@@ -1,5 +1,5 @@
 import { toComparable } from '@/utils/optionMatchUtils';
-import { AUTO_PAY_WORDS } from '@apps/runway/constants';
+import { AUTO_PAY_DAYS } from '@apps/runway/constants';
 import type {
   Cents,
   DateOnly,
@@ -249,7 +249,7 @@ export function findChargeMatches(input: {
         candidates: charges.filter(
           (purchase) =>
             isOnBill(bill, purchase, input.pullAccountId) &&
-            isNearDue(purchase, payment.dueOn, AUTO_PAY_WORDS.matchDays) &&
+            isNearDue(purchase, payment.dueOn, AUTO_PAY_DAYS.matchDays) &&
             purchase.amountCents >= payment.lowCents &&
             purchase.amountCents <= payment.highCents &&
             isNamedLike(bill, purchase),
@@ -294,8 +294,8 @@ export function rankChargeCandidates(input: {
   isLinkHistory: (purchase: OpenPurchase) => boolean;
 }): OpenPurchase[] {
   const { bill, payment } = input;
-  const from = addUtcDays(payment.dueOn, -AUTO_PAY_WORDS.pickDaysBefore);
-  const to = addUtcDays(payment.dueOn, AUTO_PAY_WORDS.pickDaysAfter);
+  const from = addUtcDays(payment.dueOn, -AUTO_PAY_DAYS.pickDaysBefore);
+  const to = addUtcDays(payment.dueOn, AUTO_PAY_DAYS.pickDaysAfter);
   const result = [
     ...new Map(
       input.purchases.map((purchase) => [purchase.id, purchase]),
@@ -374,8 +374,8 @@ export function findAutoChecks(input: {
         }
         const age = input.today - payment.dueOn;
         return isOpenPayment(bill, payment, input.matched) &&
-          age >= AUTO_PAY_WORDS.matchDays * DAY_MS &&
-          age <= AUTO_PAY_WORDS.askDays * DAY_MS &&
+          age >= AUTO_PAY_DAYS.matchDays * DAY_MS &&
+          age <= AUTO_PAY_DAYS.askDays * DAY_MS &&
           !input.snoozed.has(getPaymentKey(bill.id, payment.dueOn))
           ? [{ kind: 'charge', ...base }]
           : [];

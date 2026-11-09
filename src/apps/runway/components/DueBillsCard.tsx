@@ -15,12 +15,16 @@ import {
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
+import { ChargePickerSheet } from '@apps/runway/components/ChargePickerView';
+import ItemRow from '@apps/runway/components/ItemRow';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import {
   toBillAmountPayment,
   useBillCardName,
 } from '@apps/runway/hooks/paidAmountPayment';
 import {
+  AUTO_PAY_WORDS,
   CARD_WORDS,
   DUE_WORDS,
   HORIZON_WORDS,
@@ -33,6 +37,8 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
 import type { CostPayment } from '@apps/runway/engine/horizon';
 import type { Lookahead } from '@apps/runway/engine/lookahead';
+import type { AutoCheck } from '@apps/runway/engine/autoPay';
+import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import { useCostPaid } from '@apps/runway/hooks/useCostPaid';
 import { useDueCostRows } from '@apps/runway/hooks/useDueCostRows';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
@@ -356,6 +362,53 @@ function DueCostRow({ due, cost, payment, emoji, today }: DueCostRowProps) {
   );
 }
 
+interface AutoCheckRowProps {
+  check: AutoCheck;
+  emoji: string | null;
+}
+
+/** A payment the app marked or could not place by itself: it opens the question it needs answered. */
+function AutoCheckRow({ check, emoji }: AutoCheckRowProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const name = check.billName === '' ? 'A bill' : check.billName;
+
+  return (
+    <>
+      <ItemRow
+        name={name}
+        emoji={emoji}
+        detail={
+          check.kind === 'amount'
+            ? AUTO_PAY_WORDS.chargedOn(formatDateOrdinalUTC(check.dueOn))
+            : AUTO_PAY_WORDS.whichCharge
+        }
+        ariaLabel={`${name}. ${
+          check.kind === 'amount'
+            ? AUTO_PAY_WORDS.enterAmount
+            : AUTO_PAY_WORDS.whichCharge
+        }`}
+        onOpen={() => setIsOpen(true)}
+      />
+      {isOpen &&
+        (check.kind === 'amount' ? (
+          <AutoAmountSheet
+            billId={check.billId}
+            billName={name}
+            dueOn={check.dueOn}
+            onClose={() => setIsOpen(false)}
+          />
+        ) : (
+          <ChargePickerSheet
+            billId={check.billId}
+            billName={name}
+            dueOn={check.dueOn}
+            onClose={() => setIsOpen(false)}
+          />
+        ))}
+    </>
+  );
+}
+
 /** Rows a crowded card shows before it folds the rest away. */
 const SHOWN_DUE = 3;
 
@@ -388,6 +441,7 @@ function DueBillsCard({
   const bills = useAppSelector((state) => selectBills(state, today));
   const emojiOf = useLiveEmojiResolver();
   const costRows = useDueCostRows(lookahead, today);
+  const { checks } = useAutoChecks();
   const due: DueRow[] = [
     ...(lookahead?.due ?? []).map((entry) => ({
       kind: 'bill' as const,
@@ -395,7 +449,7 @@ function DueBillsCard({
     })),
     ...costRows.map((row) => ({ kind: 'cost' as const, ...row })),
   ].sort((a, b) => (costRows.length === 0 ? 0 : a.entry.dueOn - b.entry.dueOn));
-  if (due.length === 0) return null;
+  if (due.length + checks.length === 0) return null;
 
   const openBills = () => {
     showPlanSection('bills');
@@ -409,19 +463,27 @@ function DueBillsCard({
     (payments[entry.billId] ?? []).find(
       (payment) => payment.dueOn === entry.dueOn,
     ) ?? null;
-  const hidden = due.slice(SHOWN_DUE);
+  const rows: (DueRow | { kind: 'check'; check: AutoCheck })[] = [
+    ...due,
+    ...checks.map((check) => ({ kind: 'check' as const, check })),
+  ];
+  const hidden = rows.slice(SHOWN_DUE);
   const isUnfolded = overflow === 'unfold' && isAllDueOpen;
   const isFolded =
     overflow === 'door'
       ? hidden.length > 0
       : hidden.length > SHOWN_DUE && !isUnfolded;
   const hasFold = overflow === 'unfold' && hidden.length > SHOWN_DUE;
-  const shown = isFolded ? due.slice(0, SHOWN_DUE) : due;
+  const shown = isFolded ? rows.slice(0, SHOWN_DUE) : rows;
   const isAnyLate = due.some(({ entry }) => entry.isOverdue);
-  const title = isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
+  const getTitle = () => {
+    if (due.length === 0) return AUTO_PAY_WORDS.checksHeading;
+    return isAnyLate ? DUE_WORDS.titleLate : DUE_WORDS.title;
+  };
+  const title = getTitle();
   const count =
-    due.length > 1
-      ? DUE_WORDS.count(due.length, isAnyLate, costRows.length > 0)
+    rows.length > 1 && due.length > 0
+      ? DUE_WORDS.count(rows.length, isAnyLate, costRows.length > 0)
       : null;
   const toggleUnfolded = () => (isUnfolded ? closeAllDue() : openAllDue());
 
@@ -454,6 +516,18 @@ function DueBillsCard({
       )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {shown.map((row) => {
+          if (row.kind === 'check') {
+            const payload =
+              bills.find(({ item }) => item.id === row.check.billId)?.version
+                .payload ?? null;
+            return (
+              <AutoCheckRow
+                key={`${row.check.kind}-${row.check.billId}-${row.check.dueOn}`}
+                check={row.check}
+                emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
+              />
+            );
+          }
           if (row.kind === 'cost') {
             return (
               <DueCostRow

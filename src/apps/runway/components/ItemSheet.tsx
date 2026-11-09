@@ -19,12 +19,13 @@ import {
   Ruler,
   ShoppingBag,
   Undo2,
+  Unlink,
   Waves,
   Wallet,
 } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
@@ -47,6 +48,8 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import AccountPicker from '@apps/runway/components/AccountPicker';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
+import ChargePickerView from '@apps/runway/components/ChargePickerView';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
 import { toBillAmountPayment } from '@apps/runway/hooks/paidAmountPayment';
 import {
@@ -67,6 +70,7 @@ import SheetHead from '@apps/runway/components/SheetHead';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import {
   ACCOUNT_WORDS,
+  AUTO_PAY_WORDS,
   CARD_WORDS,
   CHANGE_WORDS,
   GOAL_CHART_WORDS,
@@ -111,7 +115,12 @@ import GoalForm, { type GoalStepId } from '@apps/runway/forms/GoalForm';
 import IncomeForm, { type IncomeStepId } from '@apps/runway/forms/IncomeForm';
 import PairingsEditor from '@apps/runway/forms/PairingsEditor';
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
+import {
+  useAutoChecks,
+  useForgetBillMatch,
+} from '@apps/runway/hooks/useAutoPay';
 import { useBillPaid } from '@apps/runway/hooks/useBillPaid';
+import { useIsSelfPaying } from '@apps/runway/hooks/useSelfPaying';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { setAccountHolds } from '@apps/runway/store/actions/accountActions';
@@ -127,6 +136,7 @@ import {
   getLaterReleaseDay,
   type HeldChoice,
 } from '@apps/runway/engine/endings';
+import { selectLearnedNames } from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccountHoldings,
@@ -183,6 +193,7 @@ type View =
   | 'setHeld'
   | 'heldIn'
   | 'spill'
+  | 'charge'
   | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
@@ -271,6 +282,7 @@ const VIEW_NOTES: Record<View, string> = {
   setHeld: '',
   heldIn: '',
   spill: '',
+  charge: '',
   dayAction: '',
 };
 
@@ -373,6 +385,16 @@ function ItemSheet({
     onUndone,
   });
   const [isAskingPaid, setIsAskingPaid] = useState(false);
+  const [isCorrecting, setIsCorrecting] = useState(false);
+  const [chargeDueOn, setChargeDueOn] = useState<number | null>(null);
+  const { confirm } = useActionModal();
+  const forgetMatch = useForgetBillMatch();
+  const { checks } = useAutoChecks();
+  const check = checks.find((entry) => entry.billId === itemId) ?? null;
+  const learnedCount = useAppSelector(
+    (state) => selectLearnedNames(state, itemId).length,
+  );
+  const isSelfPaying = useIsSelfPaying(itemId, payment?.dueOn ?? null, today);
 
   if (!version || version.kind === 'group' || version.kind === 'horizon')
     return null;
@@ -957,13 +979,26 @@ function ItemSheet({
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
-  const hasBillRow = itemKind === 'bill' && paid.isReady && payment !== null;
+  const hasBillRow =
+    itemKind === 'bill' &&
+    paid.isReady &&
+    payment !== null &&
+    !(isSelfPaying && !paid.isPaid);
+  const canForget = itemKind === 'bill' && learnedCount > 0;
 
   const openChange = (step: string | null) => {
     setOpenStep(step);
     setPhase('change');
   };
   const openHistory = () => goTo('history');
+  const forget = async () => {
+    const isConfirmed = await confirm({
+      title: AUTO_PAY_WORDS.forgetTitle(payload.name),
+      message: AUTO_PAY_WORDS.forgetSub,
+      confirmText: AUTO_PAY_WORDS.forgetConfirm,
+    });
+    if (isConfirmed) void forgetMatch(itemId, payload.name);
+  };
 
   const menu = (
     <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
@@ -1097,6 +1132,35 @@ function ItemSheet({
             onClose={() => setIsAskingPaid(false)}
           />
         )}
+        {itemKind === 'bill' && check?.kind === 'amount' && (
+          <ActionRow
+            isGrouped
+            icon={<Calculator />}
+            label={AUTO_PAY_WORDS.enterAmount}
+            subtitle={AUTO_PAY_WORDS.enterAmountSub}
+            onClick={() => setIsCorrecting(true)}
+          />
+        )}
+        {itemKind === 'bill' && check?.kind === 'charge' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<ReceiptText />}
+            label={AUTO_PAY_WORDS.whichCharge}
+            onClick={() => {
+              setChargeDueOn(check.dueOn);
+              goTo('charge');
+            }}
+          />
+        )}
+        {isCorrecting && check?.kind === 'amount' && (
+          <AutoAmountSheet
+            billId={itemId}
+            billName={payload.name}
+            dueOn={check.dueOn}
+            onClose={() => setIsCorrecting(false)}
+          />
+        )}
         {isFunded && (
           <ActionRow
             isGrouped
@@ -1156,6 +1220,15 @@ function ItemSheet({
             onClick={openHistory}
           />
         ))}
+        {canForget && (
+          <ActionRow
+            isGrouped
+            icon={<Unlink />}
+            label={AUTO_PAY_WORDS.forgetRow}
+            subtitle={AUTO_PAY_WORDS.forgetSub}
+            onClick={() => void forget()}
+          />
+        )}
       </ActionGroup>
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
@@ -1289,6 +1362,18 @@ function ItemSheet({
           }}
         />
       )}
+    </div>
+  );
+
+  const chargeView = chargeDueOn !== null && (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ChargePickerView
+        billId={itemId}
+        billName={payload.name}
+        dueOn={chargeDueOn}
+        onDone={() => goTo('menu')}
+      />
     </div>
   );
 
@@ -1686,23 +1771,25 @@ function ItemSheet({
           view === 'purchases' ||
           view === 'check'
             ? browse
-            : view === 'group'
-              ? groupView
-              : view === 'spill'
-                ? spillView
-                : view === 'move'
-                  ? moveView
-                  : view === 'setHeld'
-                    ? setHeldView
-                    : view === 'heldIn'
-                      ? heldInView
-                      : view === 'dayAction' && dayAction?.renderView
-                        ? dayAction.renderView({
-                            onBack: () => goTo('menu'),
-                            onClose,
-                            openChange,
-                          })
-                        : action
+            : view === 'charge' && chargeView
+              ? chargeView
+              : view === 'group'
+                ? groupView
+                : view === 'spill'
+                  ? spillView
+                  : view === 'move'
+                    ? moveView
+                    : view === 'setHeld'
+                      ? setHeldView
+                      : view === 'heldIn'
+                        ? heldInView
+                        : view === 'dayAction' && dayAction?.renderView
+                          ? dayAction.renderView({
+                              onBack: () => goTo('menu'),
+                              onClose,
+                              openChange,
+                            })
+                          : action
         }
       >
         {menu}

@@ -9,7 +9,7 @@ import { db } from '@lib/firebase/config';
 
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { AUTO_PAY_WORDS } from '@apps/runway/constants';
+import { AUTO_PAY_DAYS, AUTO_PAY_WORDS } from '@apps/runway/constants';
 import { getMerchantKeys } from '@apps/runway/engine/autoPay';
 import { getPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { openJson, sealJson } from '@apps/runway/security';
@@ -276,7 +276,7 @@ async function readKeys(
 
 /** Newest first, no name twice, no more than a bill keeps. */
 const mergeKeys = (added: readonly string[], kept: readonly string[]) =>
-  [...new Set([...added, ...kept])].slice(0, AUTO_PAY_WORDS.maxLearnedNames);
+  [...new Set([...added, ...kept])].slice(0, AUTO_PAY_DAYS.maxLearnedNames);
 
 /**
  * Settles a bill's payment with a bank charge in one transaction: the charge stops counting as spending (it has no lines, since the

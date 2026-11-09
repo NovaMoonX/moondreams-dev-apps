@@ -1,5 +1,5 @@
 import { DAY_MS } from '@apps/runway/engine/dates';
-import { AUTO_PAY_WORDS } from '@apps/runway/constants';
+import { AUTO_PAY_DAYS } from '@apps/runway/constants';
 
 const KEY_PREFIX = 'runway-charge-snooze';
 
@@ -33,7 +33,7 @@ export function snoozeCharge(paymentKey: string, now = Date.now()): void {
   try {
     localStorage.setItem(
       keyFor(paymentKey),
-      String(now + AUTO_PAY_WORDS.snoozeDays * DAY_MS),
+      String(now + AUTO_PAY_DAYS.snoozeDays * DAY_MS),
     );
   } catch {
     // Without storage the question simply comes back on the next visit.

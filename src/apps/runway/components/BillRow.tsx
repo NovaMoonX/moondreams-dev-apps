@@ -13,6 +13,7 @@ import ItemSheet, {
 } from '@apps/runway/components/ItemSheet';
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
+  AUTO_PAY_WORDS,
   BILL_WORDS,
   GROUP_WORDS,
   MAKE_BILL_WORDS,
@@ -30,6 +31,8 @@ import {
   joinPaymentAndState,
 } from '@apps/runway/utils/billText';
 import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import { useBillCardName } from '@apps/runway/hooks/paidAmountPayment';
+import { useIsSelfPaying } from '@apps/runway/hooks/useSelfPaying';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
@@ -180,6 +183,8 @@ export function BillSheet({
       .filter((cost) => cost.becameBillId === billId)
       .map((cost) => ({ item: version.payload.name, cost: cost.name })),
   )[0];
+  const isSelfPaying = useIsSelfPaying(billId, payment?.dueOn ?? null, today);
+  const autoCardName = useBillCardName(billId, payment?.dueOn ?? today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -197,6 +202,11 @@ export function BillSheet({
     repeat,
     getDueFact(),
     getProgress(payment, isSavingUp),
+    isSelfPaying
+      ? autoCardName === null
+        ? AUTO_PAY_WORDS.paidFromBank
+        : AUTO_PAY_WORDS.paidWithCard(autoCardName)
+      : null,
   ]
     .filter(Boolean)
     .join(' · ');

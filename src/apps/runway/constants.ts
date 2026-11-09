@@ -2437,9 +2437,8 @@ export const PAID_HISTORY_WORDS = {
   undoTitle: 'Take back this payment?',
 } as const;
 
-/** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
-export const AUTO_PAY_WORDS = {
-  changeLabel: 'Pays itself',
+/** The windows around a due day that automatic payments use. */
+export const AUTO_PAY_DAYS = {
   /** The most merchant names a bill keeps from charges it has matched. */
   maxLearnedNames: 10,
   /** A charge dated this many days either side of the due day can be the payment. */
@@ -2451,6 +2450,43 @@ export const AUTO_PAY_WORDS = {
   askDays: 45,
   /** "Not here yet" hides a payment's question for this many days, on this device. */
   snoozeDays: 3,
+} as const;
+
+/** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
+export const AUTO_PAY_WORDS = {
+  changeLabel: 'Pays itself',
+  formToggle: 'It pays itself',
+  formSummary: 'pays itself',
+  formLineCard:
+    "You won't need to mark it paid. On the due day we'll count it as charged to this card.",
+  formLineBank:
+    "You won't need to mark it paid. On the due day we'll count it as paid from your bank.",
+  paidWithCard: (card: string) => `Paid with ${card} · automatically`,
+  paidFromBank: 'From your bank · automatically',
+  paysItselfLine: 'Pays itself',
+  enterAmount: 'Enter what it charged',
+  enterAmountSub: 'We counted the top of its usual range',
+  save: 'Save',
+  whichCharge: 'Which charge was this?',
+  chargedOn: (date: string) => `Charged ${date} · enter the amount`,
+  checksHeading: 'To check',
+  forgetRow: 'Forget the matched charge',
+  forgetSub: "We'll ask which charge it is next time",
+  forgetTitle: (name: string) => `Forget the charges matched to ${name}?`,
+  forgetConfirm: 'Forget',
+  pickTitle: (name: string, due: string) =>
+    `Which charge was ${name} on ${due}?`,
+  pickEmpty: (due: string) => `No charge near ${due} yet`,
+  pickSearch: 'Search charges',
+  pickRow: (date: string, source: string | null) =>
+    source === null ? date : `${date} · ${source}`,
+  noMerchant: 'A charge',
+  cardBills: 'Bills on this card',
+  cardBillLine: (due: string, paysItself: boolean) =>
+    paysItself ? `Due ${due} · pays itself` : `Due ${due}`,
+  cardBillNoDue: 'No due date yet',
+  cardBillsMore: (count: number) => `Show ${count} more`,
+  cardBillsFewer: 'Show fewer',
   autoSummary: (name: string, due: string, amount: string) =>
     `${name} paid itself: ${amount} due\u00a0${due}.`,
   correctedSummary: (name: string, due: string, amount: string) =>
