@@ -63,13 +63,12 @@ const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 interface SortResult {
   status: 'sorted' | 'received' | 'failed';
   executionId: string | null;
-  heldReason: 'dailyLimit' | 'budgetReached' | null;
 }
 
 const toResult = (
   status: SortResult['status'],
   executionId: string | null = null,
-): SortResult => ({ status, executionId, heldReason: null });
+): SortResult => ({ status, executionId });
 
 interface CaptureDoc {
   status: string;
@@ -180,6 +179,7 @@ async function claimCapture(
     transaction.update(ref, {
       status: 'interpreting',
       attempts,
+      heldReason: null,
       claimId,
       claimedAt: now,
     });

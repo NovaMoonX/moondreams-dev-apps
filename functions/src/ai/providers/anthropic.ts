@@ -16,6 +16,8 @@ type Message = Anthropic.Beta.Messages.BetaMessageParam;
 type Block = Anthropic.Beta.Messages.BetaContentBlockParam;
 
 const TURN_TIMEOUT_MS = 15_000;
+// A turn sent with less time than this would almost surely time out, wasting what it is billed.
+const MIN_TURN_MS = 5_000;
 const MAX_OUTPUT_TOKENS = 8_000;
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
@@ -28,8 +30,15 @@ const toUsage = (usage: Anthropic.Beta.Messages.BetaUsage): ModelUsage => ({
 
 const getErrorCode = (error: unknown) => {
   if (error instanceof Anthropic.APIConnectionTimeoutError) return 'timeout';
+  // Connection and abort errors are status-less subclasses of the API error.
+  if (
+    error instanceof Anthropic.APIConnectionError ||
+    error instanceof Anthropic.APIUserAbortError
+  ) {
+    return 'network';
+  }
   if (error instanceof Anthropic.APIError) return `http${error.status ?? 0}`;
-  return 'network';
+  return 'loopError';
 };
 
 const toText = (content: unknown): string => {
@@ -68,7 +77,7 @@ export function createAnthropicProvider(
     const isOver = () =>
       state.turns >= limits.maxTurns ||
       toolCalls.length >= limits.maxToolCalls ||
-      timeLeft() <= 0;
+      timeLeft() < 2 * MIN_TURN_MS;
     const end = (
       endedBy: ToolLoopResult['endedBy'],
       terminalInput: unknown = null,
@@ -110,7 +119,7 @@ export function createAnthropicProvider(
       ];
 
       for (;;) {
-        if (state.turns >= limits.maxTurns || timeLeft() <= 0) {
+        if (state.turns >= limits.maxTurns || timeLeft() < MIN_TURN_MS) {
           return end('limit');
         }
         const response = await client.beta.messages.create(
@@ -150,7 +159,7 @@ export function createAnthropicProvider(
 
         if (state.asked) return end(isOver() ? 'limit' : 'noTerminal');
 
-        if (state.turns >= limits.maxTurns || timeLeft() <= 0) {
+        if (state.turns >= limits.maxTurns || timeLeft() < MIN_TURN_MS) {
           return end('limit');
         }
 

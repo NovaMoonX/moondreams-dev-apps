@@ -110,7 +110,8 @@ export async function loadExecutionsById(uid: string, ids: string[]) {
     store.dispatch(addFailedExecutions(failedIds));
   } catch (error) {
     console.error('Helm activity did not load', error);
-    if (store.getState().helm.uid === uid) {
+    // Offline is not broken: the turn asks again on its next mount.
+    if (navigator.onLine && store.getState().helm.uid === uid) {
       store.dispatch(addFailedExecutions(wanted));
     }
   } finally {

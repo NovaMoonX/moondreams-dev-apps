@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
 
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { createAnthropicProvider } from '../../functions/src/ai/providers/anthropic.ts';
@@ -589,11 +590,24 @@ test('a loop stays inside its turns and its time, and the ask counts as a turn',
     messages: [{ role: 'user', content: 'hi' }],
     mcpClient,
     terminalTool: FILE_RESULTS_TOOL,
-    limits: { maxTurns: 2, maxToolCalls: 12, maxMillis: 5_000 },
+    limits: { maxTurns: 2, maxToolCalls: 12, maxMillis: 30_000 },
   });
   assert.equal(counter.calls, 2, 'never more than maxTurns requests');
   assert.equal(run.endedBy, 'limit');
-  assert.ok(counter.timeouts.every((ms) => ms <= 5_000));
+  assert.ok(counter.timeouts.every((ms) => ms <= 15_000));
+
+  const short = { calls: 0, timeouts: [] as number[] };
+  await createAnthropicProvider('test', fakeClient(short) as never).runToolLoop(
+    {
+      role: 'interpret',
+      system: 's',
+      messages: [{ role: 'user', content: 'hi' }],
+      mcpClient,
+      terminalTool: FILE_RESULTS_TOOL,
+      limits: { maxTurns: 6, maxToolCalls: 12, maxMillis: 4_000 },
+    },
+  );
+  assert.equal(short.calls, 0, 'no turn starts without time to finish');
 
   const none = { calls: 0, timeouts: [] as number[] };
   const spentTime = await createAnthropicProvider(
@@ -609,6 +623,46 @@ test('a loop stays inside its turns and its time, and the ask counts as a turn',
   });
   assert.equal(none.calls, 0, 'no request once the time is spent');
   assert.equal(spentTime.endedBy, 'limit');
+});
+
+test('a dropped connection gives the try back; our own failure does not', async () => {
+  // The provider's own copy of the SDK, so its error classes are the ones it checks.
+  const { default: Anthropic } = await import(
+    createRequire(import.meta.url)
+      .resolve('@anthropic-ai/sdk', { paths: ['functions'] })
+      .replace(/\.js$/, '.mjs')
+  );
+  const mcpClient = {
+    listTools: async () => ({ tools: [] }),
+    callTool: async () => ({ content: [] }),
+  } as never;
+  const codeFor = async (error: unknown) =>
+    (
+      await createAnthropicProvider('test', {
+        beta: {
+          messages: {
+            create: async () => {
+              throw error;
+            },
+          },
+        },
+      } as never).runToolLoop({
+        role: 'interpret',
+        system: 's',
+        messages: [{ role: 'user', content: 'hi' }],
+        mcpClient,
+        terminalTool: FILE_RESULTS_TOOL,
+        limits: { maxTurns: 6, maxToolCalls: 12, maxMillis: 30_000 },
+      })
+    ).errorCode;
+  const dropped = await codeFor(
+    new Anthropic.APIConnectionError({ message: 'reset' }),
+  );
+  assert.equal(dropped, 'network');
+  assert.equal(isTransientCode(dropped ?? ''), true);
+  const ours = await codeFor(new TypeError('bug'));
+  assert.equal(ours, 'loopError');
+  assert.equal(isTransientCode(ours ?? ''), false);
 });
 
 test('an attempt is counted at the claim and given back for a busy or missing service', () => {

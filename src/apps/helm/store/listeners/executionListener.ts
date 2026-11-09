@@ -105,7 +105,7 @@ export function startRecentExecutionsListener(
   };
 }
 
-/** The executions with these ids, for turns whose execution isn't in the store; an id that is missing or won't be read comes back as failed. */
+/** The executions with these ids, for turns whose execution isn't in the store; an id that is missing or won't open comes back as failed, one that couldn't be fetched (offline) as neither. */
 export async function fetchExecutionsById(
   uid: string,
   read: SealedReader,
@@ -116,7 +116,7 @@ export async function fetchExecutionsById(
       getDoc(doc(executionsOf(uid), id)).then(
         (snapshot) =>
           snapshot.exists() ? openExecution(snapshot, read) : null,
-        () => null,
+        () => undefined,
       ),
     ),
   );
@@ -124,9 +124,9 @@ export async function fetchExecutionsById(
     opened: results.flatMap((result) =>
       result && !result.isUnreadable ? [result] : [],
     ),
-    failedIds: ids.filter(
-      (id) =>
-        !results.some((result) => result?.id === id && !result.isUnreadable),
-    ),
+    failedIds: ids.filter((_id, index) => {
+      const result = results[index];
+      return result === null || (result !== undefined && result.isUnreadable);
+    }),
   };
 }

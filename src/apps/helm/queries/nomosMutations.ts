@@ -3,12 +3,9 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '@lib/firebase/config';
 import { generateUuid } from '@/utils';
 
-import type { HeldReason } from '@apps/helm/types';
-
 interface SortResult {
   status: 'sorted' | 'received' | 'failed';
   executionId: string | null;
-  heldReason: HeldReason | null;
 }
 
 const sortHelmCaptureCallable = httpsCallable<

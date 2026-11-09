@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { formatTime } from '@/utils/formatUtils';
@@ -8,8 +8,12 @@ import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
 import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
-import { loadExecutionsById } from '@apps/helm/store/actions/captureActions';
+import {
+  loadExecutionsById,
+  markCaptureSeen,
+} from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 
@@ -26,6 +30,29 @@ interface TurnCardProps {
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
+function LostResult({
+  captureId,
+  isMarking,
+}: {
+  captureId: string;
+  isMarking: boolean;
+}) {
+  const { user } = useAuth();
+  const line = useRef<HTMLParagraphElement>(null);
+  useOnceVisible(line, isMarking && user !== null, async () => {
+    if (!user) return;
+    await markCaptureSeen(user.uid, captureId).catch((error: unknown) => {
+      console.error('Helm turn was not marked seen', error);
+      throw error;
+    });
+  });
+  return (
+    <p ref={line} className='text-muted-foreground pl-[30px] text-[13px]'>
+      {HELM_COPY.unreadable}
+    </p>
+  );
+}
+
 function TurnCard({
   capture,
   showsOutcome,
@@ -105,9 +132,10 @@ function TurnCard({
         </div>
       )}
       {hasLost && (
-        <p className='text-muted-foreground pl-[30px] text-[13px]'>
-          {HELM_COPY.unreadable}
-        </p>
+        <LostResult
+          captureId={capture.id}
+          isMarking={isOnHome && capture.seenAt === null}
+        />
       )}
       {showsOutcome && !isReading && !isSorted && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>
