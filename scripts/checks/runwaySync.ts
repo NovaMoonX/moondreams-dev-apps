@@ -353,6 +353,20 @@ assert.equal(
   'a dropped charge tied to a bill, pairing or cost is left for the person',
 );
 assert.deepEqual(tied.released, []);
+const paired = applyTransactions(
+  keyOf,
+  targets,
+  [],
+  [],
+  ['t4-pending'],
+  new Map(
+    [...person].map(([id, state]) => [
+      id,
+      { ...state, payload: { ...state.payload, pairedWithId: 'other' } },
+    ]),
+  ),
+);
+assert.equal(paired.writes.has(pendingId), false, 'a paired one is left too');
 assert.equal(tied.removed, 0);
 
 const takenOver = applyTransactions(

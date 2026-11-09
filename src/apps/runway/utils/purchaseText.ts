@@ -196,10 +196,14 @@ export function describeReleasedCharge(
   charge: OpenReleasedCharge,
   nameOf: (envelopeId: string) => string,
 ): string {
-  const what = charge.title ?? 'A pending charge';
+  const isRefund = charge.amountCents < 0;
+  const kind = isRefund ? 'refund' : 'charge';
+  const what = charge.title ?? `A pending ${kind}`;
   const where = describeEnvelopes(charge.lines, nameOf);
-  const tail = where ? ` It no longer counts against ${where}.` : '';
-  return `The bank dropped a pending charge: ${what}, ${money(charge.amountCents)} on ${formatDateOrdinalUTC(charge.date)}.${tail}`;
+  const tail = where
+    ? ` It no longer ${isRefund ? 'adds to' : 'counts against'} ${where}.`
+    : '';
+  return `The bank dropped a pending ${kind}: ${what}, ${money(Math.abs(charge.amountCents))} on ${formatDateOrdinalUTC(charge.date)}.${tail}`;
 }
 
 /** The change-log sentence for sending a waiting purchase to its envelopes, or leaving it out of spending. */

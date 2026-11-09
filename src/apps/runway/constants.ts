@@ -4293,8 +4293,9 @@ export const RELEASED_WORDS = {
     isRefund
       ? `It no longer adds to ${where}.`
       : `It no longer counts, so its money is back in ${where}.`,
-  many: (count: number) => `The bank dropped ${count} pending charges`,
-  manySub: 'They no longer count, so their money is back where it came from.',
+  many: (count: number, hasRefund: boolean) =>
+    `The bank dropped ${count} pending ${hasRefund ? 'items' : 'charges'}`,
+  manySub: 'They no longer count. History says where each one was.',
 };
 
 export const NEEDS_HOME_WORDS = {

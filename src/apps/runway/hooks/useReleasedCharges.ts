@@ -45,7 +45,7 @@ export function useReleasedCharges(uid: string | null) {
       if (fresh.length === 0) return;
       fresh.forEach((charge) => tried.current.add(charge.id));
       const nameOf = (envelopeId: string) =>
-        latest.current.looks.get(envelopeId)?.name ?? 'An envelope';
+        latest.current.looks.get(envelopeId)?.name ?? 'its envelope';
       const cleared = await fresh.reduce(
         async (previous, charge) => {
           const done = await previous;
@@ -81,7 +81,10 @@ export function useReleasedCharges(uid: string | null) {
               type: 'info',
             }
           : {
-              title: RELEASED_WORDS.many(cleared.length),
+              title: RELEASED_WORDS.many(
+                cleared.length,
+                cleared.some((charge) => charge.amountCents < 0),
+              ),
               description: RELEASED_WORDS.manySub,
               type: 'info',
             },
