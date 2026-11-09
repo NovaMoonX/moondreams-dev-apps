@@ -237,6 +237,13 @@ export interface ItemSheetProps {
     step: string;
     icon?: ReactNode;
   };
+  /** A bill's "Paid with" row, opening the change at that question. */
+  payAction?: {
+    label: string;
+    subtitle?: string;
+    step: string;
+    icon?: ReactNode;
+  };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
   /** A bill's next payment, which the sheet can mark paid. */
@@ -304,6 +311,7 @@ function ItemSheet({
   quickChange,
   dayAction,
   maxAction,
+  payAction,
   startsAtStep,
   payment = null,
   onMarked,
@@ -1007,6 +1015,17 @@ function ItemSheet({
     setPhase('change');
   };
   const openHistory = () => goTo('history');
+  const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
+    if (paid.needsAmount) return PAID_AMOUNT_WORDS.markSub;
+    if (paidWithCard !== null) return CARD_WORDS.chargedTo(paidWithCard);
+    if (due.fundedCents >= due.totalCents)
+      return ITEM_SHEET_WORDS.paidFromSetAside;
+    return mask(
+      ITEM_SHEET_R2_WORDS.paidFromFreeText(
+        formatCentsShort(due.totalCents - due.fundedCents),
+      ),
+    );
+  };
   const forget = async () => {
     const isConfirmed = await confirm({
       title: AUTO_PAY_WORDS.forgetTitle(payload.name),
@@ -1027,6 +1046,25 @@ function ItemSheet({
         help={help}
       />
       {extra}
+      {hasBillRow && payment && !paid.isPaid && (
+        <div className='space-y-1.5'>
+          <Button
+            type='button'
+            className='w-full gap-2'
+            disabled={paid.isBusy}
+            onClick={() => {
+              if (paid.needsAmount) setIsAskingPaid(true);
+              else void paid.mark();
+            }}
+          >
+            <Check className='h-4 w-4' aria-hidden='true' />
+            {CHECKLIST_WORDS.markPaid}
+          </Button>
+          <p className='text-muted-foreground text-center text-[13px]'>
+            {getMarkPaidSub(payment)}
+          </p>
+        </div>
+      )}
       <ActionGroup>
         {itemKind === 'bill' && check?.kind === 'amount' && (
           <ActionRow
@@ -1108,6 +1146,16 @@ function ItemSheet({
             onClick={() => openChange(null)}
           />
         )}
+        {canChange && payAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={payAction.icon}
+            label={payAction.label}
+            subtitle={payAction.subtitle}
+            onClick={() => openChange(payAction.step)}
+          />
+        )}
         {canChange && maxAction && (
           <ActionRow
             isGrouped
@@ -1156,36 +1204,13 @@ function ItemSheet({
               onClick={openHeldIn}
             />
           )}
-        {hasBillRow && payment && (
+        {hasBillRow && paid.isPaid && (
           <ActionRow
             isGrouped
-            icon={paid.isPaid ? <Undo2 /> : <Check />}
-            label={
-              paid.isPaid ? ITEM_SHEET_WORDS.notPaid : CHECKLIST_WORDS.markPaid
-            }
-            subtitle={
-              paid.isPaid
-                ? undefined
-                : paid.needsAmount
-                  ? PAID_AMOUNT_WORDS.markSub
-                  : paidWithCard !== null
-                    ? CARD_WORDS.chargedTo(paidWithCard)
-                    : payment.fundedCents >= payment.totalCents
-                      ? ITEM_SHEET_WORDS.paidFromSetAside
-                      : mask(
-                          ITEM_SHEET_R2_WORDS.paidFromFreeText(
-                            formatCentsShort(
-                              payment.totalCents - payment.fundedCents,
-                            ),
-                          ),
-                        )
-            }
+            icon={<Undo2 />}
+            label={ITEM_SHEET_WORDS.notPaid}
             isDisabled={paid.isBusy}
-            onClick={() => {
-              if (paid.isPaid) void paid.undo();
-              else if (paid.needsAmount) setIsAskingPaid(true);
-              else void paid.mark();
-            }}
+            onClick={() => void paid.undo()}
           />
         )}
         {isAskingPaid && payment && (
