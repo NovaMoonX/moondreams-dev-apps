@@ -716,8 +716,7 @@ export const HORIZON_PLAN_WORDS = {
     `${goal}, ${saved} of ${target}`,
   partOf: (event: string) => `Part of ${event}`,
   partOfSub: 'Saving for it',
-  unlinkTitle: (goal: string, event: string) =>
-    `Unlink ${goal} from ${event}?`,
+  unlinkTitle: (goal: string, event: string) => `Unlink ${goal} from ${event}?`,
   unlinkBody:
     'The goal keeps saving at its own pace. What should happen to its cost on the event?',
   unlinkBodyKept: (event: string) =>

@@ -89,7 +89,9 @@ function HorizonUnlinkView({
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
-      <ActionTitle>{HORIZON_PLAN_WORDS.unlinkTitle(goalName, eventName)}</ActionTitle>
+      <ActionTitle>
+        {HORIZON_PLAN_WORDS.unlinkTitle(goalName, eventName)}
+      </ActionTitle>
       <p className='text-muted-foreground text-sm'>
         {canRemoveCost
           ? HORIZON_PLAN_WORDS.unlinkBody
