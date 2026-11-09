@@ -62,10 +62,11 @@ export const isSelfPaying = (
     today - dueOn > AUTO_PAY_DAYS.askDays * DAY_MS
   );
 
-/** The day the setting was turned on: the earliest version of the newest unbroken run with it on (one change's versions share a `createdAt`); null when the newest has it off. */
+/** The day the setting took effect: the later of the day the newest unbroken run with it on was saved (one change's versions share a `createdAt`) and its earliest `effectiveFrom`; null when the newest has it off. */
 export function getPaysItselfFrom(
   versions: readonly {
     createdAt: number;
+    effectiveFrom?: DateOnly | null;
     payload: { paysItself?: boolean | null };
   }[],
 ): DateOnly | null {
@@ -84,14 +85,18 @@ export function getPaysItselfFrom(
     },
     { from: null, isBroken: false },
   );
-  return run.from === null ? null : startOfUtcDay(run.from);
+  if (run.from === null) return null;
+  const firstEffective = versions
+    .filter((version) => version.createdAt === run.from)
+    .map((version) => version.effectiveFrom ?? 0);
+  return Math.max(startOfUtcDay(run.from), ...firstEffective);
 }
 
 /** What names one payment, with no name in it: the bill's id and the due day. */
 export const getPaymentKey = (billId: string, dueOn: DateOnly) =>
   `${billId}:${toDayStamp(dueOn)}`;
 
-/** The due days of each bill's payments whose newest mark the person took back; a correction or a match writes a later mark and is not that. */
+/** The due days of each bill's payments whose newest mark the person took back; a correction or a match writes a later mark and is not that, and neither is the app reversing its own match. */
 export function getUndoneDueDays(
   moves: readonly OpenMove[],
 ): Record<string, DateOnly[]> {
@@ -111,7 +116,9 @@ export function getUndoneDueDays(
   }, new Map());
   return [...newest.values()].reduce<Record<string, DateOnly[]>>(
     (acc, move) =>
-      move.refId === null || !reversed.has(move.id)
+      move.refId === null ||
+      !reversed.has(move.id) ||
+      (move.kind === 'billPaid' && move.payload.auto?.purchaseId != null)
         ? acc
         : { ...acc, [move.refId]: [...(acc[move.refId] ?? []), move.date] },
     {},
@@ -160,6 +167,8 @@ export function findAutoMarks(input: {
   level: Level;
   today: DateOnly;
   bills: readonly AutoBill[];
+  /** Payments whose charge waits in Needs a home (`findHeldPaymentKeys`), left unmarked so a drop from Link never counts the payment twice. */
+  held?: ReadonlySet<string>;
 }): AutoMark[] {
   if (!isTrackingLevel(input.level) || isLinkAt(input.level)) return [];
   const result = input.bills
@@ -170,7 +179,8 @@ export function findAutoMarks(input: {
             payment.paid === null &&
             payment.dueOn <= input.today &&
             payment.dueOn >= bill.since &&
-            !bill.undoneDueOn.includes(payment.dueOn),
+            !bill.undoneDueOn.includes(payment.dueOn) &&
+            !input.held?.has(getPaymentKey(bill.id, payment.dueOn)),
         )
         .map((payment): AutoMark => ({
           billId: bill.id,
@@ -297,6 +307,19 @@ export const findBillCandidateIds = (input: ChargeInput): Set<string> =>
     ),
   );
 
+/** The payments, at any level, that a waiting charge could settle: left to the charge matcher rather than marked. */
+export const findHeldPaymentKeys = (
+  input: Omit<ChargeInput, 'level'>,
+): Set<string> =>
+  new Set(
+    getChargeOptions({ ...input, level: 'link' }, true).flatMap(
+      ({ bill, payment, candidates }) =>
+        candidates.some((purchase) => purchase.assignedBy !== 'person')
+          ? [getPaymentKey(bill.id, payment.dueOn)]
+          : [],
+    ),
+  );
+
 /** The charges that are clearly a bill's payment, at Link: the only candidate for that payment, and claimed by no other payment. The person's send-backs are left alone. */
 export function findChargeMatches(input: ChargeInput): ChargeMatch[] {
   const options = getChargeOptions(input, false).map((option) => ({
@@ -348,6 +371,7 @@ export function rankChargeCandidates(input: {
     .filter(
       (purchase) =>
         isCharge(purchase) &&
+        purchase.status !== 'pending' &&
         purchase.date >= from &&
         purchase.date <= to &&
         isOnBill(bill, purchase, input.pullAccountId) &&

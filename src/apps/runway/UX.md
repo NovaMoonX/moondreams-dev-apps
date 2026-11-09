@@ -386,3 +386,4 @@ The success toast carries one Undo that puts every written bill back as it was (
 - **Checklist:** a self-paying bill is a "Pays itself" row with no tick, outside the N of M count and Mark all paid; it wears the bill's emoji in the ticked rows' name column and its chevron is level with theirs.
 - **Card sheet:** "Bills on this card" lists the bills it pays (Show N more past five); a row opens the bill on Plan.
 - **Purchase screen:** a matched charge says "Paid Netflix's Nov 1st bill", has no Edit row, and offers "Not this bill's charge" right under the facts tile, which sends it back to waiting.
+- **Undo, unmatch and Take back:** undoing a match or choosing "Not this bill's charge" sends the payment back to "Which charge was this?", never to To pay now; taking back a mark that a charge settled (History, or Not paid on the bill) sends the charge back to Needs a home with it.

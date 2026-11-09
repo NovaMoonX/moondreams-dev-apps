@@ -4,6 +4,7 @@ import {
   findAutoChecks,
   findAutoMarks,
   findBillCandidateIds,
+  findHeldPaymentKeys,
   findChargeMatches,
   getMatchedKeys,
   getPaymentKey,
@@ -815,6 +816,97 @@ const paymentRows = (dueDays: number[]) =>
     ]),
     { netflix: [at(-1)] },
     'the newest mark taken back is the person’s',
+  );
+}
+
+// A reversed match is not the person's take-back.
+{
+  const move = (
+    id: string,
+    reverses: string | null,
+    purchaseId: string | null,
+  ) =>
+    ({
+      id,
+      kind: 'billPaid',
+      date: at(-1),
+      refId: 'netflix',
+      reversesMoveId: reverses,
+      createdAt: 1,
+      payload: { auto: { isEstimate: false, purchaseId } },
+    }) as unknown as OpenMove;
+  assert.deepEqual(
+    getUndoneDueDays([move('m', null, 'c'), move('unpaid_m', 'm', 'c')]),
+    {},
+    'a mark that settled a charge, reversed by an unmatch',
+  );
+  assert.deepEqual(
+    getUndoneDueDays([move('m', null, null), move('unpaid_m', 'm', null)]),
+    { netflix: [at(-1)] },
+    'a reversed mark with no charge is still the person’s',
+  );
+}
+
+// The picker never offers a pending charge.
+{
+  const payment = pay(at(-1), 1_599);
+  const list = rankChargeCandidates({
+    bill: bill({ payments: [payment] }),
+    payment,
+    purchases: [
+      charge('posted', 1_599, at(-1)),
+      charge('pending', 1_599, at(-1), { status: 'pending' }),
+    ],
+    pullAccountId: null,
+    isLinkHistory: () => false,
+  }).map((purchase) => purchase.id);
+  assert.deepEqual(list, ['posted']);
+}
+
+// The setting counts from the day it takes effect, not only the day it was saved.
+{
+  const version = (createdAt: number, effectiveFrom: number) => ({
+    createdAt,
+    effectiveFrom,
+    payload: { paysItself: true },
+  });
+  assert.equal(
+    getPaysItselfFrom([version(at(-5), at(2))]),
+    at(2),
+    'a change dated ahead starts on its day',
+  );
+  assert.equal(
+    getPaysItselfFrom([version(at(-1), at(-30))]),
+    at(-1),
+    'a backdated change starts the day it was saved',
+  );
+}
+
+// A payment whose charge waits in Needs a home is not marked.
+{
+  const waitingCharge = charge('wait', 1_599, at(-1));
+  const held = findHeldPaymentKeys({
+    today,
+    bills: [bill()],
+    waiting: [waitingCharge],
+    pullAccountId: null,
+    matched: new Set(),
+  });
+  assert.deepEqual([...held], [getPaymentKey('netflix', at(-1))]);
+  assert.equal(
+    findAutoMarks({ level: 'track', today, bills: [bill()], held }).length,
+    0,
+  );
+  assert.equal(
+    findHeldPaymentKeys({
+      today,
+      bills: [bill()],
+      waiting: [{ ...waitingCharge, assignedBy: 'person' }],
+      pullAccountId: null,
+      matched: new Set(),
+    }).size,
+    0,
+    'a charge the person sent back holds nothing',
   );
 }
 

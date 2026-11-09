@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CHECKLIST_R3_WORDS,
+  AUTO_PAY_WORDS,
   CHECKLIST_WORDS,
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
@@ -17,6 +18,7 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import type { Cents } from '@apps/runway/types';
 import { countMarks } from '@apps/runway/engine/progress';
 import { inTurn } from '@apps/runway/hooks/paidQueue';
+import { unmatchPurchaseFromBill } from '@apps/runway/hooks/useAutoPay';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
@@ -64,13 +66,28 @@ export async function markPaymentPaid(
   return written;
 }
 
-/** Takes a payment's paid mark back; resolves false when it had already been taken back. */
+/** Takes a payment's paid mark back, and the charge that settled it with it; resolves false when it had already been taken back. */
 export async function undoPaymentPaid(
   uid: string,
   billId: string,
   billName: string,
   paid: Omit<WrittenPaidMark, 'billId'>,
 ) {
+  const state = store.getState();
+  const move = state.runway.moves.find((entry) => entry.id === paid.moveId);
+  const purchaseId =
+    move?.kind === 'billPaid' ? (move.payload.auto?.purchaseId ?? null) : null;
+  if (purchaseId !== null) {
+    const purchase = [...state.runway.purchases, ...state.runway.needsHome].find(
+      (entry) =>
+        entry.id === purchaseId &&
+        entry.billRef?.billId === billId &&
+        entry.billRef.dueOn === paid.dueOn,
+    );
+    if (!purchase) throw new Error(AUTO_PAY_WORDS.takeBackNeedsUnmatch);
+    await unmatchPurchaseFromBill(uid, purchase, billName);
+    return true;
+  }
   const encryption = await getRunwayEncryption(uid);
   const isWritten = await inTurn(() =>
     undoBillPaid(

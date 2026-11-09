@@ -16,6 +16,7 @@ import { AUTO_PAY_WORDS } from '@apps/runway/constants';
 import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
   findAutoMarks,
+  findHeldPaymentKeys,
   findChargeMatches,
   getMatchedKeys,
   getPaymentKey,
@@ -196,7 +197,20 @@ export function useAutoPay(uid: string | null) {
       isWaitingToRun.current = true;
       return;
     }
-    const marks = findAutoMarks({ level, today, bills })
+    const pullAccountId = resolvePayFromAccountId(null, accounts);
+    const matched = getMatchedKeys(purchases);
+    const marks = findAutoMarks({
+      level,
+      today,
+      bills,
+      held: findHeldPaymentKeys({
+        today,
+        bills,
+        waiting,
+        pullAccountId,
+        matched,
+      }),
+    })
       .map((mark) => ({
         mark,
         key: `mark:${getPaymentKey(mark.billId, mark.dueOn)}`,
@@ -210,8 +224,8 @@ export function useAutoPay(uid: string | null) {
             today,
             bills,
             waiting,
-            pullAccountId: resolvePayFromAccountId(null, accounts),
-            matched: getMatchedKeys(purchases),
+            pullAccountId,
+            matched,
           })
             .map((match) => ({ match, key: toMatchKey(match) }))
             .filter(({ key }) => !tried.current.has(key));
@@ -351,42 +365,52 @@ export function usePickCharge() {
   return pick;
 }
 
+/** Takes a matched charge off its bill and the mark it settled with it; the mark goes back to an estimate only below Link. */
+export async function unmatchPurchaseFromBill(
+  uid: string,
+  purchase: OpenPurchase,
+  billName: string,
+): Promise<void> {
+  const ref = purchase.billRef ?? null;
+  if (ref === null) return;
+  const encryption = await getRunwayEncryption(uid);
+  const state = store.getState();
+  const level = selectLevel(state);
+  const bill = selectAutoBills(state, todayAsUtcDate()).find(
+    (entry) => entry.id === ref.billId,
+  );
+  const slot = bill?.payments.find((entry) => entry.dueOn === ref.dueOn);
+  const isMarkedByApp =
+    bill !== undefined &&
+    isTrackingLevel(level) &&
+    level !== 'link' &&
+    !bill.undoneDueOn.includes(ref.dueOn);
+  const paid = findBillPayment(ref.billId, ref.dueOn)?.paid ?? null;
+  await inTurn(() =>
+    unmatchBillCharge(uid, encryption, {
+      purchase,
+      billName,
+      mark: paid === null ? null : toWritten(ref.billId, paid),
+      restore:
+        isMarkedByApp && slot
+          ? {
+              amountCents: slot.highCents,
+              isEstimate: slot.lowCents !== slot.highCents,
+            }
+          : null,
+    }),
+  );
+}
+
 /** Takes a matched charge off its bill; resolves with whether it was written. */
 export function useUnmatchCharge() {
   const { user } = useAuth();
   const { addToast } = useToast();
 
   const unmatch = async (purchase: OpenPurchase, billName: string) => {
-    const ref = purchase.billRef ?? null;
-    if (!user || ref === null) return false;
+    if (!user || (purchase.billRef ?? null) === null) return false;
     try {
-      const encryption = await getRunwayEncryption(user.uid);
-      const state = store.getState();
-      const level = selectLevel(state);
-      const bill = selectAutoBills(state, todayAsUtcDate()).find(
-        (entry) => entry.id === ref.billId,
-      );
-      const slot = bill?.payments.find((entry) => entry.dueOn === ref.dueOn);
-      const isMarkedByApp =
-        bill !== undefined &&
-        isTrackingLevel(level) &&
-        level !== 'link' &&
-        !bill.undoneDueOn.includes(ref.dueOn);
-      const paid = findBillPayment(ref.billId, ref.dueOn)?.paid ?? null;
-      await inTurn(() =>
-        unmatchBillCharge(user.uid, encryption, {
-          purchase,
-          billName,
-          mark: paid === null ? null : toWritten(ref.billId, paid),
-          restore:
-            isMarkedByApp && slot
-              ? {
-                  amountCents: slot.highCents,
-                  isEstimate: slot.lowCents !== slot.highCents,
-                }
-              : null,
-        }),
-      );
+      await unmatchPurchaseFromBill(user.uid, purchase, billName);
       addToast({ title: AUTO_PAY_WORDS.unmatched, type: 'success' });
       return true;
     } catch (error) {
