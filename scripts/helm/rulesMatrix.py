@@ -17,6 +17,7 @@ ROOT = f'projects/{PROJECT}/databases/(default)/documents/'
 FS = f'http://{FS_HOST}/v1/' + ROOT
 
 NOW = int(time.time() * 1000)
+SEAL = {'value': 'x', 'nonce': 'n', 'keyId': 'k', 'keyVersion': 1, 'algorithm': 'AES-256-GCM'}
 DAY = 86400000
 TODAY = NOW // DAY * DAY
 
