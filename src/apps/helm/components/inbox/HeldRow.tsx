@@ -1,8 +1,14 @@
+import { useSyncExternalStore } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Hourglass } from 'lucide-react';
 
 import { formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  isUnreachable,
+  subscribeSorting,
+} from '@apps/helm/queries/nomosMutations';
 import { getWaitingReason, type HeldItem } from '@apps/helm/utils/heldCaptures';
 
 interface HeldRowProps {
@@ -10,19 +16,33 @@ interface HeldRowProps {
   onOpen: (item: HeldItem) => void;
 }
 
-const getLine = ({ kind, capture }: HeldItem) => {
+const getLine = (
+  { kind, capture }: HeldItem,
+  isUnreachableHere: boolean,
+): { reason: string; trailing: string | null } => {
   const time = formatTime(capture.createdAt);
-  if (kind === 'couldNotRead') return `${HELM_COPY.couldNotRead} · ${time}`;
-  if (kind === 'failed') return `${HELM_COPY.couldNotSort} · ${time}`;
-  if (kind === 'moreToSort') {
-    return `${HELM_COPY.moreToSort} · ${HELM_COPY.sortTheRest}`;
+  if (kind === 'couldNotRead') {
+    return { reason: HELM_COPY.couldNotRead, trailing: time };
   }
-  return `${getWaitingReason(capture)} · ${time}`;
+  if (kind === 'failed') {
+    return { reason: HELM_COPY.couldNotSort, trailing: time };
+  }
+  if (kind === 'moreToSort') {
+    return { reason: HELM_COPY.moreToSort, trailing: HELM_COPY.sortTheRest };
+  }
+  return {
+    reason: getWaitingReason(capture, isUnreachableHere),
+    trailing: null,
+  };
 };
 
 /** One turn that needs the person (a verdigris dot) or only waits (an hourglass, no dot), opening its sheet. */
 function HeldRow({ item, onOpen }: HeldRowProps) {
   const { capture } = item;
+  const isUnreachableHere = useSyncExternalStore(subscribeSorting, () =>
+    isUnreachable(capture.id),
+  );
+  const { reason, trailing } = getLine(item, isUnreachableHere);
   return (
     <Button
       type='button'
@@ -30,23 +50,33 @@ function HeldRow({ item, onOpen }: HeldRowProps) {
       className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
       onClick={() => onOpen(item)}
     >
-      {item.kind === 'waiting' ? (
-        <Hourglass
-          className='text-muted-foreground size-4 shrink-0'
-          aria-hidden='true'
-        />
-      ) : (
-        <span
-          className='size-2 shrink-0 rounded-full bg-[var(--helm-verdigris)]'
-          aria-hidden='true'
-        />
-      )}
+      <span className='flex size-4 shrink-0 items-center justify-center'>
+        {item.kind === 'waiting' ? (
+          <Hourglass
+            className='text-muted-foreground size-4'
+            aria-hidden='true'
+          />
+        ) : (
+          <span
+            className='size-2 rounded-full bg-[var(--helm-verdigris)]'
+            aria-hidden='true'
+          />
+        )}
+      </span>
       <span className='min-w-0 flex-1'>
-        <span className='text-foreground line-clamp-1 text-[15px] leading-[21px] break-words'>
+        <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
           {capture.isUnreadable ? HELM_COPY.unreadable : capture.text}
         </span>
-        <span className='text-muted-foreground block text-[13px] text-pretty'>
-          {getLine(item)}
+        <span className='text-muted-foreground block text-[13px]'>
+          <span className='flex gap-1'>
+            <span className='min-w-0 truncate'>{reason}</span>
+            {trailing && (
+              <span className='shrink-0 whitespace-nowrap tabular-nums'>
+                {'· '}
+                {trailing}
+              </span>
+            )}
+          </span>
         </span>
       </span>
       <ChevronRight

@@ -101,17 +101,27 @@ const readCommand = (
 
 const toKey = (title: string) => title.trim().toLowerCase();
 
-const hasEveryToken = (commands: NomosCommand[], reading: CaptureReading) => {
+const hasEveryToken = (
+  commands: NomosCommand[],
+  reading: CaptureReading,
+  madeTitles: string[],
+) => {
   const titles = commands.flatMap((command) =>
     'title' in command && command.title ? [command.title.toLowerCase()] : [],
   );
   if (titles.length === 0) return true;
-  return [...reading.people, ...reading.places, ...reading.documents].every(
-    (token) => titles.some((title) => title.includes(token.text.toLowerCase())),
-  );
+  const made = madeTitles.map((title) => title.toLowerCase());
+  return [...reading.people, ...reading.places, ...reading.documents]
+    .filter(
+      (token) =>
+        !made.some((title) => title.includes(token.text.toLowerCase())),
+    )
+    .every((token) =>
+      titles.some((title) => title.includes(token.text.toLowerCase())),
+    );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {
@@ -135,7 +145,7 @@ export function normalizeNomosReply(
     (command) =>
       command.kind !== 'createTask' || !made.has(toKey(command.title)),
   );
-  if (!context.alreadyMade && !hasEveryToken(fresh, context.reading)) {
+  if (!hasEveryToken(fresh, context.reading, context.alreadyMade ?? [])) {
     throw new NomosReplyError('droppedToken');
   }
   return {

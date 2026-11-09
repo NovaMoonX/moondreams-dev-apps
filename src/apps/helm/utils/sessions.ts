@@ -1,7 +1,5 @@
-import { SESSION_IDLE_MS } from '@apps/helm/constants';
+import { DAY_MS, SESSION_IDLE_MS } from '@apps/helm/constants';
 import type { OpenCapture } from '@apps/helm/types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface Session {
   sessionId: string;

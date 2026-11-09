@@ -40,6 +40,9 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.unseenCaptures,
   );
+  const isWaitingFailed = useAppSelector(
+    (state) => state.helm.waitingCaptures.isFailed,
+  );
   const [opened, setOpened] = useState<OpenCapture | null>(null);
   const [heldId, setHeldId] = useState<string | null>(null);
   const openHeld =
@@ -73,6 +76,11 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.inboxTitle}
         </h1>
+        {isWaitingFailed && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.waitingCheckFailed}
+          </p>
+        )}
         {held.needsYou.length > 0 && (
           <ul className='helm-card divide-border divide-y overflow-hidden'>
             {held.needsYou.map((item) => (

@@ -145,7 +145,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **B5 Kept what you changed.** B4 after the person moved "Call Dana Ruiz" to Thu, Nov 12 at 9:30 AM, then tapped Undo all: the fact and "Buy the rings" struck through, muted "Taken back"; "Call Dana Ruiz · Thu, Nov 12" unstruck. Line above the footer (13, ink, mark): "Took back 1 fact and 1 task. Kept 1 task you changed since: Call Dana Ruiz." Footer: "Done" only.
 
-**B6 Couldn't read this.** Drawer. Title "Couldn't read this". Quote "the thing with the". 13 muted: "{Name} couldn't tell what to make of it." Footer: trash (left), "Try reading again" (outline), "Make it a task as written" (primary, widest).
+**B6 Couldn't read this.** Drawer. Title "Couldn't read this". Quote "the thing with the". 13 muted: "{Name} couldn't tell what to make of it." Footer: trash (left), "Try again" (outline), "Make it a task as written" (primary, widest).
 
 **B8 Held captures, by reason (board Waiting).** Inbox, badge 3 (an edge-state morning). "Needs you" (verdigris dot) card: "the thing with the" · "Couldn't read this · 7:40 AM"; "Wedding list from Maya's email" · "20 filed, the rest waits · Sort the rest · 7:58 AM"; "Ask Priya about the offsite budget" · "Couldn't sort this · 9:02 AM". "Waiting to be read" (hourglass) card: "Pick up the dry cleaning Tuesday" · "Saved on this device · waits for a connection"; "Order more printer paper" · "Today's limit reached · read after 4:00 PM" (the local time of UTC midnight, when the day's allowance comes back); "Call the caterer back" · "A lot at once · sorted in a few minutes". 13 muted: "Waiting needs nothing from you: {Name} reads these on its own." Titles clamp to one line.
 
@@ -160,7 +160,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **B12 A question answered (QuestionAnswered, new in round 6b).** "We need to count the vegetarian meals for the caterer" · 9:52 AM; the question as a muted line with the mark; "Sam and Jordan" · 9:53 AM (17); "Got it: Sam Lee and Jordan Hayes." (22/500); the card: "Noted: Sam Lee and Jordan Hayes need a vegetarian meal" · "You said, answering the question"; "Added to Call the caterer: 2 vegetarian meals" · 💍 Wedding ›; "Undo all of this" · 9:53 AM. A muted line with the mark: "Which menu did you and Maya pick? **Skipped. It's waiting in Needs you.**" Note (at 616): "Sam" read as Sam Lee; the Activity line; what Undo takes back.
 
-**B9 Couldn't sort this (board CouldntSort).** Drawer over Inbox: title, quote "Ask Priya about the offsite budget", "{Name} couldn't reach its AI service, three tries this morning. Your words are saved.", small outline "Try reading again"; footer trash, "Make it a task as written" (primary).
+**B9 Couldn't sort this (board CouldntSort).** Drawer over Inbox: title, quote "Ask Priya about the offsite budget", "{Name} couldn't reach its AI service, three tries this morning. Your words are saved.", small outline "Try again"; footer trash, "Make it a task as written" (primary).
 
 **B7 Needs you empty.** Title "Needs you". One muted line top-left: "Nothing new. {Name} files what you tell it here first." Tell pill.
 

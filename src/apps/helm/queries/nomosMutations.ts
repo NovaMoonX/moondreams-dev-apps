@@ -26,12 +26,23 @@ const notify = () => listeners.forEach((listener) => listener());
 
 export const isSorting = (captureId: string) => inFlight.has(captureId);
 
+/** Turns whose last call in this tab failed for want of a connection or an answer in time, so a waiting turn can say the service couldn't be reached. */
+const unreachable = new Set<string>();
+
+export const isUnreachable = (captureId: string) => unreachable.has(captureId);
+
 export const subscribeSorting = (listener: () => void) => {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
   };
 };
+
+const isConnectionError = (error: unknown) =>
+  error instanceof Error &&
+  'code' in error &&
+  (error.code === 'functions/unavailable' ||
+    error.code === 'functions/deadline-exceeded');
 
 /** Asks the server to sort one saved turn, once. A failure is logged and leaves the turn saved as written. */
 export async function sortCapture(
@@ -47,6 +58,7 @@ export async function sortCapture(
       requestKey: generateUuid(),
       mode,
     });
+    unreachable.delete(captureId);
     return 'done';
   } catch (error) {
     const isHeld =
@@ -54,6 +66,8 @@ export async function sortCapture(
       'code' in error &&
       error.code === 'functions/resource-exhausted';
     if (!isHeld) console.error('Helm could not sort a turn', error);
+    if (isConnectionError(error)) unreachable.add(captureId);
+    else unreachable.delete(captureId);
     return isHeld ? 'held' : 'failed';
   } finally {
     inFlight.delete(captureId);

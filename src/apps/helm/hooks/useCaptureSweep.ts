@@ -2,11 +2,15 @@ import { useEffect, useRef } from 'react';
 
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { store, useAppSelector } from '@/store';
-import { RECENT_LIMIT_WINDOW_MS, SWEEP_LEASE_MS } from '@apps/helm/constants';
+import {
+  DAY_MS,
+  RECENT_LIMIT_WINDOW_MS,
+  SWEEP_LEASE_MS,
+  SWEEP_RETRY_MS,
+  SWEEP_RUN_LIMIT,
+} from '@apps/helm/constants';
 import { sortCapture, isSorting } from '@apps/helm/queries/nomosMutations';
 import type { OpenCapture } from '@apps/helm/types';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 const isUtcDayOver = (heldAt: number, now: number) =>
   Math.floor(now / DAY_MS) > Math.floor(heldAt / DAY_MS);
@@ -17,6 +21,7 @@ const isHoldOver = (
   now: number,
 ) => {
   if (heldAt === undefined) return true;
+  if (capture.heldReason === null) return now - heldAt >= SWEEP_RETRY_MS;
   return capture.heldReason === 'recentLimit'
     ? now - heldAt >= RECENT_LIMIT_WINDOW_MS
     : isUtcDayOver(heldAt, now);
@@ -32,6 +37,7 @@ function createSweep() {
     isStopped: false,
     isRunning: false,
     heldAt: new Map<string, number>(),
+    rerun: null as ReturnType<typeof setTimeout> | null,
   };
 
   const isActive = () =>
@@ -56,11 +62,21 @@ function createSweep() {
     if (!next) return;
     tried.add(next.id);
     const outcome = await sortCapture(next.id);
+    if (outcome === 'failed') state.heldAt.set(next.id, Date.now());
     if (outcome === 'held') {
       state.heldAt.set(next.id, Date.now());
+      scheduleRerun();
       return;
     }
-    return sweepNext(tried);
+    return tried.size >= SWEEP_RUN_LIMIT ? undefined : sweepNext(tried);
+  };
+
+  const scheduleRerun = () => {
+    if (state.isStopped || state.rerun !== null) return;
+    state.rerun = setTimeout(() => {
+      state.rerun = null;
+      void run();
+    }, RECENT_LIMIT_WINDOW_MS);
   };
 
   const run = async () => {
@@ -77,6 +93,7 @@ function createSweep() {
     run,
     stop: () => {
       state.isStopped = true;
+      if (state.rerun !== null) clearTimeout(state.rerun);
     },
   };
 }

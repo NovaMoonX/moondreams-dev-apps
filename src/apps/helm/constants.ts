@@ -20,6 +20,12 @@ export const TASK_TITLE_CAP = 200;
 export const SWEEP_LEASE_MS = 90 * 1000;
 /** The window of the ten-minute limit. */
 export const RECENT_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+/** A turn whose reading failed is not tried again by the sweep before this has passed. */
+export const SWEEP_RETRY_MS = 2 * 60 * 1000;
+/** Turns the sweep tries in one run. */
+export const SWEEP_RUN_LIMIT = 10;
+
+export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How many earlier sessions each scroll up brings in. */
 /** The most open tasks the app keeps listening to. */
@@ -92,7 +98,11 @@ export const HELM_COPY = {
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
-  moreToSort: 'This had more than I could file at once',
+  moreToSort: 'Too much to file at once',
+  moreToSortFiled: (count: number | null) =>
+    count === null
+      ? 'Part of it is filed. The rest is waiting.'
+      : `${count} ${count === 1 ? 'is' : 'are'} filed. The rest is waiting.`,
   couldNotSort: "Couldn't sort this",
   sortTheRest: 'Sort the rest',
   waitingHeading: 'Waiting to be read',
@@ -110,14 +120,21 @@ export const HELM_COPY = {
     `The AI service was down when ${name} tried to read this.`,
   failedUnusable: (name: string) =>
     `${name} read this but the reading came back unusable.`,
-  failedTooLong: 'These words were too long to read at once.',
   failedGeneric: (name: string) =>
     `${name} tried three times and couldn't read this.`,
   makeTaskAsWritten: 'Make it a task as written',
-  tryReadingAgain: 'Try reading again',
+  tryReadingAgain: 'Try again',
   deleteCapture: 'Delete',
   deleteCaptureTitle: 'Delete this?',
   deleteCaptureBody: 'What you said is deleted. Nothing was made from it.',
+  deleteCaptureBodyMade:
+    'What you said is deleted. The tasks already made from it stay.',
+  sortRestUnavailable:
+    "That can't be sorted right now. Try again in a few minutes.",
+  cannotTakeBack: "That can't be taken back now.",
+  waitingToBeRead: 'Waiting to be read',
+  waitingCheckFailed:
+    "Couldn't check what is waiting. Close this page and open it again.",
   madeTask: 'Made a task',
   tookBackTask: 'Took back the task',
   heldActionFailed: "That didn't work. Try again.",

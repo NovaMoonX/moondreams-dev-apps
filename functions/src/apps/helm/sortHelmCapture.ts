@@ -26,6 +26,7 @@ import {
   claimAttempts,
   isTransientCode,
   readStoredResult,
+  restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
 import { createHelmMcpServer } from './mcp/server.js';
@@ -244,12 +245,7 @@ async function failClaim(
     const capture = snapshot.data() as CaptureDoc | undefined;
     if (!capture || capture.claimId !== claimId) return toResult('received');
     if (mode === 'rest') {
-      transaction.update(ref, {
-        status: 'needsYou',
-        lastErrorCode: failure.code,
-        claimId: null,
-        claimedAt: null,
-      });
+      transaction.update(ref, restFailureFields(failure.code, extra));
       return toResult('needsYou');
     }
     const { attempts, status } = settleAttempts(
@@ -288,13 +284,19 @@ async function readAlreadyMade(
   const snapshots = await Promise.all(
     executionIds.map((id) => firestore.doc(`${base}/executions/${id}`).get()),
   );
-  return snapshots.flatMap((snapshot) => {
+  const readable = snapshots.flatMap((snapshot) => {
     const data = snapshot.data() as
       { effectRefs?: unknown; sealed: SealedPayload } | undefined;
-    if (!data) return [];
-    const words = openTitle(key, data.sealed);
-    return words ? readMadeTitles(data.effectRefs, words.sealed) : [];
+    const words = data ? openTitle(key, data.sealed) : null;
+    return data && words ? [readMadeTitles(data.effectRefs, words.sealed)] : [];
   });
+  if (readable.length < executionIds.length) {
+    logger.warn('helm.sort.alreadyMadeUnreadable', {
+      unreadable: executionIds.length - readable.length,
+      executions: executionIds.length,
+    });
+  }
+  return readable.flat();
 }
 
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {

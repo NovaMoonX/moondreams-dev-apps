@@ -36,6 +36,7 @@ const toError = (error: unknown) =>
 async function openCapture(
   entry: QueryDocumentSnapshot,
   read: SealedReader,
+  isMetadataTracked: boolean,
 ): Promise<OpenCapture> {
   const data = entry.data() as Partial<Capture>;
   const base = {
@@ -52,7 +53,7 @@ async function openCapture(
     attempts: data.attempts ?? 0,
     lastErrorCode: data.lastErrorCode ?? null,
     questionState: data.questionState ?? {},
-    hasPendingWrites: entry.metadata.hasPendingWrites,
+    hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,
     executionIds: data.executionIds ?? [],
     seenAt: data.seenAt ?? null,
     createdAt: data.createdAt ?? 0,
@@ -72,8 +73,12 @@ async function openCapture(
   }
 }
 
-const openCaptures = (docs: QueryDocumentSnapshot[], read: SealedReader) =>
-  Promise.all(docs.map((entry) => openCapture(entry, read)));
+const openCaptures = (
+  docs: QueryDocumentSnapshot[],
+  read: SealedReader,
+  isMetadataTracked = false,
+) =>
+  Promise.all(docs.map((entry) => openCapture(entry, read, isMetadataTracked)));
 
 /** A live query over turns. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 function startCapturesListener(
@@ -93,7 +98,7 @@ function startCapturesListener(
     async (snapshot) => {
       sequence.latest += 1;
       const current = sequence.latest;
-      const opened = await openCaptures(snapshot.docs, read);
+      const opened = await openCaptures(snapshot.docs, read, isMetadataTracked);
       if (current !== sequence.latest || run.isStopped) return;
       onChange(opened);
     },
@@ -153,6 +158,7 @@ export const startWaitingCapturesListener = (
     read,
     [
       where('status', 'in', ['received', 'interpreting', 'needsYou', 'failed']),
+      orderBy('createdAt', 'desc'),
       limit(WAITING_LIMIT),
     ],
     onChange,

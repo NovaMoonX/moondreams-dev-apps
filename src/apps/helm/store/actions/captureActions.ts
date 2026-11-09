@@ -14,6 +14,7 @@ import { store } from '@/store';
 import { CAPTURE_MAX_CHARS } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
+  isSorting,
   sortCapture,
   type SortOutcome,
 } from '@apps/helm/queries/nomosMutations';
@@ -28,7 +29,10 @@ import {
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
-import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import {
+  canMakeTaskAsWritten,
+  toTaskTitle,
+} from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -211,12 +215,19 @@ export const sortRestOfCapture = (captureId: string) =>
 export const deleteCapture = (uid: string, captureId: string) =>
   deleteDoc(doc(capturesOf(uid), captureId));
 
-/** Makes one task from a held turn's words as written and marks the turn sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was. */
+/** Makes one task from a held turn's words as written and marks the turn sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
 export async function makeTaskAsWritten(
   uid: string,
   encryption: HelmEncryption,
   capture: OpenCapture,
 ) {
+  const { waitingCaptures } = store.getState().helm;
+  const current =
+    waitingCaptures.captures.find((entry) => entry.id === capture.id) ??
+    capture;
+  if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
+    throw new Error('This turn is being read.');
+  }
   const title = toTaskTitle(capture.text);
   if (!title) throw new Error('A turn with no words can not become a task.');
   const now = Date.now();
@@ -269,7 +280,13 @@ export async function makeTaskAsWritten(
     ...questionFields(now),
   });
   const write = batch.commit();
-  const undo = () => {
+  const undo = async () => {
+    const task = store
+      .getState()
+      .helm.openTasks.items.find((entry) => entry.id === taskRef.id);
+    if (!task || task.status !== 'open' || task.lastEditedAt !== null) {
+      return false;
+    }
     const reverse = writeBatch(db);
     reverse.delete(taskRef);
     reverse.update(captureRef, {
@@ -278,7 +295,8 @@ export async function makeTaskAsWritten(
       seenAt: capture.seenAt,
       ...questionFields(null),
     });
-    return reverse.commit();
+    await reverse.commit();
+    return true;
   };
   return { write, undo };
 }

@@ -70,14 +70,10 @@ function TurnCard({
   );
   const isReading = isCallOut || capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
-  const outcomeLine =
+  const heldLine =
     isReading || isSorted || capture.isUnreadable
       ? null
-      : getHomeHeldLine(capture);
-  const heldLine =
-    showsOutcome || outcomeLine !== HELM_COPY.savedAsWritten
-      ? outcomeLine
-      : null;
+      : getHomeHeldLine(capture, showsOutcome);
   const executions = capture.executionIds.flatMap((id) => {
     const execution = executionsById.get(id);
     return execution ? [execution] : [];

@@ -1,7 +1,7 @@
+import { DAY_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
 import type { TaskDue } from '@apps/helm/types';
 
-const DAY_MS = 86_400_000;
 export const DUE_SOON_DAYS = 7;
 
 export const toTaskDue = (value: unknown): TaskDue | null => {

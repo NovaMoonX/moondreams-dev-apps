@@ -19,6 +19,7 @@ import {
   claimAttempts,
   isTransientCode,
   readStoredResult,
+  restFailureFields,
   settleAttempts,
 } from '../../functions/src/apps/helm/sortAttempts.ts';
 import { createHelmMcpServer } from '../../functions/src/apps/helm/mcp/server.ts';
@@ -367,6 +368,66 @@ test('25 commands file 20 and report more; rest settles the question', () => {
   assert.equal(done.questionState['q-more'].answeredAt, 2000);
   assert.ok(!hasOpenMoreToSort(done.questionState));
   assert.equal((done.sealed as Record<string, unknown>).text, 'x');
+});
+
+test('a held rest call stores no error code, a failed one keeps its code', () => {
+  assert.equal(
+    restFailureFields('held', { lastErrorCode: null }).lastErrorCode,
+    null,
+  );
+  assert.equal(restFailureFields('timeout').lastErrorCode, 'timeout');
+  assert.equal(
+    restFailureFields('held', { lastErrorCode: null }).status,
+    'needsYou',
+  );
+});
+
+test('a rest reply that drops a name still fails, one that keeps it passes', () => {
+  const rest = (commands: unknown[]) =>
+    normalizeNomosReply(
+      { commands },
+      {
+        reading: READING,
+        aliases: newContext().aliases,
+        alreadyMade: ['Call Dana'],
+      },
+    );
+  assert.equal(
+    refusal(() => rest([create('Buy the rings')])),
+    'accepted',
+  );
+  const named = {
+    ...READING,
+    people: [...READING.people, span('people:9', 'Sam')],
+  };
+  assert.equal(
+    refusal(() =>
+      normalizeNomosReply(
+        { commands: [create('Buy the rings')] },
+        {
+          reading: named,
+          aliases: newContext().aliases,
+          alreadyMade: ['Call Dana'],
+        },
+      ),
+    ),
+    'droppedToken',
+  );
+});
+
+test('more waiting with nothing filed still asks to sort the rest', () => {
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasMore: true,
+    executionId: null,
+    now: 1000,
+    newId: () => 'q-more',
+    opened: { text: 'x', reading: READING },
+    questionState: {},
+    executionIds: [],
+  });
+  assert.equal(settled.questionState['q-more'].kind, 'moreToSort');
 });
 
 test('rest mode lists the titles already made and no ids', () => {

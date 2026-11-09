@@ -307,7 +307,7 @@ export function settleCapture(input: SettleInput) {
       },
     ]),
   );
-  const isUnread = mode === 'full' && input.filed === 0;
+  const isUnread = mode === 'full' && input.filed === 0 && !input.hasMore;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
