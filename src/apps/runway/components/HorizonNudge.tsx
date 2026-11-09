@@ -145,7 +145,7 @@ function HorizonNudge({ otherwise = null }: HorizonNudgeProps) {
           type='button'
           variant='tertiary'
           size='sm'
-          className='text-muted-foreground! relative text-xs after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-[""]'
+          className='text-muted-foreground! relative text-xs after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[""]'
           onClick={() => void dismiss()}
         >
           {HORIZON_PLAN_WORDS.nudgeDismiss}

@@ -258,7 +258,7 @@ function GoalsScreen() {
           ) : undefined
         }
       />
-      {isLoaded && <HorizonNudge />}
+      {isLoaded && behindGoals.length === 0 && <HorizonNudge />}
       {getBody()}
       {isLoaded && <StoppedHoldingList kind='goal' today={today} />}
       <FloatingAction

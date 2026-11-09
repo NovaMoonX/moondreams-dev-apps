@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Ban,
-  CalendarClock,
   HandCoins,
   History,
   Pencil,
@@ -40,6 +39,8 @@ import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
 import PlanChangePickerView from '@apps/runway/components/PlanChangePickerView';
+import ItemMark from '@apps/runway/components/ItemMark';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
@@ -590,12 +591,12 @@ function HorizonSheet({
               {HORIZON_WORDS.changesCaption}
             </p>
             <ActionGroup>
-              {linkLines.map(({ link, line }) => (
+              {linkLines.map(({ link, line, itemName }) => (
                 <ActionRow
                   key={link.changeId}
                   isGrouped
                   hasChevron={horizon.state === 'open'}
-                  icon={<CalendarClock />}
+                  icon={<ItemMark itemId={link.itemId} name={itemName} />}
                   label={mask(line)}
                   onClick={() =>
                     horizon.state === 'open'
@@ -608,16 +609,14 @@ function HorizonSheet({
           </>
         )}
         {horizon.state === 'open' && (
-          <ActionGroup>
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<CalendarClock />}
-              label={HORIZON_WORDS.planChange}
-              subtitle={HORIZON_WORDS.planChangeSub}
-              onClick={() => setView('planChange')}
-            />
-          </ActionGroup>
+          <Button
+            type='button'
+            variant='secondary'
+            className='w-full'
+            onClick={() => setView('planChange')}
+          >
+            {HORIZON_WORDS.planChange}
+          </Button>
         )}
       </div>
     );
@@ -928,7 +927,8 @@ function HorizonSheet({
               }
             />
           )}
-          {shortfall && (
+          {shortfall && isHidden && <NeedsALookRow />}
+          {shortfall && !isHidden && (
             <InlineNotice
               tone='warning'
               title={

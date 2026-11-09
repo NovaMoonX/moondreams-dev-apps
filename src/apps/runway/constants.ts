@@ -360,7 +360,6 @@ export const HORIZON_WORDS = {
   noCostsSummary: 'No costs, only changes',
   changesCaption: 'What changes',
   planChange: 'Plan a change',
-  planChangeSub: 'A pay, bill, envelope or goal that changes for this',
   planChangeTitle: 'Which one changes?',
   planChangeSearch: 'Search your plan',
   planChangeNone: 'Nothing in your plan to change yet.',

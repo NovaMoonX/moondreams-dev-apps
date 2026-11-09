@@ -1185,6 +1185,7 @@ async function writeSeedLifecycle(
     groupId: null,
   };
 
+  const stretchStart = firstPayday + DAY_MS;
   const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
   const items = [
     {
@@ -1249,7 +1250,7 @@ async function writeSeedLifecycle(
     sealJson(stretchPayload, encryption),
     sealJson(
       {
-        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(today)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(stretchStart)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
         note: 'Covering the car registration',
       } satisfies ChangeSealed,
       encryption,
@@ -1320,7 +1321,7 @@ async function writeSeedLifecycle(
         'seed-envelope-eating-out',
         'envelope',
         stretchAt,
-        today,
+        stretchStart,
         'seed-change-eating-out-stretch',
         stretchSealed,
       ),
@@ -1332,7 +1333,7 @@ async function writeSeedLifecycle(
     change(
       'seed-change-eating-out-stretch',
       stretchAt,
-      today,
+      stretchStart,
       ['seed-envelope-eating-out'],
       stretchChange,
     ),

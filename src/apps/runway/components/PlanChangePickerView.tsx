@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { CalendarClock } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import SearchInput from '@/components/SearchInput';
 import { useAppSelector } from '@/store';
+import { ActionTitle } from '@apps/runway/components/ActionSection';
+import ItemMark from '@apps/runway/components/ItemMark';
 import { HORIZON_WORDS, RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
 import {
   selectBills,
@@ -76,12 +77,8 @@ function PlanChangePickerView({
 
   return (
     <div className='flex flex-1 flex-col gap-4'>
-      <div className='flex items-center gap-1'>
-        <BackLink isChevronOnly onBack={onBack} />
-        <p className='min-w-0 text-2xl font-semibold'>
-          {HORIZON_WORDS.planChangeTitle}
-        </p>
-      </div>
+      <BackLink onBack={onBack} />
+      <ActionTitle>{HORIZON_WORDS.planChangeTitle}</ActionTitle>
       {hasSearch && (
         <SearchInput
           value={query}
@@ -104,7 +101,7 @@ function PlanChangePickerView({
               key={id}
               isGrouped
               hasChevron
-              icon={<CalendarClock />}
+              icon={<ItemMark itemId={id} name={name} />}
               label={name}
               subtitle={noun}
               onClick={() =>
