@@ -3001,7 +3001,7 @@ type ExtraBillLine = Pick<RecordLine, 'itemId' | 'name' | 'emoji' | 'tier'> & {
   cents: number;
 };
 
-/** Jamie's cloud storage, which pays itself on the Venture X; her last payday set its next payment aside in full. */
+/** Jamie's cloud storage, which pays itself on the Venture X; their last payday set its next payment aside in full. */
 const JAMIE_CLOUD_LINE: ExtraBillLine = {
   itemId: 'seed-bill-jamie-cloud',
   name: 'Cloud storage',
@@ -3019,8 +3019,9 @@ interface SelfPayingBill {
 
 /**
  * Bills that pay themselves (Track and up). Taylor (Track): a card for Streaming, which marked itself paid, and Electric ($60 to $90),
- * marked at the top of its range and waiting for what it really charged. Jamie (Link): Phone on the Venture X, marked by itself five days
- * ago with no charge matched, beside three card charges near its due day, so it asks which charge it was.
+ * marked at the top of its range and waiting for what it really charged, beside Phone, due today and paid by hand. Jamie (Link): Phone on
+ * the Venture X, marked by itself five days ago with no charge matched, beside three card charges near its due day, so it asks which charge
+ * it was, and Cloud storage, which their last payday set aside in full.
  */
 async function writeSeedSelfPaying(
   context: SeedContext,
@@ -3096,7 +3097,7 @@ async function writeSeedSelfPaying(
               priority: 'must',
               orderIndex: 2,
               amount: { lowCents: 4_000, highCents: 4_000 },
-              timing: monthlyOn(today + 9 * DAY_MS),
+              timing: monthlyOn(today),
               paidByCardId: null,
               paysItself: null,
             },
