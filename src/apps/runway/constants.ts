@@ -1184,7 +1184,6 @@ export const CHANGE_WORDS = {
   saveWithoutNote: 'Save without a reason',
   unchanged: 'Make a change to continue.',
   change: 'Change',
-  scheduled: 'From',
   fromDay: 'From this income day on',
   dayOnly: 'Just this income day',
   stretch: 'For a while, then back',
@@ -1208,7 +1207,6 @@ export const CHANGE_WORDS = {
 export const PART_OF_WORDS = {
   label: 'Part of',
   none: 'Not part of an event',
-  noEvents: 'No open event on your horizon to link it to.',
   eventGone: 'That event is no longer open. Pick another, or save without one.',
   linkedLine: (name: string, what: string, from: string, event: string) =>
     `Linked ${name}: ${what}, from ${from}, to ${event}.`,
@@ -1244,8 +1242,6 @@ export const LIFECYCLE_WORDS = {
   resumeConfirm: 'Start saving',
   whyEnd: 'Why is it ending?',
   endsAfter: 'Ends after',
-  backAfter: 'then it goes back',
-  until: 'Until',
   alreadyEnded: 'This was already ended, so nothing changed.',
   alreadyArchived: 'This was already archived, so nothing changed.',
   chipsEnd: ['Paid off', 'No longer needed', 'Changed my mind', 'Job ended'],

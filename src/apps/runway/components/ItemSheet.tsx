@@ -911,7 +911,8 @@ function ItemSheet({
     }
   };
 
-  const backToSheet = () => setPhase('sheet');
+  const backToSheet = () =>
+    presetEventId === undefined ? setPhase('sheet') : onClose();
 
   if (phase === 'change') {
     if (version.kind === 'bill') {
@@ -1318,8 +1319,8 @@ function ItemSheet({
           <p className='text-muted-foreground text-xs font-medium'>
             {PART_OF_WORDS.comingCaption}
           </p>
-          {planned.map((line) => (
-            <p key={line} className='text-sm text-pretty'>
+          {planned.map((line, index) => (
+            <p key={`${index}-${line}`} className='text-sm text-pretty'>
               {mask(line)}
             </p>
           ))}
