@@ -15283,8 +15283,13 @@ const version = (
     'an item that ends first never makes the change',
   );
   assert.deepEqual(
-    removeLinks({ ...event, links: callOffLinks }, ['c1', 'c0']).links,
+    removeLinks({ ...event, links: callOffLinks }, [
+      { changeId: 'c1', itemId: 'rent' },
+      { changeId: 'c0', itemId: 'rent' },
+      { changeId: 'c3', itemId: 'rent' },
+    ]).links,
     [callOffLinks[1], callOffLinks[3]],
+    'a link is let go only when its item and change both match',
   );
 }
 

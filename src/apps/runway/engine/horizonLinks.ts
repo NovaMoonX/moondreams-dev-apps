@@ -463,13 +463,19 @@ export const removeLink = (
   links: horizon.links.filter((link) => link.changeId !== changeId),
 });
 
-/** The event with several linked changes let go. */
+/** The event with several linked changes let go, each matched by item and change, since one change can write to two items. */
 export const removeLinks = (
   horizon: HorizonSealed,
-  changeIds: readonly string[],
+  gone: readonly HorizonLink[],
 ): HorizonSealed => ({
   ...horizon,
-  links: horizon.links.filter((link) => !changeIds.includes(link.changeId)),
+  links: horizon.links.filter(
+    (link) =>
+      !gone.some(
+        (other) =>
+          other.itemId === link.itemId && other.changeId === link.changeId,
+      ),
+  ),
 });
 
 /** The event with a change linked, replacing any earlier link to the same change. */

@@ -141,7 +141,10 @@ function HorizonEndView({
   const cardNamer = getCardNamer(allCards);
   const cancelLines =
     changesPick === 'cancel'
-      ? changeRows.map(({ change }) => describeChangeLine(change, cardNamer))
+      ? changeRows.map(({ link, change }) => ({
+          key: `${link.itemId}-${link.changeId}`,
+          text: describeChangeLine(change, cardNamer),
+        }))
       : [];
   const rows = [
     ...stops.map((cost) => ({ cost, isBill: false })),
@@ -302,12 +305,14 @@ function HorizonEndView({
       setError(HORIZON_END_WORDS.moneyChanged);
       return;
     }
-    const fresh = listCallOffChanges(
-      live.links,
-      store.getState().runway.versions,
-      store.getState().runway.items,
-      todayAsUtcDate(),
-    );
+    const fresh = isCallOff
+      ? listCallOffChanges(
+          live.links,
+          store.getState().runway.versions,
+          store.getState().runway.items,
+          todayAsUtcDate(),
+        )
+      : [];
     const asked = new Set(changeRows.map(({ link }) => link.changeId));
     if (
       isCallOff &&
@@ -332,7 +337,7 @@ function HorizonEndView({
         leftCents,
         where,
         note: why,
-        unlinkIds: fresh.map(({ link }) => link.changeId),
+        unlinks: fresh.map(({ link }) => link),
         cancels:
           changesPick === 'cancel'
             ? fresh.map(({ target, change }) =>
@@ -585,9 +590,9 @@ function HorizonEndView({
       {isCallOff && (rows.length > 0 || cancelLines.length > 0) && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {cancelLines.map((line) => (
-              <li key={line} className='px-3 py-2 text-sm break-words'>
-                <MaskedText>{HORIZON_END_WORDS.cancelsRow(line)}</MaskedText>
+            {cancelLines.map(({ key, text }) => (
+              <li key={key} className='px-3 py-2 text-sm break-words'>
+                <MaskedText>{HORIZON_END_WORDS.cancelsRow(text)}</MaskedText>
               </li>
             ))}
             {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>

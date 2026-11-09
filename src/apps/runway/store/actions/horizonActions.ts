@@ -54,6 +54,7 @@ import type {
   CostPaidSealed,
   DateOnly,
   GroupSealed,
+  HorizonLink,
   HorizonSealed,
   MoveDoc,
   PlanDoc,
@@ -949,8 +950,8 @@ interface EndHorizonInput {
   where: HorizonWhere;
   note: string | null;
   /** Links the called-off version drops: changes the person kept without the event, or cancelled in the same write. */
-  unlinkIds?: readonly string[];
-  /** Changes cancelled in the same transaction; their links are in `unlinkIds`, and an Undo reopens the event only. */
+  unlinks?: readonly HorizonLink[];
+  /** Changes cancelled in the same transaction; their links are in `unlinks`, and an Undo reopens the event only. */
   cancels?: readonly CancelChangeInput[];
 }
 
@@ -984,13 +985,14 @@ async function endHorizon(
           cents: left,
           moveId: move === null ? null : moveId,
         };
-  const unlinkIds = input.unlinkIds ?? [];
   const after = removeLinks(
     setHorizonState(horizon, state, today, money),
-    unlinkIds,
+    input.unlinks ?? [],
   );
-  const cancelledIds = (input.cancels ?? []).map(({ changeId }) => changeId);
-  const before = removeLinks(horizon, cancelledIds);
+  const before = removeLinks(
+    horizon,
+    (input.cancels ?? []).map(({ itemId, changeId }) => ({ itemId, changeId })),
+  );
   const versionId = getNextVersionId(input.baseVersionId);
   const summary = HORIZON_END_WORDS.endSummary(
     horizon.name,
