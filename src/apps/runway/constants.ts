@@ -2437,6 +2437,49 @@ export const PAID_HISTORY_WORDS = {
   undoTitle: 'Take back this payment?',
 } as const;
 
+/** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
+export const AUTO_PAY_WORDS = {
+  changeLabel: 'Pays itself',
+  /** The most merchant names a bill keeps from charges it has matched. */
+  maxLearnedNames: 10,
+  /** A charge dated this many days either side of the due day can be the payment. */
+  matchDays: 3,
+  /** The picker looks this far before and after the due day. */
+  pickDaysBefore: 5,
+  pickDaysAfter: 10,
+  /** A question about a payment stops being asked this many days after it was due. */
+  askDays: 45,
+  /** "Not here yet" hides a payment's question for this many days, on this device. */
+  snoozeDays: 3,
+  autoSummary: (name: string, due: string, amount: string) =>
+    `${name} paid itself: ${amount} due\u00a0${due}.`,
+  correctedSummary: (name: string, due: string, amount: string) =>
+    `Changed ${name}'s ${due} payment to ${amount}.`,
+  matchedSummary: (name: string, due: string, amount: string) =>
+    `Matched a charge of ${amount} to ${name}'s ${due} payment.`,
+  matchUndoneSummary: (name: string, due: string) =>
+    `Undid the match of ${name}'s ${due} payment.`,
+  matchedOne: (name: string) => `Matched the ${name} charge to its bill`,
+  matchedMany: (count: number) => `Matched ${count} charges to their bills`,
+  matchedSub: 'It no longer counts as spending. Undo puts it back.',
+  undo: 'Undo',
+  undone: 'Match undone',
+  undoFailed: 'The match was not undone',
+  pickedOne: (name: string) => `Matched the charge to ${name}`,
+  amountSaved: (name: string) => `${name} updated`,
+  amountFailed: (name: string) => `${name} was not updated`,
+  forgot: (name: string) => `${name} forgot the charges it learned`,
+  forgetFailed: (name: string) => `${name} was not changed`,
+  matchFailed: 'The charge was not matched',
+  amountTask: (name: string) => `Enter what ${name} actually charged`,
+  chargeTask: 'Which charge was this?',
+  notHereYet: 'Not here yet',
+  changedElsewhere:
+    'This charge or payment changed on another device. Nothing was changed.',
+  alreadyMatched: 'This payment already has a charge.',
+  needsConnection: 'This needs a connection.',
+} as const;
+
 /** A Horizon cost's payment marked paid, or taken back. */
 export const COST_PAID_WORDS = {
   summary: (cost: string, item: string, due: string, amount: string) =>

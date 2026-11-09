@@ -14,6 +14,7 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
+import { isSelfPaying } from './autoPay';
 import type { ComingDay } from './comingDays';
 import type { BillPayment } from './demands';
 import type { Draft } from './draft';
@@ -110,6 +111,9 @@ export interface LookaheadInput {
     isPick?: boolean;
     /** No due date yet: the plan sets nothing aside for it. */
     isUndated: boolean;
+    /** The bill pays itself (from Track up): it is never listed to pay, except a payment whose automatic mark was taken back. */
+    paysItself?: boolean;
+    undoneDueOn?: readonly DateOnly[];
   }[];
   payments: Readonly<Record<string, BillPayment[]>>;
   /** The Horizon items in the plan; none when the caller has none. */
@@ -282,7 +286,8 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
         (payment) =>
           payment.paid === null &&
           payment.dueOn <= input.today &&
-          payment.dueOn >= bill.since,
+          payment.dueOn >= bill.since &&
+          !isSelfPaying(bill, payment.dueOn),
       );
       const first = unpaid[0];
       return first

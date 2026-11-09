@@ -13,6 +13,7 @@ import {
   NO_PROGRESS,
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
+import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectFreeToSpend } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
@@ -86,6 +87,8 @@ export function computeLookahead(
     horizonItems?: ReturnType<typeof selectAllHorizonItems>;
     /** Free to Spend now; a payment fronted by it is checked against it. */
     freeToSpendCents?: number | null;
+    /** The bills that pay themselves and the due days of their payments whose automatic mark was taken back; none when the caller has none. */
+    selfPaying?: ReturnType<typeof selectSelfPayingBills>;
   },
 ): Lookahead {
   const { items, versions, openDays } = plan;
@@ -99,6 +102,8 @@ export function computeLookahead(
       name: version.payload.name,
       isUndated: version.payload.timing.schedule.anchor === null,
       isPick: version.payload.fundedBy.kind === 'pay',
+      paysItself: inputs.selfPaying?.[item.id] !== undefined,
+      undoneDueOn: inputs.selfPaying?.[item.id]?.undoneDueOn,
       since: Math.max(
         startOfUtcDay(item.createdAt),
         inputs.startDate ?? 0,
@@ -154,6 +159,7 @@ export const selectLookahead = createSelector(
     selectBillPayments,
     selectAllHorizonItems,
     selectFreeToSpend,
+    selectSelfPayingBills,
     (_state: RootState, _today?: number, extraHeld?: Record<string, number>) =>
       extraHeld,
   ],
@@ -173,6 +179,7 @@ export const selectLookahead = createSelector(
     payments,
     horizonItems,
     freeToSpendCents,
+    selfPaying,
     extraHeld,
   ) =>
     computeLookahead(
@@ -190,6 +197,7 @@ export const selectLookahead = createSelector(
         payments,
         horizonItems,
         freeToSpendCents,
+        selfPaying,
       },
     ),
 );

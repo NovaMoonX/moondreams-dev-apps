@@ -1211,7 +1211,7 @@ const readImages = async (uid: string, purchaseId: string) => {
   return found.docs.map((entry) => entry.data() as ReceiptImageDoc);
 };
 
-const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
+export const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   amountCents: purchase.amountCents,
   merchant: purchase.merchant,
   merchantLogo: purchase.merchantLogo ?? null,
@@ -1226,6 +1226,7 @@ const toSealedPayload = (purchase: OpenPurchase): PurchaseSealed => ({
   link: purchase.link,
   receiptText: purchase.receiptText,
   costRef: purchase.costRef ?? null,
+  billRef: purchase.billRef ?? null,
   notSameAs: purchase.notSameAs,
   incomeDayId: purchase.incomeDayId,
   assignedBy: purchase.assignedBy,
