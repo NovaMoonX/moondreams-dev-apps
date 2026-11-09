@@ -1,8 +1,9 @@
 import { useAppSelector } from '@/store';
+import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 
-/** Whether the app pays this bill's payment due on `dueOn` (any payment when it is null): it pays itself and the person has not taken a mark of it back. */
+/** Whether the app pays this bill's payment due on `dueOn` (any payment when it is null). */
 export const useIsSelfPaying = (
   billId: string,
   dueOn: DateOnly | null,
@@ -12,6 +13,6 @@ export const useIsSelfPaying = (
     const entry = selectSelfPayingBills(state, today)[billId];
     return (
       entry !== undefined &&
-      !(dueOn !== null && entry.undoneDueOn.includes(dueOn))
+      (dueOn === null || isSelfPaying(entry, dueOn, today))
     );
   });

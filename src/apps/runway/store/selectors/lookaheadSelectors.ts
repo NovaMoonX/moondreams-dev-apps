@@ -87,7 +87,7 @@ export function computeLookahead(
     horizonItems?: ReturnType<typeof selectAllHorizonItems>;
     /** Free to Spend now; a payment fronted by it is checked against it. */
     freeToSpendCents?: number | null;
-    /** The bills that pay themselves and the due days of their payments whose automatic mark was taken back; none when the caller has none. */
+    /** The bills that pay themselves; none when the caller has none. */
     selfPaying?: ReturnType<typeof selectSelfPayingBills>;
   },
 ): Lookahead {
@@ -102,8 +102,7 @@ export function computeLookahead(
       name: version.payload.name,
       isUndated: version.payload.timing.schedule.anchor === null,
       isPick: version.payload.fundedBy.kind === 'pay',
-      paysItself: inputs.selfPaying?.[item.id] !== undefined,
-      undoneDueOn: inputs.selfPaying?.[item.id]?.undoneDueOn,
+      ...inputs.selfPaying?.[item.id],
       since: Math.max(
         startOfUtcDay(item.createdAt),
         inputs.startDate ?? 0,

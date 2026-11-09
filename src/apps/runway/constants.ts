@@ -2514,6 +2514,13 @@ export const AUTO_PAY_WORDS = {
     'This charge or payment changed on another device. Nothing was changed.',
   alreadyMatched: 'This payment already has a charge.',
   needsConnection: 'This needs a connection.',
+  paidBill: (name: string, due: string) => `Paid ${name}'s ${due} bill`,
+  notThisCharge: "Not this bill's charge",
+  notThisChargeSub: 'It goes back to waiting for a home',
+  matchedNoEnvelope: 'This charge paid a bill, so it has no envelope.',
+  unmatched: 'Charge taken off the bill',
+  unmatchFailed: 'The charge was not taken off the bill',
+  fallbackBillName: 'A bill',
 } as const;
 
 /** A Horizon cost's payment marked paid, or taken back. */

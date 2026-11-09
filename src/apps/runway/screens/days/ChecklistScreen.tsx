@@ -63,6 +63,7 @@ import {
   selectStance,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type {
   Cents,
@@ -365,7 +366,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         payment.paid === null &&
         !isWaiting &&
         selfPaying[line.itemId] !== undefined &&
-        !selfPaying[line.itemId].undoneDueOn.includes(payment.dueOn);
+        isSelfPaying(selfPaying[line.itemId], payment.dueOn, today);
       return { line, payment, isWaiting, isAuto };
     });
   const accounts = useAppSelector(selectAccounts);

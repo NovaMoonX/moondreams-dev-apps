@@ -111,9 +111,11 @@ export interface LookaheadInput {
     isPick?: boolean;
     /** No due date yet: the plan sets nothing aside for it. */
     isUndated: boolean;
-    /** The bill pays itself (from Track up): it is never listed to pay, except a payment whose automatic mark was taken back. */
+    /** The bill pays itself (from Track up): a payment the app handles is not listed to pay (`isSelfPaying`). */
     paysItself?: boolean;
     undoneDueOn?: readonly DateOnly[];
+    paysItselfFrom?: DateOnly | null;
+    isAtLink?: boolean;
   }[];
   payments: Readonly<Record<string, BillPayment[]>>;
   /** The Horizon items in the plan; none when the caller has none. */
@@ -287,7 +289,7 @@ const findDue = (input: LookaheadInput): Lookahead['due'] =>
           payment.paid === null &&
           payment.dueOn <= input.today &&
           payment.dueOn >= bill.since &&
-          !isSelfPaying(bill, payment.dueOn),
+          !isSelfPaying(bill, payment.dueOn, input.today),
       );
       const first = unpaid[0];
       return first

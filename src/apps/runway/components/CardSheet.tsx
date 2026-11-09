@@ -18,6 +18,7 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
+import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
@@ -90,7 +91,7 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
           const isSelf =
             payment !== null &&
             selfPaying[item.id] !== undefined &&
-            !selfPaying[item.id].undoneDueOn.includes(payment.dueOn);
+            isSelfPaying(selfPaying[item.id], payment.dueOn, today);
           const due =
             payment === null
               ? AUTO_PAY_WORDS.cardBillNoDue

@@ -20,7 +20,10 @@ export interface PurchaseMatches {
 
 /** A bank charge waiting in Needs a home. */
 export const isWaitingCharge = (purchase: OpenPurchase) =>
-  purchase.source === 'link' && purchase.needsHome && purchase.amountCents > 0;
+  purchase.source === 'link' &&
+  purchase.needsHome &&
+  purchase.amountCents > 0 &&
+  (purchase.billRef ?? null) === null;
 
 /** A typed purchase can stand in for a bank one only when nothing else points at it: no cost it pays, no refund of or for it. */
 const getTypedCandidates = (purchases: readonly OpenPurchase[]) => {
@@ -266,7 +269,8 @@ const isPairCandidate = (purchase: OpenPurchase, isOffer: boolean) =>
   purchase.status === 'posted' &&
   (isOffer || purchase.assignedBy === null) &&
   purchase.pairedWithId === null &&
-  purchase.incomeDayId === null;
+  purchase.incomeDayId === null &&
+  (purchase.billRef ?? null) === null;
 
 /** Money out of a linked account and the same amount in to another linked account (a transfer) or a linked card (a card payment), never money out of a card. */
 const getPairKind = (

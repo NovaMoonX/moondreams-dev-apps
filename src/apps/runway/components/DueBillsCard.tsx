@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react';
+import { Fragment, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import SectionDivider from '@/components/SectionDivider';
 import SectionHeader from '@/components/SectionHeader';
 import SensitiveValue from '@/components/SensitiveValue';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -103,7 +104,7 @@ function DueBillRow({ due, payment, emoji, today, onOpen }: DueBillRowProps) {
     payment,
     isQuick: true,
   });
-  const name = due.name === '' ? 'A bill' : due.name;
+  const name = due.name === '' ? AUTO_PAY_WORDS.fallbackBillName : due.name;
   const isUndoing = useRef(false);
   const maskText = useMaskedText();
   const [isAsking, setIsAsking] = useState(false);
@@ -370,7 +371,8 @@ interface AutoCheckRowProps {
 /** A payment the app marked or could not place by itself: it opens the question it needs answered. */
 function AutoCheckRow({ check, emoji }: AutoCheckRowProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const name = check.billName === '' ? 'A bill' : check.billName;
+  const name =
+    check.billName === '' ? AUTO_PAY_WORDS.fallbackBillName : check.billName;
 
   return (
     <>
@@ -482,10 +484,59 @@ function DueBillsCard({
   };
   const title = getTitle();
   const count =
-    rows.length > 1 && due.length > 0
-      ? DUE_WORDS.count(rows.length, isAnyLate, costRows.length > 0)
+    due.length > 1
+      ? DUE_WORDS.count(due.length, isAnyLate, costRows.length > 0)
       : null;
+  const firstCheckAt =
+    due.length > 0 ? shown.findIndex((row) => row.kind === 'check') : -1;
   const toggleUnfolded = () => (isUnfolded ? closeAllDue() : openAllDue());
+  const getRowKey = (row: (typeof rows)[number]) => {
+    if (row.kind === 'check')
+      return `${row.check.kind}-${row.check.billId}-${row.check.dueOn}`;
+    if (row.kind === 'cost') return `${row.entry.itemId}-${row.entry.costId}`;
+    return row.entry.billId;
+  };
+  const renderRow = (row: (typeof rows)[number]) => {
+    if (row.kind === 'check') {
+      const payload =
+        bills.find(({ item }) => item.id === row.check.billId)?.version
+          .payload ?? null;
+      return (
+        <AutoCheckRow
+          check={row.check}
+          emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
+        />
+      );
+    }
+    if (row.kind === 'cost') {
+      return (
+        <DueCostRow
+          due={row.entry}
+          cost={row.cost}
+          payment={row.payment}
+          emoji={emojiOf(row.emoji, null)}
+          today={today}
+        />
+      );
+    }
+    const { entry } = row;
+    const payload =
+      bills.find(({ item }) => item.id === entry.billId)?.version.payload ??
+      null;
+    return (
+      <DueBillRow
+        due={entry}
+        payment={paymentOf(entry)}
+        emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
+        today={today}
+        onOpen={() =>
+          onOpenBill
+            ? onOpenBill(entry.billId)
+            : void showOnPlan('bills', { itemId: entry.billId })
+        }
+      />
+    );
+  };
 
   return (
     <section className='space-y-2'>
@@ -515,50 +566,16 @@ function DueBillsCard({
         </div>
       )}
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-        {shown.map((row) => {
-          if (row.kind === 'check') {
-            const payload =
-              bills.find(({ item }) => item.id === row.check.billId)?.version
-                .payload ?? null;
-            return (
-              <AutoCheckRow
-                key={`${row.check.kind}-${row.check.billId}-${row.check.dueOn}`}
-                check={row.check}
-                emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
-              />
-            );
-          }
-          if (row.kind === 'cost') {
-            return (
-              <DueCostRow
-                key={`${row.entry.itemId}-${row.entry.costId}`}
-                due={row.entry}
-                cost={row.cost}
-                payment={row.payment}
-                emoji={emojiOf(row.emoji, null)}
-                today={today}
-              />
-            );
-          }
-          const { entry } = row;
-          const payload =
-            bills.find(({ item }) => item.id === entry.billId)?.version
-              .payload ?? null;
-          return (
-            <DueBillRow
-              key={entry.billId}
-              due={entry}
-              payment={paymentOf(entry)}
-              emoji={payload ? emojiOf(payload.emoji, payload.groupId) : null}
-              today={today}
-              onOpen={() =>
-                onOpenBill
-                  ? onOpenBill(entry.billId)
-                  : void showOnPlan('bills', { itemId: entry.billId })
-              }
-            />
-          );
-        })}
+        {shown.map((row, index) => (
+          <Fragment key={getRowKey(row)}>
+            {index === firstCheckAt && (
+              <li className='px-3 py-2'>
+                <SectionDivider label={AUTO_PAY_WORDS.checksHeading} />
+              </li>
+            )}
+            {renderRow(row)}
+          </Fragment>
+        ))}
       </ul>
       {hasFold && (
         <ShowMoreButton isOpen={isUnfolded} onClick={toggleUnfolded}>

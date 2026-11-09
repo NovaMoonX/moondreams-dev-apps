@@ -15,13 +15,11 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { AUTO_PAY_WORDS } from '@apps/runway/constants';
 import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
 import {
-  findAutoChecks,
   findAutoMarks,
   findChargeMatches,
   getMatchedKeys,
   getPaymentKey,
   rankChargeCandidates,
-  type AutoCheck,
   type AutoMark,
   type ChargeMatch,
 } from '@apps/runway/engine/autoPay';
@@ -36,30 +34,29 @@ import {
   forgetBillMatch,
   matchChargeToBill,
   undoChargeMatch,
+  unmatchBillCharge,
   type ChargeMatchResult,
 } from '@apps/runway/store/actions/autoPayActions';
 import {
   markBillPaid,
   type WrittenPaidMark,
 } from '@apps/runway/store/actions/moveActions';
-import { selectAutoBills } from '@apps/runway/store/selectors/autoPaySelectors';
+import {
+  selectAutoBills,
+  selectAutoChecks,
+  selectIsAutoPayReady,
+} from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
   selectBillPayments,
-  selectIsAccountsLoaded,
   selectIsLinkHistory,
-  selectIsMovesLoaded,
-  selectIsNeedsHomeLoaded,
-  selectIsPlanItemsLoaded,
-  selectIsRecordsReady,
   selectLinkWaiting,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly, OpenPurchase } from '@apps/runway/types';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import {
   getChargeSnoozeVersion,
-  isChargeSnoozed,
   snoozeCharge,
   subscribeChargeSnoozes,
 } from '@apps/runway/utils/chargeSnooze';
@@ -74,16 +71,6 @@ const toWritten = (billId: string, paid: PaidPayment): WrittenPaidMark => ({
   cardId: paid.cardId,
   auto: paid.auto ?? null,
 });
-
-/** The ledger, plan and bank charges an automatic mark or match reads are all loaded. */
-const selectIsAutoPayReady = (state: Parameters<typeof selectLevel>[0]) =>
-  selectIsMovesLoaded(state) &&
-  selectIsRecordsReady(state) &&
-  selectIsPlanItemsLoaded(state) &&
-  state.runway.isMatchKeysLoaded &&
-  state.runway.purchasesFrom !== null &&
-  selectIsAccountsLoaded(state) &&
-  selectIsNeedsHomeLoaded(state);
 
 const findBillPayment = (billId: string, dueOn: DateOnly) =>
   selectBillPayments(store.getState(), todayAsUtcDate())[billId]?.find(
@@ -183,11 +170,7 @@ function useMatchedToast() {
 const toMatchKey = (match: ChargeMatch) =>
   `match:${match.purchase.id}:${match.purchase.updatedAt}:${getPaymentKey(match.billId, match.payment.dueOn)}`;
 
-/**
- * Once the ledger is read, writes the paid mark of each bill that pays itself on its due day (quietly) and, at Link, matches each
- * bank charge that is clearly a bill's payment, with one toast and an Undo per run. Marks go first and matches wait for the store to
- * show them. A failed write is tried again on the next run; each is tried once per version of what it reads.
- */
+/** Writes the marks of bills that pay themselves and, at Link, matches clear charges. A failed mark is not retried this session. */
 export function useAutoPay(uid: string | null) {
   const today = todayAsUtcDate(useNow(60_000));
   const level = useAppSelector(selectLevel);
@@ -238,12 +221,11 @@ export function useAutoPay(uid: string | null) {
     isRunning.current = true;
     const run = async () => {
       try {
-        await marks.reduce(async (previous, { mark, key }) => {
+        await marks.reduce(async (previous, { mark }) => {
           await previous;
           try {
             await writeAutoMark(uid, mark);
           } catch (error) {
-            tried.current.delete(key);
             console.error('A bill that pays itself was not marked', error);
           }
         }, Promise.resolve());
@@ -291,41 +273,19 @@ export function useAutoPay(uid: string | null) {
   }, [uid, isReady, level, today, bills, waiting, purchases, accounts, runs]);
 }
 
-/** The questions bills that pay themselves leave: at Track the real amount of a ranged bill, at Link the charge that was this payment. Empty until the ledger is read. */
-export function useAutoChecks(): { checks: AutoCheck[]; isReady: boolean } {
+const NO_CHECKS: ReturnType<typeof selectAutoChecks> = [];
+
+/** The questions bills that pay themselves leave; `isEnabled` false skips it on a screen with no bill. */
+export function useAutoChecks(isEnabled = true) {
   const today = todayAsUtcDate(useNow(60_000));
-  const level = useAppSelector(selectLevel);
-  const bills = useAppSelector((state) => selectAutoBills(state, today));
-  const purchases = useAppSelector((state) => state.runway.purchases);
-  const isReady = useAppSelector(selectIsAutoPayReady);
   const snoozes = useSyncExternalStore(
     subscribeChargeSnoozes,
     getChargeSnoozeVersion,
   );
-  const checks = useMemo(
-    () =>
-      isReady
-        ? findAutoChecks({
-            level,
-            today,
-            bills,
-            matched: getMatchedKeys(purchases),
-            snoozed: new Set(
-              bills
-                .flatMap((bill) =>
-                  bill.payments.map((payment) =>
-                    getPaymentKey(bill.id, payment.dueOn),
-                  ),
-                )
-                .filter((key) => isChargeSnoozed(key)),
-            ),
-          })
-        : [],
-    // The snooze version changes when a question is put off; the set is read from the device.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isReady, level, today, bills, purchases, snoozes],
+  const checks = useAppSelector((state) =>
+    isEnabled ? selectAutoChecks(state, today, snoozes) : NO_CHECKS,
   );
-  return { checks, isReady };
+  return { checks };
 }
 
 /** The charges a person can pick as one payment's, closest first. */
@@ -387,6 +347,58 @@ export function usePickCharge() {
     }
   };
   return pick;
+}
+
+/** Takes a matched charge off its bill; resolves with whether it was written. */
+export function useUnmatchCharge() {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+
+  const unmatch = async (purchase: OpenPurchase, billName: string) => {
+    const ref = purchase.billRef ?? null;
+    if (!user || ref === null) return false;
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const state = store.getState();
+      const level = selectLevel(state);
+      const bill = selectAutoBills(state, todayAsUtcDate()).find(
+        (entry) => entry.id === ref.billId,
+      );
+      const slot = bill?.payments.find((entry) => entry.dueOn === ref.dueOn);
+      const isMarkedByApp =
+        bill !== undefined &&
+        isTrackingLevel(level) &&
+        !(level === 'link' && bill.cardId === null) &&
+        !bill.undoneDueOn.includes(ref.dueOn);
+      const paid = findBillPayment(ref.billId, ref.dueOn)?.paid ?? null;
+      await inTurn(() =>
+        unmatchBillCharge(user.uid, encryption, {
+          purchase,
+          billName,
+          mark: paid === null ? null : toWritten(ref.billId, paid),
+          restore:
+            isMarkedByApp && slot
+              ? {
+                  amountCents: slot.highCents,
+                  isEstimate: slot.lowCents !== slot.highCents,
+                }
+              : null,
+        }),
+      );
+      addToast({ title: AUTO_PAY_WORDS.unmatched, type: 'success' });
+      return true;
+    } catch (error) {
+      addToast({
+        title: AUTO_PAY_WORDS.unmatchFailed,
+        description: navigator.onLine
+          ? getErrorMessage(error, 'Nothing was changed.')
+          : AUTO_PAY_WORDS.needsConnection,
+        type: 'error',
+      });
+      return false;
+    }
+  };
+  return unmatch;
 }
 
 /** Corrects an automatic mark to what the payment really came to; resolves with whether it was written. */

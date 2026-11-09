@@ -9,11 +9,10 @@ import type {
   BillSealed,
 } from '@apps/runway/types';
 
-import { DAY_MS, addUtcDays, toDayStamp } from './dates';
+import { DAY_MS, addUtcDays, startOfUtcDay, toDayStamp } from './dates';
 import { isTrackingLevel } from './level';
 import type { PaidPayment } from './progress';
 
-/** One payment of a bill that pays itself: what it can come to (equal ends for an exact bill) and the mark that paid it, if any. */
 export interface AutoPayment {
   dueOn: DateOnly;
   lowCents: Cents;
@@ -21,20 +20,16 @@ export interface AutoPayment {
   paid: PaidPayment | null;
 }
 
-/** A bill that pays itself, with what the engine reads of it. */
 export interface AutoBill {
   id: string;
   name: string;
-  /** The first day its payments are tracked from. */
+  /** The first due day the app handles: never before tracking began or the day the setting was turned on. */
   since: DateOnly;
-  /** The card it is charged to; null when it is pulled from the bank. */
+  /** Null when the bill is pulled from the bank. */
   cardId: string | null;
-  /** The account it is pulled from; null when the plan has no one account to read it as. */
   accountId: string | null;
-  /** The comparable merchant names it has learned. */
   merchantKeys: readonly string[];
   payments: readonly AutoPayment[];
-  /** Due days of payments whose automatic mark was taken back: they are the person's to mark from then on. */
   undoneDueOn: readonly DateOnly[];
 }
 
@@ -44,42 +39,84 @@ export const isAutoBill = (
   level: Level,
 ): boolean => payload.paysItself === true && isTrackingLevel(level);
 
-/** Whether the payment due on `dueOn` is left to the app: the bill pays itself and the person has not taken a mark of it back. */
-export const isSelfPaying = (
-  bill: {
-    paysItself?: boolean | null;
-    undoneDueOn?: readonly DateOnly[];
-  },
-  dueOn: DateOnly,
-): boolean =>
-  bill.paysItself === true && !(bill.undoneDueOn ?? []).includes(dueOn);
+/** What decides whether the app pays one of a bill's payments. */
+export interface SelfPayingFacts {
+  paysItself?: boolean | null;
+  undoneDueOn?: readonly DateOnly[];
+  paysItselfFrom?: DateOnly | null;
+  isAtLink?: boolean;
+}
 
-/** The due days of each bill's payments that have a mark taken back, from the moves read. */
+/** Whether the payment due on `dueOn` is left to the app; at Link one unmarked past the asking window goes back to the person. */
+export const isSelfPaying = (
+  bill: SelfPayingFacts,
+  dueOn: DateOnly,
+  today?: DateOnly,
+): boolean =>
+  bill.paysItself === true &&
+  !(bill.undoneDueOn ?? []).includes(dueOn) &&
+  dueOn >= (bill.paysItselfFrom ?? 0) &&
+  !(
+    bill.isAtLink === true &&
+    today !== undefined &&
+    today - dueOn > AUTO_PAY_DAYS.askDays * DAY_MS
+  );
+
+/** The day the setting was turned on: the earliest version of the newest unbroken run with it on (one change's versions share a `createdAt`); null when the newest has it off. */
+export function getPaysItselfFrom(
+  versions: readonly {
+    createdAt: number;
+    payload: { paysItself?: boolean | null };
+  }[],
+): DateOnly | null {
+  const stamps = [
+    ...new Set(versions.map((version) => version.createdAt)),
+  ].sort((a, b) => b - a);
+  const run = stamps.reduce<{ from: number | null; isBroken: boolean }>(
+    (acc, createdAt) => {
+      if (acc.isBroken) return acc;
+      const isOn = versions
+        .filter((version) => version.createdAt === createdAt)
+        .every((version) => version.payload.paysItself === true);
+      return isOn
+        ? { from: createdAt, isBroken: false }
+        : { ...acc, isBroken: true };
+    },
+    { from: null, isBroken: false },
+  );
+  return run.from === null ? null : startOfUtcDay(run.from);
+}
+
+/** What names one payment, with no name in it: the bill's id and the due day. */
+export const getPaymentKey = (billId: string, dueOn: DateOnly) =>
+  `${billId}:${toDayStamp(dueOn)}`;
+
+/** The due days of each bill's payments whose newest mark the person took back; a correction or a match writes a later mark and is not that. */
 export function getUndoneDueDays(
   moves: readonly OpenMove[],
 ): Record<string, DateOnly[]> {
   const reversed = new Set(
     moves.flatMap((move) => (move.reversesMoveId ? [move.reversesMoveId] : [])),
   );
-  const result = moves.reduce<Record<string, DateOnly[]>>((acc, move) => {
-    if (
-      move.kind !== 'billPaid' ||
-      move.reversesMoveId ||
-      move.refId === null ||
-      !reversed.has(move.id)
-    )
+  const newest = moves.reduce<Map<string, OpenMove>>((acc, move) => {
+    if (move.kind !== 'billPaid' || move.reversesMoveId || move.refId === null)
       return acc;
-    const days = acc[move.refId] ?? [];
-    return days.includes(move.date)
-      ? acc
-      : { ...acc, [move.refId]: [...days, move.date] };
-  }, {});
-  return result;
+    const key = getPaymentKey(move.refId, move.date);
+    const seen = acc.get(key);
+    const isNewer =
+      !seen ||
+      move.createdAt > seen.createdAt ||
+      (move.createdAt === seen.createdAt && move.id > seen.id);
+    return isNewer ? acc.set(key, move) : acc;
+  }, new Map());
+  return [...newest.values()].reduce<Record<string, DateOnly[]>>(
+    (acc, move) =>
+      move.refId === null || !reversed.has(move.id)
+        ? acc
+        : { ...acc, [move.refId]: [...(acc[move.refId] ?? []), move.date] },
+    {},
+  );
 }
-
-/** What names one payment, with no name in it: the bill's id and the due day. */
-export const getPaymentKey = (billId: string, dueOn: DateOnly) =>
-  `${billId}:${toDayStamp(dueOn)}`;
 
 /** The payments that already have a charge matched to them. */
 export const getMatchedKeys = (
@@ -115,14 +152,10 @@ export interface AutoMark {
   amountCents: Cents;
   /** A ranged bill's top of range: the real amount is still to come. */
   isEstimate: boolean;
-  /** The card it is charged to; null when it comes from the bank. */
   cardId: string | null;
 }
 
-/**
- * The payments the app marks paid now: a bill that pays itself, unpaid, due today or before, inside what is tracked, with no mark ever
- * taken back. A bank-paid bill at Link waits for its charge instead, since Free to Spend there comes from the bank's balance.
- */
+/** The payments to mark paid now: unpaid, due today or before, on or after `since`, never taken back. A bank-paid bill at Link waits for its charge instead, since Free to Spend there comes from the bank's balance. */
 export function findAutoMarks(input: {
   level: Level;
   today: DateOnly;
@@ -153,7 +186,7 @@ export function findAutoMarks(input: {
   return result;
 }
 
-/** A bank charge a bill's payment could be: bought on its card or pulled from its account, and not already somewhere else. */
+/** A bank charge a bill's payment could be: not already somewhere else. */
 const isCharge = (purchase: OpenPurchase) =>
   purchase.source === 'link' &&
   purchase.amountCents > 0 &&
@@ -216,12 +249,7 @@ export interface ChargeMatch {
   purchase: OpenPurchase;
 }
 
-/**
- * The charges that are clearly a bill's payment, at Link: waiting at the bank, on the bill's card or account, dated within three days
- * of the due day, inside the bill's range, named like the bill, and the only such charge for that payment. One charge never settles two
- * payments and one payment never takes two charges.
- */
-export function findChargeMatches(input: {
+interface ChargeInput {
   level: Level;
   today: DateOnly;
   bills: readonly AutoBill[];
@@ -230,13 +258,17 @@ export function findChargeMatches(input: {
   /** The plan's one pull account, which a bank-paid bill with no account of its own reads as. */
   pullAccountId: string | null;
   matched: ReadonlySet<string>;
-}): ChargeMatch[] {
+}
+
+const getChargeOptions = (input: ChargeInput, isPendingKept: boolean) => {
   if (!isLinkAt(input.level)) return [];
   const charges = input.waiting.filter(
     (purchase) =>
-      isCharge(purchase) && purchase.needsHome && purchase.status !== 'pending',
+      isCharge(purchase) &&
+      purchase.needsHome &&
+      (isPendingKept || purchase.status !== 'pending'),
   );
-  const options = input.bills.flatMap((bill) =>
+  return input.bills.flatMap((bill) =>
     bill.payments
       .filter(
         (payment) =>
@@ -256,6 +288,24 @@ export function findChargeMatches(input: {
         ),
       })),
   );
+};
+
+/** The waiting charges a bill's open payment could take, so a rule leaves them for the bill matcher. */
+export const findBillCandidateIds = (input: ChargeInput): Set<string> =>
+  new Set(
+    getChargeOptions(input, true).flatMap(({ candidates }) =>
+      candidates.map((purchase) => purchase.id),
+    ),
+  );
+
+/** The charges that are clearly a bill's payment, at Link: the only candidate for that payment, and claimed by no other payment. The person's send-backs are left alone. */
+export function findChargeMatches(input: ChargeInput): ChargeMatch[] {
+  const options = getChargeOptions(input, false).map((option) => ({
+    ...option,
+    candidates: option.candidates.filter(
+      (purchase) => purchase.assignedBy !== 'person',
+    ),
+  }));
   const claims = options.reduce<Map<string, number>>((acc, option) => {
     option.candidates.forEach((purchase) =>
       acc.set(purchase.id, (acc.get(purchase.id) ?? 0) + 1),
@@ -277,15 +327,10 @@ export function findChargeMatches(input: {
   return result;
 }
 
-/** The distance of an amount from a range: zero inside it. */
 const getAmountDistance = (payment: AutoPayment, amountCents: Cents) =>
   Math.max(0, payment.lowCents - amountCents, amountCents - payment.highCents);
 
-/**
- * The charges a person can pick as a payment's, closest first (by how far the amount is from what the payment can come to, then how many
- * days from the due day): on the bill's card or account, from five days before the due day to ten after, and not already matched, paired
- * or brought in as a link's history.
- */
+/** The charges a person can pick as a payment's, closest first: on the bill's card or account, five days before the due day to ten after, not matched, paired or a link's history. */
 export function rankChargeCandidates(input: {
   bill: AutoBill;
   payment: AutoPayment;
@@ -322,7 +367,7 @@ export function rankChargeCandidates(input: {
 /** A question a bill that pays itself leaves for the person. */
 export type AutoCheck =
   | {
-      /** Track: a ranged bill was marked at the top of its range; the person says what it came to. */
+      /** Track: a ranged bill was marked at the top of its range. */
       kind: 'amount';
       billId: string;
       billName: string;
@@ -337,11 +382,7 @@ export type AutoCheck =
       dueOn: DateOnly;
     };
 
-/**
- * What the app could not settle by itself. At Track, a ranged bill's automatic mark still holds the top of its range. At Link, a payment
- * three or more days past due has no clear charge (until the question has been dropped for good, or put off, which the caller passes in
- * `snoozed` as payment keys).
- */
+/** What the app could not settle by itself: at Track a ranged bill's mark still at the top of its range, at Link a payment three or more days past due with no charge (until `snoozed`, as payment keys). */
 export function findAutoChecks(input: {
   level: Level;
   today: DateOnly;

@@ -389,7 +389,7 @@ function ItemSheet({
   const [chargeDueOn, setChargeDueOn] = useState<number | null>(null);
   const { confirm } = useActionModal();
   const forgetMatch = useForgetBillMatch();
-  const { checks } = useAutoChecks();
+  const { checks } = useAutoChecks(version?.kind === 'bill');
   const check = checks.find((entry) => entry.billId === itemId) ?? null;
   const learnedCount = useAppSelector(
     (state) => selectLearnedNames(state, itemId).length,
@@ -984,7 +984,8 @@ function ItemSheet({
     paid.isReady &&
     payment !== null &&
     !(isSelfPaying && !paid.isPaid);
-  const canForget = itemKind === 'bill' && learnedCount > 0;
+  const canForget =
+    itemKind === 'bill' && isTrackingLevel(level) && learnedCount > 0;
 
   const openChange = (step: string | null) => {
     setOpenStep(step);

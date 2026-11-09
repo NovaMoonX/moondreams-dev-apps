@@ -3,11 +3,14 @@ import assert from 'node:assert/strict';
 import {
   findAutoChecks,
   findAutoMarks,
+  findBillCandidateIds,
   findChargeMatches,
   getMatchedKeys,
   getPaymentKey,
+  getPaysItselfFrom,
   getUndoneDueDays,
   isAutoBill,
+  isSelfPaying,
   rankChargeCandidates,
   type AutoBill,
   type AutoPayment,
@@ -591,6 +594,228 @@ assert.equal(isAutoBill({}, 'link'), false);
     'a question stops being asked long after the due day',
   );
   assert.equal(checks('track', late).length, 0);
+}
+
+const paymentRows = (dueDays: number[]) =>
+  dueDays.map((dueOn) => ({
+    dueOn,
+    totalCents: 1_599,
+    parts: [],
+    ranged: null,
+    fundedCents: 0,
+    fundedDays: 0,
+    heldNowCents: 0,
+    heldMostCents: 0,
+    paid: null,
+  }));
+
+// A bill that starts paying itself never back-pays: the cutoff is the day the setting was turned on.
+{
+  const version = (createdAt: number, paysItself: boolean) => ({
+    createdAt,
+    payload: { paysItself },
+  });
+  assert.equal(
+    getPaysItselfFrom([
+      version(at(-40), false),
+      version(at(-3) + 5_000, true),
+      version(at(-3) + 5_000, true),
+      version(at(-1), true),
+    ]),
+    at(-3),
+    'the earliest version of the newest unbroken run, by the day it was written',
+  );
+  assert.equal(
+    getPaysItselfFrom([
+      version(at(-40), true),
+      version(at(-20), false),
+      version(at(-2), true),
+    ]),
+    at(-2),
+    'turned off and on again starts a new run',
+  );
+  assert.equal(
+    getPaysItselfFrom([version(at(-40), true), version(at(-2), false)]),
+    null,
+    'a bill whose newest version has it off has no cutoff',
+  );
+  const cut = bill({
+    since: at(-3),
+    payments: [pay(at(-5), 1_599), pay(at(-1), 1_599)],
+  });
+  assert.deepEqual(
+    findAutoMarks({ level: 'track', today, bills: [cut] }).map((m) => m.dueOn),
+    [at(-1)],
+    'a payment due before the setting was turned on is not marked',
+  );
+  assert.deepEqual(
+    findAutoChecks({
+      level: 'link',
+      today,
+      bills: [cut],
+      matched: new Set(),
+      snoozed: new Set(),
+    }).map((entry) => entry.dueOn),
+    [],
+    'nor asked about',
+  );
+  assert.equal(
+    findChargeMatches({
+      level: 'link',
+      today,
+      bills: [cut],
+      waiting: [charge('old', 1_599, at(-5))],
+      pullAccountId: null,
+      matched: new Set(),
+    }).length,
+    0,
+    'nor matched to a charge',
+  );
+  const due = lookahead({
+    today,
+    horizon: at(365),
+    days: [],
+    payments: { netflix: paymentRows([at(-5), at(-1)]) },
+    draftOf: () => null,
+    bills: [
+      {
+        id: 'netflix',
+        name: 'Netflix',
+        since: at(-60),
+        isUndated: false,
+        paysItself: true,
+        paysItselfFrom: at(-3),
+      },
+    ],
+  }).due;
+  assert.deepEqual(
+    due.map((entry) => entry.dueOn),
+    [at(-5)],
+    'the payment before the cutoff stays the person’s to mark',
+  );
+}
+
+// At Link, an unmarked payment past the asking window goes back to the person.
+{
+  const due = lookahead({
+    today,
+    horizon: at(365),
+    days: [],
+    payments: { netflix: paymentRows([at(-50), at(-10)]) },
+    draftOf: () => null,
+    bills: [
+      {
+        id: 'netflix',
+        name: 'Netflix',
+        since: at(-90),
+        isUndated: false,
+        paysItself: true,
+        isAtLink: true,
+      },
+    ],
+  }).due;
+  assert.deepEqual(
+    due.map((entry) => entry.dueOn),
+    [at(-50)],
+    'the 50 day old payment is to pay; the 10 day old one is still the app’s to settle',
+  );
+  assert.equal(
+    isSelfPaying({ paysItself: true, isAtLink: true }, at(-50), today),
+    false,
+  );
+  assert.equal(
+    isSelfPaying({ paysItself: true, isAtLink: false }, at(-50), today),
+    true,
+  );
+}
+
+// A charge a bill's open payment could take is held back from rules.
+{
+  const input = {
+    level: 'link' as const,
+    today,
+    bills: [bill()],
+    pullAccountId: null,
+    matched: new Set<string>(),
+  };
+  assert.deepEqual(
+    [
+      ...findBillCandidateIds({
+        ...input,
+        waiting: [charge('c1', 1_599, at(-1))],
+      }),
+    ],
+    ['c1'],
+  );
+  assert.equal(
+    findBillCandidateIds({
+      ...input,
+      waiting: [charge('wrongCard', 1_599, at(-1), { paidByCardId: 'other' })],
+    }).size,
+    0,
+    'another card is not a candidate',
+  );
+  assert.equal(
+    findBillCandidateIds({ ...input, waiting: [charge('big', 4_000, at(-1))] })
+      .size,
+    0,
+    'an amount outside the bill is not a candidate',
+  );
+  assert.equal(
+    findBillCandidateIds({
+      ...input,
+      waiting: [charge('late', 1_599, at(-20))],
+    }).size,
+    0,
+    'a day far from the due day is not a candidate',
+  );
+  assert.equal(
+    findBillCandidateIds({
+      ...input,
+      matched: new Set([getPaymentKey('netflix', at(-1))]),
+      waiting: [charge('c1', 1_599, at(-1))],
+    }).size,
+    0,
+    'a payment that already has a charge holds nothing',
+  );
+}
+
+// Only a mark the person took back counts: a correction or a match writes a later mark.
+{
+  const move = (
+    id: string,
+    reverses: string | null,
+    due: number,
+    createdAt: number,
+  ) =>
+    ({
+      id,
+      kind: 'billPaid',
+      date: due,
+      refId: 'netflix',
+      reversesMoveId: reverses,
+      createdAt,
+      payload: {},
+    }) as unknown as OpenMove;
+  assert.deepEqual(
+    getUndoneDueDays([
+      move('m1', null, at(-1), 10),
+      move('unpaid_m1', 'm1', at(-1), 20),
+      move('m2', null, at(-1), 20),
+    ]),
+    {},
+    'an undo followed by a new mark is a correction',
+  );
+  assert.deepEqual(
+    getUndoneDueDays([
+      move('m1', null, at(-1), 10),
+      move('unpaid_m1', 'm1', at(-1), 20),
+      move('m2', null, at(-1), 20),
+      move('unpaid_m2', 'm2', at(-1), 30),
+    ]),
+    { netflix: [at(-1)] },
+    'the newest mark taken back is the person’s',
+  );
 }
 
 console.log('runway auto pay: ok');

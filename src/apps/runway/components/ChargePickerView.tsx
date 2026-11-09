@@ -36,7 +36,7 @@ interface ChargePickerViewProps {
   onDone: () => void;
 }
 
-/** The charges near a payment's due day, to pick the one that was it; "Not here yet" puts the question off for a few days. */
+/** The charges near a payment's due day, to pick the one that was it. */
 function ChargePickerView({
   billId,
   billName,

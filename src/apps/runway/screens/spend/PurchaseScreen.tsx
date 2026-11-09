@@ -34,7 +34,9 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { getWebLinkHost } from '@/utils/urlUtils';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { useUnmatchCharge } from '@apps/runway/hooks/useAutoPay';
 import {
+  AUTO_PAY_WORDS,
   HORIZON_END_WORDS,
   MAX_RECEIPTS_PER_PURCHASE,
   NEEDS_HOME_WORDS,
@@ -153,6 +155,7 @@ function PurchaseScreen({
   const { openPurchase: openPurchaseInUrl } = useRunwayUrlState();
   const openPurchase = onOpen ?? openPurchaseInUrl;
   const { addToast } = useToast();
+  const unmatch = useUnmatchCharge();
   const purchases = useAppSelector(selectSpendPurchases);
   const lostPairs = useAppSelector(selectLostPairs);
   const isLoaded = useAppSelector(selectIsMovesLoaded);
@@ -332,14 +335,26 @@ function PurchaseScreen({
   );
   const envelopes = describeEnvelopes(purchase.lines, nameOf);
   const facts = getPurchaseFacts(purchase, envelopes, isHidden);
+  const billRef = purchase.billRef ?? null;
+  const billName =
+    billRef === null
+      ? ''
+      : (looks.get(billRef.billId)?.name ?? AUTO_PAY_WORDS.fallbackBillName);
   const fact = [
     formatDateOrdinalUTC(purchase.date),
     ...(purchase.status === 'pending' ? [NEEDS_HOME_WORDS.pending] : []),
-    ...(isWaiting
-      ? [sourceName]
-      : facts.length > 0
-        ? facts
-        : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
+    ...(billRef !== null
+      ? [
+          AUTO_PAY_WORDS.paidBill(
+            mask(billName),
+            formatDateOrdinalUTC(billRef.dueOn),
+          ),
+        ]
+      : isWaiting
+        ? [sourceName]
+        : facts.length > 0
+          ? facts
+          : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
   const bankName =
@@ -398,6 +413,14 @@ function PurchaseScreen({
           .payload ?? null);
   const paysCostName =
     paysHorizon?.costs.find(({ id }) => id === paysRef?.costId)?.name ?? null;
+
+  const unmatchCharge = async () => {
+    if (isBusy) return;
+    setIsBusy(true);
+    const isDone = await unmatch(purchase, billName);
+    setIsBusy(false);
+    if (isDone) onClose();
+  };
 
   const remove = async () => {
     if (!user || isBusy) return;
@@ -811,24 +834,38 @@ function PurchaseScreen({
             </PairOffer>
           )}
           <ActionGroup isRoomy>
-            <ActionRow
-              isGrouped
-              isRoomy
-              hasChevron
-              icon={<Pencil />}
-              label={
-                isWaiting ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
-              }
-              subtitle={isWaiting ? NEEDS_HOME_WORDS.moreOptionsSub : undefined}
-              isDisabled={isBusy}
-              onClick={() => {
-                keepEntryFor('purchase');
-                setEditTarget((current) => ({
-                  key: (current?.key ?? 0) + 1,
-                  purchase,
-                }));
-              }}
-            />
+            {billRef === null ? (
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<Pencil />}
+                label={
+                  isWaiting ? NEEDS_HOME_WORDS.moreOptions : SPEND_WORDS.edit
+                }
+                subtitle={
+                  isWaiting ? NEEDS_HOME_WORDS.moreOptionsSub : undefined
+                }
+                isDisabled={isBusy}
+                onClick={() => {
+                  keepEntryFor('purchase');
+                  setEditTarget((current) => ({
+                    key: (current?.key ?? 0) + 1,
+                    purchase,
+                  }));
+                }}
+              />
+            ) : (
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Undo2 />}
+                label={AUTO_PAY_WORDS.notThisCharge}
+                subtitle={AUTO_PAY_WORDS.notThisChargeSub}
+                isDisabled={isBusy}
+                onClick={() => void unmatchCharge()}
+              />
+            )}
             {heldRule !== null && (
               <ActionRow
                 isGrouped

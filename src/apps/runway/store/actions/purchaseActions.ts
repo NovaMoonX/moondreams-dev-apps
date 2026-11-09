@@ -12,6 +12,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
+  AUTO_PAY_WORDS,
   DEPOSIT_WORDS,
   HORIZON_END_WORDS,
   MAX_PURCHASE_LINES,
@@ -470,6 +471,7 @@ export async function editPurchase(
   if (sumLines(input.lines) !== input.amountCents) {
     throw new Error('The parts do not add up to the amount.');
   }
+  if (previous.billRef) throw new Error(AUTO_PAY_WORDS.matchedNoEnvelope);
   const isSameHome = isSameLines(previous.lines, input.lines);
   const [sealed, changeSealed, expenseSealed] = await Promise.all([
     sealJson(
@@ -488,6 +490,7 @@ export async function editPurchase(
         link: input.link,
         receiptText: input.receiptText,
         costRef: previous.costRef ?? null,
+        billRef: previous.billRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: previous.incomeDayId,
         assignedBy: isSameHome ? previous.assignedBy : 'person',
@@ -587,6 +590,9 @@ export async function assignPurchase(
 ): Promise<number> {
   if (lines.length > MAX_PURCHASE_LINES)
     throw new Error('Pick where it comes from.');
+  if (previous.billRef && lines.length > 0) {
+    throw new Error(AUTO_PAY_WORDS.matchedNoEnvelope);
+  }
   if (lines.length > 0 && sumLines(lines) !== previous.amountCents) {
     throw new Error('The parts do not add up to the amount.');
   }
@@ -607,6 +613,7 @@ export async function assignPurchase(
         link: previous.link,
         receiptText: previous.receiptText,
         costRef: previous.costRef ?? null,
+        billRef: previous.billRef ?? null,
         notSameAs: previous.notSameAs,
         incomeDayId: null,
         assignedBy: placement ? placement.assignedBy : previous.assignedBy,
@@ -1065,7 +1072,7 @@ export async function pairAccountPurchases(
 }
 
 /** What the sync gives a purchase waiting in Needs a home: a charge on its one Free to Spend line, money in on none. */
-const getWaitingLines = (amountCents: Cents): PurchaseLine[] =>
+export const getWaitingLines = (amountCents: Cents): PurchaseLine[] =>
   amountCents > 0
     ? [{ envelopeId: null, cents: amountCents, via: 'free' }]
     : [];

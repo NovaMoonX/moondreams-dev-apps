@@ -1448,7 +1448,7 @@ function BillFormBody({
                           ? { accountId: isAccount ? value : null }
                           : {}),
                       });
-                      moveOn();
+                      if (!isTracking) moveOn();
                     }}
                   />
                 )}
