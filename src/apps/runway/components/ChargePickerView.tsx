@@ -156,7 +156,7 @@ export function ChargePickerSheet({
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={AUTO_PAY_WORDS.chargeTask}
+      title={rest.billName}
       actions={<ValuesEyeButton />}
     >
       <ChargePickerView {...rest} onDone={onClose} />

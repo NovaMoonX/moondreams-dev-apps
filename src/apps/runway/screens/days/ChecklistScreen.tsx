@@ -178,7 +178,7 @@ function ChecklistBillRow({
         name={getLineTitle(line)}
         detail={isAuto ? AUTO_PAY_WORDS.paysItselfLine : progress}
         figure={amount}
-        leading={
+        slot={
           isAuto ? (
             <span
               className='grid size-5 shrink-0 place-items-center text-lg leading-none'
@@ -188,7 +188,6 @@ function ChecklistBillRow({
             </span>
           ) : undefined
         }
-        isChevronCentered={isAuto}
         ariaLabel={`${getLineTitle(line)}, ${amount}`}
         tick={
           isAuto

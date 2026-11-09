@@ -2516,7 +2516,6 @@ export const AUTO_PAY_WORDS = {
   forgetFailed: (name: string) => `${name} was not changed`,
   matchFailed: 'The charge was not matched',
   amountTask: (name: string) => `Enter what ${name} actually charged`,
-  chargeTask: 'Which charge was this?',
   notHereYet: 'Not here yet',
   changedElsewhere:
     'This charge or payment changed on another device. Nothing was changed.',

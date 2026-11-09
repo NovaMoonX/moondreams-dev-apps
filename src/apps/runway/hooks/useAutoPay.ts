@@ -106,7 +106,22 @@ interface ChargeToMatch {
   isPicked: boolean;
 }
 
+/** Charges a match is writing, so the device pass and a pick never both take one. */
+const claimedCharges = new Set<string>();
+
+/** Writes the match unless another is writing the same charge; resolves null then. */
 async function writeMatch(uid: string, charge: ChargeToMatch) {
+  const id = charge.purchase.id;
+  if (claimedCharges.has(id)) return null;
+  claimedCharges.add(id);
+  try {
+    return await writeClaimedMatch(uid, charge);
+  } finally {
+    claimedCharges.delete(id);
+  }
+}
+
+async function writeClaimedMatch(uid: string, charge: ChargeToMatch) {
   const encryption = await getRunwayEncryption(uid);
   const state = store.getState();
   const payment = findBillPayment(charge.billId, charge.dueOn);
@@ -246,6 +261,11 @@ export function useAutoPay(uid: string | null) {
         const results = await matches.reduce(
           async (done, { match, key }) => {
             const list = await done;
+            const current = store
+              .getState()
+              .runway.purchases.find((entry) => entry.id === match.purchase.id);
+            if (current && current.updatedAt !== match.purchase.updatedAt)
+              return list;
             try {
               const result = await writeMatch(uid, {
                 purchase: match.purchase,
@@ -254,7 +274,7 @@ export function useAutoPay(uid: string | null) {
                 dueOn: match.payment.dueOn,
                 isPicked: false,
               });
-              return [...list, result];
+              return result === null ? list : [...list, result];
             } catch (error) {
               tried.current.delete(key);
               console.error('A charge was not matched to its bill', error);
@@ -349,6 +369,7 @@ export function usePickCharge() {
         dueOn,
         isPicked: true,
       });
+      if (result === null) return false;
       showMatched(user.uid, [result], AUTO_PAY_WORDS.pickedOne(billName));
       return true;
     } catch (error) {
