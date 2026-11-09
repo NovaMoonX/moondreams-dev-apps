@@ -15,7 +15,7 @@ if (getApps().length === 0) {
 const STALE_AFTER_MS = 6 * 60 * 60 * 1000;
 const PARALLEL_LINKS = 5;
 
-/** Catches what a missed webhook left: every active link not synced for six hours. */
+/** Catches what a missed webhook left: every active link not synced for six hours, and every link waiting on a sign-in, so one the bank has since let back in clears itself. */
 export const syncRunwayAccounts = onSchedule(
   {
     region: 'us-central1',
@@ -39,7 +39,7 @@ export const syncRunwayAccounts = onSchedule(
           const data = link.data();
           const isDue =
             link.exists &&
-            data?.status === 'active' &&
+            (data?.status === 'active' || data?.status === 'needsAttention') &&
             now - ((data.lastSyncAt as number | null) ?? 0) > STALE_AFTER_MS;
           return isDue ? [{ uid, linkId }] : [];
         }),

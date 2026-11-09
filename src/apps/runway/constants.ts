@@ -4444,6 +4444,8 @@ export const LINK_WORDS = {
   methodManual: 'Add it myself',
   methodManualHelp: 'Type its details',
   newCardSummary: (name: string) => `Added the card ${name} from your bank`,
+  needsSignInRowValue: (when: string) =>
+    `Needs you to sign in again \u00b7 last updated ${when}`,
   linkedRowValue: (count: number, when: string) =>
     `Linked \u00b7 ${count === 1 ? '1 account' : `${count} accounts`} \u00b7 updated ${when}`,
   unlinkedRowValue: (count: number) =>

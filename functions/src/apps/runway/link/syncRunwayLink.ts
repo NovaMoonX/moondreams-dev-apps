@@ -577,10 +577,26 @@ export async function syncRunwayLink(
     };
   } catch (error) {
     if (error instanceof ProviderError && error.kind === 'needsAttention') {
-      await writeUnlessRevoked(firestore, linkRef, (transaction) =>
-        transaction.update(linkRef, { status: 'needsAttention' }),
-      );
-      logger.warn('runway.sync.needsAttention', { linkId, code: error.code });
+      const syncedAtStart: unknown = linkSnapshot.data()?.lastSyncAt ?? null;
+      const isMarked = await firestore.runTransaction(async (transaction) => {
+        const snapshot = await transaction.get(linkRef);
+        const data = snapshot.data();
+        // A sync that finished after this one started already proved the bank works, so its answer stands.
+        if (
+          !snapshot.exists ||
+          data?.status === 'revoked' ||
+          (data?.lastSyncAt ?? null) !== syncedAtStart
+        ) {
+          return false;
+        }
+        transaction.update(linkRef, { status: 'needsAttention' });
+        return true;
+      });
+      logger.warn('runway.sync.needsAttention', {
+        linkId,
+        code: error.code,
+        isMarked,
+      });
       return { ...empty, state: 'needsAttention' };
     }
     logger.error('runway.sync.failed', {
