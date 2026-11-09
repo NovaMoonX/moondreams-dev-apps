@@ -13,6 +13,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import RevealChip from '@/components/RevealChip';
 import SuggestionChips from '@/components/SuggestionChips';
+import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -75,6 +76,7 @@ const MAX_STOPS_SHOWN = 3;
 
 type Choice = 'free' | 'keep' | 'place' | null;
 type ChangesChoice = 'cancel' | 'keep' | null;
+type Step = 'changes' | 'money' | 'details' | 'review';
 
 interface HorizonEndViewProps {
   itemId: string;
@@ -113,6 +115,7 @@ function HorizonEndView({
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [editing, setEditing] = useState<Step | null>(null);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -458,6 +461,7 @@ function HorizonEndView({
                         label={option.name}
                         onClick={() => {
                           setPlaceId(option.value);
+                          setEditing(null);
                           setIsPickerOpen(false);
                           setQuery('');
                         }}
@@ -473,9 +477,206 @@ function HorizonEndView({
     );
   }
 
+  const firstOpen = (): Step | null => {
+    if (changeRows.length > 0 && changesPick === null) return 'changes';
+    return holdsMoney && where === null ? 'money' : null;
+  };
+  const step: Step = editing ?? firstOpen() ?? 'review';
+  const goBack = () => {
+    if (step === 'review') return onBack();
+    if (step === 'details' || (editing !== null && firstOpen() === null))
+      return setEditing(null);
+    if (step === 'money' && changeRows.length > 0) return setEditing('changes');
+    return onBack();
+  };
+
+  const footer = (
+    <ModalFooterActions
+      note={step === 'review' || step === 'details' ? error : null}
+      cancelAction={
+        <Button
+          type='button'
+          variant='secondary'
+          onClick={onBack}
+          disabled={isSaving}
+        >
+          Cancel
+        </Button>
+      }
+      rightActions={
+        step === 'review' || step === 'details' ? (
+          <Button
+            type='button'
+            className='whitespace-nowrap max-sm:px-3'
+            loading={isSaving}
+            disabled={isSaving || blocker !== null}
+            onClick={() => void save()}
+          >
+            {primary}
+          </Button>
+        ) : null
+      }
+    />
+  );
+
+  if (step === 'changes') {
+    return (
+      <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+        <BackLink onBack={goBack} />
+        <ActionTitle>
+          {HORIZON_END_WORDS.changesQuestion(changeRows.length)}
+        </ActionTitle>
+        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+          {changeRows.map(({ link, change }) => (
+            <li
+              key={`${link.itemId}-${link.changeId}`}
+              className='px-3 py-2 text-sm break-words'
+            >
+              <MaskedText>{describeChangeLine(change, cardNamer)}</MaskedText>
+            </li>
+          ))}
+        </ul>
+        <ChoiceCards
+          options={[
+            {
+              value: 'cancel' as const,
+              title: HORIZON_END_WORDS.changesCancelTitle(changeRows.length),
+              body: HORIZON_END_WORDS.changesCancelBody(changeRows.length),
+            },
+            {
+              value: 'keep' as const,
+              title: HORIZON_END_WORDS.changesKeepTitle(
+                horizon.name,
+                changeRows.length,
+              ),
+              body: HORIZON_END_WORDS.changesKeepBody(changeRows.length),
+            },
+          ]}
+          value={changesPick}
+          onChange={(choice) => {
+            setChangesPick(choice);
+            setEditing(null);
+            setError(null);
+          }}
+        />
+        {footer}
+      </div>
+    );
+  }
+
+  if (step === 'money') {
+    return (
+      <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+        <BackLink onBack={goBack} />
+        <ActionTitle>
+          <MaskedText>
+            {HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents))}
+          </MaskedText>
+        </ActionTitle>
+        <ChoiceCards
+          options={[
+            {
+              value: 'free' as const,
+              title: HORIZON_END_WORDS.freeTitle,
+              body: HORIZON_END_WORDS.freeBody,
+            },
+            {
+              value: 'keep' as const,
+              title: HELD_WORDS.keepTitle,
+              body: HELD_WORDS.keepBody,
+            },
+            {
+              value: 'place' as const,
+              title: HORIZON_END_WORDS.placeRow,
+              hasChevron: true,
+              body:
+                pick === 'place' && place
+                  ? HORIZON_END_WORDS.placePicked(place.name)
+                  : HORIZON_END_WORDS.placeRowSub,
+            },
+          ]}
+          value={pick}
+          onChange={(choice) => {
+            setPick(choice);
+            setIsPickerOpen(choice === 'place');
+            if (choice !== 'place') setEditing(null);
+            setError(null);
+          }}
+        />
+        {footer}
+      </div>
+    );
+  }
+
+  if (step === 'details') {
+    return (
+      <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
+        <BackLink onBack={goBack} />
+        <ActionTitle>{HORIZON_END_WORDS.detailsTitle}</ActionTitle>
+        {isCallOff && rows.length > 0 && (
+          <ActionSection caption={HORIZON_END_WORDS.whatStops}>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
+                isBill ? (
+                  <li
+                    key={cost.id}
+                    className='text-muted-foreground px-3 py-2 text-sm break-words'
+                  >
+                    {HORIZON_END_WORDS.staysBill(cost.name)}
+                  </li>
+                ) : (
+                  <li key={cost.id} className='px-3 py-2 text-sm break-words'>
+                    <MaskedText>
+                      {HORIZON_END_WORDS.stopsRow(
+                        cost.name,
+                        describeCostWhen(cost.schedule, cost.ending),
+                        cost.schedule.kind === 'once'
+                          ? describeCost(cost).figure
+                          : null,
+                      )}
+                    </MaskedText>
+                  </li>
+                ),
+              )}
+              {rows.length > MAX_STOPS_SHOWN && (
+                <li className='text-muted-foreground px-3 py-2 text-sm'>
+                  {HORIZON_END_WORDS.andMore(rows.length - MAX_STOPS_SHOWN)}
+                </li>
+              )}
+            </ul>
+          </ActionSection>
+        )}
+        {changeJson !== null && (
+          <EffectPreview
+            changeJson={changeJson}
+            emptyText=''
+            isCompact
+            lead={
+              holdsMoney && where !== null ? (
+                <p className='text-sm'>
+                  <MaskedText>{getFreeLine(where)}</MaskedText>
+                </p>
+              ) : null
+            }
+          />
+        )}
+        {footer}
+      </div>
+    );
+  }
+
+  const getMoneyAnswer = (to: HorizonWhere) => {
+    if (to.kind === 'free') return HORIZON_END_WORDS.moneyToFree;
+    return to.kind === 'place'
+      ? HORIZON_END_WORDS.moneyToPlace(to.name)
+      : HORIZON_END_WORDS.moneyStaysHeld(horizon.name);
+  };
+  const stopCount = rows.filter(({ isBill }) => !isBill).length;
+  const billCount = rows.length - stopCount;
+
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={onBack} />
+      <BackLink onBack={goBack} />
       <div className='space-y-1'>
         <ActionTitle>{title}</ActionTitle>
         <p className='text-muted-foreground text-sm'>
@@ -484,132 +685,36 @@ function HorizonEndView({
             : HORIZON_END_WORDS.finishNote}
         </p>
       </div>
-      {changeRows.length > 0 && (
-        <ActionSection caption={HORIZON_END_WORDS.changesQuestion}>
-          <div className='space-y-2'>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {changeRows.map(({ link, change }) => (
-                <li
-                  key={`${link.itemId}-${link.changeId}`}
-                  className='px-3 py-2 text-sm break-words'
-                >
-                  <MaskedText>
-                    {describeChangeLine(change, cardNamer)}
-                  </MaskedText>
-                </li>
-              ))}
-            </ul>
-            <ChoiceCards
-              options={[
-                {
-                  value: 'cancel' as const,
-                  title: HORIZON_END_WORDS.changesCancelTitle(
-                    changeRows.length,
-                  ),
-                  body: HORIZON_END_WORDS.changesCancelBody,
-                },
-                {
-                  value: 'keep' as const,
-                  title: HORIZON_END_WORDS.changesKeepTitle(
-                    horizon.name,
-                    changeRows.length,
-                  ),
-                  body: HORIZON_END_WORDS.changesKeepBody(changeRows.length),
-                },
-              ]}
-              value={changesPick}
-              onChange={(choice) => {
-                setChangesPick(choice);
-                setError(null);
-              }}
-            />
-          </div>
-        </ActionSection>
-      )}
-      {holdsMoney && (
-        <ActionSection
-          caption={mask(
-            HORIZON_END_WORDS.moneyQuestion(formatCents(leftCents)),
-          )}
-        >
-          <ChoiceCards
-            options={[
-              {
-                value: 'free' as const,
-                title: HORIZON_END_WORDS.freeTitle,
-                body: HORIZON_END_WORDS.freeBody,
-              },
-              {
-                value: 'keep' as const,
-                title: HELD_WORDS.keepTitle,
-                body: HELD_WORDS.keepBody,
-              },
-              {
-                value: 'place' as const,
-                title: HORIZON_END_WORDS.placeRow,
-                hasChevron: true,
-                body:
-                  pick === 'place' && place
-                    ? HORIZON_END_WORDS.placePicked(place.name)
-                    : HORIZON_END_WORDS.placeRowSub,
-              },
-            ]}
-            value={pick}
-            onChange={(choice) => {
-              setPick(choice);
-              setIsPickerOpen(choice === 'place');
-              setError(null);
-            }}
-          />
-        </ActionSection>
-      )}
-      {changeJson !== null && (
-        <EffectPreview
-          changeJson={changeJson}
-          emptyText=''
-          isCompact
-          lead={
-            holdsMoney && where !== null ? (
-              <p className='text-sm'>
-                <MaskedText>{getFreeLine(where)}</MaskedText>
-              </p>
-            ) : null
-          }
-        />
-      )}
-      {isCallOff && rows.length > 0 && (
-        <ActionSection caption={HORIZON_END_WORDS.whatStops}>
-          <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
-              isBill ? (
-                <li
-                  key={cost.id}
-                  className='text-muted-foreground px-3 py-2 text-sm break-words'
-                >
-                  {HORIZON_END_WORDS.staysBill(cost.name)}
-                </li>
-              ) : (
-                <li key={cost.id} className='px-3 py-2 text-sm break-words'>
-                  <MaskedText>
-                    {HORIZON_END_WORDS.stopsRow(
-                      cost.name,
-                      describeCostWhen(cost.schedule, cost.ending),
-                      cost.schedule.kind === 'once'
-                        ? describeCost(cost).figure
-                        : null,
-                    )}
-                  </MaskedText>
-                </li>
-              ),
+      <div className='space-y-2'>
+        {changeRows.length > 0 && changesPick !== null && (
+          <SummaryRow
+            label={HORIZON_END_WORDS.changesRowLabel(changeRows.length)}
+            onClick={() => setEditing('changes')}
+          >
+            {HORIZON_END_WORDS.changesAnswer(changesPick, changeRows.length)}
+          </SummaryRow>
+        )}
+        {holdsMoney && where !== null && (
+          <SummaryRow
+            label={mask(
+              HORIZON_END_WORDS.moneyRowLabel(formatCents(leftCents)),
             )}
-            {rows.length > MAX_STOPS_SHOWN && (
-              <li className='text-muted-foreground px-3 py-2 text-sm'>
-                {HORIZON_END_WORDS.andMore(rows.length - MAX_STOPS_SHOWN)}
-              </li>
-            )}
-          </ul>
-        </ActionSection>
-      )}
+            onClick={() => setEditing('money')}
+          >
+            {getMoneyAnswer(where)}
+          </SummaryRow>
+        )}
+        {changeJson !== null && (
+          <SummaryRow
+            label={HORIZON_END_WORDS.detailsTitle}
+            onClick={() => setEditing('details')}
+          >
+            {isCallOff && rows.length > 0
+              ? HORIZON_END_WORDS.detailsStops(stopCount, billCount)
+              : HORIZON_END_WORDS.detailsDays}
+          </SummaryRow>
+        )}
+      </div>
       {isCallOff && isReasonOpen && (
         <>
           <SuggestionChips
@@ -642,30 +747,7 @@ function HorizonEndView({
           </RevealChip>
         </div>
       )}
-      <ModalFooterActions
-        note={error ?? blocker}
-        cancelAction={
-          <Button
-            type='button'
-            variant='secondary'
-            onClick={onBack}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
-        }
-        rightActions={
-          <Button
-            type='button'
-            className='whitespace-nowrap max-sm:px-3'
-            loading={isSaving}
-            disabled={isSaving || blocker !== null}
-            onClick={() => void save()}
-          >
-            {primary}
-          </Button>
-        }
-      />
+      {footer}
     </div>
   );
 }

@@ -792,7 +792,10 @@ export const HORIZON_END_WORDS = {
   stopsRow: (cost: string, when: string, figure: string | null) =>
     [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
   callOffConfirm: 'Call off',
-  changesQuestion: 'What happens to its planned changes?',
+  changesQuestion: (count: number) =>
+    count === 1
+      ? 'What happens to its planned change?'
+      : 'What happens to its planned changes?',
   changesCancelTitle: (count: number) =>
     count === 1
       ? 'Cancel this change too'
@@ -803,9 +806,38 @@ export const HORIZON_END_WORDS = {
     count === 1
       ? 'It stays planned, on its own.'
       : 'They stay planned, on their own.',
-  changesCancelBody: 'Each goes back to what it was before.',
+  changesCancelBody: (count: number) =>
+    count === 1
+      ? 'It goes back to what it was before.'
+      : 'Each goes back to what it was before.',
   needsChangesChoice: 'Choose what happens to its planned changes.',
   changesStayCancelled: 'Its changes stay cancelled.',
+  changesRowLabel: (count: number) =>
+    count === 1 ? 'Its planned change' : 'Its planned changes',
+  changesAnswer: (pick: 'cancel' | 'keep', count: number) => {
+    if (pick === 'cancel')
+      return count === 1 ? 'Cancelled too' : `All ${count} cancelled too`;
+    return count === 1
+      ? 'Stays planned, on its own'
+      : 'Stay planned, on their own';
+  },
+  moneyRowLabel: (amount: string) => `The ${amount} left`,
+  moneyToFree: 'Goes to Free to Spend',
+  moneyToPlace: (place: string) => `Moves to ${place}`,
+  moneyStaysHeld: (event: string) => `Stays held for ${event}`,
+  detailsTitle: 'What changes',
+  detailsStops: (stops: number, bills: number) =>
+    [
+      stops > 0 ? (stops === 1 ? '1 cost stops' : `${stops} costs stop`) : null,
+      bills > 0
+        ? bills === 1
+          ? '1 stays a bill'
+          : `${bills} stay bills`
+        : null,
+    ]
+      .filter(Boolean)
+      .join(' \u00b7 '),
+  detailsDays: 'Your coming income days',
   calledOff: (name: string) => `${name} is called off`,
   undo: 'Undo',
   needsChoice: 'Choose what happens to the money it holds.',
