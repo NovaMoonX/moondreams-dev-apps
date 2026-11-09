@@ -20,6 +20,8 @@ export interface GroupEnvelopeMember {
   funding: FundingRule;
   /** The first day the envelope is in the plan. */
   startsOn: number;
+  /** The last day it is in the plan; it counts nothing in a month after it. */
+  endedAt?: number | null;
   /** The income days a usual month holds for the pay its rule counts (`getIncomeDaysPerMonth`). */
   incomeDaysPerMonth: number;
 }
@@ -143,8 +145,13 @@ export function monthlyTotal(
     if (!isLive(member) || isOnce(member)) return [0, 1];
     return getMonthlyFactor(member.schedule);
   });
-  const hasBegun = ({ startsOn, funding: { cadence } }: GroupEnvelopeMember) =>
+  const hasBegun = ({
+    startsOn,
+    endedAt,
+    funding: { cadence },
+  }: GroupEnvelopeMember) =>
     startsOn < nextMonth &&
+    (endedAt == null || endedAt >= monthStart) &&
     (cadence.kind !== 'calendar' ||
       cadence.startsOn === null ||
       cadence.startsOn < nextMonth);

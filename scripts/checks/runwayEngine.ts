@@ -1,6 +1,21 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
 
+import { getGoalStretches as getGoalStretchesTl } from '../../src/apps/runway/engine/goalTimeline.ts';
+import {
+  getTimelinePace as getTimelinePaceTl,
+  getTimelineTrack as getTimelineTrackTl,
+  planGoalTimeline as planGoalTimelineTl,
+} from '../../src/apps/runway/engine/pace.ts';
+import { toPaceStretches as toPaceStretchesTl } from '../../src/apps/runway/engine/goalTimeline.ts';
+import { monthlyTotal as monthlyTotalTl } from '../../src/apps/runway/engine/groups.ts';
+import { getGoalBalanceAt as getGoalBalanceAtTl } from '../../src/apps/runway/engine/horizonGoal.ts';
+import { selectBills as selectBillsTl } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
+import {
+  selectUsualMonthPlan as selectUsualMonthPlanTl,
+  toBillMember as toBillMemberTl,
+} from '../../src/apps/runway/store/selectors/usualMonthSelectors.ts';
+
 import {
   listChangesBetweenIncomeDays,
   listPlanChangeDays,
@@ -2353,6 +2368,7 @@ const version = (
       plannedByDateCents: 180_000,
       reachedOn: dayOf(45),
       state: 'onPace',
+      targetDate: vacation.targetDate,
     },
     'vacation fund: $300 each of six income days, on pace',
   );
@@ -2369,6 +2385,7 @@ const version = (
       plannedByDateCents: 0,
       reachedOn: dayOf(59),
       state: null,
+      targetDate: null,
     },
     'cushion: no date, reached on the fourth funded day',
   );
@@ -2385,6 +2402,7 @@ const version = (
       plannedByDateCents: 20_000,
       reachedOn: dayOf(3),
       state: 'ahead',
+      targetDate: phone.targetDate,
     },
     'phone: $50 each of four income days, ahead',
   );
@@ -20234,25 +20252,308 @@ console.log('runway engine: ok');
   assert.equal(
     getGoalCover(
       'g1',
-      {
-        name: 'Fund',
-        emoji: null,
-        priority: 'should',
-        orderIndex: 1,
-        targetCents: 100_000,
-        targetDate: null,
-        funding: {
-          cadence: { kind: 'none' },
-          amount: { kind: 'exact', cents: 10_000 },
-        } as unknown as GoalSealed['funding'],
-        state: 'active',
-        groupId: null,
-      },
+      [
+        {
+          from: 0,
+          until: null,
+          payload: {
+            name: 'Fund',
+            emoji: null,
+            priority: 'should',
+            orderIndex: 1,
+            targetCents: 100_000,
+            targetDate: null,
+            funding: {
+              cadence: { kind: 'none' },
+              amount: { kind: 'exact', cents: 10_000 },
+            } as unknown as GoalSealed['funding'],
+            state: 'active',
+            groupId: null,
+          },
+        },
+      ],
       12_000,
       [],
     ).contributions.length,
     0,
     'a goal that is not being saved for puts nothing in ahead, so only its balance now covers',
+  );
+}
+
+// Goals and monthly totals read the version in force on each day, not today's.
+{
+  const D = 86_400_000;
+  const t0 = Date.UTC(2027, 0, 1);
+  const pays = Array.from({ length: 12 }, (_, i) => ({
+    dayKey: `p${i}`,
+    on: t0 + (i + 1) * 14 * D,
+  }));
+  const fund = (cents: number, kind = 'everyIncomeDay') =>
+    ({
+      amount: { kind: 'exact', cents },
+      cadence: { kind },
+    }) as unknown as GoalSealed['funding'];
+  const goalPayload = (over: Partial<GoalSealed> = {}) =>
+    ({
+      name: 'G',
+      emoji: null,
+      priority: 'should',
+      orderIndex: 1,
+      targetCents: 120_000,
+      targetDate: t0 + 170 * D,
+      funding: fund(30_000),
+      state: 'active',
+      groupId: null,
+      ...over,
+    }) as GoalSealed;
+  const goalVersion = (
+    id: string,
+    payload: GoalSealed,
+    from: number,
+    until: number | null = null,
+    createdAt = 1,
+  ) => ({
+    id,
+    kind: 'goal',
+    itemId: 'g',
+    createdAt,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    payload,
+  });
+  const goalHeader = (over: Record<string, number | null> = {}) => ({
+    id: 'g',
+    endedAt: null,
+    archivedAt: null,
+    ...over,
+  });
+  const base = goalVersion('v1', goalPayload(), t0 - 100 * D);
+  const read = (
+    versions: ReturnType<typeof goalVersion>[],
+    header = goalHeader(),
+  ) => {
+    const stretches = getGoalStretchesTl(versions, header, t0);
+    return {
+      stretches,
+      pace: getTimelinePaceTl(toPaceStretchesTl(stretches), 0, pays),
+    };
+  };
+
+  const same = read([base]);
+  assert.equal(same.pace.reachedOn?.dayKey, 'p3', 'one version: $300 a pay');
+
+  const halved = read([
+    base,
+    goalVersion(
+      'v2',
+      goalPayload({ funding: fund(15_000) }),
+      t0 + 28 * D,
+      null,
+      2,
+    ),
+  ]);
+  assert.equal(
+    halved.pace.reachedOn?.dayKey,
+    'p6',
+    '$300 then $150 from the second pay: the finish date follows the change',
+  );
+
+  const stopped = read([
+    base,
+    goalVersion('v2', goalPayload({ state: 'paused' }), t0 + 31 * D, null, 2),
+  ]);
+  assert.equal(
+    stopped.pace.plannedByDateCents,
+    60_000,
+    'pays after the stop count nothing',
+  );
+  assert.equal(stopped.pace.reachedOn, null, 'a stopped goal does not finish');
+  assert.equal(stopped.pace.state, 'behind');
+  assert.equal(
+    getTimelineTrackTl(stopped.pace),
+    'behind',
+    'it is behind, not unjudged',
+  );
+
+  const later = read([
+    goalVersion(
+      'v1',
+      goalPayload({ funding: fund(30_000, 'none') }),
+      t0 - 100 * D,
+      t0 + 60 * D,
+    ),
+    goalVersion('v2', goalPayload(), t0 + 60 * D),
+  ]);
+  assert.equal(
+    later.pace.reachedOn?.dayKey,
+    'p7',
+    'a goal that starts later saves from its start',
+  );
+  assert.notEqual(later.pace.state, null, 'and has a pace');
+  assert.notEqual(getTimelineTrackTl(later.pace), null, 'and a track');
+  assert.equal(
+    later.pace.dayCount,
+    pays.filter((pay) => pay.on >= t0 + 60 * D && pay.on <= t0 + 170 * D)
+      .length,
+    'the days it needs are counted from its start',
+  );
+
+  const retargeted = read([
+    base,
+    goalVersion(
+      'v2',
+      goalPayload({ targetCents: 60_000, targetDate: t0 + 100 * D }),
+      t0 + 28 * D,
+      null,
+      2,
+    ),
+  ]);
+  assert.equal(
+    retargeted.pace.targetDate,
+    t0 + 100 * D,
+    'judged against the date in force at the end',
+  );
+  assert.equal(
+    retargeted.pace.remainingCents,
+    60_000,
+    'and the target in force at the end',
+  );
+  assert.equal(retargeted.pace.reachedOn?.dayKey, 'p1');
+  assert.equal(retargeted.pace.state, 'ahead');
+
+  const ended = read([base], goalHeader({ endedAt: t0 + 31 * D }));
+  assert.equal(
+    ended.stretches[0].until,
+    t0 + 32 * D,
+    'a future end cuts the stretch after its last day',
+  );
+  assert.equal(
+    ended.pace.plannedByDateCents,
+    60_000,
+    'pays after a future end count nothing',
+  );
+  assert.equal(ended.pace.reachedOn, null);
+
+  const planned = planGoalTimelineTl(
+    toPaceStretchesTl(ended.stretches),
+    0,
+    pays,
+  ).contributions;
+  const cover = {
+    goalId: 'g',
+    heldCents: 10_000,
+    contributions: planned.map((part) => ({
+      on: part.day.on,
+      cents: part.cents,
+    })),
+  };
+  assert.equal(
+    getGoalBalanceAtTl(cover, t0 + 160 * D),
+    70_000,
+    'an event after the goal ends draws on what it held then, not on pays after the end',
+  );
+
+  // A usual month reads the plan as that month holds it.
+  const today = Date.UTC(2026, 10, 9);
+  const dec1 = Date.UTC(2026, 11, 1);
+  const billPayload = (cents: number) => ({
+    name: 'Rent',
+    amount: { lowCents: cents, highCents: cents },
+    timing: {
+      schedule: {
+        kind: 'monthly',
+        anchor: Date.UTC(2026, 9, 5),
+        monthDays: [],
+      },
+    },
+    ending: { onDate: null, afterCount: null },
+    priority: 'must',
+    orderIndex: 1,
+  });
+  const header = (id: string, kind: string, endedAt: number | null = null) => ({
+    id,
+    kind,
+    createdAt: 1,
+    endedAt,
+    archivedAt: null,
+    parentId: null,
+  });
+  const ver = (
+    id: string,
+    itemId: string,
+    kind: string,
+    payload: unknown,
+    from: number,
+    until: number | null = null,
+    createdAt = 1,
+  ) => ({
+    id,
+    itemId,
+    kind,
+    payload,
+    effectiveFrom: from,
+    effectiveUntil: until,
+    createdAt,
+  });
+  const state = {
+    runway: {
+      items: [
+        header('rent', 'bill'),
+        header('gym', 'bill', Date.UTC(2026, 10, 20)),
+        header('fund', 'goal'),
+      ],
+      versions: [
+        ver('r1', 'rent', 'bill', billPayload(10_000), Date.UTC(2026, 8, 1)),
+        ver('r2', 'rent', 'bill', billPayload(15_000), dec1, null, 2),
+        ver('g1', 'gym', 'bill', billPayload(4_000), Date.UTC(2026, 8, 1)),
+        ver(
+          'f1',
+          'fund',
+          'goal',
+          goalPayload({ funding: fund(30_000, 'none') }),
+          Date.UTC(2026, 8, 1),
+          Date.UTC(2026, 11, 15),
+        ),
+        ver('f2', 'fund', 'goal', goalPayload(), Date.UTC(2026, 11, 15)),
+      ],
+    },
+  } as unknown as Parameters<typeof selectUsualMonthPlanTl>[0];
+  const usual = selectUsualMonthPlanTl(state, today);
+  assert.deepEqual(
+    monthlyTotalTl(usual.bills.map(toBillMemberTl), usual.month).total,
+    { lowCents: 15_000, highCents: 15_000 },
+    'a change from Dec 1 counts when the month judged is December, and a bill ended in November does not',
+  );
+  assert.equal(
+    usual.goals[0]?.version.payload.funding.cadence.kind,
+    'everyIncomeDay',
+    'a goal that starts mid-month counts from its start month',
+  );
+  const gym = selectBillsTl(state, today).find(({ item }) => item.id === 'gym');
+  assert.ok(gym);
+  assert.equal(
+    monthlyTotalTl([toBillMemberTl(gym)], usual.month).total.highCents,
+    0,
+    'a bill stopped by its end date counts nothing in the month after it',
+  );
+  const envelope = (endedAt: number | null) => ({
+    funding: fund(10_000, 'calendar'),
+    startsOn: Date.UTC(2026, 8, 1),
+    endedAt,
+    incomeDaysPerMonth: 2,
+  });
+  assert.equal(
+    monthlyTotalTl([], usual.month, [
+      {
+        ...envelope(Date.UTC(2026, 10, 20)),
+        funding: {
+          amount: { kind: 'exact', cents: 10_000 },
+          cadence: { kind: 'calendar', period: 'monthly', startsOn: null },
+        } as unknown as GoalSealed['funding'],
+      },
+    ]).total.highCents,
+    0,
+    'an envelope ended before the month counts nothing in it',
   );
 }
 

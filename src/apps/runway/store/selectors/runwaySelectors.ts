@@ -57,6 +57,7 @@ import {
   getItemStops,
 } from '@apps/runway/engine/horizonLinks';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
+import { getGoalStretches } from '@apps/runway/engine/goalTimeline';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
   resolve,
@@ -890,12 +891,13 @@ export function getEventGoalCover(
 ): GoalCover | null {
   const { goalId } = payload;
   if (goalId === null || payload.state !== 'open') return null;
-  const goal = resolveCurrentOrNext(versions.filter(isGoal), goalId, today);
   const header = items.find((item) => item.id === goalId);
-  if (!goal || !header || !isGoalCovering(header, today)) return null;
+  if (!header || !isGoalCovering(header, today)) return null;
+  const stretches = getGoalStretches(versions, header, today);
+  if (stretches.length === 0) return null;
   return getGoalCover(
     goalId,
-    goal.payload,
+    stretches,
     heldByItem[goalId] ?? 0,
     days.map((day) => ({
       ...day,
@@ -905,7 +907,13 @@ export function getEventGoalCover(
         'income',
       ),
     })),
-    getPriorDays(items, versions, today, days, [goal.payload.funding]),
+    getPriorDays(
+      items,
+      versions,
+      today,
+      days,
+      stretches.map(({ payload }) => payload.funding),
+    ),
   );
 }
 

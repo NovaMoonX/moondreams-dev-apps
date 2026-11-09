@@ -1,4 +1,3 @@
-import { isSavingFor } from '@apps/runway/engine/pace';
 import { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -150,10 +149,10 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
             since: Math.max(startDate ?? 0, todayAsUtcDate(card.createdAt)),
           }))
         : [],
-      goals: paces.flatMap(({ item, payload, pace, track }) =>
-        pace.isComplete || !isSavingFor(payload)
+      goals: paces.flatMap(({ item, pace, isSavingAhead, track }) =>
+        pace.isComplete || !isSavingAhead
           ? []
-          : [{ goalId: item.id, targetDate: payload.targetDate, track }],
+          : [{ goalId: item.id, targetDate: pace.targetDate, track }],
       ),
       planChanges: [
         ...listPlanChangeDays(

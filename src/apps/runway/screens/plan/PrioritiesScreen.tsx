@@ -51,7 +51,11 @@ import {
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getPace } from '@apps/runway/engine/pace';
+import {
+  getGoalStretches,
+  toPaceStretches,
+} from '@apps/runway/engine/goalTimeline';
+import { getTimelinePace } from '@apps/runway/engine/pace';
 import {
   applyMove,
   buildMoves,
@@ -237,18 +241,27 @@ function PrioritiesScreen({ onClose }: PrioritiesScreenProps) {
   const hasScrolledRef = useRef(false);
 
   const paces = useMemo(() => {
+    const stretchesByGoal = goals.map(({ item, version }) => {
+      const stretches = getGoalStretches(versions, item, today);
+      return stretches.length > 0
+        ? stretches
+        : [{ payload: version.payload, from: today, until: null }];
+    });
     const priorDays = getPriorDays(
       planItems,
       versions,
       today,
       comingDays,
-      goals.map(({ version }) => version.payload.funding),
+      stretchesByGoal.flatMap((stretches) =>
+        stretches.map(({ payload }) => payload.funding),
+      ),
     );
     return Object.fromEntries(
-      goals.map(({ item, version }) => [
+      goals.map(({ item }, index) => [
         item.id,
-        getPace(
-          { ...version.payload, heldCents: heldByItem[item.id] ?? 0 },
+        getTimelinePace(
+          toPaceStretches(stretchesByGoal[index]),
+          heldByItem[item.id] ?? 0,
           comingDays.map((day) => ({
             ...day,
             moneyCents: pick(

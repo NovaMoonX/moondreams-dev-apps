@@ -52,11 +52,11 @@ const describePaceShort = (
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateOrdinalUTC(pace.reachedOn.on)}`
     : PACE_WORDS.notReached;
-  if (goal.targetDate !== null && pace.state === 'behind') {
+  if (pace.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
-    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(goal.targetDate)}`;
+    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(pace.targetDate)}`;
   }
-  if (goal.targetDate === null || pace.state === null || savedCents === 0) {
+  if (pace.targetDate === null || pace.state === null || savedCents === 0) {
     return reaches.charAt(0).toUpperCase() + reaches.slice(1);
   }
   return `${PACE_STATE_LABELS[pace.state]}, ${reaches}`;

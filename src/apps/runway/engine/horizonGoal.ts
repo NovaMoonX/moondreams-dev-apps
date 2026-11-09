@@ -7,7 +7,9 @@ import type {
 } from '@apps/runway/types';
 
 import { DAY_MS } from './dates';
-import { isSavingFor, planGoalContributions, type PaceDay } from './pace';
+import type { GoalStretch } from './goalTimeline';
+import { planGoalTimeline, type PaceDay } from './pace';
+import { toPaceStretches } from './goalTimeline';
 
 /** What a goal holds now and what its plan puts in on each coming income day; the event it feeds reads the balance on a cost's due date from it. */
 export interface GoalCover {
@@ -96,25 +98,23 @@ export function shouldNudgeHorizon(input: {
   return input.today >= getHorizonNudgeFrom(targetDate, setOn);
 }
 
-/** The goal's cover for an event: its balance now and what its cadence puts in on the coming income days. A goal that is not being saved for, or takes what is left (`rest`), puts in nothing a day ahead, so its balance now is all the cover says. */
+/** The goal's cover for an event: its balance now and what the goal puts in on each coming income day, by the version in force on it. A stretch that is not being saved for (paused, not started, ended), or that takes what is left (`rest`), puts in nothing, so the balance alone is what it covers then. */
 export function getGoalCover(
   goalId: string,
-  goal: GoalSealed,
+  stretches: readonly GoalStretch[],
   heldCents: Cents,
   incomeDays: readonly (PaceDay & { on: DateOnly })[],
   priorDays: readonly PaceDay[] = [],
 ): GoalCover {
-  const isPlanned = isSavingFor(goal) && goal.funding.amount.kind !== 'rest';
   return {
     goalId,
     heldCents,
-    contributions: isPlanned
-      ? planGoalContributions(
-          { ...goal, heldCents },
-          incomeDays,
-          priorDays,
-        ).map((part) => ({ on: part.day.on, cents: part.cents }))
-      : [],
+    contributions: planGoalTimeline(
+      toPaceStretches(stretches),
+      heldCents,
+      incomeDays,
+      priorDays,
+    ).contributions.map((part) => ({ on: part.day.on, cents: part.cents })),
   };
 }
 

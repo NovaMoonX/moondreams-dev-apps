@@ -1,7 +1,11 @@
 import { useMemo } from 'react';
 
 import { useAppSelector } from '@/store';
-import { getGoalTrack, getPace } from '@apps/runway/engine/pace';
+import {
+  getGoalStretches,
+  toPaceStretches,
+} from '@apps/runway/engine/goalTimeline';
+import { getTimelinePace, getTimelineTrack } from '@apps/runway/engine/pace';
 import { fundingAtLevel, getExtras } from '@apps/runway/engine/parts';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import {
@@ -28,12 +32,20 @@ export function useGoalPaces(today: number) {
   const { dial } = usePriorityDial();
 
   return useMemo(() => {
+    const stretchesByGoal = goals.map(({ item, version }) => {
+      const stretches = getGoalStretches(versions, item, today);
+      return stretches.length > 0
+        ? stretches
+        : [{ payload: version.payload, from: today, until: null }];
+    });
     const priorDays = getPriorDays(
       items,
       versions,
       today,
       comingDays,
-      goals.map(({ version }) => version.payload.funding),
+      stretchesByGoal.flatMap((stretches) =>
+        stretches.map(({ payload }) => payload.funding),
+      ),
     );
     /** The dial a goal's finish date is counted at: only a counted goal with an extra the dial leaves out moves. */
     const getPaceDial = (goal: GoalSealed): Priority | null => {
@@ -60,13 +72,14 @@ export function useGoalPaces(today: number) {
         'income',
       ),
     }));
-    return goals.map(({ item, version }) => {
-      const pace = getPace(
-        {
-          ...version.payload,
-          ...getPaceFunding(version.payload),
-          heldCents: heldByItem[item.id] ?? 0,
-        },
+    return goals.map(({ item, version }, index) => {
+      const paceStretches = toPaceStretches(
+        stretchesByGoal[index],
+        getPaceFunding,
+      );
+      const pace = getTimelinePace(
+        paceStretches,
+        heldByItem[item.id] ?? 0,
         incomeDays,
         priorDays,
       );
@@ -75,7 +88,8 @@ export function useGoalPaces(today: number) {
         payload: version.payload,
         paceDial: getPaceDial(version.payload),
         pace,
-        track: getGoalTrack(version.payload, pace),
+        isSavingAhead: paceStretches.some((stretch) => stretch.isSaving),
+        track: getTimelineTrack(pace),
       };
     });
   }, [goals, comingDays, stance, heldByItem, items, versions, today, dial]);

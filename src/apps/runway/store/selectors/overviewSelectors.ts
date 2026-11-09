@@ -2,6 +2,7 @@ import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectUsualMonthPlan } from '@apps/runway/store/selectors/usualMonthSelectors';
 import {
   getEventGoalCover,
   selectAllHorizonItems,
@@ -9,7 +10,6 @@ import {
   selectBills,
   selectComingDays,
   selectCostPaid,
-  selectGoals,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -66,7 +66,10 @@ export const selectGoalCovers = createSelector(
 
 /** The dated goals counted at `dial` whose pace already covers their event's goal cost, so the month total leaves that cost out; a goal funded by whatever is left, or with no date, has no such pace. */
 const selectPacedGoalIds = createSelector(
-  [(state: RootState, on: number) => selectGoals(state, on), selectDial],
+  [
+    (state: RootState, on: number) => selectUsualMonthPlan(state, on).goals,
+    selectDial,
+  ],
   (goals, dial) =>
     new Set(
       goals
