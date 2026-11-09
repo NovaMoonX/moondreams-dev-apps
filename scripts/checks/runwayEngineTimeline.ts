@@ -754,7 +754,6 @@ const item = (
     'the Nov 20th pay gave the $100 it was set to, so $100 of the $200 left is still to come',
   );
 
-  // An envelope's max counts every planned pay before a day, whether the pay funds it by its own rule or by a pairing.
   const maxItems = [...payItems('pay4'), item('e', 3, { kind: 'envelope' })];
   const maxEnvelope = (maxCents: number) =>
     stored('ve', 'e', 'envelope', 1, T, null, {
