@@ -23,7 +23,7 @@ import {
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
 
@@ -101,8 +101,11 @@ function Composer({
       const withSent = (current: string) =>
         current ? `${current}\n${sent}` : sent;
       // The field may have unmounted since Send, so the words go back into the kept draft directly.
-      const kept = parseDraft(readFormDraft(uid, DRAFT_KEY, null)) ?? '';
-      writeFormDraft(uid, DRAFT_KEY, null, withSent(kept));
+      // After a switch to another account the sealer is theirs, so nothing is kept for this one.
+      if (store.getState().helm.uid === uid) {
+        const kept = parseDraft(readFormDraft(uid, DRAFT_KEY, null)) ?? '';
+        writeFormDraft(uid, DRAFT_KEY, null, withSent(kept));
+      }
       setText(withSent);
       addToast({ title: HELM_COPY.sendFailed, type: 'error' });
     };
