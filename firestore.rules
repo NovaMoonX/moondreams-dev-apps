@@ -243,7 +243,12 @@ service cloud.firestore {
     // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list.
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures'];
+        && collection in ['captures', 'tasks'];
+    }
+
+    // Activity never loses a line: the owner reads, writes and marks an execution undone, and nothing deletes one.
+    match /apps/helm/users/{uid}/executions/{executionId} {
+      allow read, create, update: if isHelmOwner(uid);
     }
 
     // --- App: nine-lives ---

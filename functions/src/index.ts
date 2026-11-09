@@ -14,6 +14,7 @@ export { getRunwayKey } from './apps/runway/getRunwayKey.js';
 export { verifyRunwayKeys } from './apps/runway/verifyRunwayKeys.js';
 export { getHelmKey } from './apps/helm/getHelmKey.js';
 export { verifyHelmKeys } from './apps/helm/verifyHelmKeys.js';
+export { sortHelmCapture } from './apps/helm/sortHelmCapture.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';
 export { exchangeRunwayLink } from './apps/runway/exchangeRunwayLink.js';

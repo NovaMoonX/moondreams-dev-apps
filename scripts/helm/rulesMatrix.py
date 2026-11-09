@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and no other path under apps/helm is open to a client.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and tasks follow the same rule, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -119,9 +119,36 @@ def main():
     check('captures create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/captures/c', turn)]), False)
     check('captures read at another uid [o]', get(f'apps/helm/users/{x_uid}/captures/c', o_tok), False)
 
+    # A task is the owner's alone.
+    admin([put(path, profile)])
+    task = dict(status='open', isUrgent=False, due=None, createdBy='nomos', createdAt=NOW, sealed=SEAL)
+    tk = f'{path}/tasks/task-1'
+    for a, tok in actors.items():
+        admin([put(tk, task)])
+        check(f'tasks read [{a}]', get(tk, tok), a == 'o')
+        check(f'tasks list [{a}]', get(f'{path}/tasks', tok), a == 'o')
+        check(f'tasks create [{a}]', commit(tok, [put_new(tk + '-new-' + a, task)]), a == 'o')
+        check(f'tasks update [{a}]', commit(tok, [put(tk, dict(task, status='done'))]), a == 'o')
+        check(f'tasks delete [{a}]', commit(tok, [rm(tk)]), a == 'o')
+        admin([rm(tk + '-new-' + a)])
+    check('tasks create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/tasks/t', task)]), False)
+
+    # An execution is the owner's to read, create and update; nobody deletes one.
+    run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
+    ex = f'{path}/executions/exec-1'
+    for a, tok in actors.items():
+        admin([put(ex, run)])
+        check(f'executions read [{a}]', get(ex, tok), a == 'o')
+        check(f'executions list [{a}]', get(f'{path}/executions', tok), a == 'o')
+        check(f'executions create [{a}]', commit(tok, [put_new(ex + '-new-' + a, run)]), a == 'o')
+        check(f'executions update [{a}]', commit(tok, [put(ex, dict(run, undoneByExecutionId='exec-2'))]), a == 'o')
+        check(f'executions delete [{a}]', commit(tok, [rm(ex)]), False)
+        admin([rm(ex + '-new-' + a)])
+    check('executions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/executions/e', run)]), False)
+
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/tasks/task-1', f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest'):
+    for p in (f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest'):
         admin([put(p, {'x': 1})])
         for a, tok in actors.items():
             check(f'{p.split("/")[-2]} read [{a}]', get(p, tok), False)
