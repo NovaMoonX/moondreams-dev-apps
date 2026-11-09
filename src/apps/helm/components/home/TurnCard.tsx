@@ -1,4 +1,5 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
 import { formatTime } from '@/utils/formatUtils';
@@ -97,7 +98,7 @@ function TurnCard({
   return (
     <article className='flex flex-col items-end gap-1'>
       <div className='flex w-full flex-col items-end gap-1'>
-        {[capture, ...joined].map((message) =>
+        {[capture, ...joined].map((message, index, messages) =>
           message.isUnreadable ? (
             <p
               key={message.id}
@@ -108,7 +109,12 @@ function TurnCard({
           ) : (
             <p
               key={message.id}
-              className='bg-primary text-primary-foreground max-w-[84%] rounded-[18px_18px_4px_18px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
+              className={join(
+                'bg-primary text-primary-foreground max-w-[84%] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap',
+                index === messages.length - 1
+                  ? 'rounded-[18px_18px_4px_18px]'
+                  : 'rounded-[18px]',
+              )}
             >
               {message.text}
             </p>
