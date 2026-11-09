@@ -1130,6 +1130,8 @@ function ItemSheet({
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow =
     itemKind === 'bill' &&
+    version !== null &&
+    version.effectiveFrom <= today &&
     paid.isReady &&
     payment !== null &&
     !(isSelfPaying && !paid.isPaid);
