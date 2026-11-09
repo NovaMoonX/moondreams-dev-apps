@@ -34,6 +34,7 @@ import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelect
 import { useBillCardName } from '@apps/runway/hooks/paidAmountPayment';
 import { useIsSelfPaying } from '@apps/runway/hooks/useSelfPaying';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
+import { usePaidWithAction } from '@apps/runway/hooks/usePaidWithAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
 interface BillRowProps {
@@ -189,6 +190,7 @@ export function BillSheet({
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
   const paidFromAction = usePaidFromAction(billId, today);
+  const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
     selectAllHorizonItems(state, today),
   );
@@ -257,6 +259,7 @@ export function BillSheet({
             }
       }
       maxAction={paidFromAction}
+      payAction={paidWithAction}
       dayAction={dayAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
