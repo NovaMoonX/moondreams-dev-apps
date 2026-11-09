@@ -11,6 +11,16 @@ import {
   sealJson,
 } from '../../src/apps/runway/security.ts';
 import {
+  addLink,
+  getChangesOnlyDoneOn,
+  getLinkSpan,
+  hasLinkHappened,
+  listComingChanges,
+  removeLink,
+  sortLinksByDate,
+} from '../../src/apps/runway/engine/horizonLinks.ts';
+import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
+import {
   findAccountPairs,
   findLostPairs,
   findDepositDays,
@@ -5624,6 +5634,7 @@ const version = (
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           {
             id: 'surg',
@@ -12853,6 +12864,7 @@ const version = (
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, storage],
   };
   const coveredUntil = (item: HorizonSealed, heldCents: number) =>
@@ -13137,6 +13149,7 @@ const version = (
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, truck],
   };
   const entry = (
@@ -13754,6 +13767,7 @@ const version = (
     state: 'open',
     stateOn: null,
     stateMoney: null,
+    links: [],
     costs: [movers, storage],
   };
   const paidMovers: CostPaidEntry = {
@@ -14952,6 +14966,139 @@ const version = (
     parseAmountDraft(zeroDraft, true),
     { lowCents: 0, highCents: 0 },
     'zero is an amount for a pause',
+  );
+}
+
+// Planned changes linked to an event.
+{
+  const D = LINK_DAY_MS;
+  const t = 20_000 * D;
+  const v = (
+    id: string,
+    itemId: string,
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+    createdAt: number,
+    changeId: string,
+  ) => ({ id, itemId, effectiveFrom, effectiveUntil, createdAt, changeId });
+  const versions = [
+    v('r0', 'rent', t - 100 * D, null, 1, 'c0'),
+    v('r1', 'rent', t + 10 * D, null, 2, 'c1'),
+    v('g0', 'gym', t - 100 * D, null, 3, 'c2'),
+    v('g1', 'gym', t + 5 * D, t + 20 * D, 4, 'c3'),
+    v('n0', 'new', t + 3 * D, null, 5, 'c4'),
+  ];
+
+  // Coming changes: a change, a stretch and its return, nothing for an item that has not begun.
+  const rent = listComingChanges(versions, 'rent', t);
+  assert.deepEqual(
+    rent.map(({ on, version, isReturn }) => [on, version.id, isReturn]),
+    [[t + 10 * D, 'r1', false]],
+  );
+  assert.equal(rent[0].before.id, 'r0');
+  const gym = listComingChanges(versions, 'gym', t);
+  assert.deepEqual(
+    gym.map(({ on, version, isReturn }) => [on, version.id, isReturn]),
+    [
+      [t + 5 * D, 'g1', false],
+      [t + 20 * D, 'g0', true],
+    ],
+    'a stretch lists its start and the earlier version coming back',
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'new', t),
+    [],
+    'a start is not a change',
+  );
+  assert.deepEqual(listComingChanges(versions, 'rent', t + 11 * D), []);
+
+  // Link spans: a change's start, and the last day of a stretch.
+  const rentSpan = getLinkSpan(versions, { changeId: 'c1', itemId: 'rent' });
+  assert.deepEqual([rentSpan?.startsOn, rentSpan?.lastDay], [t + 10 * D, null]);
+  assert.equal(rentSpan?.before?.id, 'r0');
+  const gymSpan = getLinkSpan(versions, { changeId: 'c3', itemId: 'gym' });
+  assert.deepEqual(
+    [gymSpan?.startsOn, gymSpan?.lastDay],
+    [t + 5 * D, t + 19 * D],
+  );
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'nope', itemId: 'gym' }),
+    null,
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 10 * D),
+    false,
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 19 * D),
+    true,
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 10 * D, lastDay: null }, t + 10 * D),
+    true,
+  );
+
+  // Links in date order, unresolved last; add replaces, remove lets go.
+  const links = [
+    { changeId: 'x', itemId: 'rent' },
+    { changeId: 'c3', itemId: 'gym' },
+    { changeId: 'c1', itemId: 'rent' },
+  ];
+  assert.deepEqual(
+    sortLinksByDate(links, versions).map(({ changeId }) => changeId),
+    ['c3', 'c1', 'x'],
+  );
+  const event = {
+    ...readHorizon({
+      name: 'Moving',
+      emoji: null,
+      happensOn: t + 10 * D,
+      happensUntil: null,
+      priority: 'should',
+      orderIndex: 1,
+      note: null,
+      costs: [],
+    } as never),
+  };
+  assert.deepEqual(event.links, [], 'an event sealed before links has none');
+  const linked = addLink(addLink(event, links[2]), links[2]);
+  assert.equal(
+    linked.links.length,
+    1,
+    'linking the same change twice keeps one',
+  );
+  assert.deepEqual(removeLink(linked, 'c1').links, []);
+
+  // A changes-only event is done once every linked change has happened.
+  const both = { ...event, links: [links[1], links[2]] };
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 10 * D),
+    null,
+    'the stretch is still running',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 19 * D),
+    t + 19 * D,
+    'done on the last day of the last change',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 30 * D),
+    null,
+    'no links',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(
+      { ...both, costs: [{} as never] },
+      versions,
+      t + 30 * D,
+    ),
+    null,
+    'an event with costs is never done by its changes',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn({ ...both, state: 'calledOff' }, versions, t + 30 * D),
+    null,
+    'a called-off event keeps its own state',
   );
 }
 

@@ -344,6 +344,7 @@ function BillsScreen() {
           planStance={stance}
           today={today}
           startsAtStep={getOpenStep()}
+          presetEventId={openItem?.eventId ?? undefined}
           onClose={() => {
             setOpenBillId(null);
             if (openItem === null) return;

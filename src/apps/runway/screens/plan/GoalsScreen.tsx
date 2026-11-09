@@ -67,8 +67,14 @@ function GoalsScreen() {
     dial,
     hasTargets,
   );
-  const { addRequest, clearAdd, openItem, openItemAt, closeOpenItem } =
-    useRunwayUrlState();
+  const {
+    addRequest,
+    clearAdd,
+    openItem,
+    openItemAt,
+    closeOpenItem,
+    showPlanSection,
+  } = useRunwayUrlState();
   const [formKey, setFormKey] = useState<number | null>(null);
   const isRequested = addRequest === 'goal';
   const [query, setQuery] = useState('');
@@ -110,7 +116,11 @@ function GoalsScreen() {
           paceDial={paceDial}
           heldCents={heldByItem[item.id] ?? 0}
           request={openItem?.itemId === item.id ? openItem : null}
-          onRequestDone={closeOpenItem}
+          onRequestDone={() => {
+            const returnTo = openItem?.returnTo ?? null;
+            closeOpenItem();
+            if (returnTo !== null) void showPlanSection(returnTo);
+          }}
           today={today}
           isFaded={!isCountedAt(payload.priority, dial)}
         />

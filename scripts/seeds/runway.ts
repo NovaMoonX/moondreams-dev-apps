@@ -371,6 +371,12 @@ async function writeSeedHorizon(
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [
+          {
+            changeId: 'seed-change-eating-out-stretch',
+            itemId: 'seed-envelope-eating-out',
+          },
+        ],
         costs: [
           cost(
             'seed-cost-truck',
@@ -419,6 +425,7 @@ async function writeSeedHorizon(
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
           cost(
@@ -454,6 +461,7 @@ async function writeSeedHorizon(
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
           cost(
@@ -480,6 +488,7 @@ async function writeSeedHorizon(
         state: 'finished' as const,
         stateOn: today - 3 * DAY_MS,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-couch', 'Couch', 90_000, 90_000, today - 5 * DAY_MS),
         ],
@@ -504,6 +513,7 @@ async function writeSeedHorizon(
           cents: 40_000,
           moveId: 'transfer_seed-calloff-seed-horizon-ski',
         },
+        links: [],
         costs: [
           cost(
             'seed-cost-lift',
@@ -537,6 +547,7 @@ async function writeSeedHorizon(
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost(
             'seed-cost-tuneup',
@@ -567,6 +578,7 @@ async function writeSeedHorizon(
           cents: 25_000,
           moveId: null,
         },
+        links: [],
         costs: [
           cost('seed-cost-shed', 'Shed', 22_500, 22_500, today - 8 * DAY_MS),
         ],

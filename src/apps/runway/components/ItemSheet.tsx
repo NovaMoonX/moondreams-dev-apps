@@ -1,7 +1,6 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
-  CalendarClock,
   CalendarOff,
   Calculator,
   Check,
@@ -73,6 +72,7 @@ import {
   AUTO_PAY_WORDS,
   CARD_WORDS,
   CHANGE_WORDS,
+  PART_OF_WORDS,
   GOAL_CHART_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
@@ -104,9 +104,11 @@ import type { BillPayment } from '@apps/runway/engine/demands';
 import {
   getVersionStretches,
   resolveCurrentOrNext,
-  resolveNextChange,
-  resolveVersion,
 } from '@apps/runway/engine/resolve';
+import {
+  listComingChanges,
+  type ComingChange,
+} from '@apps/runway/engine/horizonLinks';
 import { occurrences } from '@apps/runway/engine/schedule';
 import BillForm, { type BillStepId } from '@apps/runway/forms/BillForm';
 import EnvelopeForm, {
@@ -142,6 +144,7 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,
+  selectAllHorizonItems,
   selectEnvelopes,
   selectAllCards,
   selectGroups,
@@ -247,6 +250,8 @@ export interface ItemSheetProps {
   };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
+  /** Opens the change form with this open event already picked as what the change is part of. */
+  presetEventId?: string;
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -314,6 +319,7 @@ function ItemSheet({
   maxAction,
   payAction,
   startsAtStep,
+  presetEventId,
   payment = null,
   onMarked,
   onUndone,
@@ -351,19 +357,15 @@ function ItemSheet({
     const start = state.runway.plan?.startDate ?? null;
     return start !== null && start <= today;
   });
-  const next = useAppSelector((state) =>
-    resolveNextChange(state.runway.versions, itemId, today),
-  );
-  const stretchEnd = useAppSelector(
-    (state) =>
-      resolveVersion(state.runway.versions, itemId, today)?.effectiveUntil ??
-      null,
-  );
+  const allVersions = useAppSelector((state) => state.runway.versions);
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
   const [phase, setPhase] = useState<Phase>(
-    startsAtStep === undefined ? 'sheet' : 'change',
+    startsAtStep === undefined && presetEventId === undefined
+      ? 'sheet'
+      : 'change',
   );
   const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
   const [isPausing, setIsPausing] = useState(false);
@@ -520,18 +522,38 @@ function ItemSheet({
     }
   };
 
-  const difference = next
-    ? describeChange(payload, next.payload, getCardNamer(allCards))
-    : '';
+  const cardNamer = getCardNamer(allCards);
+  const getEventName = (changeId: string) =>
+    events.find(({ version }) =>
+      version.payload.links.some((link) => link.changeId === changeId),
+    )?.version.payload.name;
+  const getComingLine = (change: ComingChange<OpenVersion>) => {
+    const difference = describeChange(
+      change.before.payload as ItemPayload,
+      change.version.payload as ItemPayload,
+      cardNamer,
+    );
+    if (difference === '') return null;
+    const arrows = difference.replace(/ to /g, ' → ');
+    if (change.isReturn) {
+      const lastDay = formatDateOrdinalUTC(change.on - DAY_MS);
+      const figure = /^[^;]* to ([^;]+)$/.exec(difference)?.[1];
+      return figure
+        ? PART_OF_WORDS.comingBackTo(figure, lastDay)
+        : PART_OF_WORDS.comingBack(lastDay, arrows);
+    }
+    const eventName = getEventName(change.version.changeId);
+    return [
+      `${PART_OF_WORDS.comingFrom} ${formatDateOrdinalUTC(change.on)} · ${arrows}`,
+      eventName,
+    ]
+      .filter(Boolean)
+      .join(' · ');
+  };
   const planned = [
-    next &&
-    difference !== '' &&
-    (endedAt === null || next.effectiveFrom <= endedAt)
-      ? `${CHANGE_WORDS.scheduled} ${formatDateOrdinalUTC(next.effectiveFrom)} · ${difference.replace(/ to /g, ' → ')}`
-      : null,
-    stretchEnd !== null
-      ? `${LIFECYCLE_WORDS.until} ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}`
-      : null,
+    ...listComingChanges(allVersions, itemId, today)
+      .filter((change) => endedAt === null || change.on <= endedAt)
+      .map(getComingLine),
     endedAt !== null
       ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(endedAt)}`
       : null,
@@ -899,6 +921,7 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
           openStep={openStep as BillStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -912,6 +935,7 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
           openStep={openStep as EnvelopeStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -925,6 +949,7 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
           openStep={openStep as GoalStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -937,6 +962,7 @@ function ItemSheet({
         title={payload.name}
         defaultFrequency={null}
         isPause={isPausing}
+        presetEventId={presetEventId}
         openStep={openStep as IncomeStepId | null}
         editing={
           version.kind === 'source'
@@ -1286,17 +1312,19 @@ function ItemSheet({
             onClick={() => void release()}
           />
         )}
-        {planned.map((line) => (
-          <ActionRow
-            key={line}
-            isGrouped
-            hasChevron
-            icon={<CalendarClock />}
-            label={mask(line)}
-            onClick={openHistory}
-          />
-        ))}
       </ActionGroup>
+      {planned.length > 0 && (
+        <div className='space-y-1'>
+          <p className='text-muted-foreground text-xs font-medium'>
+            {PART_OF_WORDS.comingCaption}
+          </p>
+          {planned.map((line) => (
+            <p key={line} className='text-sm text-pretty'>
+              {mask(line)}
+            </p>
+          ))}
+        </div>
+      )}
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
           <ActionRow

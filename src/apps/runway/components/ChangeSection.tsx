@@ -4,6 +4,7 @@ import { useAppSelector } from '@/store';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import EffectPreview from '@apps/runway/components/EffectPreview';
 import FromWhenPicker from '@apps/runway/components/FromWhenPicker';
+import PartOfPicker from '@apps/runway/components/PartOfPicker';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
@@ -51,6 +52,9 @@ function ChangeSection({
         kind={kind}
         presetDayKey={flow.presetDayKey}
       />
+      {flow.isLinkable && (
+        <PartOfPicker value={flow.eventId} onChange={flow.setEventId} />
+      )}
       {replacedText && (
         <p className='text-muted-foreground text-sm text-pretty'>
           {mask(replacedText)}

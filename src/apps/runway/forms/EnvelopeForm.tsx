@@ -137,6 +137,8 @@ interface EnvelopeFormProps {
   editing?: { itemId: string; payload: EnvelopeSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
   /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
   openStep?: EnvelopeStepId | null;
   /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
@@ -213,6 +215,7 @@ function EnvelopeFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
   openStep = null,
   draft,
   presetGroupId,
@@ -499,6 +502,7 @@ function EnvelopeFormBody({
     current: editing?.payload ?? EMPTY_ENVELOPE,
     candidate,
     presetDayKey,
+    presetEventId,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,

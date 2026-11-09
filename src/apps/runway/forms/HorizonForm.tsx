@@ -219,7 +219,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
   const pickedDay = comingDays.find(
     (day) => day.dayKey === formData.restDayKey,
   );
+  const hasCosts = formData.costs.length > 0;
   const getRest = (): HorizonRest | null => {
+    if (!hasCosts) return { kind: 'later' };
     if (formData.rest === 'onePay')
       return pickedDay ? { kind: 'onePay', dayKey: pickedDay.dayKey } : null;
     return formData.rest === null ? null : { kind: formData.rest };
@@ -244,21 +246,20 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     state: 'open',
     stateOn: null,
     stateMoney: null,
+    links: [],
   });
   const blocker =
     name === ''
       ? HORIZON_WORDS.needsName
       : !isDateValid || !isEndValid
         ? (dateBlocker ?? FORM_FLOW_WORDS.pastDay)
-        : formData.costs.length === 0
-          ? HORIZON_WORDS.needsCost
-          : putBlocker !== null
-            ? putBlocker
-            : formData.rest === null
-              ? HORIZON_WORDS.needsRest
-              : formData.rest === 'onePay' && pickedDay === undefined
-                ? HORIZON_WORDS.needsPay
-                : null;
+        : hasCosts && putBlocker !== null
+          ? putBlocker
+          : hasCosts && formData.rest === null
+            ? HORIZON_WORDS.needsRest
+            : hasCosts && formData.rest === 'onePay' && pickedDay === undefined
+              ? HORIZON_WORDS.needsPay
+              : null;
 
   const isPaysAsked = rest?.kind === 'pays' || rest?.kind === 'onePay';
   const previewJson =
@@ -307,7 +308,7 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
           ),
   };
 
-  const steps: QuestionStep[] = [
+  const allSteps: QuestionStep[] = [
     {
       id: 'name',
       title: HORIZON_WORDS.nameTitle,
@@ -422,11 +423,11 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       summaryLabel: HORIZON_WORDS.costs,
       summaryValue:
         formData.costs.length === 0
-          ? ''
+          ? HORIZON_WORDS.noCostsSummary
           : formData.costs.length === 1
             ? formData.costs[0].name
             : HORIZON_WORDS.costCount(formData.costs.length),
-      isAnswered: formData.costs.length > 0,
+      isAnswered: true,
       render: () => (
         <div className='space-y-3'>
           {formData.costs.length === 0 ? (
@@ -631,6 +632,9 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
       ),
     },
   ];
+  const steps = allSteps.filter(
+    ({ id }) => hasCosts || (id !== 'put' && id !== 'rest'),
+  );
   const questions = useQuestionFlow({ steps: maskSummaries(steps, isHidden) });
 
   const requestClose = useDiscardGuard({
@@ -646,7 +650,10 @@ function HorizonForm({ isOpen, onClose, title }: HorizonFormProps) {
     }
     const horizon = getHorizon(date, rest);
     const toward =
-      formData.isNotNow || putCents === null || putFromName === undefined
+      !hasCosts ||
+      formData.isNotNow ||
+      putCents === null ||
+      putFromName === undefined
         ? null
         : {
             moveId,

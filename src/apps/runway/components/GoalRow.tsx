@@ -36,7 +36,7 @@ interface GoalRowProps {
   /** Words put before the pace on the row's line, such as why it is listed on a day. */
   detailLead?: string | null;
   /** A warning elsewhere asked for this goal: its sheet is open at this step (null for the sheet itself) until `onRequestDone`. */
-  request?: { step: string | null } | null;
+  request?: { step: string | null; eventId: string | null } | null;
   onRequestDone?: () => void;
 }
 
@@ -113,6 +113,7 @@ function GoalRow({
           itemId={goalId}
           kind='goal'
           startsAtStep={request?.step ?? undefined}
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel='Saved'
           figure={formatCents(savedCents)}

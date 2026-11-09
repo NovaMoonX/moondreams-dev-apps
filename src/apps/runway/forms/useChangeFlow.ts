@@ -10,6 +10,7 @@ import {
   ACCOUNT_WORDS,
   CARRY_WORDS,
   CHANGE_WORDS,
+  PART_OF_WORDS,
   PAY_SHARE_WORDS,
 } from '@apps/runway/constants';
 import type { BillPin } from '@apps/runway/engine/billShare';
@@ -38,6 +39,7 @@ import {
 import {
   selectAllAccounts,
   selectAllCards,
+  selectAllHorizonItems,
   selectComingDays,
   selectGroups,
   selectHorizonVersionId,
@@ -96,7 +98,17 @@ interface UseChangeFlowArgs {
   /** A kept draft's note and "from when", when the form starts from one. */
   initialNote?: string;
   initialFrom?: FromWhenValue;
+  /** The open event the change is part of when the form opens, as when it was started from that event. */
+  presetEventId?: string | null;
 }
+
+/** The kinds of item whose planned change can belong to an event. */
+const LINKABLE_KINDS: readonly ItemKind[] = [
+  'payLine',
+  'bill',
+  'envelope',
+  'goal',
+];
 
 /** What one income day's own version of an envelope or goal may differ in. */
 const getDayOnlyBlocker = (
@@ -174,6 +186,7 @@ export function useChangeFlow({
   clearsPins = false,
   initialNote = '',
   initialFrom = INITIAL_FROM_WHEN,
+  presetEventId = null,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -188,6 +201,7 @@ export function useChangeFlow({
   );
   const allVersions = useAppSelector((state) => state.runway.versions);
   const [from, setFrom] = useState(initialFrom);
+  const [eventId, setEventId] = useState<string | null>(presetEventId);
   const [step, setStepState] = useState<'form' | 'reason'>('form');
   const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
   const [note, setNote] = useState(initialNote);
@@ -217,6 +231,8 @@ export function useChangeFlow({
     ? { kind: 'version', effectiveFrom: today, effectiveUntil: null }
     : askedSpan;
   const spanBlocker = isMoneyless ? null : askedBlocker;
+  const isLinkable =
+    LINKABLE_KINDS.includes(kind) && span?.kind === 'version' && !isMoneyless;
   const effectiveFrom =
     span?.kind === 'version'
       ? span.effectiveFrom
@@ -341,9 +357,38 @@ export function useChangeFlow({
           setStep('form');
           return;
         }
+        const event = isLinkable
+          ? selectAllHorizonItems(state, today).find(
+              ({ item }) => item.id === eventId,
+            )
+          : undefined;
+        if (
+          isLinkable &&
+          eventId !== null &&
+          event?.version.payload.state !== 'open'
+        ) {
+          setError(PART_OF_WORDS.eventGone);
+          setEventId(null);
+          setStep('form');
+          return;
+        }
         await changeItem(user.uid, encryption, {
           itemId,
           kind,
+          link: event
+            ? {
+                eventId: event.item.id,
+                horizon: event.version.payload,
+                baseVersionId: event.version.id,
+                on: today,
+                summary: PART_OF_WORDS.linkedLine(
+                  candidate.name,
+                  summaryText || 'Updated',
+                  formatDateOrdinalUTC(span.effectiveFrom),
+                  event.version.payload.name,
+                ),
+              }
+            : null,
           payload: candidate,
           newGroup,
           summary,
@@ -473,6 +518,9 @@ export function useChangeFlow({
     isUnchanged,
     isMoneyless,
     isIdleThroughout,
+    isLinkable,
+    eventId,
+    setEventId,
     replaced,
     summaryText,
     today,

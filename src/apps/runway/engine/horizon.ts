@@ -196,6 +196,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   state: stored.state ?? 'open',
   stateOn: stored.stateOn ?? null,
   stateMoney: stored.stateMoney ?? null,
+  links: stored.links ?? [],
 });
 
 /** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */

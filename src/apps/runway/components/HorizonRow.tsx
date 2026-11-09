@@ -4,6 +4,10 @@ import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
+import {
+  getChangesOnlyDoneOn,
+  getLinkSpan,
+} from '@apps/runway/engine/horizonLinks';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { HORIZON_END_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
@@ -52,7 +56,19 @@ function HorizonRow({
   );
   const { shortfall } = plan;
   const isDone = horizon.state !== 'open';
+  const versions = useAppSelector((state) => state.runway.versions);
+  const isChangesOnly = horizon.costs.length === 0;
+  const isChangesDone = getChangesOnlyDoneOn(horizon, versions, today) !== null;
   const getDetail = () => {
+    if (isChangesOnly && !isDone) {
+      if (isChangesDone) return HORIZON_WORDS.changesHappened;
+      const count = horizon.links.filter((link) =>
+        getLinkSpan(versions, link),
+      ).length;
+      return count === 0
+        ? HORIZON_WORDS.noChangesYet
+        : HORIZON_WORDS.changesCount(count);
+    }
     if (isDone) {
       const on = formatDateOrdinalUTC(horizon.stateOn ?? horizon.happensOn);
       return horizon.state === 'calledOff'
@@ -88,7 +104,7 @@ function HorizonRow({
         emoji={horizon.emoji}
         detail={detail}
         isDetailWarning={shortfall !== null && !isHidden && !isFaded}
-        figure={left}
+        figure={isChangesOnly ? null : left}
         figureWord={
           isDone
             ? horizon.state === 'calledOff'
@@ -96,7 +112,11 @@ function HorizonRow({
               : HORIZON_END_WORDS.spent
             : null
         }
-        ariaLabel={`${horizon.name}, ${left} ${isDone ? 'spent' : 'left'}. ${detail}. Open`}
+        ariaLabel={
+          isChangesOnly
+            ? `${horizon.name}. ${detail}. Open`
+            : `${horizon.name}, ${left} ${isDone ? 'spent' : 'left'}. ${detail}. Open`
+        }
         onOpen={
           reorder
             ? undefined

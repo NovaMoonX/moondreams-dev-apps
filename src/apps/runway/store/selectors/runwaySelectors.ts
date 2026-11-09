@@ -51,6 +51,7 @@ import {
   type CostPaidEntry,
   type CostPayment,
 } from '@apps/runway/engine/horizon';
+import { getChangesOnlyDoneOn } from '@apps/runway/engine/horizonLinks';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
@@ -712,24 +713,40 @@ export const selectHorizonVersionId = (
   selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
     ?.version.id;
 
-/** The Horizon items still in the plan on a date: the ones that are not finished or called off. */
+/** The Horizon items still in the plan on a date: the ones that are not finished or called off, and not an event of changes alone whose changes have all happened. */
 export const selectHorizonItems = createSelector(
+  [selectAllHorizonItems, selectVersions, selectOn],
+  (all, versions, on): ResolvedHorizon[] =>
+    all.filter(
+      ({ version }) =>
+        version.payload.state === 'open' &&
+        getChangesOnlyDoneOn(version.payload, versions, on) === null,
+    ),
+);
+
+/** Every event still open, a finished-by-its-changes one included, which a change can still be linked to. */
+export const selectOpenHorizonItems = createSelector(
   [selectAllHorizonItems],
   (all): ResolvedHorizon[] =>
     all.filter(({ version }) => version.payload.state === 'open'),
 );
 
-/** The finished and called-off Horizon items, the latest first. */
+/** The finished and called-off Horizon items, and the events of changes alone that have all happened, the latest first. */
 export const selectDoneHorizonItems = createSelector(
-  [selectAllHorizonItems],
-  (all): ResolvedHorizon[] =>
-    all
-      .filter(({ version }) => version.payload.state !== 'open')
+  [selectAllHorizonItems, selectVersions, selectOn],
+  (all, versions, on): ResolvedHorizon[] => {
+    const getDoneOn = ({ version }: ResolvedHorizon) =>
+      version.payload.state !== 'open'
+        ? (version.payload.stateOn ?? 0)
+        : getChangesOnlyDoneOn(version.payload, versions, on);
+    return all
+      .filter((entry) => getDoneOn(entry) !== null)
       .sort(
         (a, b) =>
-          (b.version.payload.stateOn ?? 0) - (a.version.payload.stateOn ?? 0) ||
+          (getDoneOn(b) ?? 0) - (getDoneOn(a) ?? 0) ||
           a.item.id.localeCompare(b.item.id),
-      ),
+      );
+  },
 );
 
 export interface DraftView {

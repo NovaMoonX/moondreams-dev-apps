@@ -433,7 +433,13 @@ export interface HorizonMoneyLeft {
   moveId: string | null;
 }
 
-/** One event's costs. */
+/** A planned change to an item that belongs to an event: the change's id (shared by every version it wrote) and the item it changed. */
+export interface HorizonLink {
+  changeId: string;
+  itemId: string;
+}
+
+/** One event's costs and the planned changes linked to it. */
 export interface HorizonSealed {
   name: string;
   emoji: string | null;
@@ -454,13 +460,16 @@ export interface HorizonSealed {
   stateOn: DateOnly | null;
   /** Where its money went when `state` changed; null while open or when it held none. */
   stateMoney: HorizonMoneyLeft | null;
+  /** The planned changes to other items that belong to this event, in the order they were linked; a version sealed before links existed has none. */
+  links: HorizonLink[];
 }
 
 /** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
 export type HorizonStored = Omit<
   HorizonSealed,
-  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney'
+  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney' | 'links'
 > & {
+  links?: HorizonLink[];
   rest?: HorizonRest | null;
   state?: HorizonState;
   stateOn?: DateOnly | null;

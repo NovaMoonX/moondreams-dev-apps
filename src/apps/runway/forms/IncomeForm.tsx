@@ -152,6 +152,8 @@ interface IncomeFormProps {
   editing?: EditingIncome;
   /** A question to open first when changing a pay line ("amount"); every answer starts folded otherwise. */
   openStep?: IncomeStepId | null;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
   /** Hands the built income over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<CreateIncomeInput>;
   /** Changing a pay line to nothing for a while: the amount starts at $0 and "For a while, then back" is chosen, so only the dates are left to pick. */
@@ -389,6 +391,7 @@ function IncomeFormBody({
   defaultFrequency,
   editing,
   openStep = null,
+  presetEventId,
   draft,
   isPause = false,
 }: IncomeFormProps & StartOverProps) {
@@ -845,6 +848,7 @@ function IncomeFormBody({
     current,
     candidate,
     onDone: onClose,
+    presetEventId,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from ?? initialFrom,
   });

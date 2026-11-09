@@ -355,7 +355,34 @@ export const HORIZON_WORDS = {
   endBeforeStart: 'The end comes before the start.',
   costsTitle: 'What will it cost?',
   costs: 'Costs',
-  noCosts: 'Nothing listed yet.',
+  noCosts:
+    'Nothing listed yet. An event can also be only changes to your plan.',
+  noCostsSummary: 'No costs, only changes',
+  changesCaption: 'What changes',
+  planChange: 'Plan a change',
+  planChangeSub: 'A pay, bill, envelope or goal that changes for this',
+  planChangeTitle: 'Which one changes?',
+  planChangeSearch: 'Search your plan',
+  planChangeNone: 'Nothing in your plan to change yet.',
+  happened: 'Happened',
+  pickPay: 'Pay',
+  pickBill: 'Bill',
+  pickEnvelope: 'Envelope',
+  pickGoal: 'Goal',
+  planChangeNoMatch: 'Nothing in your plan matches that.',
+  changeFrom: (from: string) => `From\u00A0${from}`,
+  changeHappened: (on: string) => `Happened\u00A0${on}`,
+  changeLine: (item: string, what: string, when: string) =>
+    [item, what, when].filter(Boolean).join('\u00A0\u00b7 '),
+  unlinkTitle: 'Linked change',
+  unlinkRow: (event: string) => `Unlink from ${event}`,
+  unlinkNote:
+    'The change stays in your plan. It is only no longer listed under this event.',
+  unlinkFailed: 'This did not unlink. Nothing was changed.',
+  changesCount: (count: number) =>
+    `${count} planned ${count === 1 ? 'change' : 'changes'}`,
+  noChangesYet: 'No changes planned yet',
+  changesHappened: 'All its changes happened',
   addCost: 'Add a cost',
   changeCost: (name: string) => `Change ${name}`,
   payMoved: 'This pay has already moved.',
@@ -363,7 +390,6 @@ export const HORIZON_WORDS = {
   saveCost: 'Save cost',
   maxCosts: (count: number) => `An item holds up to ${count} costs.`,
   maxCostsTitle: 'That is the most costs',
-  needsCost: 'List at least one cost.',
   needsName: 'Name it.',
   priority: 'Priority',
   add: (name: string) => `Add ${name}`,
@@ -1176,6 +1202,24 @@ export const CHANGE_WORDS = {
   dayOnlyFields:
     'For one income day only the amount, how often and how much it matters can change.',
   stretchNote: 'Then it goes back to what it was.',
+} as const;
+
+/** A change that belongs to an event on the Horizon, and the item's list of changes still ahead. */
+export const PART_OF_WORDS = {
+  label: 'Part of',
+  none: 'Not part of an event',
+  noEvents: 'No open event on your horizon to link it to.',
+  eventGone: 'That event is no longer open. Pick another, or save without one.',
+  linkedLine: (name: string, what: string, from: string, event: string) =>
+    `Linked ${name}: ${what}, from ${from}, to ${event}.`,
+  unlinkedLine: (name: string, event: string) =>
+    `Unlinked ${name} from ${event}.`,
+  comingCaption: 'Coming changes',
+  comingFrom: 'From',
+  comingBackTo: (figure: string, lastDay: string) =>
+    `Back to ${figure} after ${lastDay}`,
+  comingBack: (lastDay: string, difference: string) =>
+    `Back after ${lastDay} \u00b7 ${difference}`,
 } as const;
 
 export const LIFECYCLE_WORDS = {

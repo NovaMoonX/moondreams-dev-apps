@@ -63,6 +63,7 @@ interface BillSheetProps {
   planStance: Stance;
   today: number;
   startsAtStep?: string;
+  presetEventId?: string;
   /** An action that opens first for a change that belongs to an income day. */
   dayAction?: ItemSheetProps['dayAction'];
   onClose: () => void;
@@ -185,6 +186,7 @@ export function BillSheet({
   planStance,
   today,
   startsAtStep,
+  presetEventId,
   dayAction,
   onClose,
 }: BillSheetProps) {
@@ -263,6 +265,7 @@ export function BillSheet({
       dayAction={dayAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
+      presetEventId={presetEventId}
       extra={
         <>
           {madeFrom && (

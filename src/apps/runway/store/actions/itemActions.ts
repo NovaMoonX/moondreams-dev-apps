@@ -10,6 +10,7 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { getNextVersionId } from '@apps/runway/engine/horizon';
+import { addLink } from '@apps/runway/engine/horizonLinks';
 import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
@@ -478,6 +479,55 @@ export interface ChangeItemInput {
   stretches?: VersionStretch<ItemPayload>[];
   /** For an event (`horizon`) only: the id of the version the edit was made from. Each version is written under an id named after it and the write is refused when that id is taken, so two devices editing the same version cannot both land. */
   baseVersionId?: string;
+  /** Links this change to an open event in the same write: the event as it stands, the id of the version it was read from, and the line the event's log gets. The write is refused when that version was replaced elsewhere. */
+  link?: {
+    eventId: string;
+    horizon: HorizonSealed;
+    baseVersionId: string;
+    /** The day the event's new version starts: today, so the link shows at once whatever day the change is dated. */
+    on: number;
+    summary: string;
+  } | null;
+}
+
+/** The event's next version with the change linked and the line its log gets, ready to write beside the change. */
+async function sealEventLink(
+  encryption: RunwayEncryption,
+  link: NonNullable<ChangeItemInput['link']>,
+  made: { changeId: string; itemId: string; now: number },
+) {
+  const horizon = addLink(link.horizon, {
+    changeId: made.changeId,
+    itemId: made.itemId,
+  });
+  const [eventSealed, logSealed] = await Promise.all([
+    sealJson(horizon, encryption),
+    sealJson(
+      { summary: link.summary, note: null } satisfies ChangeSealed,
+      encryption,
+    ),
+  ]);
+  const logId = generateUuid();
+  return {
+    version: {
+      id: getNextVersionId(link.baseVersionId),
+      itemId: link.eventId,
+      kind: 'horizon',
+      createdAt: made.now,
+      effectiveFrom: link.on,
+      effectiveUntil: null,
+      changeId: logId,
+      sealed: eventSealed,
+    } satisfies PlanVersionDoc,
+    log: {
+      id: logId,
+      kind: 'planChange',
+      createdAt: made.now,
+      effectiveFrom: null,
+      itemIds: [link.eventId],
+      sealed: logSealed,
+    } satisfies ChangeDoc,
+  };
 }
 
 /**
@@ -551,16 +601,50 @@ export async function changeItem(
     itemIds: [input.itemId],
     sealed: changeSealed,
   };
-  if (base !== undefined) {
+  const linked = input.link
+    ? await sealEventLink(encryption, input.link, {
+        changeId,
+        itemId: input.itemId,
+        now,
+      })
+    : null;
+  if (base !== undefined || linked !== null) {
     await runTransaction(db, async (transaction) => {
-      const taken = await transaction.get(
-        itemPath(uid, 'versions', versions[0].id),
-      );
-      if (taken.exists()) throw new Error(HORIZON_END_WORDS.changedJustNow);
+      const [taken, eventTaken] = await Promise.all([
+        transaction.get(itemPath(uid, 'versions', versions[0].id)),
+        linked === null
+          ? Promise.resolve(null)
+          : transaction.get(itemPath(uid, 'versions', linked.version.id)),
+      ]);
+      if (base !== undefined && taken.exists())
+        throw new Error(HORIZON_END_WORDS.changedJustNow);
+      if (eventTaken?.exists())
+        throw new Error(HORIZON_END_WORDS.changedJustNow);
+      if (groupDocs) {
+        transaction.set(
+          itemPath(uid, 'items', groupDocs.groupId),
+          groupDocs.header,
+        );
+        transaction.set(
+          itemPath(uid, 'versions', groupDocs.version.id),
+          groupDocs.version,
+        );
+        transaction.set(
+          itemPath(uid, 'changes', groupDocs.change.id),
+          groupDocs.change,
+        );
+      }
       versions.forEach((version) =>
         transaction.set(itemPath(uid, 'versions', version.id), version),
       );
       transaction.set(itemPath(uid, 'changes', changeId), change);
+      if (linked !== null) {
+        transaction.set(
+          itemPath(uid, 'versions', linked.version.id),
+          linked.version,
+        );
+        transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+      }
     });
     return;
   }

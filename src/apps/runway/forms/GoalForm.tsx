@@ -151,6 +151,8 @@ interface GoalFormProps {
   editing?: { itemId: string; payload: GoalSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
   /** A question to open first when changing a goal ("target", "amount"); every answer starts folded otherwise. */
   openStep?: GoalStepId | null;
   /** Hands the built goal over instead of writing it, for a person who has no plan yet. */
@@ -250,6 +252,7 @@ function GoalFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
   openStep = null,
   draft,
   presetGroupId,
@@ -662,6 +665,7 @@ function GoalFormBody({
       : EMPTY_GOAL,
     candidate,
     presetDayKey,
+    presetEventId,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,

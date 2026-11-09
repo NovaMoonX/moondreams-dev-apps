@@ -283,6 +283,8 @@ The boards for Plan > 🗓️ Horizon are the "Runway UX: Horizon" artifact (htt
 - **Board 7:** Fri, Jan 15th, the money arrived: what a pay puts toward Horizon and what it pays.
 - **Board 9:** Call off Moving (a branch on Dec 2nd).
 
+**Changes under an event.** An event's sheet draws a "What changes" caption after its costs: one quiet row per linked change in date order (item, what changes, date, "Happened" once past) that opens "Unlink from Moving" in a small sheet, then a quiet "Plan a change" row that opens a searchable picker. An item's sheet lists its changes ahead as a muted "Coming changes" caption over short lines, never rows with chips.
+
 Each board carries one filled primary at most and every figure matches the example data below; Plan boards say "paid", never "spent", "purchase" or a card, and hidden amounts leave no "short" word and no warning colour.
 
 **Example data, used on every board and here.** Today is Tue, Nov 3rd, 2026, conservative stance (a range is planned at its high end). The owner (Track) has one Work pay, $2,140.00, on the 15th and the last day of each month. **📦 Moving**, around Jan 15th: Truck rental $120 on Thu, Jan 14th, paid outside the plan (work covers it; marked paid on Jan 14th); Movers $600 to $800 on Fri, Jan 15th; Storage unit $100 a month from Mon, Feb 1st, no end yet. $800 set aside from Free to Spend on Nov 3rd. The rest comes from his pays. **💍 Sam's wedding**, Dec 18th to 19th: Flight $350 to $450 on Dec 18th, Hotel $280 on Dec 19th, $500 set aside, the rest "I'll decide later". **🛋️ New couch**, done Oct 20th, $1,180 spent.

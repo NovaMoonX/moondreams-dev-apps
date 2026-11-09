@@ -286,6 +286,8 @@ interface BillFormProps {
   editing?: { itemId: string; payload: BillSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
@@ -635,6 +637,7 @@ function BillFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
   noun = 'bill',
   openStep = null,
   draft,
@@ -1667,6 +1670,7 @@ function BillFormBody({
       : EMPTY_BILL,
     candidate,
     presetDayKey,
+    presetEventId,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     afterSave: isFundingChanged ? clearStalePins : undefined,
