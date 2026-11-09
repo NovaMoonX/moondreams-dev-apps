@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   setDoc,
   updateDoc,
   writeBatch,
@@ -222,13 +223,14 @@ export async function makeTaskAsWritten(
   capture: OpenCapture,
 ) {
   const { waitingCaptures } = store.getState().helm;
-  const current =
-    waitingCaptures.captures.find((entry) => entry.id === capture.id) ??
-    capture;
+  const current = waitingCaptures.captures.find(
+    (entry) => entry.id === capture.id,
+  );
+  if (!current) throw new Error('This turn is no longer waiting.');
   if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
     throw new Error('This turn is being read.');
   }
-  const title = toTaskTitle(capture.text);
+  const title = toTaskTitle(current.text);
   if (!title) throw new Error('A turn with no words can not become a task.');
   const now = Date.now();
   const task: Task = {
@@ -249,7 +251,7 @@ export async function makeTaskAsWritten(
     stepState: {},
     mediaIds: [],
     createdBy: 'person',
-    sourceCaptureId: capture.id,
+    sourceCaptureId: current.id,
     executionId: null,
     createdAt: now,
     lastEditedAt: null,
@@ -259,7 +261,7 @@ export async function makeTaskAsWritten(
       encryption,
     ),
   };
-  const openQuestionIds = Object.entries(capture.questionState)
+  const openQuestionIds = Object.entries(current.questionState)
     .filter(([, question]) => question.answeredAt === null)
     .map(([id]) => id);
   const questionFields = (answeredAt: number | null) =>
@@ -269,7 +271,7 @@ export async function makeTaskAsWritten(
         answeredAt,
       ]),
     );
-  const captureRef = doc(capturesOf(uid), capture.id);
+  const captureRef = doc(capturesOf(uid), current.id);
   const taskRef = doc(tasksOf(uid));
   const batch = writeBatch(db);
   batch.set(taskRef, task);
@@ -287,12 +289,19 @@ export async function makeTaskAsWritten(
     if (!task || task.status !== 'open' || task.lastEditedAt !== null) {
       return false;
     }
+    const { helm } = store.getState();
+    const known = [
+      ...helm.recentCaptures.captures,
+      ...helm.earlier.captures,
+    ].find((entry) => entry.id === current.id);
+    const stored = known ?? (await getDoc(captureRef)).data();
+    if (stored?.status !== 'sorted' || stored.sortedAt !== now) return false;
     const reverse = writeBatch(db);
     reverse.delete(taskRef);
     reverse.update(captureRef, {
-      status: capture.status,
-      sortedAt: capture.sortedAt,
-      seenAt: capture.seenAt,
+      status: current.status,
+      sortedAt: current.sortedAt,
+      seenAt: current.seenAt,
       ...questionFields(null),
     });
     await reverse.commit();

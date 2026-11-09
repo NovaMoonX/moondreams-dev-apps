@@ -2,16 +2,41 @@ import { httpsCallable } from 'firebase/functions';
 
 import { functions } from '@lib/firebase/config';
 import { generateUuid } from '@/utils';
+import type { HeldReason } from '@apps/helm/types';
 
 interface SortResult {
-  status: 'sorted' | 'received' | 'failed';
+  status: 'sorted' | 'received' | 'needsYou' | 'failed';
   executionId: string | null;
 }
 
 export type SortMode = 'full' | 'rest';
 
-/** `held` when the server's limit or budget turned the call away; the turn then carries why. */
-export type SortOutcome = 'done' | 'held' | 'failed' | 'skipped';
+/** `held` when the server's limit or budget turned the call away (`heldReason` says which); `notSorted` when it answered but the reading failed and left the turn as it was. */
+export interface SortOutcome {
+  kind: 'done' | 'held' | 'failed' | 'notSorted' | 'skipped';
+  heldReason: HeldReason | null;
+}
+
+const outcome = (
+  kind: SortOutcome['kind'],
+  heldReason: HeldReason | null = null,
+): SortOutcome => ({ kind, heldReason });
+
+const toHeldReason = (error: unknown): HeldReason | null => {
+  const reason =
+    error instanceof Error &&
+    'details' in error &&
+    typeof error.details === 'object' &&
+    error.details !== null &&
+    'heldReason' in error.details
+      ? error.details.heldReason
+      : null;
+  return reason === 'recentLimit' ||
+    reason === 'dailyLimit' ||
+    reason === 'budgetReached'
+    ? reason
+    : null;
+};
 
 const sortHelmCaptureCallable = httpsCallable<
   { captureId: string; requestKey: string; mode: SortMode },
@@ -49,17 +74,22 @@ export async function sortCapture(
   captureId: string,
   mode: SortMode = 'full',
 ): Promise<SortOutcome> {
-  if (inFlight.has(captureId)) return 'skipped';
+  if (inFlight.has(captureId)) return outcome('skipped');
   inFlight.add(captureId);
   notify();
   try {
-    await sortHelmCaptureCallable({
+    const result = await sortHelmCaptureCallable({
       captureId,
       requestKey: generateUuid(),
       mode,
     });
     unreachable.delete(captureId);
-    return 'done';
+    const { status } = result.data;
+    const isSorted =
+      mode === 'rest'
+        ? status === 'sorted'
+        : status === 'sorted' || status === 'needsYou';
+    return outcome(isSorted ? 'done' : 'notSorted');
   } catch (error) {
     const isHeld =
       error instanceof Error &&
@@ -68,7 +98,7 @@ export async function sortCapture(
     if (!isHeld) console.error('Helm could not sort a turn', error);
     if (isConnectionError(error)) unreachable.add(captureId);
     else unreachable.delete(captureId);
-    return isHeld ? 'held' : 'failed';
+    return isHeld ? outcome('held', toHeldReason(error)) : outcome('failed');
   } finally {
     inFlight.delete(captureId);
     notify();

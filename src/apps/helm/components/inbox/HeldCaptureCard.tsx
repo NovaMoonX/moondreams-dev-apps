@@ -27,13 +27,23 @@ import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelector
 import {
   canMakeTaskAsWritten,
   getFailedCause,
+  getLimitResetTime,
   getWaitingReason,
   type HeldItem,
 } from '@apps/helm/utils/heldCaptures';
+import type { HeldReason } from '@apps/helm/types';
 
 interface HeldCaptureCardProps {
   item: HeldItem | null;
   onClose: () => void;
+}
+
+function toHeldToast(heldReason: HeldReason | null) {
+  if (heldReason === 'dailyLimit') {
+    return HELM_COPY.savedHeldDaily(getLimitResetTime());
+  }
+  if (heldReason === 'budgetReached') return HELM_COPY.savedHeldBudget;
+  return HELM_COPY.sortRestUnavailable;
 }
 
 function getReasonLine(item: HeldItem, name: string, isUnreachable: boolean) {
@@ -125,13 +135,16 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
 
   const sortRest = async () => {
     if (!item) return;
-    const outcome = await sortRestOfCapture(item.capture.id);
-    if (outcome === 'done') {
+    const { kind, heldReason } = await sortRestOfCapture(item.capture.id);
+    if (kind === 'done') {
       onClose();
       return;
     }
-    if (outcome === 'skipped') return;
-    addToast({ title: HELM_COPY.sortRestUnavailable, type: 'info' });
+    if (kind === 'skipped') return;
+    addToast({
+      title: toHeldToast(kind === 'held' ? heldReason : null),
+      type: 'info',
+    });
   };
 
   const remove = async () => {

@@ -61,9 +61,11 @@ function createSweep() {
       .sort((a, b) => a.createdAt - b.createdAt)[0];
     if (!next) return;
     tried.add(next.id);
-    const outcome = await sortCapture(next.id);
-    if (outcome === 'failed') state.heldAt.set(next.id, Date.now());
-    if (outcome === 'held') {
+    const { kind } = await sortCapture(next.id);
+    if (kind === 'failed' || kind === 'notSorted') {
+      state.heldAt.set(next.id, Date.now());
+    }
+    if (kind === 'held') {
       state.heldAt.set(next.id, Date.now());
       scheduleRerun();
       return;

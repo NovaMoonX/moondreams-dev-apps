@@ -382,6 +382,15 @@ test('a held rest call stores no error code, a failed one keeps its code', () =>
   );
 });
 
+test('a held rest pass stores why it was held and no error code', () => {
+  const fields: Record<string, unknown> = restFailureFields('held', {
+    heldReason: 'dailyLimit',
+    lastErrorCode: null,
+  });
+  assert.equal(fields.heldReason, 'dailyLimit');
+  assert.equal(fields.lastErrorCode, null);
+});
+
 test('a rest reply that drops a name still fails, one that keeps it passes', () => {
   const rest = (commands: unknown[]) =>
     normalizeNomosReply(

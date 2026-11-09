@@ -47,11 +47,13 @@ export function toHeldItems(captures: OpenCapture[]): {
 }
 
 // The day's allowance is counted per UTC day, so it comes back at UTC midnight, shown in local time and never split across lines.
-const getLimitResetTime = () =>
+export const getLimitResetTime = () =>
   formatTime((Math.floor(Date.now() / DAY_MS) + 1) * DAY_MS).replace(
     /\s/g,
     '\u00a0',
   );
+
+const UNAVAILABLE_CODES = ['timeout', 'network', 'http429'];
 
 /** Why a waiting turn waits, in the words the Inbox and its sheet use. */
 export function getWaitingReason(capture: OpenCapture, isUnreachable: boolean) {
@@ -63,19 +65,20 @@ export function getWaitingReason(capture: OpenCapture, isUnreachable: boolean) {
   if (capture.hasPendingWrites || capture.heldReason === 'offline') {
     return HELM_COPY.waitingOnDevice;
   }
-  if (capture.heldReason === 'aiUnavailable' || isUnreachable) {
+  if (isUnreachable) return HELM_COPY.waitingOnDevice;
+  if (
+    capture.heldReason === 'aiUnavailable' ||
+    (capture.lastErrorCode !== null &&
+      (UNAVAILABLE_CODES.includes(capture.lastErrorCode) ||
+        /^http5\d\d$/.test(capture.lastErrorCode)))
+  ) {
     return HELM_COPY.waitingUnavailable;
   }
   return HELM_COPY.waitingDefault;
 }
 
-const SERVICE_DOWN_CODES = [
-  'timeout',
-  'network',
-  'http429',
-  'noKey',
-  'noModelKey',
-];
+// Only these can reach `failed`: the transient codes (timeout, network, http429, http5xx, noKey, noModelKey) give their attempt back.
+const SERVICE_DOWN_PATTERN = /^http4\d\d$|^http0$/;
 const UNUSABLE_CODES = [
   'modelError',
   'loopError',
@@ -87,14 +90,13 @@ const UNUSABLE_CODES = [
   'droppedToken',
   'badDate',
   'nothingToFile',
+  'maxTokens',
+  'unreadable',
 ];
 
 /** The sentence that names why three readings failed, chosen by the server's error code. */
 export function getFailedCause(code: string | null, name: string) {
-  if (
-    code !== null &&
-    (SERVICE_DOWN_CODES.includes(code) || /^http5\d\d$/.test(code))
-  ) {
+  if (code !== null && SERVICE_DOWN_PATTERN.test(code)) {
     return HELM_COPY.failedServiceDown(name);
   }
   if (code !== null && UNUSABLE_CODES.includes(code)) {

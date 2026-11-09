@@ -351,14 +351,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       claimed.captureRef,
       claimed.claimId,
       new SortFailure('held', false),
-      mode === 'rest'
-        ? { lastErrorCode: null }
-        : { heldReason: held, lastErrorCode: null },
+      { heldReason: held, lastErrorCode: null },
       mode,
     );
     throw new HttpsError(
       'resource-exhausted',
       'This will be sorted a little later.',
+      { heldReason: held },
     );
   }
   const mcp = await createHelmMcpServer({

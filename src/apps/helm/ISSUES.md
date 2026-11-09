@@ -176,7 +176,7 @@ A sent capture is read on the server by Claude and turned into tasks: "Readingâ€
 A capture the AI couldn't reach, or the day's limit held, waits as "Saved as written" and is read on the next open or return. After three failures it offers Try again, "Make it a task as written" and Delete. Words it can't make sense of wait in Needs you; more than 20 changes leave "Sort the rest". The Inbox tab badge counts Needs you.
 ### Possible Approach
 1. Sweep on open, `online` and `useOnTabReturn`, oldest first, skipping held windows; 90 s lease.
-2. Attempts and `failed` with `getAiReadFailureMessage`; Try again resets.
+2. Attempts and `failed` with `getFailedCause`; Try again resets.
 3. `couldNotRead` and `moreToSort` questions; "Sort the rest" calls `mode: 'rest'`.
 4. "Make it a task as written" (person-made) and Delete.
 ### CRUD & Entry-Point Requirements
