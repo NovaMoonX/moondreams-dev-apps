@@ -62,7 +62,7 @@ import {
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { HorizonSealed, Stance } from '@apps/runway/types';
+import type { HorizonLink, HorizonSealed, Stance } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
   describeCancelOutcome,
@@ -313,11 +313,12 @@ function HorizonEndView({
           todayAsUtcDate(),
         )
       : [];
-    const asked = new Set(changeRows.map(({ link }) => link.changeId));
+    const keyOf = (link: HorizonLink) => `${link.itemId}-${link.changeId}`;
+    const asked = new Set(changeRows.map(({ link }) => keyOf(link)));
     if (
       isCallOff &&
       (fresh.length !== asked.size ||
-        fresh.some(({ link }) => !asked.has(link.changeId)))
+        fresh.some(({ link }) => !asked.has(keyOf(link))))
     ) {
       setError(HORIZON_END_WORDS.changedJustNow);
       return;

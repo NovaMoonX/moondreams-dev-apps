@@ -1168,10 +1168,12 @@ export async function prepareCancel(
   encryption: RunwayEncryption,
   input: CancelChangeInput,
 ): Promise<PreparedCancel> {
-  const { changeId, target } = input;
+  const { itemId, changeId, target } = input;
   const now = Date.now();
   const cancelId =
-    target.kind === 'versions' ? `cancel_${changeId}` : generateUuid();
+    target.kind === 'versions'
+      ? `cancel_${itemId}_${changeId}`
+      : generateUuid();
   const linked = input.link
     ? await sealEventVersion(
         encryption,
@@ -1291,7 +1293,7 @@ export async function readCancel(
  * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
  * nothing is deleted. A version change gets new versions that restore what held before it over each of
  * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
- * to anything made later, all under one entry whose id is `cancel_<changeId>`, so a second cancel writes nothing. A coming end sets `endedAt` back to null and
+ * to anything made later, all under one entry whose id is `cancel_<itemId>_<changeId>` (one change can write two items), so a second cancel writes nothing. A coming end sets `endedAt` back to null and
  * clears the release day the ending set (unless the item was archived, whose release it may be), with a
  * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
  * is refused when the event changed on another device. Refuses a change whose first day has come.

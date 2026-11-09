@@ -215,6 +215,7 @@ export function listCallOffChanges(
         (found) =>
           !found.isReturn && getChangeRef(found).changeId === link.changeId,
       );
+      // A link with no coming change to show is not asked about and stays on the called-off event, which reads it as no longer planned.
       return change ? [{ link, target, change }] : [];
     })
     .sort((a, b) => a.change.on - b.change.on);
