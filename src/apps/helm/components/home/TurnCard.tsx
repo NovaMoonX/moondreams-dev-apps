@@ -145,7 +145,7 @@ function TurnCard({
               : HELM_COPY.reading}
           </AssistantLine>
           {showsOutcome && isOnHome && (
-            <p className='text-muted-foreground pl-8 text-[13px] leading-[18px]'>
+            <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
               {HELM_COPY.keepTyping}
             </p>
           )}
