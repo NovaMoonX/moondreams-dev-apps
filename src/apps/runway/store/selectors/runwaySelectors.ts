@@ -951,7 +951,7 @@ export interface DraftViewOptions {
   coming?: readonly ComingDay[];
   /** False for a draft that is used once and not kept, such as one step of a lookahead. */
   isCached?: boolean;
-  /** The days before this one are already in `heldByItem` (a lookahead step), so the walk does not count them again. */
+  /** The days before this one are already in `heldByItem`, so the walk does not count them again. */
   carriesEarlier?: boolean;
 }
 

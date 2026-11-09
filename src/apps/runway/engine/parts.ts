@@ -191,11 +191,7 @@ export interface FundingRun {
   extras: readonly PriorityExtra[] | null;
 }
 
-/**
- * What each day asked of an item under the funding in force on its own date, so a walk over earlier
- * days reads each one's own amount and not the drafted day's. Which days count stays the drafted
- * rule's. Null when the item's funding never changed.
- */
+/** What each day asked of an item under the funding in force on its own date, not the drafted day's. */
 export function getRunAsker<
   D extends { dayKey: string; on: number; moneyCents?: Cents },
 >(

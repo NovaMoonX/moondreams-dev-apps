@@ -54,7 +54,7 @@ export interface DraftInput {
     horizon: number;
     /** Line ids (`dayKey:itemId`) whose stretch just ran out: a funded one says it returns. */
     returns?: readonly string[];
-    /** The income days before the drafted ones are already counted in what the items hold (a lookahead walk), so no room under a limit or target is taken for them again. */
+    /** The income days before the drafted ones are already counted in what the items hold, so no room under a limit or target is taken for them again. */
     carriesEarlier?: boolean;
     /** Every coming income day, which cadences count over. */
     incomeDays: readonly {

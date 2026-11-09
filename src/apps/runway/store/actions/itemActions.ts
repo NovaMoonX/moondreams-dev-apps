@@ -1154,7 +1154,7 @@ export interface CancelChangeInput {
   link: EventLink | null;
 }
 
-/** A cancellation sealed and ready to join a transaction: `readCancel` reads, then returns what it writes. */
+/** A cancellation sealed and ready to join a transaction that reads before it writes. */
 export interface PreparedCancel {
   input: CancelChangeInput;
   cancelId: string;
@@ -1194,9 +1194,8 @@ export async function prepareCancel(
 }
 
 /**
- * The read half of a cancellation, for a transaction that reads everything before it writes: reads and
- * checks, then returns the function that writes. Null when there is nothing left to cancel (another
- * device already did). Throws a sentence when the change started or the item changed meanwhile.
+ * The read half of a cancellation: reads and checks, then returns the writer; null when another device
+ * already cancelled it, and throws a sentence when the change started or the item changed meanwhile.
  */
 export async function readCancel(
   transaction: Transaction,
@@ -1290,14 +1289,8 @@ export async function readCancel(
 }
 
 /**
- * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
- * nothing is deleted. A version change gets new versions that restore what held before it over each of
- * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
- * to anything made later, all under one entry whose id is `cancel_<itemId>_<changeId>` (one change can write two items), so a second cancel writes nothing. A coming end sets `endedAt` back to null and
- * clears the release day the ending set (unless the item was archived, whose release it may be), with a
- * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
- * is refused when the event changed on another device. Refuses a change whose first day has come.
- * Returns false when there is nothing left to cancel (another device already did).
+ * Cancels a change that has not started by writing what held before it, never deleting, under one entry
+ * per item and change so a second cancel writes nothing; a coming end clears `endedAt`. False when another device already did.
  */
 export async function cancelChange(
   uid: string,
