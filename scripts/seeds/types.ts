@@ -22,6 +22,7 @@ export type SeedScope =
   | 'runway'
   | 'going-once'
   | 'going-once-scale'
+  | 'helm'
   | 'runway-scale';
 
 export interface SeedContext {

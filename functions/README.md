@@ -490,6 +490,7 @@ Filled in by the owner. A row left blank means it has not been done. Never write
 - **Finding `startedAt`:** each app has a `findFirstActivityAt` under `functions/src/apps/<app>/` that returns the oldest timestamp the app holds for that member, or `null`. With `null` the member's start is now. Add a finder (and its entry in `registerAppUsage.ts`) for every new app.
   - A-List: membership, viewings and watchlist `createdAt`.
   - Going Once: the oldest `createdAt` of a sale whose `members` holds the member.
+  - Helm: the oldest `createdAt` of a capture or task under `apps/helm/users/{uid}`; none exist until later issues, so the start is the first open.
   - Nine Lives: `createdAt` of what the member wrote in their households (`createdBy`), plus a household they created. Joining leaves no timestamp.
   - Pinch: the oldest `createdAt` in their kitchen's collections (recipes, ingredients, meals, plans, shopping and the rest), plus the kitchen itself.
   - Runway: `createdAt` of their plan document (`apps/runway/plans/{uid}`).

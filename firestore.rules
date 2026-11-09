@@ -229,6 +229,17 @@ service cloud.firestore {
       allow update: if isShareOwner() && request.resource.data.ownerUid == resource.data.ownerUid;
     }
 
+    // --- App: helm ---
+
+    function isHelmOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // A profile is private to one person. Only `deleteHelmData` removes it, so a stray client can't half-delete a Helm.
+    match /apps/helm/users/{uid} {
+      allow read, create, update: if isHelmOwner(uid);
+    }
+
     // --- App: nine-lives ---
 
     // get() only: a household is joined by knowing its exact code, never by listing codes.

@@ -1,0 +1,88 @@
+/*
+ * Helm's theme: the household's private secretary. Pewter page, white cards, ink navy for the one filled button,
+ * a pale pewter tint for the assistant, verdigris only for "your call" and amber only for overdue. Titles are a
+ * serif; hairlines, no card shadows. The class sits on <html> (see useHelmTheme) so modals and drawers, which
+ * render outside the app's container, pick it up too.
+ */
+@font-face {
+  font-family: 'Source Serif 4';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/source-serif-4/source-serif-4-latin-600-normal.woff2') format('woff2');
+}
+
+html.helm-theme {
+  --color-background: #f3f4f7;
+  --color-foreground: #141b2d;
+  --color-card: #ffffff;
+  --color-card-foreground: #141b2d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #141b2d;
+  --color-muted: #e9ebf0;
+  --color-muted-foreground: #566074;
+  --color-border: #d8dce4;
+  --color-primary: #1d2b4c;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #e7ebf3;
+  --color-secondary-foreground: #1d2b4c;
+  --color-accent: #ddeeea;
+  --color-accent-foreground: #1e4d48;
+  --color-tooltip: #141b2d;
+  --color-tooltip-foreground: #ffffff;
+  --color-destructive: #b42318;
+  --color-destructive-foreground: #ffffff;
+
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+
+  --helm-serif: 'Source Serif 4', 'Iowan Old Style', Charter, Georgia, serif;
+  --helm-verdigris: #3d7c75;
+  --helm-overdue: #9a4b0b;
+
+  --subview-backdrop: #d5d8df;
+  --subview-radius: var(--radius-lg);
+
+  font-variant-numeric: tabular-nums;
+}
+
+html.helm-theme.dark {
+  --color-background: #0c111b;
+  --color-foreground: #e7eaf0;
+  --color-card: #151c29;
+  --color-card-foreground: #e7eaf0;
+  --color-popover: #151c29;
+  --color-popover-foreground: #e7eaf0;
+  --color-muted: #1b2331;
+  --color-muted-foreground: #9ba4b5;
+  --color-border: #2b3547;
+  --color-primary: #c3cee4;
+  --color-primary-foreground: #0c111b;
+  --color-secondary: #222f47;
+  --color-secondary-foreground: #d8dfec;
+  --color-accent: #173834;
+  --color-accent-foreground: #bfe4dd;
+  --color-tooltip: #e7eaf0;
+  --color-tooltip-foreground: #0c111b;
+  --color-destructive: #f97066;
+  --color-destructive-foreground: #0c111b;
+
+  --helm-verdigris: #71b5ab;
+  --helm-overdue: #f2b26b;
+
+  --subview-backdrop-dark: #080c14;
+}
+
+/* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
+html.helm-theme .helm-serif {
+  font-family: var(--helm-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Hairlines, no shadows on cards. */
+html.helm-theme .helm-card {
+  background-color: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
