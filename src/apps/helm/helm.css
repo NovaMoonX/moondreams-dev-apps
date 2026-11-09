@@ -68,6 +68,11 @@ html.helm-theme.dark {
   --subview-backdrop-dark: #080c14;
 }
 
+/* The conversation over a page sits above the sheet it was asked from, which stays open beneath it (drawers are z-100). */
+html.helm-theme .subview-backdrop {
+  z-index: 110;
+}
+
 /* A title: the serif at 600, tight like stationery. Everything else stays the site's sans. */
 html.helm-theme .helm-serif,
 html.helm-theme [role='dialog'] :is(h1, h2) {

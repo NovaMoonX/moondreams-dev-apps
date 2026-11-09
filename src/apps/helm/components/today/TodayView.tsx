@@ -20,6 +20,7 @@ import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import { HELM_COPY, OPEN_TASKS_LIMIT } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
@@ -80,6 +81,15 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
         .sort((a, b) => getDueSortKey(a.due) - getDueSortKey(b.due)),
     [active, held, tasksById, timeZone, now],
   );
+  const visibleRefs = dueSoon.map(({ task }) => ({
+    collection: 'tasks' as const,
+    id: task.id,
+  }));
+  useScreenContext('today', null, visibleRefs, {
+    ask: HELM_COPY.askToday,
+    chip: HELM_COPY.chipToday,
+    back: HELM_COPY.backToToday,
+  });
   const openTask = openId
     ? (held.get(openId)?.task ?? tasksById.get(openId) ?? null)
     : null;
@@ -186,6 +196,7 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
       />
       <TaskSheet
         task={openTask}
+        screen={{ view: 'today', visible: visibleRefs }}
         doneAt={openId ? (held.get(openId)?.completedAt ?? null) : null}
         activity={openId ? (activityById.get(openId) ?? null) : null}
         onClose={() => setOpenId(null)}

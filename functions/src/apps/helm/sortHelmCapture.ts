@@ -34,6 +34,7 @@ import {
   buildContext,
   readMadeTitles,
   type ContextTask,
+  type EarlierTurn,
 } from './nomos/buildContext.js';
 import {
   FILE_RESULTS_TOOL,
@@ -56,6 +57,7 @@ import {
   NomosReplyError,
 } from './nomos/normalizeNomosReply.js';
 import { decide } from './nomos/policy.js';
+import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   MAX_CONTEXT_TASKS,
   REST_PROMPT,
@@ -70,6 +72,9 @@ export const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const LEASE_MS = 90_000;
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
+const EARLIER_TURNS = 6;
+const EARLIER_EXECUTIONS = 3;
+const EARLIER_RECORDS = 10;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 
 type SortMode = 'full' | 'rest';
@@ -91,6 +96,9 @@ interface CaptureDoc {
   claimedAt?: number | null;
   executionIds?: string[];
   questionState?: Record<string, QuestionStateEntry>;
+  sessionId?: string;
+  turnIndex?: number;
+  screen?: unknown;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -299,6 +307,101 @@ async function readAlreadyMade(
   return readable.flat();
 }
 
+/** The tasks a page showed, read again under the capture's own account: a missing one or one that won't open is left out. */
+async function readScreenTasks(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  refs: ScreenRefs | null,
+) {
+  const ids = refs
+    ? [...(refs.focusId ? [refs.focusId] : []), ...refs.visibleIds]
+    : [];
+  if (!refs || ids.length === 0) return null;
+  const snapshots = await firestore.getAll(
+    ...ids.map((id) => firestore.doc(`${base}/tasks/${id}`)),
+  );
+  const tasks = new Map(
+    snapshots.flatMap((snapshot): [string, ContextTask][] => {
+      const task = snapshot.data() as TaskDoc | undefined;
+      const words = task ? openTitle(key, task.sealed) : null;
+      return task && words?.title
+        ? [
+            [
+              snapshot.id,
+              { id: snapshot.id, title: words.title, due: task.due },
+            ],
+          ]
+        : [];
+    }),
+  );
+  return {
+    view: refs.view,
+    focus: (refs.focusId && tasks.get(refs.focusId)) || null,
+    visible: refs.visibleIds.flatMap((id) => tasks.get(id) ?? []),
+  };
+}
+
+/** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
+async function readEarlierTurns(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  capture: CaptureDoc,
+): Promise<EarlierTurn[]> {
+  if (typeof capture.sessionId !== 'string') return [];
+  if (typeof capture.turnIndex !== 'number') return [];
+  const earlier = await firestore
+    .collection(`${base}/captures`)
+    .where('sessionId', '==', capture.sessionId)
+    .where('turnIndex', '<', capture.turnIndex)
+    .orderBy('turnIndex', 'desc')
+    .limit(EARLIER_TURNS)
+    .get();
+  const turns = await Promise.all(
+    earlier.docs.map(async (doc): Promise<EarlierTurn[]> => {
+      const data = doc.data() as CaptureDoc;
+      const said = openTitle(key, data.sealed)?.sealed.text;
+      if (typeof said !== 'string' || !said) return [];
+      const executions = await Promise.all(
+        (data.executionIds ?? [])
+          .slice(0, EARLIER_EXECUTIONS)
+          .map((id) => firestore.doc(`${base}/executions/${id}`).get()),
+      );
+      const done = executions.flatMap((snapshot) => {
+        const execution = snapshot.data() as
+          { effectRefs?: unknown; sealed: SealedPayload } | undefined;
+        const summary = execution
+          ? openTitle(key, execution.sealed)?.sealed.summary
+          : null;
+        const refs = Array.isArray(execution?.effectRefs)
+          ? (execution.effectRefs as { docId?: unknown }[])
+          : [];
+        return [
+          {
+            summary: typeof summary === 'string' ? summary : null,
+            ids: refs.flatMap((ref) =>
+              typeof ref?.docId === 'string' ? [ref.docId] : [],
+            ),
+          },
+        ];
+      });
+      const summaries = done.flatMap((entry) => entry.summary ?? []);
+      return [
+        {
+          said,
+          did: summaries.length ? summaries.join('. ') : null,
+          taskIds: [...new Set(done.flatMap((entry) => entry.ids))].slice(
+            0,
+            EARLIER_RECORDS,
+          ),
+        },
+      ];
+    }),
+  );
+  return turns.flat().reverse();
+}
+
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const { firestore, uid, capture, mode } = claimed;
   const base = `apps/helm/users/${uid}`;
@@ -311,18 +414,21 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   if (!text) throw new SortFailure('unreadable');
   const reading = toReading(opened.reading);
 
-  const [profile, openTasks, alreadyMade] = await Promise.all([
-    firestore.doc(base).get(),
-    firestore
-      .collection(`${base}/tasks`)
-      .where('status', '==', 'open')
-      .orderBy('createdAt', 'desc')
-      .limit(MAX_CONTEXT_TASKS)
-      .get(),
-    mode === 'rest'
-      ? readAlreadyMade(firestore, base, key, capture.executionIds ?? [])
-      : Promise.resolve(undefined),
-  ]);
+  const [profile, openTasks, alreadyMade, screen, earlierTurns] =
+    await Promise.all([
+      firestore.doc(base).get(),
+      firestore
+        .collection(`${base}/tasks`)
+        .where('status', '==', 'open')
+        .orderBy('createdAt', 'desc')
+        .limit(MAX_CONTEXT_TASKS)
+        .get(),
+      mode === 'rest'
+        ? readAlreadyMade(firestore, base, key, capture.executionIds ?? [])
+        : Promise.resolve(undefined),
+      readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
+      readEarlierTurns(firestore, base, key, capture),
+    ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
     if (!words?.title) {
@@ -341,6 +447,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     timeZone,
     tasks,
     alreadyMade,
+    screen,
+    earlierTurns,
   });
 
   const provider = pickProvider(text, reading);

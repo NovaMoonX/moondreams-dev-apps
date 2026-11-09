@@ -142,6 +142,11 @@ function TurnCard({
           isMarking={isOnHome && capture.seenAt === null}
         />
       )}
+      {import.meta.env.DEV && capture.screen && (
+        <p className='text-muted-foreground text-[11px] tabular-nums'>
+          {`screen ${capture.screen.view} · focus ${capture.screen.focus?.id ?? 'none'} · ${capture.screen.visible.length} visible`}
+        </p>
+      )}
       {heldLine !== null && (
         <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
       )}

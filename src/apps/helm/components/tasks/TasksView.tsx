@@ -16,6 +16,7 @@ import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import { HELM_COPY, OPEN_TASKS_LIMIT } from '@apps/helm/constants';
+import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
@@ -94,6 +95,18 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
         .sort((a, b) => b.createdAt - a.createdAt),
     [awake],
   );
+  const rows = isNotYetOpen
+    ? [...dated, ...undated, ...latent.map(({ task }) => task)]
+    : [...dated, ...undated];
+  const visibleRefs = rows.map((task) => ({
+    collection: 'tasks' as const,
+    id: task.id,
+  }));
+  useScreenContext('tasks', null, visibleRefs, {
+    ask: HELM_COPY.askTasks(rows.length),
+    chip: HELM_COPY.chipTasks(rows.length),
+    back: HELM_COPY.backToTasks,
+  });
   const openTask = openId
     ? (held.get(openId)?.task ?? tasksById.get(openId) ?? null)
     : null;
@@ -212,6 +225,7 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
       />
       <TaskSheet
         task={openTask}
+        screen={{ view: 'tasks', visible: visibleRefs }}
         doneAt={openId ? (held.get(openId)?.completedAt ?? null) : null}
         activity={openId ? (activityById.get(openId) ?? null) : null}
         onClose={() => setOpenId(null)}

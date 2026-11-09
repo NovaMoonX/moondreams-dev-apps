@@ -22,6 +22,7 @@ import type {
   CaptureSealed,
   Execution,
   ExecutionSealed,
+  ScreenContext,
   HelmEncryption,
   Task,
   TaskDue,
@@ -156,7 +157,27 @@ const SEED_TURNS = [
     text: 'Book the hair trial and send the save-the-dates Saturday',
     isSeen: true,
   },
+  {
+    session: 'today',
+    minutesAgo: 2,
+    text: 'Move this to Saturday',
+    isSeen: false,
+  },
 ] as const;
+
+/** The turn asked from Today with Call Dana open: it moves that task's day to Saturday, so a page's "this" has a seeded example. */
+const MOVE_TURN = 5;
+const MOVED_TASK = { id: 'seed-task-4-2', turn: 3 };
+const MOVE_SCREEN: ScreenContext = {
+  view: 'today',
+  focus: { collection: 'tasks', id: MOVED_TASK.id },
+  visible: [
+    { collection: 'tasks', id: MOVED_TASK.id },
+    { collection: 'tasks', id: 'seed-task-hand-2' },
+    { collection: 'tasks', id: 'seed-task-3-1' },
+  ],
+  v: 1,
+};
 
 type SeedHold = 'failed' | 'dailyLimit' | 'couldNotRead' | null;
 
@@ -324,6 +345,62 @@ async function buildUndone(input: {
   };
 }
 
+/** An `updateTask` that moves a task's day: the execution that records it. The task takes the new day and the time of the edit. */
+async function buildMove(input: {
+  movedTitle: string;
+  fromDue: TaskDue | null;
+  toDue: TaskDue | null;
+  captureId: string;
+  sortedAt: number;
+  encryption: HelmEncryption;
+}): Promise<{
+  execution: Execution;
+  due: TaskDue | null;
+  editedAt: number;
+}> {
+  const { movedTitle, fromDue, toDue, sortedAt } = input;
+  const execution: Execution = {
+    captureId: input.captureId,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [{ op: 'update', collection: 'tasks', docId: MOVED_TASK.id }],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: sortedAt,
+    decidedAt: sortedAt,
+    finishedAt: sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: 'Updated a task',
+        commands: [
+          {
+            kind: 'updateTask',
+            taskId: MOVED_TASK.id,
+            title: null,
+            due: toDue,
+            hasDue: true,
+            isUrgent: null,
+          },
+        ],
+        effects: [
+          {
+            written: { 'sealed.title': movedTitle, due: toDue },
+            previous: { 'sealed.title': movedTitle, due: fromDue },
+          },
+        ],
+        undoReport: null,
+        goneIds: null,
+      },
+      input.encryption,
+    ),
+  };
+  return { execution, due: toDue, editedAt: sortedAt };
+}
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -357,7 +434,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         key: data.key.toString('hex'),
       };
 
-      const turns = await Promise.all(
+      const builtTurns = await Promise.all(
         ALL_TURNS.map(async (turn, index) => {
           const turnTime = context.now - turn.minutesAgo * MINUTE_MS;
           const reading = readCapture(turn.text, {
@@ -371,7 +448,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             due: dueFrom(reading.dates, entry.dueWords),
           }));
           const executionId = `seed-execution-${index + 1}`;
-          const isSorted = sortedTasks.length > 0;
+          const isMove = index === MOVE_TURN;
+          const isSorted = sortedTasks.length > 0 || isMove;
           const sortedAt = turnTime + SORT_DELAY_MS;
           const heldFields = toHeldFields(turn.held, turnTime, isSorted);
           const capture: Capture = {
@@ -389,6 +467,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             createdAt: turnTime,
             sortedAt: isSorted ? sortedAt : null,
+            screen: isMove ? MOVE_SCREEN : null,
             sealed: await sealJson<CaptureSealed>(
               { text: turn.text, reading },
               encryption,
@@ -482,8 +561,29 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                   encryption,
                 })
               : null;
-          const execution = undone?.original ?? originalExecution;
+          const moved = isMove
+            ? await buildMove({
+                movedTitle: SEED_TASKS[MOVED_TASK.turn][1].title,
+                fromDue: dueFrom(
+                  readCapture(ALL_TURNS[MOVED_TASK.turn].text, {
+                    now:
+                      context.now -
+                      ALL_TURNS[MOVED_TASK.turn].minutesAgo * MINUTE_MS,
+                    timeZone,
+                    assistantName: DEFAULT_ASSISTANT_NAME,
+                  }).dates,
+                  SEED_TASKS[MOVED_TASK.turn][1].dueWords,
+                ),
+                toDue: dueFrom(reading.dates, 'Saturday'),
+                captureId: `seed-turn-${index + 1}`,
+                sortedAt,
+                encryption,
+              })
+            : null;
+          const execution =
+            moved?.execution ?? undone?.original ?? originalExecution;
           return {
+            moved,
             id: `seed-turn-${index + 1}`,
             capture,
             tasks: undone?.tasks ?? tasks,
@@ -493,6 +593,22 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           };
         }),
       );
+      const moved = builtTurns.find((turn) => turn.moved)?.moved ?? null;
+      const turns = builtTurns.map((turn) => ({
+        ...turn,
+        tasks: turn.tasks.map((entry) =>
+          moved && entry.id === MOVED_TASK.id
+            ? {
+                ...entry,
+                task: {
+                  ...entry.task,
+                  due: moved.due,
+                  lastEditedAt: moved.editedAt,
+                },
+              }
+            : entry,
+        ),
+      }));
       const person = users.doc(user.uid);
       const today = getDueDay({ kind: 'moment', at: context.now }, timeZone);
       const handTasks = await Promise.all(

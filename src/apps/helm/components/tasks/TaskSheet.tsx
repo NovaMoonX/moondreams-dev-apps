@@ -16,6 +16,7 @@ import { useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
 import TaskDetails, {
   WhenRow,
   WordsEditor,
@@ -29,6 +30,10 @@ import {
   NOTES_MAX_CHARS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
+import {
+  useScreenContext,
+  type ContentView,
+} from '@apps/helm/hooks/useScreenContext';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   deleteTask,
@@ -41,6 +46,7 @@ import type {
   OpenTask,
   TaskActivity,
   TaskPlainFields,
+  RecordRef,
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
@@ -53,6 +59,8 @@ interface TaskSheetProps {
   /** When it was marked done, while held. */
   doneAt: number | null;
   activity: TaskActivity | null;
+  /** The list the sheet is open over, which stays what "these" means beside the one task. */
+  screen: { view: ContentView; visible: RecordRef[] };
   onClose: () => void;
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
@@ -74,7 +82,7 @@ interface Held<T> {
 
 const MINUTE_MS = 60_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const FOOT = 'px-6 pt-2 pb-6';
+const FOOT = 'px-6 pt-2 pb-3';
 const SMALL_ACTION =
   "text-foreground! relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
 
@@ -116,11 +124,35 @@ function ConditionLine({ text, actionLabel, onAction }: ConditionLineProps) {
   );
 }
 
+function PublishTaskScreen({
+  taskId,
+  title,
+  screen,
+}: {
+  taskId: string;
+  title: string;
+  screen: TaskSheetProps['screen'];
+}) {
+  useScreenContext(
+    screen.view,
+    { collection: 'tasks', id: taskId },
+    screen.visible,
+    {
+      ask: HELM_COPY.askTask,
+      chip: HELM_COPY.chipAbout(title),
+      back: HELM_COPY.backToTask,
+    },
+    'sheet',
+  );
+  return null;
+}
+
 /** One task: its words, day and steps, and the fields most tasks leave empty. Plain fields save as they change; words save on their own Done and need a connection. */
 function TaskSheet({
   task,
   doneAt,
   activity,
+  screen,
   onClose,
   onTick,
   onUndoTick,
@@ -441,35 +473,43 @@ function TaskSheet({
   };
 
   return (
-    <DetailSheet
-      isOpen
-      onClose={requestClose}
-      title={shownTitle}
-      viewKey={shownView}
-      actions={
-        <TickButton
-          isDone={doneAt !== null}
-          label={
-            doneAt !== null
-              ? HELM_COPY.markNotDone(titleOf)
-              : HELM_COPY.markDone(titleOf)
-          }
-          onClick={() => (doneAt !== null ? onUndoTick(task.id) : onTick(task))}
-        />
-      }
-      footer={
-        shownView === 'main' && (
-          <div className={FOOT}>
-            <DeleteIconButton
-              label={HELM_COPY.deleteConfirm}
-              onClick={() => void remove()}
-            />
-          </div>
-        )
-      }
-    >
-      <div key={task.id}>{getBody()}</div>
-    </DetailSheet>
+    <>
+      <PublishTaskScreen taskId={task.id} title={shownTitle} screen={screen} />
+      <DetailSheet
+        isOpen
+        onClose={requestClose}
+        title={shownTitle}
+        viewKey={shownView}
+        actions={
+          <TickButton
+            isDone={doneAt !== null}
+            label={
+              doneAt !== null
+                ? HELM_COPY.markNotDone(titleOf)
+                : HELM_COPY.markDone(titleOf)
+            }
+            onClick={() =>
+              doneAt !== null ? onUndoTick(task.id) : onTick(task)
+            }
+          />
+        }
+        footer={
+          shownView === 'main' && (
+            <>
+              <div className={FOOT}>
+                <DeleteIconButton
+                  label={HELM_COPY.deleteConfirm}
+                  onClick={() => void remove()}
+                />
+              </div>
+              <AskAboutThisControl placement='sheet' />
+            </>
+          )
+        }
+      >
+        <div key={task.id}>{getBody()}</div>
+      </DetailSheet>
+    </>
   );
 }
 

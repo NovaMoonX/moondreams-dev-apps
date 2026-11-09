@@ -41,6 +41,7 @@ import type {
   CaptureSealed,
   HelmEncryption,
   OpenCapture,
+  ScreenContext,
   Task,
   TaskSealed,
 } from '@apps/helm/types';
@@ -61,6 +62,7 @@ export async function sendCapture(
     turnIndex: number;
     createdAt: number;
     reading: CaptureReading;
+    screen: ScreenContext | null;
   },
 ) {
   const text = turn.text.trim();
@@ -90,6 +92,7 @@ export async function sendCapture(
     seenAt: createdAt,
     createdAt,
     sortedAt: null,
+    screen: turn.screen,
     sealed,
   };
   const reference = doc(capturesOf(uid));

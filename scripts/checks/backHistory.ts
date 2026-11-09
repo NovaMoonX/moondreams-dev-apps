@@ -185,12 +185,133 @@ await [1, 6].reduce(
   (done, cpuRate) => done.then(() => runAddForm(cpuRate)),
   Promise.resolve(),
 );
+
+// Asking about a page: the conversation opens over it with one entry of its own, and each way out lands where the person was.
+interface Landing {
+  path: string;
+  hasAsk: boolean;
+  hasView: boolean;
+  text: string;
+  scrollY: number;
+}
+const read = (page: Page) =>
+  page.evaluate(() => ({
+    path: window.location.pathname,
+    hasAsk: new URLSearchParams(window.location.search).has('ask'),
+    hasView: new URLSearchParams(window.location.search).has('view'),
+    text: document.body.innerText,
+    scrollY: window.scrollY,
+  }));
+const scrolled: Step = async (page) => {
+  await page.evaluate(() => window.scrollTo(0, 600));
+  await page.waitForTimeout(200);
+};
+const askJourneys: {
+  name: string;
+  steps: Step[];
+  isRight: (landing: Landing) => boolean;
+}[] = [
+  {
+    name: 'ask from a scrolled page, Back',
+    steps: [scrolled, tap('Ask page'), back],
+    isRight: ({ path, hasAsk, text, scrollY }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Today page') &&
+      !text.includes('Ask open') &&
+      scrollY >= 590,
+  },
+  {
+    name: 'ask from a sheet, Back lands on the sheet',
+    steps: [tap('Open record sheet'), tap('Ask this one'), back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Sheet of one record') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask from a sheet, Back twice closes the sheet',
+    steps: [tap('Open record sheet'), tap('Ask this one'), back, back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' && !hasAsk && !text.includes('Sheet of one record'),
+  },
+  {
+    name: 'ask, a reply link to a record, Back to the first page',
+    steps: [tap('Ask page'), tap('Follow link'), back],
+    isRight: ({ path, hasAsk, hasView, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      !hasView &&
+      text.includes('Today page') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'sheet, ask, a reply link to a record, Back to the page',
+    steps: [
+      tap('Open record sheet'),
+      tap('Ask this one'),
+      tap('Follow link'),
+      back,
+    ],
+    isRight: ({ path, hasAsk, hasView, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      !hasView &&
+      text.includes('Today page') &&
+      !text.includes('Sheet of one record'),
+  },
+  {
+    name: 'reload with ask open, Back to the page',
+    steps: [tap('Ask page'), reload, back],
+    isRight: ({ path, hasAsk, text }) =>
+      path === '/helm' &&
+      !hasAsk &&
+      text.includes('Today page') &&
+      !text.includes('Ask open'),
+  },
+  {
+    name: 'ask closed by its control leaves no entry',
+    steps: [tap('Ask page'), tap('Close ask'), back],
+    isRight: ({ path }) => path === '/home',
+  },
+];
+const runAsk = async (
+  { name, steps, isRight }: (typeof askJourneys)[number],
+  cpuRate: number,
+) => {
+  const page = await browser.newPage();
+  if (cpuRate > 1) {
+    const cdp = await page.context().newCDPSession(page);
+    await cdp.send('Emulation.setCPUThrottlingRate', { rate: cpuRate });
+  }
+  await page.goto(`${origin}/home`);
+  await tap('Enter ask page')(page);
+  await steps.reduce(
+    (done, step) => done.then(() => step(page)),
+    Promise.resolve(),
+  );
+  const landing = await read(page);
+  const label = `${name}${cpuRate > 1 ? ` (CPU ×${cpuRate})` : ''}`;
+  const result = isRight(landing);
+  if (!result)
+    failures.push(`${label}: ${JSON.stringify({ ...landing, text: '' })}`);
+  console.log(`${result ? 'ok  ' : 'FAIL'} ${label} → ${landing.path}`);
+};
+await [1, 6].reduce(
+  (done, cpuRate) =>
+    askJourneys.reduce(
+      (inner, journey) => inner.then(() => runAsk(journey, cpuRate)),
+      done,
+    ),
+  Promise.resolve(),
+);
 await browser.close();
 server.close();
 assert.deepEqual(
   failures,
   [],
-  `A door left the app or missed its target:\n${failures.join('\n')}`,
+  `A door left the app, missed its target or lost the page:\n${failures.join('\n')}`,
 );
 console.log(
   'back-history: every door landed on its target, and a closed form left no entry',

@@ -18,7 +18,12 @@ import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
 import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
-import type { Capture, CaptureSealed, OpenCapture } from '@apps/helm/types';
+import type {
+  Capture,
+  CaptureSealed,
+  OpenCapture,
+  ScreenContext,
+} from '@apps/helm/types';
 import {
   EMPTY_READING,
   normalizeReading,
@@ -34,6 +39,29 @@ const capturesOf = (uid: string) =>
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your turns did not open.');
+
+const isRef = (value: unknown): value is ScreenContext['visible'][number] =>
+  typeof value === 'object' &&
+  value !== null &&
+  (value as { collection?: unknown }).collection === 'tasks' &&
+  typeof (value as { id?: unknown }).id === 'string';
+
+/** An older turn has no screen, and one that is not shaped like the contract counts as none. */
+const toScreen = (value: unknown): ScreenContext | null => {
+  const screen = value as Partial<ScreenContext> | null;
+  if (
+    typeof screen !== 'object' ||
+    screen === null ||
+    typeof screen.view !== 'string' ||
+    screen.v !== 1 ||
+    !Array.isArray(screen.visible) ||
+    !screen.visible.every(isRef) ||
+    (screen.focus !== null && !isRef(screen.focus))
+  ) {
+    return null;
+  }
+  return screen as ScreenContext;
+};
 
 /** A turn that won't open is kept, with no words, so the surface can say so instead of dropping it. */
 async function openCapture(
@@ -61,6 +89,7 @@ async function openCapture(
     seenAt: data.seenAt ?? null,
     createdAt: data.createdAt ?? 0,
     sortedAt: data.sortedAt ?? null,
+    screen: toScreen(data.screen ?? null),
   } as const;
   try {
     if (!data.sealed) throw new Error('This turn has no sealed words.');

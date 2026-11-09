@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 
 import { type AListState, aListReducer } from '@apps/a-list/store';
 import { type HelmState, helmReducer } from '@apps/helm/store/helmSlice';
+import { type ScreenState, screenReducer } from '@apps/helm/store/screenSlice';
 import { type GoingOnceState, goingOnceReducer } from '@apps/going-once/store';
 import { type NineLivesState, nineLivesReducer } from '@apps/nine-lives/store';
 import { type PinchState, pinchReducer } from '@apps/pinch/store';
@@ -29,6 +30,7 @@ export interface RootState {
   runway: RunwayState;
   goingOnce: GoingOnceState;
   helm: HelmState;
+  helmScreen: ScreenState;
 }
 
 export const store = configureStore({
@@ -43,6 +45,7 @@ export const store = configureStore({
     runway: runwayReducer,
     goingOnce: goingOnceReducer,
     helm: helmReducer,
+    helmScreen: screenReducer,
   },
   devTools: true,
 });

@@ -15,7 +15,22 @@ export interface ContextInput {
   timeZone: string;
   tasks: ContextTask[];
   alreadyMade?: string[];
+  screen?: {
+    view: string;
+    focus: ContextTask | null;
+    visible: ContextTask[];
+  } | null;
+  earlierTurns?: EarlierTurn[];
 }
+
+/** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
+export interface EarlierTurn {
+  said: string;
+  did: string | null;
+  taskIds: string[];
+}
+
+const MAX_EARLIER_SAID_CHARS = 500;
 
 /** JSON that cannot close a data block early: a typed `</capture>` stays inside its string. */
 const toDataJson = (value: unknown) =>
@@ -70,6 +85,22 @@ export function buildContext(input: ContextInput): {
     title: task.title,
     due: describeDue(task.due),
   }));
+  const toRef = (task: ContextTask) => ({
+    alias: aliases.add(task.id),
+    title: task.title,
+  });
+  const screen = input.screen
+    ? {
+        view: input.screen.view,
+        focus: input.screen.focus ? toRef(input.screen.focus) : null,
+        visible: input.screen.visible.map(toRef),
+      }
+    : null;
+  const earlierTurns = (input.earlierTurns ?? []).map((turn) => ({
+    said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
+    did: turn.did,
+    records: turn.taskIds.map((id) => aliases.add(id)),
+  }));
   const { reading } = input;
   const text = withoutAddress(input.text, reading).slice(0, MAX_CAPTURE_CHARS);
   const message = [
@@ -85,6 +116,12 @@ export function buildContext(input: ContextInput): {
       })),
     })}</reading>`,
     `<open_tasks>${toDataJson(tasks)}</open_tasks>`,
+    ...(screen && (screen.focus || screen.visible.length)
+      ? [`<screen>${toDataJson(screen)}</screen>`]
+      : []),
+    ...(earlierTurns.length
+      ? [`<earlier_turns>${toDataJson(earlierTurns)}</earlier_turns>`]
+      : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
       : []),

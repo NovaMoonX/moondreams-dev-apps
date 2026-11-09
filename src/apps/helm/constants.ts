@@ -8,6 +8,9 @@ export const DEFAULT_PLAN_FILL_PERCENT = 50;
 export const SEALED_SCHEMA_VERSION = 1;
 
 export const CAPTURE_COUNTER_FROM = 3_600;
+/** What a page may tell a turn it was asked from: the rows in view. */
+export const SCREEN_VISIBLE_CAP = 20;
+
 /** A run of turns with no gap over this is one session. */
 export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
@@ -82,6 +85,29 @@ const goneLine = (count: number) =>
 /** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
+  askToday: 'Ask about today',
+  chipToday: 'About today',
+  backToToday: 'Back to Today',
+  askTasks: (count: number) =>
+    count === 0
+      ? 'Ask about your tasks'
+      : count === 1
+        ? 'Ask about this task'
+        : `Ask about these ${count} tasks`,
+  chipTasks: (count: number) =>
+    count === 0
+      ? 'About your tasks'
+      : count === 1
+        ? 'About 1 task'
+        : `About ${count} tasks`,
+  backToTasks: 'Back to Tasks',
+  askTask: 'Ask about this task',
+  chipAbout: (what: string) => `About ${what}`,
+  chipAnything: 'About anything',
+  chipRemove: (chip: string) => `Remove ${chip}`,
+  backToTask: 'Back to this task',
+  askByVoice: 'Ask by voice',
+  askByTyping: 'Ask by typing',
   firstOpen: (name: string) =>
     `Tap Talk and tell ${name} the first thing on your mind. A task, a date, a name: ${name} sorts it.`,
   composerPlaceholder: (name: string) => `Type to ${name}`,

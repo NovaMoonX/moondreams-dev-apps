@@ -25,9 +25,11 @@ import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
+import { useLastInputMode } from '@apps/helm/hooks/useLastInputMode';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
+import type { ScreenContext } from '@apps/helm/types';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
 import {
   applyReadingEdits,
@@ -36,7 +38,7 @@ import {
   URGENT_KEY,
 } from '@apps/helm/utils/captureReading';
 
-const DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
+const HOME_DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
 const parseDraft = (stored: unknown) =>
   typeof stored === 'string' && stored.length > 0 ? stored : null;
@@ -49,6 +51,10 @@ interface ComposerProps {
   isReady: boolean;
   /** Says why the field waits when the key can't come yet (offline, or refused). */
   waitingPlaceholder: string | null;
+  /** The page the words are asked from, stamped on the turn; null from home. */
+  screen: ScreenContext | null;
+  /** Where unsent words are kept; the conversation over a page keeps its own, apart from home's. */
+  draftKey?: string;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
@@ -57,19 +63,22 @@ function Composer({
   onFocusChange,
   isReady,
   waitingPlaceholder,
+  screen,
+  draftKey = HOME_DRAFT_KEY,
 }: ComposerProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const [, setLastMode] = useLastInputMode(user?.uid ?? null);
   const { restored } = useFormDraft({
-    key: isReady ? DRAFT_KEY : null,
+    key: isReady ? draftKey : null,
     base: null,
     parse: parseDraft,
   });
   const [text, setText] = useState(restored ?? '');
   // Kept on unmount too: leaving home for another view, or the phone closing the page, finds the words still here.
   useKeepFormDraft({
-    key: isReady ? DRAFT_KEY : null,
+    key: isReady ? draftKey : null,
     base: null,
     isRestored: restored !== null,
     value: text,
@@ -152,8 +161,8 @@ function Composer({
       // The field may have unmounted since Send, so the words go back into the kept draft directly.
       // After a switch to another account the sealer is theirs, so nothing is kept for this one.
       if (store.getState().helm.uid === uid) {
-        const kept = parseDraft(readFormDraft(uid, DRAFT_KEY, null)) ?? '';
-        writeFormDraft(uid, DRAFT_KEY, null, withSent(kept));
+        const kept = parseDraft(readFormDraft(uid, draftKey, null)) ?? '';
+        writeFormDraft(uid, draftKey, null, withSent(kept));
         setDismissed((current) =>
           Array.from(new Set([...current, ...sentDismissed])),
         );
@@ -178,8 +187,10 @@ function Composer({
       const { write } = await sendCapture(uid, encryption, {
         text: sent,
         reading: sentReading,
+        screen,
         ...turn,
       });
+      setLastMode('typed');
       recordSentTurn(uid, turn);
       setText('');
       setDismissed([]);

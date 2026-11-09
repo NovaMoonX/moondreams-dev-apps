@@ -68,6 +68,20 @@ export interface CaptureReading {
   addressedAs: Token | null;
 }
 
+/** A record a screen shows, by id only; the server re-reads it under the caller's uid. Tasks only so far. */
+export interface RecordRef {
+  collection: 'tasks';
+  id: string;
+}
+
+/** What a content page shows, sent with a turn asked from it. Focus 1, visible 20. */
+export interface ScreenContext {
+  view: HelmView;
+  focus: RecordRef | null;
+  visible: RecordRef[];
+  v: 1;
+}
+
 /** One turn: what the person said, with the words sealed. */
 export interface Capture {
   inputMode: 'typed' | 'voice' | 'attachment';
@@ -86,6 +100,8 @@ export interface Capture {
   seenAt: number | null;
   createdAt: number;
   sortedAt: number | null;
+  /** The page it was asked from; null from home and on turns made before pages could be asked about. */
+  screen: ScreenContext | null;
   sealed: Sealed;
 }
 
