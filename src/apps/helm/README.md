@@ -25,6 +25,7 @@ Built:
 - Tasks: open one from Today or Tasks to change its day, steps, importance, length, energy, context, when it can start and what it waits on, tick it with an Undo, or delete it with an Undo; New task in a page's ⋯ makes one by hand; Today's All tasks lists every open one, with those that can't start yet folded.
 - Today, Tasks and an open task end in an ask bar ("Ask about today"): it opens the conversation over the page with an "About …" chip you can remove, the assistant reads the records the page shows, and Back returns to the page where it was.
 - Several messages sent before the reply starts are one turn: each stays its own bubble, one reply covers them all, and a message sent after the reply starts is a new turn; it works offline too.
+- Short, plain turns ("add milk", "done with the dentist", "thanks") are sorted by a quick, light model; a question, a longer turn or "sort the rest" goes to the fuller one, and the quick one can hand a turn over once. Each route has its own allowance.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

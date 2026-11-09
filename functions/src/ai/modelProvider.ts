@@ -20,6 +20,8 @@ export interface ToolLoopRequest {
   messages: { role: 'user' | 'assistant'; content: string }[];
   mcpClient: Pick<Client, 'listTools' | 'callTool'>;
   terminalTool: TerminalTool;
+  /** Other tools that also end the loop; the result names which one did. */
+  extraTerminalTools?: TerminalTool[];
   limits: ToolLoopLimits;
   /** Called with each response's usage as it arrives, so spend is recorded even if the call is cut short. */
   onUsage?: (usage: ModelUsage) => void | Promise<void>;
@@ -32,6 +34,8 @@ export type ToolLoopEnd =
 
 export interface ToolLoopResult {
   terminalInput: unknown;
+  /** The terminal tool that ended the loop; null when it ended any other way. */
+  terminalName: string | null;
   endedBy: ToolLoopEnd;
   errorCode: string | null;
   usage: ModelUsage;

@@ -64,6 +64,12 @@ import {
   NomosReplyError,
 } from './nomos/normalizeNomosReply.js';
 import { decide } from './nomos/policy.js';
+import {
+  HAND_OVER_TOOL,
+  pickRoute,
+  runRouted,
+  type Route,
+} from './nomos/route.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   MAX_CONTEXT_TASKS,
@@ -85,6 +91,8 @@ const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
+// Leaves the rest of the call for a hand-over to the full route.
+const QUICK_LOOP_MILLIS = 15_000;
 const CALL_BUDGET_MS = 55_000;
 const RESTART_MARGIN_MS = 5_000;
 const MIN_RESTART_MS = 22_000;
@@ -125,6 +133,7 @@ interface CaptureDoc {
   sessionId?: string;
   turnIndex?: number;
   turnLeadId?: string | null;
+  route?: Route | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   createdAt: number;
@@ -586,7 +595,6 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const run = async (
     read: JoinedRead & { messages: JoinedMessage[] },
     signal: AbortSignal,
-    isRestart: boolean,
   ) => {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
@@ -603,64 +611,85 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
     });
     const provider = pickProvider(combined.text, combined.reading);
-    const held = await reserveAiCall(firestore, uid, Date.now());
-    if (held) {
+    const system =
+      mode === 'rest' ? `${SYSTEM_PROMPT}\n\n${REST_PROMPT}` : SYSTEM_PROMPT;
+    const runOn = async (role: 'quick' | 'interpret', canHandOver: boolean) => {
+      const mcp = await createHelmMcpServer({
+        uid,
+        key,
+        aliases: context.aliases,
+        firestore,
+      });
+      const maxMillis = canHandOver ? QUICK_LOOP_MILLIS : LOOP_LIMITS.maxMillis;
+      const loop = await provider
+        .runToolLoop({
+          role,
+          system,
+          messages: [{ role: 'user', content: context.message }],
+          mcpClient: mcp.client,
+          terminalTool: FILE_RESULTS_TOOL,
+          extraTerminalTools: canHandOver ? [HAND_OVER_TOOL] : [],
+          limits: {
+            ...LOOP_LIMITS,
+            maxMillis: Math.min(maxMillis, timeLeft()),
+          },
+          signal,
+          onUsage: async (usage) => {
+            const cost = getUsageCost(role, usage);
+            if (cost <= 0) return;
+            await recordAiSpend(firestore, Date.now(), cost).catch(() =>
+              logger.error('helm.ai.spendNotRecorded'),
+            );
+          },
+        })
+        .finally(() => mcp.close().catch(() => undefined));
+      const handedOver =
+        loop.endedBy === 'terminal' &&
+        loop.terminalName === HAND_OVER_TOOL.name;
+      logger.info('helm.ai.call', {
+        role,
+        endedBy: loop.endedBy,
+        errorCode: loop.errorCode,
+        toolCalls: loop.toolCalls,
+        messages: read.messages.length,
+        handedOver,
+        handOverReasonLength: handedOver
+          ? String(
+              (loop.terminalInput as { reason?: unknown } | null)?.reason ?? '',
+            ).length
+          : null,
+        ...loop.usage,
+      });
+      return { handedOver, value: loop };
+    };
+    const routed = await runRouted({
+      route: pickRoute({ text: combined.text, mode }),
+      runOn,
+      reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
+    });
+    if ('held' in routed) {
       await failClaim(
         firestore,
         claimed.captureRef,
         claimed.claimId,
         new SortFailure('held', false),
-        { heldReason: held, lastErrorCode: null },
+        { heldReason: routed.held, lastErrorCode: null },
         mode,
       );
       throw new HttpsError(
         'resource-exhausted',
         'This will be sorted a little later.',
-        { heldReason: held },
+        { heldReason: routed.held },
       );
     }
-    const mcp = await createHelmMcpServer({
-      uid,
-      key,
-      aliases: context.aliases,
-      firestore,
-    });
-    const loop = await provider
-      .runToolLoop({
-        role: 'interpret',
-        system:
-          mode === 'rest'
-            ? `${SYSTEM_PROMPT}\n\n${REST_PROMPT}`
-            : SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: context.message }],
-        mcpClient: mcp.client,
-        terminalTool: FILE_RESULTS_TOOL,
-        limits: {
-          ...LOOP_LIMITS,
-          maxMillis: isRestart
-            ? Math.min(LOOP_LIMITS.maxMillis, timeLeft())
-            : LOOP_LIMITS.maxMillis,
-        },
-        signal,
-        onUsage: async (usage) => {
-          const cost = getUsageCost('interpret', usage);
-          if (cost <= 0) return;
-          await recordAiSpend(firestore, Date.now(), cost).catch(() =>
-            logger.error('helm.ai.spendNotRecorded'),
-          );
-        },
-      })
-      .finally(() => mcp.close().catch(() => undefined));
-
-    logger.info('helm.ai.call', {
-      role: 'interpret',
+    const loop = routed.value;
+    return {
       endedBy: loop.endedBy,
-      errorCode: loop.errorCode,
-      toolCalls: loop.toolCalls,
-      messages: read.messages.length,
-      ...loop.usage,
-    });
-    return { endedBy: loop.endedBy, loop, context, combined };
+      loop,
+      context,
+      combined,
+      route: routed.route,
+    };
   };
 
   const { read, result } = await interpretWithJoins({
@@ -685,7 +714,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quietMs: SETTLE_QUIET_MS,
     maxWaitMs: SETTLE_MAX_MS,
   });
-  const { loop, context, combined } = result;
+  const { loop, context, combined, route } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -711,6 +740,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     base,
     joinedIds: read.ids,
     messageCount: mode === 'rest' ? 1 : read.messages.length,
+    route,
   });
 }
 
@@ -722,6 +752,7 @@ async function writeResult(
     base: string;
     joinedIds: string[];
     messageCount: number;
+    route: Route;
   },
 ): Promise<SortResult> {
   const {
@@ -736,6 +767,7 @@ async function writeResult(
     mode,
     joinedIds,
     messageCount,
+    route,
   } = input;
   const tasksPath = `${base}/tasks`;
   const targetIds = [
@@ -878,7 +910,7 @@ async function writeResult(
       executionIds: settled.executionIds,
       questionState: settled.questionState,
       sealed: seal(settled.sealed),
-      route: 'full',
+      route,
       claimId: null,
       claimedAt: null,
       heldReason: null,

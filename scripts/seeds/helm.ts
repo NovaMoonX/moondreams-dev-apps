@@ -600,7 +600,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             turnIndex: ALL_TURNS.filter(
               (entry) => entry.session === turn.session,
             ).indexOf(turn),
-            route: isSorted ? 'quick' : null,
+            route: !isSorted
+              ? null
+              : sortedTasks.length > 2 || turn.text.length > 55
+                ? 'full'
+                : 'quick',
             claimId: null,
             claimedAt: null,
             ...heldFields,

@@ -19,9 +19,10 @@ const FILLER = new Set([
   'uh',
 ]);
 
-const ANSWER_DELAY_MS = 1_200;
+const ANSWER_DELAY_MS = { quick: 400, interpret: 1_200 };
+const HAND_OVER_PIECES = 3;
 
-const waitOrAbort = (signal?: AbortSignal) =>
+const waitOrAbort = (delayMs: number, signal?: AbortSignal) =>
   new Promise<boolean>((resolve) => {
     if (signal?.aborted) return resolve(true);
     const done = (isAborted: boolean) => {
@@ -30,7 +31,7 @@ const waitOrAbort = (signal?: AbortSignal) =>
       resolve(isAborted);
     };
     const onAbort = () => done(true);
-    const timer = setTimeout(() => done(false), ANSWER_DELAY_MS);
+    const timer = setTimeout(() => done(false), delayMs);
     signal?.addEventListener('abort', onAbort);
   });
 
@@ -117,10 +118,13 @@ export function createFixtureProvider(
   reading: CaptureReading,
 ): ModelProvider {
   return {
-    runToolLoop: async ({ messages, signal }) => {
-      if (await waitOrAbort(signal)) {
+    runToolLoop: async ({ role, messages, signal }) => {
+      const delayMs =
+        role === 'quick' ? ANSWER_DELAY_MS.quick : ANSWER_DELAY_MS.interpret;
+      if (await waitOrAbort(delayMs, signal)) {
         return {
           terminalInput: null,
+          terminalName: null,
           endedBy: 'aborted',
           errorCode: null,
           usage: EMPTY_USAGE,
@@ -131,6 +135,7 @@ export function createFixtureProvider(
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,
           usage: EMPTY_USAGE,
@@ -175,8 +180,12 @@ export function createFixtureProvider(
             ]
           : [];
       });
+      const isHandOver = role === 'quick' && commands.length > HAND_OVER_PIECES;
       return {
-        terminalInput: { commands },
+        terminalInput: isHandOver
+          ? { reason: 'More than a few changes' }
+          : { commands },
+        terminalName: isHandOver ? 'hand_over' : 'file_results',
         endedBy: 'terminal',
         errorCode: null,
         usage: EMPTY_USAGE,

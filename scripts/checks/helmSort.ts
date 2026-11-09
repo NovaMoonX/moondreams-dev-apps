@@ -469,11 +469,14 @@ test('rest mode lists the titles already made and no ids', () => {
 });
 
 test('the ten-minute window and the day hold for different reasons', () => {
-  assert.equal(readLimitHit(0, 0), null);
-  assert.equal(readLimitHit(5, AI_LIMITS.full.perWindow), 'recentLimit');
-  assert.equal(readLimitHit(AI_LIMITS.full.perDay, 0), 'dailyLimit');
+  assert.equal(readLimitHit('full', 0, 0), null);
   assert.equal(
-    readLimitHit(AI_LIMITS.full.perDay, AI_LIMITS.full.perWindow),
+    readLimitHit('full', 5, AI_LIMITS.full.perWindow),
+    'recentLimit',
+  );
+  assert.equal(readLimitHit('full', AI_LIMITS.full.perDay, 0), 'dailyLimit');
+  assert.equal(
+    readLimitHit('full', AI_LIMITS.full.perDay, AI_LIMITS.full.perWindow),
     'dailyLimit',
   );
 });
@@ -643,6 +646,60 @@ test('a loop that hits its limit ends as a failed reading, after one ask', async
     300,
   );
   assert.ok(getUsageCost('interpret', run.usage) > 0);
+});
+
+test('an extra terminal tool ends the loop and is named; the main one is named too', async () => {
+  const toolsSeen: { name: string }[][] = [];
+  const answerWith = (name: string, input: unknown) => ({
+    beta: {
+      messages: {
+        create: async (params: { tools: { name: string }[] }) => {
+          toolsSeen.push(params.tools);
+          return {
+            stop_reason: 'tool_use',
+            content: [{ type: 'tool_use', id: 'u1', name, input }],
+            usage: {
+              input_tokens: 10,
+              output_tokens: 5,
+              cache_read_input_tokens: null,
+              cache_creation_input_tokens: null,
+            },
+          };
+        },
+      },
+    },
+  });
+  const handOver = {
+    name: 'hand_over',
+    description: 'Hands the turn over.',
+    inputSchema: { type: 'object', properties: {} },
+  };
+  const loopWith = async (name: string, input: unknown) =>
+    createAnthropicProvider(
+      'test',
+      answerWith(name, input) as never,
+    ).runToolLoop({
+      role: 'quick',
+      system: 'system',
+      messages: [{ role: 'user', content: 'hi' }],
+      mcpClient: {
+        listTools: async () => ({ tools: [] }),
+        callTool: async () => ({ content: [] }),
+      } as never,
+      terminalTool: FILE_RESULTS_TOOL,
+      extraTerminalTools: [handOver],
+      limits: { maxTurns: 3, maxToolCalls: 12, maxMillis: 40_000 },
+    });
+  const handed = await loopWith('hand_over', { reason: 'long' });
+  assert.equal(handed.endedBy, 'terminal');
+  assert.equal(handed.terminalName, 'hand_over');
+  assert.deepEqual(handed.terminalInput, { reason: 'long' });
+  assert.deepEqual(
+    toolsSeen[0].map((tool) => tool.name),
+    ['file_results', 'hand_over'],
+  );
+  const filed = await loopWith('file_results', { commands: [] });
+  assert.equal(filed.terminalName, 'file_results');
 });
 
 test('a tool result is never cut mid-JSON; a long list loses items and says so', async () => {
