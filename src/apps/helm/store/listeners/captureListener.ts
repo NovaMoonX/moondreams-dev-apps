@@ -1,11 +1,14 @@
 import {
   collection,
+  doc,
+  getDoc,
   getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
   where,
+  type DocumentSnapshot,
   type QueryConstraint,
   type QueryDocumentSnapshot,
   type Unsubscribe,
@@ -34,11 +37,11 @@ const toError = (error: unknown) =>
 
 /** A turn that won't open is kept, with no words, so the surface can say so instead of dropping it. */
 async function openCapture(
-  entry: QueryDocumentSnapshot,
+  entry: DocumentSnapshot,
   read: SealedReader,
   isMetadataTracked: boolean,
 ): Promise<OpenCapture> {
-  const data = entry.data() as Partial<Capture>;
+  const data = (entry.data() ?? {}) as Partial<Capture>;
   const base = {
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
@@ -71,6 +74,16 @@ async function openCapture(
   } catch {
     return { ...base, text: '', reading: EMPTY_READING, isUnreadable: true };
   }
+}
+
+/** One turn by id, opened; null when it is gone. */
+export async function fetchCaptureById(
+  uid: string,
+  read: SealedReader,
+  id: string,
+) {
+  const snapshot = await getDoc(doc(capturesOf(uid), id));
+  return snapshot.exists() ? openCapture(snapshot, read, false) : null;
 }
 
 const openCaptures = (

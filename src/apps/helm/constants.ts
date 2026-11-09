@@ -33,6 +33,9 @@ export const OPEN_TASKS_LIMIT = 150;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
+/** How many executions Activity lists at first and each time it nears its foot. */
+export const ACTIVITY_PAGE = 30;
+
 const joinTitles = (titles: string[]) =>
   titles.length < 2
     ? (titles[0] ?? '')
@@ -186,6 +189,22 @@ export const HELM_COPY = {
   settingsYourData: 'Your data',
   activityTitle: 'Activity',
   activityRowHint: 'What was done, and when',
+  activityEmpty: (name: string) =>
+    `Nothing yet. Whatever ${name} does for you is listed here.`,
+  activityFailed:
+    "Your activity didn't open. Close this page and open it again.",
+  activityLoading: 'Opening your activity',
+  activityLoadingMore: 'Opening earlier activity',
+  activityYou: 'You',
+  activityMadeChange: 'Made a change',
+  activityToday: 'Today',
+  activityYesterday: 'Yesterday',
+  youTookBack: (summary: string) =>
+    `You ${summary.charAt(0).toLowerCase()}${summary.slice(1)}`,
+  takenBackLabel: 'Taken back',
+  keptRow: 'Kept: you changed it since',
+  sheetChanged: 'What it changed',
+  sheetDayTime: (day: string, time: string) => `${day} ${time}`,
   whatTheAiSees: 'What the AI sees',
   whatTheAiSeesRowHint: 'What is sent, where it runs and what is kept',
   aiSeesSent: (name: string) =>

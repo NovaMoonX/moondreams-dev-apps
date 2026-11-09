@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   getDoc,
+  limit,
   onSnapshot,
   orderBy,
   query,
@@ -89,6 +90,35 @@ export function startRecentExecutionsListener(
       where('createdAt', '>=', windowStart),
       orderBy('createdAt', 'asc'),
     ),
+    async (snapshot) => {
+      sequence.latest += 1;
+      const current = sequence.latest;
+      const opened = await openExecutions(snapshot.docs, read);
+      if (current !== sequence.latest || run.isStopped) return;
+      onChange(opened);
+    },
+    (error) => onError(toError(error)),
+  );
+
+  return () => {
+    run.isStopped = true;
+    stop();
+  };
+}
+
+/** The newest `count` executions, live. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+export function startActivityListener(
+  uid: string,
+  read: SealedReader,
+  count: number,
+  onChange: (executions: OpenExecution[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const sequence = { latest: 0 };
+  const run = { isStopped: false };
+
+  const stop = onSnapshot(
+    query(executionsOf(uid), orderBy('createdAt', 'desc'), limit(count)),
     async (snapshot) => {
       sequence.latest += 1;
       const current = sequence.latest;

@@ -1,5 +1,6 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import { ACTIVITY_PAGE } from '@apps/helm/constants';
 import { resetAllState } from '@/store/actions/globalActions';
 import type {
   HelmProfile,
@@ -49,6 +50,8 @@ export interface HelmState {
   recentExecutions: LoadedSet<OpenExecution>;
   /** What it did for the earlier sessions scrolled into view. */
   earlierExecutions: OpenExecution[];
+  /** Every execution, newest first, while Activity is open. */
+  activity: LoadedSet<OpenExecution> & { limit: number; isExhausted: boolean };
   /** Executions fetched by id that couldn't be opened, so their turns can say so. */
   failedExecutionIds: string[];
   /** Older sessions, brought in a page at a time as the person scrolls up. */
@@ -78,6 +81,11 @@ const initialState: HelmState = {
   openTasks: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
+  activity: {
+    ...emptyLoadedSet,
+    limit: ACTIVITY_PAGE,
+    isExhausted: false,
+  },
   failedExecutionIds: [],
   earlier: {
     captures: [],
@@ -170,11 +178,33 @@ const helmSlice = createSlice({
       state,
       action: PayloadAction<{ executionId: string; undoExecutionId: string }>,
     ) => {
-      state.earlierExecutions = state.earlierExecutions.map((entry) =>
+      const patch = (entry: OpenExecution) =>
         entry.id === action.payload.executionId
           ? { ...entry, undoneByExecutionId: action.payload.undoExecutionId }
-          : entry,
-      );
+          : entry;
+      state.earlierExecutions = state.earlierExecutions.map(patch);
+      state.recentExecutions.items = state.recentExecutions.items.map(patch);
+      state.activity.items = state.activity.items.map(patch);
+    },
+    setActivity: (state, action: PayloadAction<OpenExecution[]>) => {
+      state.activity = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+        limit: state.activity.limit,
+        isExhausted: action.payload.length < state.activity.limit,
+      };
+    },
+    setActivityFailed: (state) => {
+      state.activity.isFailed = true;
+    },
+    showMoreActivity: (state, action: PayloadAction<number>) => {
+      if (state.activity.limit === action.payload) {
+        state.activity.limit += ACTIVITY_PAGE;
+      }
+    },
+    clearActivity: (state) => {
+      state.activity = initialState.activity;
     },
     addFailedExecutions: (state, action: PayloadAction<string[]>) => {
       state.failedExecutionIds = [
@@ -221,6 +251,10 @@ export const {
   setRecentExecutionsFailed,
   addEarlierExecutions,
   markExecutionUndone,
+  setActivity,
+  setActivityFailed,
+  showMoreActivity,
+  clearActivity,
   addFailedExecutions,
   startLoadingEarlier,
   addEarlierCaptures,

@@ -77,9 +77,7 @@ function Helm() {
           onOpenActivity={() => showView('activity')}
         />
       )}
-      {!isLocked && view === 'activity' && (
-        <ActivityScreen onBack={goBack} onHome={goHome} />
-      )}
+      {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
       <BrowseSheet
         isOpen={isBrowseOpen && isHome && !isLocked}
         onClose={closeBrowse}

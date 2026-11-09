@@ -1,0 +1,150 @@
+import { useEffect, useState } from 'react';
+
+import DetailSheet from '@/components/DetailSheet';
+import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
+import { useAppSelector } from '@/store';
+import { formatDate, formatTime } from '@/utils/formatUtils';
+import ActorMark from '@apps/helm/components/activity/ActorMark';
+import UndoButton from '@apps/helm/components/activity/UndoButton';
+import ResultRows from '@apps/helm/components/home/ResultRows';
+import { HELM_COPY } from '@apps/helm/constants';
+import { useResultLines } from '@apps/helm/hooks/useResultLines';
+import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
+import { canUndo } from '@apps/helm/nomos/planUndo';
+import { loadCaptureText } from '@apps/helm/store/actions/activityActions';
+import {
+  selectAllCaptures,
+  selectExecutionsById,
+} from '@apps/helm/store/selectors/captureSelectors';
+import type { OpenExecution } from '@apps/helm/types';
+import {
+  formatDayHeading,
+  getActivityLine,
+  toDayStart,
+} from '@apps/helm/utils/activity';
+
+interface ExecutionSheetProps {
+  /** The execution to show; null keeps the sheet closed. */
+  executionId: string | null;
+  onClose: () => void;
+}
+
+/** The words the execution was made from, from the store or fetched; null when they are gone or won't open. */
+function useCaptureText(captureId: string | null) {
+  const { user } = useAuth();
+  const stored = useAppSelector(selectAllCaptures).find(
+    (capture) => capture.id === captureId,
+  );
+  const [fetched, setFetched] = useState<{
+    id: string;
+    text: string | null;
+  } | null>(null);
+  const uid = user?.uid;
+  const needsFetch = captureId !== null && !stored;
+
+  useEffect(() => {
+    if (!uid || !captureId || !needsFetch) return;
+    let isCurrent = true;
+    loadCaptureText(uid, captureId)
+      .then((text) => {
+        if (isCurrent) setFetched({ id: captureId, text });
+      })
+      .catch((error: unknown) => {
+        console.error('Helm turn did not load', error);
+      });
+    return () => {
+      isCurrent = false;
+    };
+  }, [uid, captureId, needsFetch]);
+
+  if (stored) return stored.isUnreadable || !stored.text ? null : stored.text;
+  return fetched?.id === captureId ? fetched.text : null;
+}
+
+function SheetBody({ execution }: { execution: OpenExecution }) {
+  const lines = useResultLines(execution);
+  const { undo } = useUndoOf(execution);
+  const text = useCaptureText(execution.captureId);
+  const now = useNow(60_000);
+  const dayStart = toDayStart(execution.createdAt);
+
+  return (
+    <div className='space-y-4'>
+      <div className='flex items-center gap-2'>
+        <ActorMark actor={execution.actor} />
+        <p className='text-muted-foreground text-[13px] tabular-nums'>
+          {HELM_COPY.sheetDayTime(
+            formatDayHeading(dayStart, now),
+            formatTime(execution.createdAt),
+          )}
+        </p>
+      </div>
+      {text && (
+        <blockquote className='bg-muted text-muted-foreground rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
+          {text}
+        </blockquote>
+      )}
+      {lines.length > 0 && (
+        <section className='space-y-2'>
+          <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>
+          <div className='helm-card overflow-hidden'>
+            <ResultRows execution={execution} lines={lines} undo={undo} />
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
+function SheetFoot({ execution }: { execution: OpenExecution }) {
+  const lines = useResultLines(execution);
+  const { undo } = useUndoOf(execution);
+
+  if (execution.category === 'undo') {
+    return (
+      <div className='px-6 pt-2 pb-6'>
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {execution.undoReport ?? execution.summary}
+        </p>
+      </div>
+    );
+  }
+  if (execution.undoneByExecutionId !== null) {
+    return (
+      <div className='px-6 pt-2 pb-6'>
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {undo?.undoReport ??
+            (undo
+              ? HELM_COPY.alreadyTakenBack(formatDate(undo.createdAt))
+              : HELM_COPY.takenBackLabel)}
+        </p>
+      </div>
+    );
+  }
+  if (!canUndo(execution)) return null;
+  return (
+    <div className='px-6 pt-2 pb-6'>
+      <UndoButton execution={execution} lineCount={lines.length} />
+    </div>
+  );
+}
+
+/** One entry of Activity: what was done, what it came from and what it changed, with its Undo. */
+function ExecutionSheet({ executionId, onClose }: ExecutionSheetProps) {
+  const byId = useAppSelector(selectExecutionsById);
+  const execution = executionId ? (byId.get(executionId) ?? null) : null;
+
+  return (
+    <DetailSheet
+      isOpen={execution !== null}
+      onClose={onClose}
+      title={execution ? getActivityLine(execution) : ''}
+      footer={execution && <SheetFoot execution={execution} />}
+    >
+      {execution && <SheetBody key={execution.id} execution={execution} />}
+    </DetailSheet>
+  );
+}
+
+export default ExecutionSheet;

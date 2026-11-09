@@ -52,11 +52,15 @@ const selectRecentExecutions = (state: RootState) =>
 const selectEarlierExecutions = (state: RootState) =>
   state.helm.earlierExecutions;
 
-/** Every execution home has loaded, by id. */
+const selectActivityItems = (state: RootState) => state.helm.activity.items;
+
+/** Every execution loaded, by id: home's, the ones fetched on their own and Activity's. */
 export const selectExecutionsById = createSelector(
-  [selectRecentExecutions, selectEarlierExecutions],
-  (recent, earlier): Map<string, OpenExecution> =>
-    new Map([...earlier, ...recent].map((entry) => [entry.id, entry])),
+  [selectRecentExecutions, selectEarlierExecutions, selectActivityItems],
+  (recent, earlier, activity): Map<string, OpenExecution> =>
+    new Map(
+      [...earlier, ...activity, ...recent].map((entry) => [entry.id, entry]),
+    ),
 );
 
 const selectOpenTasks = (state: RootState) => state.helm.openTasks.items;
