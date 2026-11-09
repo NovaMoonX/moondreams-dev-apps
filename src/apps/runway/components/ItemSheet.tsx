@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
   CalendarClock,
+  CalendarPlus,
   CalendarOff,
   Calculator,
   Check,
@@ -32,6 +33,12 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
 import PartOfPicker from '@apps/runway/components/PartOfPicker';
+import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
+import ComingChangesList from '@apps/runway/components/ComingChangesList';
+import ComingChangesRow from '@apps/runway/components/ComingChangesRow';
+import PlanAheadView, {
+  type PlanAheadChoice,
+} from '@apps/runway/components/PlanAheadView';
 import { getEventLink } from '@apps/runway/utils/eventLink';
 import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
@@ -78,6 +85,7 @@ import {
   AUTO_PAY_WORDS,
   CARD_WORDS,
   CHANGE_WORDS,
+  COMING_WORDS,
   PART_OF_WORDS,
   GOAL_CHART_WORDS,
   CHECK_WORDS,
@@ -91,7 +99,6 @@ import {
   ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
-  PAUSE_PAY_WORDS,
   PAIRING_STOP_WORDS,
   HELD_WORDS,
   RELEASE_UNDO_WORDS,
@@ -114,8 +121,8 @@ import {
   resolveCurrentOrNext,
 } from '@apps/runway/engine/resolve';
 import {
+  findLinkHolder,
   listComingChanges,
-  type ComingChange,
 } from '@apps/runway/engine/horizonLinks';
 import { occurrences } from '@apps/runway/engine/schedule';
 import BillForm, { type BillStepId } from '@apps/runway/forms/BillForm';
@@ -186,6 +193,12 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import {
+  describeComingHeadline,
+  getChangeRef,
+  toPlanChange,
+} from '@apps/runway/utils/comingChangeText';
+import type { PlanChange } from '@apps/runway/engine/planChanges';
+import {
   NEW_GROUP_ID,
   resolveGroupChoice,
 } from '@apps/runway/utils/groupChoice';
@@ -209,7 +222,10 @@ type View =
   | 'charge'
   | 'horizonPlan'
   | 'horizonLink'
-  | 'dayAction';
+  | 'dayAction'
+  | 'planChoice'
+  | 'comingList'
+  | 'changeSheet';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 export interface ItemSheetProps {
@@ -260,8 +276,10 @@ export interface ItemSheetProps {
   };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
-  /** Opens the change form with this open event already picked as what the change is part of. */
+  /** Opens at "What will change?" with this open event already picked as what the change is part of. */
   presetEventId?: string;
+  /** Opens on this coming change's own sheet (its id and first day, as `getChangeRef` reads them from a change). */
+  presetChange?: { changeId: string; on: number };
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -312,6 +330,9 @@ const VIEW_NOTES: Record<View, string> = {
   horizonPlan: '',
   horizonLink: '',
   dayAction: '',
+  planChoice: '',
+  comingList: '',
+  changeSheet: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -332,6 +353,7 @@ function ItemSheet({
   payAction,
   startsAtStep,
   presetEventId,
+  presetChange,
   payment = null,
   onMarked,
   onUndone,
@@ -375,19 +397,23 @@ function ItemSheet({
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
   const [phase, setPhase] = useState<Phase>(
-    startsAtStep === undefined && presetEventId === undefined
-      ? 'sheet'
-      : 'change',
+    startsAtStep === undefined ? 'sheet' : 'change',
   );
+  const [planAhead, setPlanAhead] = useState<'date' | 'stretch' | null>(null);
+  const [fromPlan, setFromPlan] = useState(false);
+  const [focusedChange, setFocusedChange] = useState(presetChange ?? null);
+  const [isChangeFromList, setIsChangeFromList] = useState(false);
   const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
   const [isPausing, setIsPausing] = useState(false);
-  const [view, setView] = useState<View>('menu');
+  const [view, setView] = useState<View>(
+    presetChange ? 'changeSheet' : presetEventId ? 'planChoice' : 'menu',
+  );
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [endPick, setEndPick] = useState<string>(String(today));
   const [endDate, setEndDate] = useState('');
   const [pauseDate, setPauseDate] = useState(toDateInputValue(today));
-  const [eventId, setEventId] = useState<string | null>(null);
+  const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
   const [error, setError] = useState<string | null>(null);
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
@@ -555,48 +581,31 @@ function ItemSheet({
   };
 
   const cardNamer = getCardNamer(allCards);
-  const getEventName = (changeId: string) =>
-    events.find(({ version }) =>
-      version.payload.links.some((link) => link.changeId === changeId),
-    )?.version.payload.name;
-  const getComingLine = (change: ComingChange<OpenVersion>) => {
-    if (change.kind === 'stop')
-      return [
-        `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(change.on - DAY_MS)}`,
-        getEventName(change.changeId),
-      ]
-        .filter(Boolean)
-        .join(' · ');
-    const difference = describeChange(
-      change.before.payload as ItemPayload,
-      change.version.payload as ItemPayload,
-      cardNamer,
-    );
-    if (difference === '') return null;
-    const arrows = difference.replace(/ to /g, ' → ');
-    if (change.isReturn) {
-      const lastDay = formatDateOrdinalUTC(change.on - DAY_MS);
-      const figure = /^[^;]* to ([^;]+)$/.exec(difference)?.[1];
-      return figure
-        ? PART_OF_WORDS.comingBackTo(figure, lastDay)
-        : PART_OF_WORDS.comingBack(lastDay, arrows);
-    }
-    const eventName = getEventName(change.version.changeId);
-    return [
-      `${PART_OF_WORDS.comingFrom} ${formatDateOrdinalUTC(change.on)} · ${arrows}`,
-      eventName,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-  };
-  const planned = [
-    ...listComingChanges(allVersions, itemId, today, endedAt).map(
-      getComingLine,
-    ),
+  const comingChanges = listComingChanges(
+    allVersions,
+    itemId,
+    today,
+    endedAt,
+  ).map(toPlanChange);
+  const getEventName = (change: PlanChange) =>
+    findLinkHolder(events, {
+      changeId: getChangeRef(change).changeId,
+      itemId,
+    })?.version.payload.name;
+  const activeChange =
+    focusedChange === null
+      ? null
+      : (comingChanges.find(
+          (change) =>
+            getChangeRef(change).changeId === focusedChange.changeId &&
+            change.on === focusedChange.on,
+        ) ?? null);
+  const currentView: View =
+    view === 'changeSheet' && activeChange === null ? 'menu' : view;
+  const pastEnd =
     endedAt !== null && endedAt + DAY_MS <= today
       ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(endedAt)}`
-      : null,
-  ].filter((line): line is string => line !== null);
+      : null;
 
   const pairings =
     version.kind === 'source' || version.kind === 'payLine'
@@ -608,8 +617,9 @@ function ItemSheet({
     setReason('');
     setIsReasonOpen(false);
     setHeldChoice(null);
-    setEventId(null);
+    setEventId(presetEventId ?? null);
     setPauseDate(toDateInputValue(today));
+    setFromPlan(false);
     setView(nextView);
   };
 
@@ -988,8 +998,7 @@ function ItemSheet({
     }
   };
 
-  const backToSheet = () =>
-    presetEventId === undefined ? setPhase('sheet') : onClose();
+  const backToSheet = () => setPhase('sheet');
 
   if (phase === 'change') {
     if (version.kind === 'bill') {
@@ -1000,6 +1009,7 @@ function ItemSheet({
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as BillStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -1014,6 +1024,7 @@ function ItemSheet({
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as EnvelopeStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -1028,6 +1039,7 @@ function ItemSheet({
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
           presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as GoalStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -1041,6 +1053,7 @@ function ItemSheet({
         defaultFrequency={null}
         isPause={isPausing}
         presetEventId={presetEventId}
+        planAhead={planAhead ?? undefined}
         openStep={openStep as IncomeStepId | null}
         editing={
           version.kind === 'source'
@@ -1120,13 +1133,57 @@ function ItemSheet({
 
   const openChange = (step: string | null) => {
     setIsPausing(false);
+    setPlanAhead(null);
     setOpenStep(step);
     setPhase('change');
   };
   const openPause = () => {
     setIsPausing(true);
+    setPlanAhead(null);
     setOpenStep(null);
     setPhase('change');
+  };
+  const planAheadChoices: PlanAheadChoice[] =
+    !canChange || !isStoppable
+      ? []
+      : [
+          'amount',
+          'stretch',
+          'stop',
+          ...(itemKind === 'payLine' ? (['pause'] as const) : []),
+          ...(goal && !isPaused && !isUnfunded
+            ? (['stopSaving'] as const)
+            : []),
+        ];
+  const planAheadOn = (choice: PlanAheadChoice) => {
+    if (choice === 'amount' || choice === 'stretch') {
+      setIsPausing(false);
+      setPlanAhead(choice === 'amount' ? 'date' : 'stretch');
+      setOpenStep(null);
+      setPhase('change');
+      return;
+    }
+    if (choice === 'pause') {
+      openPause();
+      return;
+    }
+    if (choice === 'stop') {
+      const firstAhead = upcoming.find((on) => on > today);
+      goTo('end');
+      setEndPick(
+        firstAhead === undefined ? LAST_DAY_OTHER : String(firstAhead),
+      );
+      setEndDate('');
+    } else {
+      goTo('pause');
+      setPauseDate(toDateInputValue(addUtcDays(today, 1)));
+    }
+    setFromPlan(true);
+  };
+  const openChangeSheet = (change: PlanChange, isFromList: boolean) => {
+    goTo('changeSheet');
+    setFocusedChange(getChangeRef(change));
+    setIsChangeFromList(isFromList);
   };
   const openHistory = () => goTo('history');
   const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
@@ -1178,6 +1235,28 @@ function ItemSheet({
             {getMarkPaidSub(payment)}
           </p>
         </div>
+      )}
+      {comingChanges.length > 0 && (
+        <ComingChangesRow
+          changes={comingChanges}
+          eventNameOf={getEventName}
+          onOpenChange={(change) => openChangeSheet(change, false)}
+          onOpenList={() => goTo('comingList')}
+        />
+      )}
+      {pastEnd !== null && (
+        <p className='text-muted-foreground text-sm'>{pastEnd}</p>
+      )}
+      {planAheadChoices.length > 0 && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='w-full gap-2'
+          onClick={() => goTo('planChoice')}
+        >
+          <CalendarPlus className='h-4 w-4' aria-hidden='true' />
+          {COMING_WORDS.planChange}
+        </Button>
       )}
       <ActionGroup>
         {itemKind === 'bill' && check?.kind === 'amount' && (
@@ -1421,18 +1500,6 @@ function ItemSheet({
           />
         )}
       </ActionGroup>
-      {planned.length > 0 && (
-        <div className='space-y-1'>
-          <p className='text-muted-foreground text-xs font-medium'>
-            {PART_OF_WORDS.comingCaption}
-          </p>
-          {planned.map((line, index) => (
-            <p key={`${index}-${line}`} className='text-sm text-pretty'>
-              {mask(line)}
-            </p>
-          ))}
-        </div>
-      )}
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
           <ActionRow
@@ -1493,16 +1560,6 @@ function ItemSheet({
               onClick={() => openChange('often')}
             />
           )}
-          {canChange && isStoppable && itemKind === 'payLine' && (
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<Pause />}
-              label={PAUSE_PAY_WORDS.label}
-              subtitle={PAUSE_PAY_WORDS.subtitle}
-              onClick={openPause}
-            />
-          )}
           {isStoppable && goal && !isPaused && !isUnfunded && (
             <ActionRow
               isGrouped
@@ -1530,7 +1587,10 @@ function ItemSheet({
               icon={<CalendarOff />}
               label={LIFECYCLE_WORDS.end}
               subtitle={ITEM_SHEET_R2_WORDS.endSub}
-              onClick={() => goTo('end')}
+              onClick={() => {
+                goTo('end');
+                setEndPick(String(today));
+              }}
             />
           )}
           <ActionRow
@@ -1902,11 +1962,16 @@ function ItemSheet({
     </div>
   );
 
+  const leaveAction = () => goTo(fromPlan ? 'planChoice' : 'menu');
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={leaveAction} />
       <div className='space-y-1'>
-        <ActionTitle>{getActionTitle(view, itemKind)}</ActionTitle>
+        <ActionTitle>
+          {fromPlan && view === 'pause'
+            ? COMING_WORDS.planStopSaving
+            : getActionTitle(view, itemKind)}
+        </ActionTitle>
         {VIEW_NOTES[view] !== '' && (
           <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
         )}
@@ -2009,7 +2074,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => goTo('menu')}
+            onClick={leaveAction}
             disabled={isSaving}
           >
             Cancel
@@ -2030,6 +2095,43 @@ function ItemSheet({
     </div>
   );
 
+  const planChoiceView = (
+    <PlanAheadView
+      choices={planAheadChoices}
+      onPick={planAheadOn}
+      onBack={() => (presetEventId === undefined ? goTo('menu') : onClose())}
+    />
+  );
+
+  const comingListView = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>{COMING_WORDS.listTitle}</ActionTitle>
+      <ComingChangesList
+        changes={comingChanges}
+        today={today}
+        textOf={(change) =>
+          [describeComingHeadline(change, cardNamer), getEventName(change)]
+            .filter(Boolean)
+            .join(' \u00b7 ')
+        }
+        onOpen={(change) => openChangeSheet(change, true)}
+      />
+    </div>
+  );
+
+  const changeSheetView = activeChange && (
+    <ChangeSheetView
+      change={activeChange}
+      today={today}
+      onBack={() =>
+        goTo(
+          isChangeFromList && comingChanges.length > 1 ? 'comingList' : 'menu',
+        )
+      }
+    />
+  );
+
   return (
     <FormSheet
       isOpen
@@ -2039,7 +2141,7 @@ function ItemSheet({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={view !== 'menu'}
+        isReason={currentView !== 'menu'}
         reason={
           view === 'history' ||
           view === 'balance' ||
@@ -2060,15 +2162,22 @@ function ItemSheet({
                         ? heldInView
                         : view === 'horizonPlan'
                           ? horizonPlanView
-                          : view === 'horizonLink' && horizonLinkView
-                            ? horizonLinkView
-                            : view === 'dayAction' && dayAction?.renderView
-                              ? dayAction.renderView({
-                                  onBack: () => goTo('menu'),
-                                  onClose,
-                                  openChange,
-                                })
-                              : action
+                          : view === 'planChoice'
+                            ? planChoiceView
+                            : view === 'comingList'
+                              ? comingListView
+                              : view === 'changeSheet' && changeSheetView
+                                ? changeSheetView
+                                : view === 'horizonLink' && horizonLinkView
+                                  ? horizonLinkView
+                                  : view === 'dayAction' &&
+                                      dayAction?.renderView
+                                    ? dayAction.renderView({
+                                        onBack: () => goTo('menu'),
+                                        onClose,
+                                        openChange,
+                                      })
+                                    : action
         }
       >
         {menu}

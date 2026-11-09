@@ -57,7 +57,7 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import { describePayChoice } from '@apps/runway/utils/payFrom';
 import {
   getChangeSpan,
-  INITIAL_FROM_WHEN,
+  getPlanAheadFrom,
   type ChangeSpan,
   type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
@@ -100,6 +100,8 @@ interface UseChangeFlowArgs {
   initialFrom?: FromWhenValue;
   /** The open event the change is part of when the form opens, as when it was started from that event. */
   presetEventId?: string | null;
+  /** The change is planned for a later day: it starts on that question, and the "When it starts" row offers only later starts. */
+  planAhead?: 'date' | 'stretch' | null;
 }
 
 /** The kinds of item whose planned change can belong to an event. */
@@ -185,8 +187,9 @@ export function useChangeFlow({
   afterSave,
   clearsPins = false,
   initialNote = '',
-  initialFrom = INITIAL_FROM_WHEN,
+  initialFrom,
   presetEventId = null,
+  planAhead = null,
 }: UseChangeFlowArgs) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -205,7 +208,8 @@ export function useChangeFlow({
     selectResolvedPlan(state, today),
   );
   const allVersions = useAppSelector((state) => state.runway.versions);
-  const [from, setFrom] = useState(initialFrom);
+  const startFrom = initialFrom ?? getPlanAheadFrom(planAhead);
+  const [from, setFrom] = useState(startFrom);
   const [eventId, setEventId] = useState<string | null>(presetEventId);
   const [step, setStepState] = useState<'form' | 'reason'>('form');
   const reviewedRef = useRef<StretchPlan<ItemPayload>['written'] | null>(null);
@@ -509,6 +513,8 @@ export function useChangeFlow({
     getBlocker,
     from,
     setFrom,
+    initialFrom: startFrom,
+    isPlanning: planAhead !== null,
     step,
     setStep,
     note,

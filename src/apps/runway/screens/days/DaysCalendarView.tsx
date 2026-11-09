@@ -24,6 +24,8 @@ import {
 } from '@apps/runway/engine/dates';
 import { listPlanChangeDays } from '@apps/runway/engine/planChanges';
 import PlanChangeRow from '@apps/runway/components/PlanChangeRow';
+import PlanChangesDoor from '@apps/runway/screens/days/PlanChangesDoor';
+import { describePlanChangeGoes } from '@apps/runway/utils/planChangeText';
 import {
   buildCalendarEntries,
   type CalendarEntry,
@@ -47,6 +49,8 @@ import {
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { formatDayTitle } from '@apps/runway/utils/dayTitle';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+
+const MAX_AGENDA_CHANGES = 3;
 
 const CALENDAR_STYLES = {
   containerClassName: 'border-0 bg-transparent p-0 shadow-none',
@@ -237,6 +241,13 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
 
   const dayDays = new Map(days.map((day) => [day.dayKey, day]));
   const openBill = bills.find(({ item }) => item.id === openBillRef?.billId);
+  const changeEntries = selectedEntries.filter(
+    (entry): entry is Extract<CalendarEntry, { kind: 'change' }> =>
+      entry.kind === 'change',
+  );
+  const otherEntries = selectedEntries.filter(
+    (entry) => entry.kind !== 'change',
+  );
   const getRow = (entry: CalendarEntry) => {
     if (entry.kind === 'income') {
       const day = dayDays.get(entry.dayKey);
@@ -286,6 +297,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           key={`${entry.change.itemId}${entry.on}`}
           change={entry.change}
           today={today}
+          text={describePlanChangeGoes(entry.change)}
         />
       );
     }
@@ -395,7 +407,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           </p>
         ) : (
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {selectedEntries.map(getRow)}
+            {otherEntries.map(getRow)}
+            {changeEntries.length > MAX_AGENDA_CHANGES ? (
+              <PlanChangesDoor
+                changes={changeEntries.flatMap((entry) => entry.change)}
+                day={formatDayTitle(selectedOn)}
+                today={today}
+              />
+            ) : (
+              changeEntries.map(getRow)
+            )}
           </ul>
         )}
       </div>

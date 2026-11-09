@@ -71,6 +71,7 @@ import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
 import {
+  getPlanAheadFrom,
   INITIAL_FROM_WHEN,
   type FromWhenValue,
 } from '@apps/runway/utils/fromWhen';
@@ -158,6 +159,8 @@ interface IncomeFormProps {
   openStep?: IncomeStepId | null;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
   /** The open event a new pay is part of; the pay starts on its first payday. */
   eventId?: string;
   /** Hands the built income over instead of writing it, for a person who has no plan yet. */
@@ -398,6 +401,7 @@ function IncomeFormBody({
   editing,
   openStep = null,
   presetEventId,
+  planAhead,
   eventId,
   draft,
   isPause = false,
@@ -454,7 +458,7 @@ function IncomeFormBody({
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const allowsZero = editing?.kind === 'payLine';
-  const initialFrom = isPause ? PAUSE_FROM : INITIAL_FROM_WHEN;
+  const initialFrom = isPause ? PAUSE_FROM : getPlanAheadFrom(planAhead);
   const set = (patch: Partial<IncomeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -856,6 +860,7 @@ function IncomeFormBody({
     candidate,
     onDone: onClose,
     presetEventId,
+    planAhead,
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from ?? initialFrom,
   });

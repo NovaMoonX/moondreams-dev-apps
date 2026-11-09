@@ -87,7 +87,6 @@ import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   NEW_GROUP_ID,
   getGroupChoices,
@@ -156,6 +155,8 @@ interface GoalFormProps {
   presetDayKey?: string;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
   /** A later day a new goal starts taking money; it is listed from today and gets its funding from this day. */
   startsOn?: DateOnly;
   /** The open event a new goal (or its later start) is part of. */
@@ -260,6 +261,7 @@ function GoalFormBody({
   editing,
   presetDayKey,
   presetEventId,
+  planAhead,
   startsOn,
   eventId,
   openStep = null,
@@ -675,6 +677,7 @@ function GoalFormBody({
     candidate,
     presetDayKey,
     presetEventId,
+    planAhead,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     initialNote: kept.restored?.note,
@@ -683,7 +686,7 @@ function GoalFormBody({
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(flow.initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
   const keptValue = useMemo(

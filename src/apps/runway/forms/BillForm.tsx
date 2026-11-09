@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { getFirstMoneyDay } from '@apps/runway/engine/horizonLinks';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -119,7 +120,6 @@ import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describePayChoice,
   getPayOptions,
@@ -291,6 +291,8 @@ interface BillFormProps {
   presetDayKey?: string;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
   /** The open event a new bill is part of; the bill starts on its first due day. */
   eventId?: string;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
@@ -643,6 +645,7 @@ function BillFormBody({
   editing,
   presetDayKey,
   presetEventId,
+  planAhead,
   eventId,
   noun = 'bill',
   openStep = null,
@@ -1677,6 +1680,7 @@ function BillFormBody({
     candidate,
     presetDayKey,
     presetEventId,
+    planAhead,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     afterSave: isFundingChanged ? clearStalePins : undefined,
@@ -1687,7 +1691,7 @@ function BillFormBody({
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(flow.initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) ||
     isChangeDirty ||
@@ -1826,7 +1830,16 @@ function BillFormBody({
             today,
             itemName: bill.name,
             what: PART_OF_WORDS.starts,
-            from: bill.timing.schedule.anchor ?? today,
+            from: getFirstMoneyDay({
+              itemId: '',
+              createdAt: 0,
+              effectiveFrom: today,
+              effectiveUntil: null,
+              id: '',
+              changeId: '',
+              kind: 'bill',
+              payload: bill,
+            }),
           },
         ),
       });

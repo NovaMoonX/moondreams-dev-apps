@@ -1,9 +1,9 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
-import { PLAN_CHANGE_WORDS } from '@apps/runway/constants';
+import { COMING_WORDS, PLAN_CHANGE_WORDS } from '@apps/runway/constants';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import type { OpenVersion } from '@apps/runway/types';
 
-interface Figure {
+export interface Figure {
   text: string;
   isZero: boolean;
 }
@@ -19,7 +19,7 @@ const fromRange = (range: { lowCents: number; highCents: number }): Figure => ({
 const zero = (): Figure => ({ text: formatCentsShort(0), isZero: true });
 
 /** What an item puts in or takes out each time, in the words a short line uses; null when its amount is a share or whatever is left. */
-const getFigure = (version: OpenVersion): Figure | null => {
+export const getChangeFigure = (version: OpenVersion): Figure | null => {
   if (version.kind === 'payLine' || version.kind === 'bill') {
     return fromRange(version.payload.amount);
   }
@@ -44,8 +44,8 @@ export function describePlanChange(change: PlanChange): string {
   const name = change.after.payload.name;
   if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
   if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
-  const before = getFigure(change.before);
-  const after = getFigure(change.after);
+  const before = getChangeFigure(change.before);
+  const after = getChangeFigure(change.after);
   if (change.isReturn) {
     return after
       ? PLAN_CHANGE_WORDS.rowReturns(name, after.text)
@@ -63,8 +63,8 @@ export function describePlanChangeShort(change: PlanChange): string {
   if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
   if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
   if (change.isReturn) return PLAN_CHANGE_WORDS.returns(name);
-  const after = getFigure(change.after);
-  const before = getFigure(change.before);
+  const after = getChangeFigure(change.after);
+  const before = getChangeFigure(change.before);
   return after?.isZero && !before?.isZero
     ? PLAN_CHANGE_WORDS.stops(name)
     : PLAN_CHANGE_WORDS.changes(name);
@@ -75,4 +75,17 @@ export function describePlanChanges(changes: readonly PlanChange[]): string {
   const shown = changes.slice(0, 3).map(describePlanChangeShort).join(' · ');
   const rest = changes.length - 3;
   return rest > 0 ? `${shown} ${PLAN_CHANGE_WORDS.more(rest)}` : shown;
+}
+
+/** What a day's agenda says a change does: "Eating out goes to $40", "Gym stops", "Phone fund starts". Carries amounts, so it is drawn masked. */
+export function describePlanChangeGoes(change: PlanChange): string {
+  const name = change.after.payload.name;
+  if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
+  if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
+  const after = getChangeFigure(change.after);
+  if (after === null) return PLAN_CHANGE_WORDS.changes(name);
+  if (change.isReturn) return COMING_WORDS.goesBackTo(name, after.text);
+  return after.isZero
+    ? PLAN_CHANGE_WORDS.stops(name)
+    : COMING_WORDS.goesTo(name, after.text);
 }
