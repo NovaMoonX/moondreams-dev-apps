@@ -334,6 +334,27 @@ assert.deepEqual(
   'and is reported with where its money went back',
 );
 
+const tied = applyTransactions(
+  keyOf,
+  targets,
+  [],
+  [],
+  ['t4-pending'],
+  new Map(
+    [...person].map(([id, state]) => [
+      id,
+      { ...state, payload: { ...state.payload, billRef: 'bill-1:2026-11-01' } },
+    ]),
+  ),
+);
+assert.equal(
+  tied.writes.has(pendingId),
+  false,
+  'a dropped charge tied to a bill, pairing or cost is left for the person',
+);
+assert.deepEqual(tied.released, []);
+assert.equal(tied.removed, 0);
+
 const takenOver = applyTransactions(
   keyOf,
   targets,

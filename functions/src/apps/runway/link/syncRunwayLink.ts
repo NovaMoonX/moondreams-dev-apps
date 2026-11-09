@@ -140,7 +140,11 @@ type Write =
       data: Record<string, unknown>;
       lastUpdateTime: Timestamp | null;
     }
-  | { kind: 'delete'; ref: DocumentReference };
+  | {
+      kind: 'delete';
+      ref: DocumentReference;
+      lastUpdateTime: Timestamp | null;
+    };
 
 function toWrites(
   firestore: Firestore,
@@ -154,7 +158,11 @@ function toWrites(
   return [...outcome.writes].flatMap(([docId, state]): Write[] => {
     if (unreadable.has(docId)) return [];
     const ref = firestore.doc(planDocPath(uid, 'purchases', docId));
-    if (state === null) return [{ kind: 'delete', ref }];
+    if (state === null) {
+      return [
+        { kind: 'delete', ref, lastUpdateTime: updateTimes.get(docId) ?? null },
+      ];
+    }
     const sealed = sealWithKey(
       planKey,
       { ...state.payload },
@@ -249,7 +257,7 @@ async function moveReceiptImages(
           ),
           data: entry.data(),
         },
-        { kind: 'delete', ref: entry.ref },
+        { kind: 'delete', ref: entry.ref, lastUpdateTime: null },
       ]);
     }),
   );
@@ -274,6 +282,8 @@ async function commitWrites(firestore: Firestore, writes: readonly Write[]) {
                 lastUpdateTime: write.lastUpdateTime,
               });
             } else batch.update(write.ref, write.data);
+          } else if (write.lastUpdateTime) {
+            batch.delete(write.ref, { lastUpdateTime: write.lastUpdateTime });
           } else batch.delete(write.ref);
         });
         await batch.commit();
@@ -374,7 +384,10 @@ async function syncPurchases(
       uid,
       outcome.takeovers.filter(({ from }) => !unreadable.has(from)),
     ).catch(() => {
-      logger.warn('runway.sync.receiptsNotMoved', { linkId });
+      logger.warn('runway.sync.receiptsNotMoved', {
+        linkId,
+        count: outcome.takeovers.length,
+      });
     });
     /* The batch can't share a transaction with the mark, so it marks again once the batch has landed:
        a closing rebuilt in between is refused by the plan's new stamp and built again. */

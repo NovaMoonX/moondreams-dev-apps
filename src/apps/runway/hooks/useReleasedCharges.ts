@@ -1,25 +1,19 @@
 import { useEffect, useRef } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import { db } from '@lib/firebase/config';
 import { useAppSelector } from '@/store';
 import { RELEASED_WORDS } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { createSealedReader } from '@apps/runway/security';
 import { clearReleasedCharge } from '@apps/runway/store/actions/purchaseActions';
 import { removeReceiptImagesOf } from '@apps/runway/store/actions/receiptActions';
+import { startReleasedChargesListener } from '@apps/runway/store/listeners/linkListeners';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsPlanItemsLoaded,
   selectItemLooks,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type {
-  OpenReleasedCharge,
-  ReleasedChargeDoc,
-  ReleasedChargeSealed,
-} from '@apps/runway/types';
+import type { OpenReleasedCharge, RunwayEncryption } from '@apps/runway/types';
 import {
   describeEnvelopes,
   describeReleasedCharge,
@@ -43,39 +37,30 @@ export function useReleasedCharges(uid: string | null) {
 
   useEffect(() => {
     if (uid === null || !isReady || level !== 'link') return undefined;
-    const handle = async (docs: ReleasedChargeDoc[]) => {
-      const fresh = docs.filter((entry) => !tried.current.has(entry.id));
+    const handle = async (
+      encryption: RunwayEncryption,
+      charges: OpenReleasedCharge[],
+    ) => {
+      const fresh = charges.filter((charge) => !tried.current.has(charge.id));
       if (fresh.length === 0) return;
-      fresh.forEach((entry) => tried.current.add(entry.id));
-      const encryption = await getRunwayEncryption(uid);
-      const read = createSealedReader(encryption);
+      fresh.forEach((charge) => tried.current.add(charge.id));
       const nameOf = (envelopeId: string) =>
         latest.current.looks.get(envelopeId)?.name ?? 'An envelope';
       const cleared = await fresh.reduce(
-        async (previous, entry) => {
+        async (previous, charge) => {
           const done = await previous;
           try {
-            const sealed = await read<ReleasedChargeSealed>(entry.sealed);
-            const charge: OpenReleasedCharge = {
-              id: entry.id,
-              date: entry.date,
-              title: sealed.title ?? null,
-              amountCents: sealed.amountCents,
-              lines: sealed.lines ?? [],
-            };
+            // Before the note goes, so a failure leaves it to be tried again rather than orphaning the photos.
+            await removeReceiptImagesOf(uid, charge.id);
             const isMine = await clearReleasedCharge(
               uid,
               encryption,
               charge,
               describeReleasedCharge(charge, nameOf),
             );
-            if (!isMine) return done;
-            await removeReceiptImagesOf(uid, charge.id).catch((error) => {
-              console.error('A dropped charge left receipts behind', error);
-            });
-            return [...done, charge];
+            return isMine ? [...done, charge] : done;
           } catch (error) {
-            tried.current.delete(entry.id);
+            tried.current.delete(charge.id);
             console.error('A dropped pending charge was not cleared', error);
             return done;
           }
@@ -102,16 +87,24 @@ export function useReleasedCharges(uid: string | null) {
             },
       );
     };
-    return onSnapshot(
-      collection(db, 'apps', 'runway', 'plans', uid, 'releasedCharges'),
-      (snapshot) => {
-        void handle(
-          snapshot.docs.map(
-            (entry) => ({ ...entry.data(), id: entry.id }) as ReleasedChargeDoc,
-          ),
+    const run = { stop: null as (() => void) | null, isStopped: false };
+    void getRunwayEncryption(uid)
+      .then((encryption) => {
+        if (run.isStopped) return;
+        run.stop = startReleasedChargesListener(
+          uid,
+          encryption,
+          (charges) => void handle(encryption, charges),
+          (error) =>
+            console.error('Dropped pending charges were not read', error),
         );
-      },
-      (error) => console.error('Dropped pending charges were not read', error),
-    );
+      })
+      .catch((error: unknown) =>
+        console.error('Dropped pending charges were not read', error),
+      );
+    return () => {
+      run.isStopped = true;
+      run.stop?.();
+    };
   }, [uid, isReady, level]);
 }

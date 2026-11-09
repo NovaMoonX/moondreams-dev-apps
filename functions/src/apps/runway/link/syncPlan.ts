@@ -222,6 +222,21 @@ function upsert(
 }
 
 const TAKEOVER_DAYS = 10;
+const TIED_FIELDS = [
+  'costRef',
+  'billRef',
+  'pairedWithId',
+  'cardPaymentMoveId',
+  'incomeDayId',
+  'refundOfId',
+] as const;
+
+/** A purchase another record leans on (a cost marked paid, a bill, a pair, a pay day) is left for the person: removing it here would leave that record pointing at nothing. */
+const isTied = (state: PurchaseState) =>
+  TIED_FIELDS.some((field) => {
+    const value = state.payload[field];
+    return value !== null && value !== undefined;
+  });
 const TAKEOVER_SHARE = 0.25;
 const TAKEOVER_MIN_CENTS = 500;
 
@@ -326,6 +341,7 @@ export function applyTransactions(
     const docId = purchaseIdFor(keyOf(providerTransactionId));
     const state = states.get(docId);
     if (!state || state.status !== 'pending') return [];
+    if (!state.needsHome && isTied(state)) return [];
     counts.removed += 1;
     touchedDates.push(state.date);
     states.delete(docId);
