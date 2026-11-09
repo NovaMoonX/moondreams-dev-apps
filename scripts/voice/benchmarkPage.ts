@@ -4,8 +4,10 @@ import {
   type TtsProviderId,
 } from '../../functions/src/voice/voiceConfig';
 import {
+  cancelNaturalSynthesis,
   enableNaturalVoice,
   getNaturalVoiceState,
+  isNaturalVoiceCancel,
   synthesizeNaturalVoice,
 } from '@/lib/speech/naturalVoice/naturalVoiceEngine';
 import { NATURAL_VOICE_SIZE_MB } from '@/lib/speech/naturalVoice/config';
@@ -40,6 +42,7 @@ interface Reply {
 }
 interface Results {
   ranAt: string;
+  isFixture?: boolean;
   replies: Reply[];
   providers: Provider[];
 }
@@ -137,8 +140,8 @@ const summaryTable = (providers: Provider[]) => {
       h(
         'tr',
         {},
-        ...['Voice', 'First sound', 'Done', 'Cut off', 'All 12'].map((text) =>
-          h('th', {}, text),
+        ...['Voice', 'First sound', 'Done', 'Stream cut', 'All 12'].map(
+          (text) => h('th', {}, text),
         ),
       ),
       ...rows,
@@ -192,9 +195,16 @@ const getContext = () => {
   return contexts[0];
 };
 
+const player = { source: null as AudioBufferSourceNode | null };
+
+const stopPlayer = () => {
+  player.source?.stop();
+  player.source = null;
+};
+
 const naturalRow = (reply: Reply) => {
   const status = h('p', { class: 'muted' }, 'free, on this device');
-  const play = h('button', {}, '');
+  const play = h('button', {}, '') as HTMLButtonElement;
   const stop = h('button', { hidden: '' }, 'Stop');
   const isOn = () => getNaturalVoiceState().status === 'ready';
   const setLabel = () => {
@@ -203,8 +213,13 @@ const naturalRow = (reply: Reply) => {
       : `Turn on the natural voice (${NATURAL_VOICE_SIZE_MB} MB) to compare`;
   };
   setLabel();
-  let current: AudioBufferSourceNode | null = null;
   play.addEventListener('click', async () => {
+    // Created and resumed before any await so the tap still counts as the gesture.
+    const context = getContext();
+    const resumed = context.resume();
+    stopPlayer();
+    cancelNaturalSynthesis();
+    play.disabled = true;
     try {
       if (!isOn()) {
         status.textContent = 'Turning on the natural voice…';
@@ -215,31 +230,39 @@ const naturalRow = (reply: Reply) => {
           return;
         }
       }
-      const context = getContext();
-      await context.resume();
+      await resumed;
+      stop.hidden = false;
+      status.textContent = 'Making the reply…';
       const startedAt = performance.now();
       const { pcm, sampleRate } = await synthesizeNaturalVoice(
         toSpokenText(reply.text),
       );
-      current = playPcm(context, pcm, sampleRate);
-      stop.hidden = false;
-      const source = current;
+      const readyMs = performance.now() - startedAt;
+      const source = playPcm(context, pcm, sampleRate);
+      player.source = source;
       source.onended = () => {
         stop.hidden = true;
       };
-      status.textContent = `first sound ${millis(performance.now() - startedAt)} · free, on this device`;
+      status.textContent = `ready in ${millis(readyMs)} · free, on this device`;
     } catch (error) {
-      status.textContent = `Failed: ${error instanceof Error ? error.message : String(error)}`;
+      stop.hidden = true;
+      status.textContent = isNaturalVoiceCancel(error)
+        ? 'Stopped.'
+        : `Failed: ${error instanceof Error ? error.message : String(error)}`;
+    } finally {
+      play.disabled = false;
     }
   });
   stop.addEventListener('click', () => {
-    const source = current;
+    cancelNaturalSynthesis();
+    const source = player.source;
     if (source === null) return;
     const stoppedAt = performance.now();
     source.onended = () => {
       stop.hidden = true;
-      status.textContent = `stopped in ${millis(performance.now() - stoppedAt)} · free, on this device`;
+      status.textContent = `stopped in ${millis(performance.now() - stoppedAt)} (until the player ended) · free, on this device`;
     };
+    player.source = null;
     source.stop();
   });
   return h(
@@ -279,7 +302,9 @@ const priceNote = () =>
           ? `${NAMES[id]}: ${dollars(sample)} per 1,000 characters`
           : `${NAMES[id]}: about ${dollars(sample)} a minute of audio`;
       })
-      .concat(`Prices checked ${TTS_PRICES.googleTts.checkedOn}`)
+      .concat(
+        `Prices read from the providers' docs on ${TTS_PRICES.googleTts.readOn}`,
+      )
       .join('. ') + '.',
   );
 
@@ -289,6 +314,15 @@ const render = (app: HTMLElement, results: Results) => {
   );
   app.append(
     h('h1', {}, 'Voice benchmark'),
+    ...(results.isFixture === true
+      ? [
+          h(
+            'p',
+            { class: 'error' },
+            'Made-up numbers and tones from a test run. Run npm run voice:benchmark for the real thing.',
+          ),
+        ]
+      : []),
     h(
       'p',
       { class: 'muted' },
@@ -307,6 +341,11 @@ const render = (app: HTMLElement, results: Results) => {
       { class: 'card' },
       summaryTable(results.providers),
       priceNote(),
+      h(
+        'p',
+        { class: 'muted' },
+        'The natural voice makes the whole reply before it plays, so its figure is "ready in", not first sound.',
+      ),
     ),
     ...results.replies.map((reply) => replyCard(results, reply)),
   );

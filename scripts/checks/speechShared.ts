@@ -714,7 +714,7 @@ const gemini = record(
     new Response(
       new ReadableStream<Uint8Array>({
         start(controller) {
-          const text = sse([1, 2], [3, 4, 5]);
+          const text = sse([1, 2], [3, 4, 5, 6]);
           const cut = Math.floor(text.length / 3);
           controller.enqueue(new TextEncoder().encode(text.slice(0, cut)));
           controller.enqueue(new TextEncoder().encode(text.slice(cut)));
@@ -753,8 +753,126 @@ assert.deepEqual(
 );
 assert.deepEqual(
   await readAll(geminiSpeech.stream),
-  [1, 2, 3, 4, 5],
+  [1, 2, 3, 4, 5, 6],
   'Gemini joins the audio of each event, even one split across reads',
+);
+
+const encode = (text: string) => new TextEncoder().encode(text);
+const geminiFrom = (body: () => ReadableStream<Uint8Array>) =>
+  createGeminiTts({
+    apiKey,
+    fetchImpl: record(() => new Response(body())).fetchImpl,
+  });
+const textBody = (text: string) => () =>
+  new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encode(text));
+      controller.close();
+    },
+  });
+const readChunks = async (stream: ReadableStream<Uint8Array>) => {
+  const reader = stream.getReader();
+  const next = async (): Promise<number[][]> => {
+    const { done, value } = await reader.read();
+    return done ? [] : [[...value], ...(await next())];
+  };
+  return next();
+};
+const rejects = (run: () => Promise<unknown>) =>
+  run().then(
+    () => false,
+    () => true,
+  );
+assert.deepEqual(
+  await readAll(
+    (
+      await geminiFrom(
+        textBody(sse([1, 2], [3, 4]).replaceAll('\n', '\r\n')),
+      ).speak(speakInput)
+    ).stream,
+  ),
+  [1, 2, 3, 4],
+  'Gemini reads events whose lines end in CRLF',
+);
+assert.deepEqual(
+  await readAll(
+    (
+      await geminiFrom(textBody(sse([1, 2], [3, 4]).trimEnd())).speak(
+        speakInput,
+      )
+    ).stream,
+  ),
+  [1, 2, 3, 4],
+  'Gemini keeps a last event that has no trailing newline',
+);
+assert.deepEqual(
+  await readAll(
+    (
+      await geminiFrom(
+        textBody(
+          `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { data: toBase64([1, 2]) } }, { inlineData: { data: toBase64([3, 4]) } }] } }] })}\n\n`,
+        ),
+      ).speak(speakInput)
+    ).stream,
+  ),
+  [1, 2, 3, 4],
+  'Gemini keeps every audio part of one event',
+);
+assert.deepEqual(
+  await readChunks(
+    (await geminiFrom(textBody(sse([1, 2, 3], [4, 5, 6]))).speak(speakInput))
+      .stream,
+  ),
+  [
+    [1, 2],
+    [3, 4, 5, 6],
+  ],
+  'Gemini hands on whole 16-bit samples, carrying an odd byte to the next part',
+);
+const cancelled = { source: false };
+const openStream = (
+  await geminiFrom(
+    () =>
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encode(sse([1, 2])));
+        },
+        cancel() {
+          cancelled.source = true;
+        },
+      }),
+  ).speak(speakInput)
+).stream;
+const openReader = openStream.getReader();
+await openReader.read();
+await openReader.cancel();
+assert.ok(
+  cancelled.source,
+  'cancelling the audio stream cancels the provider response',
+);
+assert.ok(
+  await rejects(async () =>
+    readAll(
+      (
+        await geminiFrom(textBody('data: {"candidates":[]}\n\n')).speak(
+          speakInput,
+        )
+      ).stream,
+    ),
+  ),
+  'a 200 answer with no audio is an error, not silence',
+);
+assert.ok(
+  await rejects(async () =>
+    readAll(
+      (
+        await geminiFrom(textBody('data: {"error":{"message":"x"}}\n\n')).speak(
+          speakInput,
+        )
+      ).stream,
+    ),
+  ),
+  'an event carrying an error ends the stream with an error',
 );
 
 const google = record(() =>
@@ -791,6 +909,55 @@ assert.deepEqual(
   await readAll(googleSpeech.stream),
   [9, 8, 7],
   'Google audio comes back as the bytes of its base64',
+);
+
+assert.ok(
+  await rejects(() =>
+    createGoogleTts({
+      getAccessToken: async () => 'token-1',
+      projectId: 'a-project',
+      fetchImpl: record(() => Response.json({})).fetchImpl,
+    }).speak(speakInput),
+  ),
+  'Google without audio content is an error',
+);
+
+const unreadBodies = { deepgram: false, gemini: false, google: false };
+const failingBody = (key: keyof typeof unreadBodies) =>
+  record(
+    () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encode('bad key'));
+          },
+          cancel() {
+            unreadBodies[key] = true;
+          },
+        }),
+        { status: 500 },
+      ),
+  ).fetchImpl;
+await createDeepgramAura({
+  apiKey,
+  fetchImpl: failingBody('deepgram'),
+})
+  .speak(speakInput)
+  .catch(() => undefined);
+await createGeminiTts({ apiKey, fetchImpl: failingBody('gemini') })
+  .speak(speakInput)
+  .catch(() => undefined);
+await createGoogleTts({
+  getAccessToken: async () => 'token-1',
+  projectId: 'a-project',
+  fetchImpl: failingBody('google'),
+})
+  .speak(speakInput)
+  .catch(() => undefined);
+assert.deepEqual(
+  unreadBodies,
+  { deepgram: true, gemini: true, google: true },
+  'a non-ok answer releases its body without reading it',
 );
 
 const providers: [TtsProviderId, TtsProvider][] = [

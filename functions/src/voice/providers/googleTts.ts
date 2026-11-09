@@ -35,8 +35,15 @@ export function createGoogleTts({
           signal,
         },
       );
-      if (!res.ok) throw failedSpeech('googleTts', res.status);
-      const { audioContent } = (await res.json()) as { audioContent: string };
+      if (!res.ok) {
+        await res.body?.cancel();
+        throw failedSpeech('googleTts', res.status);
+      }
+      const { audioContent } = (await res.json()) as {
+        audioContent?: unknown;
+      };
+      if (typeof audioContent !== 'string' || audioContent === '')
+        throw failedSpeech('googleTts', res.status);
       // Streaming synthesis is gRPC only, so the REST answer is the whole clip in one chunk.
       const bytes = new Uint8Array(Buffer.from(audioContent, 'base64'));
       return {

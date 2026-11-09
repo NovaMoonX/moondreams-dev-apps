@@ -32,11 +32,11 @@ if [[ -t 0 ]]; then
 fi
 
 # Listing voices reads only. The token goes to curl's stdin as a header file, never argv.
-status=$(printf 'Authorization: Bearer %s\nx-goog-user-project: %s\n' "$(gcloud auth print-access-token)" "$PROJECT" \
+status=$(printf 'Authorization: Bearer %s\nx-goog-user-project: %s\n' "$(gcloud auth application-default print-access-token)" "$PROJECT" \
   | curl -s -o /dev/null -w '%{http_code}' -H @- "https://texttospeech.googleapis.com/v1/voices?languageCode=en-US") || true
 if [[ "$status" == "200" ]]; then
   echo "✓ Google answered: the voices are ready"
 else
-  echo "✗ Google answered $status: sign in with \"gcloud auth login\", give the API a minute after enabling it, and run this again." >&2
+  echo "✗ Google answered $status: run \"gcloud auth application-default login\", give the API a minute after enabling it, and run this again." >&2
   exit 1
 fi

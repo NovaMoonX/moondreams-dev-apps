@@ -71,7 +71,7 @@ Every callable requires a signed-in caller, except `getCalendarShare`, `getPinch
 
 ## Voice providers
 
-`functions/src/voice/` holds three text-to-speech providers (Deepgram Aura-2, Gemini TTS, Google Cloud TTS Chirp 3 HD), their prices and voices, and no app's words. Nothing is exported from `index.ts` and nothing is deployed yet; `npm run voice:benchmark` runs them from the owner's machine (`docs/voice-benchmark.md`). `npm run voice:google-setup` enables the Text-to-Speech API.
+`functions/src/voice/` holds three text-to-speech providers (Deepgram Aura-2, Gemini TTS, Google Cloud TTS Chirp 3 HD), their prices and voices, and no app's words. Nothing is exported from `index.ts` and nothing is deployed yet; `npm run voice:benchmark` runs them from the owner's machine (`docs/voice-benchmark.md`). `npm run voice:google-setup` enables the Text-to-Speech API. Prices, voice ids and formats were read from the providers' docs (search results, 2026-11-09) and are unverified until the first real run.
 
 ## Secrets and config
 

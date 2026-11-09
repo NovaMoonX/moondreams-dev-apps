@@ -1,11 +1,21 @@
 // Renders the same replies through each cloud voice, times them and opens a page to listen.
-//   npm run voice:benchmark [-- --fixture] [-- --no-open]
+//   npm run voice:benchmark [-- --fixture [--force]] [-- --no-open]
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { GoogleAuth } from 'google-auth-library';
 
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
-import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
+import {
+  createGeminiTts,
+  GEMINI_SAMPLE_RATE,
+} from '../../functions/src/voice/providers/geminiTts.ts';
 import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
 import { pcmToWav } from '../../functions/src/voice/providers/pcm.ts';
 import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
@@ -20,8 +30,8 @@ const PROJECT = 'moondreams-dev-apps';
 const RUNS = 5;
 const ABORT_AFTER_MS = 300;
 const OUT_DIR = new URL('../../voice-benchmark/', import.meta.url);
+const NEXT_DIR = new URL('.next/', OUT_DIR);
 const DOC_PATH = new URL('../../docs/voice-benchmark.md', import.meta.url);
-const PAGE_URL = 'http://localhost:5173/scripts/voice/benchmark.html';
 const PROVIDER_IDS: TtsProviderId[] = [
   'deepgramAura',
   'geminiTts',
@@ -32,10 +42,10 @@ const PROVIDER_NAMES: Record<TtsProviderId, string> = {
   geminiTts: 'Gemini 3.8 Flash-Lite TTS',
   googleTts: 'Google Cloud TTS Chirp 3 HD',
 };
-const GEMINI_RATE = 24_000;
 
 const isFixture = process.argv.includes('--fixture');
 const isOpening = !process.argv.includes('--no-open');
+const isForced = process.argv.includes('--force');
 
 interface Reply {
   id: string;
@@ -129,6 +139,18 @@ interface ProviderResult {
   voices: VoiceResult[];
 }
 
+const inSequence = <T, R>(
+  items: readonly T[],
+  run: (item: T, index: number) => Promise<R>,
+): Promise<R[]> =>
+  items.reduce(
+    async (previous, item, index) => [
+      ...(await previous),
+      await run(item, index),
+    ],
+    Promise.resolve([] as R[]),
+  );
+
 const median = (values: number[]) => {
   const sorted = [...values].sort((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
@@ -199,7 +221,8 @@ const drain = async (
   if (!next.done) return drain(reader);
 };
 
-const probeAbort = async (
+/** Time for the response stream to close after an abort; null when the stream had already ended. */
+const probeStreamCut = async (
   provider: TtsProvider,
   text: string,
   voiceId: string,
@@ -212,11 +235,19 @@ const probeAbort = async (
     signal: controller.signal,
   });
   const reader = stream.getReader();
-  await reader.read();
+  const first = await reader.read();
+  if (first.done) return null;
+  const state = { isDone: false };
+  const pump = drain(reader)
+    .catch(() => undefined)
+    .then(() => {
+      state.isDone = true;
+    });
   await new Promise((resolve) => setTimeout(resolve, ABORT_AFTER_MS));
+  if (state.isDone) return null;
   const abortedAt = performance.now();
   controller.abort();
-  await drain(reader).catch(() => undefined);
+  await pump;
   return performance.now() - abortedAt;
 };
 
@@ -228,9 +259,9 @@ const toSample = (
   audio: Uint8Array,
 ): { sample: Sample; bytes: Uint8Array; extension: string } => {
   const isPcm = providerId === 'geminiTts';
-  const audioSeconds = isPcm ? audio.length / (GEMINI_RATE * 2) : null;
+  const audioSeconds = isPcm ? audio.length / (GEMINI_SAMPLE_RATE * 2) : null;
   return {
-    bytes: isPcm ? pcmToWav(audio, GEMINI_RATE) : audio,
+    bytes: isPcm ? pcmToWav(audio, GEMINI_SAMPLE_RATE) : audio,
     extension: isPcm ? 'wav' : 'mp3',
     sample: {
       replyId: reply.id,
@@ -265,61 +296,72 @@ const saveSample = (
   made: { sample: Sample; bytes: Uint8Array; extension: string },
 ): Sample => {
   const file = `samples/${providerId}-${voiceId}-${reply.id}.${made.extension}`;
-  writeFileSync(new URL(file, OUT_DIR), made.bytes);
+  writeFileSync(new URL(file, NEXT_DIR), made.bytes);
   return { ...made.sample, file };
 };
 
-const tryProbeAbort = async (
+const messageOf = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const isAuthFailure = (message: string) => /answered (401|403)$/.test(message);
+
+const runReply = async (
   provider: TtsProvider,
-  voiceId: string,
-  failure: { error: string | null },
-) => {
-  if (failure.error !== null) return null;
-  try {
-    return await probeAbort(provider, toSpokenText(PROBE_REPLY.text), voiceId);
-  } catch (error) {
-    failure.error = error instanceof Error ? error.message : String(error);
-    return null;
-  }
+  voice: { id: string },
+  item: Reply,
+): Promise<Sample> => {
+  const text = toSpokenText(item.text);
+  const runs = await inSequence(Array.from({ length: RUNS }), () =>
+    speakOnce(provider, text, voice.id),
+  );
+  const sample = saveSample(
+    provider.id,
+    voice.id,
+    item,
+    toSample(provider.id, item, text.length, runs[0], runs[0].audio),
+  );
+  return {
+    ...sample,
+    firstByteMs: medianOf(runs.map((result) => result.firstByteMs)),
+    totalMs: medianOf(runs.map((result) => result.totalMs)),
+  };
 };
 
 const runVoice = async (
   provider: TtsProvider,
   voice: { id: string; label: string },
-  failure: { error: string | null },
+  auth: { error: string | null },
 ): Promise<VoiceResult> => {
-  const samples: Sample[] = [];
-  for (const item of REPLIES) {
-    if (failure.error !== null) {
-      samples.push(failedSample(item, failure.error));
-      continue;
-    }
-    const text = toSpokenText(item.text);
-    try {
-      const runs: Awaited<ReturnType<typeof speakOnce>>[] = [];
-      for (let run = 0; run < RUNS; run += 1) {
-        runs.push(await speakOnce(provider, text, voice.id));
-      }
-      const kept = toSample(
-        provider.id,
-        item,
-        text.length,
-        runs[0],
-        runs[0].audio,
-      );
-      const sample = saveSample(provider.id, voice.id, item, kept);
-      samples.push({
-        ...sample,
-        firstByteMs: medianOf(runs.map((result) => result.firstByteMs)),
-        totalMs: medianOf(runs.map((result) => result.totalMs)),
-      });
-    } catch (error) {
-      failure.error = error instanceof Error ? error.message : String(error);
-      samples.push(failedSample(item, failure.error));
-    }
-  }
-  const abortMs = await tryProbeAbort(provider, voice.id, failure);
-  console.log(`  ${provider.id} ${voice.label}: ${failure.error ?? 'done'}`);
+  const noteFailure = (error: unknown) => {
+    const message = messageOf(error);
+    if (isAuthFailure(message)) auth.error = message;
+    return message;
+  };
+  // One untimed call first, so connection and token setup stay out of the medians.
+  const voiceError =
+    auth.error ??
+    (await speakOnce(provider, toSpokenText(REPLIES[0].text), voice.id).then(
+      () => null,
+      noteFailure,
+    ));
+  const samples = await inSequence(REPLIES, async (item) => {
+    const blocked = auth.error ?? voiceError;
+    return blocked !== null
+      ? failedSample(item, blocked)
+      : runReply(provider, voice, item).catch((error) =>
+          failedSample(item, noteFailure(error)),
+        );
+  });
+  const abortMs =
+    auth.error !== null || voiceError !== null
+      ? null
+      : await probeStreamCut(
+          provider,
+          toSpokenText(PROBE_REPLY.text),
+          voice.id,
+        ).catch(() => null);
+  const failed = samples.find((sample) => sample.error !== null);
+  console.log(`  ${provider.id} ${voice.label}: ${failed?.error ?? 'done'}`);
   return { id: voice.id, label: voice.label, samples, abortMs };
 };
 
@@ -389,17 +431,19 @@ const buildProviders = async (): Promise<
 };
 
 const makeTone = (seconds: number, hertz: number) => {
-  const count = Math.round(GEMINI_RATE * seconds);
+  const count = Math.round(GEMINI_SAMPLE_RATE * seconds);
   const pcm = new Uint8Array(count * 2);
   const view = new DataView(pcm.buffer);
   Array.from({ length: count }).forEach((_, index) =>
     view.setInt16(
       index * 2,
-      Math.round(Math.sin((2 * Math.PI * hertz * index) / GEMINI_RATE) * 6000),
+      Math.round(
+        Math.sin((2 * Math.PI * hertz * index) / GEMINI_SAMPLE_RATE) * 6000,
+      ),
       true,
     ),
   );
-  return pcmToWav(pcm, GEMINI_RATE);
+  return pcmToWav(pcm, GEMINI_SAMPLE_RATE);
 };
 
 const runFixture = (): ProviderResult[] =>
@@ -417,7 +461,7 @@ const runFixture = (): ProviderResult[] =>
         const audioSeconds = characters / 15;
         const file = `samples/${id}-${voice.id}-${item.id}.wav`;
         writeFileSync(
-          new URL(file, OUT_DIR),
+          new URL(file, NEXT_DIR),
           makeTone(0.6, 220 + providerIndex * 110 + voiceIndex * 40),
         );
         return {
@@ -467,18 +511,24 @@ const renderTable = (providers: ProviderResult[]) => {
         }),
   );
   return [
-    '| Provider | Voice | Median first sound | Median done | Interruption | All 12 replies | Per 1,000 characters |',
+    '| Provider | Voice | Median first sound | Median done | Stream cut | All 12 replies | Per 1,000 characters |',
     '| --- | --- | --- | --- | --- | --- | --- |',
     ...rows,
   ].join('\n');
 };
 
 const writeDoc = (providers: ProviderResult[], ranAt: string) => {
+  if (providers.every((provider) => provider.skipped !== null)) {
+    console.log(
+      'No provider ran, so docs/voice-benchmark.md was left as it was.',
+    );
+    return;
+  }
   const doc = readFileSync(DOC_PATH, 'utf8');
   const start = '<!-- results:start -->';
   const end = '<!-- results:end -->';
   const from = doc.indexOf(start);
-  const to = doc.indexOf(end);
+  const to = doc.indexOf(end, from);
   if (from === -1 || to === -1) {
     console.log('docs/voice-benchmark.md has no results block; not updated.');
     return;
@@ -492,39 +542,73 @@ const writeDoc = (providers: ProviderResult[], ranAt: string) => {
 
 const runProviders = async () => {
   const built = await buildProviders();
-  const results: ProviderResult[] = [];
-  for (const entry of built) {
+  return inSequence(built, async (entry): Promise<ProviderResult> => {
     if (entry.provider === null) {
       console.log(entry.skipped);
-      results.push({ id: entry.id, skipped: entry.skipped, voices: [] });
-      continue;
+      return { id: entry.id, skipped: entry.skipped, voices: [] };
     }
+    const provider = entry.provider;
     console.log(`${PROVIDER_NAMES[entry.id]}:`);
-    const failure = { error: null as string | null };
-    const voices: VoiceResult[] = [];
-    for (const voice of TTS_VOICES[entry.id]) {
-      voices.push(await runVoice(entry.provider, voice, failure));
-    }
-    results.push({ id: entry.id, skipped: null, voices });
+    const auth = { error: null as string | null };
+    const voices = await inSequence(TTS_VOICES[entry.id], (voice) =>
+      runVoice(provider, voice, auth),
+    );
+    return { id: entry.id, skipped: null, voices };
+  });
+};
+
+const hasRealRun = () => {
+  try {
+    const previous = JSON.parse(
+      readFileSync(new URL('results.json', OUT_DIR), 'utf8'),
+    ) as { isFixture?: boolean };
+    return previous.isFixture === false;
+  } catch {
+    return false;
   }
-  return results;
+};
+
+const swapIn = () => {
+  const previous = new URL('.previous/', OUT_DIR);
+  rmSync(previous, { recursive: true, force: true });
+  if (existsSync(new URL('results.json', OUT_DIR))) {
+    mkdirSync(previous, { recursive: true });
+    ['samples', 'results.json']
+      .filter((name) => existsSync(new URL(name, OUT_DIR)))
+      .forEach((name) =>
+        renameSync(new URL(name, OUT_DIR), new URL(name, previous)),
+      );
+  }
+  ['samples', 'results.json'].forEach((name) =>
+    renameSync(new URL(name, NEXT_DIR), new URL(name, OUT_DIR)),
+  );
+  rmSync(NEXT_DIR, { recursive: true, force: true });
+  rmSync(previous, { recursive: true, force: true });
 };
 
 const main = async () => {
-  rmSync(OUT_DIR, { recursive: true, force: true });
-  mkdirSync(new URL('samples/', OUT_DIR), { recursive: true });
+  if (isFixture && !isForced && hasRealRun()) {
+    console.log(
+      "There's a real run in voice-benchmark/. Add --force to replace it with made-up numbers.",
+    );
+    process.exitCode = 1;
+    return;
+  }
+  rmSync(NEXT_DIR, { recursive: true, force: true });
+  mkdirSync(new URL('samples/', NEXT_DIR), { recursive: true });
   const ranAt = new Date().toISOString();
   const providers: ProviderResult[] = isFixture
     ? runFixture()
     : await runProviders();
   writeFileSync(
-    new URL('results.json', OUT_DIR),
-    JSON.stringify({ ranAt, replies: REPLIES, providers }, null, 2),
+    new URL('results.json', NEXT_DIR),
+    JSON.stringify({ ranAt, isFixture, replies: REPLIES, providers }, null, 2),
   );
+  swapIn();
   console.log(`Wrote ${new URL('results.json', OUT_DIR).pathname}`);
   if (!isFixture) writeDoc(providers, ranAt);
   if (!isOpening) return;
-  console.log(`Opening ${PAGE_URL}`);
+  console.log('Opening the benchmark page…');
   spawnSync('npx', ['vite', '--open', '/scripts/voice/benchmark.html'], {
     stdio: 'inherit',
   });

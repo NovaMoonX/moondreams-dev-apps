@@ -33,8 +33,10 @@ export function createDeepgramAura({
           signal,
         },
       );
-      if (!res.ok || res.body === null)
+      if (!res.ok || res.body === null) {
+        await res.body?.cancel();
         throw failedSpeech('deepgramAura', res.status);
+      }
       return { stream: res.body, contentType: AUDIO_CONTENT_TYPES[format] };
     },
   };

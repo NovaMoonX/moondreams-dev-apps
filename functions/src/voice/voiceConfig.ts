@@ -8,14 +8,14 @@ export const TTS_MAX_CHARS = 600;
 interface TtsPrice {
   per: 'character' | 'audioSecond';
   micros: number;
-  checkedOn: '2026-11-09';
+  readOn: '2026-11-09';
 }
 
-/** Millionths of a dollar per character or per second of audio. Google's first million characters a month are free; Gemini's audio price doubles to $12 per million tokens on 2027-01-01. */
+/** Millionths of a dollar per character or per second of audio, read from the providers' docs (search results) and unverified until the first real run. Google's first million characters a month are free; Gemini's audio price is said to double to $12 per million tokens on 2027-01-01. */
 export const TTS_PRICES: Record<TtsProviderId, TtsPrice> = {
-  deepgramAura: { per: 'character', micros: 30, checkedOn: '2026-11-09' },
-  googleTts: { per: 'character', micros: 30, checkedOn: '2026-11-09' },
-  geminiTts: { per: 'audioSecond', micros: 150, checkedOn: '2026-11-09' },
+  deepgramAura: { per: 'character', micros: 30, readOn: '2026-11-09' },
+  googleTts: { per: 'character', micros: 30, readOn: '2026-11-09' },
+  geminiTts: { per: 'audioSecond', micros: 150, readOn: '2026-11-09' },
 };
 
 /** The candidates the benchmark plays for each provider. */
