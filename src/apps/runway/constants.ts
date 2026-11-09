@@ -797,10 +797,13 @@ export const HORIZON_END_WORDS = {
     count === 1
       ? 'Cancel this change too'
       : `Cancel these ${count} changes too`,
-  changesKeepTitle: (event: string) => `Keep them, not part of ${event}`,
-  changesKeepBody: 'They stay planned, on their own.',
+  changesKeepTitle: (event: string, count: number) =>
+    `Keep ${count === 1 ? 'it' : 'them'}, not part of ${event}`,
+  changesKeepBody: (count: number) =>
+    count === 1
+      ? 'It stays planned, on its own.'
+      : 'They stay planned, on their own.',
   changesCancelBody: 'Each goes back to what it was before.',
-  cancelsRow: (line: string) => `Cancelled \u00b7 ${line}`,
   needsChangesChoice: 'Choose what happens to its planned changes.',
   changesStayCancelled: 'Its changes stay cancelled.',
   calledOff: (name: string) => `${name} is called off`,

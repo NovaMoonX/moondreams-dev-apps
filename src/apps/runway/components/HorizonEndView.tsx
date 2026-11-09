@@ -137,13 +137,6 @@ function HorizonEndView({
     ? listCallOffChanges(horizon.links, versions, items, today)
     : [];
   const cardNamer = getCardNamer(allCards);
-  const cancelLines =
-    changesPick === 'cancel'
-      ? changeRows.map(({ link, change }) => ({
-          key: `${link.itemId}-${link.changeId}`,
-          text: describeChangeLine(change, cardNamer),
-        }))
-      : [];
   const rows = [
     ...stops.map((cost) => ({ cost, isBill: false })),
     ...bills.map((cost) => ({ cost, isBill: true })),
@@ -517,8 +510,11 @@ function HorizonEndView({
                 },
                 {
                   value: 'keep' as const,
-                  title: HORIZON_END_WORDS.changesKeepTitle(horizon.name),
-                  body: HORIZON_END_WORDS.changesKeepBody,
+                  title: HORIZON_END_WORDS.changesKeepTitle(
+                    horizon.name,
+                    changeRows.length,
+                  ),
+                  body: HORIZON_END_WORDS.changesKeepBody(changeRows.length),
                 },
               ]}
               value={changesPick}
@@ -581,14 +577,9 @@ function HorizonEndView({
           }
         />
       )}
-      {isCallOff && (rows.length > 0 || cancelLines.length > 0) && (
+      {isCallOff && rows.length > 0 && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-            {cancelLines.map(({ key, text }) => (
-              <li key={key} className='px-3 py-2 text-sm break-words'>
-                <MaskedText>{HORIZON_END_WORDS.cancelsRow(text)}</MaskedText>
-              </li>
-            ))}
             {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
               isBill ? (
                 <li

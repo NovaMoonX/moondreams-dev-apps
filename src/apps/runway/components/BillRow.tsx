@@ -118,14 +118,12 @@ function BillRow({
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
-  const paymentCents =
-    figureKind === 'payment' && payment && !payment.paid
-      ? payment.totalCents
-      : cents;
+  // The row names the next payment's due day, so it shows that payment's amount, a change before it included.
+  const paymentCents = payment && !payment.paid ? payment.totalCents : cents;
   const monthly =
     figureKind === 'monthly'
       ? describeBillMonthly(
-          { lowCents: cents, highCents: cents },
+          { lowCents: paymentCents, highCents: paymentCents },
           bill.timing.schedule,
         )
       : null;
