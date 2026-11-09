@@ -20,6 +20,7 @@ import { inTurn } from '@apps/runway/hooks/paidQueue';
 import { unmatchPurchaseFromBill } from '@apps/runway/hooks/useAutoPay';
 import { getMarkCardId } from '@apps/runway/utils/cardText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import { readPurchaseNow } from '@apps/runway/store/actions/purchaseActions';
 import {
   markBillPaid,
   undoBillPaid,
@@ -76,20 +77,21 @@ export async function undoPaymentPaid(
   const move = state.runway.moves.find((entry) => entry.id === paid.moveId);
   const purchaseId =
     move?.kind === 'billPaid' ? (move.payload.auto?.purchaseId ?? null) : null;
-  const purchase =
+  const encryption = await getRunwayEncryption(uid);
+  const loaded =
     purchaseId === null
-      ? undefined
-      : [...state.runway.purchases, ...state.runway.needsHome].find(
-          (entry) =>
-            entry.id === purchaseId &&
-            entry.billRef?.billId === billId &&
-            entry.billRef.dueOn === paid.dueOn,
-        );
+      ? null
+      : ([...state.runway.purchases, ...state.runway.needsHome].find(
+          (entry) => entry.id === purchaseId,
+        ) ?? (await readPurchaseNow(uid, encryption, purchaseId)));
+  const purchase =
+    loaded?.billRef?.billId === billId && loaded.billRef.dueOn === paid.dueOn
+      ? loaded
+      : null;
   if (purchase) {
     await unmatchPurchaseFromBill(uid, purchase, billName);
     return true;
   }
-  const encryption = await getRunwayEncryption(uid);
   const isWritten = await inTurn(() =>
     undoBillPaid(
       uid,
