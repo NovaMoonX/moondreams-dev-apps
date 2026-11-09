@@ -12,7 +12,6 @@ export interface NaturalDate {
 }
 
 const DAY_MS = 86_400_000;
-const TONIGHT_HOUR = 20;
 
 const WEEKDAYS = [
   'sunday',
@@ -73,27 +72,49 @@ const monthPattern = [
   ...Object.keys(MONTH_SHORT).sort((a, b) => b.length - a.length),
 ].join('|');
 
+const ORDINAL = '(?:st|nd|rd|th)?';
+const YEAR_PART = (name: string) =>
+  `(?:,?\\s+(?<${name}>(?:19|20)\\d{2})(?!\\d))?`;
+
 const DAY_RE = new RegExp(
   [
     '(?<![\\w@#^])(?:',
-    '(?<word>today|tonight|tomorrow)',
+    "(?<word>today|tonight|tomorrow)(?!['’]\\p{L})",
+    `|(?<wdC>${weekdayPattern})\\.?,?\\s+(?<monthC>${monthPattern})\\.?\\s+(?<dayC>\\d{1,2})${ORDINAL}(?![\\d:])${YEAR_PART('yearC')}`,
     `|(?:(?<rel>next|this)\\s+)?(?<weekday>${weekdayPattern})`,
-    `|(?<monthA>${monthPattern})\\.?\\s+(?<dayA>\\d{1,2})(?:st|nd|rd|th)?(?![\\d:])`,
-    `|(?<![\\d$.,:/-])(?<dayB>\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(?<monthB>${monthPattern})`,
+    `|(?<monthA>${monthPattern})\\.?\\s+(?<dayA>\\d{1,2})${ORDINAL}(?![\\d:])${YEAR_PART('yearA')}`,
+    `|(?<![\\d$.,:/-])(?<dayB>\\d{1,2})${ORDINAL}\\s+(?:of\\s+)?(?<monthB>${monthPattern})${YEAR_PART('yearB')}`,
     ')\\b',
   ].join(''),
-  'gi',
+  'giu',
 );
 
+// Words that are also plain English count only when capitalised or right after "on".
+const LOOSE_WORDS = new Set([
+  'may',
+  'march',
+  'mar',
+  'wed',
+  'mon',
+  'sat',
+  'sun',
+]);
+
 const TIME_PATTERN =
-  '(?<![\\w])(?<at>(?:at|@)\\s*)?(?<hour>\\d{1,2})(?::(?<minute>\\d{2}))?(?:\\s*(?<meridiem>[ap]m))?\\b(?!:)';
-const TIME_RE = new RegExp(TIME_PATTERN, 'gi');
-const TIME_AFTER_DAY_RE = new RegExp(`\\s*,?\\s*${TIME_PATTERN}`, 'iy');
+  '(?<![\\w])(?<at>(?:at|@)\\s*)?(?:(?<hour>\\d{1,2})(?::(?<minute>\\d{2}))?(?:\\s*(?<meridiem>[ap]m))?|(?<named>noon|midnight))\\b(?!:)';
+const TIME_RE = new RegExp(TIME_PATTERN, 'giu');
+const TIME_AFTER_DAY_RE = new RegExp(`\\s*,?\\s*${TIME_PATTERN}`, 'iuy');
+const TIME_BEFORE_DAY_RE = new RegExp(
+  `${TIME_PATTERN}\\s*,?\\s*(?:on\\s+)?$`,
+  'iu',
+);
 
 interface ClockTime {
   hour: number;
   minute: number;
+  start: number;
   end: number;
+  nextDay: boolean;
 }
 
 const toCivil = (epochDay: number) => {
@@ -119,29 +140,61 @@ const getCivilToday = (now: number, timeZone: string) => {
 
 const pad = (value: number) => String(value).padStart(2, '0');
 
-const toClock = (match: RegExpMatchArray | RegExpExecArray, end: number) => {
+/** A lone time needs am/pm, a colon or noon/midnight; "at" counts as evidence only beside a day word. */
+const toClock = (
+  match: RegExpMatchArray | RegExpExecArray,
+  base: number,
+  isLone: boolean,
+): ClockTime | null => {
   const groups = match.groups ?? {};
+  const start = base + (match.index ?? 0);
+  const end = start + match[0].length;
+  const named = groups.named?.toLowerCase();
+  if (named) {
+    return {
+      hour: named === 'noon' ? 12 : 0,
+      minute: 0,
+      start,
+      end,
+      nextDay: false,
+    };
+  }
   const hour = Number(groups.hour);
   const minute = groups.minute === undefined ? 0 : Number(groups.minute);
   const meridiem = groups.meridiem?.toLowerCase();
-  const isClear = groups.at !== undefined || meridiem || groups.minute;
+  const isClear =
+    meridiem || groups.minute !== undefined || (!isLone && groups.at);
   if (!isClear || minute > 59) return null;
+  const read = (value: number) => ({
+    hour: value,
+    minute,
+    start,
+    end,
+    nextDay: false,
+  });
   if (meridiem) {
     if (hour < 1 || hour > 12) return null;
-    return { hour: (hour % 12) + (meridiem === 'pm' ? 12 : 0), minute, end };
+    return read((hour % 12) + (meridiem === 'pm' ? 12 : 0));
   }
-  if (groups.minute !== undefined) {
-    return hour > 23 ? null : { hour, minute, end };
-  }
+  if (groups.minute !== undefined) return hour > 23 ? null : read(hour);
   if (hour < 1 || hour > 12) return null;
   // No am/pm: a working-hours reading, 1 to 7 is afternoon.
-  return { hour: hour <= 7 ? hour + 12 : hour, minute, end };
+  return read(hour <= 7 ? hour + 12 : hour);
 };
 
 const readClockAfter = (text: string, from: number): ClockTime | null => {
   TIME_AFTER_DAY_RE.lastIndex = from;
   const match = TIME_AFTER_DAY_RE.exec(text);
-  return match ? toClock(match, from + match[0].length) : null;
+  return match ? toClock(match, 0, false) : null;
+};
+
+const readClockBefore = (
+  text: string,
+  from: number,
+  to: number,
+): ClockTime | null => {
+  const match = TIME_BEFORE_DAY_RE.exec(text.slice(from, to));
+  return match ? toClock(match, from, false) : null;
 };
 
 const weekPosition = (epochDay: number) =>
@@ -163,16 +216,26 @@ const getWeekdayDay = (
   return today + (((target - current + 6) % 7) + 1) * DAY_MS;
 };
 
-const getMonthDay = (today: number, month: number, day: number) => {
-  const { year } = toCivil(today);
+const getMonthDay = (
+  today: number,
+  month: number,
+  day: number,
+  year: number | null,
+) => {
   const isReal = (candidate: number) => {
     const date = new Date(Date.UTC(candidate, month, day));
     return date.getUTCMonth() === month && date.getUTCDate() === day;
   };
-  const found = [year, year + 1, year + 4]
+  const thisYear = toCivil(today).year;
+  // A 29 Feb is found by stepping on to the next leap year.
+  const years =
+    year === null
+      ? Array.from({ length: 9 }, (_, offset) => thisYear + offset)
+      : [year];
+  const found = years
     .filter(isReal)
     .map((candidate) => Date.UTC(candidate, month, day))
-    .find((epochDay) => epochDay >= today);
+    .find((epochDay) => year !== null || epochDay >= today);
   return found ?? null;
 };
 
@@ -192,46 +255,82 @@ interface DayHit {
   start: number;
   end: number;
   epochDay: number;
-  hour: number | null;
+  isTonight: boolean;
 }
 
-const readDayHit = (match: RegExpMatchArray, today: number): DayHit | null => {
+const toYear = (value: string | undefined) =>
+  value === undefined ? null : Number(value);
+
+const isReadableWord = (word: string, isAfterOn: boolean) =>
+  !LOOSE_WORDS.has(word.toLowerCase()) || /^\p{Lu}/u.test(word) || isAfterOn;
+
+const readDayHit = (
+  match: RegExpMatchArray,
+  today: number,
+  text: string,
+): DayHit | null => {
   const groups = match.groups ?? {};
   const start = match.index ?? 0;
   const end = start + match[0].length;
+  const isAfterOn = /\bon\s+$/i.test(text.slice(0, start));
+  const hit = (epochDay: number | null, isTonight = false) =>
+    epochDay === null ? null : { start, end, epochDay, isTonight };
   const word = groups.word?.toLowerCase();
-  if (word) {
-    const epochDay = today + (word === 'tomorrow' ? DAY_MS : 0);
-    return {
-      start,
-      end,
-      epochDay,
-      hour: word === 'tonight' ? TONIGHT_HOUR : null,
-    };
+  if (word)
+    return hit(today + (word === 'tomorrow' ? DAY_MS : 0), word === 'tonight');
+  if (groups.wdC) {
+    if (!isReadableWord(groups.wdC, isAfterOn)) return null;
+    if (!isReadableWord(groups.monthC, false)) return null;
+    const epochDay = getMonthDay(
+      today,
+      lookupMonth(groups.monthC),
+      Number(groups.dayC),
+      toYear(groups.yearC),
+    );
+    // A weekday that contradicts its date is never trusted.
+    const isSameWeekday =
+      epochDay !== null &&
+      new Date(epochDay).getUTCDay() === lookupWeekday(groups.wdC);
+    return isSameWeekday ? hit(epochDay) : null;
   }
   if (groups.weekday) {
-    const isBareLoose =
-      !groups.rel && ['sat', 'sun'].includes(groups.weekday.toLowerCase());
-    if (isBareLoose) return null;
-    const epochDay = getWeekdayDay(
-      today,
-      lookupWeekday(groups.weekday),
-      groups.rel?.toLowerCase(),
+    if (!groups.rel && !isReadableWord(groups.weekday, isAfterOn)) return null;
+    return hit(
+      getWeekdayDay(
+        today,
+        lookupWeekday(groups.weekday),
+        groups.rel?.toLowerCase(),
+      ),
     );
-    return { start, end, epochDay, hour: null };
   }
-  const month = lookupMonth(groups.monthA ?? groups.monthB);
-  const epochDay = getMonthDay(
-    today,
-    month,
-    Number(groups.dayA ?? groups.dayB),
+  if (groups.monthA) {
+    if (!isReadableWord(groups.monthA, isAfterOn)) return null;
+    return hit(
+      getMonthDay(
+        today,
+        lookupMonth(groups.monthA),
+        Number(groups.dayA),
+        toYear(groups.yearA),
+      ),
+    );
+  }
+  if (!isReadableWord(groups.monthB, false)) return null;
+  return hit(
+    getMonthDay(
+      today,
+      lookupMonth(groups.monthB),
+      Number(groups.dayB),
+      toYear(groups.yearB),
+    ),
   );
-  return epochDay === null ? null : { start, end, epochDay, hour: null };
 };
 
 const resolveClock = (hit: DayHit, clock: ClockTime | null) => {
-  if (hit.hour === null) return clock;
-  if (!clock) return { hour: hit.hour, minute: 0, end: hit.end };
+  if (!hit.isTonight || !clock) return clock;
+  // "Tonight at 12" is the coming midnight.
+  if (clock.hour === 12 || clock.hour === 0) {
+    return { ...clock, hour: 0, nextDay: true };
+  }
   const isMorning = clock.hour >= 1 && clock.hour < 12;
   return isMorning ? { ...clock, hour: clock.hour + 12 } : clock;
 };
@@ -253,38 +352,46 @@ const toDue = (
   };
 };
 
-/** Every date phrase in `text` ("tomorrow at 3", "next Fri", "Mar 12", "at 3:30pm"), read in `timeZone` from `now`: a day is UTC midnight of its calendar day, a phrase with a time is the instant. A bare weekday is the next one after today, "tonight" is 20:00, a time alone is today's or else tomorrow's, and a bare 1 to 7 means pm. */
+/** Every date phrase in `text` ("tomorrow at 3", "3pm Friday", "next Fri", "Mar 12 2027", "at 3:30pm"), read in `timeZone` from `now`: a day is UTC midnight of its calendar day, a phrase with a time is the instant. A bare weekday is the next one after today, a date with no year is its next occurrence, a time alone is today's or else tomorrow's, and a bare 1 to 7 means pm. */
 export function parseNaturalDate(
   text: string,
   options: { now: number; timeZone: string },
 ): NaturalDate[] {
   const { now, timeZone } = options;
   const today = getCivilToday(now, timeZone);
-  const dayHits = Array.from(text.matchAll(DAY_RE))
-    .map((match) => readDayHit(match, today))
-    .filter((hit): hit is DayHit => hit !== null)
-    .map((hit) => {
-      const clock = resolveClock(hit, readClockAfter(text, hit.end));
-      return {
-        start: hit.start,
-        end: clock?.end ?? hit.end,
-        due: toDue(hit.epochDay, clock, timeZone),
-      };
-    });
+  const dayHits = Array.from(text.matchAll(DAY_RE)).reduce<
+    { start: number; end: number; due: NaturalDue }[]
+  >((found, match) => {
+    const hit = readDayHit(match, today, text);
+    const floor = found.at(-1)?.end ?? 0;
+    if (!hit || hit.start < floor) return found;
+    const clock = resolveClock(
+      hit,
+      readClockAfter(text, hit.end) ?? readClockBefore(text, floor, hit.start),
+    );
+    const epochDay = hit.epochDay + (clock?.nextDay ? DAY_MS : 0);
+    return [
+      ...found,
+      {
+        start: Math.min(hit.start, clock?.start ?? hit.start),
+        end: Math.max(hit.end, clock?.end ?? hit.end),
+        due: toDue(epochDay, clock, timeZone),
+      },
+    ];
+  }, []);
   const isInsideDay = (start: number) =>
     dayHits.some((hit) => start >= hit.start && start < hit.end);
   const timeHits = Array.from(text.matchAll(TIME_RE))
-    .map((match) => ({ match, clock: toClock(match, 0) }))
-    .filter(({ match }) => !isInsideDay(match.index ?? 0))
-    .flatMap(({ match, clock }) => {
-      if (!clock) return [];
-      const start = match.index ?? 0;
+    .map((match) => toClock(match, 0, true))
+    .filter((clock): clock is ClockTime => clock !== null)
+    .filter((clock) => !isInsideDay(clock.start))
+    .map((clock) => {
       const at = toDue(today, clock, timeZone);
       const due =
         at.kind === 'moment' && at.at <= now
           ? toDue(today + DAY_MS, clock, timeZone)
           : at;
-      return [{ start, end: start + match[0].length, due }];
+      return { start: clock.start, end: clock.end, due };
     });
   return [...dayHits, ...timeHits]
     .sort((a, b) => a.start - b.start)

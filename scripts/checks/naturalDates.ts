@@ -9,6 +9,8 @@ const AUCKLAND = 'Pacific/Auckland';
 const WEDNESDAY_NOON = Date.parse('2026-11-11T20:00:00Z');
 const SATURDAY_EVENING = Date.parse('2026-10-31T23:00:00Z');
 
+const MARCH_2028 = Date.parse('2028-03-01T20:00:00Z');
+
 const day = (year: number, month: number, date: number) => ({
   kind: 'day',
   date: Date.UTC(year, month - 1, date),
@@ -35,7 +37,7 @@ const cases = [
   ['Nov 10', WEDNESDAY_NOON, LA, day(2027, 11, 10)],
   ['today', WEDNESDAY_NOON, LA, day(2026, 11, 11)],
   ['tomorrow', WEDNESDAY_NOON, LA, day(2026, 11, 12)],
-  ['tonight', WEDNESDAY_NOON, LA, moment('2026-11-12T04:00:00Z')],
+  ['tonight', WEDNESDAY_NOON, LA, day(2026, 11, 11)],
   ['tomorrow at 3', WEDNESDAY_NOON, LA, moment('2026-11-12T23:00:00Z')],
   ['Friday at 3pm', WEDNESDAY_NOON, LA, moment('2026-11-13T23:00:00Z')],
   ['Friday at 9', WEDNESDAY_NOON, LA, moment('2026-11-13T17:00:00Z')],
@@ -55,6 +57,24 @@ const cases = [
   ['tomorrow at 3', SATURDAY_EVENING, LA, moment('2026-11-01T23:00:00Z')],
   ['today at 3', SATURDAY_EVENING, LA, moment('2026-10-31T22:00:00Z')],
   ['Sunday at 1am', SATURDAY_EVENING, LA, moment('2026-11-01T08:00:00Z')],
+  ['tonight at 12', WEDNESDAY_NOON, LA, moment('2026-11-12T08:00:00Z')],
+  ['3pm Friday', WEDNESDAY_NOON, LA, moment('2026-11-13T23:00:00Z')],
+  ['at 3 tomorrow', WEDNESDAY_NOON, LA, moment('2026-11-12T23:00:00Z')],
+  ['at 7 tonight', WEDNESDAY_NOON, LA, moment('2026-11-12T03:00:00Z')],
+  ['at 3 pm on friday', WEDNESDAY_NOON, LA, moment('2026-11-13T23:00:00Z')],
+  ['Friday at noon', WEDNESDAY_NOON, LA, moment('2026-11-13T20:00:00Z')],
+  ['at midnight', WEDNESDAY_NOON, LA, moment('2026-11-12T08:00:00Z')],
+  ['Mar 12 2025', WEDNESDAY_NOON, LA, day(2025, 3, 12)],
+  ['Mar 12, 2027', WEDNESDAY_NOON, LA, day(2027, 3, 12)],
+  ['12 Mar 2028', WEDNESDAY_NOON, LA, day(2028, 3, 12)],
+  ['Feb 29', WEDNESDAY_NOON, LA, day(2028, 2, 29)],
+  ['Feb 29', MARCH_2028, LA, day(2032, 2, 29)],
+  ['Sunday March 14', WEDNESDAY_NOON, LA, day(2027, 3, 14)],
+  ['Sun, Mar 14', WEDNESDAY_NOON, LA, day(2027, 3, 14)],
+  ['May 3', WEDNESDAY_NOON, LA, day(2027, 5, 3)],
+  ['on wed', WEDNESDAY_NOON, LA, day(2026, 11, 18)],
+  ['next mon', WEDNESDAY_NOON, LA, day(2026, 11, 16)],
+  ['3 Mar', WEDNESDAY_NOON, LA, day(2027, 3, 3)],
 ] as const;
 
 cases.forEach(([text, now, zone, expected]) => {
@@ -87,6 +107,24 @@ assert.deepEqual(found('tomorrow 5 people'), ['tomorrow']);
 assert.deepEqual(found('Buy 3 of them'), []);
 assert.deepEqual(found('Ask @Friday'), []);
 assert.deepEqual(found('Tomorrow, 3pm'), ['Tomorrow, 3pm']);
+assert.deepEqual(found('at 3 tables'), []);
+assert.deepEqual(found('pay at 7'), []);
+assert.deepEqual(found("I'll be at 3"), []);
+assert.deepEqual(found('at 3:30'), ['at 3:30']);
+assert.deepEqual(found('15:30'), ['15:30']);
+assert.deepEqual(found('3pm Friday'), ['3pm Friday']);
+assert.deepEqual(found('at 3 tomorrow'), ['at 3 tomorrow']);
+assert.deepEqual(found('at 7 tonight'), ['at 7 tonight']);
+assert.deepEqual(found('at 3 pm on friday'), ['at 3 pm on friday']);
+assert.deepEqual(found('Saturday March 14'), []);
+assert.deepEqual(found('Sunday, March 14'), ['Sunday, March 14']);
+assert.deepEqual(found('may 3 people'), []);
+assert.deepEqual(found('we may 5 times'), []);
+assert.deepEqual(found('I have 3 mar tickets'), []);
+assert.deepEqual(found('call mon'), []);
+assert.deepEqual(found('we wed'), []);
+assert.deepEqual(found("today's plan"), []);
+assert.deepEqual(found('tomorrow’s list'), []);
 
 const [first] = parseNaturalDate('Call Dana on Fri', {
   now: WEDNESDAY_NOON,

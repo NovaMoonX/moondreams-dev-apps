@@ -14,7 +14,6 @@ import { ArrowUp } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
-import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 
 import {
@@ -81,6 +80,10 @@ function Composer({
   const [isFocused, setIsFocused] = useState(false);
   const [dismissed, setDismissed] = useState<string[]>([]);
   const [fixedDays, setFixedDays] = useState<Record<string, number>>({});
+  const [lastDrop, setLastDrop] = useState<{
+    key: string;
+    label: string;
+  } | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
@@ -114,29 +117,24 @@ function Composer({
   const isCapturesLoaded = useAppSelector(
     (state) => state.helm.recentCaptures.isLoaded,
   );
+  const length = text.trim().length;
+  const isTooLong = length > CAPTURE_MAX_CHARS;
   const canSend =
     isReady &&
-    text.trim().length > 0 &&
+    length > 0 &&
     !isSending &&
     isCapturesLoaded &&
     user !== null &&
-    text.length <= CAPTURE_MAX_CHARS;
-  const isNearLimit = text.length >= CAPTURE_COUNTER_FROM;
-  const isTooLong = text.length > CAPTURE_MAX_CHARS;
+    !isTooLong;
+  const isNearLimit = length >= CAPTURE_COUNTER_FROM;
 
   const send = async () => {
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
     const turn = { ...getNextTurn(), createdAt: Date.now() };
-    const sentReading = applyReadingEdits(
-      readCapture(sent.trimStart(), {
-        now: turn.createdAt,
-        timeZone,
-        assistantName: name,
-      }),
-      { dismissed, days: fixedDays, timeZone },
-    );
+    const sentDismissed = dismissed;
+    const sentDays = fixedDays;
     const restore = (error: unknown) => {
       console.error('Helm turn did not send', error);
       const withSent = (current: string) =>
@@ -146,6 +144,10 @@ function Composer({
       if (store.getState().helm.uid === uid) {
         const kept = parseDraft(readFormDraft(uid, DRAFT_KEY, null)) ?? '';
         writeFormDraft(uid, DRAFT_KEY, null, withSent(kept));
+        setDismissed((current) =>
+          Array.from(new Set([...current, ...sentDismissed])),
+        );
+        setFixedDays((current) => ({ ...sentDays, ...current }));
       }
       setText(withSent);
       addToast({ title: HELM_COPY.sendFailed, type: 'error' });
@@ -156,13 +158,14 @@ function Composer({
       // The write is not awaited: offline it waits in the queue, and the field is free for the next line.
       const { write } = await sendCapture(uid, encryption, {
         text: sent,
-        reading: sentReading,
+        reading,
         ...turn,
       });
       recordSentTurn(uid, turn);
       setText('');
       setDismissed([]);
       setFixedDays({});
+      setLastDrop(null);
       write.catch(restore);
     } catch (error) {
       restore(error);
@@ -245,27 +248,47 @@ function Composer({
       <ReadChips
         reading={reading}
         timeZone={timeZone}
-        onDismiss={(key) => setDismissed((current) => [...current, key])}
-        onPickDay={(key, day) =>
-          setFixedDays((current) => ({ ...current, [key]: day }))
-        }
+        onDismiss={(key, label) => {
+          setDismissed((current) => [...current, key]);
+          setLastDrop({ key, label });
+        }}
+        onPickDay={(key, day) => {
+          setFixedDays((current) => ({ ...current, [key]: day }));
+          setLastDrop(null);
+        }}
       />
+      {lastDrop && (
+        <p className='text-muted-foreground flex items-center gap-1 text-[13px]'>
+          {HELM_COPY.readAsTextDone(lastDrop.label)}
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative h-7 min-w-0 rounded-full px-2 text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+            onClick={() => {
+              setDismissed((current) =>
+                current.filter((key) => key !== lastDrop.key),
+              );
+              setLastDrop(null);
+            }}
+          >
+            {HELM_COPY.undo}
+          </Button>
+        </p>
+      )}
       {isTooLong && (
         <p className='text-destructive text-[13px]' aria-live='polite'>
-          {HELM_COPY.tooLong(text.length - CAPTURE_MAX_CHARS)}
+          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS)}
         </p>
       )}
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
           <span
-            className={join(
-              'text-[13px] tabular-nums',
-              isTooLong ? 'text-destructive' : 'text-muted-foreground',
-            )}
+            className='text-muted-foreground text-[13px] tabular-nums'
             aria-live='polite'
           >
             {isNearLimit &&
-              `${text.length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
+              `${length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
           </span>
           <Button
             type='button'

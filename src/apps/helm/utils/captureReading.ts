@@ -10,6 +10,27 @@ import type {
 const SIGIL_RE =
   /(?<![\p{L}\p{N}_])([@#^])(\p{L}[\p{L}\p{N}_]*(?:['’-][\p{L}\p{N}_]+)*)/gu;
 const CAPITALISED_WORD_RE = /^ (\p{Lu}[\p{L}\p{N}_]*(?:['’-][\p{L}\p{N}_]+)*)/u;
+const TITLE_ABBREVIATION_RE = /(?<![\p{L}\p{N}_])(?:Dr|Mr|Mrs|Ms|Mx|St)$/u;
+const POSSESSIVE_RE = /['’]s$/i;
+const NAME_STOPLIST = new Set([
+  'Please',
+  'Thanks',
+  'I',
+  'The',
+  'A',
+  'An',
+  'And',
+  'About',
+  'To',
+  'At',
+  'For',
+  'On',
+  'In',
+  'With',
+  'Then',
+  'But',
+  'So',
+]);
 const URGENT_RE = /(?<!\S)!(?!\S)|^!(?=\S)/;
 
 export const EMPTY_READING: CaptureReading = {
@@ -31,15 +52,19 @@ const KIND_BY_SIGIL = {
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Takes the capitalised words that follow, so "#Sweet Layer Bakery" is one place, but never into a date phrase. */
+/** Takes the capitalised words that follow, so "#Sweet Layer Bakery" is one place and "@Dr. Alexandria Chen" one person, but never into a date phrase or a capitalised function word ("Please"). */
 const extendRun = (
   text: string,
   end: number,
   isStopped: (start: number) => boolean,
 ): number => {
-  const next = CAPITALISED_WORD_RE.exec(text.slice(end));
-  if (!next || isStopped(end + 1)) return end;
-  return extendRun(text, end + next[0].length, isStopped);
+  const dot =
+    text[end] === '.' && TITLE_ABBREVIATION_RE.test(text.slice(0, end));
+  const from = dot ? end + 1 : end;
+  const next = CAPITALISED_WORD_RE.exec(text.slice(from));
+  const isFunctionWord = next && NAME_STOPLIST.has(next[1].split(/['’-]/)[0]);
+  if (!next || isFunctionWord || isStopped(from + 1)) return end;
+  return extendRun(text, from + next[0].length, isStopped);
 };
 
 const readAddressedAs = (text: string, assistantName: string): Token | null => {
@@ -75,7 +100,12 @@ export function readCapture(
     const kind = KIND_BY_SIGIL[match[1] as keyof typeof KIND_BY_SIGIL];
     const firstEnd = start + match[0].length;
     const isCapitalised = /^\p{Lu}/u.test(match[2]);
-    const end = isCapitalised ? extendRun(text, firstEnd, isInDate) : firstEnd;
+    const runEnd = isCapitalised
+      ? extendRun(text, firstEnd, isInDate)
+      : firstEnd;
+    const end = POSSESSIVE_RE.test(text.slice(start + 1, runEnd))
+      ? runEnd - 2
+      : runEnd;
     return {
       kind,
       token: {
