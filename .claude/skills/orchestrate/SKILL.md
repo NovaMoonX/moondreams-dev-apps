@@ -51,6 +51,12 @@ Leave out the files, selectors, data paths, verification steps, docs to update a
 
 When the owner assigns a list of issues, work them in order, one PR each (stacked when one builds on the last), and for each: plan it from the issue's checklists, build it through the table above, validate, size and run the review, fix, push, and refresh that PR's **status comment** before starting the next. The owner opens any PR and reads where it stands without scrolling the conversation.
 
+**A run never goes quiet.** Finishing one issue is not the end of the round: start the next in the same turn, and close with the card only when the run is finished or waits on the owner (owner, Helm MVP: a session finished Issue 9, posted its wrap-up and sat idle until asked "Still working?"). A turn may end mid-run only while something will wake the session: a background agent or task still working (its completion wakes you), or a `send_later` check-in for what lives outside (CI, a deploy, the merge line). `npm run -s run:state` records it, and the `run-keepalive.sh` Stop hook holds a turn that would end with nothing in flight and names the next step:
+
+- `start "<the run>"` when the run begins, `next "<step>"` as each issue closes;
+- `wait "<what wakes you>"` after scheduling a check-in (it lapses after 110 minutes, since background tasks stop at two hours);
+- `block "<what the owner must do>"` when only the owner can move it, and `done` when the last PR is wrapped up.
+
 ## Keeping your PRs current
 
 "Current" means one thing: the PR's own base (main, or the PR beneath it in a stack) is merged into its branch. Its diff against that base stays exactly its own changes; nothing from another open PR ever enters it, and unrelated PRs are never stacked on each other. The session that opened a PR keeps it current for as long as it watches it, so the owner never has to ask.
