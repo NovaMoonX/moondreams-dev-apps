@@ -77,6 +77,8 @@ Every PR in this skill also ends with `.claude/skills/pr-wrap-up/SKILL.md`: scre
 
 Branch names: `claude/<id>-NN-<slug>`. Each branch is cut from the previous PR's branch, so the first one is cut from the docs branch.
 
+The build is one run (`orchestrate` "A run never goes quiet"): `npm run -s run:state -- start "<App> MVP"` before the first issue, `next` as each PR is wrapped up, and the next issue starts in the same turn; `done` only after the polish PR's overview comment.
+
 For each MVP issue, in order:
 
 1. **Re-read the issue.** All of its checklists (Success Criteria, CRUD & Entry-Point Requirements, Documentation) are binding.

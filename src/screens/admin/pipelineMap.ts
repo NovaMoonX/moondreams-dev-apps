@@ -51,6 +51,7 @@ export const MAP_NODES: MapNode[] = [
       'Hint to orchestrate',
       'Plan shape',
       'Automatic compaction',
+      'Keep a run going',
       'Improving the pipeline',
     ],
     lane: 'work',
