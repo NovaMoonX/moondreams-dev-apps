@@ -5,6 +5,7 @@ import {
   Calendar,
   Popover,
 } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import Drawer from '@/components/Drawer';
@@ -35,7 +36,11 @@ interface Chip {
 const MAX_SHOWN_CHIPS = 6;
 
 const formatDue = (due: TaskDue, timeZone: string) => {
-  const isOtherYear = (year: number) => year !== new Date().getFullYear();
+  const isOtherYear = (year: number) =>
+    year !==
+    Number(
+      new Date().toLocaleDateString('en-US', { timeZone, year: 'numeric' }),
+    );
   if (due.kind === 'day') {
     const date = new Date(due.date);
     return date.toLocaleDateString('en-US', {
@@ -102,20 +107,21 @@ function ReadChips({
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [isExpanded, setIsExpanded] = useState(false);
   const isPhone = useMediaQuery().isBelow('sm');
-  const { dialogId, onDialogClose } = useSheetHistory(
-    openKey !== null && isPhone,
-    () => setOpenKey(null),
-  );
   // The same words said twice are one chip, as dropping or fixing one answers for both.
   const chips = Array.from(
     new Map(
       toChips(reading, timeZone).map((chip) => [chip.key, chip]),
     ).values(),
   );
-  if (chips.length === 0) return null;
-  const shown = isExpanded ? chips : chips.slice(0, MAX_SHOWN_CHIPS);
-  const hiddenCount = chips.length - shown.length;
   const openChip = chips.find((chip) => chip.key === openKey);
+  const { dialogId, onDialogClose } = useSheetHistory(
+    openChip?.due != null && isPhone,
+    () => setOpenKey(null),
+  );
+  if (chips.length === 0) return null;
+  // On a phone the chips are one sideways row, so however many there are, Send stays in reach.
+  const shown = isExpanded || isPhone ? chips : chips.slice(0, MAX_SHOWN_CHIPS);
+  const hiddenCount = chips.length - shown.length;
 
   const renderCalendar = (chip: Chip & { due: TaskDue }) => (
     <Calendar
@@ -139,7 +145,13 @@ function ReadChips({
     <>
       <ul
         aria-label={HELM_COPY.readChipsLabel}
-        className='flex flex-wrap items-center gap-1.5'
+        data-no-swipe
+        className={join(
+          'flex items-center gap-1.5',
+          isPhone
+            ? '-mx-4 [scrollbar-width:none] overflow-x-auto overscroll-x-contain px-4 [&::-webkit-scrollbar]:hidden'
+            : 'flex-wrap',
+        )}
       >
         {shown.map((chip) => {
           const face =
@@ -166,7 +178,7 @@ function ReadChips({
           return (
             <li
               key={chip.key}
-              className='border-border bg-card text-foreground inline-flex h-8 max-w-full items-center rounded-full border'
+              className='border-border bg-card text-foreground inline-flex h-8 max-w-full shrink-0 items-center rounded-full border'
             >
               {chip.due && onPickDay && !isPhone ? (
                 <Popover

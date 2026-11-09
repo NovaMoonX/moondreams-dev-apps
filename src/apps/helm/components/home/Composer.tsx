@@ -31,7 +31,9 @@ import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
 import {
   applyReadingEdits,
+  getReadingKey,
   readCapture,
+  URGENT_KEY,
 } from '@apps/helm/utils/captureReading';
 
 const DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
@@ -102,6 +104,14 @@ function Composer({
     days: fixedDays,
     timeZone,
   });
+  const readKeys = [
+    ...(['people', 'places', 'documents', 'dates'] as const).flatMap((kind) =>
+      read[kind].map((token) => getReadingKey(kind, token.text)),
+    ),
+    ...(read.isUrgent ? [URGENT_KEY] : []),
+  ];
+  const shownDrop =
+    lastDrop && readKeys.includes(lastDrop.key) ? lastDrop : null;
   const stopKeepingInView = useRef<(() => void) | null>(null);
 
   // A field removed while focused gets no blur, so leaving home mid-typing must hand the dock back too.
@@ -156,9 +166,18 @@ function Composer({
     try {
       const encryption = await getHelmEncryption(uid);
       // The write is not awaited: offline it waits in the queue, and the field is free for the next line.
+      // Read again at Send, so a line typed before midnight and sent after it means the day it is sent.
+      const sentReading = applyReadingEdits(
+        readCapture(sent.trimStart(), {
+          now: turn.createdAt,
+          timeZone,
+          assistantName: name,
+        }),
+        { dismissed: sentDismissed, days: sentDays, timeZone },
+      );
       const { write } = await sendCapture(uid, encryption, {
         text: sent,
-        reading,
+        reading: sentReading,
         ...turn,
       });
       recordSentTurn(uid, turn);
@@ -257,17 +276,17 @@ function Composer({
           setLastDrop(null);
         }}
       />
-      {lastDrop && (
-        <p className='text-muted-foreground flex items-center gap-1 text-[13px]'>
-          {HELM_COPY.readAsTextDone(lastDrop.label)}
+      {shownDrop && (
+        <p className='text-muted-foreground text-[13px]'>
+          {HELM_COPY.readAsTextDone(shownDrop.label)}
           <Button
             type='button'
             variant='tertiary'
             size='sm'
-            className="relative h-7 min-w-0 rounded-full px-2 text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+            className="relative ml-1 inline-flex h-7 min-w-0 rounded-full px-2 align-middle text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
             onClick={() => {
               setDismissed((current) =>
-                current.filter((key) => key !== lastDrop.key),
+                current.filter((key) => key !== shownDrop.key),
               );
               setLastDrop(null);
             }}
