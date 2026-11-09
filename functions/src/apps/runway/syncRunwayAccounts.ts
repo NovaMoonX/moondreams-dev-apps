@@ -39,8 +39,10 @@ export const syncRunwayAccounts = onSchedule(
           const data = link.data();
           const isDue =
             link.exists &&
-            (data?.status === 'active' || data?.status === 'needsAttention') &&
-            now - ((data.lastSyncAt as number | null) ?? 0) > STALE_AFTER_MS;
+            (data?.status === 'needsAttention' ||
+              (data?.status === 'active' &&
+                now - ((data.lastSyncAt as number | null) ?? 0) >
+                  STALE_AFTER_MS));
           return isDue ? [{ uid, linkId }] : [];
         }),
       )
@@ -66,6 +68,8 @@ export const syncRunwayAccounts = onSchedule(
       checked: items.size,
       synced: states.filter((state) => state === 'ok').length,
       failed: states.filter((state) => state === 'failed').length,
+      needsAttention: states.filter((state) => state === 'needsAttention')
+        .length,
     });
   },
 );
