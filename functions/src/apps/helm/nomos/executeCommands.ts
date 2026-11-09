@@ -1,7 +1,12 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { MAX_EFFECTS, type NomosCommand, type TaskDue } from './commands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
-import { summarize, type EffectCounts } from './summaries.js';
+import {
+  buildCodeQuestion,
+  summarize,
+  type CodeQuestionKind,
+  type EffectCounts,
+} from './summaries.js';
 
 export interface ExistingTask {
   status: 'open' | 'done';
@@ -234,5 +239,94 @@ export function buildExecution(
       effects: plan.effects,
       undoReport: null,
     }),
+  };
+}
+
+export interface QuestionStateEntry {
+  kind: string;
+  shape: string;
+  askedAt: number;
+  answeredAt: number | null;
+  skippedAt: number | null;
+}
+
+interface SettleInput {
+  mode: 'full' | 'rest';
+  filed: number;
+  hasMore: boolean;
+  executionId: string | null;
+  now: number;
+  newId: () => string;
+  opened: Record<string, unknown>;
+  questionState: Record<string, QuestionStateEntry>;
+  executionIds: string[];
+}
+
+const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
+  entry.kind === 'moreToSort' && entry.answeredAt === null;
+
+/** Whether the capture still waits on a "Sort the rest" answer. */
+export const hasOpenMoreToSort = (
+  questionState: Record<string, QuestionStateEntry> | undefined,
+): boolean => Object.entries(questionState ?? {}).some(isOpenMore);
+
+const asked = (kind: CodeQuestionKind, id: string, now: number) => ({
+  state: {
+    [id]: {
+      kind,
+      shape: 'pickOne',
+      askedAt: now,
+      answeredAt: null,
+      skippedAt: null,
+    },
+  },
+  sealed: { [id]: buildCodeQuestion(kind) },
+});
+
+/** Where a capture lands once a reading is filed: sorted, still more to sort, or nothing could be made of it. The opened payload is spread so its text and reading are never dropped. */
+export function settleCapture(input: SettleInput) {
+  const { now, mode, opened } = input;
+  const oldQuestions = (opened.questions ?? {}) as Record<string, unknown>;
+  const closing = Object.entries(input.questionState).filter(isOpenMore);
+  const closedState = Object.fromEntries(
+    closing.map(([id, entry]) => [id, { ...entry, answeredAt: now }]),
+  );
+  const closedQuestions = Object.fromEntries(
+    closing.map(([id]) => [
+      id,
+      {
+        ...(oldQuestions[id] as Record<string, unknown>),
+        answer: {
+          by: 'tap',
+          at: now,
+          turnCaptureId: null,
+          shape: 'pickOne',
+          optionId: 'sortRest',
+          otherText: null,
+        },
+      },
+    ]),
+  );
+  const isUnread = mode === 'full' && input.filed === 0;
+  const next = isUnread
+    ? asked('couldNotRead', input.newId(), now)
+    : input.hasMore
+      ? asked('moreToSort', input.newId(), now)
+      : null;
+  const previous =
+    typeof opened.sortedThrough === 'number' ? opened.sortedThrough : 0;
+  return {
+    status: next ? ('needsYou' as const) : ('sorted' as const),
+    questionState: { ...input.questionState, ...closedState, ...next?.state },
+    sealed: {
+      ...opened,
+      questions: { ...oldQuestions, ...closedQuestions, ...next?.sealed },
+      sortedThrough: input.hasMore
+        ? previous + input.filed
+        : (opened.sortedThrough ?? null),
+    },
+    executionIds: input.executionId
+      ? [...input.executionIds, input.executionId]
+      : input.executionIds,
   };
 }

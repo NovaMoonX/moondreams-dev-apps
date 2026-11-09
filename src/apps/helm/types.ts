@@ -25,7 +25,18 @@ export type CaptureStatus =
   'received' | 'interpreting' | 'sorted' | 'needsYou' | 'failed';
 
 export type HeldReason =
-  'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached';
+  'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached' | 'recentLimit';
+
+export type QuestionKind = 'couldNotRead' | 'moreToSort' | (string & {});
+
+/** The readable state of one question; its words are sealed and never needed on the device. */
+export interface QuestionState {
+  kind: QuestionKind;
+  shape: string;
+  askedAt: number;
+  answeredAt: number | null;
+  skippedAt: number | null;
+}
 
 export type CaptureRoute = 'quick' | 'full';
 
@@ -69,6 +80,7 @@ export interface Capture {
   claimedAt: number | null;
   attempts: number;
   lastErrorCode: string | null;
+  questionState: Record<string, QuestionState>;
   executionIds: string[];
   seenAt: number | null;
   createdAt: number;
@@ -87,6 +99,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   text: string;
   reading: CaptureReading;
   isUnreadable: boolean;
+  /** The write has not reached the server yet, so it waits for a connection. */
+  hasPendingWrites: boolean;
 }
 
 export type TaskStatus = 'open' | 'done';

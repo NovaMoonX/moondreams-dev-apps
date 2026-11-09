@@ -26,14 +26,18 @@ import {
   setRecentExecutionsFailed,
   setUnseenCaptures,
   setUnseenCapturesFailed,
+  setWaitingCaptures,
+  setWaitingCapturesFailed,
 } from '@apps/helm/store/helmSlice';
 import {
   startRecentCapturesListener,
   startUnseenCapturesListener,
+  startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
+import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
@@ -78,6 +82,8 @@ export function useHelmSync(uid: string | null) {
     };
   }, [uid, dispatch]);
 
+  useCaptureSweep(uid);
+
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
 
   useEffect(() => {
@@ -117,6 +123,15 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm unseen turns listener failed', error);
               dispatch(setUnseenCapturesFailed());
+            },
+          ),
+          startWaitingCapturesListener(
+            uid,
+            read,
+            (captures) => dispatch(setWaitingCaptures(captures)),
+            (error) => {
+              console.error('Helm waiting turns listener failed', error);
+              dispatch(setWaitingCapturesFailed());
             },
           ),
           startOpenTasksListener(

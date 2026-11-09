@@ -3,8 +3,30 @@ import { EMPTY_USAGE } from '../../../ai/models.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,|\band\b/gi;
+const FILLER = new Set([
+  'the',
+  'a',
+  'an',
+  'thing',
+  'things',
+  'stuff',
+  'with',
+  'of',
+  'that',
+  'this',
+  'it',
+  'um',
+  'uh',
+]);
 
-/** Emulator stand-in with no key: one createTask per comma, "and" or line, each carrying the date span that lies inside it. */
+const hasMeaning = (title: string) =>
+  /\p{L}/u.test(title) &&
+  title
+    .toLowerCase()
+    .split(/\s+/)
+    .some((word) => !FILLER.has(word.replace(/[^\p{L}\p{N}]/gu, '')));
+
+/** Emulator stand-in with no key: one createTask per comma, "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
 export function createFixtureProvider(
   text: string,
   reading: CaptureReading,
@@ -36,7 +58,7 @@ export function createFixtureProvider(
           .replace(/[@#^!]/g, '')
           .replace(/\s+/g, ' ')
           .trim();
-        return title
+        return hasMeaning(title)
           ? [
               {
                 kind: 'createTask',

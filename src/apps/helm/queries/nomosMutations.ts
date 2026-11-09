@@ -8,8 +8,13 @@ interface SortResult {
   executionId: string | null;
 }
 
+export type SortMode = 'full' | 'rest';
+
+/** `held` when the server's limit or budget turned the call away; the turn then carries why. */
+export type SortOutcome = 'done' | 'held' | 'failed' | 'skipped';
+
 const sortHelmCaptureCallable = httpsCallable<
-  { captureId: string; requestKey: string },
+  { captureId: string; requestKey: string; mode: SortMode },
   SortResult
 >(functions, 'sortHelmCapture');
 
@@ -29,14 +34,27 @@ export const subscribeSorting = (listener: () => void) => {
 };
 
 /** Asks the server to sort one saved turn, once. A failure is logged and leaves the turn saved as written. */
-export async function sortCapture(captureId: string) {
-  if (inFlight.has(captureId)) return;
+export async function sortCapture(
+  captureId: string,
+  mode: SortMode = 'full',
+): Promise<SortOutcome> {
+  if (inFlight.has(captureId)) return 'skipped';
   inFlight.add(captureId);
   notify();
   try {
-    await sortHelmCaptureCallable({ captureId, requestKey: generateUuid() });
+    await sortHelmCaptureCallable({
+      captureId,
+      requestKey: generateUuid(),
+      mode,
+    });
+    return 'done';
   } catch (error) {
-    console.error('Helm could not sort a turn', error);
+    const isHeld =
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'functions/resource-exhausted';
+    if (!isHeld) console.error('Helm could not sort a turn', error);
+    return isHeld ? 'held' : 'failed';
   } finally {
     inFlight.delete(captureId);
     notify();

@@ -1,4 +1,4 @@
-import { MAX_COMMANDS } from './commands.js';
+import { MAX_COMMANDS, MAX_EFFECTS } from './commands.js';
 
 export const MAX_CAPTURE_CHARS = 4_000;
 export const MAX_CONTEXT_TASKS = 150;
@@ -13,4 +13,6 @@ How to file:
 - Dates come only from the reading. To give a task a day, set dueSpanId to the id of a date span in <reading> that belongs to that task. Never write a date, a day name or a time yourself, and leave dueSpanId null when no span belongs to it.
 - isUrgent is true only when the reading says the capture is urgent or the person says it of that task.
 - To change or finish a task that already exists, use updateTask or completeTask with its alias from <open_tasks>. When the person may mean a task that is not listed, call search_tasks first. Never invent an alias. Do not make a task that <open_tasks> already holds.
-- Make at most ${MAX_COMMANDS} commands. Up to ${MAX_CONTEXT_TASKS} open tasks are listed.`;
+- List the commands in the order the person said them, at most ${MAX_EFFECTS}. The first ${MAX_COMMANDS} are filed now and the person can ask for the rest. When nothing in the capture can be made into a task, send no commands. Up to ${MAX_CONTEXT_TASKS} open tasks are listed.`;
+
+export const REST_PROMPT = `Some of this capture has already been filed. The titles are in <already_made>. File only what those tasks do not already cover, and never make one of them again.`;

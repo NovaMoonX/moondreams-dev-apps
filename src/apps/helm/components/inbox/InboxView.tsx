@@ -9,6 +9,8 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
+import HeldCaptureCard from '@apps/helm/components/inbox/HeldCaptureCard';
+import HeldRow from '@apps/helm/components/inbox/HeldRow';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -16,7 +18,11 @@ import {
   markAllSeen,
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
-import { selectUnseenCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectHeldItems,
+  selectNewSinceLooked,
+} from '@apps/helm/store/selectors/captureSelectors';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { OpenCapture } from '@apps/helm/types';
 
 interface InboxViewProps {
@@ -28,11 +34,18 @@ interface InboxViewProps {
 function InboxView({ onBack, onHome }: InboxViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const unseen = useAppSelector(selectUnseenCaptures);
+  const name = useAssistantName();
+  const unseen = useAppSelector(selectNewSinceLooked);
+  const held = useAppSelector(selectHeldItems);
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.unseenCaptures,
   );
   const [opened, setOpened] = useState<OpenCapture | null>(null);
+  const [heldId, setHeldId] = useState<string | null>(null);
+  const openHeld =
+    [...held.needsYou, ...held.waiting].find(
+      (item) => item.capture.id === heldId,
+    ) ?? null;
 
   const reportFailure = (error: unknown) => {
     console.error('Helm turn was not marked seen', error);
@@ -60,6 +73,36 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.inboxTitle}
         </h1>
+        {held.needsYou.length > 0 && (
+          <ul className='helm-card divide-border divide-y overflow-hidden'>
+            {held.needsYou.map((item) => (
+              <li key={item.capture.id}>
+                <HeldRow
+                  item={item}
+                  onOpen={(entry) => setHeldId(entry.capture.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        )}
+        {held.waiting.length > 0 && (
+          <>
+            <SectionDivider label={HELM_COPY.waitingHeading} />
+            <ul className='helm-card divide-border divide-y overflow-hidden'>
+              {held.waiting.map((item) => (
+                <li key={item.capture.id}>
+                  <HeldRow
+                    item={item}
+                    onOpen={(entry) => setHeldId(entry.capture.id)}
+                  />
+                </li>
+              ))}
+            </ul>
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {HELM_COPY.waitingNote(name)}
+            </p>
+          </>
+        )}
         <SectionDivider
           label={HELM_COPY.inboxNewSince}
           trailing={
@@ -117,6 +160,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
           </ul>
         )}
       </main>
+      <HeldCaptureCard item={openHeld} onClose={() => setHeldId(null)} />
       <DetailSheet
         isOpen={opened !== null}
         onClose={() => setOpened(null)}

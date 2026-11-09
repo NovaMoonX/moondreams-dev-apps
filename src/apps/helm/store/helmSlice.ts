@@ -41,6 +41,8 @@ export interface HelmState {
   recentCaptures: CaptureSet;
   /** Turns not yet seen in the Inbox, whenever they were said. */
   unseenCaptures: CaptureSet;
+  /** Turns waiting to be read, being read, failed or asking the person, whenever they were said. */
+  waitingCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
   /** What the assistant did for the turns in the eager window. */
@@ -72,6 +74,7 @@ const initialState: HelmState = {
   uid: null,
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
+  waitingCaptures: emptySet,
   openTasks: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -125,6 +128,16 @@ const helmSlice = createSlice({
     },
     setUnseenCapturesFailed: (state) => {
       state.unseenCaptures.isFailed = true;
+    },
+    setWaitingCaptures: (state, action: PayloadAction<OpenCapture[]>) => {
+      state.waitingCaptures = {
+        captures: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setWaitingCapturesFailed: (state) => {
+      state.waitingCaptures.isFailed = true;
     },
     setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
       state.openTasks = {
@@ -190,6 +203,8 @@ export const {
   setRecentCapturesFailed,
   setUnseenCaptures,
   setUnseenCapturesFailed,
+  setWaitingCaptures,
+  setWaitingCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setRecentExecutions,

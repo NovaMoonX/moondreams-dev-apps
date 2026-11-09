@@ -20,6 +20,7 @@ Built:
 - Words typed but not sent are still there when the phone closes the page, kept only sealed; opened offline or with the key refused, home says so, with Try again.
 - As you type, chips under the field show what was read for certain (`@` people, `#` places, `^` procedures or notes, `!` urgent, and dates like "Friday at 3"); a date chip opens a calendar, its ✕ reads it as text, and the reading is sealed with the turn.
 - Each sent turn is read by the assistant and filed as tasks, with a reply under the turn saying what it did; Today lists what is overdue or due within a week.
+- A turn the assistant can't read yet is kept as written and read again on the next open, when the connection returns or when you come back; Needs you lists what couldn't be read or sorted (Try reading again, Make it a task as written, Delete) and what is waiting, with why.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

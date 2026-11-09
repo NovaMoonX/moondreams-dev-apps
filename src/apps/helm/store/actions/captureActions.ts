@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   doc,
   setDoc,
   updateDoc,
@@ -12,7 +13,10 @@ import { createSealedReader } from '@lib/security';
 import { store } from '@/store';
 import { CAPTURE_MAX_CHARS } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import { sortCapture } from '@apps/helm/queries/nomosMutations';
+import {
+  sortCapture,
+  type SortOutcome,
+} from '@apps/helm/queries/nomosMutations';
 import { openJson, sealJson } from '@apps/helm/security';
 import {
   addEarlierCaptures,
@@ -24,12 +28,16 @@ import {
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
   CaptureReading,
   CaptureSealed,
   HelmEncryption,
+  OpenCapture,
+  Task,
+  TaskSealed,
 } from '@apps/helm/types';
 
 const BATCH_LIMIT = 400;
@@ -72,6 +80,7 @@ export async function sendCapture(
     claimedAt: null,
     attempts: 0,
     lastErrorCode: null,
+    questionState: {},
     executionIds: [],
     seenAt: createdAt,
     createdAt,
@@ -168,4 +177,108 @@ export async function markAllSeen(uid: string, captureIds: string[]) {
       return batch.commit();
     }),
   );
+}
+
+const tasksOf = (uid: string) =>
+  collection(db, 'apps', 'helm', 'users', uid, 'tasks');
+
+/** Puts a failed or unreadable turn back to received, with its attempts spent and its hold cleared, and asks the server to read it again. */
+export async function retryCapture(
+  uid: string,
+  capture: OpenCapture,
+): Promise<SortOutcome> {
+  const now = Date.now();
+  // A new reading settles the turn afresh, so the question it leaves behind is closed.
+  const closedQuestions = Object.fromEntries(
+    Object.entries(capture.questionState)
+      .filter(([, question]) => question.answeredAt === null)
+      .map(([id]) => [`questionState.${id}.answeredAt`, now]),
+  );
+  await updateDoc(doc(capturesOf(uid), capture.id), {
+    status: 'received',
+    attempts: 0,
+    lastErrorCode: null,
+    heldReason: null,
+    ...closedQuestions,
+  });
+  return sortCapture(capture.id);
+}
+
+/** Asks the server to file what a turn held back past its first 20 changes. */
+export const sortRestOfCapture = (captureId: string) =>
+  sortCapture(captureId, 'rest');
+
+export const deleteCapture = (uid: string, captureId: string) =>
+  deleteDoc(doc(capturesOf(uid), captureId));
+
+/** Makes one task from a held turn's words as written and marks the turn sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was. */
+export async function makeTaskAsWritten(
+  uid: string,
+  encryption: HelmEncryption,
+  capture: OpenCapture,
+) {
+  const title = toTaskTitle(capture.text);
+  if (!title) throw new Error('A turn with no words can not become a task.');
+  const now = Date.now();
+  const task: Task = {
+    status: 'open',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: null,
+    energy: null,
+    context: null,
+    projectId: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    mediaIds: [],
+    createdBy: 'person',
+    sourceCaptureId: capture.id,
+    executionId: null,
+    createdAt: now,
+    lastEditedAt: null,
+    completedAt: null,
+    sealed: await sealJson<TaskSealed>(
+      { title, notes: null, steps: {} },
+      encryption,
+    ),
+  };
+  const openQuestionIds = Object.entries(capture.questionState)
+    .filter(([, question]) => question.answeredAt === null)
+    .map(([id]) => id);
+  const questionFields = (answeredAt: number | null) =>
+    Object.fromEntries(
+      openQuestionIds.map((id) => [
+        `questionState.${id}.answeredAt`,
+        answeredAt,
+      ]),
+    );
+  const captureRef = doc(capturesOf(uid), capture.id);
+  const taskRef = doc(tasksOf(uid));
+  const batch = writeBatch(db);
+  batch.set(taskRef, task);
+  batch.update(captureRef, {
+    status: 'sorted',
+    sortedAt: now,
+    seenAt: now,
+    ...questionFields(now),
+  });
+  const write = batch.commit();
+  const undo = () => {
+    const reverse = writeBatch(db);
+    reverse.delete(taskRef);
+    reverse.update(captureRef, {
+      status: capture.status,
+      sortedAt: capture.sortedAt,
+      seenAt: capture.seenAt,
+      ...questionFields(null),
+    });
+    return reverse.commit();
+  };
+  return { write, undo };
 }

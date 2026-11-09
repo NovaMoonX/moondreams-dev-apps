@@ -14,6 +14,7 @@ export interface ContextInput {
   createdAt: number;
   timeZone: string;
   tasks: ContextTask[];
+  alreadyMade?: string[];
 }
 
 /** JSON that cannot close a data block early: a typed `</capture>` stays inside its string. */
@@ -84,7 +85,28 @@ export function buildContext(input: ContextInput): {
       })),
     })}</reading>`,
     `<open_tasks>${toDataJson(tasks)}</open_tasks>`,
+    ...(input.alreadyMade
+      ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
+      : []),
     `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
   return { message, aliases };
+}
+
+/** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */
+export function readMadeTitles(
+  effectRefs: unknown,
+  opened: Record<string, unknown>,
+): string[] {
+  const refs = Array.isArray(effectRefs) ? effectRefs : [];
+  const effects = Array.isArray(opened.effects) ? opened.effects : [];
+  return refs.flatMap((ref: unknown, index) => {
+    const written = (effects[index] as { written?: Record<string, unknown> })
+      ?.written;
+    const title = written?.['sealed.title'];
+    return (ref as { op?: string })?.op === 'create' &&
+      typeof title === 'string'
+      ? [title]
+      : [];
+  });
 }

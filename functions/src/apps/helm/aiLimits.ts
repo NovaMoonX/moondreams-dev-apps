@@ -7,7 +7,16 @@ export const AI_WINDOW_MS = 10 * 60 * 1000;
 export const AI_DAILY_BUDGET_CENTS = 1000;
 const HUNDREDTHS_PER_CENT = 100;
 
-export type HeldReason = 'dailyLimit' | 'budgetReached';
+export type HeldReason = 'dailyLimit' | 'recentLimit' | 'budgetReached';
+
+/** Which allowance a call has spent: the day's first, since waiting out the window would not help. */
+export const readLimitHit = (
+  day: number,
+  recentCount: number,
+): 'dailyLimit' | 'recentLimit' | null => {
+  if (day >= AI_LIMITS.full.perDay) return 'dailyLimit';
+  return recentCount >= AI_LIMITS.full.perWindow ? 'recentLimit' : null;
+};
 
 export const getDayKey = (now: number) =>
   new Date(now).toISOString().slice(0, 10);
@@ -42,18 +51,14 @@ export async function reserveAiCall(
       recent: [],
     };
     const recent = usage.recent.filter((at) => now - at < AI_WINDOW_MS);
-    if (
-      usage.day >= AI_LIMITS.full.perDay ||
-      recent.length >= AI_LIMITS.full.perWindow
-    ) {
-      return 'dailyLimit' as const;
-    }
+    const hit = readLimitHit(usage.day, recent.length);
+    if (hit) return hit;
     transaction.set(usageRef, {
       full: { day: usage.day + 1, recent: [...recent, now] },
     });
     return null;
   });
-  if (held === 'dailyLimit') logger.info('helm.ai.dailyLimit');
+  if (held) logger.info(`helm.ai.${held}`);
   return held;
 }
 

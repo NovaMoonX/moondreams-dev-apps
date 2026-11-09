@@ -18,9 +18,9 @@ interface BrowseTileProps {
   importance: BrowseImportance;
   /** A tile that is big only while it has something waiting; null for a fixed size. */
   grows: 'openQuestions' | null;
-  /** What a growing tile counts. */
+  /** What needs the person: unreadable, unsorted and unfinished turns; waiting ones are not counted. */
   openQuestions: number;
-  /** Turns not seen yet, said on a growing tile while it is small. */
+  /** Turns not seen yet, said on a growing tile beside what needs the person. */
   newSinceLooked: number;
   /** Spans the row, so a last tile that would sit alone fills it. */
   isWide: boolean;
@@ -63,11 +63,17 @@ function BrowseTile({
       >
         {label}
       </span>
-      {isShrunk && (
-        <span className='text-muted-foreground -mt-2 text-[13px]'>
-          {newSinceLooked > 0
-            ? HELM_COPY.newSinceLooked(newSinceLooked)
-            : HELM_COPY.nothingWaiting}
+      {grows === 'openQuestions' && (
+        <span className='text-muted-foreground -mt-2 flex flex-col text-[13px]'>
+          {openQuestions > 0 && (
+            <span>{HELM_COPY.needsYouCount(openQuestions)}</span>
+          )}
+          {newSinceLooked > 0 && (
+            <span>{HELM_COPY.newSinceLooked(newSinceLooked)}</span>
+          )}
+          {openQuestions === 0 && newSinceLooked === 0 && (
+            <span>{HELM_COPY.nothingWaiting}</span>
+          )}
         </span>
       )}
     </Button>

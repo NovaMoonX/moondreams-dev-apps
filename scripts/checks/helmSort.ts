@@ -12,6 +12,10 @@ import {
   sealForHelm,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import {
+  AI_LIMITS,
+  readLimitHit,
+} from '../../functions/src/apps/helm/aiLimits.ts';
+import {
   claimAttempts,
   isTransientCode,
   readStoredResult,
@@ -19,14 +23,19 @@ import {
 } from '../../functions/src/apps/helm/sortAttempts.ts';
 import { createHelmMcpServer } from '../../functions/src/apps/helm/mcp/server.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
-import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
+import {
+  buildContext,
+  readMadeTitles,
+} from '../../functions/src/apps/helm/nomos/buildContext.ts';
 import {
   FILE_RESULTS_TOOL,
   type CaptureReading,
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   buildExecution,
+  hasOpenMoreToSort,
   planWrites,
+  settleCapture,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import {
@@ -165,7 +174,7 @@ const normalize = (commands: unknown[]) =>
   normalizeNomosReply(
     { commands },
     { reading: READING, aliases: newContext().aliases },
-  );
+  ).commands;
 const create = (title: string, extra: Record<string, unknown> = {}) => ({
   kind: 'createTask',
   ref: null,
@@ -259,11 +268,9 @@ test('a day the model wrote is refused', () => {
   );
 });
 
-test('a reply with nothing to file is refused', () => {
-  assert.equal(
-    refusal(() => normalize([{ ...create('x'), kind: 'dance' }])),
-    'nothingToFile',
-  );
+test('a sound reply with nothing in it is empty, a malformed one is refused', () => {
+  assert.deepEqual(normalize([{ ...create('x'), kind: 'dance' }]), []);
+  assert.deepEqual(normalize([]), []);
   assert.equal(
     refusal(() =>
       normalizeNomosReply('hello', {
@@ -273,6 +280,155 @@ test('a reply with nothing to file is refused', () => {
     ),
     'badShape',
   );
+});
+
+test('an empty reply settles as couldNotRead, with its question sealed and readable', () => {
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasMore: false,
+    executionId: null,
+    now: 9000,
+    newId: () => 'q-1',
+    opened: { text: 'the thing with the', reading: READING },
+    questionState: {},
+    executionIds: [],
+  });
+  assert.equal(settled.status, 'needsYou');
+  assert.deepEqual(settled.executionIds, []);
+  assert.deepEqual(settled.questionState, {
+    'q-1': {
+      kind: 'couldNotRead',
+      shape: 'pickOne',
+      askedAt: 9000,
+      answeredAt: null,
+      skippedAt: null,
+    },
+  });
+  const sealed = settled.sealed as Record<string, unknown> & {
+    questions: Record<string, unknown>;
+  };
+  const question = sealed.questions['q-1'] as { kind: string; shape: string };
+  assert.equal(sealed.text, 'the thing with the');
+  assert.ok(sealed.reading);
+  assert.equal(question.kind, 'couldNotRead');
+  assert.equal(question.shape, 'pickOne');
+  assert.ok(!/helm|nomos/i.test(JSON.stringify(sealed.questions)));
+});
+
+const manyTitles = Array.from({ length: 25 }, (_, index) => `Item ${index}`);
+
+test('25 commands file 20 and report more; rest settles the question', () => {
+  const reading = { ...READING, people: [] };
+  const full = normalizeNomosReply(
+    { commands: manyTitles.map((title) => create(title)) },
+    { reading, aliases: newContext().aliases },
+  );
+  assert.equal(full.commands.length, 20);
+  assert.equal(full.hasMore, true);
+  const first = settleCapture({
+    mode: 'full',
+    filed: 20,
+    hasMore: true,
+    executionId: 'e-1',
+    now: 1000,
+    newId: () => 'q-more',
+    opened: { text: 'x', reading: READING },
+    questionState: {},
+    executionIds: [],
+  });
+  assert.equal(first.status, 'needsYou');
+  assert.equal((first.sealed as Record<string, unknown>).sortedThrough, 20);
+  assert.equal(first.questionState['q-more'].kind, 'moreToSort');
+  assert.ok(hasOpenMoreToSort(first.questionState));
+  const rest = normalizeNomosReply(
+    { commands: manyTitles.map((title) => create(title)) },
+    {
+      reading,
+      aliases: newContext().aliases,
+      alreadyMade: manyTitles.slice(0, 20),
+    },
+  );
+  assert.equal(rest.commands.length, 5);
+  assert.equal(rest.hasMore, false);
+  const done = settleCapture({
+    mode: 'rest',
+    filed: 5,
+    hasMore: false,
+    executionId: 'e-2',
+    now: 2000,
+    newId: () => 'unused',
+    opened: first.sealed as Record<string, unknown>,
+    questionState: first.questionState,
+    executionIds: first.executionIds,
+  });
+  assert.equal(done.status, 'sorted');
+  assert.deepEqual(done.executionIds, ['e-1', 'e-2']);
+  assert.equal(done.questionState['q-more'].answeredAt, 2000);
+  assert.ok(!hasOpenMoreToSort(done.questionState));
+  assert.equal((done.sealed as Record<string, unknown>).text, 'x');
+});
+
+test('rest mode lists the titles already made and no ids', () => {
+  const { message } = buildContext({
+    text: TEXT,
+    reading: READING,
+    createdAt: 0,
+    timeZone: 'UTC',
+    tasks: [],
+    alreadyMade: ['Call Dana', 'Buy the rings'],
+  });
+  assert.ok(message.includes('<already_made>'));
+  assert.ok(message.includes('Buy the rings'));
+  assert.ok(!containsId(message));
+  assert.deepEqual(
+    readMadeTitles(
+      [
+        { op: 'create', collection: 'tasks', docId: 'a' },
+        { op: 'update', collection: 'tasks', docId: 'b' },
+      ],
+      {
+        effects: [
+          { written: { 'sealed.title': 'Call Dana' } },
+          { written: { 'sealed.title': 'Order', status: 'done' } },
+        ],
+      },
+    ),
+    ['Call Dana'],
+  );
+});
+
+test('the ten-minute window and the day hold for different reasons', () => {
+  assert.equal(readLimitHit(0, 0), null);
+  assert.equal(readLimitHit(5, AI_LIMITS.full.perWindow), 'recentLimit');
+  assert.equal(readLimitHit(AI_LIMITS.full.perDay, 0), 'dailyLimit');
+  assert.equal(
+    readLimitHit(AI_LIMITS.full.perDay, AI_LIMITS.full.perWindow),
+    'dailyLimit',
+  );
+});
+
+const runFixture = async (text: string) => {
+  const run = await createFixtureProvider(text, {
+    ...READING,
+    dates: [],
+    people: [],
+  }).runToolLoop({
+    role: 'interpret',
+    system: '',
+    messages: [],
+    mcpClient: {} as never,
+    terminalTool: FILE_RESULTS_TOOL,
+    limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+  });
+  return (run.terminalInput as { commands: unknown[] }).commands;
+};
+
+test('the fixture reads filler as nothing and a long list as more than 20', async () => {
+  assert.equal((await runFixture('the thing with the')).length, 0);
+  assert.equal((await runFixture('123, !!')).length, 0);
+  assert.equal((await runFixture('Call mom, the thing with the')).length, 1);
+  assert.equal((await runFixture(manyTitles.join(', '))).length, 25);
 });
 
 test('summaries are past-tense code templates', () => {
@@ -307,7 +463,7 @@ test('the fixture reading goes through the same checks and the same plan', async
     terminalTool: FILE_RESULTS_TOOL,
     limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
   });
-  const commands = normalizeNomosReply(run.terminalInput, {
+  const { commands } = normalizeNomosReply(run.terminalInput, {
     reading: READING,
     aliases: newContext().aliases,
   });

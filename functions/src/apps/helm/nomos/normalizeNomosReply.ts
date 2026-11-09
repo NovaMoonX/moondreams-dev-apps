@@ -9,7 +9,7 @@ import {
 } from './commands.js';
 
 export type NomosReplyErrorCode =
-  'badShape' | 'unknownAlias' | 'droppedToken' | 'badDate' | 'nothingToFile';
+  'badShape' | 'unknownAlias' | 'droppedToken' | 'badDate';
 
 /** A reply that can't be trusted: the capture goes back to be read again, never filed in part. */
 export class NomosReplyError extends Error {
@@ -99,6 +99,8 @@ const readCommand = (
   return { kind, taskId, title, due, hasDue, isUrgent };
 };
 
+const toKey = (title: string) => title.trim().toLowerCase();
+
 const hasEveryToken = (commands: NomosCommand[], reading: CaptureReading) => {
   const titles = commands.flatMap((command) =>
     'title' in command && command.title ? [command.title.toLowerCase()] : [],
@@ -109,26 +111,35 @@ const hasEveryToken = (commands: NomosCommand[], reading: CaptureReading) => {
   );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
-  context: { reading: CaptureReading; aliases: AliasBook },
-): NomosCommand[] {
+  context: {
+    reading: CaptureReading;
+    aliases: AliasBook;
+    alreadyMade?: string[];
+  },
+): { commands: NomosCommand[]; hasMore: boolean } {
   if (!isRecord(raw) || !Array.isArray(raw.commands)) {
     throw new NomosReplyError('badShape');
   }
   const state = { refs: new Set<string>() };
-  const commands = raw.commands
-    .slice(0, MAX_COMMANDS)
-    .flatMap((item: unknown) => {
-      const command = isRecord(item)
-        ? readCommand(item, state, context.reading, context.aliases)
-        : null;
-      return command ? [command] : [];
-    });
-  if (commands.length === 0) throw new NomosReplyError('nothingToFile');
-  if (!hasEveryToken(commands, context.reading)) {
+  const made = new Set((context.alreadyMade ?? []).map(toKey));
+  const read = raw.commands.flatMap((item: unknown) => {
+    const command = isRecord(item)
+      ? readCommand(item, state, context.reading, context.aliases)
+      : null;
+    return command ? [command] : [];
+  });
+  const fresh = read.filter(
+    (command) =>
+      command.kind !== 'createTask' || !made.has(toKey(command.title)),
+  );
+  if (!context.alreadyMade && !hasEveryToken(fresh, context.reading)) {
     throw new NomosReplyError('droppedToken');
   }
-  return commands;
+  return {
+    commands: fresh.slice(0, MAX_COMMANDS),
+    hasMore: fresh.length > MAX_COMMANDS,
+  };
 }

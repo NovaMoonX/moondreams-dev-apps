@@ -84,6 +84,90 @@ const SEED_TURNS = [
   },
 ] as const;
 
+type SeedHold = 'failed' | 'dailyLimit' | 'couldNotRead' | null;
+
+/** A turn the assistant could not sort, one of each way: three failed readings, held by the day's limit, and words it could make nothing of. */
+const SEED_HELD_TURNS = [
+  {
+    session: 'yesterday',
+    minutesAgo: 26 * 60 - 12,
+    text: 'Ask Priya about the offsite budget',
+    isSeen: false,
+    held: 'failed',
+  },
+  {
+    session: 'yesterday',
+    minutesAgo: 26 * 60 - 20,
+    text: 'the thing with the',
+    isSeen: false,
+    held: 'couldNotRead',
+  },
+  {
+    session: 'today',
+    minutesAgo: 1,
+    text: 'Order more printer paper',
+    isSeen: true,
+    held: 'dailyLimit',
+  },
+] as const;
+
+const ALL_TURNS = [
+  ...SEED_TURNS.map((turn) => ({ ...turn, held: null as SeedHold })),
+  ...SEED_HELD_TURNS.map((turn) => ({ ...turn, held: turn.held as SeedHold })),
+];
+
+const toHeldFields = (
+  hold: SeedHold,
+  turnTime: number,
+  isSorted: boolean,
+): Pick<
+  Capture,
+  'status' | 'heldReason' | 'attempts' | 'lastErrorCode' | 'questionState'
+> => {
+  if (hold === 'failed') {
+    return {
+      status: 'failed',
+      heldReason: null,
+      attempts: 3,
+      lastErrorCode: 'modelError',
+      questionState: {},
+    };
+  }
+  if (hold === 'dailyLimit') {
+    return {
+      status: 'received',
+      heldReason: 'dailyLimit',
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+    };
+  }
+  if (hold === 'couldNotRead') {
+    return {
+      status: 'needsYou',
+      heldReason: null,
+      attempts: 1,
+      lastErrorCode: null,
+      questionState: {
+        'seed-question-1': {
+          kind: 'couldNotRead',
+          shape: 'freeText',
+          askedAt: turnTime + SORT_DELAY_MS,
+          answeredAt: null,
+          skippedAt: null,
+        },
+      },
+    };
+  }
+  return {
+    status: isSorted ? 'sorted' : 'received',
+    heldReason: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {},
+  };
+};
+
 const dueFrom = (
   dates: { text: string; due: TaskDue }[],
   words: string | null,
@@ -128,7 +212,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       };
 
       const turns = await Promise.all(
-        SEED_TURNS.map(async (turn, index) => {
+        ALL_TURNS.map(async (turn, index) => {
           const turnTime = context.now - turn.minutesAgo * MINUTE_MS;
           const reading = readCapture(turn.text, {
             now: turnTime,
@@ -143,20 +227,18 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           const executionId = `seed-execution-${index + 1}`;
           const isSorted = sortedTasks.length > 0;
           const sortedAt = turnTime + SORT_DELAY_MS;
+          const heldFields = toHeldFields(turn.held, turnTime, isSorted);
           const capture: Capture = {
             inputMode: 'typed',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
-            turnIndex: SEED_TURNS.filter(
+            turnIndex: ALL_TURNS.filter(
               (entry) => entry.session === turn.session,
             ).indexOf(turn),
             route: isSorted ? 'quick' : null,
-            status: isSorted ? 'sorted' : 'received',
-            heldReason: null,
             claimId: null,
             claimedAt: null,
-            attempts: 0,
-            lastErrorCode: null,
+            ...heldFields,
             executionIds: isSorted ? [executionId] : [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             createdAt: turnTime,

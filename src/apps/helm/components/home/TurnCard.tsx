@@ -16,6 +16,7 @@ import {
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
+import { getHomeHeldLine } from '@apps/helm/utils/heldCaptures';
 
 interface TurnCardProps {
   capture: OpenCapture;
@@ -139,7 +140,7 @@ function TurnCard({
       )}
       {showsOutcome && !isReading && !isSorted && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.savedAsWritten}
+          {getHomeHeldLine(capture)}
         </p>
       )}
     </article>

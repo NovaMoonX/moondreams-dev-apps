@@ -1,6 +1,9 @@
 import Drawer from '@/components/Drawer';
 import { useAppSelector } from '@/store';
-import { selectUnseenCaptures } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectHeldItems,
+  selectNewSinceLooked,
+} from '@apps/helm/store/selectors/captureSelectors';
 import { BROWSE_FOOT, BROWSE_TILES } from '@apps/helm/screen/views';
 import type { HelmView } from '@apps/helm/types';
 
@@ -12,14 +15,12 @@ interface BrowseSheetProps {
   onOpenView: (view: HelmView) => void;
 }
 
-/** Questions arrive with the issue that asks them; until then a tile that grows with them stays small. */
-const OPEN_QUESTIONS = 0;
-
 const SINGLE_TILES = BROWSE_TILES.filter((tile) => tile.importance !== 'lead');
 
 /** Every view as a bento of tiles by importance: the lead is wide, and a last small tile that would sit alone fills its row, so the grid has no holes. */
 function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
-  const unseenCount = useAppSelector(selectUnseenCaptures).length;
+  const unseenCount = useAppSelector(selectNewSinceLooked).length;
+  const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
   const lastSingleView =
     SINGLE_TILES.length % 2 === 1 ? SINGLE_TILES.at(-1)?.view : null;
 
@@ -33,7 +34,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
               view={tile.view}
               importance={tile.importance}
               grows={tile.grows}
-              openQuestions={OPEN_QUESTIONS}
+              openQuestions={needsYouCount}
               newSinceLooked={unseenCount}
               isWide={
                 tile.importance === 'lead' || tile.view === lastSingleView

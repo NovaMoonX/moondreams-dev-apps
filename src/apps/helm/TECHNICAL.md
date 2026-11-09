@@ -118,7 +118,7 @@ One thing the person said, typed or attached: a turn in the conversation, the In
 
 ```ts
 type CaptureStatus = 'received' | 'interpreting' | 'sorted' | 'needsYou' | 'failed';
-type HeldReason = 'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached';
+type HeldReason = 'offline' | 'aiUnavailable' | 'recentLimit' | 'dailyLimit' | 'budgetReached'; // recentLimit: the 10-minute window; dailyLimit: the day's
 type NomosQuestionKind =
   | 'whichPerson' | 'whichPlace' | 'whichProject'
   | 'whichIsTrue' | 'whichDate'
@@ -879,8 +879,12 @@ Capture text, record names, fact statements, note bodies, synced titles and ever
 
 - **Warm offline** (opened online, then the signal drops) or **trusted offline**: the key is in memory, so a capture is sealed and written as usual; Firestore queues it, the sheet says "Saved as written. {name} will sort it when you're back online.", and the Inbox shows it waiting.
 - **Cold offline, untrusted**: the capture goes through the drop box (section 3) and is imported, then sorted, once online.
-- **Sorting later**: on app open, the `online` event and `useOnTabReturn`, the device calls `sortHelmCapture` for its `received` captures (and `interpreting` ones whose lease is older than 90 s) one at a time, oldest first, skipping `dailyLimit`/`budgetReached` ones until the window ends (logged: retried when the app next opens).
+- **Sorting later**: on app open, the `online` event and `useOnTabReturn`, the device calls `sortHelmCapture` for its `received` captures (and `interpreting` ones whose lease is older than 90 s) one at a time, oldest first, skipping `recentLimit`/`dailyLimit`/`budgetReached` ones until the window ends (logged: retried when the app next opens).
 - **Failure**: a model or validation failure puts the capture back to `received` with `attempts + 1` and `lastErrorCode`; at 3 it is `failed` with Try again (which resets attempts), "Make it a task as written" and Delete. The sentence comes from `getAiReadFailureMessage`. A retried call with the same `requestKey` returns the stored result.
+- **Held reasons**: `recentLimit` (20 calls in 10 minutes; read again after the window, "A lot at once · sorted in a few minutes"), `dailyLimit` (150 a day; read again the next day) and `budgetReached` (the project's day; read again the next day). The day's limit wins when both are spent. The call answers `resource-exhausted` and the capture goes back to `received` with `heldReason`, attempts untouched.
+- **Words it can't make sense of**: a sound reply with no commands is not a failure. The final transaction settles the capture as `needsYou` (`seenAt: null`, `sortedAt`, no Execution) with a code-built `couldNotRead` question (`pickOne`: "Make it a task as written" `makeTask`, "Delete it" `delete`, fixed wording in `nomos/summaries.ts`). The sealed `questions[id]` is the `NomosQuestion` with `builtBy: 'code'`, empty `heldCommands` and `answer: null`, plus `kind`; the readable `questionState[id]` is `{ kind, shape: 'pickOne', askedAt, answeredAt: null, skippedAt: null }`. The sealed payload is re-sealed by spreading what was opened, so `text` and `reading` stay.
+- **More than 20 changes**: the first 20 are filed as one Execution, sealed `sortedThrough` records the count filed so far (cumulative), and a `moreToSort` question (`sortRest` "Sort the rest", `leave` "Leave it for now") is added the same way, so the capture is `needsYou` beside its Execution. "Sort the rest" calls `sortHelmCapture({ captureId, requestKey, mode: 'rest' })`: allowed only while the capture holds an open `moreToSort` (otherwise `failed-precondition`), it claims the capture from `needsYou` without counting an attempt, tells the model the titles this capture's Executions already made (and drops a repeat of one), files the remainder as a new Execution appended to `executionIds`, marks the question answered and settles `sorted` (or `needsYou` again with a new `moreToSort` when still more). A failed rest call puts the capture back to `needsYou` with `lastErrorCode`. The call answers `{ status: 'sorted' | 'needsYou' | 'received' | 'failed', executionId }`.
+- **Try again**: the device resets the capture (`status: 'received'`, `attempts: 0`, `lastErrorCode: null`, `heldReason: null`; the owner's rules already allow it) and the next sweep claims it like any `received` capture.
 - **Two devices**: the claim lets one call read a capture; the final transaction re-checks `claimId`, so a call whose lease was taken over writes nothing.
 
 ### What goes to the model

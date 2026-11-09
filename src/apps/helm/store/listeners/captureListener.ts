@@ -24,6 +24,7 @@ import { groupSessions } from '@apps/helm/utils/sessions';
 
 const EARLIER_FETCH_LIMIT = 200;
 const UNSEEN_LIMIT = 200;
+const WAITING_LIMIT = 200;
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -50,6 +51,8 @@ async function openCapture(
     claimedAt: data.claimedAt ?? null,
     attempts: data.attempts ?? 0,
     lastErrorCode: data.lastErrorCode ?? null,
+    questionState: data.questionState ?? {},
+    hasPendingWrites: entry.metadata.hasPendingWrites,
     executionIds: data.executionIds ?? [],
     seenAt: data.seenAt ?? null,
     createdAt: data.createdAt ?? 0,
@@ -79,12 +82,14 @@ function startCapturesListener(
   constraints: QueryConstraint[],
   onChange: (captures: OpenCapture[]) => void,
   onError: (error: Error) => void,
+  isMetadataTracked = false,
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
 
   const stop = onSnapshot(
     query(capturesOf(uid), ...constraints),
+    { includeMetadataChanges: isMetadataTracked },
     async (snapshot) => {
       sequence.latest += 1;
       const current = sequence.latest;
@@ -134,6 +139,25 @@ export const startUnseenCapturesListener = (
     ],
     onChange,
     onError,
+  );
+
+/** Turns that still need something, whenever they were said: waiting to be read, being read, failed or asking the person. The metadata is tracked so a turn still on this device says so. */
+export const startWaitingCapturesListener = (
+  uid: string,
+  read: SealedReader,
+  onChange: (captures: OpenCapture[]) => void,
+  onError: (error: Error) => void,
+) =>
+  startCapturesListener(
+    uid,
+    read,
+    [
+      where('status', 'in', ['received', 'interpreting', 'needsYou', 'failed']),
+      limit(WAITING_LIMIT),
+    ],
+    onChange,
+    onError,
+    true,
   );
 
 /** The next sessions older than `before`, whole ones only: a session cut by the fetch's end waits for the next page. */

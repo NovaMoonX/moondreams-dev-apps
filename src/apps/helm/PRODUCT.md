@@ -711,7 +711,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] One turn split into several things, each filed as a task, fact, who, place, preference or note and linked to a project, with one Undo; typed shorthand read exactly (O, N, C)
 - [ ] Questions in the shape that fits (pick one, pick several, yes or no, a few words, a date or time, a person, place or project, a number), asked only for what the assistant can't settle, one at a time when spoken, answered by tap or voice, skippable to Needs you, with Undo (O, N, C)
 - [ ] Inbox: Needs you (the questions waiting) and what's new since you looked (O, C)
-- [ ] Turns kept when the AI, the connection or the day's limit is away, and sorted once it is back (N, C)
+- [x] Turns kept when the AI, the connection or the day's limit is away, and sorted once it is back (N, C)
 - [ ] Tasks with importance, urgency, deadline, length, energy, context, place, who, steps, what they wait on and "not until" (O, N)
 - [ ] Key dates for people, pets, organizations and you, in two kinds: dates that come back (birthdays with or without a year, anniversaries, custom yearly) on each page, on Today a few days ahead for close and regular people, and in a Coming up view by month; and moments (moves, jobs, graduations, adoptions, meeting, passing away) on each page and in a list by decade and year; from conversation and Contacts, used in answers (O, C)
 - [ ] "Ask about this" on every content page, the same control in the same place, opening the conversation about that page and returning to it (O, C)
