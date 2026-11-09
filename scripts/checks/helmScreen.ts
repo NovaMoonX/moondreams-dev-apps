@@ -279,6 +279,12 @@ test('the fixture follows this, it and the nth one from the context', async () =
     buildContext({ ...base, tasks: [], text: 'the fifth one is done' }).message,
   );
   assert.deepEqual(ninth, []);
+  const unfocused = await runFixture(
+    'this is done',
+    READING,
+    buildContext({ ...base, tasks: [], text: 'this is done' }).message,
+  );
+  assert.deepEqual(unfocused, []);
   const earlier = await runFixture(
     'and make it urgent',
     READING,

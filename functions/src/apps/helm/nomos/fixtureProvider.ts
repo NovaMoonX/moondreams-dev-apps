@@ -72,11 +72,12 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
   if (/\bmake (this|it|that) urgent\b/i.test(text)) {
     return urgentTarget ? [toUpdate(urgentTarget, null, true)] : [];
   }
+  const isPointedDone = /\b(this is done|done with (this|it))\b/i.test(text);
   const target =
     ordinal >= 0
       ? (screen?.visible.find((entry) => entry.position === ordinal + 1)
           ?.alias ?? null)
-      : /\b(this is done|done with (this|it))\b/i.test(text)
+      : isPointedDone
         ? focus
         : null;
   return target
@@ -90,7 +91,7 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
           isUrgent: null,
         },
       ]
-    : ordinal >= 0
+    : ordinal >= 0 || isPointedDone
       ? []
       : null;
 }
