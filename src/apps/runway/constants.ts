@@ -2638,7 +2638,7 @@ export const PURCHASE_COST_WORDS = {
   aPurchase: 'A purchase in Spend',
 } as const;
 
-/** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
+/** Moving money out of an envelope or goal to another envelope or goal, or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
   openGoal: "Move what's saved",

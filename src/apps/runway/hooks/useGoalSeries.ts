@@ -1,5 +1,6 @@
 import { useAppSelector } from '@/store';
 import { getEffectiveSplits } from '@apps/runway/engine/correct';
+import { collectTransferEntries } from '@apps/runway/engine/progress';
 import { isSavingFor, planGoalContributions } from '@apps/runway/engine/pace';
 import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import {
@@ -25,6 +26,7 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
   );
   const records = useAppSelector((state) => state.runway.records);
   const days = useAppSelector((state) => state.runway.days);
+  const moves = useAppSelector((state) => state.runway.moves);
   const comingDays = useAppSelector((state) => selectComingDays(state, today));
   const stance = useAppSelector(selectStance);
   const items = useAppSelector((state) => state.runway.items);
@@ -44,6 +46,10 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
       .filter((line) => line.itemId === goalId)
       .reduce((sum, line) => sum + line.cents, 0),
   }));
+  const moved = collectTransferEntries(moves, startDate).flatMap((entry) => [
+    ...(entry.toId === goalId ? [{ on: entry.on, cents: entry.cents }] : []),
+    ...(entry.fromId === goalId ? [{ on: entry.on, cents: -entry.cents }] : []),
+  ]);
   const isPlanned = isSavingFor(goal) && goal.funding.amount.kind !== 'rest';
   const contributions = isPlanned
     ? planGoalContributions(
@@ -64,7 +70,7 @@ export function useGoalSeries({ goalId, goal, today }: GoalSeriesTarget) {
     targetCents: goal.targetCents,
     targetDate: goal.targetDate,
     startDate,
-    splits,
+    splits: [...splits, ...moved],
     contributions,
     today,
   });
