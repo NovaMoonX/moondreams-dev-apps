@@ -978,13 +978,15 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
   - **D6, one Undo per execution card**; **D7,** only a readable `succeeded` execution that is not itself an Undo, not yet undone and with effects can be undone, so an Undo can't be undone.
   - **D8, a kept line is generic** ("Kept: you changed it since"), as the changed value is never repeated. Its known limit: a record a later run changed, or a later undo stamped, is kept the same way and the line still says "you".
   - **Sealed paths** are compared and restored on the opened payload, which is resealed whole (`{...opened, [field]: previous}`); a dotted `sealed.title` field path is never written.
-- **The person's own edits** are `updateDoc` of the fields the form owns, the sealed payload resealed from the opened copy with the form's changes; they make no execution in MVP.
+- **The person's own edits** (`store/actions/taskActions.ts`) make no execution in MVP. A plain field (day, importance, length, a condition) is a field-scoped `updateDoc` that works offline; a change to words (title, notes, a step's text) is a transaction that re-reads the document, opens its sealed payload, applies the one change to that copy (`applyWordsChange`, pure, `check:helm-task-edits`) and reseals it, so it needs a connection. Every one of them sets `lastEditedAt`, so an Undo of the assistant's work keeps the task; a hand-made task is `createdBy: 'person'` with no execution and a null `lastEditedAt`, like one made from a held turn.
+- **Steps** live in two places: the text in the sealed `steps` map and each step's `order` and `doneAt` in the readable `stepState`, both keyed by a 12-character id. Adding or removing a step changes both in the one transaction; ticking and reordering are dotted-path updates of `stepState` only, with no reseal. The limit of 30 steps is the sheet's alone, not the rules'.
+- **Done and delete** are single writes: a tick sets `status`, `completedAt` and `lastEditedAt` together, and its Undo reopens only while the task is still done from that tick. Delete keeps the document as read (the cache is enough) and Undo writes it back only while its id is free; it works offline.
 - **Edits that race**: a form save never `setDoc`s the cached document; ticks, slot changes and milestone dates are dotted-path updates on readable map keys; a form that changes sealed words reseals in a transaction that re-reads the document, so a second device's edit to another field of the same payload is kept; Correct and the `whichIsTrue` answer are transactions over both facts.
 
 ## 10. Latent and conditional tasks
 
 - **MVP conditions**: `notUntil` (date-only, active from the start of that day in the profile's zone), `waitsOnTaskIds` (active once each is done or gone) and `waitsOnWhoId` (round 6 rename; active once the person clears it). All hold together.
-- `selectTaskActivity` (pure, `createSelector` over tasks and a minute-granular clock) labels each open task `active | notYet | waiting`. It runs at render; nothing is written when a task wakes. A latent task stays out of Today and out of open counts, and appears by itself when its condition holds.
+- `selectTaskActivity` (pure, `createSelector` over tasks and a minute-granular clock) labels each open task `active | notYet | waiting`. It runs at render; nothing is written when a task wakes. `notYet` wins over `waiting`; a waited task that is not in the open list counts as ended, so past the 150-task cap an open task reads as ended; a task waiting on itself is ignored, and the picker blocks direct cycles. Deleting a task leaves its id in other tasks' `waitsOnTaskIds`, which read as ended. Checked by `check:helm-activation`. A latent task stays out of Today and out of open counts, and appears by itself when its condition holds.
 - **Places without location tracking**: a place groups (a home place puts tasks under "When you get home") and never gates. "I'm home" on the group's divider, or said in a capture (`setCurrentPlace`, an `organize` change with Undo), sets `HelmProfile.currentPlace` with `saidAt`, lapsing after 3 hours (lead, round 2: MVP). While it holds, Today lifts that place's tasks to the top of "Any time" and the planner prefers them for the next gap. Helm never calls the Geolocation API.
 - **[Next]** `beforeEvent`; an event Helm can no longer see reads as "waiting on an event Helm can't see", never active and never lost.
 - A push when a task wakes is [Later], behind the central reminders infrastructure.
@@ -1185,7 +1187,7 @@ src/apps/helm/
   queries/
     helmKeyQueries.ts  nomosMutations.ts  contactsQueries.ts  styleMutations.ts
   store/
-    helmSlice.ts  screenSlice.ts  selectors.ts   # selectTaskActivity, selectProjectEvidence, selectToday, selectSession,
+    helmSlice.ts  screenSlice.ts  selectors.ts   # (taskSelectors.ts: selectTaskActivity, selectActiveTasks) selectTaskActivity, selectProjectEvidence, selectToday, selectSession,
                                  # selectWhoByTier, selectUpcomingKeyDates (joins tiers, orders close first then soonest), selectSyncedForDay, selectDiscrepancies, selectSelfFacts
     listeners/  actions/         # captureActions, taskActions, projectActions, whoActions, noteActions, procedureActions,
                                  # runActions, mediaActions, planActions, undoActions, settingsActions
@@ -1198,6 +1200,7 @@ src/apps/helm/
                                  # ≤1 lead, ≤3 major), BROWSE_FOOT and the contract
   utils/
     keyDateIndex.ts              # round 6e: applyToKeyDateIndex, rebuild, split (pure; server copy, check:server-copies)
+    taskEdits.ts                 # applyWordsChange, step order helpers (pure, check:helm-task-edits)
     captureReading.ts  procedureMarkdown.ts  stepGroups.ts  noteSearch.ts  dropBox.ts  sameThing.ts  mediaCaps.ts
   components/
     shell/        HelmShell, VoiceDock (Browse · Talk · Type, home only), BrowseSheet (Search on top, bento tiles by importance, foot row), BrowseTile,

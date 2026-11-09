@@ -25,6 +25,32 @@ export const SWEEP_RETRY_MS = 2 * 60 * 1000;
 /** Turns the sweep tries in one run. */
 export const SWEEP_RUN_LIMIT = 10;
 
+export const IMPORTANCE_OPTIONS = [
+  { value: 'must', label: 'Must' },
+  { value: 'should', label: 'Should' },
+  { value: 'could', label: 'Could' },
+] as const;
+
+export const ENERGY_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+] as const;
+
+export const CONTEXT_OPTIONS = [
+  { value: 'atHome', label: 'At home' },
+  { value: 'out', label: 'Out' },
+  { value: 'atComputer', label: 'At a computer' },
+  { value: 'onPhone', label: 'On the phone' },
+] as const;
+
+export const LENGTH_OPTIONS = [15, 30, 60, 120] as const;
+
+/** Only the sheet enforces these; the rules and the server do not. */
+export const STEP_LIMIT = 30;
+export const WAITS_ON_LIMIT = 10;
+export const NOTES_MAX_CHARS = 4_000;
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How many earlier sessions each scroll up brings in. */
@@ -40,6 +66,13 @@ const joinTitles = (titles: string[]) =>
   titles.length < 2
     ? (titles[0] ?? '')
     : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
+
+const waitingOnCount = (waiting: number) =>
+  waiting === 0
+    ? ''
+    : waiting === 1
+      ? ' 1 task waiting on it can start then.'
+      : ` ${waiting} tasks waiting on it can start then.`;
 
 const goneLine = (count: number) =>
   count === 1
@@ -219,4 +252,79 @@ export const HELM_COPY = {
   aiSeesKeptLead: "What's kept",
   aiSeesKept:
     "What you say and every change in Activity. The server's logs keep counts and codes, never your words.",
+  newTask: 'New task',
+  moreActions: 'More',
+  taskFormTitle: 'Task',
+  taskTitleLabel: 'What to do',
+  taskTitleMissing: 'Write what to do first',
+  addTask: 'Add task',
+  whenLabel: 'When',
+  noDay: 'No day',
+  addTime: 'Add a time',
+  removeField: 'Remove',
+  doneEditing: 'Done',
+  stepsLabel: 'Steps',
+  stepsCount: (done: number, total: number) => `${done} of ${total}`,
+  noneValue: 'None',
+  addStep: 'Add a step',
+  stepPlaceholder: 'A step',
+  editStep: 'Edit',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  stepActions: (text: string) => `Actions for ${text}`,
+  stepsFull: `Up to ${STEP_LIMIT} steps`,
+  moreDetails: 'More details',
+  fewerDetails: 'Fewer details',
+  importanceLabel: 'Importance',
+  notSet: 'Not set',
+  clearField: 'Clear',
+  urgentLabel: 'Urgent',
+  lengthLabel: 'Length',
+  lengthOther: 'Other',
+  lengthMinutes: 'Minutes',
+  lengthValue: (minutes: number) =>
+    minutes < 60
+      ? `${minutes} min`
+      : minutes % 60 === 0
+        ? `${minutes / 60}h`
+        : `${Math.floor(minutes / 60)}h ${minutes % 60}m`,
+  energyLabel: 'Energy',
+  contextLabel: 'Context',
+  notUntilLabel: 'Not until',
+  waitsOnLabel: 'Waits on',
+  nothingValue: 'Nothing',
+  waitsOnTasks: (count: number) => `${count} tasks`,
+  someone: 'Someone',
+  notesLabel: 'Notes',
+  conditionNotUntil: (date: string) => `Not until ${date}`,
+  startItNow: 'Start it now',
+  conditionWaitsOnTask: (title: string, more: number) =>
+    more > 0 ? `Waits on ${title} and ${more} more` : `Waits on ${title}`,
+  stopWaiting: 'Stop waiting',
+  conditionWaitsOnWho: 'Waits on someone',
+  markAnswered: 'Mark as answered',
+  markDone: (title: string) => `Mark ${title} done`,
+  markNotDone: (title: string) => `Mark ${title} not done`,
+  doneAt: (day: string, time: string) => `Done ${day} ${time}`,
+  rowDone: 'Done',
+  deleteTaskTitle: 'Delete this task?',
+  deleteTaskBody: (waiting: number) =>
+    `Its notes and steps go with it.${waitingOnCount(waiting)}`,
+  deleteConfirm: 'Delete',
+  deletedTask: (title: string) => `Deleted ${title}`,
+  restoreExists: 'It is back already.',
+  wordsNeedConnectionTitle: 'Changing the words needs a connection',
+  wordsNeedConnectionBody:
+    "Another device may have changed them, so this waits until you're back online.",
+  wordsSaveFailed: "That didn't save. Your words are still here.",
+  fieldSaveFailed: "That change didn't save. Try again.",
+  taskWordsUnreadable:
+    "This task's words couldn't be opened. Its other details can still be changed.",
+  tasksTitle: 'Tasks',
+  allTasks: 'All tasks',
+  openCount: (count: number) => `${count} open`,
+  tasksEmpty: 'No open tasks.',
+  tasksDue: 'Due',
+  tasksAnyTime: 'Any time',
+  notYetDivider: (count: number) => `Not yet · ${count}`,
 } as const;

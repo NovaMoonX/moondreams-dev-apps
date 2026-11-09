@@ -13,7 +13,10 @@ import {
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import { openJson, sealJson } from '../../src/apps/helm/security.ts';
-import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
+import {
+  getDueDay,
+  readCapture,
+} from '../../src/apps/helm/utils/captureReading.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -42,6 +45,62 @@ const SEED_PROFILES = [
 ];
 
 const SORT_DELAY_MS = 4_000;
+
+type HandTask = {
+  title: string;
+  notes?: string;
+  steps?: string[];
+  stepsDone?: number;
+} & Partial<
+  Pick<
+    Task,
+    | 'importance'
+    | 'isUrgent'
+    | 'durationMinutes'
+    | 'energy'
+    | 'context'
+    | 'waitsOnTaskIds'
+    | 'waitsOnWhoId'
+  >
+> & { notUntilDays?: number; dueDays?: number; dueDate?: number };
+
+/** Tasks the person made by hand, each showing one state of the task sheet: not yet, awake with every field, waiting on a task, waiting on someone, and steps. */
+const SEED_HAND_TASKS: HandTask[] = [
+  { title: 'Order the welcome bags', notUntilDays: 21, importance: 'could' },
+  {
+    title: 'Confirm the cake order',
+    notUntilDays: -1,
+    dueDays: 2,
+    importance: 'must',
+    isUrgent: true,
+    durationMinutes: 15,
+    energy: 'low',
+    context: 'onPhone',
+    notes: 'Sweet Layer Bakery, ask for the lemon tier',
+  },
+  {
+    title: 'Send the florist the final count',
+    waitsOnTaskIds: ['seed-task-4-2'],
+    dueDays: 10,
+  },
+  {
+    title: 'Book the florist delivery',
+    waitsOnWhoId: 'seed-who-dana',
+    dueDate: Date.UTC(2026, 11, 4),
+  },
+  {
+    title: 'Pack for the venue walk-through',
+    steps: [
+      'Print the floor plan',
+      'Charge the camera',
+      'Bring the swatches',
+      'Pack the measuring tape',
+    ],
+    stepsDone: 2,
+    energy: 'medium',
+    context: 'atHome',
+  },
+];
 
 /** What the assistant made of each sorted turn, by the turn's place in `SEED_TURNS`: a task's title and the words of the turn its day was read from. The first turn is left as saved, so home shows both kinds of line. */
 const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
@@ -435,6 +494,73 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         }),
       );
       const person = users.doc(user.uid);
+      const today = getDueDay({ kind: 'moment', at: context.now }, timeZone);
+      const handTasks = await Promise.all(
+        SEED_HAND_TASKS.map(async (entry, index) => {
+          const made = context.now - (index + 1) * 90 * MINUTE_MS;
+          const stepIds = (entry.steps ?? []).map(
+            (_, order) => `seed-step-${index + 1}-${order + 1}`,
+          );
+          const task: Task = {
+            status: 'open',
+            importance: entry.importance ?? null,
+            isUrgent: entry.isUrgent ?? false,
+            due:
+              entry.dueDate !== undefined
+                ? { kind: 'day', date: entry.dueDate }
+                : entry.dueDays !== undefined
+                  ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
+                  : null,
+            durationMinutes: entry.durationMinutes ?? null,
+            energy: entry.energy ?? null,
+            context: entry.context ?? null,
+            projectId: null,
+            milestoneId: null,
+            whoIds: [],
+            placeIds: [],
+            notUntil:
+              entry.notUntilDays !== undefined
+                ? today + entry.notUntilDays * DAY_MS
+                : null,
+            waitsOnTaskIds: entry.waitsOnTaskIds ?? [],
+            waitsOnWhoId: entry.waitsOnWhoId ?? null,
+            stepState: Object.fromEntries(
+              stepIds.map((id, order) => [
+                id,
+                {
+                  order,
+                  doneAt:
+                    order < (entry.stepsDone ?? 0) ? made + MINUTE_MS : null,
+                },
+              ]),
+            ),
+            mediaIds: [],
+            createdBy: 'person',
+            sourceCaptureId: null,
+            executionId: null,
+            createdAt: made,
+            lastEditedAt: made + 3 * MINUTE_MS,
+            completedAt: null,
+            sealed: await sealJson<TaskSealed>(
+              {
+                title: entry.title,
+                notes: entry.notes ?? null,
+                steps: Object.fromEntries(
+                  stepIds.map((id, order) => [
+                    id,
+                    { text: (entry.steps ?? [])[order] },
+                  ]),
+                ),
+              },
+              encryption,
+            ),
+          };
+          return { id: `seed-task-hand-${index + 1}`, task };
+        }),
+      );
+      handTasks.forEach((entry) =>
+        batch.set(person.collection('tasks').doc(entry.id), entry.task),
+      );
       turns.forEach(({ id, capture, tasks, execution, executionId, undo }) => {
         batch.set(person.collection('captures').doc(id), capture);
         tasks.forEach((entry) =>
@@ -460,7 +586,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           turn.tasks.length +
           (turn.execution ? 1 : 0) +
           (turn.undo ? 1 : 0),
-        0,
+        handTasks.length,
       );
     }),
   );

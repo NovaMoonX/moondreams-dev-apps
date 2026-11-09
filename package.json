@@ -80,6 +80,8 @@
     "check:natural-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/naturalDates.ts",
     "check:helm-sort": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSort.ts",
     "check:helm-undo": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmUndo.ts",
+    "check:helm-activation": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActivation.ts",
+    "check:helm-task-edits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmTaskEdits.ts",
     "check:helm-copy": "tsx scripts/checks/helmCopy.ts",
     "check:helm-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/helm/rulesMatrix.py\"",
     "check:runway-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/runway/rulesMatrix.py && python3 scripts/runway/linkRules.py\"",

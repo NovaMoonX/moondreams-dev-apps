@@ -210,3 +210,30 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   goneIds: string[] | null;
   isUnreadable: boolean;
 }
+
+export type TaskActivity =
+  | { kind: 'active' }
+  | { kind: 'notYet'; until: number }
+  | { kind: 'waiting'; onTaskIds: string[]; onWhoId: string | null };
+
+export type TaskWordsChange =
+  | { kind: 'title'; title: string }
+  | { kind: 'notes'; notes: string | null }
+  | { kind: 'addStep'; stepId: string; text: string }
+  | { kind: 'editStep'; stepId: string; text: string }
+  | { kind: 'removeStep'; stepId: string };
+
+export type TaskPlainFields = Partial<
+  Pick<
+    Task,
+    | 'importance'
+    | 'isUrgent'
+    | 'due'
+    | 'durationMinutes'
+    | 'energy'
+    | 'context'
+    | 'notUntil'
+    | 'waitsOnTaskIds'
+    | 'waitsOnWhoId'
+  >
+>;
