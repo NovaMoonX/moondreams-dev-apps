@@ -1046,6 +1046,25 @@ export interface PurchaseDoc {
   sealed: Sealed;
 }
 
+/** A placed pending charge the bank dropped, noted by Functions so the app can say where its money went back; the app deletes it once read. */
+export interface ReleasedChargeDoc {
+  id: string;
+  date: DateOnly;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface ReleasedChargeSealed {
+  title: string | null;
+  amountCents: Cents;
+  lines: PurchaseLine[];
+}
+
+export interface OpenReleasedCharge extends ReleasedChargeSealed {
+  id: string;
+  date: DateOnly;
+}
+
 export interface OpenPurchase extends PurchaseSealed {
   id: string;
   date: DateOnly;

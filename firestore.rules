@@ -328,11 +328,12 @@ service cloud.firestore {
     // `links` and `accountBalances` are written only by Functions (bank data), and a card's or account's `linkId`
     // is set only by `attachRunwayAccounts`: a client creates them unlinked and never changes it. A purchase brought
     // in from a bank (`source` 'link', a `dedupeKey`) is made only by Functions: a client creates purchases with
-    // neither and never changes either.
+    // neither and never changes either. `releasedCharges` notes (a pending charge the bank dropped) are made only by
+    // Functions; the app deletes one once it has told the person.
     match /apps/runway/plans/{uid}/{document=**} {
       allow read: if isUser(uid);
       allow create: if isUser(uid)
-        && !(document[0] in ['links', 'accountBalances'])
+        && !(document[0] in ['links', 'accountBalances', 'releasedCharges'])
         && (!(document[0] in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == null)
         && (document[0] != 'purchases' || (request.resource.data.get('dedupeKey', null) == null && request.resource.data.get('source', null) != 'link'));
     }
@@ -346,7 +347,7 @@ service cloud.firestore {
         && collection in ['items', 'days', 'purchases', 'closings', 'cards', 'accounts', 'expenses', 'rules']
         && (!(collection in ['cards', 'accounts']) || request.resource.data.get('linkId', null) == resource.data.get('linkId', null))
         && (collection != 'purchases' || (request.resource.data.get('dedupeKey', null) == resource.data.get('dedupeKey', null) && request.resource.data.get('source', null) == resource.data.get('source', null)));
-      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules'];
+      allow delete: if isUser(uid) && collection in ['purchases', 'closings', 'expenses', 'rules', 'releasedCharges'];
     }
 
     match /apps/runway/plans/{uid}/purchases/{purchaseId}/receiptImages/{imageId} {

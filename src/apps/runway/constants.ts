@@ -4286,6 +4286,18 @@ export const BANK_BACKED_WORDS = {
 } as const;
 
 /** Purchases that came in from a linked bank and wait for the person to say where the money came from. */
+export const RELEASED_WORDS = {
+  one: (title: string | null, isRefund: boolean) =>
+    `The bank dropped a pending ${isRefund ? 'refund' : 'charge'}${title ? ` from ${title}` : ''}`,
+  oneSub: (where: string, isRefund: boolean) =>
+    isRefund
+      ? `It no longer adds to ${where}.`
+      : `It no longer counts, so its money is back in ${where}.`,
+  many: (count: number, hasRefund: boolean) =>
+    `The bank dropped ${count} pending ${hasRefund ? 'items' : 'charges'}`,
+  manySub: 'They no longer count. History says where each one was.',
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',

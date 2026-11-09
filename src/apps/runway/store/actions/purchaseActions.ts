@@ -62,6 +62,7 @@ import type {
   CostRef,
   DateOnly,
   OpenPurchase,
+  OpenReleasedCharge,
   ChangeDoc,
   ChangeSealed,
   PlanDoc,
@@ -1512,6 +1513,46 @@ export async function deletePurchase(
         sealed: changeSealed,
       } satisfies ChangeDoc,
     );
+  });
+}
+
+/** Writes the History line for a pending charge the bank dropped and removes its note, once across devices. Resolves false when another device already did. */
+export async function clearReleasedCharge(
+  uid: string,
+  encryption: RunwayEncryption,
+  charge: OpenReleasedCharge,
+  summary: string,
+): Promise<boolean> {
+  const changeSealed = await sealJson(
+    { summary, note: null } satisfies ChangeSealed,
+    encryption,
+  );
+  const noteRef = doc(
+    db,
+    'apps',
+    'runway',
+    'plans',
+    uid,
+    'releasedCharges',
+    charge.id,
+  );
+  const changeId = generateUuid();
+  return runTransaction(db, async (transaction) => {
+    const note = await transaction.get(noteRef);
+    if (!note.exists()) return false;
+    transaction.delete(noteRef);
+    transaction.set(
+      doc(db, 'apps', 'runway', 'plans', uid, 'changes', changeId),
+      {
+        id: changeId,
+        kind: 'purchaseChange',
+        createdAt: Date.now(),
+        effectiveFrom: null,
+        itemIds: getChangeItemIds(charge.lines),
+        sealed: changeSealed,
+      } satisfies ChangeDoc,
+    );
+    return true;
   });
 }
 
