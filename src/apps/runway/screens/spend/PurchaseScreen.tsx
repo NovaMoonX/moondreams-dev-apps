@@ -677,6 +677,19 @@ function PurchaseScreen({
               bankName === null ? null : SPEND_WORDS.bankName(bankName)
             }
           />
+          {billRef !== null && (
+            <ActionGroup isRoomy>
+              <ActionRow
+                isGrouped
+                isRoomy
+                icon={<Undo2 />}
+                label={AUTO_PAY_WORDS.notThisCharge}
+                subtitle={AUTO_PAY_WORDS.notThisChargeSub}
+                isDisabled={isBusy}
+                onClick={() => void unmatchCharge()}
+              />
+            </ActionGroup>
+          )}
           {(note !== null ||
             receiptText !== null ||
             linkHost !== null ||
@@ -834,7 +847,7 @@ function PurchaseScreen({
             </PairOffer>
           )}
           <ActionGroup isRoomy>
-            {billRef === null ? (
+            {billRef === null && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -854,16 +867,6 @@ function PurchaseScreen({
                     purchase,
                   }));
                 }}
-              />
-            ) : (
-              <ActionRow
-                isGrouped
-                isRoomy
-                icon={<Undo2 />}
-                label={AUTO_PAY_WORDS.notThisCharge}
-                subtitle={AUTO_PAY_WORDS.notThisChargeSub}
-                isDisabled={isBusy}
-                onClick={() => void unmatchCharge()}
               />
             )}
             {heldRule !== null && (

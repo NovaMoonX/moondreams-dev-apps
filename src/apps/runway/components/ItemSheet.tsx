@@ -165,6 +165,7 @@ import type {
   GoalSealed,
   GoalVersion,
   ItemKind,
+  OpenPurchase,
   OpenVersion,
   PayLineSealed,
 } from '@apps/runway/types';
@@ -211,6 +212,8 @@ export interface ItemSheetProps {
   figureSuffix?: string;
   /** The one short fact under the figure. */
   fact?: string | null;
+  /** A second muted line under the fact. */
+  secondFact?: string | null;
   /** A caveat about the figure (the end of a range, a pairing), behind a help icon by it. */
   help?: ReactNode;
   /** The sheet's first action: the change people make most, opened at that question. */
@@ -296,6 +299,7 @@ function ItemSheet({
   figure,
   figureSuffix,
   fact,
+  secondFact,
   help,
   quickChange,
   dayAction,
@@ -395,6 +399,17 @@ function ItemSheet({
     (state) => selectLearnedNames(state, itemId).length,
   );
   const isSelfPaying = useIsSelfPaying(itemId, payment?.dueOn ?? null, today);
+  const matchedPurchase = useAppSelector((state) =>
+    state.runway.purchases.reduce<OpenPurchase | null>(
+      (newest, purchase) =>
+        purchase.billRef?.billId === itemId &&
+        (newest === null ||
+          purchase.billRef.dueOn > (newest.billRef?.dueOn ?? 0))
+          ? purchase
+          : newest,
+      null,
+    ),
+  );
 
   if (!version || version.kind === 'group' || version.kind === 'horizon')
     return null;
@@ -1008,10 +1023,57 @@ function ItemSheet({
         figure={figure}
         suffix={figureSuffix}
         fact={fact}
+        secondFact={secondFact}
         help={help}
       />
       {extra}
       <ActionGroup>
+        {itemKind === 'bill' && check?.kind === 'amount' && (
+          <ActionRow
+            isGrouped
+            icon={<Calculator />}
+            label={AUTO_PAY_WORDS.enterAmount}
+            subtitle={AUTO_PAY_WORDS.enterAmountSub(
+              formatDateOrdinalUTC(check.dueOn),
+            )}
+            onClick={() => setIsCorrecting(true)}
+          />
+        )}
+        {itemKind === 'bill' && check?.kind === 'charge' && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<ReceiptText />}
+            label={AUTO_PAY_WORDS.whichCharge}
+            subtitle={AUTO_PAY_WORDS.whichChargeSub(
+              formatDateOrdinalUTC(check.dueOn),
+            )}
+            onClick={() => {
+              setChargeDueOn(check.dueOn);
+              goTo('charge');
+            }}
+          />
+        )}
+        {itemKind === 'bill' && matchedPurchase && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<ReceiptText />}
+            label={mask(
+              AUTO_PAY_WORDS.paidByCharge(
+                matchedPurchase.label?.trim() ||
+                  matchedPurchase.merchant?.trim() ||
+                  AUTO_PAY_WORDS.noMerchant,
+                formatCents(matchedPurchase.amountCents),
+                formatDateOrdinalUTC(matchedPurchase.date),
+              ),
+            )}
+            onClick={() => {
+              setPurchaseId(matchedPurchase.id);
+              setPhase('purchaseDetail');
+            }}
+          />
+        )}
         {canChange && dayAction && (
           <ActionRow
             isGrouped
@@ -1133,27 +1195,6 @@ function ItemSheet({
             onClose={() => setIsAskingPaid(false)}
           />
         )}
-        {itemKind === 'bill' && check?.kind === 'amount' && (
-          <ActionRow
-            isGrouped
-            icon={<Calculator />}
-            label={AUTO_PAY_WORDS.enterAmount}
-            subtitle={AUTO_PAY_WORDS.enterAmountSub}
-            onClick={() => setIsCorrecting(true)}
-          />
-        )}
-        {itemKind === 'bill' && check?.kind === 'charge' && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<ReceiptText />}
-            label={AUTO_PAY_WORDS.whichCharge}
-            onClick={() => {
-              setChargeDueOn(check.dueOn);
-              goTo('charge');
-            }}
-          />
-        )}
         {isCorrecting && check?.kind === 'amount' && (
           <AutoAmountSheet
             billId={itemId}
@@ -1221,15 +1262,6 @@ function ItemSheet({
             onClick={openHistory}
           />
         ))}
-        {canForget && (
-          <ActionRow
-            isGrouped
-            icon={<Unlink />}
-            label={AUTO_PAY_WORDS.forgetRow}
-            subtitle={AUTO_PAY_WORDS.forgetSub}
-            onClick={() => void forget()}
-          />
-        )}
       </ActionGroup>
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
@@ -1329,6 +1361,15 @@ function ItemSheet({
             subtitle={ITEM_SHEET_R2_WORDS.archiveSub}
             onClick={() => goTo('archive')}
           />
+          {canForget && (
+            <ActionRow
+              isGrouped
+              icon={<Unlink />}
+              label={AUTO_PAY_WORDS.forgetRow(payload.name)}
+              subtitle={AUTO_PAY_WORDS.forgetSub}
+              onClick={() => void forget()}
+            />
+          )}
         </ActionGroup>
       )}
     </div>

@@ -75,6 +75,8 @@ interface ItemRowProps {
   /** The figure is a quiet word, not an amount (a balance not given yet). */
   isFigureMuted?: boolean;
   itemId?: string;
+  /** The chevron sits level with a 64px row's middle, as a ticked row's does, whatever lines the text has. */
+  isChevronCentered?: boolean;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -101,6 +103,7 @@ function ItemRow({
   isFaded = false,
   isFigureMuted = false,
   itemId,
+  isChevronCentered = false,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const baseAriaLabel =
@@ -224,7 +227,7 @@ function ItemRow({
     <ChevronRight
       className={join(
         'text-muted-foreground h-4 w-4 shrink-0',
-        hasDetail ? 'mt-0.5' : 'mt-3',
+        hasDetail && !isChevronCentered ? 'mt-0.5' : 'mt-3',
       )}
       aria-hidden='true'
     />

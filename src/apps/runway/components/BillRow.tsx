@@ -133,6 +133,17 @@ function BillRow({
     today,
     isSavingUp && monthly === null,
   );
+  const isSelfPaying = useIsSelfPaying(
+    itemId ?? '',
+    payment?.dueOn ?? null,
+    today,
+  );
+  const payerCard = useBillCardName(itemId ?? '', payment?.dueOn ?? null);
+  const payer = !isSelfPaying
+    ? null
+    : payerCard === null
+      ? AUTO_PAY_WORDS.payerBank
+      : payerCard;
   const figureWord = monthly
     ? BILL_WORDS.aMonth
     : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
@@ -148,7 +159,10 @@ function BillRow({
     <ItemRow
       name={bill.name}
       emoji={emoji}
-      detail={detailOverride ?? dueLine}
+      detail={
+        detailOverride ??
+        (payer === null ? dueLine : AUTO_PAY_WORDS.dueLinePayer(dueLine, payer))
+      }
       isDetailWarning={isUndated && detailOverride === null}
       figure={amount}
       figureWord={figureWord}
@@ -202,14 +216,14 @@ export function BillSheet({
     repeat,
     getDueFact(),
     getProgress(payment, isSavingUp),
-    isSelfPaying
-      ? autoCardName === null
-        ? AUTO_PAY_WORDS.paidFromBank
-        : AUTO_PAY_WORDS.paidWithCard(autoCardName)
-      : null,
   ]
     .filter(Boolean)
     .join(' · ');
+  const payerFact = !isSelfPaying
+    ? null
+    : autoCardName === null
+      ? AUTO_PAY_WORDS.paysItselfFromBank
+      : AUTO_PAY_WORDS.paysItselfFromCard(autoCardName);
   const rangeText = describeRange(
     bill.amount,
     stance,
@@ -231,6 +245,7 @@ export function BillSheet({
       }
       figure={amount}
       fact={fact}
+      secondFact={payerFact}
       help={rangeText}
       quickChange={
         isUndated

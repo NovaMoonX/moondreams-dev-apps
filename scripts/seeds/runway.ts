@@ -3020,7 +3020,7 @@ interface SelfPayingBill {
 /**
  * Bills that pay themselves (Track and up). Taylor (Track): a card for Streaming, which marked itself paid, and Electric ($60 to $90),
  * marked at the top of its range and waiting for what it really charged, beside Phone, due today and paid by hand. Jamie (Link): Phone on
- * the Venture X, marked by itself five days ago with no charge matched, beside three card charges near its due day, so it asks which charge
+ * the Venture X, left unmarked since Link waits for its charge, beside three card charges near its due day, so it asks which charge
  * it was, and Cloud storage, which their last payday set aside in full.
  */
 async function writeSeedSelfPaying(
@@ -3118,7 +3118,7 @@ async function writeSeedSelfPaying(
               groupId: 'seed-group-home',
               paidByCardId: SEED_VENTURE_CARD,
             },
-            mark: { dueOn: phoneDue, amountCents: 4_500, isEstimate: false },
+            mark: null,
           },
           {
             id: JAMIE_CLOUD_LINE.itemId,

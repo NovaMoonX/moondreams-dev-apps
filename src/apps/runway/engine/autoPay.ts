@@ -161,9 +161,8 @@ export function findAutoMarks(input: {
   today: DateOnly;
   bills: readonly AutoBill[];
 }): AutoMark[] {
-  if (!isTrackingLevel(input.level)) return [];
+  if (!isTrackingLevel(input.level) || isLinkAt(input.level)) return [];
   const result = input.bills
-    .filter((bill) => !(isLinkAt(input.level) && bill.cardId === null))
     .flatMap((bill) =>
       bill.payments
         .filter(

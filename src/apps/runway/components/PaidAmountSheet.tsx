@@ -134,6 +134,14 @@ function PaidAmountSheet({
               <InlineNotice tone='info'>
                 {PAID_AMOUNT_WORDS.alreadyPaid(name)}
               </InlineNotice>
+            ) : isCorrection && payment.range ? (
+              <InlineNotice tone='info'>
+                <MaskedText>
+                  {AUTO_PAY_WORDS.countedAt(
+                    formatCents(payment.range.highCents),
+                  )}
+                </MaskedText>
+              </InlineNotice>
             ) : (
               getNotice()
             )}

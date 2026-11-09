@@ -1417,49 +1417,49 @@ function BillFormBody({
             render: ({ moveOn }: QuestionControls) => (
               <div className='space-y-4'>
                 {(shownCards.length > 0 || shownAccounts.length > 0) && (
-                  <PillGroup
-                    label={BILL_PAY_WORDS.label}
-                    options={[
-                      { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
-                      ...shownCards.map((card) => ({
-                        value: card.id,
-                        label: getCardName(card, allCards),
-                        detail: BILL_PAY_WORDS.cardDetail,
-                      })),
-                      ...shownAccounts.map((account) => ({
-                        value: account.id,
-                        label: account.name,
-                        detail: describeAccountLine(account),
-                      })),
-                    ]}
-                    value={payWay}
-                    onChange={(value) => {
-                      const isCard = shownCards.some(
-                        (card) => card.id === value,
-                      );
-                      const isAccount = shownAccounts.some(
-                        (account) => account.id === value,
-                      );
-                      set({
-                        ...(isTracking
-                          ? { paidByCardId: isCard ? value : null }
-                          : {}),
-                        ...(shownAccounts.length > 0
-                          ? { accountId: isAccount ? value : null }
-                          : {}),
-                      });
-                      if (!isTracking) moveOn();
-                    }}
-                  />
+                  <div className='[&_button]:min-h-10!'>
+                    <PillGroup
+                      label={BILL_PAY_WORDS.label}
+                      options={[
+                        { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
+                        ...shownCards.map((card) => ({
+                          value: card.id,
+                          label: getCardName(card, allCards),
+                          detail: BILL_PAY_WORDS.cardDetail,
+                        })),
+                        ...shownAccounts.map((account) => ({
+                          value: account.id,
+                          label: account.name,
+                          detail: describeAccountLine(account),
+                        })),
+                      ]}
+                      value={payWay}
+                      onChange={(value) => {
+                        const isCard = shownCards.some(
+                          (card) => card.id === value,
+                        );
+                        const isAccount = shownAccounts.some(
+                          (account) => account.id === value,
+                        );
+                        set({
+                          ...(isTracking
+                            ? { paidByCardId: isCard ? value : null }
+                            : {}),
+                          ...(shownAccounts.length > 0
+                            ? { accountId: isAccount ? value : null }
+                            : {}),
+                        });
+                        if (!isTracking) moveOn();
+                      }}
+                    />
+                  </div>
                 )}
                 {isTracking && (
                   <div className='flex items-start justify-between gap-3'>
                     <div className='min-w-0 space-y-0.5'>
                       <p className='font-medium'>{AUTO_PAY_WORDS.formToggle}</p>
                       <p className='text-muted-foreground text-sm'>
-                        {shownCards.some((card) => card.id === payWay)
-                          ? AUTO_PAY_WORDS.formLineCard
-                          : AUTO_PAY_WORDS.formLineBank}
+                        {AUTO_PAY_WORDS.formLine}
                       </p>
                     </div>
                     <AppToggle

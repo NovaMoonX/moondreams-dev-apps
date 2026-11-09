@@ -43,7 +43,7 @@ function ChargePickerView({
   dueOn,
   onDone,
 }: ChargePickerViewProps) {
-  const candidates = useChargeCandidates(billId, dueOn);
+  const { candidates, payment } = useChargeCandidates(billId, dueOn);
   const cards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAccounts);
   const pickCharge = usePickCharge();
@@ -62,6 +62,20 @@ function ChargePickerView({
       ? getCardName(card, cards)
       : (accounts.find((entry) => entry.id === purchase.accountId)?.name ??
           null);
+  };
+  const isOneSource =
+    new Set(candidates.map((purchase) => getSource(purchase))).size <= 1;
+  const getMatchWord = (purchase: OpenPurchase) => {
+    if (!payment) return null;
+    if (payment.lowCents === payment.highCents) {
+      return purchase.amountCents === payment.lowCents
+        ? AUTO_PAY_WORDS.pickSameAmount
+        : null;
+    }
+    return purchase.amountCents >= payment.lowCents &&
+      purchase.amountCents <= payment.highCents
+      ? AUTO_PAY_WORDS.pickInRange
+      : null;
   };
   const needle = query.trim().toLowerCase();
   const shown =
@@ -91,28 +105,6 @@ function ChargePickerView({
           placeholder={AUTO_PAY_WORDS.pickSearch}
         />
       )}
-      {candidates.length === 0 ? (
-        <EmptyCard icon={<SearchX className='size-5' />}>
-          {AUTO_PAY_WORDS.pickEmpty(due)}
-        </EmptyCard>
-      ) : (
-        <ul className='border-border divide-border bg-card max-h-[max(9rem,calc(92dvh-29rem))] divide-y overflow-y-auto rounded-2xl border'>
-          {shown.map((purchase) => (
-            <ItemRow
-              key={purchase.id}
-              name={getName(purchase)}
-              detail={AUTO_PAY_WORDS.pickRow(
-                formatDateOrdinalUTC(purchase.date),
-                getSource(purchase),
-              )}
-              figure={formatCents(purchase.amountCents)}
-              isAction
-              onOpen={() => void choose(purchase)}
-              ariaLabel={`${getName(purchase)}. Pick this charge`}
-            />
-          ))}
-        </ul>
-      )}
       <Button
         type='button'
         variant='secondary'
@@ -123,6 +115,29 @@ function ChargePickerView({
       >
         {AUTO_PAY_WORDS.notHereYet}
       </Button>
+      {candidates.length === 0 ? (
+        <EmptyCard icon={<SearchX className='size-5' />}>
+          {AUTO_PAY_WORDS.pickEmpty(due)}
+        </EmptyCard>
+      ) : (
+        <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+          {shown.map((purchase) => (
+            <ItemRow
+              key={purchase.id}
+              name={getName(purchase)}
+              detail={AUTO_PAY_WORDS.pickRow(
+                formatDateOrdinalUTC(purchase.date),
+                isOneSource ? null : getSource(purchase),
+              )}
+              figure={formatCents(purchase.amountCents)}
+              figureWord={getMatchWord(purchase)}
+              isAction
+              onOpen={() => void choose(purchase)}
+              ariaLabel={`${getName(purchase)}. Pick this charge`}
+            />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -141,7 +156,7 @@ export function ChargePickerSheet({
       isOpen
       isDrawerWhenShort
       onClose={onClose}
-      title={rest.billName}
+      title={AUTO_PAY_WORDS.chargeTask}
       actions={<ValuesEyeButton />}
     >
       <ChargePickerView {...rest} onDone={onClose} />

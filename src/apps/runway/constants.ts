@@ -2457,20 +2457,27 @@ export const AUTO_PAY_WORDS = {
   changeLabel: 'Pays itself',
   formToggle: 'It pays itself',
   formSummary: 'pays itself',
-  formLineCard:
-    "You won't need to mark it paid. On the due day we'll count it as charged to this card.",
-  formLineBank:
-    "You won't need to mark it paid. On the due day we'll count it as paid from your bank.",
-  paidWithCard: (card: string) => `Paid with ${card} · automatically`,
-  paidFromBank: 'From your bank · automatically',
+  formLine: 'Counted as paid on its due day',
+  paysItselfFromCard: (card: string) =>
+    `Pays itself from ${card}`.replaceAll(' ', '\u00a0'),
+  paysItselfFromBank: 'Pays\u00a0itself\u00a0from\u00a0your\u00a0bank',
+  dueLinePayer: (due: string, payer: string) => `${due} · ${payer}`,
+  payerBank: 'from your bank',
   paysItselfLine: 'Pays itself',
   enterAmount: 'Enter what it charged',
-  enterAmountSub: 'We counted the top of its usual range',
+  enterAmountSub: (due: string) =>
+    `${due}\u2019s payment \u00b7 counted at the top of its range`,
+  countedAt: (amount: string) =>
+    `We counted ${amount}, the top of its range, until you tell us.`,
+  whichChargeSub: (due: string) =>
+    `${due}\u2019s payment \u00b7 no charge matched yet`,
   save: 'Save',
   whichCharge: 'Which charge was this?',
   chargedOn: (date: string) => `Charged ${date} · enter the amount`,
   checksHeading: 'To check',
-  forgetRow: 'Forget the matched charge',
+  forgetRow: (name: string) => `Forget what ${name}\u2019s charge looks like`,
+  paidByCharge: (name: string, amount: string, date: string) =>
+    `Paid by ${name} \u00b7 ${amount} \u00b7 ${date}`,
   forgetSub: "We'll ask which charge it is next time",
   forgetTitle: (name: string) => `Forget the charges matched to ${name}?`,
   forgetConfirm: 'Forget',
@@ -2480,10 +2487,11 @@ export const AUTO_PAY_WORDS = {
   pickSearch: 'Search charges',
   pickRow: (date: string, source: string | null) =>
     source === null ? date : `${date} · ${source}`,
+  pickSameAmount: 'Same amount',
+  pickInRange: 'In range',
   noMerchant: 'A charge',
   cardBills: 'Bills on this card',
-  cardBillLine: (due: string, paysItself: boolean) =>
-    paysItself ? `Due ${due} · pays itself` : `Due ${due}`,
+  cardBillLine: (due: string) => `Due ${due}`,
   cardBillNoDue: 'No due date yet',
   cardBillsMore: (count: number) => `Show ${count} more`,
   cardBillsFewer: 'Show fewer',

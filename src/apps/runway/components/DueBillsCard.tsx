@@ -382,7 +382,7 @@ function AutoCheckRow({ check, emoji }: AutoCheckRowProps) {
         detail={
           check.kind === 'amount'
             ? AUTO_PAY_WORDS.chargedOn(formatDateOrdinalUTC(check.dueOn))
-            : AUTO_PAY_WORDS.whichCharge
+            : AUTO_PAY_WORDS.whichChargeSub(formatDateOrdinalUTC(check.dueOn))
         }
         ariaLabel={`${name}. ${
           check.kind === 'amount'

@@ -63,6 +63,7 @@ import {
   selectStance,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
 import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type {
@@ -127,6 +128,7 @@ function ChecklistBillRow({
   const isChecked = pending ?? settled;
 
   const [isAsking, setIsAsking] = useState(false);
+  const emoji = useRecordedEmoji(line.emoji, line.itemId);
   const sheetCardName = useBillCardName(line.itemId, payment?.dueOn ?? null);
 
   /** Resolves true once the tick is written; a bill that varies first asks what it came to. */
@@ -176,6 +178,17 @@ function ChecklistBillRow({
         name={getLineTitle(line)}
         detail={isAuto ? AUTO_PAY_WORDS.paysItselfLine : progress}
         figure={amount}
+        leading={
+          isAuto ? (
+            <span
+              className='grid size-5 shrink-0 place-items-center text-lg leading-none'
+              aria-hidden='true'
+            >
+              {emoji ?? Array.from(getLineTitle(line).trim())[0]?.toUpperCase()}
+            </span>
+          ) : undefined
+        }
+        isChevronCentered={isAuto}
         ariaLabel={`${getLineTitle(line)}, ${amount}`}
         tick={
           isAuto

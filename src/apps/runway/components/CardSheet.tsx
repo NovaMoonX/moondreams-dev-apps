@@ -18,7 +18,6 @@ import {
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
@@ -31,7 +30,6 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { archiveCard } from '@apps/runway/store/actions/cardActions';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
 import {
   selectAllCards,
   selectBillPayments,
@@ -71,9 +69,6 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
   const emojiOf = useLiveEmojiResolver();
   const bills = useAppSelector((state) => selectBills(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
-  const selfPaying = useAppSelector((state) =>
-    selectSelfPayingBills(state, today),
-  );
   const [isAll, setIsAll] = useState(false);
   const onCard = bills.filter(
     ({ version }) => (version.payload.paidByCardId ?? null) === cardId,
@@ -88,10 +83,6 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
           const payment =
             (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ??
             null;
-          const isSelf =
-            payment !== null &&
-            selfPaying[item.id] !== undefined &&
-            isSelfPaying(selfPaying[item.id], payment.dueOn, today);
           const due =
             payment === null
               ? AUTO_PAY_WORDS.cardBillNoDue
@@ -101,7 +92,6 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
                     today,
                     formatDateOrdinalUTC,
                   ),
-                  isSelf,
                 );
           return (
             <ItemRow

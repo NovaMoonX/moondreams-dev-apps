@@ -176,8 +176,8 @@ assert.equal(isAutoBill({}, 'link'), false);
   );
   assert.equal(
     findAutoMarks({ level: 'link', today, bills: [bill()] }).length,
-    1,
-    'a card-paid bill at Link is marked',
+    0,
+    'a card-paid bill at Link waits for its charge too',
   );
 }
 

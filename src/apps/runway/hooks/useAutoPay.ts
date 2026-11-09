@@ -288,7 +288,7 @@ export function useAutoChecks(isEnabled = true) {
   return { checks };
 }
 
-/** The charges a person can pick as one payment's, closest first. */
+/** The charges a person can pick as one payment's, closest first, with the payment's range. */
 export function useChargeCandidates(billId: string, dueOn: DateOnly) {
   const today = todayAsUtcDate(useNow(60_000));
   const bills = useAppSelector((state) => selectAutoBills(state, today));
@@ -296,20 +296,22 @@ export function useChargeCandidates(billId: string, dueOn: DateOnly) {
   const needsHome = useAppSelector((state) => state.runway.needsHome);
   const accounts = useAppSelector(selectAccounts);
   const isLinkHistory = useAppSelector(selectIsLinkHistory);
-  const candidates = useMemo(() => {
+  return useMemo(() => {
     const bill = bills.find((entry) => entry.id === billId);
     const payment = bill?.payments.find((entry) => entry.dueOn === dueOn);
     return bill && payment
-      ? rankChargeCandidates({
-          bill,
+      ? {
           payment,
-          purchases: [...needsHome, ...purchases],
-          pullAccountId: resolvePayFromAccountId(null, accounts),
-          isLinkHistory,
-        })
-      : [];
+          candidates: rankChargeCandidates({
+            bill,
+            payment,
+            purchases: [...needsHome, ...purchases],
+            pullAccountId: resolvePayFromAccountId(null, accounts),
+            isLinkHistory,
+          }),
+        }
+      : { payment: null, candidates: [] };
   }, [bills, billId, dueOn, purchases, needsHome, accounts, isLinkHistory]);
-  return candidates;
 }
 
 /** Matches the charge a person picked to a payment, learning its name, with an Undo toast; resolves with whether it was written. */
@@ -368,7 +370,7 @@ export function useUnmatchCharge() {
       const isMarkedByApp =
         bill !== undefined &&
         isTrackingLevel(level) &&
-        !(level === 'link' && bill.cardId === null) &&
+        level !== 'link' &&
         !bill.undoneDueOn.includes(ref.dueOn);
       const paid = findBillPayment(ref.billId, ref.dueOn)?.paid ?? null;
       await inTurn(() =>
