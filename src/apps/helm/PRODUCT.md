@@ -703,7 +703,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 ### Core MVP
 
 - [ ] Home is a conversation, with the voice dock (Browse · Talk · Type): brief answers in a natural voice, then listening for the reply; every view one tap away through Browse, with no tab bar and no dock off home (O, N, C)
-- [ ] The voice: cloud listening and speech online, the phone's own past the day's allowance, barge-in, spoken replies only to spoken turns, "Got it" at once, "undo that" (O, N, C) (issue 12 built the phone's own voice: Talk, the "Got it" line for a spoken turn, "undo that" and Mute; the cloud voice, barge-in and the wake phrase follow)
+- [ ] The voice: cloud listening and speech online, the phone's own past the day's allowance, barge-in, spoken replies only to spoken turns, "Got it" at once, "undo that" (O, N, C) (issue 12 built the phone's own voice: Talk, the "Got it" line for a spoken turn, "undo that" and Mute; the cloud voice, barge-in and the wake phrase follow; issue 13 built the voice benchmark, and the default cloud voice is the owner's pick)
 - [ ] Hear me offline, on every phone: an opt-in download of about 40–75 MB that listens on the phone, interrupting included (N, C)
 - [ ] "Hey [name]" while Helm is open on screen, off until you turn it on (O)
 - [ ] The assistant on every screen, knowing what is in view: "move this to Friday", "who's this?", "add a step" (O, C)

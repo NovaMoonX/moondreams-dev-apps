@@ -22,6 +22,16 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
+import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
+import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
+import { pcmToWav } from '../../functions/src/voice/providers/pcm.ts';
+import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
+import {
+  costMicros,
+  TTS_PRICES,
+  type TtsProviderId,
+} from '../../functions/src/voice/voiceConfig.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
 import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
@@ -42,6 +52,12 @@ const sharedFiles = [
   new URL('../../src/hooks/useNaturalVoice.ts', import.meta.url),
   new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
   new URL('../../src/components/NaturalVoiceOption.tsx', import.meta.url),
+  ...['../../functions/src/voice/', '../../scripts/voice/'].flatMap((folder) =>
+    readdirSync(new URL(folder, import.meta.url), { recursive: true })
+      .map(String)
+      .filter((name) => /\.(tsx?|html|sh)$/.test(name))
+      .map((name) => new URL(`${folder}${name}`, import.meta.url)),
+  ),
 ];
 assert.ok(sharedFiles.length >= 12, 'the shared speech files are all found');
 const APP_WORDS =
@@ -51,14 +67,29 @@ assert.ok(
   sharedPaths.some((path) =>
     path.endsWith('/lib/speech/voice/playbackQueue.ts'),
   ) &&
-    sharedPaths.some((path) => path.endsWith('/hooks/useVoiceConversation.ts')),
-  'the voice service and its hook are among the files scanned',
+    sharedPaths.some((path) =>
+      path.endsWith('/hooks/useVoiceConversation.ts'),
+    ) &&
+    sharedPaths.some((path) =>
+      path.endsWith('/voice/providers/geminiTts.ts'),
+    ) &&
+    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')),
+  'the voice service, its hook, the providers and the benchmark are among the files scanned',
 );
 ['a recipe', 'Helm', 'the Nomos voice'].forEach((planted) =>
   assert.ok(APP_WORDS.test(planted), `"${planted}" is caught as an app word`),
 );
+const VOICE_SERVICE_WORDS = new RegExp(
+  `${APP_WORDS.source}|\\btasks?\\b|capture`,
+  'i',
+);
 sharedFiles.forEach((file) => {
-  const found = readFileSync(file, 'utf8').match(APP_WORDS);
+  const isVoiceService = /\/(functions\/src|scripts)\/voice\//.test(
+    file.pathname,
+  );
+  const found = readFileSync(file, 'utf8').match(
+    isVoiceService ? VOICE_SERVICE_WORDS : APP_WORDS,
+  );
   assert.equal(
     found,
     null,
@@ -601,3 +632,234 @@ assert.deepEqual(
   'clear stops what plays and drops what waits',
 );
 console.log('speechShared: voice router and playback queue checks passed');
+
+const apiKey = 'sk-test-key-123';
+interface Call {
+  url: string;
+  headers: Record<string, string>;
+  body: Record<string, unknown>;
+}
+const record = (
+  answer: () => Response,
+): { calls: Call[]; fetchImpl: typeof fetch } => {
+  const calls: Call[] = [];
+  return {
+    calls,
+    fetchImpl: (async (url: string | URL | Request, init?: RequestInit) => {
+      calls.push({
+        url: String(url),
+        headers: init?.headers as Record<string, string>,
+        body: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      });
+      return answer();
+    }) as typeof fetch,
+  };
+};
+const readAll = async (stream: ReadableStream<Uint8Array>) => {
+  const reader = stream.getReader();
+  const chunks: number[] = [];
+  const next = async (): Promise<void> => {
+    const { done, value } = await reader.read();
+    if (done) return;
+    chunks.push(...value);
+    return next();
+  };
+  await next();
+  return chunks;
+};
+const speakInput = {
+  text: 'Hello there.',
+  voiceId: 'voice-a',
+  format: 'mp3' as const,
+};
+
+const deepgram = record(() => new Response(new Uint8Array([1, 2, 3])));
+const deepgramSpeech = await createDeepgramAura({
+  apiKey,
+  fetchImpl: deepgram.fetchImpl,
+}).speak(speakInput);
+assert.ok(
+  deepgram.calls[0].url.startsWith('https://api.deepgram.com/v1/speak?') &&
+    ['model=voice-a', 'encoding=mp3', 'mip_opt_out=true'].every((part) =>
+      deepgram.calls[0].url.includes(part),
+    ),
+  'Deepgram asks for the model, the encoding and the model-improvement opt-out',
+);
+assert.equal(
+  deepgram.calls[0].headers.Authorization,
+  `Token ${apiKey}`,
+  'Deepgram is sent the key as a Token',
+);
+assert.deepEqual(
+  deepgram.calls[0].body,
+  { text: 'Hello there.' },
+  'Deepgram is sent the text only',
+);
+assert.deepEqual(
+  await readAll(deepgramSpeech.stream),
+  [1, 2, 3],
+  'Deepgram audio streams back as it is',
+);
+
+const toBase64 = (bytes: number[]) => Buffer.from(bytes).toString('base64');
+const sse = (...chunks: number[][]) =>
+  chunks
+    .map(
+      (chunk) =>
+        `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ inlineData: { data: toBase64(chunk) } }] } }] })}\n\n`,
+    )
+    .join('');
+const gemini = record(
+  () =>
+    new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          const text = sse([1, 2], [3, 4, 5]);
+          const cut = Math.floor(text.length / 3);
+          controller.enqueue(new TextEncoder().encode(text.slice(0, cut)));
+          controller.enqueue(new TextEncoder().encode(text.slice(cut)));
+          controller.close();
+        },
+      }),
+    ),
+);
+const geminiSpeech = await createGeminiTts({
+  apiKey,
+  fetchImpl: gemini.fetchImpl,
+}).speak(speakInput);
+assert.ok(
+  gemini.calls[0].url.includes(
+    'gemini-3.8-flash-lite-tts:streamGenerateContent',
+  ) && gemini.calls[0].url.endsWith('alt=sse'),
+  'Gemini streams server-sent events from its TTS model',
+);
+assert.equal(
+  gemini.calls[0].headers['x-goog-api-key'],
+  apiKey,
+  'Gemini is sent the key in its own header',
+);
+assert.deepEqual(
+  gemini.calls[0].body,
+  {
+    contents: [{ parts: [{ text: 'Hello there.' }] }],
+    generationConfig: {
+      responseModalities: ['AUDIO'],
+      speechConfig: {
+        voiceConfig: { prebuiltVoiceConfig: { voiceName: 'voice-a' } },
+      },
+    },
+  },
+  'Gemini asks for audio in the chosen voice',
+);
+assert.deepEqual(
+  await readAll(geminiSpeech.stream),
+  [1, 2, 3, 4, 5],
+  'Gemini joins the audio of each event, even one split across reads',
+);
+
+const google = record(() =>
+  Response.json({ audioContent: toBase64([9, 8, 7]) }),
+);
+const googleSpeech = await createGoogleTts({
+  getAccessToken: async () => 'token-1',
+  projectId: 'a-project',
+  fetchImpl: google.fetchImpl,
+}).speak(speakInput);
+assert.equal(
+  google.calls[0].url,
+  'https://texttospeech.googleapis.com/v1/text:synthesize',
+  'Google synthesizes through the REST endpoint',
+);
+assert.deepEqual(
+  [
+    google.calls[0].headers.Authorization,
+    google.calls[0].headers['x-goog-user-project'],
+  ],
+  ['Bearer token-1', 'a-project'],
+  'Google is sent a bearer token and the project to bill',
+);
+assert.deepEqual(
+  google.calls[0].body,
+  {
+    input: { text: 'Hello there.' },
+    voice: { languageCode: 'en-US', name: 'voice-a' },
+    audioConfig: { audioEncoding: 'MP3' },
+  },
+  'Google is sent the text, the voice and the encoding',
+);
+assert.deepEqual(
+  await readAll(googleSpeech.stream),
+  [9, 8, 7],
+  'Google audio comes back as the bytes of its base64',
+);
+
+const providers: [TtsProviderId, TtsProvider][] = [
+  [
+    'deepgramAura',
+    createDeepgramAura({
+      apiKey,
+      fetchImpl: record(
+        () => new Response('bad key sk-test-key-123', { status: 401 }),
+      ).fetchImpl,
+    }),
+  ],
+  [
+    'geminiTts',
+    createGeminiTts({
+      apiKey,
+      fetchImpl: record(
+        () => new Response('bad key sk-test-key-123', { status: 401 }),
+      ).fetchImpl,
+    }),
+  ],
+  [
+    'googleTts',
+    createGoogleTts({
+      getAccessToken: async () => apiKey,
+      projectId: 'a-project',
+      fetchImpl: record(
+        () => new Response('bad key sk-test-key-123', { status: 401 }),
+      ).fetchImpl,
+    }),
+  ],
+];
+for (const [id, provider] of providers) {
+  const error = await provider.speak(speakInput).then(
+    () => null,
+    (caught: Error) => caught,
+  );
+  assert.ok(
+    error !== null &&
+      error.message.includes(id) &&
+      error.message.includes('401') &&
+      !error.message.includes(apiKey),
+    `${id} names itself and the status, never the key`,
+  );
+}
+
+const wav = pcmToWav(new Uint8Array([1, 0, 2, 0]), 24_000);
+const wavView = new DataView(wav.buffer);
+assert.deepEqual(
+  [
+    new TextDecoder().decode(wav.slice(0, 4)),
+    new TextDecoder().decode(wav.slice(8, 12)),
+    wavView.getUint32(24, true),
+    wavView.getUint16(34, true),
+    wavView.getUint32(40, true),
+    wav.length,
+  ],
+  ['RIFF', 'WAVE', 24_000, 16, 4, 48],
+  'the PCM is wrapped in a 44-byte RIFF header of 24 kHz, 16-bit mono',
+);
+
+assert.equal(
+  costMicros('deepgramAura', { characters: 1000, audioSeconds: 99 }),
+  TTS_PRICES.deepgramAura.micros * 1000,
+  'a per-character price ignores the audio length',
+);
+assert.equal(
+  costMicros('geminiTts', { characters: 1000, audioSeconds: 60 }),
+  9000,
+  'a minute of Gemini audio costs about $0.009',
+);
+console.log('speechShared: voice provider checks passed');

@@ -69,6 +69,10 @@ Every callable requires a signed-in caller, except `getCalendarShare`, `getPinch
 
 `functions/src/share/` holds what every link-based share needs and no app's words: `shareIds.ts` (the 26-character link id, `mintShareId` and `isShareId`) and `shareFiles.ts` (`copyFileUnderNewToken`, `removeFolderFiles`, `describeError`). Pinch's share functions and Going Once's link functions both import them.
 
+## Voice providers
+
+`functions/src/voice/` holds three text-to-speech providers (Deepgram Aura-2, Gemini TTS, Google Cloud TTS Chirp 3 HD), their prices and voices, and no app's words. Nothing is exported from `index.ts` and nothing is deployed yet; `npm run voice:benchmark` runs them from the owner's machine (`docs/voice-benchmark.md`). `npm run voice:google-setup` enables the Text-to-Speech API.
+
 ## Secrets and config
 
 | Name | Kind | Used by | Set it with |
@@ -79,6 +83,8 @@ Every callable requires a signed-in caller, except `getCalendarShare`, `getPinch
 | `RUNWAY_MASTER_KEYS` | Functions secret, **required to deploy**: a JSON keyring, `{ "current": "m1", "keys": { "m1": "<64 hex characters>" } }` | `getRunwayKey`, `exchangeRunwayLink`, `attachRunwayAccounts`, `discardRunwayLink`, `unlinkRunwayAccount`, `syncRunwayLinks`, `reconnectRunwayLink`, `runwayPlaidWebhook`, `syncRunwayAccounts`, `deleteRunwayPlan`, `sendRunwayNeedsHomeDigest` | `firebase functions:secrets:set RUNWAY_MASTER_KEYS --project moondreams-dev-apps` (paste the keyring JSON; generate a key with `openssl rand -hex 32`). Ids are only ever added, never removed or reused. See "Runway: the master keyring" below. |
 | `HELM_MASTER_KEYS` | Functions secret, **required to deploy**: a JSON keyring in Runway's shape, Helm's own and never shared with Runway | `getHelmKey`, `verifyHelmKeys`, `sortHelmCapture` | `npm run helm:keyring` (creates the first keyring, checks it, sets the 90-day destruction delay and prints the escrow step). Ids are only ever added, never removed or reused. See "Helm: the master keyring" below. |
 | `ANTHROPIC_API_KEY` | Functions secret, **required to deploy** once `sortHelmCapture` ships | `sortHelmCapture` | `npm run ai:anthropic-secret` (reads the key hidden, checks it against Anthropic, saves it and prints the console spend-limit steps). Unset in the emulator, where the fixture answers. |
+| `DEEPGRAM_API_KEY` | Functions secret, optional (a provider without its key is skipped) | `functions/src/voice/` (Deepgram Aura-2; no function uses it yet) | `npm run voice:deepgram-secret` (reads the key hidden, checks it against Deepgram, saves it and prints the usage-alert steps). |
+| `GEMINI_API_KEY` | Functions secret, optional (a provider without its key is skipped) | `functions/src/voice/` (Gemini TTS; no function uses it yet) | `npm run voice:gemini-secret` (reads the key hidden, checks it against Google, saves it). Use a key from a project with billing on. |
 | `RUNWAY_PLAID_CLIENT_ID`, `RUNWAY_PLAID_SECRET` | Functions secrets, **required to deploy** (the Trial plan's production keys; the emulator uses the sandbox when `functions/.secret.local` holds sandbox keys, and otherwise a stand-in bank, Chase with a Sapphire Preferred and a Total Checking, so linking works locally with no keys) | `createRunwayLinkSession`, `exchangeRunwayLink`, `attachRunwayAccounts`, `discardRunwayLink`, `unlinkRunwayAccount`, `syncRunwayLinks`, `reconnectRunwayLink`, `runwayPlaidWebhook`, `syncRunwayAccounts`, `deleteRunwayPlan` | `firebase functions:secrets:set RUNWAY_PLAID_CLIENT_ID --project moondreams-dev-apps`, then the same for `RUNWAY_PLAID_SECRET` |
 | `MOVIE_PROVIDER` | env, optional (`tmdb` or `omdb`) | `searchMovies` | `functions/.env.local` locally. Forces a provider; unset, TMDB is used whenever its key is set. |
 | `TMDB_API_BASE` | env, optional | TMDB calls | `functions/.env.local`. Points TMDB calls at another server; a test aid, never set in production. |
