@@ -4,6 +4,17 @@ export const DEFAULT_DAY_START_TIME = '08:00';
 export const DEFAULT_DAY_END_TIME = '22:00';
 export const DEFAULT_PLAN_FILL_PERCENT = 50;
 
+/** The version every sealed payload carries inside it; a reader refuses a newer one. */
+export const SEALED_SCHEMA_VERSION = 1;
+
+/** A run of turns with no gap over this is one session. */
+export const SESSION_IDLE_MS = 10 * 60 * 1000;
+
+export const CAPTURE_MAX_CHARS = 4_000;
+
+/** How many earlier sessions each scroll up brings in. */
+export const EARLIER_SESSIONS_PAGE = 20;
+
 /** Every line that names the assistant is a template filled with `useAssistantName()`, so a renamed assistant is renamed everywhere. */
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -13,4 +24,17 @@ export const HELM_COPY = {
   composerLabel: (name: string) => `Message to ${name}`,
   todayFirstRun:
     'Nothing is planned for today yet. Once you have told Helm about a task or an event, it appears here.',
+  send: 'Send',
+  sendFailed: "That didn't send. Your words are still here.",
+  savedAsWritten: 'Saved as written',
+  unreadable: "Couldn't open this",
+  loadingEarlier: 'Opening earlier turns',
+  earlierFailed: "Couldn't open earlier turns. Try again",
+  inboxTitle: 'Needs you',
+  inboxNewSince: 'New since you looked',
+  inboxEmpty: 'Nothing new since you looked.',
+  markAllSeen: 'Mark all seen',
+  seenFailed: "That couldn't be marked seen. Try again.",
+  turnSheetTitle: 'What you said',
+  nothingWaiting: 'Nothing waiting',
 } as const;

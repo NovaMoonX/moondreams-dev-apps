@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, and no other path under apps/helm is open to a client.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and no other path under apps/helm is open to a client.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -104,9 +104,24 @@ def main():
         check(f'profile delete [{a}]', commit(tok, [rm(path)]), False)
     check('profile create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}', profile)]), False)
 
-    # Nothing but the profile is opened yet: a collection under it, and the server-only paths, refuse everyone.
+    # A turn is the owner's alone: read, list, create, update and delete.
     admin([put(path, profile)])
-    for p in (f'{path}/captures/capture-1', f'{path}/tasks/task-1', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest'):
+    turn = dict(inputMode='typed', medium='web', sessionId='s1', turnIndex=0, status='received', seenAt=None, createdAt=NOW, sealed=SEAL)
+    cap = f'{path}/captures/capture-1'
+    for a, tok in actors.items():
+        admin([put(cap, turn)])
+        check(f'captures read [{a}]', get(cap, tok), a == 'o')
+        check(f'captures list [{a}]', get(f'{path}/captures', tok), a == 'o')
+        check(f'captures create [{a}]', commit(tok, [put_new(cap + '-new-' + a, turn)]), a == 'o')
+        check(f'captures update [{a}]', commit(tok, [put(cap, dict(turn, seenAt=NOW))]), a == 'o')
+        check(f'captures delete [{a}]', commit(tok, [rm(cap)]), a == 'o')
+        admin([rm(cap + '-new-' + a)])
+    check('captures create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/captures/c', turn)]), False)
+    check('captures read at another uid [o]', get(f'apps/helm/users/{x_uid}/captures/c', o_tok), False)
+
+    # No other collection is opened yet, and the server-only paths refuse everyone.
+    admin([put(path, profile)])
+    for p in (f'{path}/tasks/task-1', f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest'):
         admin([put(p, {'x': 1})])
         for a, tok in actors.items():
             check(f'{p.split("/")[-2]} read [{a}]', get(p, tok), False)

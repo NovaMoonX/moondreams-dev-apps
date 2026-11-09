@@ -240,6 +240,12 @@ service cloud.firestore {
       allow read, create, update: if isHelmOwner(uid);
     }
 
+    // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list.
+    match /apps/helm/users/{uid}/{collection}/{docId} {
+      allow read, create, update, delete: if isHelmOwner(uid)
+        && collection in ['captures'];
+    }
+
     // --- App: nine-lives ---
 
     // get() only: a household is joined by knowing its exact code, never by listing codes.

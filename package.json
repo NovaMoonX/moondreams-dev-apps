@@ -94,7 +94,8 @@
     "prs:sync": "bash scripts/prSync.sh --merge",
     "merge:lock": "bash scripts/mergeLock.sh",
     "pipeline:secrets": "bash scripts/pipelineSecrets.sh",
-    "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh"
+    "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh",
+    "helm:keyring": "bash scripts/helm/keyring.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",

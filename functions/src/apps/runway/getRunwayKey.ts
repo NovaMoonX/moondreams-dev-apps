@@ -4,10 +4,9 @@ import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
+import { createKeyringLoader } from '../../appKeys/loadKeyring.js';
 import {
   createDataKey,
-  DEV_KEYRING,
-  readKeyring,
   unwrapDataKey,
   wrapDataKey,
   wrappedKeyPath,
@@ -22,27 +21,9 @@ if (getApps().length === 0) {
 export const RUNWAY_MASTER_KEYS = defineSecret('RUNWAY_MASTER_KEYS');
 
 const CANNOT_OPEN = 'Your plan cannot be opened right now.';
-const isEmulator = () => process.env.FUNCTIONS_EMULATOR === 'true';
-
-function readSecretValue() {
-  try {
-    return RUNWAY_MASTER_KEYS.value();
-  } catch (error) {
-    if (!isEmulator()) throw error;
-    return '';
-  }
-}
-
-let cached: { raw: string; keyring: Keyring } | null = null;
 
 /** Validated on an instance's first call and again whenever the secret's text changes. */
-export function loadKeyring(): Keyring {
-  const raw = readSecretValue();
-  if (cached && cached.raw === raw) return cached.keyring;
-  const keyring = !raw && isEmulator() ? DEV_KEYRING : readKeyring(raw);
-  cached = { raw, keyring };
-  return keyring;
-}
+export const loadKeyring = createKeyringLoader(RUNWAY_MASTER_KEYS);
 
 function loadKeyringOrFail(): Keyring {
   try {

@@ -113,14 +113,14 @@ const SEED_LOGO_PURPLE =
 
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
-/** The emulator's keyring: `RUNWAY_MASTER_KEYS` in functions/.secret.local, else the built-in development one. */
-export function readEmulatorKeyring() {
+/** The emulator's keyring: the named secret (an app's `<APP>_MASTER_KEYS`) in functions/.secret.local, else the built-in development one. */
+export function readEmulatorKeyring(secretName = 'RUNWAY_MASTER_KEYS') {
   try {
     const line = readFileSync(SECRET_FILE, 'utf8')
       .split('\n')
-      .find((entry) => entry.startsWith('RUNWAY_MASTER_KEYS='));
+      .find((entry) => entry.startsWith(`${secretName}=`));
     const raw = line
-      ?.slice('RUNWAY_MASTER_KEYS='.length)
+      ?.slice(`${secretName}=`.length)
       .trim()
       .replace(/^(['"])(.*)\1$/, '$2');
     return raw ? readKeyring(raw) : DEV_KEYRING;

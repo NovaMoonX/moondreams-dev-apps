@@ -71,26 +71,6 @@ export const openBytes = (
   encryption: RunwayEncryption,
 ) => decryptBytes(bytes, encryption.key, nonce);
 
-const MAX_REMEMBERED_PAYLOADS = 6_000;
-
-/** An opener that keeps what it opened: a snapshot that changes one document opens that one, not its whole window again. */
-export function createSealedReader(encryption: RunwayEncryption) {
-  const remembered = new Map<string, Promise<object>>();
-  const read = <T extends object>(sealed: Sealed): Promise<T> => {
-    const key = `${sealed.nonce}:${sealed.value}`;
-    const known = remembered.get(key);
-    if (known) return known as Promise<T>;
-    if (remembered.size >= MAX_REMEMBERED_PAYLOADS) remembered.clear();
-    const opening = openJson<T>(sealed, encryption);
-    remembered.set(key, opening);
-    opening.catch(() => remembered.delete(key));
-    return opening;
-  };
-  return read;
-}
-
-export type SealedReader = ReturnType<typeof createSealedReader>;
-
 /** Seals and opens a form's draft kept on this device, with the plan's key. */
 export function createDraftSealer(encryption: RunwayEncryption) {
   return {

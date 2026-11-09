@@ -10,7 +10,7 @@ Tier tags: **[MVP]**, **[Next]** (Next Steps), **[Later]** (Stretch). Only MVP f
 - **Sealed from day one, Runway's way (owner, round 1).** Each document keeps ids, statuses, enums, flags, dates and timestamps readable for queries and ordering, and seals everything a person would recognise into one `sealed` payload. Media bytes (photos, PDFs, voice notes, Markdown files) are sealed on the device before upload, as Runway's receipt photos are (round 6). Each person has one random data key, stored only wrapped under Helm's own keyring `HELM_MASTER_KEYS` (logged: not shared with Runway); the client gets it from a callable and by default holds it in memory only (section 3).
 - **A trusted browser keeps the key (owner, round 2), on the site's shared standard.** Opt-in per browser through `createTrustedKeyStore` and `TrustBrowserRow` (PR #819). A lost phone is handled by Remove, Sign out everywhere and the 30-day limit; no re-key in the MVP (owner, round 3). Section 4.
 - **Untrusted browsers still capture offline, sealed** through the per-person drop box (section 3), so nothing a person types into Helm is kept on a device in plain text.
-- **Home is the conversation (owner, round 6; supersedes round 1's "capture sheet with results, no chat thread").** Every capture is a turn in a conversation *session*; the home surface shows the current session's turns with what the assistant did (with Undo) and what it kept, and every other view is one tap away through home's voice dock (Browse · Talk · Type; round 6e: on home only), whose Browse opens the Browse sheet, the one view-switcher component: Search at the top, then a bento of tiles sized by importance (a wide Today, a few big tiles, the rest small), so a new section is a small tile and the big ones never multiply (owner, round 6b review). No footer tab bar, no doors on home. A content page (a record, Today, Coming up, Needs you, a list, Knowledge, How {name} sees you) has no dock: it carries Back and Home in its header and one standard built-in "Ask about this" control, which opens the conversation about that page over it; a utility screen (Search, Settings, Connected apps, Activity, a form) has neither (section 21). The data unit stays the `Capture`: one thing the person said, typed or attached (section 21).
+- **Home is the conversation (owner, round 6; supersedes round 1's "capture sheet with results, no chat thread").** Every capture is a turn in a conversation _session_; the home surface shows the current session's turns with what the assistant did (with Undo) and what it kept, and every other view is one tap away through home's voice dock (Browse · Talk · Type; round 6e: on home only), whose Browse opens the Browse sheet, the one view-switcher component: Search at the top, then a bento of tiles sized by importance (a wide Today, a few big tiles, the rest small), so a new section is a small tile and the big ones never multiply (owner, round 6b review). No footer tab bar, no doors on home. A content page (a record, Today, Coming up, Needs you, a list, Knowledge, How {name} sees you) has no dock: it carries Back and Home in its header and one standard built-in "Ask about this" control, which opens the conversation about that page over it; a utility screen (Search, Settings, Connected apps, Activity, a form) has neither (section 21). The data unit stays the `Capture`: one thing the person said, typed or attached (section 21).
 - **Voice is its own service, separate from reasoning (owner, round 6).** Speech-to-text, reasoning and speech output are three replaceable layers with their own budgets. Listening and speaking go through a provider-independent voice service: cloud adapters (Deepgram streaming for listening; Nomos's voice through the provider the voice benchmark picks among Gemini Flash-Lite TTS, Deepgram Aura-2 and Google Cloud TTS) and device adapters (the browser's recognition; the site's natural voice and system voices through `@/lib/speech`), chosen per turn by connectivity, the person's voice allowance and the response's priority. Keys stay on the server: streaming listening uses short-lived tokens the server mints; speaking streams through a site function. Claude's budget pays for reasoning only (section 20).
 - **The assistant knows the screen (lead, round 6).** Every view publishes a small, capped screen context (a focus record, the visible record ids, the view's name); the server re-reads those records itself under the caller's uid, so "move this to Friday" on a task works and a forged context can reach nothing the person couldn't (section 21).
 - **The assistant runs on the server from day one (owner, round 1)**, on Claude through the Anthropic API (owner, round 5), in a tool-use loop over Helm's own in-process MCP server (section 5). **Model routing (lead, round 6):** a quick, cheap model takes simple turns, the Sonnet-class model takes planning, answers, attachments and topic documents, and the quick model can hand a turn over; roles map to model ids only in `models.ts`. The model never writes, never sees a document id or a token, never picks a date.
@@ -18,7 +18,7 @@ Tier tags: **[MVP]**, **[Next]** (Next Steps), **[Later]** (Stretch). Only MVP f
 - **One "who" record for people, pets and organizations (lead, round 6).** `who/{whoId}` with `kind` (`person | pet | organization`; groups and households later), an importance `tier` (`close | regular | passing`), an optional photo, and a `role` per project (`key | involved | mentioned`). The person themself is a `who` with `isSelf`, so their identity, preferences and (later) life events hang off the same shape as everyone else's (section 22).
 - **Preferences, favorites and identity are facts** with a `kind` and a topic, shown and edited on "How Nomos sees you" with the learned writing style (section 26).
 - **Knowledge is loose notes and topics, and each topic is a living document (owner, rounds 2, 3, 6 and 6c).** A topic reads as one formatted document that the assistant writes and keeps up from the knowledge filed under it, with a source on every section and a version history with Undo; topics nest three levels deep, and a parent opens with an overview of its subtopics. The assistant adds without removing the person's words unless asked (section 24). This replaces round 6's separate living docs: the topic is the document.
-- **Procedures replace checklists (owner and lead, round 6).** A task is a one-off thing to do and may have steps; a procedure is a reusable routine with versions, run each time as a ticked *run* attached to a project, a trip or an event (section 25).
+- **Procedures replace checklists (owner and lead, round 6).** A task is a one-off thing to do and may have steps; a procedure is a reusable routine with versions, run each time as a ticked _run_ attached to a project, a trip or an event (section 25).
 - **Media in the conversation (owner, round 6):** photos and screenshots, PDFs, voice notes and Markdown files. The assistant decides to keep or discard each; kept media is sealed in Storage and shows on the record it changed and in the conversation (section 23).
 - **Google Contacts import, picked people only (owner, round 6):** `contacts.readonly` through the platform's Google token store; only the people the person ticks are written, as `who` records (section 22).
 - **What stays on the device:** the shorthand and date reading, the planner, latent-task activation, note ranking, the screen context, voice routing and barge-in, Undo, and the person's own edits. None of them calls the model.
@@ -38,40 +38,41 @@ All times are millisecond numbers. **Date-only** values (a due day, a "not until
 
 ### Paths
 
-| Path | What | Tier |
-|---|---|---|
-| `apps/helm/users/{uid}` | `HelmProfile`: settings, the assistant's name and tone, voice settings | MVP |
-| `apps/helm/users/{uid}/captures/{captureId}` | One turn: what the person said, typed or attached, how it was read, the screen it came from, the reply, Inbox state | MVP |
-| `apps/helm/users/{uid}/tasks/{taskId}` | Tasks (with steps), latent ones included | MVP |
-| `apps/helm/users/{uid}/projects/{projectId}` | Projects with milestones and the people in them, each with a role | MVP |
-| `apps/helm/users/{uid}/who/{whoId}` | People, pets and organizations, the person themself included (`isSelf`); replaces round 5's `people` | MVP |
-| `apps/helm/users/{uid}/keyDates/{keyDateId}` | Key dates of every who and the self: dates that come back and moments, one document each (moved out of the who's sealed payload so a lifetime of them scales) | MVP |
-| `apps/helm/users/{uid}/meta/keyDateIndex` | One sealed document listing every date that comes back in compact form, so Today, Coming up and answers read one document (split into `keyDateIndex-01` … `-12` by month only past its cap) | MVP |
-| `apps/helm/users/{uid}/places/{placeId}` | Places (named, never coordinates), with photos | MVP |
-| `apps/helm/users/{uid}/facts/{factId}` | Facts about a who, place, project or synced record, preferences, favorites and identity among them, with provenance | MVP |
-| `apps/helm/users/{uid}/notes/{noteId}` | Knowledge: the pieces (a note typed, said, saved from an answer or brought in from a file), in topics or loose | MVP |
-| `apps/helm/users/{uid}/topics/{topicId}` | Topics, nested up to 3 levels, each with its sealed document | MVP |
-| `apps/helm/users/{uid}/topics/{topicId}/versions/{versionNumber}` | A topic document's versions | MVP |
-| `apps/helm/users/{uid}/procedures/{procedureId}` | Reusable routines; replace round 5's checklist `artifacts` | MVP |
-| `apps/helm/users/{uid}/procedures/{procedureId}/versions/{versionNumber}` | A procedure's versions | MVP |
-| `apps/helm/users/{uid}/procedureRuns/{runId}` | One run of a procedure, attached to a project, a trip, an event or a task | MVP |
-| `apps/helm/users/{uid}/media/{mediaId}` | A photo, PDF, voice note or Markdown file: what it is, where it is kept, what it shows on | MVP |
-| `apps/helm/users/{uid}/style/{styleId}` | Learned writing style, general and per occasion or audience | MVP |
-| `apps/helm/users/{uid}/executions/{executionId}` | Activity: every assistant change, decision and undo | MVP |
-| `apps/helm/users/{uid}/planDays/{dayKey}` | Helm's slots and the calendar snapshot for one local day | MVP |
-| `apps/helm/users/{uid}/synced/{syncedId}` | Sealed copies of what connected sources share (section 19), **written only by Functions** | MVP |
-| `apps/helm/server/{uid}/keys/data`, `…/keys/dropBox` | The wrapped data key and drop-box private key, **Admin SDK only, no rule matches** | MVP |
-| `apps/helm/server/{uid}/aiUsage/{dayKey}` | Per-person reasoning call counts, **Admin SDK only** | MVP |
-| `apps/helm/aiBudget/{dayKey}` | Project-wide reasoning spend for the daily guard, **Admin SDK only** | MVP |
-| `apps/helm/keyChecks/{masterKeyId}` | The keyring canary `verifyHelmKeys` opens daily, **Admin SDK only** | MVP |
-| `apps/helm/users/{uid}/commitments/{id}`, `scenarios/{id}` | Promises, what-ifs | Next |
-| `apps/helm/users/{uid}/lifeEvents/{id}` | Milestones in the person's life and others' (section 27) | Next |
+| Path                                                                      | What                                                                                                                                                                                        | Tier |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `apps/helm/users/{uid}`                                                   | `HelmProfile`: settings, the assistant's name and tone, voice settings                                                                                                                      | MVP  |
+| `apps/helm/users/{uid}/captures/{captureId}`                              | One turn: what the person said, typed or attached, how it was read, the screen it came from, the reply, Inbox state                                                                         | MVP  |
+| `apps/helm/users/{uid}/tasks/{taskId}`                                    | Tasks (with steps), latent ones included                                                                                                                                                    | MVP  |
+| `apps/helm/users/{uid}/projects/{projectId}`                              | Projects with milestones and the people in them, each with a role                                                                                                                           | MVP  |
+| `apps/helm/users/{uid}/who/{whoId}`                                       | People, pets and organizations, the person themself included (`isSelf`); replaces round 5's `people`                                                                                        | MVP  |
+| `apps/helm/users/{uid}/keyDates/{keyDateId}`                              | Key dates of every who and the self: dates that come back and moments, one document each (moved out of the who's sealed payload so a lifetime of them scales)                               | MVP  |
+| `apps/helm/users/{uid}/meta/keyDateIndex`                                 | One sealed document listing every date that comes back in compact form, so Today, Coming up and answers read one document (split into `keyDateIndex-01` … `-12` by month only past its cap) | MVP  |
+| `apps/helm/users/{uid}/places/{placeId}`                                  | Places (named, never coordinates), with photos                                                                                                                                              | MVP  |
+| `apps/helm/users/{uid}/facts/{factId}`                                    | Facts about a who, place, project or synced record, preferences, favorites and identity among them, with provenance                                                                         | MVP  |
+| `apps/helm/users/{uid}/notes/{noteId}`                                    | Knowledge: the pieces (a note typed, said, saved from an answer or brought in from a file), in topics or loose                                                                              | MVP  |
+| `apps/helm/users/{uid}/topics/{topicId}`                                  | Topics, nested up to 3 levels, each with its sealed document                                                                                                                                | MVP  |
+| `apps/helm/users/{uid}/topics/{topicId}/versions/{versionNumber}`         | A topic document's versions                                                                                                                                                                 | MVP  |
+| `apps/helm/users/{uid}/procedures/{procedureId}`                          | Reusable routines; replace round 5's checklist `artifacts`                                                                                                                                  | MVP  |
+| `apps/helm/users/{uid}/procedures/{procedureId}/versions/{versionNumber}` | A procedure's versions                                                                                                                                                                      | MVP  |
+| `apps/helm/users/{uid}/procedureRuns/{runId}`                             | One run of a procedure, attached to a project, a trip, an event or a task                                                                                                                   | MVP  |
+| `apps/helm/users/{uid}/media/{mediaId}`                                   | A photo, PDF, voice note or Markdown file: what it is, where it is kept, what it shows on                                                                                                   | MVP  |
+| `apps/helm/users/{uid}/style/{styleId}`                                   | Learned writing style, general and per occasion or audience                                                                                                                                 | MVP  |
+| `apps/helm/users/{uid}/executions/{executionId}`                          | Activity: every assistant change, decision and undo                                                                                                                                         | MVP  |
+| `apps/helm/users/{uid}/planDays/{dayKey}`                                 | Helm's slots and the calendar snapshot for one local day                                                                                                                                    | MVP  |
+| `apps/helm/users/{uid}/synced/{syncedId}`                                 | Sealed copies of what connected sources share (section 19), **written only by Functions**                                                                                                   | MVP  |
+| `apps/helm/server/{uid}/keys/data`, `…/keys/dropBox`                      | The wrapped data key and drop-box private key, **Admin SDK only, no rule matches**                                                                                                          | MVP  |
+| `apps/helm/server/{uid}/aiUsage/{dayKey}`                                 | Per-person reasoning call counts, **Admin SDK only**                                                                                                                                        | MVP  |
+| `apps/helm/aiBudget/{dayKey}`                                             | Project-wide reasoning spend for the daily guard, **Admin SDK only**                                                                                                                        | MVP  |
+| `apps/helm/keyChecks/{masterKeyId}`                                       | The keyring canary `verifyHelmKeys` opens daily, **Admin SDK only**                                                                                                                         | MVP  |
+| `apps/helm/users/{uid}/commitments/{id}`, `scenarios/{id}`                | Promises, what-ifs                                                                                                                                                                          | Next |
+| `apps/helm/users/{uid}/lifeEvents/{id}`                                   | Milestones in the person's life and others' (section 27)                                                                                                                                    | Next |
 
 Paths outside the app namespace, called out: the shared `users/{uid}` profile (read for the person's name and email, never written by Helm), the shared `apps/{appId}/usage` records from `useTrackAppUsage`, the site's connections paths (section 19: `connections/{uid}/…` owner-read, callable-written; `connectionsServer/{uid}/**` Admin only), and **the site's voice service paths** `voiceUsage/{uid}/days/{dayKey}` and `voiceBudget/{dayKey}` (section 20), Admin SDK only, no rule matches. Helm adds nothing to central `reminders`.
 
 **Storage**: `apps/helm/media/{uid}/{mediaId}` (the sealed bytes) and `apps/helm/media/{uid}/{mediaId}.thumb` (a sealed 512-px thumbnail for photos and a PDF's first page when the device can draw it), `application/octet-stream` only, owner-only (section 14).
 
 **On the device only**, every entry naming the uid and cleared on sign-out and by "Remove from this device" (the site's `forgetDeviceSecretsFor`):
+
 - `helmOutbox` and `helmDropBoxKey` (device secrets): drop-box envelopes of captures made while Helm had no key, and the public key that seals them (section 3).
 - `form-draft:<uid>:helm:*`: unsent capture text, a sealed form draft (`declareSealedFormDrafts('helm:')`).
 - The trusted browser's kept data key (section 4).
@@ -83,28 +84,28 @@ Readable throughout: nothing on it is the person's content, and the shell needs 
 
 ```ts
 type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal'; // options + sample answers + prompt lines in constants.ts
-type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';             // round 6: deviceOnly never sends audio to a voice provider
+type VoiceMode = 'cloudWhenOnline' | 'deviceOnly'; // round 6: deviceOnly never sends audio to a voice provider
 
 interface HelmProfile {
-  assistantName: string;               // default DEFAULT_ASSISTANT_NAME ("Nomos"); 1–16 chars of ASSISTANT_NAME_PATTERN; also the wake word
-  assistantTone: AssistantTone;        // default 'composed'
-  selfWhoId: string | null;            // round 6: the person's own who record, made with the profile
-  timeZone: string;                    // IANA; set from the device on first open, editable
-  dayStartTime: string;                // "HH:mm" floating: the earliest a slot may start
-  dayEndTime: string;                  // "HH:mm"
-  planFillPercent: number;             // share of free time the planner may fill (default 50)
-  shiftCalendarIds: string[];          // "{accountId}/{calendarId}" marked as shifts (rest-day rule)
-  busyAllDayEventRefs: string[];       // synced ids of all-day events the person said block the day
+  assistantName: string; // default DEFAULT_ASSISTANT_NAME ("Nomos"); 1–16 chars of ASSISTANT_NAME_PATTERN; also the wake word
+  assistantTone: AssistantTone; // default 'composed'
+  selfWhoId: string | null; // round 6: the person's own who record, made with the profile
+  timeZone: string; // IANA; set from the device on first open, editable
+  dayStartTime: string; // "HH:mm" floating: the earliest a slot may start
+  dayEndTime: string; // "HH:mm"
+  planFillPercent: number; // share of free time the planner may fill (default 50)
+  shiftCalendarIds: string[]; // "{accountId}/{calendarId}" marked as shifts (rest-day rule)
+  busyAllDayEventRefs: string[]; // synced ids of all-day events the person said block the day
   calendarOfferFoldedAt: number | null;
-  hasSeenAiNotice: boolean;            // the first-capture AI line was shown
-  hasSeenVoiceNotice: boolean;         // round 6: the first-voice line (who hears what) was shown
-  voiceMode: VoiceMode;                // round 6: default 'cloudWhenOnline'
-  isWakeWordOn: boolean;               // round 6: "Hey {name}" while Helm is open on screen; default false (PRODUCT.md: off until turned on)
-  isHandsFreeOn: boolean;              // round 6: the mic reopens for a follow-up after a spoken reply; default true
+  hasSeenAiNotice: boolean; // the first-capture AI line was shown
+  hasSeenVoiceNotice: boolean; // round 6: the first-voice line (who hears what) was shown
+  voiceMode: VoiceMode; // round 6: default 'cloudWhenOnline'
+  isWakeWordOn: boolean; // round 6: "Hey {name}" while Helm is open on screen; default false (PRODUCT.md: off until turned on)
+  isHandsFreeOn: boolean; // round 6: the mic reopens for a follow-up after a spoken reply; default true
   styleFromMailAccountId: string | null; // round 6: the Google account whose sent mail the person let the style learner read
-  styleLearnedThroughAt: number | null;  // round 6: createdAt of the newest typed capture the style learner has read
+  styleLearnedThroughAt: number | null; // round 6: createdAt of the newest typed capture the style learner has read
   currentPlace: { placeId: string; saidAt: number } | null; // "I'm home", lapses after 3 h (section 10)
-  autonomyOverrides: Record<string, AutonomyLevel> | null;  // [Later] per-category opt-in to levels 3–4
+  autonomyOverrides: Record<string, AutonomyLevel> | null; // [Later] per-category opt-in to levels 3–4
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -117,90 +118,189 @@ interface HelmProfile {
 One thing the person said, typed or attached: a turn in the conversation, the Inbox's source and the source every record it made points to.
 
 ```ts
-type CaptureStatus = 'received' | 'interpreting' | 'sorted' | 'needsYou' | 'failed';
+type CaptureStatus =
+  'received' | 'interpreting' | 'sorted' | 'needsYou' | 'failed';
 type HeldReason = 'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached';
 type NomosQuestionKind =
-  | 'whichPerson' | 'whichPlace' | 'whichProject'
-  | 'whichIsTrue' | 'whichDate'
-  | 'couldNotRead' | 'moreToSort'      // built by code, fixed wording
-  | 'whichTopic' | 'groupTopics'      // round 6d: built by code (section 7); whichTopic is pickOne with "New topic" when none fits, pickSeveral when two or more could
-  | 'asked';                           // round 6c: written by the model through `ask` (section 5 "Questions")
-type QuestionShape = 'pickOne' | 'pickSeveral' | 'yesNo' | 'freeText' | 'dateTime' | 'pickRecord' | 'number'; // round 6c
-type SpokenPriority = 'ack' | 'reply' | 'summary';  // round 6: section 20 "Routing"
+  | 'whichPerson'
+  | 'whichPlace'
+  | 'whichProject'
+  | 'whichIsTrue'
+  | 'whichDate'
+  | 'couldNotRead'
+  | 'moreToSort' // built by code, fixed wording
+  | 'whichTopic'
+  | 'groupTopics' // round 6d: built by code (section 7); whichTopic is pickOne with "New topic" when none fits, pickSeveral when two or more could
+  | 'asked'; // round 6c: written by the model through `ask` (section 5 "Questions")
+type QuestionShape =
+  | 'pickOne'
+  | 'pickSeveral'
+  | 'yesNo'
+  | 'freeText'
+  | 'dateTime'
+  | 'pickRecord'
+  | 'number'; // round 6c
+type SpokenPriority = 'ack' | 'reply' | 'summary'; // round 6: section 20 "Routing"
 
 interface Capture {
   inputMode: 'typed' | 'voice' | 'attachment'; // round 6: 'attachment' = media with no words
-  sttProvider: string | null;          // round 6: 'deepgram' | 'device' for a voice turn; null otherwise
-  ttsProvider: string | null;          // round 6: which voice spoke the reply ('cloud:{provider}' | 'natural' | 'system'); null when nothing was spoken
+  sttProvider: string | null; // round 6: 'deepgram' | 'device' for a voice turn; null otherwise
+  ttsProvider: string | null; // round 6: which voice spoke the reply ('cloud:{provider}' | 'natural' | 'system'); null when nothing was spoken
   arrivedVia: 'direct' | 'dropBox';
-  medium: 'web';                       // round 6: [Later] 'extension' and other mediums (section 27)
-  sessionId: string;                   // round 6: the conversation session (section 21)
-  turnIndex: number;                   // round 6: order inside the session
-  screen: { view: HelmView; focus: RecordRef | null; visible: RecordRef[]; v: 1 } | null; // round 6: section 21; ≤20 visible
-  attachmentIds: string[];             // round 6: media ids, ≤5 (PRODUCT.md)
+  medium: 'web'; // round 6: [Later] 'extension' and other mediums (section 27)
+  sessionId: string; // round 6: the conversation session (section 21)
+  turnIndex: number; // round 6: order inside the session
+  screen: {
+    view: HelmView;
+    focus: RecordRef | null;
+    visible: RecordRef[];
+    v: 1;
+  } | null; // round 6: section 21; ≤20 visible
+  attachmentIds: string[]; // round 6: media ids, ≤5 (PRODUCT.md)
   interruptedCaptureId: string | null; // round 6: the turn whose spoken reply the person talked over (barge-in)
-  turnLeadId: string | null;           // round 6d: set on a message that joined an earlier one's turn (section 21 "Back-to-back messages"); null on the lead
-  joinedCaptureIds: string[];          // round 6d: on the lead, the messages that joined it, in order; ≤9
-  route: 'quick' | 'full' | null;      // round 6: the model route taken (section 5)
+  turnLeadId: string | null; // round 6d: set on a message that joined an earlier one's turn (section 21 "Back-to-back messages"); null on the lead
+  joinedCaptureIds: string[]; // round 6d: on the lead, the messages that joined it, in order; ≤9
+  route: 'quick' | 'full' | null; // round 6: the model route taken (section 5)
   status: CaptureStatus;
   heldReason: HeldReason | null;
-  claimId: string | null; claimedAt: number | null; attempts: number;
+  claimId: string | null;
+  claimedAt: number | null;
+  attempts: number;
   lastErrorCode: string | null;
-  questionState: Record<string, { kind: NomosQuestionKind; shape: QuestionShape; askedAt: number; answeredAt: number | null; skippedAt: number | null }>; // round 6c: shape, askedAt, skippedAt
+  questionState: Record<
+    string,
+    {
+      kind: NomosQuestionKind;
+      shape: QuestionShape;
+      askedAt: number;
+      answeredAt: number | null;
+      skippedAt: number | null;
+    }
+  >; // round 6c: shape, askedAt, skippedAt
   answersQuestion: { captureId: string; questionId: string } | null; // round 6c: this turn is the answer to that question (section 5)
   executionIds: string[];
   hasAnswer: boolean;
   answerSavedNoteId: string | null;
-  quotedSourceKeys: string[];          // round 5: "{connectorId}|{accountId}" of every quote and synced source
-  planDayKey: string | null; planTaskIds: string[];
+  quotedSourceKeys: string[]; // round 5: "{connectorId}|{accountId}" of every quote and synced source
+  planDayKey: string | null;
+  planTaskIds: string[];
   seenAt: number | null;
-  createdAt: number;                   // when it was said: the "now" its reading and its sorting use
+  createdAt: number; // when it was said: the "now" its reading and its sorting use
   sortedAt: number | null;
   sealed: Sealed;
 }
 
 interface CaptureSealed {
-  text: string;                        // as typed, or the final transcript; ≤4,000 chars; never edited after Send
+  text: string; // as typed, or the final transcript; ≤4,000 chars; never edited after Send
   reading: CaptureReading;
   answer: CaptureAnswer | null;
-  spoken: { text: string; priority: SpokenPriority; builtBy: 'code' | 'model' } | null; // round 6: what is said back (≤280)
-  spokenChars: number | null;          // round 6: on an interrupted turn, how much of its reply was heard before the barge-in
+  spoken: {
+    text: string;
+    priority: SpokenPriority;
+    builtBy: 'code' | 'model';
+  } | null; // round 6: what is said back (≤280)
+  spokenChars: number | null; // round 6: on an interrupted turn, how much of its reply was heard before the barge-in
   questions: Record<string, NomosQuestion>;
   sortedThrough: number | null;
 }
 
-type HelmView = 'home' | 'today' | 'inbox' | 'task' | 'project' | 'who' | 'place' | 'knowledge' | 'note' | 'topic'
-              | 'procedure' | 'run' | 'howNomosSeesYou' | 'activity' | 'search' | 'settings' | 'connection'
-              | 'comingUp';  // round 6; 6e: Coming up
-interface RecordRef { collection: HelmCollection | 'synced'; id: string; }
+type HelmView =
+  | 'home'
+  | 'today'
+  | 'inbox'
+  | 'task'
+  | 'project'
+  | 'who'
+  | 'place'
+  | 'knowledge'
+  | 'note'
+  | 'topic'
+  | 'procedure'
+  | 'run'
+  | 'howNomosSeesYou'
+  | 'activity'
+  | 'search'
+  | 'settings'
+  | 'connection'
+  | 'comingUp'; // round 6; 6e: Coming up
+interface RecordRef {
+  collection: HelmCollection | 'synced';
+  id: string;
+}
 ```
 
 `CaptureAnswer`, `AnswerQuote`, `SearchedSource`, `CaptureReading`, `Token`, `DateSpan`, `SourceRef` and `NomosQuestion` are as in round 5:
 
 ```ts
 interface CaptureAnswer {
-  question: string;                    // ≤200
+  question: string; // ≤200
   scope: 'yourThings' | 'theWorld' | 'both';
-  fromRecords: string | null;          // kept only with ≥1 resolved source
+  fromRecords: string | null; // kept only with ≥1 resolved source
   sources: SourceRef[];
-  general: string | null;              // kept per section 6's guards; never without its label
+  general: string | null; // kept per section 6's guards; never without its label
   isHealth: boolean;
   generalDiffersFrom: { noteId: string; says: string } | null;
   suggestedTopicId: string | null;
-  quotes: AnswerQuote[];               // ≤5, copied by code from tool results
+  quotes: AnswerQuote[]; // ≤5, copied by code from tool results
   searched: SearchedSource[];
 }
-interface AnswerQuote { id: string; connectorId: string; accountId: string; sourceLabel: string;
-  text: string | null; deepLink: string | null; deletedAt: number | null; }
-interface SearchedSource { connectorId: string; accountId: string; label: string; at: number; found: number; failed: string | null; }
-interface CaptureReading { people: Token[]; places: Token[]; documents: Token[]; commands: Token[];
-  isUrgent: boolean; dates: DateSpan[]; addressedAs: Token | null; }
-interface Token { id: string; text: string; start: number; end: number; }
-interface DateSpan extends Token { due: TaskDue; }
+interface AnswerQuote {
+  id: string;
+  connectorId: string;
+  accountId: string;
+  sourceLabel: string;
+  text: string | null;
+  deepLink: string | null;
+  deletedAt: number | null;
+}
+interface SearchedSource {
+  connectorId: string;
+  accountId: string;
+  label: string;
+  at: number;
+  found: number;
+  failed: string | null;
+}
+interface CaptureReading {
+  people: Token[];
+  places: Token[];
+  documents: Token[];
+  commands: Token[];
+  isUrgent: boolean;
+  dates: DateSpan[];
+  addressedAs: Token | null;
+}
+interface Token {
+  id: string;
+  text: string;
+  start: number;
+  end: number;
+}
+interface DateSpan extends Token {
+  due: TaskDue;
+}
 type SourceRef =
-  | { kind: 'fact' | 'note' | 'task' | 'project' | 'who' | 'place' | 'procedure' | 'media' | 'topic'; id: string } // round 6: who, procedure, media; round 6d: topic
+  | {
+      kind:
+        | 'fact'
+        | 'note'
+        | 'task'
+        | 'project'
+        | 'who'
+        | 'place'
+        | 'procedure'
+        | 'media'
+        | 'topic';
+      id: string;
+    } // round 6: who, procedure, media; round 6d: topic
   | { kind: 'event'; eventRef: string; title: string; startAt: number }
-  | { kind: 'synced'; id: string; connectorId: string; title: string | null; startAt: number | null };
+  | {
+      kind: 'synced';
+      id: string;
+      connectorId: string;
+      title: string | null;
+      startAt: number | null;
+    };
 ```
 
 `NomosQuestion` gains shapes (owner, round 6b: "multi-select or free response, like most chats today"). It was never built, so `answerOptionId` is replaced by `answer`, not deprecated:
@@ -208,26 +308,42 @@ type SourceRef =
 ```ts
 interface NomosQuestion {
   builtBy: 'code' | 'model';
-  shape: QuestionShape;                // code-built kinds are 'pickOne' (whichDate is 'dateTime')
-  prompt: string;                      // ≤200, cut at a word; code-built prompts come from constants.ts
-  options: { id: string; label: string; detail: string | null; ref: RecordRef | null }[];
-                                       // pickOne 2–6, pickSeveral 2–8, yesNo fixed by code, pickRecord ≤6 resolved records; label ≤80, detail ≤80
-  allowsSomethingElse: boolean;        // pickOne: a last "Something else" opening a free answer
-  noneOption: boolean;                 // pickSeveral: always true, a code-added "None of these"
+  shape: QuestionShape; // code-built kinds are 'pickOne' (whichDate is 'dateTime')
+  prompt: string; // ≤200, cut at a word; code-built prompts come from constants.ts
+  options: {
+    id: string;
+    label: string;
+    detail: string | null;
+    ref: RecordRef | null;
+  }[];
+  // pickOne 2–6, pickSeveral 2–8, yesNo fixed by code, pickRecord ≤6 resolved records; label ≤80, detail ≤80
+  allowsSomethingElse: boolean; // pickOne: a last "Something else" opening a free answer
+  noneOption: boolean; // pickSeveral: always true, a code-added "None of these"
   recordKinds: ('who' | 'place' | 'project')[]; // pickRecord: what the search and the closing "new" option make; [] otherwise
   dateMode: 'date' | 'time' | 'dateTime' | null;
-  number: { min: number | null; max: number | null; unit: string | null; isMoney: boolean; decimals: 0 | 1 | 2 } | null; // unit ≤20
-  heldCommands: NomosCommand[];        // code-built only; [] for 'asked'
-  aboutRef: RecordRef | null;          // what the question is about, for its card and Activity
+  number: {
+    min: number | null;
+    max: number | null;
+    unit: string | null;
+    isMoney: boolean;
+    decimals: 0 | 1 | 2;
+  } | null; // unit ≤20
+  heldCommands: NomosCommand[]; // code-built only; [] for 'asked'
+  aboutRef: RecordRef | null; // what the question is about, for its card and Activity
   answer: QuestionAnswer | null;
 }
-type QuestionAnswer = { by: 'tap' | 'voice'; at: number; turnCaptureId: string | null } & (
-  | { shape: 'pickOne' | 'yesNo'; optionId: string; otherText: string | null }   // otherText with "Something else", ≤500
-  | { shape: 'pickSeveral'; optionIds: string[] }                                 // ['none'] for None of these, never []
-  | { shape: 'freeText'; text: string }                                           // ≤500
-  | { shape: 'dateTime'; date: number | null; time: string | null }               // date-only (UTC midnight) and a floating "HH:mm" in the profile's zone
-  | { shape: 'pickRecord'; ref: RecordRef | null; newName: string | null }        // newName when the "new" option was chosen
-  | { shape: 'number'; value: number });                                          // isMoney: integer cents
+type QuestionAnswer = {
+  by: 'tap' | 'voice';
+  at: number;
+  turnCaptureId: string | null;
+} & (
+  | { shape: 'pickOne' | 'yesNo'; optionId: string; otherText: string | null } // otherText with "Something else", ≤500
+  | { shape: 'pickSeveral'; optionIds: string[] } // ['none'] for None of these, never []
+  | { shape: 'freeText'; text: string } // ≤500
+  | { shape: 'dateTime'; date: number | null; time: string | null } // date-only (UTC midnight) and a floating "HH:mm" in the profile's zone
+  | { shape: 'pickRecord'; ref: RecordRef | null; newName: string | null } // newName when the "new" option was chosen
+  | { shape: 'number'; value: number }
+); // isMoney: integer cents
 ```
 
 The reading is made on the device from `createdAt`, for a voice turn over the final transcript, so "tomorrow" said offline on Monday still means Tuesday when the capture is sorted on Wednesday. The server checks the reading's spans sit inside the text; it never re-reads dates. The `documents` token (`^`) now names a procedure or doc.
@@ -243,21 +359,34 @@ type TaskDue = { kind: 'day'; date: number } | { kind: 'moment'; at: number };
 
 interface Task {
   status: TaskStatus;
-  importance: Importance | null; isUrgent: boolean; due: TaskDue | null;
-  durationMinutes: number | null; energy: Energy | null; context: TaskContext | null;
-  projectId: string | null; milestoneId: string | null;
-  whoIds: string[];                    // round 6: renamed from personIds (a pet's vet visit names the pet)
+  importance: Importance | null;
+  isUrgent: boolean;
+  due: TaskDue | null;
+  durationMinutes: number | null;
+  energy: Energy | null;
+  context: TaskContext | null;
+  projectId: string | null;
+  milestoneId: string | null;
+  whoIds: string[]; // round 6: renamed from personIds (a pet's vet visit names the pet)
   placeIds: string[];
   notUntil: number | null;
-  waitsOnTaskIds: string[]; waitsOnWhoId: string | null;
+  waitsOnTaskIds: string[];
+  waitsOnWhoId: string | null;
   stepState: Record<string, { order: number; doneAt: number | null }>; // round 6: a one-off task's own steps; {} when none
-  mediaIds: string[];                  // round 6: kept media shown on the task
+  mediaIds: string[]; // round 6: kept media shown on the task
   createdBy: 'person' | 'nomos';
-  sourceCaptureId: string | null; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null; completedAt: number | null;
-  sealed: Sealed;                      // TaskSealed
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  completedAt: number | null;
+  sealed: Sealed; // TaskSealed
 }
-interface TaskSealed { title: string; notes: string | null; steps: Record<string, { text: string }>; } // steps: same keys as stepState
+interface TaskSealed {
+  title: string;
+  notes: string | null;
+  steps: Record<string, { text: string }>;
+} // steps: same keys as stepState
 ```
 
 A task's steps are its own and are not reusable; something done again and again is a procedure (section 25). "Turn these steps into a procedure" copies them into a new procedure (a `createProcedure` with the task's step texts) and leaves the task as it was. Latency is derived, never stored. Delete is the person's own action; the assistant never deletes.
@@ -265,20 +394,31 @@ A task's steps are its own and are not reusable; something done again and again 
 ### `Project` [MVP]
 
 ```ts
-type ProjectRole = 'key' | 'involved' | 'mentioned';   // round 6
+type ProjectRole = 'key' | 'involved' | 'mentioned'; // round 6
 
 interface Project {
   targetDate: number | null;
   status: 'active' | 'finished';
-  milestoneState: Record<string, { date: number | null; order: number; doneAt: number | null }>;
+  milestoneState: Record<
+    string,
+    { date: number | null; order: number; doneAt: number | null }
+  >;
   whoRoles: Record<string, ProjectRole>; // round 6: whoId → role; replaces personIds; readable (ids and an enum only)
-  mediaIds: string[];                    // round 6
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null; finishedAt: number | null;
-  sealed: Sealed;                        // ProjectSealed
+  mediaIds: string[]; // round 6
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  finishedAt: number | null;
+  sealed: Sealed; // ProjectSealed
 }
-interface ProjectSealed { name: string; emoji: string | null; objective: string | null;
-  milestones: Record<string, { title: string }>; roleNotes: Record<string, string>; } // roleNotes: whoId → "photographer" (≤40), same keys as whoRoles where set
+interface ProjectSealed {
+  name: string;
+  emoji: string | null;
+  objective: string | null;
+  milestones: Record<string, { title: string }>;
+  roleNotes: Record<string, string>;
+} // roleNotes: whoId → "photographer" (≤40), same keys as whoRoles where set
 ```
 
 **Roles.** `key` people show at the top of a project and in its evidence line ("Dana (florist) hasn't confirmed"); `involved` people are listed; `mentioned` are linked only because a capture named them in the project's context. The assistant sets `mentioned` on its own, `involved` when a task in the project names the person, and `key` only when the person said so ("Dana is doing the flowers") or picked it; it never lowers a role the person set. A who linked to a project with `key` or `involved` is at least `regular` (section 22). Health is derived, never stored and never a percentage.
@@ -288,81 +428,113 @@ interface ProjectSealed { name: string; emoji: string | null; objective: string 
 Reusable entities, upsert on first mention. The server matches `@Dana` or a name the model read through `createOptionMatcher` over `name` + `aliases` of every who, any kind (section 5, "Matching on the server"). One sure match links; two candidates or a weak one become a `whichPerson` question ("Which Miso?" when a cat and a person share a name, the kind in each option's detail) with "Someone new"; no match creates one, written with `toDisplayCase`. The assistant's own name is never matched.
 
 ```ts
-type WhoKind = 'person' | 'pet' | 'organization';    // [Next] 'group' (a household, a team): section 27
+type WhoKind = 'person' | 'pet' | 'organization'; // [Next] 'group' (a household, a team): section 27
 type WhoTier = 'close' | 'regular' | 'passing';
 
 interface Who {
   kind: WhoKind;
-  tier: WhoTier;                       // section 22 "Tiers"
-  tierSetBy: 'person' | 'nomos';       // the assistant never changes a tier the person set
-  isSelf: boolean;                     // exactly one, made with the profile
+  tier: WhoTier; // section 22 "Tiers"
+  tierSetBy: 'person' | 'nomos'; // the assistant never changes a tier the person set
+  isSelf: boolean; // exactly one, made with the profile
   placeIds: string[];
-  photoMediaId: string | null;         // the who's picture (a media document with role 'photo')
-  mediaIds: string[];                  // other kept media shown on the record
-  importedFrom: { connectorId: 'google:contacts'; accountId: string; resourceName: string; importedAt: number } | null; // one-time copy
+  photoMediaId: string | null; // the who's picture (a media document with role 'photo')
+  mediaIds: string[]; // other kept media shown on the record
+  importedFrom: {
+    connectorId: 'google:contacts';
+    accountId: string;
+    resourceName: string;
+    importedAt: number;
+  } | null; // one-time copy
   importedFields: Record<string, string>; // field → HMAC of the value Google gave, so "Update from Google" replaces only fields the person hasn't edited; {} when not imported
-  lastMentionedAt: number | null;      // the newest capture that linked it: lists and tier suggestions
-  yearlyDateCount: number;             // round 6e: the who's dates that come back (≤20), kept in the same batch as each write
-  momentCount: number;                 // round 6e: the who's moments (≤500): "See all 14" without reading them
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null;
-  sealed: Sealed;                      // WhoSealed
+  lastMentionedAt: number | null; // the newest capture that linked it: lists and tier suggestions
+  yearlyDateCount: number; // round 6e: the who's dates that come back (≤20), kept in the same batch as each write
+  momentCount: number; // round 6e: the who's moments (≤500): "See all 14" without reading them
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed; // WhoSealed
 }
 interface WhoSealed {
-  name: string; aliases: string[];
-  relation: string | null;             // "my sister", "our vet clinic", "Mum's cat"
-  phone: string | null; email: string | null; notes: string | null;
-  species: string | null;              // pets only ("cat"); free text written with toDisplayCase
-  organizationKind: string | null;     // organizations only ("bakery", "employer")
+  name: string;
+  aliases: string[];
+  relation: string | null; // "my sister", "our vet clinic", "Mum's cat"
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  species: string | null; // pets only ("cat"); free text written with toDisplayCase
+  organizationKind: string | null; // organizations only ("bakery", "employer")
 }
 
 interface Place {
   isHome: boolean;
-  photoMediaIds: string[];             // round 6: ordered, first is the cover; ≤12
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null;
-  sealed: Sealed;                      // { name, aliases, address, notes }; never coordinates
+  photoMediaIds: string[]; // round 6: ordered, first is the cover; ≤12
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed; // { name, aliases, address, notes }; never coordinates
 }
 ```
 
 ### `KeyDate` (dates that come back, and moments) [MVP]
 
 ```ts
-type KeyDateKind = 'birthday' | 'anniversary' | 'passedAway' | 'met' | 'adopted' | 'startedJob' | 'leftJob'
-  | 'moved' | 'graduated' | 'custom';  // options and their words in constants.ts; switch with a default branch
+type KeyDateKind =
+  | 'birthday'
+  | 'anniversary'
+  | 'passedAway'
+  | 'met'
+  | 'adopted'
+  | 'startedJob'
+  | 'leftJob'
+  | 'moved'
+  | 'graduated'
+  | 'custom'; // options and their words in constants.ts; switch with a default branch
 type KeyDateShape = 'yearly' | 'moment'; // the kind decides: birthday and anniversary are yearly, every other named
-                                       // kind is a moment, and custom carries the person's "Comes back each year"
+// kind is a moment, and custom carries the person's "Comes back each year"
 type MomentPrecision = 'day' | 'month' | 'year' | 'decade';
 
-interface KeyDate {                    // apps/helm/users/{uid}/keyDates/{id}
-  whoId: string;                       // the self's who for the person's own
+interface KeyDate {
+  // apps/helm/users/{uid}/keyDates/{id}
+  whoId: string; // the self's who for the person's own
   shape: KeyDateShape;
   source: 'person' | 'nomos' | 'google:contacts';
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null;
-  sealed: Sealed;                      // KeyDateSealed
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed; // KeyDateSealed
 }
 interface KeyDateSealed {
   kind: KeyDateKind;
-  label: string | null;                // required for 'custom' (≤60, "Gotcha day", "Lease renews"); otherwise an optional note
-  month: number | null;                // 1–12; null only for a moment of precision 'year' or 'decade'
-  day: number | null;                  // valid for the month (29 Feb allowed); yearly: null for "Aug 1984"; moments: precision 'day'
-  year: number | null;                 // yearly: the first year, null when unknown; moments: always set (the decade's first year)
-  precision: MomentPrecision | null;   // moments only
-  captureId: string | null;            // the turn that said it
+  label: string | null; // required for 'custom' (≤60, "Gotcha day", "Lease renews"); otherwise an optional note
+  month: number | null; // 1–12; null only for a moment of precision 'year' or 'decade'
+  day: number | null; // valid for the month (29 Feb allowed); yearly: null for "Aug 1984"; moments: precision 'day'
+  year: number | null; // yearly: the first year, null when unknown; moments: always set (the decade's first year)
+  precision: MomentPrecision | null; // moments only
+  captureId: string | null; // the turn that said it
 }
 
-interface KeyDateIndex {               // apps/helm/users/{uid}/meta/keyDateIndex; one per person
-  entryCount: number;                  // readable: the cap check and a repair's comparison, nothing else
-  rebuiltAt: number | null;            // set by a full rebuild (repair), null otherwise
+interface KeyDateIndex {
+  // apps/helm/users/{uid}/meta/keyDateIndex; one per person
+  entryCount: number; // readable: the cap check and a repair's comparison, nothing else
+  rebuiltAt: number | null; // set by a full rebuild (repair), null otherwise
   lastEditedAt: number;
-  sealed: Sealed;                      // KeyDateIndexSealed
+  sealed: Sealed; // KeyDateIndexSealed
 }
-interface KeyDateIndexSealed {         // grouped by who so each whoId is written once
+interface KeyDateIndexSealed {
+  // grouped by who so each whoId is written once
   byWho: Record<string, KeyDateIndexEntry[]>;
 }
-type KeyDateIndexEntry = [keyDateId: string, kind: KeyDateKind, month: number, day: number | null,
-  year: number | null, label: string | null];   // a tuple, not an object, to keep the document small; label for custom only
+type KeyDateIndexEntry = [
+  keyDateId: string,
+  kind: KeyDateKind,
+  month: number,
+  day: number | null,
+  year: number | null,
+  label: string | null,
+]; // a tuple, not an object, to keep the document small; label for custom only
 ```
 
 - **What stays readable**: only `whoId` and `shape` (the who page's read and Search's), as for any linked record. No day, month, year or kind is readable, and nothing is derived from them, so section 12's promise holds: nothing sealed is indexed anywhere. Tier is not copied here: Today and Coming up read each entry's who against the who records already open on the device (the eager `who` listener), so a tier change never touches key dates.
@@ -382,27 +554,39 @@ type FactStatus = 'confirmed' | 'inferred' | 'superseded';
 type FactKind = 'world' | 'preference' | 'favorite' | 'identity'; // round 6 (PRODUCT.md's names)
 
 interface Fact {
-  kind: FactKind;                      // round 6: 'world' is every round-5 fact (a thing true about a who, place or project)
+  kind: FactKind; // round 6: 'world' is every round-5 fact (a thing true about a who, place or project)
   status: FactStatus;
   stated: 'personSaid' | 'nomosInferred' | 'personCorrected';
-  sourceCaptureId: string | null; sourceExecutionId: string | null;
-  sourceEventRef: string | null;       // [Next]
-  sourceConnection: { connectorId: string; accountId: string; quoteId: string } | null;
+  sourceCaptureId: string | null;
+  sourceExecutionId: string | null;
+  sourceEventRef: string | null; // [Next]
+  sourceConnection: {
+    connectorId: string;
+    accountId: string;
+    quoteId: string;
+  } | null;
   aboutField: 'startAt' | 'endAt' | 'place' | null;
-  whoIds: string[]; placeIds: string[]; projectIds: string[]; syncedIds: string[]; // whoIds: round 6, was personIds
-  subjectIds: string[];                // union of the four (never empty)
-  occurredOn: number | null;           // round 6: date-only, when what it says happened ("moved to Lisbon in 2019"); feeds life events later
+  whoIds: string[];
+  placeIds: string[];
+  projectIds: string[];
+  syncedIds: string[]; // whoIds: round 6, was personIds
+  subjectIds: string[]; // union of the four (never empty)
+  occurredOn: number | null; // round 6: date-only, when what it says happened ("moved to Lisbon in 2019"); feeds life events later
   keptOverSource: { syncedId: string; contentHash: string } | null;
-  supersedesId: string | null; supersededById: string | null; supersededAt: number | null;
+  supersedesId: string | null;
+  supersededById: string | null;
+  supersededAt: number | null;
   disputedWithId: string | null;
-  createdAt: number; confirmedAt: number | null; lastEditedAt: number | null;
-  sealed: Sealed;                      // FactSealed
+  createdAt: number;
+  confirmedAt: number | null;
+  lastEditedAt: number | null;
+  sealed: Sealed; // FactSealed
 }
 interface FactSealed {
-  statement: string;                   // ≤500 ("Prefers Shell stations")
-  quote: string | null;                // verbatim from the capture, ≤280
-  topic: string | null;                // round 6: every kind may carry one ("gas station", "movies", "diet"), ≤40, matched to the person's existing topics of this kind
-  value: string | null;                // round 6: the preferred or favorite thing ("Shell", "Arrival"), ≤80
+  statement: string; // ≤500 ("Prefers Shell stations")
+  quote: string | null; // verbatim from the capture, ≤280
+  topic: string | null; // round 6: every kind may carry one ("gas station", "movies", "diet"), ≤40, matched to the person's existing topics of this kind
+  value: string | null; // round 6: the preferred or favorite thing ("Shell", "Arrival"), ≤80
 }
 ```
 
@@ -415,64 +599,83 @@ Provenance is set by code, not by the prompt (round 5, unchanged): a `remember` 
 Code keeps the names `notes` and `topics`; copy says **Knowledge** for the place, "note" for a piece of knowledge and "topic" for a document the assistant keeps. A **note** is one piece: something typed, said ("remember that…"), saved from an answer (general knowledge included) or brought in from a file. It may feed several topics or none ("Loose notes"). A **topic** is a living document: a sealed, formatted Markdown body the assistant writes from the notes filed under it, every section citing its sources, versioned with Undo. Topics nest: an optional parent, three levels at most (Car care › Washing, Fragrance). Round 6's `format: 'doc'`, "Make this a doc" and note versions are gone (never built, so nothing is deprecated).
 
 ```ts
-type NoteSource = 'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft'; // assistantDraft: [Next]
+type NoteSource =
+  'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft'; // assistantDraft: [Next]
 
 interface Note {
-  topicIds: string[];                  // 0–10; [] = a loose note
+  topicIds: string[]; // 0–10; [] = a loose note
   source: NoteSource;
-  isFromGeneralAnswer: boolean; checkedAt: number | null; hasHealthCaution: boolean;
-  sourceCaptureId: string | null;      // what the person said, and when (the capture's createdAt)
-  sourceMediaId: string | null;        // the file it came from
+  isFromGeneralAnswer: boolean;
+  checkedAt: number | null;
+  hasHealthCaution: boolean;
+  sourceCaptureId: string | null; // what the person said, and when (the capture's createdAt)
+  sourceMediaId: string | null; // the file it came from
   projectIds: string[];
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null;
-  sealed: Sealed;                      // { title (≤80), body (≤20,000; plain text with links, or Markdown from a file) }
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed; // { title (≤80), body (≤20,000; plain text with links, or Markdown from a file) }
 }
 
 interface Topic {
-  parentId: string | null;             // round 6d: null at the top
-  depth: 1 | 2 | 3;                    // set by code from the parent on every move; a move that would put any descendant past 3 is refused
-  projectIds: string[];                // "Wedding plan" on Wedding
-  version: number;                     // equals the latest versions/{n}; 0 until the first document is written
+  parentId: string | null; // round 6d: null at the top
+  depth: 1 | 2 | 3; // set by code from the parent on every move; a move that would put any descendant past 3 is refused
+  projectIds: string[]; // "Wedding plan" on Wedding
+  version: number; // equals the latest versions/{n}; 0 until the first document is written
   docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed'; // behind: notes filed since the last write
-  pendingNoteIds: string[];            // notes filed or changed since the last write, oldest first; ≤50
+  pendingNoteIds: string[]; // notes filed or changed since the last write, oldest first; ≤50
   writeClaim: { claimId: string; at: number } | null; // one write at a time (90 s lease)
-  overviewOf: Record<string, number>;  // parents only: child topic id → the child version the overview was written from
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null; lastWrittenAt: number | null;
-  sealed: Sealed;                      // TopicSealed
+  overviewOf: Record<string, number>; // parents only: child topic id → the child version the overview was written from
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  lastWrittenAt: number | null;
+  sealed: Sealed; // TopicSealed
 }
 interface TopicSealed {
-  name: string; emoji: string | null;  // name ≤40
-  overview: string | null;             // parents only: ≤1,200 characters of Markdown above the document; the child links below it are drawn by code
-  sections: TopicSection[];            // the document, in order; ≤60
+  name: string;
+  emoji: string | null; // name ≤40
+  overview: string | null; // parents only: ≤1,200 characters of Markdown above the document; the child links below it are drawn by code
+  sections: TopicSection[]; // the document, in order; ≤60
 }
 interface TopicSection {
-  id: string;                          // generateUuid; stable across versions, so a source tap and Undo find it
-  heading: string | null;              // ≤80; the first section may have none
+  id: string; // generateUuid; stable across versions, so a source tap and Undo find it
+  heading: string | null; // ≤80; the first section may have none
   level: 1 | 2 | 3;
-  markdown: string;                    // ≤4,000; the whole document ≤30,000
-  writtenBy: 'nomos' | 'person';       // a section the person wrote or edited by hand is theirs: the assistant never rewrites or removes it unless asked
-  sources: TopicSource[];              // ≤20: the source marks a tap on the section shows
+  markdown: string; // ≤4,000; the whole document ≤30,000
+  writtenBy: 'nomos' | 'person'; // a section the person wrote or edited by hand is theirs: the assistant never rewrites or removes it unless asked
+  sources: TopicSource[]; // ≤20: the source marks a tap on the section shows
 }
-type TopicSource =                     // round 6d: notes ↔ topics is many-to-many; each mark points at what the words came from
-  | { kind: 'note'; noteId: string }                        // a note typed or saved
-  | { kind: 'message'; captureId: string; at: number }      // what the person said, and when
+type TopicSource =
+  // round 6d: notes ↔ topics is many-to-many; each mark points at what the words came from
+  | { kind: 'note'; noteId: string } // a note typed or saved
+  | { kind: 'message'; captureId: string; at: number } // what the person said, and when
   | { kind: 'file'; mediaId: string; noteId: string | null } // a file brought in
-  | { kind: 'general'; noteId: string }                     // general knowledge the person saved (labelled as such)
-  | { kind: 'person'; at: number };                         // typed into the document by hand
+  | { kind: 'general'; noteId: string } // general knowledge the person saved (labelled as such)
+  | { kind: 'person'; at: number }; // typed into the document by hand
 
-interface TopicVersion {               // topics/{id}/versions/{n}
+interface TopicVersion {
+  // topics/{id}/versions/{n}
   version: number;
   restoredFromVersion: number | null;
   createdBy: 'person' | 'nomos';
-  reason: 'firstWritten' | 'addedFromSource' | 'personEdit' | 'revisedOnRequest' | 'moved' | 'grouped' | 'rearranged'
-        | 'imported' | 'restored';   // History's typed rows (product, round 6d)
-  noteIds: string[];                   // the notes this version brought in or re-read (an edited note)
-  sourceCaptureId: string | null;      // the turn that asked for it (revisedOnRequest keeps its quote in the sealed summary)
+  reason:
+    | 'firstWritten'
+    | 'addedFromSource'
+    | 'personEdit'
+    | 'revisedOnRequest'
+    | 'moved'
+    | 'grouped'
+    | 'rearranged'
+    | 'imported'
+    | 'restored'; // History's typed rows (product, round 6d)
+  noteIds: string[]; // the notes this version brought in or re-read (an edited note)
+  sourceCaptureId: string | null; // the turn that asked for it (revisedOnRequest keeps its quote in the sealed summary)
   executionId: string | null;
   createdAt: number;
-  sealed: Sealed;                      // { sections, changeSummary (≤200: what changed, in words), requestQuote | null, parentName | null }
+  sealed: Sealed; // { sections, changeSummary (≤200: what changed, in words), requestQuote | null, parentName | null }
 }
 ```
 
@@ -485,43 +688,64 @@ Replace round 5's checklist `Artifact`. Briefings, research and other drafted do
 ```ts
 interface Procedure {
   stepState: Record<string, { order: number; groupId: string | null }>; // readable order
-  groupOrder: string[];                // ungrouped steps first (one pure helper orders every surface)
-  projectIds: string[];                // a work procedure filed under a project ("Starting a new initiative")
+  groupOrder: string[]; // ungrouped steps first (one pure helper orders every surface)
+  projectIds: string[]; // a work procedure filed under a project ("Starting a new initiative")
   version: number;
-  runCount: number; lastRunAt: number | null;
-  createdBy: 'person' | 'nomos'; executionId: string | null;
-  createdAt: number; lastEditedAt: number | null; archivedAt: number | null;
-  sealed: Sealed;                      // ProcedureSealed
+  runCount: number;
+  lastRunAt: number | null;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  archivedAt: number | null;
+  sealed: Sealed; // ProcedureSealed
 }
 interface ProcedureSealed {
-  title: string;                       // "Packing for a trip"
+  title: string; // "Packing for a trip"
   steps: Record<string, { text: string; detail: string | null }>; // same keys as stepState; text ≤200, detail ≤500
   groups: Record<string, { name: string }>;
-  sources: SourceRef[];                // notes or topics it was drafted from
+  sources: SourceRef[]; // notes or topics it was drafted from
 }
-interface ProcedureVersion {           // procedures/{id}/versions/{n}; like NoteVersion
-  version: number; restoredFromVersion: number | null; createdBy: 'person' | 'nomos';
-  reason: 'created' | 'editedByHand' | 'revisedByAsking' | 'restored' | 'fromRun';
-  sourceCaptureId: string | null; executionId: string | null; createdAt: number;
-  sealed: Sealed;                      // { title, steps, groups, changeSummary }
+interface ProcedureVersion {
+  // procedures/{id}/versions/{n}; like NoteVersion
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason:
+    'created' | 'editedByHand' | 'revisedByAsking' | 'restored' | 'fromRun';
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed; // { title, steps, groups, changeSummary }
 }
 
 type RunAttachment =
   | { kind: 'project'; id: string }
   | { kind: 'task'; id: string }
-  | { kind: 'synced'; id: string }     // a Waypoint trip or a calendar or app event
+  | { kind: 'synced'; id: string } // a Waypoint trip or a calendar or app event
   | null;
 
 interface ProcedureRun {
   procedureId: string;
-  procedureVersion: number;            // the version it started from
+  procedureVersion: number; // the version it started from
   attachedTo: RunAttachment;
-  dueOn: number | null;                // date-only: the trip's or event's first day, else null
-  stepState: Record<string, { order: number; groupId: string | null; doneAt: number | null; isExtra: boolean }>;
+  dueOn: number | null; // date-only: the trip's or event's first day, else null
+  stepState: Record<
+    string,
+    {
+      order: number;
+      groupId: string | null;
+      doneAt: number | null;
+      isExtra: boolean;
+    }
+  >;
   groupOrder: string[];
-  startedAt: number; finishedAt: number | null;
-  createdBy: 'person' | 'nomos'; executionId: string | null; lastEditedAt: number | null;
-  sealed: Sealed;                      // { title, steps: Record<id, { text }>, groups, attachedLabel ("Lisbon trip, May 3", kept if the trip goes) }
+  startedAt: number;
+  finishedAt: number | null;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  lastEditedAt: number | null;
+  sealed: Sealed; // { title, steps: Record<id, { text }>, groups, attachedLabel ("Lisbon trip, May 3", kept if the trip goes) }
 }
 ```
 
@@ -530,33 +754,38 @@ A run copies the procedure's steps when it starts, so editing the procedure neve
 ### `Media` [MVP]
 
 ```ts
-type MediaKind = 'photo' | 'pdf' | 'voiceNote' | 'markdown';   // [Next] 'video'
+type MediaKind = 'photo' | 'pdf' | 'voiceNote' | 'markdown'; // [Next] 'video'
 type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
-type MediaRole = 'attachment' | 'photo';                       // photo: a who's or place's picture, picked by hand or kept from a turn
+type MediaRole = 'attachment' | 'photo'; // photo: a who's or place's picture, picked by hand or kept from a turn
 
 interface Media {
   kind: MediaKind;
   role: MediaRole;
   status: MediaStatus;
-  mimeType: string;                    // of the original, before sealing ("image/jpeg", "application/pdf", "audio/webm", "text/markdown")
-  byteSize: number;                    // sealed size
-  width: number | null; height: number | null; durationMs: number | null; pageCount: number | null;
+  mimeType: string; // of the original, before sealing ("image/jpeg", "application/pdf", "audio/webm", "text/markdown")
+  byteSize: number; // sealed size
+  width: number | null;
+  height: number | null;
+  durationMs: number | null;
+  pageCount: number | null;
   hasThumb: boolean;
-  attachedTo: RecordRef[];             // the records it shows on; [] while only in the conversation
+  attachedTo: RecordRef[]; // the records it shows on; [] while only in the conversation
   sourceCaptureId: string | null;
   executionId: string | null;
   decidedBy: 'nomos' | 'person' | null;
-  takenAt: number | null;              // a photo's own date when the device can read it; feeds the life timeline later
-  createdAt: number; decidedAt: number | null;
-  deleteAfter: number | null;          // discarded: decidedAt + 24 h; uploading: createdAt + 24 h
-  sealed: Sealed;                      // MediaSealed
+  takenAt: number | null; // a photo's own date when the device can read it; feeds the life timeline later
+  createdAt: number;
+  decidedAt: number | null;
+  deleteAfter: number | null; // discarded: decidedAt + 24 h; uploading: createdAt + 24 h
+  sealed: Sealed; // MediaSealed
 }
 interface MediaSealed {
-  fileName: string | null;             // ≤120
-  caption: string | null;              // the assistant's one line of what it is (≤200): "Receipt from Sweet Layer, $1,800"
-  text: string | null;                 // Markdown text (≤20,000), a PDF's text layer (≤30,000), or a voice note's transcript (kept even when the audio is let go)
-  bytesNonce: string; thumbNonce: string | null; // nonces for the sealed Storage objects
-  keyId: string;                       // the data key that sealed the bytes
+  fileName: string | null; // ≤120
+  caption: string | null; // the assistant's one line of what it is (≤200): "Receipt from Sweet Layer, $1,800"
+  text: string | null; // Markdown text (≤20,000), a PDF's text layer (≤30,000), or a voice note's transcript (kept even when the audio is let go)
+  bytesNonce: string;
+  thumbNonce: string | null; // nonces for the sealed Storage objects
+  keyId: string; // the data key that sealed the bytes
 }
 ```
 
@@ -571,17 +800,21 @@ type StyleScope = 'general' | 'occasion' | 'audience';
 
 interface StyleProfile {
   scope: StyleScope;
-  audienceWhoId: string | null;        // audience: the who it is about (texts to Dana); never made from mail alone
+  audienceWhoId: string | null; // audience: the who it is about (texts to Dana); never made from mail alone
   learnedFrom: ('helmText' | 'sentMail')[];
-  sampleCount: number;                 // how many pieces of writing it rests on
+  sampleCount: number; // how many pieces of writing it rests on
   personEditedAt: number | null;
-  createdAt: number; lastEditedAt: number | null;
-  sealed: Sealed;                      // StyleSealed
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed; // StyleSealed
 }
 interface StyleSealed {
-  label: string;                       // "General", "Work email", "Texts to Dana" (≤40)
-  traits: Record<string, { text: string; isPersonSet: boolean; exampleCount: number }>; // ≤12, ≤120 chars: "Short sentences", "Signs off 'Cheers,'"; exampleCount: how many pieces of writing showed it (0 when the person wrote it)
-  avoid: string[];                     // ≤6, ≤80 chars: "No exclamation marks"
+  label: string; // "General", "Work email", "Texts to Dana" (≤40)
+  traits: Record<
+    string,
+    { text: string; isPersonSet: boolean; exampleCount: number }
+  >; // ≤12, ≤120 chars: "Short sentences", "Signs off 'Cheers,'"; exampleCount: how many pieces of writing showed it (0 when the person wrote it)
+  avoid: string[]; // ≤6, ≤80 chars: "No exclamation marks"
 }
 ```
 
@@ -592,17 +825,35 @@ No sample of the person's writing is stored: only traits written as descriptions
 As round 5, with `HelmCollection` now `'captures' | 'tasks' | 'projects' | 'who' | 'keyDates' | 'places' | 'facts' | 'notes' | 'topics' | 'procedures' | 'procedureRuns' | 'media' | 'style' | 'planDays'`.
 
 ```ts
-type ExecutionState = 'proposed' | 'succeeded' | 'failed' | 'rejected' | 'executing' | 'verificationRequired';
-type ActionCategory = 'organize' | 'remember' | 'plan' | 'draft' | 'answer' | 'undo' | 'outbound'; // outbound: [Next]
+type ExecutionState =
+  | 'proposed'
+  | 'succeeded'
+  | 'failed'
+  | 'rejected'
+  | 'executing'
+  | 'verificationRequired';
+type ActionCategory =
+  'organize' | 'remember' | 'plan' | 'draft' | 'answer' | 'undo' | 'outbound'; // outbound: [Next]
 
 interface Execution {
-  captureId: string | null; actor: 'nomos' | 'person'; category: ActionCategory;
-  autonomyLevel: AutonomyLevel; state: ExecutionState;
-  effectRefs: { op: 'create' | 'update'; collection: HelmCollection; docId: string }[]; // capped 40
-  undoesExecutionId: string | null; undoneByExecutionId: string | null;
+  captureId: string | null;
+  actor: 'nomos' | 'person';
+  category: ActionCategory;
+  autonomyLevel: AutonomyLevel;
+  state: ExecutionState;
+  effectRefs: {
+    op: 'create' | 'update';
+    collection: HelmCollection;
+    docId: string;
+  }[]; // capped 40
+  undoesExecutionId: string | null;
+  undoneByExecutionId: string | null;
   questionRef: { captureId: string; questionId: string } | null; // round 6c: the question this answer's effect came from
-  errorCode: string | null; createdAt: number; decidedAt: number | null; finishedAt: number | null;
-  sealed: Sealed;                      // { summary, commands, effects: { written, previous }[], undoReport }
+  errorCode: string | null;
+  createdAt: number;
+  decidedAt: number | null;
+  finishedAt: number | null;
+  sealed: Sealed; // { summary, commands, effects: { written, previous }[], undoReport }
 }
 ```
 
@@ -611,26 +862,33 @@ interface Execution {
 ### `PlanDay` [MVP]
 
 ```ts
-interface PlanDay {                    // id = "YYYY-MM-DD" in profile.timeZone
-  date: number;                        // date-only, UTC midnight
-  slots: Record<string, PlanSlot>;     // readable: Keep / Another time / Not today stay dotted-path writes
+interface PlanDay {
+  // id = "YYYY-MM-DD" in profile.timeZone
+  date: number; // date-only, UTC midnight
+  slots: Record<string, PlanSlot>; // readable: Keep / Another time / Not today stay dotted-path writes
   isRestDay: boolean;
-  restDayOverriddenAt: number | null;  // "Plan my day anyway"
+  restDayOverriddenAt: number | null; // "Plan my day anyway"
   generatedAt: number | null;
-  calendarReadAt: number | null;      // round 5: the Calendar category's lastOkAt the plan was made from
-  sealed: Sealed;                      // PlanDaySealed
+  calendarReadAt: number | null; // round 5: the Calendar category's lastOkAt the plan was made from
+  sealed: Sealed; // PlanDaySealed
 }
 interface PlanSlot {
   taskId: string;
-  startAt: number | null;              // instant; null = "Any time today" (no calendar)
+  startAt: number | null; // instant; null = "Any time today" (no calendar)
   endAt: number | null;
   status: 'suggested' | 'kept' | 'notToday';
   source: 'nomos' | 'person';
   decidedAt: number | null;
 }
 interface PlanDaySealed {
-  reasons: Record<string, string>;     // slot id → rule-built chip ("20 min · fits before the tasting")
-  calendarSnapshot: { eventRef: string; title: string; startAt: number; endAt: number; isAllDay: boolean }[];
+  reasons: Record<string, string>; // slot id → rule-built chip ("20 min · fits before the tasting")
+  calendarSnapshot: {
+    eventRef: string;
+    title: string;
+    startAt: number;
+    endAt: number;
+    isAllDay: boolean;
+  }[];
 }
 ```
 
@@ -639,52 +897,65 @@ The snapshot is rewritten whenever that day's plan is generated or re-run and wh
 ### `SyncedRecord` and server-only documents [MVP]
 
 ```ts
-interface SyncedRecord {               // synced/{syncedId}: client reads; only the platform's Helm sink writes (section 19)
-  connectorId: string;                 // 'app:pinch', 'google:calendar'
-  accountId: string;                   // 'site' for a site app; a Google account's id (section 19)
+interface SyncedRecord {
+  // synced/{syncedId}: client reads; only the platform's Helm sink writes (section 19)
+  connectorId: string; // 'app:pinch', 'google:calendar'
+  accountId: string; // 'site' for a site app; a Google account's id (section 19)
   grantId: string;
-  category: string;                    // the adapter's category id ('plannedMeals')
-  kind: SharedKind;                    // 'event' | 'task' | 'place' | 'project' | 'person' | 'knowledge' | 'trip' | 'pet' | 'moneySummary' | 'countSummary'
-  sourceRef: string;                   // the source's own id, opaque; syncedId = hash(grantId, category, sourceRef)
-  startAt: number | null;              // events: instant; date-only values are UTC midnight with isAllDay
+  category: string; // the adapter's category id ('plannedMeals')
+  kind: SharedKind; // 'event' | 'task' | 'place' | 'project' | 'person' | 'knowledge' | 'trip' | 'pet' | 'moneySummary' | 'countSummary'
+  sourceRef: string; // the source's own id, opaque; syncedId = hash(grantId, category, sourceRef)
+  startAt: number | null; // events: instant; date-only values are UTC midnight with isAllDay
   endAt: number | null;
   isAllDay: boolean;
-  dueAt: number | null;                // tasks (date-only, UTC midnight)
-  calendarKey: string | null;          // calendar events: "{accountId}/{calendarId}", for shifts and busy
-  isBusy: boolean | null;              // calendar events: declined dropped, tentative busy
-  sourceUpdatedAt: number | null;      // the source's own change time when it has one
-  contentHash: string;                 // HMAC under a subkey of the person's data key: skip unchanged writes without opening
-  syncedAt: number;                    // when this copy was last confirmed by a sync
-  transformVersion: number;            // the adapter's version when it wrote this shape
-  connectionEndedAt: number | null;    // set when the grant ends and the copy is kept ("no longer updated")
-  deleteAfter: number | null;          // set for a kept copy: connectionEndedAt + 90 days; null while connected
-  sealed: Sealed;                      // { title, subtitle, detail (≤500), placeLabel, amountCents, currency, deepLink, extra }
+  dueAt: number | null; // tasks (date-only, UTC midnight)
+  calendarKey: string | null; // calendar events: "{accountId}/{calendarId}", for shifts and busy
+  isBusy: boolean | null; // calendar events: declined dropped, tentative busy
+  sourceUpdatedAt: number | null; // the source's own change time when it has one
+  contentHash: string; // HMAC under a subkey of the person's data key: skip unchanged writes without opening
+  syncedAt: number; // when this copy was last confirmed by a sync
+  transformVersion: number; // the adapter's version when it wrote this shape
+  connectionEndedAt: number | null; // set when the grant ends and the copy is kept ("no longer updated")
+  deleteAfter: number | null; // set for a kept copy: connectionEndedAt + 90 days; null while connected
+  sealed: Sealed; // { title, subtitle, detail (≤500), placeLabel, amountCents, currency, deepLink, extra }
 }
 ```
 
 `SharedKind` and each kind's sealed fields are the platform contract's (section 19), not Helm's; Helm's type re-exports them. A record sealed by an older `transformVersion` is rewritten at its next sync, never migrated.
 
 ```ts
-interface DropBoxKeyDoc {              // server/{uid}/keys/dropBox
-  publicJwk: JsonWebKey;               // P-256 ECDH public key, handed to the device
-  wrappedPrivateKey: string; nonce: string; masterKeyId: string;
+interface DropBoxKeyDoc {
+  // server/{uid}/keys/dropBox
+  publicJwk: JsonWebKey; // P-256 ECDH public key, handed to the device
+  wrappedPrivateKey: string;
+  nonce: string;
+  masterKeyId: string;
   createdAt: number;
 }
-interface AiUsageDoc {                 // server/{uid}/aiUsage/{dayKey}
-  calls: number; windowStartedAt: number; windowCalls: number;      // the full (Sonnet-class) route
-  quickCalls: number; quickWindowStartedAt: number; quickWindowCalls: number; // round 6: the quick route, counted apart
-  inputTokens: number; outputTokens: number;
+interface AiUsageDoc {
+  // server/{uid}/aiUsage/{dayKey}
+  calls: number;
+  windowStartedAt: number;
+  windowCalls: number; // the full (Sonnet-class) route
+  quickCalls: number;
+  quickWindowStartedAt: number;
+  quickWindowCalls: number; // round 6: the quick route, counted apart
+  inputTokens: number;
+  outputTokens: number;
 }
-interface VoiceUsageDoc {              // round 6: voiceUsage/{uid}/days/{dayKey}, site level, Admin only (section 20)
-  appId: string;                       // the app the last charge came from; per-app split is a later field
-  listenMs: number;                    // cloud listening, as reported at stream close, capped per mint
-  mints: number;                       // listening tokens minted today
-  spokenChars: number;                 // cloud speech, after toSpokenText
-  transcribeMs: number;                // voice notes
-  costMicros: number;                  // worst-case estimate the budget is checked against
+interface VoiceUsageDoc {
+  // round 6: voiceUsage/{uid}/days/{dayKey}, site level, Admin only (section 20)
+  appId: string; // the app the last charge came from; per-app split is a later field
+  listenMs: number; // cloud listening, as reported at stream close, capped per mint
+  mints: number; // listening tokens minted today
+  spokenChars: number; // cloud speech, after toSpokenText
+  transcribeMs: number; // voice notes
+  costMicros: number; // worst-case estimate the budget is checked against
 }
-interface VoiceBudgetDoc {             // round 6: voiceBudget/{dayKey}, site level, Admin only
-  costMicros: number; isOver: boolean;
+interface VoiceBudgetDoc {
+  // round 6: voiceBudget/{dayKey}, site level, Admin only
+  costMicros: number;
+  isOver: boolean;
 }
 ```
 
@@ -694,17 +965,17 @@ The pattern is Runway's (`src/apps/runway/TECHNICAL.md` "Sealed documents", "The
 
 ### Readable versus sealed
 
-| Readable (queries, rules, ordering, the planner's arithmetic) | Sealed (anything the person would recognise) |
-|---|---|
-| ids and opaque id lists (`projectId`, `whoIds`, `subjectIds`, `topicIds`, `waitsOnTaskIds`, `effectRefs`) | capture text, its reading, answers, question options and held commands |
-| statuses and enums (`status`, `importance`, `energy`, `context`, `stated`, `source`, `category`, `state`, `heldReason`) | task titles and notes; project names, emoji, objectives, milestone titles |
-| flags (`isUrgent`, `isHome`, `isRestDay`, `isFromGeneralAnswer`, `hasAnswer`, `isSelf`) | who records' names, aliases, relations, phones, emails, notes; places' names and addresses |
-| timestamps and date-only values (`createdAt`, `due`, `notUntil`, milestone dates, slot times) | fact statements and quotes; note titles and bodies; topic names |
-| map state (`stepState`, `milestoneState`, `whoRoles`, `slots`, `questionState`) | step texts, procedure titles and groups, topic documents and overviews, versions' change summaries, event snapshots |
-| round 6: kinds, tiers, media kind, status, size, dimensions, page count, duration, the route and voice providers | round 6: media file names, captions and extracted text; media bytes (sealed in Storage); spoken lines; style traits; fact topics and values |
-| profile settings, name and tone; a synced record's connector, account, category, kind, times and freshness | execution summaries, commands, written/previous values, undo reports; slot reasons; the calendar snapshot; a synced record's words and deep link; answer quotes and what was searched |
+| Readable (queries, rules, ordering, the planner's arithmetic)                                                           | Sealed (anything the person would recognise)                                                                                                                                          |
+| ----------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ids and opaque id lists (`projectId`, `whoIds`, `subjectIds`, `topicIds`, `waitsOnTaskIds`, `effectRefs`)               | capture text, its reading, answers, question options and held commands                                                                                                                |
+| statuses and enums (`status`, `importance`, `energy`, `context`, `stated`, `source`, `category`, `state`, `heldReason`) | task titles and notes; project names, emoji, objectives, milestone titles                                                                                                             |
+| flags (`isUrgent`, `isHome`, `isRestDay`, `isFromGeneralAnswer`, `hasAnswer`, `isSelf`)                                 | who records' names, aliases, relations, phones, emails, notes; places' names and addresses                                                                                            |
+| timestamps and date-only values (`createdAt`, `due`, `notUntil`, milestone dates, slot times)                           | fact statements and quotes; note titles and bodies; topic names                                                                                                                       |
+| map state (`stepState`, `milestoneState`, `whoRoles`, `slots`, `questionState`)                                         | step texts, procedure titles and groups, topic documents and overviews, versions' change summaries, event snapshots                                                                   |
+| round 6: kinds, tiers, media kind, status, size, dimensions, page count, duration, the route and voice providers        | round 6: media file names, captions and extracted text; media bytes (sealed in Storage); spoken lines; style traits; fact topics and values                                           |
+| profile settings, name and tone; a synced record's connector, account, category, kind, times and freshness              | execution summaries, commands, written/previous values, undo reports; slot reasons; the calendar snapshot; a synced record's words and deep link; answer quotes and what was searched |
 
- Key dates add no readable date: Today and Coming up read the one sealed yearly index (section 2 "KeyDate"), never a query on a day. What readable fields still say: when the person captures, how many tasks, facts and notes they have, their due dates and slot times, which records link to which, which browsers they trust. Rules protect them; sealing doesn't.
+Key dates add no readable date: Today and Coming up read the one sealed yearly index (section 2 "KeyDate"), never a query on a day. What readable fields still say: when the person captures, how many tasks, facts and notes they have, their due dates and slot times, which records link to which, which browsers they trust. Rules protect them; sealing doesn't.
 
 ### The key
 
@@ -907,6 +1178,7 @@ Two passes were weighed: a records-only call, then a second call with only the q
 - **Authority** (section 19, "Field authority") is applied by code when it builds the answer's sources: the calendar's or the owning app's value is the one stated, and mail's differing value is the one noted.
 
 **How the client renders it** (`AnswerCard`; words are product's and design's):
+
 - The records part as plain text with its source rings and doors (filled for what the person said, hollow for inferred, the book mark for a note, with "saved from a general answer, not checked" or "checked by you" on a note that was; a cited note with `hasHealthCaution` brings its caution).
 - The general part in `GeneralKnowledgeCard` under `SectionDivider` "Not from your records" (globe, "General knowledge", the caution, or the health caution block first), with no source rings and no doors, then **Save to my knowledge**. It is never shown without the label, including in Activity and in a capture's result sheet opened later.
 - Activity: "Answered: {question}", or "Answered from general knowledge: {question}" from the execution summary.
@@ -935,12 +1207,12 @@ Round 6d: each **topic is a living document** written from its notes (section 24
 
 Options weighed for searching sealed notes:
 
-| Option | How | Cost and limit | Taken? |
-|---|---|---|---|
-| **Rank on the device, send ids** | Notes are already opened on the device (eager listener, they feed Memory and Search). `utils/noteSearch.ts` `rankNotes(text, notes, topics)` scores each note, and each topic section (round 6d), by term overlap (`toComparable` words, stopwords dropped, title ×2, topic names ×1.5, BM25-style length damping) and sends the top 8 with a score above zero as `noteIds` and `topicSectionRefs` (`{ topicId, sectionId }`). The server reads those documents by id under the caller's own path and opens them. | No extra model call, no index, ≤8 reads per capture; ranking 1,000 notes takes a few ms. Limit: lexical, so "how long does sponge last" finds "cakes keep 3 days" only through a shared word; about 1,000 notes before the eager listener's size hurts first open. | **MVP** |
-| Decrypt-and-scan on the server | Read every note, open, rank in the function. | Up to 1,000 reads and 1–2 MB opened per capture; +0.3–1 s; no help over the device ranking. | No |
-| Sealed embeddings | On save, a callable embeds title + body (an embeddings model through `functions/src/ai/`, chosen in that issue; about $0.00002 per note) and stores the vector sealed; at question time the server embeds the question and the device or server compares. | Finds by meaning; every note write goes through a callable (offline note edits wait); about 3 KB per note. | **[Next]** "Notes found by meaning" |
-| Plain vectors or keyword tokens in Firestore (vector search, blind index) | Queryable on the server. | Leaks what notes say (vectors can be partly inverted; tokens leak word frequencies). | Never |
+| Option                                                                    | How                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Cost and limit                                                                                                                                                                                                                                                     | Taken?                              |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------- |
+| **Rank on the device, send ids**                                          | Notes are already opened on the device (eager listener, they feed Memory and Search). `utils/noteSearch.ts` `rankNotes(text, notes, topics)` scores each note, and each topic section (round 6d), by term overlap (`toComparable` words, stopwords dropped, title ×2, topic names ×1.5, BM25-style length damping) and sends the top 8 with a score above zero as `noteIds` and `topicSectionRefs` (`{ topicId, sectionId }`). The server reads those documents by id under the caller's own path and opens them. | No extra model call, no index, ≤8 reads per capture; ranking 1,000 notes takes a few ms. Limit: lexical, so "how long does sponge last" finds "cakes keep 3 days" only through a shared word; about 1,000 notes before the eager listener's size hurts first open. | **MVP**                             |
+| Decrypt-and-scan on the server                                            | Read every note, open, rank in the function.                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | Up to 1,000 reads and 1–2 MB opened per capture; +0.3–1 s; no help over the device ranking.                                                                                                                                                                        | No                                  |
+| Sealed embeddings                                                         | On save, a callable embeds title + body (an embeddings model through `functions/src/ai/`, chosen in that issue; about $0.00002 per note) and stores the vector sealed; at question time the server embeds the question and the device or server compares.                                                                                                                                                                                                                                                         | Finds by meaning; every note write goes through a callable (offline note edits wait); about 3 KB per note.                                                                                                                                                         | **[Next]** "Notes found by meaning" |
+| Plain vectors or keyword tokens in Firestore (vector search, blind index) | Queryable on the server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Leaks what notes say (vectors can be partly inverted; tokens leak word frequencies).                                                                                                                                                                               | Never                               |
 
 The server never trusts the hints for access: it builds every path from the caller's uid, drops an id that doesn't exist, caps at 8 and at 6,000 characters. The sweep and "Sort the rest" re-rank on the device before calling.
 
@@ -991,74 +1263,74 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
 
 ## 13. Edge states
 
-| Situation | What happens | Where |
-|---|---|---|
-| `getHelmKey` fails (keyring problem) | "Helm can't open your things right now" with Try again; capture still works through the drop box; nothing is ever replaced on the server | `CannotOpenState` |
-| One document won't open (corrupt, other key) | Row kept as "Couldn't open this"; others open; logged with a code | sealed reader |
-| A payload from a newer schema (`v` too high) | Row "Update Helm to open this"; the stale-chunk prompt usually arrives first | `openJson` |
-| Opened offline, untrusted | "Your things open once you're back online"; capture via drop box; the home surface shows "N saved on this device" | `NeedsConnectionState` |
-| Opened offline, trusted | Cached records open; writes queue; assistant, Undo, calendar, trusting or removing browsers, Delete all say they need a connection | section 4 |
-| Sign out everywhere | Every `trustedBrowsers` entry deleted, every session revoked; other browsers signed out within an hour (which forgets their kept key); an offline phone keeps what it has until its 30 days run out (stated in the confirm) | section 4 |
-| Trusted browser offline for 30+ days | The shared store has dropped its copy; Helm says "Connect once to keep opening Helm offline" | section 4 |
-| Device revoked while open / while offline | Open: wiped at once, keeps working untrusted. Offline: wiped on its next online open | section 4 |
-| Browser evicted its stored secrets | The shared store finds no kept copy and the switch reads off; the list still shows the entry until the person removes it (shared behaviour) | Settings |
-| Delete all on another device | This device's profile listener sees the profile vanish: key dropped, reopens to first run | section 12 |
-| AI unreachable, model timeout, invalid reply | Capture `received` with `heldReason`/`lastErrorCode`, retried on open and return; `failed` after 3 with Try again, "Make it a task as written", Delete | section 5 |
-| Per-person limit or project budget reached | `heldReason: 'dailyLimit' \| 'budgetReached'`; "Saved as written" line names when it will be read | section 5 |
-| More than 20 changes in one capture | First 20 filed; `moreToSort` question with "Sort the rest" | section 5 |
-| Question answered on two devices at once | Second gets `already-exists`; its sheet closes itself | section 5 |
-| Undo after the record was edited or deleted | Kept and reported ("Kept 1 task you changed since"); a deleted record counts as kept | section 9 |
-| Answer cites nothing resolvable | Records part dropped; general kept only for a world question; else "Nothing in Helm says …" | section 6 |
-| A hinted note was deleted before the call | Dropped silently; the answer uses the rest | section 7 |
-| Topic deleted | Notes keep their words, lose the topic; count in the confirm | section 12 |
-| Note over 20,000 characters (a paste) | Field counts from 18,000 and Save waits, nothing cut silently | `NoteForm` |
-| A capture over 4,000 characters | Send waits; "Save as a note" keeps the whole text as a note read by no AI | composer |
-| A note or saved answer already kept word for word | Nothing saved; "Already in your notes: {title}" with Open | device, executor |
-| A capture names a topic that doesn't exist, or two that could fit | The note goes to "Not in a topic"; nothing is asked and no topic is made | executor |
-| 1,000 notes or 50 topics | New note / topic shows the cap in its own row; capture's `createNote` answers with a line saying the cap | device, executor |
-| Calendar grant revoked or expired (Testing mode) | Account `needsReconnect`; Today drops to no-calendar with Reconnect; copies kept, marked stale | section 8 |
-| A site app or Google can't be reached for a sync | Copies kept with their `syncedAt`; row "Couldn't update since Thu · Try now"; past a day Today adds one muted line naming it | section 19 |
-| The person lost access to a group source (left a trip, a household) | The adapter returns nothing for it; the next sync deletes those copies; a source app the person can no longer open marks the grant `noAccess` ("You can't open Nine Lives any more") with Disconnect | section 19 |
-| A copy's `transformVersion` is older than the adapter's | Rewritten at its next sync; read meanwhile with defaults | section 19 |
-| Mail, Drive or Runway's transactions fail mid-answer | The answer goes on without it and its `searched` line says it couldn't look | section 6 |
-| Gmail or Drive for someone not on the tester allowlist | The ticks aren't shown; the callable refuses the scope too | section 19 |
-| Disconnect with copies kept | Copies get `connectionEndedAt` ("no longer updated") and `deleteAfter`; Today stops planning around them; the expiry sweep deletes them | section 19 |
-| A category switched off | Its copies are deleted at once; Undo turns it back on and the next sync copies again | section 19 |
-| Same event in Google Calendar and an app | One card, both marks; the calendar's time shown, the app's in one line if it differs | section 19 |
-| Device's time zone differs from the profile | Today's travel line with Switch; the planner always uses the profile's zone | Today |
-| A spoken answer it can't place | The quick model tries it against the question; still unclear or out of range, asked again once, then the question waits in Needs you; never answered by default | section 5 "Questions" |
-| A question answered on two devices, or after its records went | The second gets `already-exists` and its card closes; a deleted record's option is dropped, and a question with none left closes as "No longer needed" | section 5 "Questions" |
-| The model asks with too few options, or past 20 open questions | The question is not written (`ask-invalid` or the cap); the reply says it in words | section 5 "Questions" |
-| A key date on 29 February, or with no year or no day | `nextYearlyOccurrence` puts 29 February on the 28th in a year without one, for Today and Coming up alike; no age or count without a year; a yearly date with no day stays in the index but never reaches Today or Coming up; never stored with a made-up year or day | section 22 |
-| A who with hundreds of moments, or 2,000 who | The who page reads that who's moments only (≤500, opened and sorted on the device, typically a handful); Today, Coming up and answers open the one yearly index; nothing reads every key date except Search, in pages | section 22 |
-| The yearly index disagrees with the documents, or would pass 6,000 entries | Rebuilt from the yearly documents in one transaction (`rebuiltAt` set); past the cap, split into twelve month documents in one transaction | section 2 |
-| A date that comes back changed by hand offline | "Needs a connection to save"; the sheet stays open with the typed date; a spoken one is held like any turn | section 2 |
-| A who's tier changes, or a who is forgotten mid-way | Tier lives on the who only, so Today and Coming up re-sort at once; an interrupted forget has already removed the who's index entries, and leaves key dates whose who is gone, which every surface skips and the next forget removes | sections 12, 22 |
-| A different birthday said for a who that has one | Not written: a "Which is true now?" question with both dates and their sources; the same date with a year added just fills it in | section 22 |
-| Clock skew on the device | `createdAt` is the device's; dates resolve from it; the server only checks the span offsets, so a wrong clock gives a wrong "tomorrow" the person sees as a chip before Send | capture |
-| Sign-out with outbox envelopes | Asks first; Stay is the safe choice | section 4 |
-| Plain-HTTP page (LAN link) | Sealing works (`@noble/ciphers`); drop box and Trust this browser aren't offered (`canKeepDeviceSecrets`), each saying it needs a secure connection | sections 3, 4 |
-| No microphone permission, or the browser has no recognition | The Nomos button opens the composer for typing; one line says how to allow the microphone; nothing else changes | `VoiceControl` |
-| Offline while talking | The on-device model listens when downloaded; without it, the browser's recognition where it works offline, else "Type it, or turn on Hear me offline"; replies spoken by the device voice; the capture waits as "Saved as written" |
-| On-device model can't run here, or there isn't room | The capability check fails before any download and the row says why ("This phone can't run offline listening" / "Needs about 60 MB free"); a failed or cancelled download leaves nothing behind | section 20 | section 20 |
-| Cloud listening token slow or refused | Device listening for that turn, no message; refused for a limit: device for the rest of the day with one quiet line | section 20 |
-| Cloud voice slow (no audio in 2.5 s) or failing | The device voice says the same line; the turn records which voice spoke | section 20 |
-| Person talks over a reply | Playback stops, the stream is cut, the new turn starts with the last 300 ms of audio and knows the earlier one was interrupted; works with cloud listening and the on-device model, online or off; only on the browser's recognition fallback, or over a system-voice ack, is a tap needed | section 20 |
-| Voice or site voice budget reached | Device listening and voice until midnight UTC; nothing blocked | section 20 |
-| Attachment over its cap, or a sixth one | Refused on the device before upload, naming the cap ("PDFs up to 20 pages") | composer |
-| Upload fails or the phone goes offline mid-upload | The medium stays `uploading` on the device with Retry; the turn waits for it; after 24 h the server deletes the stub | section 23 |
-| A scanned PDF with no text, or a password-protected one | Scanned: read as a document; protected: "Couldn't open this PDF" on its line, the rest of the turn goes on | section 23 |
-| A Markdown file over 20,000 characters | Refused before upload with the cap | composer |
-| Discarded media | Shown 24 h with "Keep it", then deleted with its Storage objects | section 23 |
-| A topic written from two devices at once | `writeClaim` lets one write run; the other shows "Bringing in 2 new notes…" and reads the result; a revision re-reads a newer version and asks the model once more; never overwrites | section 24 |
-| A topic move that makes a cycle or a fourth level | Refused on the device and in the server's command check; `TopicPicker` never offers it | section 7 |
-| A topic write fails or the AI is away | The document stays as it was with "2 new notes aren't in the document yet · Try again"; the notes are already saved and searchable | section 24 |
-| Back-to-back messages | Each shows as its own bubble; those sent before the reply starts get one reply covering them all; one sent after starts a new turn | section 21 |
-| A procedure changed while a run is open | The run keeps the steps it started with | section 25 |
-| Contacts list over 2,000 | The picker shows the first 2,000 with search on those, and says so | section 22 |
-| A picked contact already in Helm | Matched by email, phone or name; fills only empty fields | section 22 |
-| Contacts grant expired (Testing mode) | "Update from Google" and the picker say Reconnect; imported who records are untouched | section 22 |
-| Sensitive fact about someone else | Not kept; the turn's summary says nothing was kept about it | section 2 |
+| Situation                                                                  | What happens                                                                                                                                                                                                                                                                               | Where                  |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| `getHelmKey` fails (keyring problem)                                       | "Helm can't open your things right now" with Try again; capture still works through the drop box; nothing is ever replaced on the server                                                                                                                                                   | `CannotOpenState`      |
+| One document won't open (corrupt, other key)                               | Row kept as "Couldn't open this"; others open; logged with a code                                                                                                                                                                                                                          | sealed reader          |
+| A payload from a newer schema (`v` too high)                               | Row "Update Helm to open this"; the stale-chunk prompt usually arrives first                                                                                                                                                                                                               | `openJson`             |
+| Opened offline, untrusted                                                  | "Your things open once you're back online"; capture via drop box; the home surface shows "N saved on this device"                                                                                                                                                                          | `NeedsConnectionState` |
+| Opened offline, trusted                                                    | Cached records open; writes queue; assistant, Undo, calendar, trusting or removing browsers, Delete all say they need a connection                                                                                                                                                         | section 4              |
+| Sign out everywhere                                                        | Every `trustedBrowsers` entry deleted, every session revoked; other browsers signed out within an hour (which forgets their kept key); an offline phone keeps what it has until its 30 days run out (stated in the confirm)                                                                | section 4              |
+| Trusted browser offline for 30+ days                                       | The shared store has dropped its copy; Helm says "Connect once to keep opening Helm offline"                                                                                                                                                                                               | section 4              |
+| Device revoked while open / while offline                                  | Open: wiped at once, keeps working untrusted. Offline: wiped on its next online open                                                                                                                                                                                                       | section 4              |
+| Browser evicted its stored secrets                                         | The shared store finds no kept copy and the switch reads off; the list still shows the entry until the person removes it (shared behaviour)                                                                                                                                                | Settings               |
+| Delete all on another device                                               | This device's profile listener sees the profile vanish: key dropped, reopens to first run                                                                                                                                                                                                  | section 12             |
+| AI unreachable, model timeout, invalid reply                               | Capture `received` with `heldReason`/`lastErrorCode`, retried on open and return; `failed` after 3 with Try again, "Make it a task as written", Delete                                                                                                                                     | section 5              |
+| Per-person limit or project budget reached                                 | `heldReason: 'dailyLimit' \| 'budgetReached'`; "Saved as written" line names when it will be read                                                                                                                                                                                          | section 5              |
+| More than 20 changes in one capture                                        | First 20 filed; `moreToSort` question with "Sort the rest"                                                                                                                                                                                                                                 | section 5              |
+| Question answered on two devices at once                                   | Second gets `already-exists`; its sheet closes itself                                                                                                                                                                                                                                      | section 5              |
+| Undo after the record was edited or deleted                                | Kept and reported ("Kept 1 task you changed since"); a deleted record counts as kept                                                                                                                                                                                                       | section 9              |
+| Answer cites nothing resolvable                                            | Records part dropped; general kept only for a world question; else "Nothing in Helm says …"                                                                                                                                                                                                | section 6              |
+| A hinted note was deleted before the call                                  | Dropped silently; the answer uses the rest                                                                                                                                                                                                                                                 | section 7              |
+| Topic deleted                                                              | Notes keep their words, lose the topic; count in the confirm                                                                                                                                                                                                                               | section 12             |
+| Note over 20,000 characters (a paste)                                      | Field counts from 18,000 and Save waits, nothing cut silently                                                                                                                                                                                                                              | `NoteForm`             |
+| A capture over 4,000 characters                                            | Send waits; "Save as a note" keeps the whole text as a note read by no AI                                                                                                                                                                                                                  | composer               |
+| A note or saved answer already kept word for word                          | Nothing saved; "Already in your notes: {title}" with Open                                                                                                                                                                                                                                  | device, executor       |
+| A capture names a topic that doesn't exist, or two that could fit          | The note goes to "Not in a topic"; nothing is asked and no topic is made                                                                                                                                                                                                                   | executor               |
+| 1,000 notes or 50 topics                                                   | New note / topic shows the cap in its own row; capture's `createNote` answers with a line saying the cap                                                                                                                                                                                   | device, executor       |
+| Calendar grant revoked or expired (Testing mode)                           | Account `needsReconnect`; Today drops to no-calendar with Reconnect; copies kept, marked stale                                                                                                                                                                                             | section 8              |
+| A site app or Google can't be reached for a sync                           | Copies kept with their `syncedAt`; row "Couldn't update since Thu · Try now"; past a day Today adds one muted line naming it                                                                                                                                                               | section 19             |
+| The person lost access to a group source (left a trip, a household)        | The adapter returns nothing for it; the next sync deletes those copies; a source app the person can no longer open marks the grant `noAccess` ("You can't open Nine Lives any more") with Disconnect                                                                                       | section 19             |
+| A copy's `transformVersion` is older than the adapter's                    | Rewritten at its next sync; read meanwhile with defaults                                                                                                                                                                                                                                   | section 19             |
+| Mail, Drive or Runway's transactions fail mid-answer                       | The answer goes on without it and its `searched` line says it couldn't look                                                                                                                                                                                                                | section 6              |
+| Gmail or Drive for someone not on the tester allowlist                     | The ticks aren't shown; the callable refuses the scope too                                                                                                                                                                                                                                 | section 19             |
+| Disconnect with copies kept                                                | Copies get `connectionEndedAt` ("no longer updated") and `deleteAfter`; Today stops planning around them; the expiry sweep deletes them                                                                                                                                                    | section 19             |
+| A category switched off                                                    | Its copies are deleted at once; Undo turns it back on and the next sync copies again                                                                                                                                                                                                       | section 19             |
+| Same event in Google Calendar and an app                                   | One card, both marks; the calendar's time shown, the app's in one line if it differs                                                                                                                                                                                                       | section 19             |
+| Device's time zone differs from the profile                                | Today's travel line with Switch; the planner always uses the profile's zone                                                                                                                                                                                                                | Today                  |
+| A spoken answer it can't place                                             | The quick model tries it against the question; still unclear or out of range, asked again once, then the question waits in Needs you; never answered by default                                                                                                                            | section 5 "Questions"  |
+| A question answered on two devices, or after its records went              | The second gets `already-exists` and its card closes; a deleted record's option is dropped, and a question with none left closes as "No longer needed"                                                                                                                                     | section 5 "Questions"  |
+| The model asks with too few options, or past 20 open questions             | The question is not written (`ask-invalid` or the cap); the reply says it in words                                                                                                                                                                                                         | section 5 "Questions"  |
+| A key date on 29 February, or with no year or no day                       | `nextYearlyOccurrence` puts 29 February on the 28th in a year without one, for Today and Coming up alike; no age or count without a year; a yearly date with no day stays in the index but never reaches Today or Coming up; never stored with a made-up year or day                       | section 22             |
+| A who with hundreds of moments, or 2,000 who                               | The who page reads that who's moments only (≤500, opened and sorted on the device, typically a handful); Today, Coming up and answers open the one yearly index; nothing reads every key date except Search, in pages                                                                      | section 22             |
+| The yearly index disagrees with the documents, or would pass 6,000 entries | Rebuilt from the yearly documents in one transaction (`rebuiltAt` set); past the cap, split into twelve month documents in one transaction                                                                                                                                                 | section 2              |
+| A date that comes back changed by hand offline                             | "Needs a connection to save"; the sheet stays open with the typed date; a spoken one is held like any turn                                                                                                                                                                                 | section 2              |
+| A who's tier changes, or a who is forgotten mid-way                        | Tier lives on the who only, so Today and Coming up re-sort at once; an interrupted forget has already removed the who's index entries, and leaves key dates whose who is gone, which every surface skips and the next forget removes                                                       | sections 12, 22        |
+| A different birthday said for a who that has one                           | Not written: a "Which is true now?" question with both dates and their sources; the same date with a year added just fills it in                                                                                                                                                           | section 22             |
+| Clock skew on the device                                                   | `createdAt` is the device's; dates resolve from it; the server only checks the span offsets, so a wrong clock gives a wrong "tomorrow" the person sees as a chip before Send                                                                                                               | capture                |
+| Sign-out with outbox envelopes                                             | Asks first; Stay is the safe choice                                                                                                                                                                                                                                                        | section 4              |
+| Plain-HTTP page (LAN link)                                                 | Sealing works (`@noble/ciphers`); drop box and Trust this browser aren't offered (`canKeepDeviceSecrets`), each saying it needs a secure connection                                                                                                                                        | sections 3, 4          |
+| No microphone permission, or the browser has no recognition                | The Nomos button opens the composer for typing; one line says how to allow the microphone; nothing else changes                                                                                                                                                                            | `VoiceControl`         |
+| Offline while talking                                                      | The on-device model listens when downloaded; without it, the browser's recognition where it works offline, else "Type it, or turn on Hear me offline"; replies spoken by the device voice; the capture waits as "Saved as written"                                                         |
+| On-device model can't run here, or there isn't room                        | The capability check fails before any download and the row says why ("This phone can't run offline listening" / "Needs about 60 MB free"); a failed or cancelled download leaves nothing behind                                                                                            | section 20             | section 20 |
+| Cloud listening token slow or refused                                      | Device listening for that turn, no message; refused for a limit: device for the rest of the day with one quiet line                                                                                                                                                                        | section 20             |
+| Cloud voice slow (no audio in 2.5 s) or failing                            | The device voice says the same line; the turn records which voice spoke                                                                                                                                                                                                                    | section 20             |
+| Person talks over a reply                                                  | Playback stops, the stream is cut, the new turn starts with the last 300 ms of audio and knows the earlier one was interrupted; works with cloud listening and the on-device model, online or off; only on the browser's recognition fallback, or over a system-voice ack, is a tap needed | section 20             |
+| Voice or site voice budget reached                                         | Device listening and voice until midnight UTC; nothing blocked                                                                                                                                                                                                                             | section 20             |
+| Attachment over its cap, or a sixth one                                    | Refused on the device before upload, naming the cap ("PDFs up to 20 pages")                                                                                                                                                                                                                | composer               |
+| Upload fails or the phone goes offline mid-upload                          | The medium stays `uploading` on the device with Retry; the turn waits for it; after 24 h the server deletes the stub                                                                                                                                                                       | section 23             |
+| A scanned PDF with no text, or a password-protected one                    | Scanned: read as a document; protected: "Couldn't open this PDF" on its line, the rest of the turn goes on                                                                                                                                                                                 | section 23             |
+| A Markdown file over 20,000 characters                                     | Refused before upload with the cap                                                                                                                                                                                                                                                         | composer               |
+| Discarded media                                                            | Shown 24 h with "Keep it", then deleted with its Storage objects                                                                                                                                                                                                                           | section 23             |
+| A topic written from two devices at once                                   | `writeClaim` lets one write run; the other shows "Bringing in 2 new notes…" and reads the result; a revision re-reads a newer version and asks the model once more; never overwrites                                                                                                       | section 24             |
+| A topic move that makes a cycle or a fourth level                          | Refused on the device and in the server's command check; `TopicPicker` never offers it                                                                                                                                                                                                     | section 7              |
+| A topic write fails or the AI is away                                      | The document stays as it was with "2 new notes aren't in the document yet · Try again"; the notes are already saved and searchable                                                                                                                                                         | section 24             |
+| Back-to-back messages                                                      | Each shows as its own bubble; those sent before the reply starts get one reply covering them all; one sent after starts a new turn                                                                                                                                                         | section 21             |
+| A procedure changed while a run is open                                    | The run keeps the steps it started with                                                                                                                                                                                                                                                    | section 25             |
+| Contacts list over 2,000                                                   | The picker shows the first 2,000 with search on those, and says so                                                                                                                                                                                                                         | section 22             |
+| A picked contact already in Helm                                           | Matched by email, phone or name; fills only empty fields                                                                                                                                                                                                                                   | section 22             |
+| Contacts grant expired (Testing mode)                                      | "Update from Google" and the picker say Reconnect; imported who records are untouched                                                                                                                                                                                                      | section 22             |
+| Sensitive fact about someone else                                          | Not kept; the turn's summary says nothing was kept about it                                                                                                                                                                                                                                | section 2              |
 
 ## 14. Security and privacy requirements
 
@@ -1077,18 +1349,18 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
 
 One `isHelmOwner(uid)` helper (`request.auth != null && request.auth.uid == uid`). A wildcard match for the owner's ordinary collections carries a condition that keeps the special ones out (firestore-rules "Rule-language traps": a condition on the wildcard, not a second match).
 
-| Path | Owner read | Owner create | Owner update | Owner delete | Why |
-|---|---|---|---|---|---|
-| `apps/helm/users/{uid}` (profile) | yes | yes | yes | **no** | Only `deleteHelmData` removes it, so a stray client can't half-delete a Helm |
-| `…/{uid}/{collection}/{docId}` for `captures`, `tasks`, `projects`, `who`, `keyDates`, `meta`, `places`, `facts`, `notes`, `topics`, `procedures`, `procedureRuns`, `media`, `style`, `planDays` | yes | yes | yes | yes | The person's own content; the wildcard's condition is `collection in [those fifteen]` (round 6: `people` and `artifacts` are gone, never built) |
-| `…/{uid}/topics/{topicId}/versions/{n}`, `…/{uid}/procedures/{procedureId}/versions/{n}` | yes | yes | **no** | yes | History isn't rewritten; deleting a topic or procedure removes its versions |
-| `…/{uid}/executions/{executionId}` | yes | yes | yes | **no** | The device writes plan proposals and undo lines and marks `undoneByExecutionId`; Activity never loses a line |
-| `…/{uid}/synced/{syncedId}` | yes | no | no | no | Written only by the platform's Helm sink; the person deletes copies through Disconnect or Delete now |
-| `apps/helm/server/**`, `apps/helm/aiBudget/**`, `apps/helm/keyChecks/**` | no rule | | | | Admin SDK only; clients denied by default |
-| `voiceUsage/**`, `voiceBudget/**` (site) | no rule | | | | The voice service's counters; Admin SDK only |
-| `connections/{uid}/{document=**}` (site: `accounts`, `grants`) | yes | no | no | no | The site's grants, read by any app the person opens (Helm's Connected apps, the account page's index); changed only through the platform's callables (section 19) |
-| `connectionsServer/**` | no rule | | | | Sealed tokens, sync cursors and the expiry queue; Admin SDK only |
-| Storage `apps/helm/media/{uid}/{file}` | yes | yes, `application/octet-stream`, ≤ 10 MiB + 1 KiB | yes, same | yes | Sealed bytes only (Runway's receipt rule's shape); the size covers a 10 MB PDF or voice note after sealing |
+| Path                                                                                                                                                                                             | Owner read | Owner create                                      | Owner update | Owner delete | Why                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ------------------------------------------------- | ------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/helm/users/{uid}` (profile)                                                                                                                                                                | yes        | yes                                               | yes          | **no**       | Only `deleteHelmData` removes it, so a stray client can't half-delete a Helm                                                                                      |
+| `…/{uid}/{collection}/{docId}` for `captures`, `tasks`, `projects`, `who`, `keyDates`, `meta`, `places`, `facts`, `notes`, `topics`, `procedures`, `procedureRuns`, `media`, `style`, `planDays` | yes        | yes                                               | yes          | yes          | The person's own content; the wildcard's condition is `collection in [those fifteen]` (round 6: `people` and `artifacts` are gone, never built)                   |
+| `…/{uid}/topics/{topicId}/versions/{n}`, `…/{uid}/procedures/{procedureId}/versions/{n}`                                                                                                         | yes        | yes                                               | **no**       | yes          | History isn't rewritten; deleting a topic or procedure removes its versions                                                                                       |
+| `…/{uid}/executions/{executionId}`                                                                                                                                                               | yes        | yes                                               | yes          | **no**       | The device writes plan proposals and undo lines and marks `undoneByExecutionId`; Activity never loses a line                                                      |
+| `…/{uid}/synced/{syncedId}`                                                                                                                                                                      | yes        | no                                                | no           | no           | Written only by the platform's Helm sink; the person deletes copies through Disconnect or Delete now                                                              |
+| `apps/helm/server/**`, `apps/helm/aiBudget/**`, `apps/helm/keyChecks/**`                                                                                                                         | no rule    |                                                   |              |              | Admin SDK only; clients denied by default                                                                                                                         |
+| `voiceUsage/**`, `voiceBudget/**` (site)                                                                                                                                                         | no rule    |                                                   |              |              | The voice service's counters; Admin SDK only                                                                                                                      |
+| `connections/{uid}/{document=**}` (site: `accounts`, `grants`)                                                                                                                                   | yes        | no                                                | no           | no           | The site's grants, read by any app the person opens (Helm's Connected apps, the account page's index); changed only through the platform's callables (section 19) |
+| `connectionsServer/**`                                                                                                                                                                           | no rule    |                                                   |              |              | Sealed tokens, sync cursors and the expiry queue; Admin SDK only                                                                                                  |
+| Storage `apps/helm/media/{uid}/{file}`                                                                                                                                                           | yes        | yes, `application/octet-stream`, ≤ 10 MiB + 1 KiB | yes, same    | yes          | Sealed bytes only (Runway's receipt rule's shape); the size covers a 10 MB PDF or voice note after sealing                                                        |
 
 Every row is proven in `check:helm-rules` (the site rows in `check:connections-rules`) (a Python emulator matrix in the shape of `check:runway-rules`) as the owner, another signed-in user and signed out, plus a create on each special collection and a delete on the profile and on an execution. The size estimate goes in each rules PR's Regression check (about 1,400 characters, ~2,500 bytes).
 
@@ -1104,53 +1376,53 @@ Every row is proven in `check:helm-rules` (the site rows in `check:connections-r
 
 ## 16. Backend surface
 
-| Kind | Name / path | What it does, and why plain client code can't | Trigger / consumer | Lands in |
-|---|---|---|---|---|
-| Callable | `getHelmKey` | Creates or unwraps the person's data key and drop-box pair with the master keyring, a secret no client may hold; answers whether a device is still trusted | `useHelmSync` | Issue 2 (drop box: 60; device answer: 61) |
-| Callable | `sortHelmCapture` | Opens the key, builds the context (session turns, screen records, media), routes the turn, runs the Claude tool loop over Helm's in-process MCP server with the server's API key, enforces policy, rate limit and budget, writes sealed records and the Execution atomically, sweeps the caller's expired media | composer, sweep | Issue 5 (failure and questions: 6; sessions and screen: 9; back-to-back messages: 10; routing: 11; tools over synced records: 19 onward; media: 52, 53) |
-| Callable | `resolveHelmQuestion` | Validates an answer against its question's shape; runs a code-built question's held commands through the server executor, or writes a model-written question's answer as a turn and sorts it (round 6c) | question cards, Needs you, spoken answers | Issue 35 (shapes: 36) |
-| Callable | `writeHelmTopic` | Claims a `behind` topic, opens its document and up to 20 pending notes, asks `topicWrite` for at most 8 section changes, applies those code allows (never a `person` section's words), writes the version and execution; writes a parent's overview with `topicOverview` | `TopicScreen` on open, "Bring in new notes" | Issue 50 |
-| Callable | `importHelmOutbox` | Opens drop-box envelopes with the server-held private key and writes them as sealed captures | `useCaptureOutbox` | Issue 60 |
-| Callable | `signOutEverywhere` (site, `functions/src/auth/`) | Deletes every `trustedBrowsers/{uid}/browsers` entry and revokes every session site-wide; no app's words | `TrustBrowserRow`'s optional `onSignOutEverywhere` | Issue 62 |
-| Callable | `mintVoiceToken` (site, `functions/src/voice/`) | Checks the person's listening allowance and the site voice budget in one transaction, then mints a short-lived streaming token with the provider key no client may hold | `deepgramStream.ts` | Issue 14 |
-| HTTPS function | `streamSpeech` (site, `functions/src/voice/`) | Streams the cloud voice's audio for at most 600 characters; ID token and App Check from headers, site-origin CORS; callables can't stream bytes | `cloudTts.ts` | Issue 15 (provider choice: 13) |
-| Callable | `transcribeVoiceNote` (site) | Opens a sealed voice note with the person's key and sends it to the provider's pre-recorded endpoint; charged to listening minutes | composer | Issue 53 |
-| Callable | `importHelmContacts` | Re-fetches the picked contacts with the platform's Google token (never sent to a client), dedupes, seals and writes who records, their photos and (round 6b) a birthday key date in one execution; also "Update from Google" for one person | `ContactsPicker`, who page | Issue 38 (birthdays: 43) |
-| Callable | `learnHelmStyle` | Opens the last 50 typed captures (or reads sent mail live through the platform) and asks the `style` role for traits with counts; stores only the traits | device after 25 typed captures; "Learn from my sent mail" | Issue 56 (sent mail: 57) |
-| Callable | `grantConnection` / `updateConnection` / `endConnection` / `deleteKeptCopies` | The site's grant writes (section 19) | Connected apps, the account page's index | Issue 18 (keep and delete: 19) |
-| Callable | `syncConnections` | Runs the sync for the caller's grants older than 15 minutes (or one grant on Sync now / Try now) | `useHelmSync` on open and return, Sync now | Issue 19 |
-| Callable | `startGoogleConnection` / `finishGoogleConnection` | OAuth code exchange with the client secret, incremental scopes, the tester gate for restricted scopes; seals the refresh token under the site keyring | Connect flows | Issue 20 (Gmail: 28, Drive: 29, Contacts: 38) |
-| Callable | `readConnectorOptions` | A connector's live option list (Google calendars; round 6: a Contacts page for the picker) as an allowlisted shape | calendar picker, `ContactsPicker` | Issue 20 (Contacts: 38) |
-| Callable | `deleteHelmData` | Ends Helm's grants, revokes unused Google accounts, `recursiveDelete`s the person's tree and server-only keys, deletes the `apps/helm/media/{uid}/` Storage prefix and the person's `voiceUsage` days | Settings | Issue 63 |
-| Scheduled | `verifyHelmKeys` (daily), `verifyConnectionKeys` (daily) | Open each keyring id's canary; log ok/failed for the alerts | Cloud Monitoring | Issues 2, 20 |
-| Scheduled | `syncConnectionsHourly` | Every hour, syncs each live synced grant whose last sync is over 50 minutes old, at most 200 a run | Cloud Scheduler | Issue 19 |
-| Scheduled | `expireKeptCopies` (daily) | Deletes kept copies past `deleteAfter` through each reader's sink | Cloud Scheduler | Issue 19 |
-| Function file | `functions/src/apps/helm/findFirstActivityAt.ts` + `FIRST_ACTIVITY_FINDERS` entry | New-app checklist: oldest capture or task `createdAt`; `null` until either exists | `registerAppUsage` | Issue 1 |
-| Function files | `functions/src/apps/<app>/share/adapter.ts` per source app, `functions/src/apps/helm/connections/sink.ts`, `functions/src/connections/google/contacts.ts` | Each app's read contract, Helm's sink, the Contacts connector (section 19) | the platform | Issues 18, 19, 21–26 (Runway's transactions: 30; Contacts: 38) |
-| External API | Anthropic Messages API (`@anthropic-ai/sdk`, `@modelcontextprotocol/sdk`) | Sonnet-class for full turns (about 3 to 10 cents), Haiku-class for quick turns (well under a cent, unverified); per-person per-route limits and a dollar cap; when down, captures wait as "saved as written" | `sortHelmCapture`, `learnHelmStyle` | Issue 5 (quick route: 11) |
-| External API | Deepgram streaming (`wss://`, token grant) and pre-recorded endpoints; Aura-2 if the benchmark picks it | About $0.0077 a minute listening, about $0.03 per 1,000 characters speaking (unverified); per-person allowance and the site's $5 a day cap; when down, the device voice | `mintVoiceToken`, `transcribeVoiceNote`, `streamSpeech` | Issues 13, 14, 53 |
-| External API | Google Cloud Text-to-Speech (Chirp 3 HD); Gemini Flash-Lite TTS (paid API or Vertex) | Priced per character or audio token (unverified); the benchmark's default only | `streamSpeech` | Issues 13, 15 |
-| External API | Google Calendar API v3, Gmail API, Drive API v3, OAuth token and revoke endpoints; round 6: People API (`people.connections.list`, `people.getBatchGet`) | Free; per-project quotas far above one person's use | platform connectors | Issues 20, 28, 29, 38 |
-| Secrets | `HELM_MASTER_KEYS` | Helm's keyring; created by `npm run helm:keyring` before issue 2 merges | key, assistant, outbox, trust, sink, delete, verify, media | Issue 2 |
-| Secrets | `ANTHROPIC_API_KEY` | The model; created by `npm run ai:anthropic-secret`, which checks the key with a one-token call before saving | `sortHelmCapture`, `learnHelmStyle` | Issue 5 |
-| Secrets | `DEEPGRAM_API_KEY` (optional: absent means cloud listening is skipped and the device listens) | Created by `npm run voice:deepgram-secret`, which checks the key against Deepgram's projects endpoint before saving (unverified endpoint) | voice functions | Issue 13 (listening: 14; voice notes: 53) |
-| Secrets | `GEMINI_API_KEY` (optional; only if the benchmark picks Gemini and Vertex isn't used) | `npm run voice:gemini-secret`, checked with a one-line call | `streamSpeech` | Issue 13 |
-| Secrets | `CONNECTIONS_MASTER_KEYS`, `GOOGLE_OAUTH_CLIENT` | The platform's token keyring and the site OAuth client; `npm run connections:keyring`, `npm run connections:google-secrets` | Google connectors, verify | Issue 20 |
-| Console | An Anthropic console monthly spend limit and alert; round 6: a Deepgram project spend limit | Clicks no command can do, spelled out | first assistant issue, cloud listening | Issues 5, 14 |
-| Console | Calendar, Gmail, Drive, round 6: People and Text-to-Speech APIs on (`npm run connections:google-setup` and `npm run voice:google-setup` run the `gcloud` parts); scopes on the consent screen | Clicks no command can do | Google issues | Issues 15, 20, 28, 29, 38 |
-| Console | Three Cloud Monitoring alert policies on `helm.keys.*`, three on `connections.keys.*`; round 6: one on `voice.budgetReached` | Same as Runway's runbook | first sealed issue, Google issue, voice | Issues 2, 14, 20 |
-| Gate | `google-mail-and-drive` in `FEATURE_GATES` (appId `helm`, default `testing`) | The tester allowlist for restricted scopes; sent-mail style needs it too; Contacts does not | Connected apps | Issue 28 |
-| Index | `tasks`: `status` ASC, `createdAt` DESC | `sortHelmCapture`'s newest 150 open tasks | server context | Issue 5 |
-| Index | `facts`: `status` ASC, `createdAt` DESC | The newest 40 confirmed or inferred facts beside the subject matches | server context | Issue 40 |
-| Index | `media`: `status` ASC, `deleteAfter` ASC (collection scope) | The end-of-call sweep of the caller's expired media | `sortHelmCapture` | Issue 52 |
-| Index | `captures`: `sessionId` ASC, `turnIndex` DESC | The session's last 6 turns for the context | server context | Issue 9 |
-| Index | `synced`: `grantId` ASC, `category` ASC, `syncedAt` ASC | The sink finds copies a full sync didn't confirm | sink | Issue 19 |
-| Index | `synced`: `kind` ASC, `startAt` ASC | The context's events for today and tomorrow, `get_calendar` | server context | Issue 27 |
-| Index | `synced`: `deleteAfter` ASC (collection group) | The expiry sweep | `expireKeptCopies` | Issue 19 |
-| Index | `grants`: `status` ASC, `lastSyncAt` ASC (collection group) | The hourly sweep's oldest live grants | `syncConnectionsHourly` | Issue 19 |
-| Index | none other | `facts.subjectIds array-contains-any`, notes by id, `keyDates` by `whoId` and `shape` (equality only, round 6e), `captures.quotedSourceKeys array-contains`, and every client listener are single-field or document-id ranges | n/a | n/a |
-| Storage | `apps/helm/media/{uid}/{mediaId}` and `{mediaId}.thumb` | Sealed media bytes; owner-only rule (section 14) | media flow | Issue 37 |
-| Callable | `embedHelmNote` | Seals an embedding of a note for retrieval by meaning | note save | Next |
+| Kind           | Name / path                                                                                                                                                                                   | What it does, and why plain client code can't                                                                                                                                                                                                                                                                   | Trigger / consumer                                         | Lands in                                                                                                                                                |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Callable       | `getHelmKey`                                                                                                                                                                                  | Creates or unwraps the person's data key and drop-box pair with the master keyring, a secret no client may hold; answers whether a device is still trusted                                                                                                                                                      | `useHelmSync`                                              | Issue 2 (drop box: 60; device answer: 61)                                                                                                               |
+| Callable       | `sortHelmCapture`                                                                                                                                                                             | Opens the key, builds the context (session turns, screen records, media), routes the turn, runs the Claude tool loop over Helm's in-process MCP server with the server's API key, enforces policy, rate limit and budget, writes sealed records and the Execution atomically, sweeps the caller's expired media | composer, sweep                                            | Issue 5 (failure and questions: 6; sessions and screen: 9; back-to-back messages: 10; routing: 11; tools over synced records: 19 onward; media: 52, 53) |
+| Callable       | `resolveHelmQuestion`                                                                                                                                                                         | Validates an answer against its question's shape; runs a code-built question's held commands through the server executor, or writes a model-written question's answer as a turn and sorts it (round 6c)                                                                                                         | question cards, Needs you, spoken answers                  | Issue 35 (shapes: 36)                                                                                                                                   |
+| Callable       | `writeHelmTopic`                                                                                                                                                                              | Claims a `behind` topic, opens its document and up to 20 pending notes, asks `topicWrite` for at most 8 section changes, applies those code allows (never a `person` section's words), writes the version and execution; writes a parent's overview with `topicOverview`                                        | `TopicScreen` on open, "Bring in new notes"                | Issue 50                                                                                                                                                |
+| Callable       | `importHelmOutbox`                                                                                                                                                                            | Opens drop-box envelopes with the server-held private key and writes them as sealed captures                                                                                                                                                                                                                    | `useCaptureOutbox`                                         | Issue 60                                                                                                                                                |
+| Callable       | `signOutEverywhere` (site, `functions/src/auth/`)                                                                                                                                             | Deletes every `trustedBrowsers/{uid}/browsers` entry and revokes every session site-wide; no app's words                                                                                                                                                                                                        | `TrustBrowserRow`'s optional `onSignOutEverywhere`         | Issue 62                                                                                                                                                |
+| Callable       | `mintVoiceToken` (site, `functions/src/voice/`)                                                                                                                                               | Checks the person's listening allowance and the site voice budget in one transaction, then mints a short-lived streaming token with the provider key no client may hold                                                                                                                                         | `deepgramStream.ts`                                        | Issue 14                                                                                                                                                |
+| HTTPS function | `streamSpeech` (site, `functions/src/voice/`)                                                                                                                                                 | Streams the cloud voice's audio for at most 600 characters; ID token and App Check from headers, site-origin CORS; callables can't stream bytes                                                                                                                                                                 | `cloudTts.ts`                                              | Issue 15 (provider choice: 13)                                                                                                                          |
+| Callable       | `transcribeVoiceNote` (site)                                                                                                                                                                  | Opens a sealed voice note with the person's key and sends it to the provider's pre-recorded endpoint; charged to listening minutes                                                                                                                                                                              | composer                                                   | Issue 53                                                                                                                                                |
+| Callable       | `importHelmContacts`                                                                                                                                                                          | Re-fetches the picked contacts with the platform's Google token (never sent to a client), dedupes, seals and writes who records, their photos and (round 6b) a birthday key date in one execution; also "Update from Google" for one person                                                                     | `ContactsPicker`, who page                                 | Issue 38 (birthdays: 43)                                                                                                                                |
+| Callable       | `learnHelmStyle`                                                                                                                                                                              | Opens the last 50 typed captures (or reads sent mail live through the platform) and asks the `style` role for traits with counts; stores only the traits                                                                                                                                                        | device after 25 typed captures; "Learn from my sent mail"  | Issue 56 (sent mail: 57)                                                                                                                                |
+| Callable       | `grantConnection` / `updateConnection` / `endConnection` / `deleteKeptCopies`                                                                                                                 | The site's grant writes (section 19)                                                                                                                                                                                                                                                                            | Connected apps, the account page's index                   | Issue 18 (keep and delete: 19)                                                                                                                          |
+| Callable       | `syncConnections`                                                                                                                                                                             | Runs the sync for the caller's grants older than 15 minutes (or one grant on Sync now / Try now)                                                                                                                                                                                                                | `useHelmSync` on open and return, Sync now                 | Issue 19                                                                                                                                                |
+| Callable       | `startGoogleConnection` / `finishGoogleConnection`                                                                                                                                            | OAuth code exchange with the client secret, incremental scopes, the tester gate for restricted scopes; seals the refresh token under the site keyring                                                                                                                                                           | Connect flows                                              | Issue 20 (Gmail: 28, Drive: 29, Contacts: 38)                                                                                                           |
+| Callable       | `readConnectorOptions`                                                                                                                                                                        | A connector's live option list (Google calendars; round 6: a Contacts page for the picker) as an allowlisted shape                                                                                                                                                                                              | calendar picker, `ContactsPicker`                          | Issue 20 (Contacts: 38)                                                                                                                                 |
+| Callable       | `deleteHelmData`                                                                                                                                                                              | Ends Helm's grants, revokes unused Google accounts, `recursiveDelete`s the person's tree and server-only keys, deletes the `apps/helm/media/{uid}/` Storage prefix and the person's `voiceUsage` days                                                                                                           | Settings                                                   | Issue 63                                                                                                                                                |
+| Scheduled      | `verifyHelmKeys` (daily), `verifyConnectionKeys` (daily)                                                                                                                                      | Open each keyring id's canary; log ok/failed for the alerts                                                                                                                                                                                                                                                     | Cloud Monitoring                                           | Issues 2, 20                                                                                                                                            |
+| Scheduled      | `syncConnectionsHourly`                                                                                                                                                                       | Every hour, syncs each live synced grant whose last sync is over 50 minutes old, at most 200 a run                                                                                                                                                                                                              | Cloud Scheduler                                            | Issue 19                                                                                                                                                |
+| Scheduled      | `expireKeptCopies` (daily)                                                                                                                                                                    | Deletes kept copies past `deleteAfter` through each reader's sink                                                                                                                                                                                                                                               | Cloud Scheduler                                            | Issue 19                                                                                                                                                |
+| Function file  | `functions/src/apps/helm/findFirstActivityAt.ts` + `FIRST_ACTIVITY_FINDERS` entry                                                                                                             | New-app checklist: oldest capture or task `createdAt`; `null` until either exists                                                                                                                                                                                                                               | `registerAppUsage`                                         | Issue 1                                                                                                                                                 |
+| Function files | `functions/src/apps/<app>/share/adapter.ts` per source app, `functions/src/apps/helm/connections/sink.ts`, `functions/src/connections/google/contacts.ts`                                     | Each app's read contract, Helm's sink, the Contacts connector (section 19)                                                                                                                                                                                                                                      | the platform                                               | Issues 18, 19, 21–26 (Runway's transactions: 30; Contacts: 38)                                                                                          |
+| External API   | Anthropic Messages API (`@anthropic-ai/sdk`, `@modelcontextprotocol/sdk`)                                                                                                                     | Sonnet-class for full turns (about 3 to 10 cents), Haiku-class for quick turns (well under a cent, unverified); per-person per-route limits and a dollar cap; when down, captures wait as "saved as written"                                                                                                    | `sortHelmCapture`, `learnHelmStyle`                        | Issue 5 (quick route: 11)                                                                                                                               |
+| External API   | Deepgram streaming (`wss://`, token grant) and pre-recorded endpoints; Aura-2 if the benchmark picks it                                                                                       | About $0.0077 a minute listening, about $0.03 per 1,000 characters speaking (unverified); per-person allowance and the site's $5 a day cap; when down, the device voice                                                                                                                                         | `mintVoiceToken`, `transcribeVoiceNote`, `streamSpeech`    | Issues 13, 14, 53                                                                                                                                       |
+| External API   | Google Cloud Text-to-Speech (Chirp 3 HD); Gemini Flash-Lite TTS (paid API or Vertex)                                                                                                          | Priced per character or audio token (unverified); the benchmark's default only                                                                                                                                                                                                                                  | `streamSpeech`                                             | Issues 13, 15                                                                                                                                           |
+| External API   | Google Calendar API v3, Gmail API, Drive API v3, OAuth token and revoke endpoints; round 6: People API (`people.connections.list`, `people.getBatchGet`)                                      | Free; per-project quotas far above one person's use                                                                                                                                                                                                                                                             | platform connectors                                        | Issues 20, 28, 29, 38                                                                                                                                   |
+| Secrets        | `HELM_MASTER_KEYS`                                                                                                                                                                            | Helm's keyring; created by `npm run helm:keyring` before issue 2 merges                                                                                                                                                                                                                                         | key, assistant, outbox, trust, sink, delete, verify, media | Issue 2                                                                                                                                                 |
+| Secrets        | `ANTHROPIC_API_KEY`                                                                                                                                                                           | The model; created by `npm run ai:anthropic-secret`, which checks the key with a one-token call before saving                                                                                                                                                                                                   | `sortHelmCapture`, `learnHelmStyle`                        | Issue 5                                                                                                                                                 |
+| Secrets        | `DEEPGRAM_API_KEY` (optional: absent means cloud listening is skipped and the device listens)                                                                                                 | Created by `npm run voice:deepgram-secret`, which checks the key against Deepgram's projects endpoint before saving (unverified endpoint)                                                                                                                                                                       | voice functions                                            | Issue 13 (listening: 14; voice notes: 53)                                                                                                               |
+| Secrets        | `GEMINI_API_KEY` (optional; only if the benchmark picks Gemini and Vertex isn't used)                                                                                                         | `npm run voice:gemini-secret`, checked with a one-line call                                                                                                                                                                                                                                                     | `streamSpeech`                                             | Issue 13                                                                                                                                                |
+| Secrets        | `CONNECTIONS_MASTER_KEYS`, `GOOGLE_OAUTH_CLIENT`                                                                                                                                              | The platform's token keyring and the site OAuth client; `npm run connections:keyring`, `npm run connections:google-secrets`                                                                                                                                                                                     | Google connectors, verify                                  | Issue 20                                                                                                                                                |
+| Console        | An Anthropic console monthly spend limit and alert; round 6: a Deepgram project spend limit                                                                                                   | Clicks no command can do, spelled out                                                                                                                                                                                                                                                                           | first assistant issue, cloud listening                     | Issues 5, 14                                                                                                                                            |
+| Console        | Calendar, Gmail, Drive, round 6: People and Text-to-Speech APIs on (`npm run connections:google-setup` and `npm run voice:google-setup` run the `gcloud` parts); scopes on the consent screen | Clicks no command can do                                                                                                                                                                                                                                                                                        | Google issues                                              | Issues 15, 20, 28, 29, 38                                                                                                                               |
+| Console        | Three Cloud Monitoring alert policies on `helm.keys.*`, three on `connections.keys.*`; round 6: one on `voice.budgetReached`                                                                  | Same as Runway's runbook                                                                                                                                                                                                                                                                                        | first sealed issue, Google issue, voice                    | Issues 2, 14, 20                                                                                                                                        |
+| Gate           | `google-mail-and-drive` in `FEATURE_GATES` (appId `helm`, default `testing`)                                                                                                                  | The tester allowlist for restricted scopes; sent-mail style needs it too; Contacts does not                                                                                                                                                                                                                     | Connected apps                                             | Issue 28                                                                                                                                                |
+| Index          | `tasks`: `status` ASC, `createdAt` DESC                                                                                                                                                       | `sortHelmCapture`'s newest 150 open tasks                                                                                                                                                                                                                                                                       | server context                                             | Issue 5                                                                                                                                                 |
+| Index          | `facts`: `status` ASC, `createdAt` DESC                                                                                                                                                       | The newest 40 confirmed or inferred facts beside the subject matches                                                                                                                                                                                                                                            | server context                                             | Issue 40                                                                                                                                                |
+| Index          | `media`: `status` ASC, `deleteAfter` ASC (collection scope)                                                                                                                                   | The end-of-call sweep of the caller's expired media                                                                                                                                                                                                                                                             | `sortHelmCapture`                                          | Issue 52                                                                                                                                                |
+| Index          | `captures`: `sessionId` ASC, `turnIndex` DESC                                                                                                                                                 | The session's last 6 turns for the context                                                                                                                                                                                                                                                                      | server context                                             | Issue 9                                                                                                                                                 |
+| Index          | `synced`: `grantId` ASC, `category` ASC, `syncedAt` ASC                                                                                                                                       | The sink finds copies a full sync didn't confirm                                                                                                                                                                                                                                                                | sink                                                       | Issue 19                                                                                                                                                |
+| Index          | `synced`: `kind` ASC, `startAt` ASC                                                                                                                                                           | The context's events for today and tomorrow, `get_calendar`                                                                                                                                                                                                                                                     | server context                                             | Issue 27                                                                                                                                                |
+| Index          | `synced`: `deleteAfter` ASC (collection group)                                                                                                                                                | The expiry sweep                                                                                                                                                                                                                                                                                                | `expireKeptCopies`                                         | Issue 19                                                                                                                                                |
+| Index          | `grants`: `status` ASC, `lastSyncAt` ASC (collection group)                                                                                                                                   | The hourly sweep's oldest live grants                                                                                                                                                                                                                                                                           | `syncConnectionsHourly`                                    | Issue 19                                                                                                                                                |
+| Index          | none other                                                                                                                                                                                    | `facts.subjectIds array-contains-any`, notes by id, `keyDates` by `whoId` and `shape` (equality only, round 6e), `captures.quotedSourceKeys array-contains`, and every client listener are single-field or document-id ranges                                                                                   | n/a                                                        | n/a                                                                                                                                                     |
+| Storage        | `apps/helm/media/{uid}/{mediaId}` and `{mediaId}.thumb`                                                                                                                                       | Sealed media bytes; owner-only rule (section 14)                                                                                                                                                                                                                                                                | media flow                                                 | Issue 37                                                                                                                                                |
+| Callable       | `embedHelmNote`                                                                                                                                                                               | Seals an embedding of a note for retrieval by meaning                                                                                                                                                                                                                                                           | note save                                                  | Next                                                                                                                                                    |
 
 No Realtime Database paths, pushes or worker changes beyond the registry's own `cloudflare-worker.js` entry. Round 6 adds Helm's first Storage path.
 
@@ -1305,43 +1577,97 @@ The owner's words: a pipeline for apps to read data from one another, with Helm 
 ### The connector contract
 
 ```ts
-type ConnectorId = `app:${AppId}` | 'google:calendar' | 'google:gmail' | 'google:drive' | 'google:contacts'; // round 6: contacts
-type SharedKind = 'person' | 'place' | 'event' | 'task' | 'project' | 'knowledge' | 'artifact' | 'scenario'
-                | 'trip' | 'pet' | 'moneySummary' | 'transaction' | 'countSummary'; // round 5: the last two for Runway's transactions and Worth the Wait's box counts
+type ConnectorId =
+  | `app:${AppId}`
+  | 'google:calendar'
+  | 'google:gmail'
+  | 'google:drive'
+  | 'google:contacts'; // round 6: contacts
+type SharedKind =
+  | 'person'
+  | 'place'
+  | 'event'
+  | 'task'
+  | 'project'
+  | 'knowledge'
+  | 'artifact'
+  | 'scenario'
+  | 'trip'
+  | 'pet'
+  | 'moneySummary'
+  | 'transaction'
+  | 'countSummary'; // round 5: the last two for Runway's transactions and Worth the Wait's box counts
 
-interface ConnectorManifest {          // src/lib/connections/contract.ts; one per source
+interface ConnectorManifest {
+  // src/lib/connections/contract.ts; one per source
   id: ConnectorId;
   kind: 'firstPartyApp' | 'oauth' | 'apiKey';
   contractVersion: 1;
-  transformVersion: number;            // bumped when the adapter's output shape changes
-  categories: CategoryManifest[];      // what may be offered; Never data has no category and no field
-  never: string[];                     // the person's words for what is never shared ("What you paid, savings")
+  transformVersion: number; // bumped when the adapter's output shape changes
+  categories: CategoryManifest[]; // what may be offered; Never data has no category and no field
+  never: string[]; // the person's words for what is never shared ("What you paid, savings")
   capabilities: { read: true; write: false; backgroundSync: boolean }; // write is false for every source in the MVP
-  connect: { kind: 'siteGrant' } | { kind: 'oauth'; provider: 'google'; scopesByCategory: Record<string, string[]>; isRestricted: boolean };
+  connect:
+    | { kind: 'siteGrant' }
+    | {
+        kind: 'oauth';
+        provider: 'google';
+        scopesByCategory: Record<string, string[]>;
+        isRestricted: boolean;
+      };
 }
 interface CategoryManifest {
-  id: string;                          // 'plannedMeals'
+  id: string; // 'plannedMeals'
   kind: SharedKind;
-  label: string; detail: string;       // "Planned meals" · "The meal, day and slot"
+  label: string;
+  detail: string; // "Planned meals" · "The meal, day and slot"
   mode: 'sync' | 'live';
-  isOnAtConnect: boolean;              // product's On / Off
-  addedInVersion: number;              // a category added later starts off and shows "New" once
+  isOnAtConnect: boolean; // product's On / Off
+  addedInVersion: number; // a category added later starts off and shows "New" once
 }
 
-interface SourceAdapter {              // server; functions/src/apps/<app>/share/adapter.ts or connections/google/*.ts
+interface SourceAdapter {
+  // server; functions/src/apps/<app>/share/adapter.ts or connections/google/*.ts
   manifest: ConnectorManifest;
   status(ctx: SourceCtx): Promise<'ok' | 'noAccess' | 'needsReconnect'>;
-  syncPage?(ctx: SourceCtx, req: { category: string; cursor: string | null; windowStart: number })
-    : Promise<{ records: SharedRecord[]; deletedRefs: string[]; cursor: string | null; isFull: boolean; isDone: boolean }>;
-  query?(ctx: SourceCtx, req: { op: 'search' | 'read'; category: string; args: LiveArgs })
-    : Promise<LiveResult[]>;           // live connectors only
+  syncPage?(
+    ctx: SourceCtx,
+    req: { category: string; cursor: string | null; windowStart: number },
+  ): Promise<{
+    records: SharedRecord[];
+    deletedRefs: string[];
+    cursor: string | null;
+    isFull: boolean;
+    isDone: boolean;
+  }>;
+  query?(
+    ctx: SourceCtx,
+    req: { op: 'search' | 'read'; category: string; args: LiveArgs },
+  ): Promise<LiveResult[]>; // live connectors only
   deepLink(ref: string, ctx: SourceCtx): string | null; // checked: a site path under the app's registry route, or an allowlisted Google host
 }
-interface SourceCtx { uid: string; accountId: string; grant: ConnectionGrant; openToken?: () => Promise<string> } // openToken only inside connections/
-interface SharedRecord {               // a kind's allowlisted shape; typed per kind, no free-form field
-  sourceRef: string; kind: SharedKind; title: string; subtitle: string | null; detail: string | null;
-  startAt: number | null; endAt: number | null; isAllDay: boolean; dueAt: number | null; timeZone: string | null;
-  placeLabel: string | null; amountCents: number | null; currency: string | null; sourceUpdatedAt: number | null;
+interface SourceCtx {
+  uid: string;
+  accountId: string;
+  grant: ConnectionGrant;
+  openToken?: () => Promise<string>;
+} // openToken only inside connections/
+interface SharedRecord {
+  // a kind's allowlisted shape; typed per kind, no free-form field
+  sourceRef: string;
+  kind: SharedKind;
+  title: string;
+  subtitle: string | null;
+  detail: string | null;
+  startAt: number | null;
+  endAt: number | null;
+  isAllDay: boolean;
+  dueAt: number | null;
+  timeZone: string | null;
+  placeLabel: string | null;
+  amountCents: number | null;
+  currency: string | null;
+  sourceUpdatedAt: number | null;
   extra: Record<string, string | number | boolean | null>; // per-kind allowlisted keys from the contract (a pet's name, a sale's counts)
 }
 ```
@@ -1352,44 +1678,60 @@ interface SharedRecord {               // a kind's allowlisted shape; typed per 
 
 Categories in the manifest are product's table; a Never line has no category and no field in the kind's shape, so an adapter can't return it. Every site adapter returns only what the uid can already see in that app, and in a group app only the person's own plans and to-dos (never another member's private items, contacts or messages).
 
-| Source (adapter reads) | Categories: On | Categories: Off | Notes |
-|---|---|---|---|
-| A-List (`memberships/{uid}`) | `plannedShowings` (event), `savedTheaters` (place) | `seenMovies` (knowledge: title, rating) | |
-| Going Once (sales the uid is in) | `pickups` (event), `mySales` (project: name, available/pending/sold counts) | | No buyer, contact, floor price, note or price fields exist |
-| Nine Lives (households the uid is a member of) | `cats` (pet: name), `vetVisits` (event), `dueCare` (task), `clinics` (place: name, phone, address) | `conditions` (knowledge) | |
-| Pinch (`kitchens/{uid}`) | `plannedMeals` (event), `shoppingList` (task: unticked only) | `useSoon` (task) | |
-| Runway (`plans/{uid}`, sealed) | `moneySummary` (Free to Spend now, next income day, due before it as one total) | `upcomingBills` (task: name, amount, due), `horizon` (project: name, target, set aside), `transactions` (live; transaction: date, payee, amount, category) | Server-side under Runway's key; no account, balance, card, note, receipt or link field exists (owner round 5: Transactions offered, off) |
-| Waypoint (trips whose `members` holds the uid) | `trips` (trip), `itinerary` (event and place, trip zone), `myTasks` (task: assigned to or private to the uid) | `tripBalances` (moneySummary per trip) | |
-| Worth the Wait (spaces the uid is a member of) | none | `boxCounts` (countSummary: box name and emoji, items, revealed, not yet revealed) | Counts from the readable `isRevealed` flag by aggregation; no item is read or opened (owner round 5: counts only) |
-| Google Calendar | `events` (event: title, time, calendar) | | Calendars chosen in `options.calendarIds` (section 8) |
-| Gmail (live) | `mail` (search, then sender, date, subject, text) | | No attachments, no send, label, archive or delete |
-| Drive (live) | `documents` (search by name and text, then a Doc's or PDF's text) | | Other file types' contents never read |
-| Google Contacts (live, round 6) | `contacts` (person: name, email, phone, organization, birthday, photo; read when the person opens the picker or imports) | | Only the people the person ticks are written, as who records (section 22); nothing synced; no contact groups, notes or other fields |
+| Source (adapter reads)                         | Categories: On                                                                                                           | Categories: Off                                                                                                                                            | Notes                                                                                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| A-List (`memberships/{uid}`)                   | `plannedShowings` (event), `savedTheaters` (place)                                                                       | `seenMovies` (knowledge: title, rating)                                                                                                                    |                                                                                                                                          |
+| Going Once (sales the uid is in)               | `pickups` (event), `mySales` (project: name, available/pending/sold counts)                                              |                                                                                                                                                            | No buyer, contact, floor price, note or price fields exist                                                                               |
+| Nine Lives (households the uid is a member of) | `cats` (pet: name), `vetVisits` (event), `dueCare` (task), `clinics` (place: name, phone, address)                       | `conditions` (knowledge)                                                                                                                                   |                                                                                                                                          |
+| Pinch (`kitchens/{uid}`)                       | `plannedMeals` (event), `shoppingList` (task: unticked only)                                                             | `useSoon` (task)                                                                                                                                           |                                                                                                                                          |
+| Runway (`plans/{uid}`, sealed)                 | `moneySummary` (Free to Spend now, next income day, due before it as one total)                                          | `upcomingBills` (task: name, amount, due), `horizon` (project: name, target, set aside), `transactions` (live; transaction: date, payee, amount, category) | Server-side under Runway's key; no account, balance, card, note, receipt or link field exists (owner round 5: Transactions offered, off) |
+| Waypoint (trips whose `members` holds the uid) | `trips` (trip), `itinerary` (event and place, trip zone), `myTasks` (task: assigned to or private to the uid)            | `tripBalances` (moneySummary per trip)                                                                                                                     |                                                                                                                                          |
+| Worth the Wait (spaces the uid is a member of) | none                                                                                                                     | `boxCounts` (countSummary: box name and emoji, items, revealed, not yet revealed)                                                                          | Counts from the readable `isRevealed` flag by aggregation; no item is read or opened (owner round 5: counts only)                        |
+| Google Calendar                                | `events` (event: title, time, calendar)                                                                                  |                                                                                                                                                            | Calendars chosen in `options.calendarIds` (section 8)                                                                                    |
+| Gmail (live)                                   | `mail` (search, then sender, date, subject, text)                                                                        |                                                                                                                                                            | No attachments, no send, label, archive or delete                                                                                        |
+| Drive (live)                                   | `documents` (search by name and text, then a Doc's or PDF's text)                                                        |                                                                                                                                                            | Other file types' contents never read                                                                                                    |
+| Google Contacts (live, round 6)                | `contacts` (person: name, email, phone, organization, birthday, photo; read when the person opens the picker or imports) |                                                                                                                                                            | Only the people the person ticks are written, as who records (section 22); nothing synced; no contact groups, notes or other fields      |
 
 Helm declares `shares: []`: in the MVP no app can read Helm.
 
 ### Grants and accounts
 
 ```ts
-interface ConnectionAccount {          // connections/{uid}/accounts/{accountId}: owner reads, only callables write
+interface ConnectionAccount {
+  // connections/{uid}/accounts/{accountId}: owner reads, only callables write
   provider: 'google';
-  email: string; label: string | null; // label: "work", set by the person through updateConnection
-  grantedScopes: string[];             // what Google says this account granted
+  email: string;
+  label: string | null; // label: "work", set by the person through updateConnection
+  grantedScopes: string[]; // what Google says this account granted
   status: 'live' | 'needsReconnect' | 'revoked';
-  connectedAt: number; lastError: { code: string; at: number } | null;
-}                                      // accountId = 'g_' + 16 hex of sha256(Google sub); site apps use accountId 'site' and have no document
+  connectedAt: number;
+  lastError: { code: string; at: number } | null;
+} // accountId = 'g_' + 16 hex of sha256(Google sub); site apps use accountId 'site' and have no document
 
-interface ConnectionGrant {            // connections/{uid}/grants/{readerAppId}__{connector}__{accountId}: owner reads, only callables write
-  readerAppId: AppId; connectorId: ConnectorId; accountId: string;
+interface ConnectionGrant {
+  // connections/{uid}/grants/{readerAppId}__{connector}__{accountId}: owner reads, only callables write
+  readerAppId: AppId;
+  connectorId: ConnectorId;
+  accountId: string;
   categories: Record<string, { isOn: boolean; changedAt: number }>;
   options: { calendarIds: string[] } | null;
   status: 'live' | 'needsReconnect' | 'noAccess' | 'ended';
-  categoryState: Record<string, { lastOkAt: number | null; lastError: { code: string; at: number } | null; count: number }>;
+  categoryState: Record<
+    string,
+    {
+      lastOkAt: number | null;
+      lastError: { code: string; at: number } | null;
+      count: number;
+    }
+  >;
   errors: { category: string; code: string; at: number }[]; // newest 10, shown as sentences
-  newCategoryIds: string[];            // shown as "New: …" once, cleared when the page is seen
-  lastSyncAt: number | null; syncLeaseUntil: number | null;
+  newCategoryIds: string[]; // shown as "New: …" once, cleared when the page is seen
+  lastSyncAt: number | null;
+  syncLeaseUntil: number | null;
   keptCopies: { count: number; deleteAfter: number | null } | null; // after a disconnect that kept copies
-  createdAt: number; updatedAt: number; endedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+  endedAt: number | null;
 }
 ```
 
@@ -1441,20 +1783,21 @@ interface ConnectionGrant {            // connections/{uid}/grants/{readerAppId}
 ### Restricted scopes: the tester limit
 
 `gmail.readonly` and `drive.readonly` are restricted: before anyone but test users may grant them, Google requires verification and a yearly independent security assessment. So in the MVP:
+
 - The Gmail and Drive ticks show only to people the `google-mail-and-drive` switch lets in (`FEATURE_GATES`, appId `helm`, default `testing`, set in the admin's Features tab), and `startGoogleConnection` refuses those scopes for anyone else (`assertGateOpen`). Everyone else sees Calendar alone. The owner also lists each tester as a test user on the consent screen (clicks spelled out in issue 27), since the switch can't do Google's part.
 - The consent screen stays in Testing with the owner as a test user, so every Google connection, Calendar included, needs Reconnect about once a week (refresh tokens expire after 7 days), which design draws. Issue 19 checks Google's current rules for "In production, unverified" with restricted scopes and moves the screen there if it keeps owner-only use working without the weekly expiry.
 
 ### Keeping and deleting (mirrors PRODUCT.md "Keeping and Deleting")
 
-| What | Kept | Deleted by |
-|---|---|---|
-| A synced copy | While connected: current, upcoming and the last 30 days | the next sync once older or gone at the source; a switch turned off; Disconnect with delete; Delete all |
-| A kept copy after Disconnect | Until `deleteAfter`, 90 days after the disconnect | `expireKeptCopies`; Delete now; Delete all |
-| Mail, Drive and Runway transaction results | Only during the answer, plus 15 minutes in instance memory | nothing stored |
-| Quotes and a noted fact | With the answer, sealed | blanked when the source's copies are deleted; Delete all |
-| A past day's event snapshot | With that day's plan | Delete all |
-| A grant, an account, a token | Until disconnect or Delete all | `endConnection`; `endReaderGrants` |
-| Records Helm made | Helm's own | like any record |
+| What                                       | Kept                                                       | Deleted by                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| A synced copy                              | While connected: current, upcoming and the last 30 days    | the next sync once older or gone at the source; a switch turned off; Disconnect with delete; Delete all |
+| A kept copy after Disconnect               | Until `deleteAfter`, 90 days after the disconnect          | `expireKeptCopies`; Delete now; Delete all                                                              |
+| Mail, Drive and Runway transaction results | Only during the answer, plus 15 minutes in instance memory | nothing stored                                                                                          |
+| Quotes and a noted fact                    | With the answer, sealed                                    | blanked when the source's copies are deleted; Delete all                                                |
+| A past day's event snapshot                | With that day's plan                                       | Delete all                                                                                              |
+| A grant, an account, a token               | Until disconnect or Delete all                             | `endConnection`; `endReaderGrants`                                                                      |
+| Records Helm made                          | Helm's own                                                 | like any record                                                                                         |
 
 Nothing read from a connection is written to logs: the runner and router log connector, category, counts, durations and error codes only.
 
@@ -1483,29 +1826,51 @@ Voice is three layers that never know about each other: **listening** (speech to
 ```ts
 // src/lib/speech/voice/types.ts (general: no app's words; covered by check:pinch-voice)
 type VoiceRoute = 'cloud' | 'device';
-type SpeechPriority = 'ack' | 'reply' | 'summary';           // ack: "Got it, Friday" · reply: an answer · summary: a long read
+type SpeechPriority = 'ack' | 'reply' | 'summary'; // ack: "Got it, Friday" · reply: an answer · summary: a long read
 interface SttAdapter {
-  id: string;                                                // 'deepgram-stream' | 'browser'
+  id: string; // 'deepgram-stream' | 'browser'
   route: VoiceRoute;
   canStream: boolean;
-  start(opts: { onPartial(text: string): void; onFinal(text: string): void; onSpeechStart(): void;
-                onError(code: SttErrorCode): void; preRoll: Float32Array | null }): Promise<void>;
-  stop(): void;                                              // ends the utterance; onFinal fires once
+  start(opts: {
+    onPartial(text: string): void;
+    onFinal(text: string): void;
+    onSpeechStart(): void;
+    onError(code: SttErrorCode): void;
+    preRoll: Float32Array | null;
+  }): Promise<void>;
+  stop(): void; // ends the utterance; onFinal fires once
 }
 interface TtsAdapter {
-  id: string;                                                // 'cloud' | 'natural' | 'system'
+  id: string; // 'cloud' | 'natural' | 'system'
   route: VoiceRoute;
-  speak(text: string, opts: { priority: SpeechPriority; signal: AbortSignal; onStart(): void; onEnd(): void }): Promise<void>;
-  isPlayingThroughWebAudio: boolean;                         // true: the browser's echo cancellation hears it (barge-in works)
+  speak(
+    text: string,
+    opts: {
+      priority: SpeechPriority;
+      signal: AbortSignal;
+      onStart(): void;
+      onEnd(): void;
+    },
+  ): Promise<void>;
+  isPlayingThroughWebAudio: boolean; // true: the browser's echo cancellation hears it (barge-in works)
 }
-interface VoiceIdentity { id: string; label: string; device: { naturalVoice: boolean; systemVoiceHints: string[]; rate: number; pitch: number } }
+interface VoiceIdentity {
+  id: string;
+  label: string;
+  device: {
+    naturalVoice: boolean;
+    systemVoiceHints: string[];
+    rate: number;
+    pitch: number;
+  };
+}
 ```
 
-| Layer | Cloud adapter | Device adapter |
-|---|---|---|
-| Listening | `deepgramStream.ts`: the browser opens a WebSocket straight to Deepgram's streaming endpoint with a short-lived token the server minted (`mintVoiceToken`), audio from `getUserMedia({ echoCancellation: true, noiseSuppression: true })` through an `AudioWorklet` at 16 kHz linear PCM; partial and final transcripts come back on the socket. Model: Nova-3 or Flux, picked in the cloud-listening issue (unverified which is better for turn-taking) | `browserStt.ts`: wraps `createSpeechListener` from `useSpeechCommands` as it is. Chrome sends this audio to Google's servers, so it is offline only where the browser has an on-device model (unverified per platform) |
-| Listening, offline | | `onDeviceStt.ts`: an opt-in on-device recognition model (section 20, "On-device recognition") run in a Web Worker on the same PCM worklet frames, so it hears offline on every phone, and streams partials |
-| Speaking | `cloudTts.ts`: posts the text to the site function `streamSpeech` and plays the streamed audio through `AudioContext` as chunks arrive | `deviceTts.ts`: wraps `readAloud` (the natural voice through WebAudio when downloaded, the system voice otherwise); every text through `toSpokenText` first |
+| Layer              | Cloud adapter                                                                                                                                                                                                                                                                                                                                                                                                                                            | Device adapter                                                                                                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Listening          | `deepgramStream.ts`: the browser opens a WebSocket straight to Deepgram's streaming endpoint with a short-lived token the server minted (`mintVoiceToken`), audio from `getUserMedia({ echoCancellation: true, noiseSuppression: true })` through an `AudioWorklet` at 16 kHz linear PCM; partial and final transcripts come back on the socket. Model: Nova-3 or Flux, picked in the cloud-listening issue (unverified which is better for turn-taking) | `browserStt.ts`: wraps `createSpeechListener` from `useSpeechCommands` as it is. Chrome sends this audio to Google's servers, so it is offline only where the browser has an on-device model (unverified per platform) |
+| Listening, offline |                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `onDeviceStt.ts`: an opt-in on-device recognition model (section 20, "On-device recognition") run in a Web Worker on the same PCM worklet frames, so it hears offline on every phone, and streams partials             |
+| Speaking           | `cloudTts.ts`: posts the text to the site function `streamSpeech` and plays the streamed audio through `AudioContext` as chunks arrive                                                                                                                                                                                                                                                                                                                   | `deviceTts.ts`: wraps `readAloud` (the natural voice through WebAudio when downloaded, the system voice otherwise); every text through `toSpokenText` first                                                            |
 
 Cloud speaking's provider is a server choice, never a client one: `functions/src/voice/providers/` holds `geminiTts.ts` (Gemini Flash-Lite TTS), `deepgramAura.ts` (Aura-2) and `googleTts.ts` (Cloud Text-to-Speech, Chirp 3 HD), each `speak({ text, voiceId, format }) → ReadableStream<Uint8Array>`. `VOICE_PROVIDER_DEFAULT` in `functions/src/voice/voiceConfig.ts` names the one the voice benchmark (issue 12) picks; until then it is `googleTts` (ADC, no new secret). An optional provider credential is read at run time and its absence means that provider is skipped (cloud-functions rule), so a missing `DEEPGRAM_API_KEY` sends every turn to the device adapters and nothing fails.
 
@@ -1554,13 +1919,13 @@ The owner chose to bundle an opt-in on-device model in the MVP so voice works of
 
 Claude's budget pays only for reasoning; voice has its own counters and cap, at site level because voice is a site service:
 
-| Limit | Accepted (owner, round 6) | Where it is counted | Over it |
-|---|---|---|---|
-| Cloud listening per person | 60 minutes a day | `voiceUsage/{uid}/days/{dayKey}.listenMs`: the device reports each stream's length when it closes, capped at the 60-second utterance limit per mint, so a lying client gains at most a minute per token | device listening for the rest of the day |
-| Listening tokens per person | 300 a day (a hard bound behind the minutes) | `.mints`, in the mint's transaction | device listening |
-| Cloud speech per person | 30,000 characters a day (after `toSpokenText`) | `.spokenChars`, charged before the stream starts | device voice |
-| Voice notes per person | inside the listening minutes; 5 minutes each | `.transcribeMs` | the note is kept with "Couldn't write this out today" and transcribed on the next day's open |
-| Site-wide | $5 a day (`VOICE_DAILY_BUDGET_CENTS = 500`) across every app and person | `voiceBudget/{dayKey}.costMicros`: each mint counted at its worst case (60 s), each speech request at its characters, each note at its length, against the price table in `voiceConfig.ts` | every app's voice goes to the device until midnight UTC; logged `voice.budgetReached` |
+| Limit                       | Accepted (owner, round 6)                                               | Where it is counted                                                                                                                                                                                     | Over it                                                                                      |
+| --------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Cloud listening per person  | 60 minutes a day                                                        | `voiceUsage/{uid}/days/{dayKey}.listenMs`: the device reports each stream's length when it closes, capped at the 60-second utterance limit per mint, so a lying client gains at most a minute per token | device listening for the rest of the day                                                     |
+| Listening tokens per person | 300 a day (a hard bound behind the minutes)                             | `.mints`, in the mint's transaction                                                                                                                                                                     | device listening                                                                             |
+| Cloud speech per person     | 30,000 characters a day (after `toSpokenText`)                          | `.spokenChars`, charged before the stream starts                                                                                                                                                        | device voice                                                                                 |
+| Voice notes per person      | inside the listening minutes; 5 minutes each                            | `.transcribeMs`                                                                                                                                                                                         | the note is kept with "Couldn't write this out today" and transcribed on the next day's open |
+| Site-wide                   | $5 a day (`VOICE_DAILY_BUDGET_CENTS = 500`) across every app and person | `voiceBudget/{dayKey}.costMicros`: each mint counted at its worst case (60 s), each speech request at its characters, each note at its length, against the price table in `voiceConfig.ts`              | every app's voice goes to the device until midnight UTC; logged `voice.budgetReached`        |
 
 The person's allowance and the site budget are checked in one transaction per mint or speech request. Prices to start the table (all **unverified**, checked in the issue that first calls each): Deepgram streaming about $0.0077 a minute; Aura-2 about $0.030 per 1,000 characters; Cloud TTS Chirp 3 HD about $30 per million characters with a monthly free allowance; Gemini Flash-Lite TTS priced per audio token. At those prices a person at both limits costs about $0.46 of listening and $0.90 of speech a day, so the $5 cap covers about three people at their limits, or many more at normal use.
 
@@ -1584,10 +1949,11 @@ A **session** is a run of turns with no gap over 10 minutes (`SESSION_IDLE_MS`);
 ### The screen context contract (v1)
 
 ```ts
-interface ScreenContext {              // stored on the capture as `screen`; built by each view's useScreenContext
-  view: HelmView;                      // section 2's union
-  focus: RecordRef | null;             // the one record the screen is about (a task sheet, a topic, a who's page)
-  visible: RecordRef[];                // ≤20, in screen order: what a "this one", "the second", "all of these" could mean
+interface ScreenContext {
+  // stored on the capture as `screen`; built by each view's useScreenContext
+  view: HelmView; // section 2's union
+  focus: RecordRef | null; // the one record the screen is about (a task sheet, a topic, a who's page)
+  visible: RecordRef[]; // ≤20, in screen order: what a "this one", "the second", "all of these" could mean
   v: 1;
 }
 ```
@@ -1652,12 +2018,12 @@ Sized for 2,000 who and 20,000 key dates per person; each date is its own `keyDa
 
 ### Kinds and caps
 
-| Kind | Accepted | Cap | How the assistant reads it |
-|---|---|---|---|
-| Photo or screenshot | JPEG, PNG, WebP, HEIC (converted on the device) | shrunk on the device to `cover` (1600 px) for the model and `photo` (1280 px) to keep; 10 MB before shrinking | an image block |
-| PDF | `application/pdf` | 10 MB and 20 pages (PRODUCT.md) | its text layer, extracted on the server, up to 12,000 characters to the model; a scanned PDF with no text layer goes as a document block (Claude reads PDFs natively up to its own page limit; unverified current limits) |
-| Voice note | recorded in the composer (`audio/webm` or `audio/mp4`) | 5 minutes, 10 MB | transcribed by `transcribeVoiceNote`, charged to voice listening minutes; the transcript is the capture's text |
-| Markdown | `.md`, `text/markdown`, `text/plain` with a `.md` name | 20,000 characters (PRODUCT.md), 100 KB | read as text, no vision path; up to 12,000 characters to the model (the whole file when it starts a topic, below) |
+| Kind                | Accepted                                               | Cap                                                                                                           | How the assistant reads it                                                                                                                                                                                                |
+| ------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Photo or screenshot | JPEG, PNG, WebP, HEIC (converted on the device)        | shrunk on the device to `cover` (1600 px) for the model and `photo` (1280 px) to keep; 10 MB before shrinking | an image block                                                                                                                                                                                                            |
+| PDF                 | `application/pdf`                                      | 10 MB and 20 pages (PRODUCT.md)                                                                               | its text layer, extracted on the server, up to 12,000 characters to the model; a scanned PDF with no text layer goes as a document block (Claude reads PDFs natively up to its own page limit; unverified current limits) |
+| Voice note          | recorded in the composer (`audio/webm` or `audio/mp4`) | 5 minutes, 10 MB                                                                                              | transcribed by `transcribeVoiceNote`, charged to voice listening minutes; the transcript is the capture's text                                                                                                            |
+| Markdown            | `.md`, `text/markdown`, `text/plain` with a `.md` name | 20,000 characters (PRODUCT.md), 100 KB                                                                        | read as text, no vision path; up to 12,000 characters to the model (the whole file when it starts a topic, below)                                                                                                         |
 
 Up to 5 attachments per turn (PRODUCT.md); 2,000 kept media per person (a quiet cap row in Settings). Video is Next.
 

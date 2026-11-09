@@ -211,4 +211,3 @@ export const selectHeldBy = (state: RootState, placeId: string | null) =>
   placeId === null
     ? selectFreeToSpend(state)
     : selectEnvelopeFigure(state, placeId);
-

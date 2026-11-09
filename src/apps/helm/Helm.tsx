@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import Loading from '@/ui/Loading';
 import HomeSurface from '@apps/helm/components/home/HomeSurface';
+import InboxView from '@apps/helm/components/inbox/InboxView';
 import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
@@ -42,6 +43,7 @@ function Helm() {
     >
       {isHome && <HomeSurface composerRef={composerRef} />}
       {view === 'today' && <TodayView onBack={goHome} onHome={goHome} />}
+      {view === 'inbox' && <InboxView onBack={goHome} onHome={goHome} />}
       <BrowseSheet
         isOpen={isBrowseOpen && isHome}
         onClose={closeBrowse}

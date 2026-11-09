@@ -18,7 +18,8 @@ import {
 } from '@apps/runway/engine/linkHistory';
 import { AUTO_MATCH_DAYS } from '@apps/runway/hooks/useBankMatch';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import { assignPurchase } from '@apps/runway/store/actions/purchaseActions';
 import { openPurchase } from '@apps/runway/store/listeners/openLedger';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
@@ -110,7 +111,7 @@ export function useLinkHistory(uid: string | null) {
         addUtcDays(Math.min(...linkDays), -LINK_DAYS_BACK),
       );
       if (from >= to) return [];
-      const read = createSealedReader(await getRunwayEncryption(uid));
+      const read = createSealedReader(await getRunwayEncryption(uid), openJson);
       const snapshot = await getDocsFromServer(
         query(
           collection(db, 'apps', 'runway', 'plans', uid, 'purchases'),

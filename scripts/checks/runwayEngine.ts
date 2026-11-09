@@ -1,10 +1,8 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
 
-import {
-  createSealedReader,
-  sealJson,
-} from '../../src/apps/runway/security.ts';
+import { createSealedReader } from '../../src/lib/security/sealedReader.ts';
+import { openJson, sealJson } from '../../src/apps/runway/security.ts';
 import {
   findAccountPairs,
   findLostPairs,
@@ -7693,7 +7691,7 @@ const version = (
   };
   const first = await sealJson({ name: 'Rent' }, encryption);
   const second = await sealJson({ name: 'Rent' }, encryption);
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
   const [again, once, other] = await Promise.all([
     read<{ name: string }>(first),
     read<{ name: string }>(first),

@@ -15,9 +15,11 @@ Helm is a private companion for one person's whole life, and you mostly talk to 
 ## Status
 
 Built:
+
 - Nothing yet; this is the plan.
 
 Next (Core MVP):
+
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase
 - [ ] The assistant on every screen, knowing what is in view
 - [ ] Questions in several shapes (pick one or several, yes or no, a few words, a date, a person, a number), answered by tap or voice or skipped
@@ -31,6 +33,7 @@ Next (Core MVP):
 - [ ] Encrypted from day one; Trust this browser; Activity with Undo; search
 
 Later:
+
 - [ ] Drafting in your style, video, app cards (a Pinch recipe card), a life timeline and milestones from the moments Helm keeps, writes to other apps
 - [ ] A browser extension and other ways to reach the assistant, orders, Apple contacts and sign-in
 

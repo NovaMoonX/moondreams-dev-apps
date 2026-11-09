@@ -1,8 +1,8 @@
 /**
  * Maintainer-only, for the recovery drill in a scratch project. Never touches the real project.
  *
- *   tsx scripts/runway/drillKeyring.ts seed --project <scratch> (--keyring-file <path> | --from-secret)
- *   tsx scripts/runway/drillKeyring.ts open --project <scratch> (--keyring-file <path> | --from-secret)
+ *   tsx scripts/appKeys/drillKeyring.ts seed --app runway|helm --project <scratch> (--keyring-file <path> | --from-secret)
+ *   tsx scripts/appKeys/drillKeyring.ts open --app runway|helm --project <scratch> (--keyring-file <path> | --from-secret)
  *
  * `seed` writes a test plan's wrapped key under the keyring's current master key. `open` unwraps it with the
  * keyring you give (an escrow file, or the secret's latest version) and says only whether it opened.
@@ -13,28 +13,33 @@ import { readFileSync } from 'node:fs';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+import { readKeyring } from '../../functions/src/appKeys/keyring.ts';
 import {
   createDataKey,
-  readKeyring,
   unwrapDataKey,
   wrapDataKey,
-  wrappedKeyPath,
   type WrappedKey,
-} from '../../functions/src/apps/runway/planKey.ts';
+} from '../../functions/src/appKeys/wrap.ts';
+import { readAppFlag, type AppKeys } from './apps.ts';
 import { gcloudStore, Refusal } from './publishKeyring.ts';
 
 const REAL_PROJECT = 'moondreams-dev-apps';
-export const DRILL_UID = 'drill-test-plan';
 
 /** Seeds one wrapped key under the keyring's current id; refuses a document that is already there. */
 export async function seedTestPlan(
   firestore: FirebaseFirestore.Firestore,
   keyringJson: string,
+  app: AppKeys,
   now = Date.now(),
 ) {
   const keyring = readKeyring(keyringJson);
-  const wrapped = wrapDataKey(keyring, DRILL_UID, createDataKey(), now);
-  await firestore.doc(wrappedKeyPath(DRILL_UID)).create(wrapped);
+  const wrapped = wrapDataKey(
+    keyring,
+    app.drillUid,
+    createDataKey('drill'),
+    now,
+  );
+  await firestore.doc(app.wrappedKeyPath(app.drillUid)).create(wrapped);
   return { masterKeyId: wrapped.masterKeyId };
 }
 
@@ -42,15 +47,16 @@ export async function seedTestPlan(
 export async function openTestPlan(
   firestore: FirebaseFirestore.Firestore,
   keyringJson: string,
+  app: AppKeys,
 ) {
   const keyring = readKeyring(keyringJson);
-  const snapshot = await firestore.doc(wrappedKeyPath(DRILL_UID)).get();
+  const snapshot = await firestore.doc(app.wrappedKeyPath(app.drillUid)).get();
   if (!snapshot.exists) {
     throw new Refusal('Refused: the test plan has not been seeded here.');
   }
   const wrapped = snapshot.data() as WrappedKey;
   try {
-    unwrapDataKey(keyring, DRILL_UID, wrapped);
+    unwrapDataKey(keyring, app.drillUid, wrapped);
     return { opened: true, masterKeyId: wrapped.masterKeyId };
   } catch {
     return { opened: false, masterKeyId: wrapped.masterKeyId };
@@ -63,11 +69,11 @@ const flag = (name: string) => {
 };
 const has = (name: string) => process.argv.includes(`--${name}`);
 
-async function readKeyringText(project: string) {
+async function readKeyringText(project: string, app: AppKeys) {
   const file = flag('keyring-file');
   if (file) return readFileSync(file, 'utf8');
   if (has('from-secret')) {
-    const text = await gcloudStore(project).readLatest();
+    const text = await gcloudStore(project, app.secretName).readLatest();
     if (text) return text;
     throw new Refusal('Refused: the secret has no readable latest version.');
   }
@@ -76,6 +82,7 @@ async function readKeyringText(project: string) {
 
 async function main() {
   const command = process.argv[2];
+  const app = readAppFlag(flag('app'));
   const project = flag('project');
   if (!project) throw new Refusal('Refused: --project is required.');
   const isEmulator = has('emulator');
@@ -100,16 +107,16 @@ async function main() {
   }
   if (getApps().length === 0) initializeApp({ projectId: project });
   const firestore = getFirestore();
-  const keyringJson = await readKeyringText(project);
+  const keyringJson = await readKeyringText(project, app);
 
   if (command === 'seed') {
-    const result = await seedTestPlan(firestore, keyringJson);
+    const result = await seedTestPlan(firestore, keyringJson, app);
     console.log(
       `Seeded the test plan's wrapped key under ${result.masterKeyId}.`,
     );
     return;
   }
-  const result = await openTestPlan(firestore, keyringJson);
+  const result = await openTestPlan(firestore, keyringJson, app);
   console.log(
     result.opened
       ? `Opened: the test plan's key unwrapped under ${result.masterKeyId}.`

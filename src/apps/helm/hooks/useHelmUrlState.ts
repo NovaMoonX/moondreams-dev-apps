@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import type { HelmView } from '@apps/helm/types';
 
-const URL_VIEWS = ['today'] as const satisfies readonly HelmView[];
+const URL_VIEWS = ['today', 'inbox'] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
 

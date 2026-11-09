@@ -2,7 +2,8 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader } from '@apps/runway/security';
+import { createSealedReader } from '@lib/security';
+import { openJson } from '@apps/runway/security';
 import type {
   AccountDoc,
   AccountSealed,
@@ -22,7 +23,7 @@ export function startAccountsListener(
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
-  const read = createSealedReader(encryption);
+  const read = createSealedReader(encryption, openJson);
 
   const stop = onSnapshot(
     collection(db, 'apps', 'runway', 'plans', uid, 'accounts'),

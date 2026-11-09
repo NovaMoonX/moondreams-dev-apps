@@ -10,6 +10,9 @@ interface BrowseSheetProps {
   onOpenView: (view: HelmView) => void;
 }
 
+/** Questions arrive with the issue that asks them; until then a tile that grows with them stays small. */
+const OPEN_QUESTIONS = 0;
+
 const SINGLE_TILES = BROWSE_TILES.filter((tile) => tile.importance !== 'lead');
 
 /** Every view as a bento of tiles by importance: the lead is wide, and a last small tile that would sit alone fills its row, so the grid has no holes. */
@@ -26,6 +29,8 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
               key={tile.view}
               view={tile.view}
               importance={tile.importance}
+              grows={tile.grows}
+              openQuestions={OPEN_QUESTIONS}
               isWide={
                 tile.importance === 'lead' || tile.view === lastSingleView
               }
@@ -40,6 +45,8 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
                 key={view}
                 view={view}
                 importance='minor'
+                grows={null}
+                openQuestions={0}
                 isWide={false}
                 onOpen={onOpenView}
               />
