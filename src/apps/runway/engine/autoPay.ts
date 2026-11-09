@@ -167,7 +167,7 @@ export function findAutoMarks(input: {
   level: Level;
   today: DateOnly;
   bills: readonly AutoBill[];
-  /** Payments whose charge waits in Needs a home (`findHeldPaymentKeys`), left unmarked so a drop from Link never counts the payment twice. */
+  /** Payments whose charge waits in Needs a home (`findHeldPaymentKeys`), left unmarked for up to the asking window so a drop from Link never counts the payment twice. */
   held?: ReadonlySet<string>;
 }): AutoMark[] {
   if (!isTrackingLevel(input.level) || isLinkAt(input.level)) return [];
@@ -180,7 +180,10 @@ export function findAutoMarks(input: {
             payment.dueOn <= input.today &&
             payment.dueOn >= bill.since &&
             !bill.undoneDueOn.includes(payment.dueOn) &&
-            !input.held?.has(getPaymentKey(bill.id, payment.dueOn)),
+            !(
+              input.held?.has(getPaymentKey(bill.id, payment.dueOn)) &&
+              input.today - payment.dueOn <= AUTO_PAY_DAYS.askDays * DAY_MS
+            ),
         )
         .map((payment): AutoMark => ({
           billId: bill.id,

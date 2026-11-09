@@ -2521,8 +2521,6 @@ export const AUTO_PAY_WORDS = {
   changedElsewhere:
     'This charge or payment changed on another device. Nothing was changed.',
   alreadyMatched: 'This payment already has a charge.',
-  takeBackNeedsUnmatch:
-    'A charge settled this payment. Open the charge and choose “Not this bill’s charge” to take both back.',
   needsConnection: 'This needs a connection.',
   paidBill: (name: string, due: string) => `Paid ${name}'s ${due} bill`,
   notThisCharge: "Not this bill's charge",

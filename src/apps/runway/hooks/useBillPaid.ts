@@ -9,7 +9,6 @@ import { getErrorMessage } from '@/utils/errorUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CHECKLIST_R3_WORDS,
-  AUTO_PAY_WORDS,
   CHECKLIST_WORDS,
   PAID_HISTORY_WORDS,
 } from '@apps/runway/constants';
@@ -77,14 +76,16 @@ export async function undoPaymentPaid(
   const move = state.runway.moves.find((entry) => entry.id === paid.moveId);
   const purchaseId =
     move?.kind === 'billPaid' ? (move.payload.auto?.purchaseId ?? null) : null;
-  if (purchaseId !== null) {
-    const purchase = [...state.runway.purchases, ...state.runway.needsHome].find(
-      (entry) =>
-        entry.id === purchaseId &&
-        entry.billRef?.billId === billId &&
-        entry.billRef.dueOn === paid.dueOn,
-    );
-    if (!purchase) throw new Error(AUTO_PAY_WORDS.takeBackNeedsUnmatch);
+  const purchase =
+    purchaseId === null
+      ? undefined
+      : [...state.runway.purchases, ...state.runway.needsHome].find(
+          (entry) =>
+            entry.id === purchaseId &&
+            entry.billRef?.billId === billId &&
+            entry.billRef.dueOn === paid.dueOn,
+        );
+  if (purchase) {
     await unmatchPurchaseFromBill(uid, purchase, billName);
     return true;
   }
