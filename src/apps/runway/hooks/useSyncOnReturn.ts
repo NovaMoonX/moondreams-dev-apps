@@ -11,23 +11,27 @@ import { syncLinks } from '@apps/runway/store/actions/linkActions';
 
 const pull = { uid: '', startedAt: 0, isRunning: false };
 
-/** Asks the banks for what is new when the app opens or comes back to the front for the links 15 minutes or more behind, quietly: nothing is shown on success or failure. */
+/** Asks the banks for what is new when the app opens or comes back to the front for the links 15 minutes or more behind (a bank waiting on a sign-in included, so one that is back clears), quietly: nothing is shown on success or failure. */
 export function useSyncOnReturn() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const isGateOpen = useIsGateOpen('runway', LINK_BANKS_GATE_ID);
-  const hasActiveLink = useAppSelector((state) =>
-    state.runway.links.some((link) => link.status === 'active'),
+  const hasSyncableLink = useAppSelector((state) =>
+    state.runway.links.some(
+      (link) => link.status === 'active' || link.status === 'needsAttention',
+    ),
   );
   const oldestSyncAt = useAppSelector((state) =>
     state.runway.links
-      .filter((link) => link.status === 'active')
+      .filter(
+        (link) => link.status === 'active' || link.status === 'needsAttention',
+      )
       .reduce(
         (oldest, link) => Math.min(oldest, link.lastSyncAt ?? 0),
         Number.POSITIVE_INFINITY,
       ),
   );
-  const isEnabled = uid !== null && isGateOpen && hasActiveLink;
+  const isEnabled = uid !== null && isGateOpen && hasSyncableLink;
 
   useEffect(() => {
     if (!isEnabled) return;

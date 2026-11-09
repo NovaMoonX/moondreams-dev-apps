@@ -132,11 +132,11 @@ function HeldInPromptScreen({ onClose }: HeldInPromptScreenProps) {
   };
 
   const skipButton = (label: string, note: string, isForGood: boolean) => (
-    <div className='flex flex-col items-center'>
+    <div className='flex flex-col items-center text-center'>
       <Button
         type='button'
         variant='tertiary'
-        className='text-muted-foreground!'
+        className='text-muted-foreground! whitespace-nowrap'
         disabled={isSaving}
         onClick={() => void skip(isForGood)}
       >
@@ -158,13 +158,13 @@ function HeldInPromptScreen({ onClose }: HeldInPromptScreenProps) {
         </p>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
           {unheld.map((item) => (
-            <li key={item.id} className='flex items-center gap-3 p-3'>
+            <li key={item.id} className='flex flex-wrap items-center gap-3 p-3'>
               <ItemBadge name={item.name} emoji={item.emoji} />
               <span className='min-w-0 flex-1 text-sm font-medium break-words'>
                 {item.name}
               </span>
               <Select
-                className='w-40 shrink-0'
+                className='w-full sm:w-40 sm:shrink-0'
                 aria-label={HOLDS_PROMPT_WORDS.accountLabel(item.name)}
                 options={[
                   { text: HOLDS_PROMPT_WORDS.notSure, value: NO_ACCOUNT },
@@ -190,7 +190,7 @@ function HeldInPromptScreen({ onClose }: HeldInPromptScreenProps) {
             {error}
           </p>
         )}
-        <div className='flex justify-center gap-6'>
+        <div className='grid grid-cols-2 gap-4'>
           {skipButton(
             HOLDS_PROMPT_WORDS.askLater,
             HOLDS_PROMPT_WORDS.askLaterNote,
