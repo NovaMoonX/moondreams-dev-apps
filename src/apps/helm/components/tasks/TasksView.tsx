@@ -10,7 +10,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
@@ -22,7 +21,7 @@ import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { OpenTask, TaskActivity } from '@apps/helm/types';
-import { getDueSortKey } from '@apps/helm/utils/taskDue';
+import { formatWeekdayDayUTC, getDueSortKey } from '@apps/helm/utils/taskDue';
 
 const { option } = DropdownMenuFactories;
 const NEW_TASK = 'new-task';
@@ -37,7 +36,7 @@ const getCondition = (
   titleOf: (taskId: string) => string,
 ) => {
   if (activity.kind === 'notYet') {
-    return HELM_COPY.conditionNotUntil(formatDateUTC(activity.until));
+    return HELM_COPY.conditionNotUntil(formatWeekdayDayUTC(activity.until));
   }
   if (activity.kind !== 'waiting') return null;
   const [first] = activity.onTaskIds;
@@ -66,7 +65,7 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
   const tasksById = useAppSelector(selectOpenTasksById);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
-  const { held, tick, undoTick } = useTaskTicks(user?.uid ?? null);
+  const { held, tick, undoTick, forget } = useTaskTicks(user?.uid ?? null);
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -100,7 +99,7 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
     : null;
   const titleOf = (taskId: string) => {
     const task = tasksById.get(taskId);
-    return task && !task.isUnreadable ? task.title : HELM_COPY.unreadable;
+    return (task && !task.isUnreadable && task.title) || HELM_COPY.unreadable;
   };
   const isEmpty = awake.length === 0 && latent.length === 0;
 
@@ -120,9 +119,11 @@ function TasksView({ onBack, onHome }: TasksViewProps) {
   );
 
   const handleDeleted = (
+    taskId: string,
     title: string,
     restore: () => Promise<RestoreResult>,
   ) => {
+    forget(taskId);
     showUndo(HELM_COPY.deletedTask(title), () => {
       restore()
         .then((result) => {

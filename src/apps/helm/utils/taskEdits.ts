@@ -16,8 +16,13 @@ export function applyWordsChange(
       return { ...opened, title: change.title };
     case 'notes':
       return { ...opened, notes: change.notes };
-    case 'addStep':
     case 'editStep':
+      if (!(change.stepId in opened.steps)) return opened;
+      return {
+        ...opened,
+        steps: { ...opened.steps, [change.stepId]: { text: change.text } },
+      };
+    case 'addStep':
       return {
         ...opened,
         steps: { ...opened.steps, [change.stepId]: { text: change.text } },
@@ -33,12 +38,17 @@ export function applyWordsChange(
 }
 
 export const nextStepOrder = (stepState: Task['stepState']) =>
-  Math.max(-1, ...Object.values(stepState).map((step) => step.order)) + 1;
+  Math.max(
+    -1,
+    ...Object.values(stepState)
+      .map((step) => step.order)
+      .filter(Number.isFinite),
+  ) + 1;
 
 /** Steps in the person's order; an id missing from either the words or the state is skipped. */
 export const getOrderedSteps = (task: Pick<OpenTask, 'steps' | 'stepState'>) =>
   Object.entries(task.stepState)
-    .filter(([id]) => id in task.steps)
+    .filter(([id, state]) => id in task.steps && Number.isFinite(state.order))
     .map(([id, state]) => ({
       id,
       text: task.steps[id].text,

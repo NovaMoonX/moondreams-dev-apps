@@ -4,6 +4,7 @@ import {
   deleteField,
   doc,
   getDoc,
+  getDocFromCache,
   runTransaction,
   setDoc,
   updateDoc,
@@ -189,7 +190,7 @@ export function completeTask(uid: string, taskId: string) {
 /** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. Writes are handed back or left unawaited, so both work offline. */
 export async function deleteTask(uid: string, taskId: string) {
   const ref = doc(tasksOf(uid), taskId);
-  const raw = (await getDoc(ref)).data();
+  const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
   if (!raw) throw new Error('This task is already gone.');
   const write = deleteDoc(ref);
   const restore = async (): Promise<RestoreResult> => {

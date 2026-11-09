@@ -91,6 +91,31 @@ test('steps are ordered by order then id and skip ids missing a side', () => {
   assert.equal(steps[0].doneAt, 5);
 });
 
+test('a step state with no order is ignored by the next order and the ordering', () => {
+  const stepState = {
+    a: { order: 2, doneAt: null },
+    b: { doneAt: null },
+  } as unknown as Parameters<typeof nextStepOrder>[0];
+  assert.equal(nextStepOrder(stepState), 3);
+  const steps = getOrderedSteps({
+    steps: { a: { text: 'A' }, b: { text: 'B' } },
+    stepState,
+  });
+  assert.deepEqual(
+    steps.map((step) => step.id),
+    ['a'],
+  );
+});
+
+test('editing a step another device removed leaves the words as they are', () => {
+  const result = applyWordsChange(reread, {
+    kind: 'editStep',
+    stepId: 'gone',
+    text: 'Back again',
+  });
+  assert.equal(result, reread);
+});
+
 test('a swap trades two orders and is null at the ends', () => {
   const steps = getOrderedSteps({
     steps: { a: { text: 'A' }, b: { text: 'B' } },

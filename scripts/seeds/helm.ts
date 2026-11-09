@@ -62,7 +62,7 @@ type HandTask = {
     | 'waitsOnTaskIds'
     | 'waitsOnWhoId'
   >
-> & { notUntilDays?: number; dueDays?: number; dueDate?: number };
+> & { notUntilDays?: number; dueDays?: number };
 
 /** Tasks the person made by hand, each showing one state of the task sheet: not yet, awake with every field, waiting on a task, waiting on someone, and steps. */
 const SEED_HAND_TASKS: HandTask[] = [
@@ -86,7 +86,7 @@ const SEED_HAND_TASKS: HandTask[] = [
   {
     title: 'Book the florist delivery',
     waitsOnWhoId: 'seed-who-dana',
-    dueDate: Date.UTC(2026, 11, 4),
+    dueDays: 25,
   },
   {
     title: 'Pack for the venue walk-through',
@@ -506,11 +506,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             importance: entry.importance ?? null,
             isUrgent: entry.isUrgent ?? false,
             due:
-              entry.dueDate !== undefined
-                ? { kind: 'day', date: entry.dueDate }
-                : entry.dueDays !== undefined
-                  ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
-                  : null,
+              entry.dueDays !== undefined
+                ? { kind: 'day', date: today + entry.dueDays * DAY_MS }
+                : null,
             durationMinutes: entry.durationMinutes ?? null,
             energy: entry.energy ?? null,
             context: entry.context ?? null,

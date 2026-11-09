@@ -11,8 +11,8 @@ import NotchedSlider from '@/components/NotchedSlider';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
 import SummaryEditor from '@/components/SummaryEditor';
 import SummaryRow from '@/components/SummaryRow';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
-import { formatDateUTC } from '@/utils/formatUtils';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import {
   CONTEXT_OPTIONS,
@@ -29,7 +29,7 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { getDueDay } from '@apps/helm/utils/captureReading';
-import { formatTaskDue } from '@apps/helm/utils/taskDue';
+import { formatTaskDue, formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 
 export type WordsOutcome = WordsResult | 'failed';
 
@@ -83,6 +83,7 @@ interface WordsEditorProps {
   toValue: (text: string) => string | null;
   onSave: (value: string) => Promise<WordsOutcome>;
   onSaved: (value: string) => void;
+  onDirtyChange: (isDirty: boolean) => void;
   onBack: () => void;
 }
 
@@ -104,12 +105,22 @@ export function WordsEditor({
   toValue,
   onSave,
   onSaved,
+  onDirtyChange,
   onBack,
 }: WordsEditorProps) {
   const [text, setText] = useState(initial);
   const [isSaving, setIsSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const value = toValue(text);
+  const requestBack = useDiscardGuard({
+    isDirty: text !== initial,
+    onClose: onBack,
+    isBusy: isSaving,
+  });
+  const change = (next: string) => {
+    setText(next);
+    onDirtyChange(next !== initial);
+  };
   const canSave =
     !isSaving && (!isRequired || (value !== null && value !== ''));
 
@@ -129,7 +140,7 @@ export function WordsEditor({
   return (
     <div className='space-y-4'>
       <div className='space-y-1'>
-        <BackLink onBack={onBack} />
+        <BackLink onBack={requestBack} />
         <p className='font-medium'>{label}</p>
       </div>
       {isMultiline ? (
@@ -140,7 +151,7 @@ export function WordsEditor({
           className='helm-field'
           maxLength={maxLength}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => change(event.target.value)}
         />
       ) : (
         <Input
@@ -149,7 +160,7 @@ export function WordsEditor({
           className='helm-field'
           maxLength={maxLength}
           value={text}
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => change(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return;
             event.preventDefault();
@@ -189,7 +200,6 @@ interface WhenRowProps {
   now: number;
 }
 
-/** The task's day, and optionally a time, written as the person changes them. */
 export function WhenRow({ editing, now }: WhenRowProps) {
   const { task, timeZone, saveFields } = editing;
   const { due } = task;
@@ -403,7 +413,6 @@ interface TaskDetailsProps {
   onOpenWaits: () => void;
 }
 
-/** The fields most tasks leave empty, each written as it changes. */
 function TaskDetails({
   editing,
   notes,
@@ -419,6 +428,7 @@ function TaskDetails({
       <label className={join(FIELD_ROW, 'justify-between')}>
         <span>{HELM_COPY.urgentLabel}</span>
         <AppToggle
+          aria-label={HELM_COPY.urgentLabel}
           checked={task.isUrgent}
           onCheckedChange={(isUrgent) => saveFields({ isUrgent })}
         />
@@ -455,7 +465,9 @@ function TaskDetails({
         shouldFocus={false}
         label={HELM_COPY.notUntilLabel}
         title={HELM_COPY.notUntilLabel}
-        summary={task.notUntil === null ? '' : formatDateUTC(task.notUntil)}
+        summary={
+          task.notUntil === null ? '' : formatWeekdayDayUTC(task.notUntil)
+        }
         placeholder={HELM_COPY.noneValue}
       >
         <DateInput

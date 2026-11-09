@@ -14,16 +14,13 @@ interface WaitsOnPickerProps {
   onBack: () => void;
 }
 
-/** Which other open tasks this one waits on; written on Done. */
 function WaitsOnPicker({
   candidates,
   selectedIds,
   onDone,
   onBack,
 }: WaitsOnPickerProps) {
-  const [chosen, setChosen] = useState(() =>
-    selectedIds.filter((id) => candidates.some((task) => task.id === id)),
-  );
+  const [chosen, setChosen] = useState(selectedIds);
   const isFull = chosen.length >= WAITS_ON_LIMIT;
 
   return (

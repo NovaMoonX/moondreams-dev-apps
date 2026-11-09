@@ -52,5 +52,8 @@ export function useTaskTicks(uid: string | null) {
     hold(new Map([...heldRef.current].filter(([heldId]) => heldId !== taskId)));
   };
 
-  return { held, tick, undoTick };
+  const forget = (taskId: string) =>
+    hold(new Map([...heldRef.current].filter(([heldId]) => heldId !== taskId)));
+
+  return { held, tick, undoTick, forget };
 }

@@ -33,7 +33,6 @@ interface TickButtonProps {
   onClick: () => void;
 }
 
-/** A round tick with a 44px hit area, filled once done. */
 export function TickButton({ isDone, label, onClick }: TickButtonProps) {
   return (
     <Button
@@ -41,7 +40,6 @@ export function TickButton({ isDone, label, onClick }: TickButtonProps) {
       variant='tertiary'
       size='icon'
       aria-label={label}
-      aria-pressed={isDone}
       onClick={onClick}
       className="relative size-10 min-w-10 shrink-0 p-0 before:absolute before:-inset-0.5 before:content-['']"
     >
@@ -79,7 +77,9 @@ function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
       title:
         outcome === 'offline'
           ? HELM_COPY.wordsNeedConnectionTitle
-          : HELM_COPY.wordsSaveFailed,
+          : outcome === 'unreadable'
+            ? HELM_COPY.taskWordsUnreadable
+            : HELM_COPY.wordsSaveFailed,
       description:
         outcome === 'offline' ? HELM_COPY.wordsNeedConnectionBody : undefined,
       type: 'error',
@@ -104,7 +104,9 @@ function TaskSteps({ editing, onEdit, onBack }: TaskStepsProps) {
     setFailure(
       outcome === 'offline'
         ? HELM_COPY.wordsNeedConnectionBody
-        : HELM_COPY.wordsSaveFailed,
+        : outcome === 'unreadable'
+          ? HELM_COPY.taskWordsUnreadable
+          : HELM_COPY.wordsSaveFailed,
     );
   };
 

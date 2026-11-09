@@ -75,6 +75,15 @@ test('a waited task that is not open has ended', () => {
   );
 });
 
+test('past the cap an unknown waited task still reads as open', () => {
+  const full = Array.from({ length: 150 }, (_, index) => task(`t${index}`));
+  const waiter = task('w', { waitsOnTaskIds: ['unseen'] });
+  const result = splitByActivity([...full.slice(1), waiter], LA);
+  assert.equal(result.byId.get('w')?.kind, 'waiting');
+  const short = splitByActivity([task('a'), waiter], LA);
+  assert.equal(short.byId.get('w')?.kind, 'active');
+});
+
 test('only the still-open waited tasks are named', () => {
   const result = activity(task('a', { waitsOnTaskIds: ['b', 'c'] }), [
     'a',

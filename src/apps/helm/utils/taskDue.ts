@@ -23,20 +23,26 @@ const getRelativeWord = (days: number) => {
   return null;
 };
 
+/** "Fri, Nov 13" for a date-only day, with the year when it isn't `year`. */
+export const formatWeekdayDayUTC = (
+  day: number,
+  year = new Date().getUTCFullYear(),
+) =>
+  new Date(day).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    ...(new Date(day).getUTCFullYear() === year ? {} : { year: 'numeric' }),
+  });
+
 /** "Fri, Nov 13", or "Tomorrow, 9:00 AM" for a moment. A day-only due reads in UTC and a moment in `timeZone`. */
 export function formatTaskDue(due: TaskDue, timeZone: string, now: number) {
   const today = getDueDay({ kind: 'moment', at: now }, timeZone);
   const day = getDueDay(due, timeZone);
-  const year = new Date(day).getUTCFullYear();
   const dayLabel =
     getRelativeWord(Math.round((day - today) / DAY_MS)) ??
-    new Date(day).toLocaleDateString('en-US', {
-      timeZone: 'UTC',
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      ...(year === new Date(today).getUTCFullYear() ? {} : { year: 'numeric' }),
-    });
+    formatWeekdayDayUTC(day, new Date(today).getUTCFullYear());
   if (due.kind === 'day') return dayLabel;
   const time = new Date(due.at).toLocaleTimeString('en-US', {
     timeZone,

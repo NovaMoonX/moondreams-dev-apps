@@ -120,7 +120,7 @@ function TaskRow({
           type='button'
           variant='tertiary'
           size='sm'
-          className='mr-3 shrink-0 font-semibold'
+          className="relative mr-3 shrink-0 font-semibold before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
           onClick={() => onUndoTick(task.id)}
         >
           {HELM_COPY.undo}

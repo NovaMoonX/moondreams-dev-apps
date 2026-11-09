@@ -6,17 +6,15 @@ import { Hourglass } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
-import {
-  formatDateShort,
-  formatDateUTC,
-  formatTime,
-} from '@/utils/formatUtils';
+import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import TaskDetails, {
   WhenRow,
@@ -46,18 +44,23 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
 
 interface TaskSheetProps {
-  /** The task to show; the caller passes the live one, or a copy held while it is done. Null keeps the sheet closed. */
+  /** The live task, or a copy held while it is done. Null keeps the sheet closed. */
   task: OpenTask | null;
-  /** When it was marked done, while the caller still holds it as done. */
+  /** When it was marked done, while held. */
   doneAt: number | null;
   activity: TaskActivity | null;
   onClose: () => void;
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
-  onDeleted: (title: string, restore: () => Promise<RestoreResult>) => void;
+  onDeleted: (
+    taskId: string,
+    title: string,
+    restore: () => Promise<RestoreResult>,
+  ) => void;
 }
 
 type View = 'main' | 'steps' | 'waits' | 'title' | 'notes' | `step:${string}`;
@@ -136,7 +139,20 @@ function TaskSheet({
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
   const [heldTitle, setHeldTitle] = useState<Held<string> | null>(null);
   const [heldNotes, setHeldNotes] = useState<Held<string | null> | null>(null);
+  const [isWordsDirty, setIsWordsDirty] = useState(false);
   const isDeleting = useRef(false);
+
+  const close = () => {
+    setNav(null);
+    setHeldTitle(null);
+    setHeldNotes(null);
+    setIsWordsDirty(false);
+    onClose();
+  };
+  const requestClose = useDiscardGuard({
+    isDirty: isWordsDirty,
+    onClose: close,
+  });
 
   const open = useMemo(
     () => [...split.active, ...split.latent.map((entry) => entry.task)],
@@ -145,14 +161,17 @@ function TaskSheet({
 
   if (!task || !uid) {
     return (
-      <DetailSheet isOpen={false} onClose={onClose} title=''>
+      <DetailSheet isOpen={false} onClose={close} title=''>
         {null}
       </DetailSheet>
     );
   }
 
   const view: View = nav?.taskId === task.id ? nav.view : 'main';
-  const go = (next: View) => setNav({ taskId: task.id, view: next });
+  const go = (next: View) => {
+    setIsWordsDirty(false);
+    setNav({ taskId: task.id, view: next });
+  };
   const title = readHeld(heldTitle, task.id, task.title);
   const notes = readHeld(heldNotes, task.id, task.notes);
   const steps = getOrderedSteps(task);
@@ -160,7 +179,8 @@ function TaskSheet({
   const step = steps.find((entry) => entry.id === stepId);
   const shownView: View = stepId !== null && !step ? 'steps' : view;
   const isDetailsOpen = detailsFor === task.id;
-  const titleOf = title || HELM_COPY.taskFormTitle;
+  const shownTitle = task.isUnreadable ? HELM_COPY.unreadable : title;
+  const titleOf = shownTitle || HELM_COPY.taskFormTitle;
   const others = open.filter((entry) => entry.id !== task.id);
   const waitedTasks = task.waitsOnTaskIds
     .map((id) => others.find((entry) => entry.id === id))
@@ -184,7 +204,7 @@ function TaskSheet({
     try {
       const encryption = await getHelmEncryption(uid);
       const result = await updateTaskWords(uid, encryption, task.id, change);
-      if (result === 'missing') onClose();
+      if (result === 'missing') close();
       return result;
     } catch (error) {
       console.error('Helm task words did not save', error);
@@ -214,8 +234,8 @@ function TaskSheet({
       if (!isConfirmed) return;
       const { write, restore } = await deleteTask(uid, task.id);
       run(write);
-      onClose();
-      onDeleted(titleOf, restore);
+      close();
+      onDeleted(task.id, titleOf, restore);
     } catch (error) {
       console.error('Helm task did not delete', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
@@ -229,7 +249,9 @@ function TaskSheet({
     if (activity.kind === 'notYet') {
       return (
         <ConditionLine
-          text={HELM_COPY.conditionNotUntil(formatDateUTC(activity.until))}
+          text={HELM_COPY.conditionNotUntil(
+            formatWeekdayDayUTC(activity.until),
+          )}
           actionLabel={HELM_COPY.startItNow}
           onAction={() => saveFields({ notUntil: null })}
         />
@@ -242,7 +264,8 @@ function TaskSheet({
       return (
         <ConditionLine
           text={HELM_COPY.conditionWaitsOnTask(
-            first?.title ?? '',
+            (first && !first.isUnreadable && first.title) ||
+              HELM_COPY.unreadable,
             activity.onTaskIds.length - 1,
           )}
           actionLabel={HELM_COPY.stopWaiting}
@@ -281,6 +304,7 @@ function TaskSheet({
             setHeldTitle({ taskId: task.id, from: task.title, text: value });
             go('main');
           }}
+          onDirtyChange={setIsWordsDirty}
           onBack={() => go('main')}
         />
       );
@@ -303,6 +327,7 @@ function TaskSheet({
             });
             go('main');
           }}
+          onDirtyChange={setIsWordsDirty}
           onBack={() => go('main')}
         />
       );
@@ -321,6 +346,7 @@ function TaskSheet({
             saveWords({ kind: 'editStep', stepId, text: value })
           }
           onSaved={() => go('steps')}
+          onDirtyChange={setIsWordsDirty}
           onBack={() => go('steps')}
         />
       );
@@ -395,15 +421,12 @@ function TaskSheet({
             </SummaryRow>
           )}
         </div>
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-foreground! h-auto min-h-11 w-full justify-start px-0!'
-          aria-expanded={isDetailsOpen}
+        <ShowMoreButton
+          isOpen={isDetailsOpen}
           onClick={() => setDetailsFor(isDetailsOpen ? null : task.id)}
         >
           {isDetailsOpen ? HELM_COPY.fewerDetails : HELM_COPY.moreDetails}
-        </Button>
+        </ShowMoreButton>
         {isDetailsOpen && (
           <TaskDetails
             editing={editing}
@@ -420,8 +443,8 @@ function TaskSheet({
   return (
     <DetailSheet
       isOpen
-      onClose={onClose}
-      title={title}
+      onClose={requestClose}
+      title={shownTitle}
       viewKey={shownView}
       actions={
         <TickButton

@@ -7,13 +7,11 @@ import HeaderIconButton from '@/components/HeaderIconButton';
 import { HELM_COPY } from '@apps/helm/constants';
 
 interface HelmHeaderProps {
-  /** Names where Back goes ("Home"). */
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
   /** False on a screen reached only from one parent, where Home would skip a step. */
   showsHome?: boolean;
-  /** The page's ⋯ menu, drawn at the right edge. */
   menu?: {
     items: DropdownMenuProps['items'];
     onItemSelect: (value: string) => void;

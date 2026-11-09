@@ -59,7 +59,7 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
   const tasksById = useAppSelector(selectOpenTasksById);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
-  const { held, tick, undoTick } = useTaskTicks(user?.uid ?? null);
+  const { held, tick, undoTick, forget } = useTaskTicks(user?.uid ?? null);
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
@@ -86,9 +86,11 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
   const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
 
   const handleDeleted = (
+    taskId: string,
     title: string,
     restore: () => Promise<RestoreResult>,
   ) => {
+    forget(taskId);
     showUndo(HELM_COPY.deletedTask(title), () => {
       restore()
         .then((result) => {
