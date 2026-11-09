@@ -121,28 +121,41 @@ test('the context holds <capture> for one message and <messages> for several', (
   ]);
 });
 
-const harness = (growsDuring: number[]) => {
-  const log = { reads: 0, runs: [] as boolean[], watched: [] as number[] };
+const harness = (growsDuring: number[], canRestart = true) => {
+  const log = { reads: 0, runs: [] as boolean[], readCounts: [] as number[] };
   const watch = { grow: null as (() => void) | null };
-  const run = async (_read: JoinedRead, signal: AbortSignal) => {
-    if (growsDuring.includes(log.runs.length + 1)) watch.grow?.();
+  const count = { listed: 0 };
+  const run = async (
+    _read: JoinedRead,
+    signal: AbortSignal,
+    isRestart: boolean,
+  ) => {
+    if (growsDuring.includes(log.runs.length + 1)) {
+      count.listed += 1;
+      watch.grow?.();
+    }
     log.runs.push(signal.aborted);
-    return { endedBy: signal.aborted ? 'aborted' : 'terminal' };
+    log.readCounts.push(_read.joinedCount);
+    return { endedBy: signal.aborted ? 'aborted' : 'terminal', isRestart };
   };
   return {
     log,
+    count,
+    watch,
     go: () =>
       interpretWithJoins({
         readJoined: async () => {
           log.reads += 1;
           return {
-            ids: Array.from({ length: log.reads }, (_, i) => `j${i}`),
-            joinedCount: log.reads,
+            ids: Array.from({ length: count.listed + 1 }, (_, i) => `j${i}`),
+            joinedCount: count.listed + 1,
           };
         },
         run,
-        watchJoins: (readCount, onGrow) => {
-          log.watched.push(readCount);
+        canRestart: () => canRestart,
+        quietMs: 40,
+        maxWaitMs: 200,
+        watchJoins: (_readCount, onGrow) => {
           watch.grow = onGrow;
           return () => {
             watch.grow = null;
@@ -167,8 +180,30 @@ test('a join during the first run aborts it and restarts once with the new read'
   assert.equal(result.endedBy, 'terminal');
   assert.equal(log.reads, 2);
   assert.deepEqual(log.runs, [true, false]);
-  assert.deepEqual(log.watched, [1]);
   assert.equal(read.ids.length, 2);
+});
+
+test('joins arriving while the restart settles are all read by the second run', async () => {
+  const { go, log, count, watch } = harness([1]);
+  const late = [20, 50].map((delay) =>
+    setTimeout(() => {
+      count.listed += 1;
+      watch.grow?.();
+    }, delay),
+  );
+  const { read } = await go();
+  late.forEach(clearTimeout);
+  assert.deepEqual(log.runs, [true, false]);
+  assert.equal(read.joinedCount, 4);
+});
+
+test('a join after the second run starts is left for the commit to release', async () => {
+  const { go, log, count, watch } = harness([1]);
+  const { read } = await go();
+  count.listed += 1;
+  watch.grow?.();
+  assert.deepEqual(log.runs, [true, false]);
+  assert.equal(read.joinedCount, 2);
 });
 
 test('a join during the second run is not aborted', async () => {
@@ -177,6 +212,51 @@ test('a join during the second run is not aborted', async () => {
   assert.equal(result.endedBy, 'terminal');
   assert.equal(log.reads, 2);
   assert.deepEqual(log.runs, [true, false]);
+});
+
+test('a join with too little time left lets the first run finish', async () => {
+  const { go, log } = harness([1], false);
+  const { result, read } = await go();
+  assert.equal(result.endedBy, 'terminal');
+  assert.equal(log.reads, 1);
+  assert.deepEqual(log.runs, [false]);
+  assert.equal(read.ids.length, 1);
+});
+
+test('several messages prefix every token id, not only dates', () => {
+  const token = (id: string, text: string) => ({
+    id,
+    text,
+    start: 0,
+    end: text.length,
+  });
+  const combined = combineMessages([
+    { text: '@Ann', reading: { ...READING, people: [token('p1', '@Ann')] } },
+    {
+      text: '#Home',
+      reading: {
+        ...READING,
+        places: [token('l1', '#Home')],
+        documents: [token('f1', '^Deed')],
+        commands: [token('c1', '/done')],
+      },
+    },
+  ]);
+  assert.deepEqual(
+    [
+      combined.reading.people[0].id,
+      combined.reading.places[0].id,
+      combined.reading.documents[0].id,
+      combined.reading.commands[0].id,
+    ],
+    ['m1.p1', 'm2.l1', 'm2.f1', 'm2.c1'],
+  );
+  assert.equal(
+    combineMessages([
+      { text: '@Ann', reading: { ...READING, people: [token('p1', '@Ann')] } },
+    ]).reading.people[0].id,
+    'p1',
+  );
 });
 
 const failures: string[] = [];

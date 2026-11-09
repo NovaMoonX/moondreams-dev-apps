@@ -9,11 +9,14 @@ import {
   isUnreachable,
   subscribeSorting,
 } from '@apps/helm/queries/nomosMutations';
+import type { OpenCapture } from '@apps/helm/types';
 import { getWaitingReason, type HeldItem } from '@apps/helm/utils/heldCaptures';
 
 interface HeldRowProps {
   item: HeldItem;
   onOpen: (item: HeldItem) => void;
+  /** Messages that joined this turn, in order; the row shows all the words. */
+  joined?: OpenCapture[];
 }
 
 const getLine = (
@@ -37,7 +40,7 @@ const getLine = (
 };
 
 /** One turn that needs the person (a verdigris dot) or only waits (an hourglass, no dot), opening its sheet. */
-function HeldRow({ item, onOpen }: HeldRowProps) {
+function HeldRow({ item, onOpen, joined = [] }: HeldRowProps) {
   const { capture } = item;
   const isUnreachableHere = useSyncExternalStore(subscribeSorting, () =>
     isUnreachable(capture.id),
@@ -65,7 +68,11 @@ function HeldRow({ item, onOpen }: HeldRowProps) {
       </span>
       <span className='min-w-0 flex-1'>
         <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
-          {capture.isUnreadable ? HELM_COPY.unreadable : capture.text}
+          {[capture, ...joined]
+            .map((message) =>
+              message.isUnreadable ? HELM_COPY.unreadable : message.text,
+            )
+            .join(' ')}
         </span>
         <span className='text-muted-foreground block text-[13px]'>
           <span className='flex gap-1'>

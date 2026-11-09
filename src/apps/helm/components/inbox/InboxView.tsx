@@ -19,11 +19,13 @@ import {
   markCaptureSeen,
 } from '@apps/helm/store/actions/captureActions';
 import {
+  selectAllCaptures,
   selectHeldItems,
   selectNewSinceLooked,
 } from '@apps/helm/store/selectors/captureSelectors';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { OpenCapture } from '@apps/helm/types';
+import { getJoinedOf } from '@apps/helm/utils/sessions';
 
 interface InboxViewProps {
   onBack: () => void;
@@ -37,6 +39,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const name = useAssistantName();
   const unseen = useAppSelector(selectNewSinceLooked);
   const held = useAppSelector(selectHeldItems);
+  const allCaptures = useAppSelector(selectAllCaptures);
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.unseenCaptures,
   );
@@ -87,6 +90,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
               <li key={item.capture.id}>
                 <HeldRow
                   item={item}
+                  joined={getJoinedOf(item.capture, allCaptures)}
                   onOpen={(entry) => setHeldId(entry.capture.id)}
                 />
               </li>
@@ -101,6 +105,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
                 <li key={item.capture.id}>
                   <HeldRow
                     item={item}
+                    joined={getJoinedOf(item.capture, allCaptures)}
                     onOpen={(entry) => setHeldId(entry.capture.id)}
                   />
                 </li>
@@ -181,6 +186,7 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             isOnHome={false}
             showsNotice={false}
             capture={opened}
+            joined={getJoinedOf(opened, allCaptures)}
           />
         )}
       </DetailSheet>

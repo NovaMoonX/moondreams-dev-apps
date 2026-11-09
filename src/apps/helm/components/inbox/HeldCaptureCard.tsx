@@ -23,7 +23,10 @@ import {
   retryCapture,
   sortRestOfCapture,
 } from '@apps/helm/store/actions/captureActions';
-import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectAllCaptures,
+  selectExecutionsById,
+} from '@apps/helm/store/selectors/captureSelectors';
 import {
   canMakeTaskAsWritten,
   getFailedCause,
@@ -32,6 +35,7 @@ import {
   type HeldItem,
 } from '@apps/helm/utils/heldCaptures';
 import type { HeldReason } from '@apps/helm/types';
+import { getJoinedOf } from '@apps/helm/utils/sessions';
 
 interface HeldCaptureCardProps {
   item: HeldItem | null;
@@ -70,6 +74,7 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
     captureId === null ? false : isUnreachable(captureId),
   );
   const executionsById = useAppSelector(selectExecutionsById);
+  const allCaptures = useAppSelector(selectAllCaptures);
   const executionIds = item?.capture.executionIds ?? [];
   const missingKey = executionIds
     .filter((id) => !executionsById.has(id))
@@ -206,11 +211,16 @@ function HeldCaptureCard({ item, onClose }: HeldCaptureCardProps) {
     >
       {item && (
         <div className='space-y-3'>
-          <p className='bg-muted/60 rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
-            {item.capture.isUnreadable
-              ? HELM_COPY.unreadable
-              : item.capture.text}
-          </p>
+          {[item.capture, ...getJoinedOf(item.capture, allCaptures)].map(
+            (message) => (
+              <p
+                key={message.id}
+                className='bg-muted/60 rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
+              >
+                {message.isUnreadable ? HELM_COPY.unreadable : message.text}
+              </p>
+            ),
+          )}
           {(item.kind === 'failed' || item.kind === 'couldNotRead') && (
             <Button type='button' variant='secondary' size='sm' onClick={retry}>
               {HELM_COPY.tryReadingAgain}

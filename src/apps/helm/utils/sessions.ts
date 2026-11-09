@@ -37,18 +37,32 @@ export interface TurnGroup {
   joined: OpenCapture[];
 }
 
-/** A session's turns as leads with the messages that joined them, in order; a joined message whose lead is not loaded, or that was released, stands as its own turn. */
+/** A session's turns as leads with the messages that joined them, in order; a joined message folds under its lead only while the lead is loaded, lists it and has not settled, and the message has no result of its own. Any other stands as its own turn. */
 export function groupTurns(turns: OpenCapture[]): TurnGroup[] {
-  const ids = new Set(turns.map((turn) => turn.id));
-  const isJoined = (turn: OpenCapture) =>
-    turn.turnLeadId !== null && ids.has(turn.turnLeadId);
+  const byId = new Map(turns.map((turn) => [turn.id, turn]));
+  const leadOf = (turn: OpenCapture) => {
+    const lead =
+      turn.turnLeadId === null ? undefined : byId.get(turn.turnLeadId);
+    return lead &&
+      lead.joinedCaptureIds.includes(turn.id) &&
+      (lead.status === 'received' ||
+        lead.status === 'interpreting' ||
+        lead.status === 'sorted') &&
+      turn.executionIds.length === 0
+      ? lead
+      : undefined;
+  };
   return turns
-    .filter((turn) => !isJoined(turn))
+    .filter((turn) => leadOf(turn) === undefined)
     .map((lead) => ({
       lead,
-      joined: turns.filter((turn) => turn.turnLeadId === lead.id),
+      joined: turns.filter((turn) => leadOf(turn)?.id === lead.id),
     }));
 }
+
+/** The messages groupTurns folds under this lead, in order. */
+export const getJoinedOf = (lead: OpenCapture, captures: OpenCapture[]) =>
+  groupTurns(captures).find((group) => group.lead.id === lead.id)?.joined ?? [];
 
 /** The session still open: the last turn's, while it is under the idle gap. */
 export function getOpenSessionId(sorted: OpenCapture[], now: number) {

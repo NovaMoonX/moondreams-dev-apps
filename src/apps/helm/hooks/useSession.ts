@@ -22,6 +22,7 @@ export function useSession() {
 }
 
 type SentTurn = {
+  captureId: string;
   sessionId: string;
   turnIndex: number;
   createdAt: number;
@@ -50,12 +51,20 @@ export const recordSentTurn = (
 ) => {
   lastSent.uid = uid;
   lastSent.turn = {
+    captureId,
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
     createdAt: turn.createdAt,
     leadId: turn.leadId ?? captureId,
     joinedCount: turn.leadId === null ? 0 : turn.joinedCount + 1,
   };
+};
+
+/** Forgets a send whose write was rejected, so the next Send does not join a turn that was never saved. */
+export const clearSentTurn = (uid: string, captureId: string) => {
+  if (lastSent.uid === uid && lastSent.turn?.captureId === captureId) {
+    lastSent.turn = null;
+  }
 };
 
 /** Which session the next turn joins and its place in it, and the turn it joins (`leadId`, with how many joined it so far) while that turn's reply has not started and fewer than 9 joined. Read when the person taps Send, so a session that went quiet while they typed starts a new one. */
@@ -76,7 +85,7 @@ export function getNextTurn() {
     };
   }
   const lead = isPendingLast
-    ? { id: pending.leadId, count: pending.joinedCount, isWorking: true }
+    ? toPendingLead(captures, pending)
     : toStoredLead(captures, stored);
   const canJoin = lead.isWorking && lead.count < MAX_JOINED;
   return {
@@ -88,6 +97,18 @@ export function getNextTurn() {
 }
 
 const MAX_JOINED = 9;
+
+function toPendingLead(captures: OpenCapture[], pending: SentTurn) {
+  const stored = captures.find((entry) => entry.id === pending.leadId);
+  return {
+    id: pending.leadId,
+    count: pending.joinedCount,
+    isWorking:
+      stored === undefined ||
+      stored.status === 'received' ||
+      stored.status === 'interpreting',
+  };
+}
 
 function toStoredLead(captures: OpenCapture[], last: OpenCapture | null) {
   const lead = last

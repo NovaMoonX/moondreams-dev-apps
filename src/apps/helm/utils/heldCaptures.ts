@@ -34,6 +34,7 @@ const ridesWithLead = (capture: OpenCapture, captures: OpenCapture[]) =>
   captures.some(
     (entry) =>
       entry.id === capture.turnLeadId &&
+      entry.joinedCaptureIds.includes(capture.id) &&
       (entry.status === 'received' || entry.status === 'interpreting'),
   );
 

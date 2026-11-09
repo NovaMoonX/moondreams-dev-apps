@@ -18,6 +18,7 @@ import {
 } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import { getActivityLine } from '@apps/helm/utils/activity';
+import { getJoinedOf } from '@apps/helm/utils/sessions';
 
 interface ExecutionSheetProps {
   /** The execution to show, as it was when opened; null keeps the sheet closed. The live one in the store replaces it while it is there. */
@@ -25,12 +26,11 @@ interface ExecutionSheetProps {
   onClose: () => void;
 }
 
-/** The words the execution was made from, from the store or fetched; null when they are gone or won't open. */
-function useCaptureText(captureId: string | null) {
+/** The words the execution was made from (every message of a joined turn), from the store or fetched; empty when they are gone or won't open. */
+function useCaptureTexts(captureId: string | null) {
   const { user } = useAuth();
-  const stored = useAppSelector(selectAllCaptures).find(
-    (capture) => capture.id === captureId,
-  );
+  const captures = useAppSelector(selectAllCaptures);
+  const stored = captures.find((capture) => capture.id === captureId);
   const [fetched, setFetched] = useState<{
     id: string;
     text: string | null;
@@ -53,14 +53,18 @@ function useCaptureText(captureId: string | null) {
     };
   }, [uid, captureId, needsFetch]);
 
-  if (stored) return stored.isUnreadable || !stored.text ? null : stored.text;
-  return fetched?.id === captureId ? fetched.text : null;
+  if (stored) {
+    return [stored, ...getJoinedOf(stored, captures)].flatMap((message) =>
+      message.isUnreadable || !message.text ? [] : [message.text],
+    );
+  }
+  return fetched?.id === captureId && fetched.text ? [fetched.text] : [];
 }
 
 function SheetBody({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
   const { undo } = useUndoOf(execution);
-  const text = useCaptureText(execution.captureId);
+  const texts = useCaptureTexts(execution.captureId);
 
   return (
     <div className='space-y-4'>
@@ -73,11 +77,14 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
           )}
         </p>
       </div>
-      {text && (
-        <blockquote className='bg-muted text-muted-foreground rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
+      {texts.map((text, index) => (
+        <blockquote
+          key={index}
+          className='bg-muted text-muted-foreground rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
+        >
           {text}
         </blockquote>
-      )}
+      ))}
       {lines.length > 0 && (
         <section className='space-y-1'>
           <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>

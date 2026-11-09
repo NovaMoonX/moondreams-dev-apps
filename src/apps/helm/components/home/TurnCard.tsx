@@ -139,7 +139,16 @@ function TurnCard({
       )}
       {isReading && !capture.isUnreadable && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine isQuiet>{HELM_COPY.reading}</AssistantLine>
+          <AssistantLine isQuiet>
+            {joined.length > 0
+              ? HELM_COPY.readingSeveral(joined.length + 1)
+              : HELM_COPY.reading}
+          </AssistantLine>
+          {showsOutcome && isOnHome && (
+            <p className='text-muted-foreground pl-8 text-[13px] leading-[18px]'>
+              {HELM_COPY.keepTyping}
+            </p>
+          )}
         </div>
       )}
       {hasCard && (

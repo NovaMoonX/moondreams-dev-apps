@@ -83,7 +83,13 @@ const EARLIER_TURNS = 6;
 const EARLIER_EXECUTIONS = 3;
 const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
+const MAX_LISTED = 50;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
+const CALL_BUDGET_MS = 55_000;
+const RESTART_MARGIN_MS = 5_000;
+const MIN_RESTART_MS = 12_000;
+const SETTLE_QUIET_MS = 1_000;
+const SETTLE_MAX_MS = 3_000;
 
 type SortMode = 'full' | 'rest';
 
@@ -213,6 +219,7 @@ const readLeadHold = async (
 ) => {
   const leadId = capture.turnLeadId;
   if (typeof leadId !== 'string' || !ID_RE.test(leadId)) return false;
+  if (leadId === ref.id) return false;
   const lead = (await transaction.get(ref.parent.doc(leadId))).data() as
     CaptureDoc | undefined;
   return (
@@ -322,6 +329,7 @@ interface Claimed {
   claimId: string;
   capture: CaptureDoc;
   mode: SortMode;
+  startedAt: number;
 }
 
 async function readAlreadyMade(
@@ -405,7 +413,7 @@ async function readEarlierTurns(
     .where('sessionId', '==', capture.sessionId)
     .where('turnIndex', '<', capture.turnIndex)
     .orderBy('turnIndex', 'desc')
-    .limit(EARLIER_TURNS)
+    .limit(EARLIER_TURNS * 2)
     .get();
   const fetched = new Set(earlier.docs.map((doc) => doc.id));
   const readSaid = (data: CaptureDoc) => {
@@ -432,51 +440,56 @@ async function readEarlierTurns(
       ),
   );
   const turns = await Promise.all(
-    earlier.docs.map(async (doc): Promise<EarlierTurn[]> => {
-      const data = doc.data() as CaptureDoc;
-      const own = readSaid(data);
-      if (!own || isFolded(data)) return [];
-      const said = [own, ...(foldedWords.get(doc.id) ?? [])].join('\n');
-      const executions = await Promise.all(
-        (data.executionIds ?? [])
-          .slice(0, EARLIER_EXECUTIONS)
-          .map((id) => firestore.doc(`${base}/executions/${id}`).get()),
-      );
-      const done = executions.flatMap((snapshot) => {
-        const execution = snapshot.data() as
-          { effectRefs?: unknown; sealed: SealedPayload } | undefined;
-        const summary = execution
-          ? openTitle(key, execution.sealed)?.sealed.summary
-          : null;
-        const refs = Array.isArray(execution?.effectRefs)
-          ? (execution.effectRefs as {
-              collection?: unknown;
-              docId?: unknown;
-            }[])
-          : [];
+    earlier.docs
+      .filter((doc) => {
+        const data = doc.data() as CaptureDoc;
+        return !isFolded(data) && !!readSaid(data);
+      })
+      .slice(0, EARLIER_TURNS)
+      .map(async (doc): Promise<EarlierTurn[]> => {
+        const data = doc.data() as CaptureDoc;
+        const own = readSaid(data) as string;
+        const said = [own, ...(foldedWords.get(doc.id) ?? [])].join('\n');
+        const executions = await Promise.all(
+          (data.executionIds ?? [])
+            .slice(0, EARLIER_EXECUTIONS)
+            .map((id) => firestore.doc(`${base}/executions/${id}`).get()),
+        );
+        const done = executions.flatMap((snapshot) => {
+          const execution = snapshot.data() as
+            { effectRefs?: unknown; sealed: SealedPayload } | undefined;
+          const summary = execution
+            ? openTitle(key, execution.sealed)?.sealed.summary
+            : null;
+          const refs = Array.isArray(execution?.effectRefs)
+            ? (execution.effectRefs as {
+                collection?: unknown;
+                docId?: unknown;
+              }[])
+            : [];
+          return [
+            {
+              summary: typeof summary === 'string' ? summary : null,
+              ids: refs.flatMap((ref) =>
+                ref?.collection === 'tasks' && typeof ref.docId === 'string'
+                  ? [ref.docId]
+                  : [],
+              ),
+            },
+          ];
+        });
+        const summaries = done.flatMap((entry) => entry.summary ?? []);
         return [
           {
-            summary: typeof summary === 'string' ? summary : null,
-            ids: refs.flatMap((ref) =>
-              ref?.collection === 'tasks' && typeof ref.docId === 'string'
-                ? [ref.docId]
-                : [],
+            said,
+            did: summaries.length ? summaries.join('. ') : null,
+            taskIds: [...new Set(done.flatMap((entry) => entry.ids))].slice(
+              0,
+              EARLIER_RECORDS,
             ),
           },
         ];
-      });
-      const summaries = done.flatMap((entry) => entry.summary ?? []);
-      return [
-        {
-          said,
-          did: summaries.length ? summaries.join('. ') : null,
-          taskIds: [...new Set(done.flatMap((entry) => entry.ids))].slice(
-            0,
-            EARLIER_RECORDS,
-          ),
-        },
-      ];
-    }),
+      }),
   );
   return turns.flat().reverse();
 }
@@ -570,7 +583,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const run = async (
     read: JoinedRead & { messages: JoinedMessage[] },
     signal: AbortSignal,
+    isRestart: boolean,
   ) => {
+    const timeLeft = () =>
+      claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
     const context = buildContext({
       text: combined.text,
@@ -616,7 +632,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         messages: [{ role: 'user', content: context.message }],
         mcpClient: mcp.client,
         terminalTool: FILE_RESULTS_TOOL,
-        limits: LOOP_LIMITS,
+        limits: {
+          ...LOOP_LIMITS,
+          maxMillis: isRestart
+            ? Math.min(LOOP_LIMITS.maxMillis, timeLeft())
+            : LOOP_LIMITS.maxMillis,
+        },
         signal,
         onUsage: async (usage) => {
           const cost = getUsageCost('interpret', usage);
@@ -642,15 +663,24 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const { read, result } = await interpretWithJoins({
     readJoined,
     run,
-    watchJoins: (readCount, onGrow) =>
-      claimed.captureRef.onSnapshot(
+    canRestart: () =>
+      claimed.startedAt + CALL_BUDGET_MS - Date.now() >= MIN_RESTART_MS,
+    watchJoins: (readCount, onGrow) => {
+      const seen = { count: readCount };
+      return claimed.captureRef.onSnapshot(
         (snapshot) => {
           const listed = (snapshot.data() as CaptureDoc | undefined)
             ?.joinedCaptureIds;
-          if ((listed?.length ?? 0) > readCount) onGrow();
+          const count = listed?.length ?? 0;
+          if (count <= seen.count) return;
+          seen.count = count;
+          onGrow();
         },
         () => undefined,
-      ),
+      );
+    },
+    quietMs: SETTLE_QUIET_MS,
+    maxWaitMs: SETTLE_MAX_MS,
   });
   const { loop, context, combined } = result;
   if (loop.endedBy !== 'terminal') {
@@ -740,7 +770,7 @@ async function writeResult(
           (id) => typeof id === 'string' && ID_RE.test(id),
         ),
       ),
-    ];
+    ].slice(0, MAX_LISTED);
     const lateIds =
       mode === 'full' ? listedNow.filter((id) => !joinedIds.includes(id)) : [];
     const [readSnaps, lateSnaps] = await Promise.all(
@@ -919,6 +949,7 @@ export const sortHelmCapture = onCall(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
+    const startedAt = Date.now();
     const { captureId, requestKey, mode } = readInput(request.data);
     const firestore = getFirestore();
     const captureRef = firestore.doc(
@@ -957,6 +988,7 @@ export const sortHelmCapture = onCall(
       captureRef,
       requestRef,
       mode,
+      startedAt,
       ...claim,
     }).catch((error: unknown) => {
       if (error instanceof HttpsError) throw error;

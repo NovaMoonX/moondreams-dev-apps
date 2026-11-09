@@ -86,7 +86,10 @@ export async function sortCapture(
     });
     unreachable.delete(captureId);
     const { status, releasedIds } = result.data;
-    (releasedIds ?? []).forEach((id) => void sortCapture(id));
+    void (releasedIds ?? []).reduce(
+      (chain, id) => chain.then(() => sortCapture(id)),
+      Promise.resolve<unknown>(undefined),
+    );
     const isSorted =
       mode === 'rest'
         ? status === 'sorted'

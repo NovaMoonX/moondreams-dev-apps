@@ -24,7 +24,11 @@ import {
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
+import {
+  clearSentTurn,
+  getNextTurn,
+  recordSentTurn,
+} from '@apps/helm/hooks/useSession';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
@@ -193,7 +197,10 @@ function Composer({
       setDismissed([]);
       setFixedDays({});
       setLastDrop(null);
-      write.catch(restore);
+      write.catch((error: unknown) => {
+        clearSentTurn(uid, id);
+        restore(error);
+      });
     } catch (error) {
       restore(error);
     } finally {

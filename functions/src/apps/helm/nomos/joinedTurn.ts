@@ -35,7 +35,10 @@ export function combineMessages(messages: JoinedMessage[]): {
         };
   const gather = (pick: (reading: CaptureReading) => Token[]) =>
     messages.flatMap((message, index) =>
-      pick(message.reading).map((token) => shift(token, index)),
+      pick(message.reading).map((token) => ({
+        ...shift(token, index),
+        id: isSingle ? token.id : `m${index + 1}.${token.id}`,
+      })),
     );
   const first = messages[0].reading;
   return {
@@ -65,31 +68,48 @@ export interface JoinedRead {
   joinedCount: number;
 }
 
-/** Runs once over the messages read; when another joins mid-run (`onGrow`), that run is aborted and one more run reads them all and is left to finish. */
+const SETTLE_POLL_MS = 25;
+
+/** Runs once over the messages read; when another joins mid-run (`onGrow`) and there is still time to run again (`canRestart`), that run is aborted, the call waits until messages stop arriving (`quietMs`, at most `maxWaitMs`) and one more run reads them all and is left to finish. Otherwise the first run finishes and a late message is released afterwards. */
 export async function interpretWithJoins<
   Read extends JoinedRead,
   Out extends { endedBy: string },
 >(input: {
   readJoined: () => Promise<Read>;
-  run: (read: Read, signal: AbortSignal) => Promise<Out>;
+  run: (read: Read, signal: AbortSignal, isRestart: boolean) => Promise<Out>;
+  canRestart: () => boolean;
   watchJoins: (readCount: number, onGrow: () => void) => () => void;
+  quietMs?: number;
+  maxWaitMs?: number;
 }): Promise<{ read: Read; result: Out }> {
-  const attempt = async (read: Read, isWatched: boolean) => {
-    const controller = new AbortController();
-    const stop = isWatched
-      ? input.watchJoins(read.joinedCount, () => controller.abort())
-      : () => undefined;
-    try {
-      return await input.run(read, controller.signal);
-    } finally {
-      stop();
-    }
-  };
+  const { quietMs = 1_000, maxWaitMs = 3_000 } = input;
+  const controller = new AbortController();
+  const lastGrew = { at: 0 };
   const first = await input.readJoined();
-  const firstResult = await attempt(first, true);
-  if (firstResult.endedBy !== 'aborted') {
-    return { read: first, result: firstResult };
+  const stop = input.watchJoins(first.joinedCount, () => {
+    lastGrew.at = Date.now();
+    if (input.canRestart()) controller.abort();
+  });
+  try {
+    const firstResult = await input.run(first, controller.signal, false);
+    if (firstResult.endedBy !== 'aborted') {
+      return { read: first, result: firstResult };
+    }
+    const waitStart = Date.now();
+    const isSettling = () =>
+      Date.now() - lastGrew.at < quietMs &&
+      Date.now() - waitStart < maxWaitMs &&
+      input.canRestart();
+    while (isSettling()) {
+      await new Promise((resolve) => setTimeout(resolve, SETTLE_POLL_MS));
+    }
+    stop();
+    const second = await input.readJoined();
+    return {
+      read: second,
+      result: await input.run(second, new AbortController().signal, true),
+    };
+  } finally {
+    stop();
   }
-  const second = await input.readJoined();
-  return { read: second, result: await attempt(second, false) };
 }
