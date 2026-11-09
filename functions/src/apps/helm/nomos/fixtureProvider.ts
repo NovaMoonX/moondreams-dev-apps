@@ -2,7 +2,7 @@ import type { ModelProvider } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import type { CaptureReading } from './commands.js';
 
-const SPLIT_RE = /\n|,|\band\b/gi;
+const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
 const FILLER = new Set([
   'the',
   'a',
@@ -26,7 +26,7 @@ const hasMeaning = (title: string) =>
     .split(/\s+/)
     .some((word) => !FILLER.has(word.replace(/[^\p{L}\p{N}]/gu, '')));
 
-/** Emulator stand-in with no key: one createTask per comma, "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
+/** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
 export function createFixtureProvider(
   text: string,
   reading: CaptureReading,

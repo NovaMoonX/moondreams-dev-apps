@@ -294,6 +294,7 @@ export const HELM_COPY = {
   waitsOnLabel: 'Waits on',
   nothingValue: 'Nothing',
   waitsOnTasks: (count: number) => `${count} tasks`,
+  waitsOnFull: `Up to ${WAITS_ON_LIMIT} tasks`,
   someone: 'Someone',
   notesLabel: 'Notes',
   conditionNotUntil: (date: string) => `Not until ${date}`,
@@ -326,5 +327,7 @@ export const HELM_COPY = {
   tasksEmpty: 'No open tasks.',
   tasksDue: 'Due',
   tasksAnyTime: 'Any time',
+  showNotYet: 'Show',
+  hideNotYet: 'Hide',
   notYetDivider: (count: number) => `Not yet · ${count}`,
 } as const;

@@ -8,6 +8,7 @@ import type { HelmView } from '@apps/helm/types';
 const URL_VIEWS = [
   'today',
   'inbox',
+  'tasks',
   'settings',
   'activity',
 ] as const satisfies readonly HelmView[];

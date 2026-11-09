@@ -3,6 +3,7 @@ import {
   CalendarDays,
   History,
   Inbox,
+  ListChecks,
   Settings2,
   type LucideIcon,
 } from 'lucide-react';
@@ -17,6 +18,7 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   home: { label: 'Home', icon: CalendarDays },
   today: { label: 'Today', icon: CalendarDays },
   inbox: { label: 'Needs you', icon: Inbox },
+  tasks: { label: HELM_COPY.tasksTitle, icon: ListChecks },
   settings: { label: HELM_COPY.settingsTitle, icon: Settings2 },
   activity: { label: HELM_COPY.activityTitle, icon: History },
 };

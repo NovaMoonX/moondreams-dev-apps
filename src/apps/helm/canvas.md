@@ -227,6 +227,8 @@ D10 Checklist and D13 Suggested checklist are retired with the board file `Check
 
 **D17 Waiting task "Book the florist delivery".** First row muted with `Hourglass`: "Waits on Dana Ruiz" · "Mark as answered" (outline small). Rows: When · "Due Fri, Dec 4"; Project · "💍 Wedding". Footer: trash, "Plan it" hidden. Board note: a "Not until Mon, Nov 30" task shows "Start it now" in the same place.
 
+**As shipped (issue 8).** D14 has no Who, Project or source rows and no Plan it (footer: the trash only); D15's Importance starts at "Not set"; D16's Undo is a small quiet button; D17 reads "Waits on someone" for a person. New screens, not drawn on a board: **Tasks** (Back "Today" and Home, ⋯ "New task"; serif 28/34 title; `SectionDivider` Due, Any time and "Not yet · N" folded behind Show; each row a round tick, the words and a 13 muted line, overdue in the warning colour; Today ends its list with a thin card row "All tasks · 6 open" ›) and **New task** (`FormSheet` "Task": What to do, When, "Add task").
+
 **D18 Steps offer (round 6).** D14 for "Pay venue deposit" with a dashed row under the summary rows: mark "{Name} can draft steps for this" · "Draft them" (outline small) · "Not now" (tertiary small).
 
 ## Row E: "People: what Helm knows about someone, and where it heard it"

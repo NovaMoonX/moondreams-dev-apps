@@ -33,6 +33,7 @@ type ValidTiles<Tiles extends readonly BrowseTile[]> = CountOf<
 const TILES = [
   { view: 'today', importance: 'lead', grows: null },
   { view: 'inbox', importance: 'major', grows: 'openQuestions' },
+  { view: 'tasks', importance: 'minor', grows: null },
 ] as const satisfies readonly BrowseTile[];
 
 // More than one lead or three major tiles fails to typecheck here.
@@ -45,6 +46,7 @@ export const BROWSE_FOOT: readonly HelmView[] = ['settings', 'activity'];
 export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   today: 'home',
   inbox: 'home',
+  tasks: 'today',
   settings: 'home',
   activity: 'settings',
 };
@@ -53,6 +55,7 @@ export const VIEW_KINDS = {
   home: 'home',
   today: 'content',
   inbox: 'content',
+  tasks: 'content',
   settings: 'utility',
   activity: 'utility',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;

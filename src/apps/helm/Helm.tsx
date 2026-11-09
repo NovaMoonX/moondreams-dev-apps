@@ -11,6 +11,7 @@ import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import TasksView from '@apps/helm/components/tasks/TasksView';
 import TodayView from '@apps/helm/components/today/TodayView';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
 import { useHelmTheme } from '@apps/helm/hooks/useHelmTheme';
@@ -66,7 +67,14 @@ function Helm() {
         />
       )}
       {!isLocked && view === 'today' && (
-        <TodayView onBack={goHome} onHome={goHome} />
+        <TodayView
+          onBack={goHome}
+          onHome={goHome}
+          onOpenTasks={() => showView('tasks')}
+        />
+      )}
+      {!isLocked && view === 'tasks' && (
+        <TasksView onBack={goBack} onHome={goHome} />
       )}
       {!isLocked && view === 'inbox' && (
         <InboxView onBack={goHome} onHome={goHome} />

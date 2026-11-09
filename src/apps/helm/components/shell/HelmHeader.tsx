@@ -1,7 +1,10 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import type { DropdownMenuProps } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronLeft, House } from 'lucide-react';
 
+import EllipsisDropdown from '@/components/EllipsisDropdown';
 import HeaderIconButton from '@/components/HeaderIconButton';
+import { HELM_COPY } from '@apps/helm/constants';
 
 interface HelmHeaderProps {
   /** Names where Back goes ("Home"). */
@@ -10,6 +13,11 @@ interface HelmHeaderProps {
   onHome: () => void;
   /** False on a screen reached only from one parent, where Home would skip a step. */
   showsHome?: boolean;
+  /** The page's ⋯ menu, drawn at the right edge. */
+  menu?: {
+    items: DropdownMenuProps['items'];
+    onItemSelect: (value: string) => void;
+  };
 }
 
 /** A content page's header: Back, then Home unless Back already says Home. */
@@ -18,6 +26,7 @@ function HelmHeader({
   onBack,
   onHome,
   showsHome = true,
+  menu,
 }: HelmHeaderProps) {
   return (
     <header className='flex min-h-10 items-center gap-3'>
@@ -38,6 +47,16 @@ function HelmHeader({
           label='Home'
           onClick={onHome}
         />
+      )}
+      {menu && (
+        <div className='ml-auto shrink-0'>
+          <EllipsisDropdown
+            items={menu.items}
+            onItemSelect={menu.onItemSelect}
+            ariaLabel={HELM_COPY.moreActions}
+            className="relative size-8 after:absolute after:-inset-1 after:content-['']"
+          />
+        </div>
       )}
     </header>
   );
