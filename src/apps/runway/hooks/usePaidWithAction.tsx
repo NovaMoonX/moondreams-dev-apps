@@ -6,13 +6,17 @@ import {
   AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
 } from '@apps/runway/constants';
-import { getPullAccounts } from '@apps/runway/engine/accounts';
+import {
+  getPullAccounts,
+  keepPullAccountId,
+} from '@apps/runway/engine/accounts';
 import { isTrackingLevel } from '@apps/runway/engine/level';
 import { resolveCurrentOrNext } from '@apps/runway/engine/resolve';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccounts,
   selectAllCards,
+  selectIsAccountsLoaded,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { BillVersion } from '@apps/runway/types';
 import { getCardName } from '@apps/runway/utils/cardText';
@@ -22,6 +26,7 @@ export function usePaidWithAction(billId: string, today: number) {
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const allCards = useAppSelector(selectAllCards);
   const openAccounts = useAppSelector(selectAccounts);
+  const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const bill = useAppSelector((state) =>
     resolveCurrentOrNext(
       state.runway.versions.filter(
@@ -32,14 +37,21 @@ export function usePaidWithAction(billId: string, today: number) {
     ),
   )?.payload;
   if (!bill) return undefined;
-  const liveCards = isTracking
-    ? allCards.filter((card) => card.archivedAt === null)
+  const shownCards = isTracking
+    ? allCards.filter(
+        (card) => card.archivedAt === null || card.id === bill.paidByCardId,
+      )
     : [];
   const pullAccounts = getPullAccounts(openAccounts);
   const shownAccounts = pullAccounts.length >= 2 ? pullAccounts : [];
   if (!isTracking && shownAccounts.length === 0) return undefined;
-  const card = liveCards.find((found) => found.id === bill.paidByCardId);
-  const account = shownAccounts.find((found) => found.id === bill.accountId);
+  const card = shownCards.find((found) => found.id === bill.paidByCardId);
+  const accountId = keepPullAccountId(
+    bill.accountId,
+    openAccounts,
+    isAccountsLoaded,
+  );
+  const account = shownAccounts.find((found) => found.id === accountId);
   const getWay = () => {
     if (card) return getCardName(card, allCards);
     if (account) return account.name;
