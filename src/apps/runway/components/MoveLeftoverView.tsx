@@ -99,6 +99,7 @@ function MoveLeftoverView({
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const resultsRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   const envelopePlaces: Place[] = hasEnvelopes
@@ -138,6 +139,12 @@ function MoveLeftoverView({
     { label: MOVE_WORDS.envelopes, options: toOptions(envelopePlaces) },
     { label: MOVE_WORDS.goals, options: toOptions(goalPlaces) },
   ].filter((section) => section.options.length > 0);
+  const search = (text: string) => {
+    setQuery(text);
+    requestAnimationFrame(() =>
+      resultsRef.current?.scrollIntoView({ block: 'nearest' }),
+    );
+  };
   const choose = (value: string) => {
     setPick(value);
     setQuery('');
@@ -316,30 +323,32 @@ function MoveLeftoverView({
             >
               <SearchInput
                 value={query}
-                onChange={setQuery}
+                onChange={search}
                 placeholder={
                   hasEnvelopes ? MOVE_WORDS.search : MOVE_WORDS.searchGoals
                 }
               />
             </div>
           )}
-          {sections.map((section) => (
-            <div key={section.label} className='space-y-2'>
-              <SectionDivider label={section.label} />
-              <PillGroup
-                label={section.label}
-                options={section.options}
-                value={pick}
-                onChange={choose}
-                isSearchable={false}
-              />
-            </div>
-          ))}
-          {trimmedQuery !== '' && sections.length === 0 && (
-            <p className='text-muted-foreground text-sm'>
-              {MOVE_WORDS.noMatch(query.trim())}
-            </p>
-          )}
+          <div ref={resultsRef} className='space-y-3'>
+            {sections.map((section) => (
+              <div key={section.label} className='space-y-2'>
+                <SectionDivider label={section.label} />
+                <PillGroup
+                  label={section.label}
+                  options={section.options}
+                  value={pick}
+                  onChange={choose}
+                  isSearchable={false}
+                />
+              </div>
+            ))}
+            {trimmedQuery !== '' && sections.length === 0 && (
+              <p className='text-muted-foreground text-sm'>
+                {MOVE_WORDS.noMatch(query.trim())}
+              </p>
+            )}
+          </div>
         </div>
       </ActionSection>
       {rows.length > 0 && (

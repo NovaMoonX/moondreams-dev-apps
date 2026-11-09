@@ -2648,7 +2648,7 @@ export const MOVE_WORDS = {
   freeToSpend: 'Free to Spend',
   envelopes: 'Envelopes',
   goals: 'Goals',
-  search: 'Search envelopes and goals',
+  search: 'Search places',
   searchGoals: 'Search goals',
   noMatch: (query: string) => `Nothing matches “${query}”.`,
   needsAmount: 'Enter how much to move.',
