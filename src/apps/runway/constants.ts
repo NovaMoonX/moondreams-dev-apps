@@ -688,6 +688,65 @@ const listNamesAndMore = (names: readonly string[], more: number) =>
   more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
 
 /** Issue 88: finishing an event, calling it off and bringing it back. */
+/** Planning a goal or an envelope on the Horizon: which event, linking a goal, moving an envelope in, and the nudge. */
+export const HORIZON_PLAN_WORDS = {
+  door: 'Plan it on your Horizon',
+  goalDoorSub: 'Add what it is for as an event',
+  envelopeDoorSub: 'Move its money into an event',
+  title: 'Which event?',
+  newEvent: 'New event',
+  newEventSubGoal: (goal: string) => `Starts with ${goal}`,
+  newEventSubEnvelope: (envelope: string) => `Starts with ${envelope}'s money`,
+  search: 'Search',
+  noMatch: 'No event matches',
+  goalTaken: (goal: string, event: string) =>
+    `${goal} already saves for ${event}. A goal saves for one event.`,
+  eventHasGoal: (event: string, goal: string) =>
+    `${event} already draws from ${goal}. An event draws from one goal.`,
+  linkSummary: (goal: string, event: string, amount: string | null) =>
+    `${goal} now saves for ${event}.${amount === null ? '' : ` Added ${goal}, ${amount}, as its first cost.`}`,
+  unlinkSummary: (goal: string, event: string) =>
+    `${goal} no longer saves for ${event}. Its cost stays on the event.`,
+  newFromGoalSummary: (event: string, goal: string) =>
+    `Added ${event}, saving for it from ${goal}.`,
+  linked: (goal: string, event: string) => `${goal} now saves for ${event}`,
+  unlinked: (goal: string, event: string) =>
+    `${goal} no longer saves for ${event}`,
+  savingForCaption: 'Saving for it',
+  savingForLine: (goal: string, saved: string, target: string) =>
+    `${goal}, ${saved} of ${target}`,
+  partOf: (event: string) => `Part of ${event}`,
+  partOfSub: 'Saving for it',
+  unlinkTitle: (event: string) => `Stop saving for ${event}?`,
+  unlinkBody: (event: string) =>
+    `${event} keeps its cost and pays it from its own money. The goal keeps saving at its own pace.`,
+  unlinkAction: 'Unlink the goal',
+  envelopeConfirm: (envelope: string, amount: string, event: string) =>
+    `${envelope} closes and its ${amount} moves to ${event}`,
+  envelopeConfirmEmpty: (envelope: string, event: string) =>
+    `${envelope} closes. It holds nothing to move to ${event}`,
+  envelopeAction: (envelope: string) => `Close ${envelope}`,
+  envelopeMoved: (envelope: string, amount: string, event: string) =>
+    `${envelope} closed and its ${amount} moved to ${event}`,
+  envelopeMoveUndo: (envelope: string, amount: string, event: string) =>
+    `${envelope} reopened and its ${amount} came back from ${event}`,
+  envelopeArchiveSummary: (amount: string, event: string) =>
+    `Closed. Its ${amount} moved to ${event}.`,
+  envelopeNewSummary: (event: string, envelope: string) =>
+    `Added ${event}, with the money from ${envelope}.`,
+  envelopeUndoShort: (event: string) =>
+    `${event} has used some of it, so this can't be undone.`,
+  envelopeUndoChanged: 'It was changed since, so nothing was undone.',
+  envelopeAlreadyClosed: 'That envelope was already closed.',
+  offline: 'You are offline, so nothing was changed.',
+  failed: 'This did not save. Nothing was changed.',
+  nudgeTitle: "Know what it'll cost?",
+  nudgeSub: (goal: string, date: string) => `${goal} is due ${date}.`,
+  nudgeAction: 'Plan it on your Horizon',
+  nudgeDismiss: "Don't ask again",
+  nudgeDismissFailed: 'That did not save. Try again.',
+} as const;
+
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
   readySub: 'Nothing is left to pay, so it is ready to finish.',
@@ -2585,6 +2644,12 @@ export const COST_PAID_WORDS = {
     `${cost}'s ${due} payment on ${item} goes back to unpaid${gives === null ? '' : `. ${gives}`}.`,
   givesBackItem: (item: string, amount: string) =>
     `${item} gets ${amount} back`,
+  givesBackGoal: (goal: string, amount: string) =>
+    `${goal} gets ${amount} back`,
+  goalSummary: (cost: string, event: string, amount: string) =>
+    `Paid ${cost} for ${event}: ${amount} came from this goal.`,
+  goalUndoSummary: (cost: string, event: string, amount: string) =>
+    `Took back ${cost} for ${event}: ${amount} went back to this goal.`,
   givesBackFree: (amount: string) => `${amount} goes back to Free to Spend`,
   purchaseRemoved: 'the purchase is removed from Spend',
   confirmMark: (

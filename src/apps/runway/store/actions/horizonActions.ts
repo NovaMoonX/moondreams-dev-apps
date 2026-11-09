@@ -9,9 +9,18 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 
-import { HORIZON_END_WORDS, MAKE_BILL_WORDS } from '@apps/runway/constants';
+import {
+  COST_PAID_WORDS,
+  HORIZON_END_WORDS,
+  HORIZON_PLAN_WORDS,
+  MAKE_BILL_WORDS,
+} from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getNextVersionId, setHorizonState } from '@apps/runway/engine/horizon';
+import {
+  getNextVersionId,
+  setHorizonState,
+  type CostPaidEntry,
+} from '@apps/runway/engine/horizon';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
@@ -60,6 +69,12 @@ export interface AddHorizonInput {
   startDate: number;
   /** Money put toward the item as it is added; its target is the new item. Null puts none. */
   toward: Omit<MoveLeftoverInput, 'toId' | 'note' | 'isOutside'> | null;
+  /** The change-log sentence; defaults to "Added <name>.". */
+  summary?: string;
+  /** Other items the change entry is listed on, such as the goal the event draws from. */
+  alsoItemIds?: string[];
+  /** Closes the envelope the money comes from in the same write, with its own history line; needs `toward` from an envelope. */
+  archive?: { summary: string } | null;
 }
 
 /**
@@ -70,15 +85,32 @@ export interface AddHorizonInput {
 export async function addHorizon(
   uid: string,
   encryption: RunwayEncryption,
-  { horizonId, horizon, startDate, toward }: AddHorizonInput,
+  {
+    horizonId,
+    horizon,
+    startDate,
+    toward,
+    summary,
+    alsoItemIds = [],
+    archive = null,
+  }: AddHorizonInput,
 ): Promise<{ horizonId: string }> {
   const now = Date.now();
   const changeId = generateUuid();
-  const changePayload: ChangeSealed = { summary: `Added ${horizon.name}.` };
+  const changePayload: ChangeSealed = {
+    summary: summary ?? `Added ${horizon.name}.`,
+  };
+  const archiveId = generateUuid();
 
-  const [horizonSealed, changeSealed] = await Promise.all([
+  const [horizonSealed, changeSealed, archiveSealed] = await Promise.all([
     sealJson(horizon, encryption),
     sealJson(changePayload, encryption),
+    archive
+      ? sealJson(
+          { summary: archive.summary } satisfies ChangeSealed,
+          encryption,
+        )
+      : Promise.resolve(null),
   ]);
 
   const header: PlanItemDoc = {
@@ -105,7 +137,7 @@ export async function addHorizon(
     kind: 'planChange',
     createdAt: now,
     effectiveFrom: startDate,
-    itemIds: [horizonId],
+    itemIds: [horizonId, ...alsoItemIds],
     sealed: changeSealed,
   };
 
@@ -149,9 +181,33 @@ export async function addHorizon(
       move,
       toward.fromId ?? horizonId,
     );
+    if (archive && archiveSealed && toward.fromId !== null) {
+      const fromData = from?.data() as Partial<PlanItemDoc> | undefined;
+      if ((fromData?.archivedAt ?? null) !== null) {
+        throw new Error(HORIZON_PLAN_WORDS.envelopeAlreadyClosed);
+      }
+      transaction.update(planDoc(uid, 'items', toward.fromId), {
+        archivedAt: startDate,
+      });
+      transaction.set(planDoc(uid, 'changes', archiveId), {
+        id: archiveId,
+        kind: 'planChange',
+        createdAt: now,
+        effectiveFrom: startDate,
+        itemIds: [toward.fromId, horizonId],
+        sealed: archiveSealed,
+      } satisfies ChangeDoc);
+    }
   });
 
   return { horizonId };
+}
+
+/** The goal that paid part of a cost's payment, with what it paid. */
+export interface GoalPart {
+  goalId: string;
+  goalName: string;
+  cents: Cents;
 }
 
 export interface MarkCostPaidInput {
@@ -166,6 +222,8 @@ export interface MarkCostPaidInput {
   fromFreeCents: Cents;
   paidOn: DateOnly;
   mark: Extract<CostPaidMark, 'item' | 'outside'>;
+  /** The part the event's linked goal pays, taken before the event's own money; null when the event has no goal or it holds nothing. */
+  goal: GoalPart | null;
   /** How many times this payment has been marked before, undone marks included. */
   marks: number;
 }
@@ -174,12 +232,20 @@ export interface MarkCostPaidInput {
 export interface CostPaidNames {
   item: string;
   cost: string;
+  /** The linked goal's name when it paid part of the payment. */
+  goal?: string | null;
 }
 
 export type WrittenCostPaid = {
   moveId: string;
   itemId: string;
-} & CostPaidSealed;
+} & CostPaidSealed &
+  Pick<CostPaidEntry, 'fromGoalCents' | 'goalId'>;
+
+const getGoalOf = (paid: WrittenCostPaid, names: CostPaidNames) =>
+  paid.goalId !== null && paid.fromGoalCents > 0
+    ? { name: names.goal ?? '', cents: paid.fromGoalCents }
+    : null;
 
 /** How many earlier marks of one payment are looked past when a mark was undone, which the device may not have loaded. */
 const MAX_MARK_PROBES = 12;
@@ -198,6 +264,7 @@ export async function getCostPaidChange(
     paid.amountCents,
     paid.fromFreeCents,
     paid.mark,
+    getGoalOf(paid, names),
   );
   const id = generateUuid();
   return {
@@ -240,12 +307,41 @@ export async function getCostPaidChange(
             fromFreeCents: paid.fromFreeCents,
             mark: paid.mark,
             purchaseId: paid.purchaseId,
+            fromGoalCents: paid.fromGoalCents,
+            goalId: paid.goalId,
+            goalName: names.goal ?? null,
           },
         },
       } satisfies ChangeSealed,
       encryption,
     ),
   } satisfies ChangeDoc;
+}
+
+/** The History entry on the goal for a payment of its event that took money from it, or that gave it back; null when the goal paid nothing. */
+export async function getGoalPaidChange(
+  encryption: RunwayEncryption,
+  paid: WrittenCostPaid,
+  names: CostPaidNames,
+  isUndo: boolean,
+): Promise<ChangeDoc | null> {
+  if (paid.goalId === null || paid.fromGoalCents <= 0) return null;
+  const words = isUndo
+    ? COST_PAID_WORDS.goalUndoSummary
+    : COST_PAID_WORDS.goalSummary;
+  return {
+    id: generateUuid(),
+    kind: 'planChange',
+    createdAt: Date.now(),
+    effectiveFrom: null,
+    itemIds: [paid.goalId],
+    sealed: await sealJson(
+      {
+        summary: words(names.cost, names.item, formatCents(paid.fromGoalCents)),
+      } satisfies ChangeSealed,
+      encryption,
+    ),
+  };
 }
 
 /**
@@ -295,7 +391,9 @@ export async function markCostPaid(
   encryption: RunwayEncryption,
   input: MarkCostPaidInput,
 ): Promise<WrittenCostPaid | null> {
-  const payload: CostPaidSealed = {
+  const goal = input.mark === 'outside' ? null : input.goal;
+  const payload: CostPaidSealed &
+    Pick<CostPaidEntry, 'fromGoalCents' | 'goalId'> = {
     costId: input.costId,
     dueOn: input.dueOn,
     amountCents: input.amountCents,
@@ -303,6 +401,8 @@ export async function markCostPaid(
     fromFreeCents: input.mark === 'outside' ? 0 : input.fromFreeCents,
     mark: input.mark,
     purchaseId: null,
+    fromGoalCents: goal?.cents ?? 0,
+    goalId: goal?.goalId ?? null,
   };
   const sealed = await sealJson(payload, encryption);
   const written = await runTransaction(db, async (transaction) => {
@@ -321,12 +421,13 @@ export async function markCostPaid(
       itemId: input.itemId,
       ...payload,
     };
-    const change = await getCostPaidChange(
-      encryption,
-      mark,
-      { item: input.itemName, cost: input.costName },
-      false,
-    );
+    const names = {
+      item: input.itemName,
+      cost: input.costName,
+      goal: goal?.goalName ?? null,
+    };
+    const change = await getCostPaidChange(encryption, mark, names, false);
+    const goalChange = await getGoalPaidChange(encryption, mark, names, false);
     markLedgerWrite(transaction, uid, plan.data(), [input.dueOn]);
     transaction.set(planDoc(uid, 'moves', id), {
       id,
@@ -338,6 +439,9 @@ export async function markCostPaid(
       sealed,
     } satisfies MoveDoc);
     transaction.set(planDoc(uid, 'changes', change.id), change);
+    if (goalChange) {
+      transaction.set(planDoc(uid, 'changes', goalChange.id), goalChange);
+    }
     return mark;
   });
   return written;
@@ -357,6 +461,8 @@ export const sealCostUnmark = (
       fromFreeCents: paid.fromFreeCents,
       mark: paid.mark,
       purchaseId: paid.purchaseId,
+      fromGoalCents: paid.fromGoalCents,
+      goalId: paid.goalId,
     } satisfies CostPaidSealed,
     encryption,
   );
@@ -388,7 +494,11 @@ export function setCostUnmark(
   sealed: Sealed,
   change: ChangeDoc,
   reopen: SealedReopen | null = null,
+  goalChange: ChangeDoc | null = null,
 ) {
+  if (goalChange) {
+    transaction.set(planDoc(uid, 'changes', goalChange.id), goalChange);
+  }
   if (reopen) {
     transaction.set(
       planDoc(uid, 'versions', reopen.version.id),
@@ -489,8 +599,9 @@ export async function undoCostPaid(
     if (isDone) return false;
     if (isReopenGone) throw new Error(HORIZON_END_WORDS.changedJustNow);
     const change = await getCostPaidChange(encryption, paid, names, true);
+    const goalChange = await getGoalPaidChange(encryption, paid, names, true);
     markLedgerWrite(transaction, uid, plan.data(), [paid.dueOn]);
-    setCostUnmark(transaction, uid, paid, sealed, change, reopen);
+    setCostUnmark(transaction, uid, paid, sealed, change, reopen, goalChange);
     return true;
   });
   return isWritten;
@@ -680,6 +791,8 @@ export interface SetHorizonStateInput {
   move: HorizonMoneyMove | null;
   /** The move reverses the one it names (an Undo), so it is written under the id that names it. */
   isUndo?: boolean;
+  /** Other items the change entry is listed on, such as the goal an event draws from. */
+  alsoItemIds?: string[];
 }
 
 /**
@@ -763,7 +876,7 @@ export async function setHorizonStateWith(
       kind: 'planChange',
       createdAt: now,
       effectiveFrom: input.on,
-      itemIds: [input.itemId, ...placeIds],
+      itemIds: [input.itemId, ...placeIds, ...(input.alsoItemIds ?? [])],
       sealed: changeSealed,
     } satisfies ChangeDoc);
     if (move && moveId !== null && moveSealed !== null) {

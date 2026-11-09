@@ -1,6 +1,7 @@
 import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
+  CalendarClock,
   CalendarOff,
   Calculator,
   Check,
@@ -47,6 +48,10 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import AccountPicker from '@apps/runway/components/AccountPicker';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import HorizonPlanView from '@apps/runway/components/HorizonPlanView';
+import HorizonUnlinkView from '@apps/runway/components/HorizonUnlinkView';
+import HorizonForm, { type HorizonSeed } from '@apps/runway/forms/HorizonForm';
+import { getLinkedEventId } from '@apps/runway/engine/horizonGoal';
 import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
 import ChargePickerView from '@apps/runway/components/ChargePickerView';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -97,6 +102,8 @@ import {
   SET_HELD_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
+  HORIZON_PLAN_WORDS,
+  HORIZON_WORDS,
 } from '@apps/runway/constants';
 import { getHolderById } from '@apps/runway/engine/accounts';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
@@ -199,6 +206,8 @@ type View =
   | 'heldIn'
   | 'spill'
   | 'charge'
+  | 'horizonPlan'
+  | 'horizonLink'
   | 'dayAction';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
@@ -299,6 +308,8 @@ const VIEW_NOTES: Record<View, string> = {
   heldIn: '',
   spill: '',
   charge: '',
+  horizonPlan: '',
+  horizonLink: '',
   dayAction: '',
 };
 
@@ -378,6 +389,7 @@ function ItemSheet({
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
   const [groupText, setGroupText] = useState('');
+  const [horizonSeed, setHorizonSeed] = useState<HorizonSeed | null>(null);
   const [accountChoice, setAccountChoice] = useState(NO_ACCOUNT);
   const openAccounts = useAppSelector(selectAccounts);
   const holdings = useAppSelector((state) =>
@@ -434,6 +446,19 @@ function ItemSheet({
   const endedAt = header?.endedAt ?? null;
 
   const goal = itemKind === 'goal' ? (payload as GoalSealed) : null;
+  const linkedEvent =
+    goal === null
+      ? null
+      : (events.find(
+          ({ version: eventVersion }) =>
+            getLinkedEventId(itemId, [
+              { id: itemId, horizon: eventVersion.payload },
+            ]) !== null,
+        ) ?? null);
+  const canPlanOnHorizon =
+    canChange &&
+    header?.archivedAt == null &&
+    (goal !== null || (itemKind === 'envelope' && heldCents > 0));
   const isPaused = goal !== null && (goal.state ?? 'active') === 'paused';
   const isUnfunded = goal !== null && goal.funding.cadence.kind === 'none';
   const upcoming = isScheduled(payload)
@@ -1282,6 +1307,30 @@ function ItemSheet({
             onOpen={() => goTo('balance')}
           />
         )}
+        {goal && linkedEvent && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={HORIZON_PLAN_WORDS.partOf(linkedEvent.version.payload.name)}
+            subtitle={HORIZON_PLAN_WORDS.partOfSub}
+            onClick={() => goTo('horizonLink')}
+          />
+        )}
+        {canPlanOnHorizon && !linkedEvent && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={HORIZON_PLAN_WORDS.door}
+            subtitle={
+              goal
+                ? HORIZON_PLAN_WORDS.goalDoorSub
+                : HORIZON_PLAN_WORDS.envelopeDoorSub
+            }
+            onClick={() => goTo('horizonPlan')}
+          />
+        )}
         <ActionRow
           isGrouped
           hasChevron
@@ -1720,6 +1769,42 @@ function ItemSheet({
     />
   );
 
+  const horizonPlanView = (
+    <HorizonPlanView
+      source={
+        goal
+          ? {
+              kind: 'goal',
+              goalId: itemId,
+              name: goal.name,
+              emoji: goal.emoji,
+              targetCents: goal.targetCents,
+              targetDate: goal.targetDate,
+            }
+          : {
+              kind: 'envelope',
+              envelopeId: itemId,
+              name: payload.name,
+              emoji: (payload as EnvelopeSealed).emoji ?? null,
+              heldCents,
+            }
+      }
+      today={today}
+      onBack={() => goTo('menu')}
+      onNewEvent={setHorizonSeed}
+      onClose={onClose}
+    />
+  );
+
+  const horizonLinkView = linkedEvent && (
+    <HorizonUnlinkView
+      goalName={payload.name}
+      event={linkedEvent}
+      today={today}
+      onBack={() => goTo('menu')}
+    />
+  );
+
   const heldInView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -1898,17 +1983,30 @@ function ItemSheet({
                       ? setHeldView
                       : view === 'heldIn'
                         ? heldInView
-                        : view === 'dayAction' && dayAction?.renderView
-                          ? dayAction.renderView({
-                              onBack: () => goTo('menu'),
-                              onClose,
-                              openChange,
-                            })
-                          : action
+                        : view === 'horizonPlan'
+                          ? horizonPlanView
+                          : view === 'horizonLink' && horizonLinkView
+                            ? horizonLinkView
+                            : view === 'dayAction' && dayAction?.renderView
+                              ? dayAction.renderView({
+                                  onBack: () => goTo('menu'),
+                                  onClose,
+                                  openChange,
+                                })
+                              : action
         }
       >
         {menu}
       </ChangeSteps>
+      {horizonSeed !== null && (
+        <HorizonForm
+          isOpen
+          title={HORIZON_WORDS.formTitle}
+          seed={horizonSeed}
+          onClose={() => setHorizonSeed(null)}
+          onSaved={onClose}
+        />
+      )}
     </FormSheet>
   );
 }

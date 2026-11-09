@@ -18,6 +18,7 @@ import { selectFreeToSpend } from '@apps/runway/store/selectors/balanceSelectors
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   computeDraftView,
+  getEventGoalCover,
   selectBillPayments,
   selectBillProgress,
   selectBills,
@@ -119,6 +120,15 @@ export function computeLookahead(
       costs: version.payload.costs,
       state: version.payload.state,
       heldCents: heldByItem[item.id] ?? 0,
+      goalCover: getEventGoalCover(
+        version.payload,
+        items,
+        versions,
+        today,
+        inputs.comingDays,
+        heldByItem,
+        stance,
+      ),
       paid: billProgress[item.id]?.costPaid ?? [],
     })),
     draftOf: (day, carry) => {

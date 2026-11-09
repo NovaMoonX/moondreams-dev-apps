@@ -89,8 +89,13 @@ export function useUndoTransfer() {
         const isWritten = await undoCostPayment(
           user.uid,
           cost.itemId,
-          { item: cost.itemName, cost: cost.name },
-          { ...cost, moveId: moved.moveId },
+          { item: cost.itemName, cost: cost.name, goal: cost.goalName ?? null },
+          {
+            ...cost,
+            fromGoalCents: cost.fromGoalCents ?? 0,
+            goalId: cost.goalId ?? null,
+            moveId: moved.moveId,
+          },
         );
         if (!isWritten) {
           addToast({

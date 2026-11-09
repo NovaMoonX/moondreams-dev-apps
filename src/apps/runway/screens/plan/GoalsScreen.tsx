@@ -19,6 +19,7 @@ import {
   GROUP_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
+import HorizonNudge from '@apps/runway/components/HorizonNudge';
 import GoalRow from '@apps/runway/components/GoalRow';
 import GroupHeading from '@apps/runway/components/GroupHeading';
 import GroupSheet from '@apps/runway/forms/GroupSheet';
@@ -257,6 +258,7 @@ function GoalsScreen() {
           ) : undefined
         }
       />
+      {isLoaded && <HorizonNudge />}
       {getBody()}
       {isLoaded && <StoppedHoldingList kind='goal' today={today} />}
       <FloatingAction

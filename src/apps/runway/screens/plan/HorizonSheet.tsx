@@ -6,6 +6,7 @@ import {
   History,
   Pencil,
   RotateCcw,
+  Target,
   Unlink,
   Unlock,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ import {
   COST_PAID_WORDS,
   FIX_WORDS,
   HORIZON_END_WORDS,
+  HORIZON_PLAN_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
   ITEM_VIEW_WORDS,
@@ -87,6 +89,7 @@ import {
   selectBalances,
   selectHeldBy,
 } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectAllCards,
   selectAllHorizonItems,
@@ -142,6 +145,8 @@ function HorizonSheet({
   const { dial } = usePriorityDial();
   const balances = useAppSelector(selectBalances);
   const paid = useAppSelector(selectCostPaid)[itemId];
+  const goalCover =
+    useAppSelector((state) => selectGoalCovers(state, today))[itemId] ?? null;
   const costPayments = useAppSelector((state) =>
     selectCostPayments(state, today),
   );
@@ -192,6 +197,7 @@ function HorizonSheet({
     paid,
     balances.costPaidByItem[itemId] ?? 0,
     balances.costFromFreeByItem[itemId] ?? 0,
+    goalCover,
   );
   const { shortfall } = plan;
   const isDone = horizon.state !== 'open';
@@ -544,6 +550,36 @@ function HorizonSheet({
       setIsUnlinking(false);
     }
   };
+  const linkedGoal =
+    horizon.goalId === null
+      ? undefined
+      : goals.find(({ item }) => item.id === horizon.goalId);
+  const goalBlock = linkedGoal && (
+    <div className='space-y-2'>
+      <p className='text-muted-foreground text-sm font-medium'>
+        {HORIZON_PLAN_WORDS.savingForCaption}
+      </p>
+      <ActionGroup>
+        <ActionRow
+          isGrouped
+          hasChevron
+          icon={<Target />}
+          label={mask(
+            HORIZON_PLAN_WORDS.savingForLine(
+              linkedGoal.version.payload.name,
+              formatCents(
+                Math.max(0, balances.assignedByItem[linkedGoal.item.id] ?? 0),
+              ),
+              formatCents(linkedGoal.version.payload.targetCents),
+            ),
+          )}
+          onClick={() =>
+            void showOnPlan('goals', { itemId: linkedGoal.item.id })
+          }
+        />
+      </ActionGroup>
+    </div>
+  );
   const isChangesOnly = horizon.costs.length === 0;
   const changesBlock =
     linkLines.length === 0 && horizon.state !== 'open' ? null : (
@@ -761,6 +797,7 @@ function HorizonSheet({
               </p>
             )}
           </div>
+          {goalBlock}
           {changesBlock}
           {!isChangesOnly && (
             <div className='space-y-2'>
@@ -1041,6 +1078,7 @@ function HorizonSheet({
               </ActionGroup>
             )}
           </div>
+          {goalBlock}
           {changesBlock}
           <ActionGroup isRoomy>
             {!shortfall && !isChangesOnly && (

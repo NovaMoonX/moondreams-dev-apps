@@ -34,7 +34,7 @@ export const newTransferMoveId = () => `transfer_${generateUuid()}`;
 /** Takes one move of money back by naming it, so a second undo of it is the same id. */
 export const getUndoTransferMoveId = (moveId: string) => `untransfer_${moveId}`;
 
-const getChangeDoc = async (
+export const getChangeDoc = async (
   encryption: RunwayEncryption,
   summary: string,
   note: string | null,

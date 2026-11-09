@@ -519,10 +519,15 @@ export const describeCostGivesBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) => {
-  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const goal = mark === 'outside' || fromGoal === null ? 0 : fromGoal.cents;
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents - goal;
   const free = mark === 'outside' ? 0 : fromFreeCents;
   const parts = [
+    goal > 0 &&
+      fromGoal !== null &&
+      COST_PAID_WORDS.givesBackGoal(fromGoal.name, formatCents(goal)),
     fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
     free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
     mark === 'purchase' && COST_PAID_WORDS.purchaseRemoved,
@@ -541,10 +546,11 @@ export const describeCostTakenBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) =>
   COST_PAID_WORDS.undoText(
     cost,
     item,
     formatDateOrdinalUTC(dueOn),
-    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark, fromGoal),
   );

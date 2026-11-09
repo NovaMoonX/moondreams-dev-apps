@@ -78,6 +78,12 @@ function ChangeRow({
                   move.cost.amountCents,
                   move.cost.fromFreeCents,
                   move.cost.mark,
+                  move.cost.goalId != null && (move.cost.fromGoalCents ?? 0) > 0
+                    ? {
+                        name: move.cost.goalName ?? '',
+                        cents: move.cost.fromGoalCents ?? 0,
+                      }
+                    : null,
                 ),
               ),
               getOpensAgainNote(move.cost.itemId),

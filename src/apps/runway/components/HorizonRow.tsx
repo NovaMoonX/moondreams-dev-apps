@@ -12,6 +12,7 @@ import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { HORIZON_END_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectCostPaid,
   selectItemStops,
@@ -48,6 +49,8 @@ function HorizonRow({
   const { isHidden } = useValuesHidden();
   const balances = useAppSelector(selectBalances);
   const paid = useAppSelector(selectCostPaid)[itemId];
+  const goalCover =
+    useAppSelector((state) => selectGoalCovers(state, today))[itemId] ?? null;
   const { figures, plan, next } = getHorizonStatus(
     horizon,
     balances.assignedByItem[itemId] ?? 0,
@@ -56,6 +59,7 @@ function HorizonRow({
     paid,
     balances.costPaidByItem[itemId] ?? 0,
     balances.costFromFreeByItem[itemId] ?? 0,
+    goalCover,
   );
   const { shortfall } = plan;
   const isDone = horizon.state !== 'open';

@@ -3,10 +3,13 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
+  getPriorDays,
+  selectAllHorizonItems,
   selectBillPayments,
   selectBills,
   selectComingDays,
   selectCostPaid,
+  selectGoals,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -16,12 +19,67 @@ import {
   getHorizonPaceCents,
   getLiveCosts,
 } from '@apps/runway/engine/horizon';
+import { getGoalCover, type GoalCover } from '@apps/runway/engine/horizonGoal';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 const selectOn = (_state: RootState, on: number) => on;
 const selectDial = (_state: RootState, _on: number, dial: Priority) => dial;
+
+/** What the goal each open event draws from holds now and puts in on the coming income days, by event id; an event with no live goal has none. */
+export const selectGoalCovers = createSelector(
+  [
+    selectAllHorizonItems,
+    selectGoals,
+    selectBalances,
+    selectComingDays,
+    selectStance,
+    (state: RootState) => state.runway.items,
+    (state: RootState) => state.runway.versions,
+    selectOn,
+  ],
+  (
+    events,
+    goals,
+    balances,
+    comingDays,
+    stance,
+    items,
+    versions,
+    today,
+  ): Record<string, GoalCover> =>
+    Object.fromEntries(
+      events.flatMap(({ item, version }) => {
+        const goalId =
+          version.payload.state === 'open' ? version.payload.goalId : null;
+        const goal = goals.find(({ item: found }) => found.id === goalId);
+        return goalId === null || !goal
+          ? []
+          : [
+              [
+                item.id,
+                getGoalCover(
+                  goal.version.payload,
+                  balances.assignedByItem[goalId] ?? 0,
+                  comingDays.map((day) => ({
+                    ...day,
+                    moneyCents: pick(
+                      effectiveStance(stance, day.stanceOverride),
+                      day.amount,
+                      'income',
+                    ),
+                  })),
+                  getPriorDays(items, versions, today, comingDays, [
+                    goal.version.payload.funding,
+                  ]),
+                ),
+              ],
+            ];
+      }),
+    ),
+);
 
 /** The steady amount a month the costs of open Horizon items counted at `dial` need, each cost at its own priority, to meet every payment on its due date from what is not yet held; the usual-month basis the dated goals use. */
 export const selectHorizonMonthCents = createSelector(
@@ -32,8 +90,9 @@ export const selectHorizonMonthCents = createSelector(
     selectStance,
     selectOn,
     selectDial,
+    selectGoalCovers,
   ],
-  (items, balances, costPaid, stance, today, dial): number =>
+  (items, balances, costPaid, stance, today, dial, covers): number =>
     items.reduce(
       (sum, { item, version }) =>
         sum +
@@ -46,6 +105,7 @@ export const selectHorizonMonthCents = createSelector(
             costPaid[item.id],
             balances.costPaidByItem[item.id] ?? 0,
             balances.costFromFreeByItem[item.id] ?? 0,
+            covers[item.id] ?? null,
           ).plan.covers,
           new Set(
             getLiveCosts(version.payload)
@@ -92,8 +152,9 @@ export const selectHorizonShortCents = createSelector(
     selectStance,
     selectOn,
     selectDial,
+    selectGoalCovers,
   ],
-  (items, balances, costPaid, stance, today, dial): number =>
+  (items, balances, costPaid, stance, today, dial, covers): number =>
     items.reduce(
       (sum, { item, version }) =>
         sum +
@@ -106,6 +167,7 @@ export const selectHorizonShortCents = createSelector(
             costPaid[item.id],
             balances.costPaidByItem[item.id] ?? 0,
             balances.costFromFreeByItem[item.id] ?? 0,
+            covers[item.id] ?? null,
           ).plan,
           new Set(
             getLiveCosts(version.payload)

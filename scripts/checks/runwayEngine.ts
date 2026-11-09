@@ -117,8 +117,19 @@ import {
   splitReceiptRow,
 } from '../../src/apps/runway/utils/receiptText.ts';
 import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
+import {
+  getGoalBalanceAt,
+  getGoalCost,
+  getGoalCover,
+  getGoalLinkBlock,
+  getHorizonNudgeFrom,
+  getLinkedEventId,
+  getTargetDateSetOn,
+  shouldNudgeHorizon,
+} from '../../src/apps/runway/engine/horizonGoal.ts';
 import type {
   BillFundedBy,
+  GoalSealed,
   OpenAccount,
   OpenCard,
   OpenLink,
@@ -332,6 +343,7 @@ import {
   getPurchaseMarkFigures,
   setHorizonState,
   settleCostPaid,
+  settleCostPaidWithGoal,
   getHorizonFigures,
   sumCostPayments,
   sumCostSpent,
@@ -5635,6 +5647,7 @@ const version = (
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        goalId: null,
         links: [],
         costs: [
           {
@@ -12862,6 +12875,7 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'later' as const },
     note: null,
+    goalId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
@@ -12935,6 +12949,8 @@ const version = (
     fromFreeCents: 0,
     mark: 'item',
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   };
   assert.deepEqual(
     listCostPayments(earlyEnd, jan15 + 90 * 86_400_000, 'conservative', [
@@ -13147,6 +13163,7 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'later' },
     note: null,
+    goalId: null,
     state: 'open' as const,
     stateOn: null,
     stateMoney: null,
@@ -13168,6 +13185,8 @@ const version = (
     fromFreeCents,
     mark,
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   });
   const markMove = (paid: CostPaidEntry): OpenMove => ({
     id: paid.moveId,
@@ -13765,6 +13784,7 @@ const version = (
     orderIndex: 1,
     rest: { kind: 'pays' },
     note: null,
+    goalId: null,
     state: 'open',
     stateOn: null,
     stateMoney: null,
@@ -18681,6 +18701,8 @@ console.log('runway engine: ok');
     fromFreeCents: 0,
     mark: 'item',
     purchaseId: null,
+    fromGoalCents: 0,
+    goalId: null,
   };
   assert.deepEqual(
     getMakeBillBlock(
@@ -19140,6 +19162,471 @@ console.log('runway engine: ok');
     'and the split still adds up',
   );
   assert.equal(rulePlaced.length, 2, 'the chain pays what the envelope cannot');
+}
+
+// A goal linked to a Horizon event: the walk covers each cost from the goal first, a payment takes from the goal then the event, and the nudge asks as the date nears.
+{
+  const jan1 = utc(2027, 0, 1);
+  const jan15 = utc(2027, 0, 15);
+  const mar1 = utc(2027, 2, 1);
+  const exact = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const once = (id: string, cents: number, on: number): HorizonCost => ({
+    id,
+    name: id,
+    amount: exact(cents),
+    schedule: { kind: 'once', anchor: on, monthDays: [] },
+    ending: { onDate: null, afterCount: null },
+    isOutside: false,
+    pricedOn: null,
+    endsAfter: null,
+    becameBillId: null,
+    becameBillOn: null,
+    priority: null,
+    note: null,
+  });
+  const suit = once('suit', 30_000, jan15);
+  const venue = once('venue', 100_000, mar1);
+  const end = utc(2027, 11, 31);
+  const payments = listHorizonPayments([venue, suit], end, 'conservative');
+  const cover = {
+    heldCents: 20_000,
+    contributions: [
+      { on: utc(2027, 0, 10), cents: 15_000 },
+      { on: utc(2027, 1, 10), cents: 120_000 },
+    ],
+  };
+
+  assert.equal(
+    getGoalBalanceAt(cover, jan1),
+    20_000,
+    'the goal holds what it holds before any planned day',
+  );
+  assert.equal(
+    getGoalBalanceAt(cover, jan15),
+    35_000,
+    'and what the plan has put in through the day',
+  );
+  assert.equal(
+    getGoalBalanceAt({ heldCents: -500, contributions: [] }, jan15),
+    0,
+    'a negative balance covers nothing',
+  );
+
+  const without = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    0,
+    payments,
+  );
+  assert.equal(
+    without.covers.every((cover) => cover.coveredCents === 0),
+    true,
+    'with no goal and no money nothing is covered',
+  );
+  assert.equal(
+    without.covers.some((entry) => 'fromGoalCents' in entry),
+    false,
+    'and a cover carries no goal part without a goal',
+  );
+
+  const covered = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    0,
+    payments,
+    cover,
+  );
+  assert.deepEqual(
+    covered.covers.map(({ costId, coveredCents, fromGoalCents }) => [
+      costId,
+      coveredCents,
+      fromGoalCents,
+    ]),
+    [
+      ['suit', 30_000, 30_000],
+      ['venue', 100_000, 100_000],
+    ],
+    'each cost is covered from the goal as projected by its due date, less what the earlier cost took',
+  );
+  assert.equal(covered.shortfall, null, 'so the event reads covered');
+
+  const tight = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, venue] },
+    10_000,
+    payments,
+    { heldCents: 20_000, contributions: [] },
+  );
+  assert.deepEqual(
+    tight.covers.map(({ costId, coveredCents, fromGoalCents }) => [
+      costId,
+      coveredCents,
+      fromGoalCents,
+    ]),
+    [
+      ['suit', 30_000, 20_000],
+      ['venue', 0, 0],
+    ],
+    'the goal pays first and the event own money tops it up; once both are used the rest is short',
+  );
+  assert.equal(
+    tight.shortfall?.shortCents,
+    100_000,
+    'the event is short only by what neither holds',
+  );
+  assert.equal(
+    tight.shortfall?.dueOn,
+    mar1,
+    'and names the first payment neither covers',
+  );
+
+  // Paying: the goal first, then the event's own money, then Free to Spend.
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 20_000, 30_000, 'item'),
+    { fromGoalCents: 20_000, fromItemCents: 30_000, fromFreeCents: 10_000 },
+    'a payment takes the goal first, then the event, and Free to Spend fronts the rest',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(10_000, 20_000, 30_000, 'item'),
+    { fromGoalCents: 10_000, fromItemCents: 0, fromFreeCents: 0 },
+    'a payment the goal covers leaves the event untouched',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 20_000, 30_000, 'outside'),
+    { fromGoalCents: 0, fromItemCents: 0, fromFreeCents: 0 },
+    'an outside mark takes nothing from the goal',
+  );
+  assert.deepEqual(
+    settleCostPaidWithGoal(60_000, 0, 30_000, 'item'),
+    { fromGoalCents: 0, fromItemCents: 30_000, fromFreeCents: 30_000 },
+    'without a goal it settles as before',
+  );
+
+  const wedding: HorizonSealed = {
+    name: 'Wedding',
+    emoji: null,
+    happensOn: jan15,
+    happensUntil: null,
+    priority: 'should',
+    orderIndex: 1,
+    rest: { kind: 'later' },
+    note: null,
+    goalId: 'goal',
+    state: 'open' as const,
+    stateOn: null,
+    stateMoney: null,
+    links: [],
+    costs: [suit],
+  };
+  const starts: OpenMove[] = [
+    {
+      id: 's1',
+      kind: 'start',
+      date: jan1,
+      refId: null,
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 200_000, holding: 'money' },
+    },
+    {
+      id: 's2',
+      kind: 'start',
+      date: jan1,
+      refId: 'wedding',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 10_000, holding: 'bill' },
+    },
+    {
+      id: 's3',
+      kind: 'start',
+      date: jan1,
+      refId: 'goal',
+      reversesMoveId: null,
+      createdAt: 1,
+      payload: { amountCents: 50_000, holding: 'goal' },
+    },
+  ];
+  const paidEntry: CostPaidEntry = {
+    moveId: 'paid_wedding_suit_1',
+    costId: 'suit',
+    dueOn: jan15,
+    amountCents: 60_000,
+    paidOn: jan15,
+    fromFreeCents: 5_000,
+    mark: 'item',
+    purchaseId: null,
+    fromGoalCents: 45_000,
+    goalId: 'goal',
+  };
+  const paidMove: OpenMove = {
+    id: paidEntry.moveId,
+    kind: 'costPaid',
+    date: jan15,
+    refId: 'wedding',
+    reversesMoveId: null,
+    createdAt: 5,
+    payload: {
+      costId: 'suit',
+      dueOn: jan15,
+      amountCents: 60_000,
+      paidOn: jan15,
+      fromFreeCents: 5_000,
+      mark: 'item',
+      purchaseId: null,
+      fromGoalCents: 45_000,
+      goalId: 'goal',
+    },
+  };
+  const derive = (moves: OpenMove[]) =>
+    deriveBalances({
+      startDate: jan1,
+      moves: [...starts, ...moves],
+      records: [],
+      arrivedOn: new Map(),
+      kinds: { wedding: 'horizon', goal: 'goal' },
+    });
+  const before = derive([]);
+  const after = derive([paidMove]);
+  assert.equal(
+    after.assignedByItem.goal,
+    (before.assignedByItem.goal ?? 0) - 45_000,
+    'a payment lowers the goal by the part it paid',
+  );
+  assert.equal(
+    after.assignedByItem.wedding,
+    (before.assignedByItem.wedding ?? 0) - 10_000,
+    'and the event by what its own money paid',
+  );
+  assert.equal(
+    after.freeToSpendCents,
+    before.freeToSpendCents - 5_000,
+    'Free to Spend falls only by what it fronted, so nothing counts twice',
+  );
+  assert.equal(
+    after.costPaidByItem.wedding,
+    60_000,
+    'the whole payment is spent by the event',
+  );
+  const takenBack = derive([
+    paidMove,
+    {
+      id: `unpaid_${paidEntry.moveId}`,
+      kind: 'costPaid',
+      date: jan15,
+      refId: 'wedding',
+      reversesMoveId: paidEntry.moveId,
+      createdAt: 6,
+      payload: paidMove.payload,
+    },
+  ]);
+  assert.equal(
+    takenBack.assignedByItem.goal,
+    before.assignedByItem.goal,
+    'taking the payment back gives the goal its part again',
+  );
+  assert.equal(
+    takenBack.freeToSpendCents,
+    before.freeToSpendCents,
+    'and Free to Spend its own',
+  );
+
+  const closed = buildClosing(toMonthKey(jan1), null, {
+    startDate: jan1,
+    days: [],
+    records: [],
+    moves: [...starts, paidMove],
+    purchases: [],
+    billIds: new Set(),
+  });
+  const read = decodeClosing(toMonthKey(jan1), encodeClosing(closed));
+  assert.deepEqual(
+    [
+      read.costPaid.wedding?.[0].fromGoalCents,
+      read.costPaid.wedding?.[0].goalId,
+    ],
+    [45_000, 'goal'],
+    'a closing keeps what a goal paid and which goal',
+  );
+  assert.equal(
+    getHorizonFigures(0, 60_000, 5_000, 45_000).setAsideCents,
+    10_000,
+    "set aside counts only what the event's own money was given",
+  );
+  assert.equal(
+    readHorizon({ ...wedding, goalId: undefined }).goalId,
+    null,
+    'an event sealed before goals could be linked reads no goal',
+  );
+
+  // Links: a goal feeds one event and an event draws from one goal.
+  const events = [
+    { id: 'wedding', horizon: { goalId: 'goal', state: 'open' as const } },
+    { id: 'trip', horizon: { goalId: null, state: 'open' as const } },
+    { id: 'old', horizon: { goalId: 'gone', state: 'finished' as const } },
+  ];
+  assert.equal(
+    getLinkedEventId('goal', events),
+    'wedding',
+    'an open event reads as the goal link',
+  );
+  assert.equal(
+    getLinkedEventId('gone', events),
+    null,
+    'a finished event no longer draws from its goal',
+  );
+  assert.equal(
+    getGoalLinkBlock('goal', 'trip', events),
+    'goalTaken',
+    'a goal already feeding an event is refused',
+  );
+  assert.equal(
+    getGoalLinkBlock('other', 'wedding', events),
+    'eventHasGoal',
+    'an event that already has a goal is refused',
+  );
+  assert.equal(
+    getGoalLinkBlock('goal', 'wedding', events),
+    null,
+    'the same pair is not a conflict',
+  );
+  assert.equal(
+    getGoalLinkBlock('other', 'trip', events),
+    null,
+    'two free items link',
+  );
+  assert.equal(
+    getGoalCost({ name: 'Wedding fund', targetCents: 600_000 }, 'goal', jan15)
+      .amount.lowCents,
+    600_000,
+    'the goal target becomes an exact cost',
+  );
+  assert.equal(
+    getGoalCost({ name: 'Wedding fund', targetCents: 600_000 }, 'goal', jan15)
+      .schedule.kind,
+    'once',
+    'paid once',
+  );
+
+  // The nudge: a quarter of the time between the day the date was set and the date, never under 60 days or over a year.
+  const dayNum = (from: number, to: number) =>
+    Math.round((to - from) / LINK_DAY_MS);
+  const setOn = utc(2027, 0, 1);
+  const farDate = utc(2032, 0, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(farDate, setOn), farDate),
+    365,
+    'a date years away asks a year ahead',
+  );
+  const shortDate = utc(2027, 3, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(shortDate, setOn), shortDate),
+    60,
+    'a date a few months after it was set asks at 60 days',
+  );
+  const midDate = utc(2028, 0, 1);
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(midDate, setOn), midDate),
+    Math.round(dayNum(setOn, midDate) * 0.25),
+    'in between it is a quarter of the time',
+  );
+  assert.equal(
+    dayNum(getHorizonNudgeFrom(utc(2027, 0, 20), setOn), utc(2027, 0, 20)),
+    60,
+    'a date under 60 days away asks 60 days before it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [
+        { effectiveFrom: utc(2027, 0, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 2, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 5, 1), targetDate: farDate },
+      ],
+      farDate,
+    ),
+    utc(2027, 5, 1),
+    'the day a date was set is the earliest version carrying it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [
+        { effectiveFrom: utc(2027, 0, 1), targetDate: midDate },
+        { effectiveFrom: utc(2027, 2, 1), targetDate: midDate },
+      ],
+      midDate,
+    ),
+    utc(2027, 0, 1),
+    'a later edit that keeps the date does not reset it',
+  );
+  assert.equal(
+    getTargetDateSetOn(
+      [{ effectiveFrom: utc(2027, 0, 1), targetDate: midDate }],
+      farDate,
+    ),
+    null,
+    'a date no version carries has no day',
+  );
+  const asks = (today: number, extra = {}) =>
+    shouldNudgeHorizon({
+      targetDate: midDate,
+      setOn,
+      today,
+      isLinked: false,
+      dismissedDate: undefined,
+      ...extra,
+    });
+  const from = getHorizonNudgeFrom(midDate, setOn);
+  assert.equal(
+    asks(from - LINK_DAY_MS),
+    false,
+    'it stays quiet the day before it starts',
+  );
+  assert.equal(asks(from), true, 'it asks from its day');
+  assert.equal(asks(midDate), true, 'and keeps asking through the date');
+  assert.equal(
+    asks(midDate + LINK_DAY_MS),
+    false,
+    'a date that has passed is not asked about',
+  );
+  assert.equal(
+    asks(from, { isLinked: true }),
+    false,
+    'a goal an event draws from is not asked',
+  );
+  assert.equal(
+    asks(from, { targetDate: null }),
+    false,
+    'an undated goal is not asked',
+  );
+  assert.equal(
+    asks(from, { dismissedDate: midDate }),
+    false,
+    'Do not ask again keeps it quiet for that date',
+  );
+  assert.equal(
+    asks(from, { dismissedDate: farDate }),
+    true,
+    'and a changed date brings it back',
+  );
+  assert.equal(
+    getGoalCover(
+      {
+        name: 'Fund',
+        emoji: null,
+        priority: 'should',
+        orderIndex: 1,
+        targetCents: 100_000,
+        targetDate: null,
+        funding: {
+          cadence: { kind: 'none' },
+          amount: { kind: 'exact', cents: 10_000 },
+        } as unknown as GoalSealed['funding'],
+        state: 'active',
+        groupId: null,
+      },
+      12_000,
+      [],
+    ).contributions.length,
+    0,
+    'a goal that is not being saved for puts nothing in ahead, so only its balance now covers',
+  );
 }
 
 console.log('runway engine: ok');

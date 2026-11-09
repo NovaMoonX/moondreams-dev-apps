@@ -29,6 +29,7 @@ import {
   daysInUtcMonth,
   payLineIdOfDayKey,
 } from './dates';
+import type { GoalCover } from './horizonGoal';
 import { allocate, percentOf, percentShares } from './money';
 import {
   countFundedDays,
@@ -900,6 +901,8 @@ export interface DraftHorizonInput {
   state?: HorizonState;
   /** What the item holds before the day drafted. */
   heldCents: Cents;
+  /** The goal the item draws its costs from, read before the item's own money; null or missing when it has none. */
+  goalCover?: GoalCover | null;
   /** Cents the person set a pay to put toward one cost, by cost id and then day key. */
   fixed?: Readonly<Record<string, Readonly<Record<string, Cents>>>>;
   /** Payments marked paid, with the part Free to Spend fronted; they ask nothing, and a fronted one is given back by the picked pay. */
@@ -954,6 +957,7 @@ export function planCostShares(
           item,
           item.heldCents,
           all.filter(({ costId, dueOn }) => !isPaid(costId, dueOn)),
+          item.goalCover ?? null,
         )
       : { covers: [] };
   const shares = covers

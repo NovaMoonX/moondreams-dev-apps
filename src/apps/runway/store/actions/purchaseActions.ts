@@ -155,7 +155,13 @@ async function readLiveCostMark(
     );
     return opened.kind === 'costPaid' &&
       opened.payload.purchaseId === previous.id
-      ? { moveId, itemId: ref.itemId, ...opened.payload }
+      ? {
+          moveId,
+          itemId: ref.itemId,
+          ...opened.payload,
+          fromGoalCents: opened.payload.fromGoalCents ?? 0,
+          goalId: opened.payload.goalId ?? null,
+        }
       : lookup(index + 1);
   };
   return lookup(0);
@@ -333,6 +339,8 @@ async function setCostMark(
     moveId,
     itemId: cost.ref.itemId,
     ...payload,
+    fromGoalCents: 0,
+    goalId: null,
   };
   const change = await getCostPaidChange(
     encryption,

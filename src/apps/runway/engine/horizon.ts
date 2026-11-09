@@ -16,6 +16,7 @@ import type {
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 
 import { addUtcMonths, DAY_MS } from './dates';
+import { getGoalBalanceAt, type GoalCover } from './horizonGoal';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
 
@@ -33,6 +34,9 @@ export interface CostPaidEntry {
   fromFreeCents: Cents;
   mark: CostPaidMark;
   purchaseId: string | null;
+  /** The part paid out of the event's linked goal; zero when none was. */
+  fromGoalCents: Cents;
+  goalId: string | null;
 }
 
 /** One time a cost asks for money. */
@@ -111,6 +115,21 @@ export function settleCostPaid(
   if (mark !== 'item') return { fromItemCents: 0, fromFreeCents: 0 };
   const fromItemCents = Math.min(amountCents, Math.max(0, heldCents));
   return { fromItemCents, fromFreeCents: amountCents - fromItemCents };
+}
+
+/** Where a payment takes its money when the event has a linked goal: the goal's balance first, then the event's own, and Free to Spend for the rest. A mark that moves nothing takes none. */
+export function settleCostPaidWithGoal(
+  amountCents: Cents,
+  goalHeldCents: Cents,
+  heldCents: Cents,
+  mark: CostPaidMark = 'item',
+) {
+  const fromGoalCents =
+    mark === 'item' ? Math.min(amountCents, Math.max(0, goalHeldCents)) : 0;
+  return {
+    fromGoalCents,
+    ...settleCostPaid(amountCents - fromGoalCents, heldCents, mark),
+  };
 }
 
 /** A cost whose amount is a range is marked with what it came to, never the planned figure. */
@@ -197,6 +216,7 @@ export const readHorizon = (stored: HorizonStored): HorizonSealed => ({
   stateOn: stored.stateOn ?? null,
   stateMoney: stored.stateMoney ?? null,
   links: stored.links ?? [],
+  goalId: stored.goalId ?? null,
 });
 
 /** The due dates of a repeating payment's first occurrences from `from` that `heldCents` covers in full, soonest first. */
@@ -392,8 +412,11 @@ export const restoreCost = (
 export interface HorizonCover {
   costId: string;
   dueOn: DateOnly;
+  /** Everything that covers the payment: the linked goal's part and the event's own. */
   coveredCents: Cents;
   totalCents: Cents;
+  /** The part of `coveredCents` the linked goal covers; only present when the event has one. */
+  fromGoalCents?: Cents;
 }
 
 export interface HorizonShortfall {
@@ -420,11 +443,12 @@ export interface HorizonPlan {
   shortfall: HorizonShortfall | null;
 }
 
-/** Walks the money held over the unpaid payments in due order, ties by cost id; the input order changes nothing. */
+/** Walks the money over the unpaid payments in due order, ties by cost id; the input order changes nothing. With a linked goal, each payment is covered first from what the goal is projected to hold on its due date (less what earlier payments took of it), then from the event's own money. */
 export function planHorizon(
   item: Pick<HorizonSealed, 'rest'> & { costs: readonly HorizonCost[] },
   heldCents: Cents,
   payments: readonly CostPayment[],
+  goal: GoalCover | null = null,
 ): HorizonPlan {
   const outsideIds = new Set(
     item.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
@@ -432,15 +456,35 @@ export function planHorizon(
   const ordered = payments
     .filter(({ costId, paid }) => paid === null && !outsideIds.has(costId))
     .sort((a, b) => a.dueOn - b.dueOn || a.costId.localeCompare(b.costId));
-  const covers = ordered.reduce<{ left: Cents; list: HorizonCover[] }>(
+  const covers = ordered.reduce<{
+    left: Cents;
+    goalUsed: Cents;
+    list: HorizonCover[];
+  }>(
     (walk, { costId, dueOn, totalCents }) => {
-      const coveredCents = Math.min(totalCents, walk.left);
+      const fromGoalCents = goal
+        ? Math.min(
+            totalCents,
+            Math.max(0, getGoalBalanceAt(goal, dueOn) - walk.goalUsed),
+          )
+        : 0;
+      const ownCents = Math.min(totalCents - fromGoalCents, walk.left);
       return {
-        left: walk.left - coveredCents,
-        list: [...walk.list, { costId, dueOn, coveredCents, totalCents }],
+        left: walk.left - ownCents,
+        goalUsed: walk.goalUsed + fromGoalCents,
+        list: [
+          ...walk.list,
+          {
+            costId,
+            dueOn,
+            coveredCents: fromGoalCents + ownCents,
+            totalCents,
+            ...(goal ? { fromGoalCents } : {}),
+          },
+        ],
       };
     },
-    { left: Math.max(0, heldCents), list: [] },
+    { left: Math.max(0, heldCents), goalUsed: 0, list: [] },
   ).list;
   const short = covers.filter(
     ({ coveredCents, totalCents }) => coveredCents < totalCents,
@@ -489,8 +533,9 @@ export const getHorizonFigures = (
   leftCents: Cents,
   spentCents: Cents = 0,
   fromFreeCents: Cents = 0,
+  fromGoalCents: Cents = 0,
 ) => ({
-  setAsideCents: leftCents + spentCents - fromFreeCents,
+  setAsideCents: leftCents + spentCents - fromFreeCents - fromGoalCents,
   spentCents,
   fromFreeCents,
   leftCents,

@@ -254,6 +254,15 @@ Several costs that belong to one event, some once and some repeating, paid from 
 5. **Medication pays in one tap.** Each $40 is exact, so "Mark paid" marks it at once, with Undo on the toast ("Marked Medication paid · $40.00 from Miso's surgery").
 6. **Done after the third Medication.** Every cost is paid, nothing is left, and the item folds into Done: "Paid $640".
 
+**Goals and envelopes on the Horizon**
+
+- **"Plan it on your Horizon"** is an action on a goal's sheet and on an envelope's sheet (only while it holds money). It asks "Which event?": "New event" first, then open events, searchable from 5.
+- **A goal linked to an event keeps saving, and the event draws its costs from it.** A goal links to at most one event and an event to at most one goal; otherwise a plain message says which is taken. Linking adds the goal's target as the event's first cost (the goal's name, once, on the event's date, exact), only at that moment. A new event takes the goal's name, emoji and target date (asked for when the goal has none). The event lists the goal under "Saving for it" and the goal's sheet shows "Part of <event>" with an Unlink door; unlinking keeps the cost. Both histories get a line.
+- **Covering a cost.** Each cost is covered first from the goal's balance projected to its due date (money already held plus its planned contributions up to that day), then the event's own money; the event reads short only when both fall short. Free to Spend is never counted twice.
+- **Paying a cost takes from the goal first, then the event's money, then Free to Spend.** The goal's history names the event and the cost; Undo restores each part.
+- **An envelope moves into an event** as one dated transfer and the envelope closes. The confirm says first what happens ("Groceries closes and its $120 moves to Sam's wedding"); the toast has Undo, which reopens the envelope while nothing else changed. A new event takes the envelope's name and emoji and asks for a date.
+- **The nudge.** A dated goal that no event draws from asks "Know what it'll cost?" once today is within a quarter of the time from the day its date was set (never under 60 or over 365 days) of its date, until the date passes. "Plan it on your Horizon" opens the same step; "Don't ask again" keeps it quiet for that goal and date, and a changed date brings it back. It shows at the top of Goals and in Home's quiet slot after the Priorities nudge and before the Track invite.
+
 **What an item is**
 
 - **A Horizon item is an event with its own money.** A name and emoji (📦 Moving), when it happens (one date, shown as "around Jan 15th"; an end date when it takes a few days), a priority (Should to start, shared by its costs) and a list of costs. It is not a goal (a goal saves toward one number and keeps it) and not a bill (one amount on a schedule): it is several costs, some once and some repeating, paid from one pot that runs down in date order.
