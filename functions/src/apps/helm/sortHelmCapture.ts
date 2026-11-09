@@ -551,7 +551,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
 
   const readJoined = async (): Promise<
-    JoinedRead & { messages: JoinedMessage[] }
+    JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
   > => {
     const lead = (await claimed.captureRef.get()).data() as
       CaptureDoc | undefined;
@@ -590,11 +590,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       ids: mode === 'rest' ? [] : joined.map((snapshot) => snapshot.id),
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
+      // A turn is spoken when any of its messages was, so a spoken message joined behind a typed one still hears its reply.
+      isSpoken:
+        lead?.inputMode === 'voice' ||
+        joined.some(
+          (snapshot) => (snapshot.data() as CaptureDoc).inputMode === 'voice',
+        ),
     };
   };
 
   const run = async (
-    read: JoinedRead & { messages: JoinedMessage[] },
+    read: JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean },
     signal: AbortSignal,
     isRestart: boolean,
   ) => {
@@ -750,6 +756,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     messageCount: mode === 'rest' ? 1 : read.messages.length,
     route,
     timeZone,
+    isSpoken: read.isSpoken,
   });
 }
 
@@ -763,6 +770,7 @@ async function writeResult(
     messageCount: number;
     route: Route;
     timeZone: string;
+    isSpoken: boolean;
   },
 ): Promise<SortResult> {
   const {
@@ -779,6 +787,7 @@ async function writeResult(
     messageCount,
     route,
     timeZone,
+    isSpoken,
   } = input;
   const tasksPath = `${base}/tasks`;
   const targetIds = [
@@ -885,7 +894,7 @@ async function writeResult(
           now,
           seal,
           messageCount,
-          inputMode: capture.inputMode,
+          inputMode: isSpoken ? 'voice' : capture.inputMode,
           timeZone,
         }),
       );

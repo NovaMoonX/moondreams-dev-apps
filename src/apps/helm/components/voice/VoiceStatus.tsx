@@ -19,7 +19,7 @@ interface VoiceStatusProps {
   screen?: ScreenContext | null;
 }
 
-/** What the voice is doing, in words: what is heard as it is said, "Working on it…", the line being spoken, or the short line after an undo. Draws nothing while idle unless it carries the controls. */
+/** What the voice is doing, in words: what is heard as it is said (the newest words kept in view), the line being spoken, or the short line after an undo, with Mute while a line plays and Muted once it is on. Draws nothing while idle unless it carries the controls or the voice is muted. */
 function VoiceStatus({
   hasControls = false,
   onBlocked,
@@ -30,13 +30,14 @@ function VoiceStatus({
   const text =
     voice.state === 'listening'
       ? voice.heard || HELM_COPY.talkListeningHint
-      : voice.state === 'thinking'
-        ? HELM_COPY.talkWorking
-        : voice.state === 'speaking'
-          ? voice.saying
-          : (voice.note ?? '');
+      : voice.state === 'speaking'
+        ? voice.saying
+        : voice.state === 'idle'
+          ? (voice.note ?? '')
+          : '';
   const isIdle = voice.state === 'idle';
-  if (text === '' && !(hasControls && isIdle)) return null;
+  const isWorking = voice.state === 'thinking' || voice.state === 'speaking';
+  if (text === '' && !(hasControls && isIdle) && !voice.isMuted) return null;
 
   return (
     <div
@@ -44,7 +45,15 @@ function VoiceStatus({
       aria-live='polite'
       className='flex flex-col items-center gap-3 text-center'
     >
-      {text !== '' && (
+      {text !== '' && voice.state === 'listening' && (
+        // A long sentence keeps its newest words in view: the start is what gives way.
+        <div className='flex max-h-[84px] flex-col justify-end overflow-hidden'>
+          <p className='text-[20px] leading-7 font-medium text-balance break-words'>
+            {text}
+          </p>
+        </div>
+      )}
+      {text !== '' && voice.state !== 'listening' && (
         <p
           className={join(
             'max-h-36 overflow-y-auto text-balance break-words',
@@ -56,7 +65,9 @@ function VoiceStatus({
           {text}
         </p>
       )}
-      <MuteControl shows='whileSpeaking' />
+      {!(hasControls && isWorking) && (
+        <MuteControl shows={voice.isMuted ? 'whileMuted' : 'whileSpeaking'} />
+      )}
       {hasControls && voice.state === 'listening' && (
         <div className='flex gap-2'>
           <Button
@@ -79,8 +90,9 @@ function VoiceStatus({
           </Button>
         </div>
       )}
-      {hasControls &&
-        (voice.state === 'thinking' || voice.state === 'speaking') && (
+      {hasControls && isWorking && (
+        <div className='flex gap-2'>
+          <MuteControl shows={voice.isMuted ? 'whileMuted' : 'whileSpeaking'} />
           <Button
             type='button'
             variant='secondary'
@@ -90,7 +102,8 @@ function VoiceStatus({
             <Square className='size-3.5 fill-current' aria-hidden='true' />
             {HELM_COPY.talkStop}
           </Button>
-        )}
+        </div>
+      )}
       {hasControls && isIdle && (
         <Button
           type='button'

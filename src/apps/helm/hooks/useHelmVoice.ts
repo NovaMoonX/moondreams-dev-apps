@@ -39,6 +39,8 @@ import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { isUndoPhrase } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
+// A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
+const OFFLINE_WAIT_MS = 20_000;
 
 const HELM_VOICE_IDENTITY: VoiceIdentity = {
   id: 'helm-assistant',
@@ -66,6 +68,10 @@ export function useHelmVoice() {
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
   const onSettled = useRef(() => undefined as void);
+  const offlineId = useRef(0);
+  const isSurfaceShown = useRef(true);
+  // Rises on each Stop, so a turn still being sent when Stop was tapped is never waited on.
+  const stopCount = useRef(0);
 
   const voice = useVoiceConversation({
     lang: navigator.language || 'en-US',
@@ -74,6 +80,7 @@ export function useHelmVoice() {
     onUtterance: (text) => {
       void handleUtterance(text);
     },
+    onNothingHeard: () => showNote(HELM_COPY.talkHeardNothing),
   });
 
   function showNote(text: string) {
@@ -105,6 +112,7 @@ export function useHelmVoice() {
     }
     const timeZone = helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
     const turn = { ...getNextTurn(), createdAt: Date.now() };
+    const stopsAtSend = stopCount.current;
     const fail = (error: unknown) => {
       console.error('Helm spoken turn did not send', error);
       voice.settle();
@@ -129,12 +137,23 @@ export function useHelmVoice() {
       });
       recordSentTurn(uid, turn, id);
       const leadId = turn.leadId ?? id;
-      waiting.current.add(leadId);
       write.catch((error: unknown) => {
         clearSentTurn(uid, id);
         waiting.current.delete(leadId);
         fail(error);
       });
+      if (stopCount.current !== stopsAtSend) return;
+      waiting.current.add(leadId);
+      window.clearTimeout(offlineId.current);
+      offlineId.current = window.setTimeout(
+        () => {
+          if (!waiting.current.has(leadId) || navigator.onLine) return;
+          waiting.current.delete(leadId);
+          voice.settle();
+          showNote(HELM_COPY.talkSavedOffline);
+        },
+        navigator.onLine ? OFFLINE_WAIT_MS : 0,
+      );
     } catch (error) {
       fail(error);
     }
@@ -144,6 +163,17 @@ export function useHelmVoice() {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(all, Date.now());
+    const isTurnPending =
+      waiting.current.size > 0 ||
+      all.some(
+        (capture) =>
+          capture.sessionId === sessionId &&
+          (capture.status === 'received' || capture.status === 'interpreting'),
+      );
+    if (isTurnPending) {
+      say(HELM_COPY.undoWhilePending);
+      return;
+    }
     const executions = selectExecutionsById(state);
     const latest = all
       .filter((capture) => capture.sessionId === sessionId)
@@ -169,11 +199,13 @@ export function useHelmVoice() {
 
   async function deliver(capture: OpenCapture, line: string) {
     voice.settle();
+    // Nothing shows the voice on this view (no Stop, no Mute), so the written reply stands alone.
+    if (!isSurfaceShown.current) return;
     const result = await voice.speak(line, {
       priority: 'ack',
       turnKey: capture.createdAt,
     });
-    if (uid && result.adapterId !== null) {
+    if (uid && result.status === 'spoken' && result.adapterId !== null) {
       markCaptureSpoken(uid, capture.id, result.adapterId).catch(
         (error: unknown) => console.error('Helm voice was not recorded', error),
       );
@@ -216,12 +248,40 @@ export function useHelmVoice() {
     onSettled.current();
   }, [captures, executionsById, failedIds, uid]);
 
-  useEffect(() => () => window.clearTimeout(noteId.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(noteId.current);
+      window.clearTimeout(offlineId.current);
+    },
+    [],
+  );
+
+  /** Says whether this view shows the voice (home's dock or the conversation over a page). Leaving it throws away words being heard and cuts off a line being said; a turn being worked on carries on and its reply stays written. */
+  const setSurfaceShown = (isShown: boolean) => {
+    const wasShown = isSurfaceShown.current;
+    isSurfaceShown.current = isShown;
+    if (isShown || !wasShown) return;
+    const { state } = voice;
+    queueMicrotask(() => {
+      if (state === 'listening') voice.cancel();
+      else if (state === 'speaking') voice.stop();
+      else if (state === 'thinking') {
+        waiting.current.clear();
+        voice.settle();
+      }
+    });
+  };
 
   /** Starts listening from `page` (what the page publishes, null from home), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null) => {
     if (voice.state !== 'idle') {
-      if (voice.state !== 'listening') waiting.current.clear();
+      if (voice.state !== 'listening') {
+        waiting.current.clear();
+        stopCount.current += 1;
+      }
+      // The turn was already sent: Stop ends the wait and the spoken line, never the filing.
+      if (voice.state === 'thinking')
+        showNote(HELM_COPY.talkStoppedWhileWorking);
       voice.stop();
       return 'stopped' as const;
     }
@@ -245,6 +305,7 @@ export function useHelmVoice() {
     notice,
     clearNotice: () => setNotice(null),
     talk,
+    setSurfaceShown,
   };
 }
 

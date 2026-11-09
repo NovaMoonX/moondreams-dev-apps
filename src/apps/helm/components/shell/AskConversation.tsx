@@ -91,14 +91,16 @@ function AskConversation({ entry: liveEntry, onClose }: AskConversationProps) {
             screen={screen}
             onBlocked={() => fieldRef.current?.focus()}
           />
-          <Composer
-            fieldRef={fieldRef}
-            onFocusChange={noop}
-            isReady={keyStatus === 'ready'}
-            waitingPlaceholder={null}
-            screen={screen}
-            draftKey={ASK_DRAFT_KEY}
-          />
+          <div className={voice.state === 'idle' ? undefined : 'hidden'}>
+            <Composer
+              fieldRef={fieldRef}
+              onFocusChange={noop}
+              isReady={keyStatus === 'ready'}
+              waitingPlaceholder={null}
+              screen={screen}
+              draftKey={ASK_DRAFT_KEY}
+            />
+          </div>
         </div>
       </div>
     </Subview>

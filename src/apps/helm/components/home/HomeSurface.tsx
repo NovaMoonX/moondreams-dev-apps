@@ -7,10 +7,10 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
-import MuteControl from '@apps/helm/components/voice/MuteControl';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
@@ -42,15 +42,11 @@ function HomeSurface({
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
   const hasTurns = sessions.length > 0;
+  const voice = useHelmVoiceContext();
 
   return (
     <main className='flex flex-1 flex-col gap-8'>
       <div className='relative flex flex-col items-center gap-2 pt-10 text-center'>
-        {keyStatus === 'ready' && (
-          <div className='absolute top-0 left-0'>
-            <MuteControl shows='whileMuted' />
-          </div>
-        )}
         {keyStatus === 'ready' && (
           <div className='absolute top-0 right-0'>
             <HeaderIconButton
@@ -97,14 +93,17 @@ function HomeSurface({
             onRetry={() => dispatch(retryKey())}
           />
         )}
-        <Composer
-          key={keyStatus === 'ready' ? 'ready' : 'waiting'}
-          fieldRef={composerRef}
-          screen={null}
-          onFocusChange={onComposerFocusChange}
-          isReady={keyStatus === 'ready'}
-          waitingPlaceholder={WAITING_PLACEHOLDER[keyStatus]}
-        />
+        {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
+        <div className={voice.state === 'idle' ? undefined : 'invisible'}>
+          <Composer
+            key={keyStatus === 'ready' ? 'ready' : 'waiting'}
+            fieldRef={composerRef}
+            screen={null}
+            onFocusChange={onComposerFocusChange}
+            isReady={keyStatus === 'ready'}
+            waitingPlaceholder={WAITING_PLACEHOLDER[keyStatus]}
+          />
+        </div>
       </div>
     </main>
   );

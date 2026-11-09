@@ -43,6 +43,8 @@ interface VoiceConversationOptions {
   endPhrases: string[];
   /** Gets the finished utterance, never empty, with any end phrase taken off. */
   onUtterance: (text: string) => void;
+  /** Listening ended with nothing heard (not a cancel). */
+  onNothingHeard?: () => void;
   /** The opt-in natural voice is downloaded and ready (`useNaturalVoice().isReady`). */
   isNaturalVoiceReady?: boolean;
   /** Silence this long ends the utterance. */
@@ -80,6 +82,7 @@ export function useVoiceConversation({
   identity,
   endPhrases,
   onUtterance,
+  onNothingHeard,
   isNaturalVoiceReady = false,
   quietMs = QUIET_MS,
 }: VoiceConversationOptions) {
@@ -97,6 +100,7 @@ export function useVoiceConversation({
     identity,
     endPhrases,
     onUtterance,
+    onNothingHeard,
     isNaturalVoiceReady,
     quietMs,
     isMuted,
@@ -115,6 +119,7 @@ export function useVoiceConversation({
       identity,
       endPhrases,
       onUtterance,
+      onNothingHeard,
       isNaturalVoiceReady,
       quietMs,
       isMuted,
@@ -187,16 +192,23 @@ export function useVoiceConversation({
     if (run.current.isCancelled) return;
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
-    if (said === '') return;
+    if (said === '') {
+      latest.current.onNothingHeard?.();
+      return;
+    }
     setIsThinking(true);
     latest.current.onUtterance(said);
   };
 
+  // A refusal or an unsupported language stays (until the permission changes); any other failure ends this attempt only, said as nothing heard.
   const handleError = (code: SttErrorCode) => {
     run.current.isCancelled = true;
-    setReason(BLOCKED.includes(code) ? 'no-permission' : 'no-recognition');
+    const isLasting = BLOCKED.includes(code) || code === 'language';
+    if (BLOCKED.includes(code)) setReason('no-permission');
+    else if (code === 'language') setReason('no-recognition');
     run.current.stopListening?.();
     handleFinal('');
+    if (!isLasting) latest.current.onNothingHeard?.();
   };
 
   const listen = () => {

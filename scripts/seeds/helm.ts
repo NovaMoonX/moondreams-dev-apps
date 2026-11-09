@@ -1,4 +1,5 @@
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
+import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   deriveSeedDataKey,
   keyCheckPath,
@@ -118,11 +119,8 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
     ],
   };
 
-/** Spoken turns, by the turn's place in `SEED_TURNS`: the line the phone said once each was filed. */
-const SEED_VOICE: Record<number, string> = {
-  1: 'Got it. Lunch with Sam, Thursday.',
-  2: 'Got it. Call Grandpa about the wedding questions.',
-};
+/** The turns that were spoken; their line is the one the server would seal for them. */
+const SEED_VOICE_TURNS = new Set([1, 2]);
 
 /** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
 const UNDONE_TURN = 4;
@@ -604,7 +602,21 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           const isSorted = sortedTasks.length > 0 || isMove;
           const sortedAt = turnTime + SORT_DELAY_MS;
           const heldFields = toHeldFields(turn.held, turnTime, isSorted);
-          const spoken = isSorted ? SEED_VOICE[index] : undefined;
+          const spoken =
+            isSorted && SEED_VOICE_TURNS.has(index)
+              ? (buildSpokenAck({
+                  inputMode: 'voice',
+                  counts: {
+                    made: sortedTasks.length,
+                    updated: 0,
+                    completed: 0,
+                  },
+                  messageCount: 1,
+                  created: sortedTasks,
+                  timeZone,
+                  now: sortedAt,
+                }) ?? undefined)
+              : undefined;
           const capture: Capture = {
             inputMode: spoken === undefined ? 'typed' : 'voice',
             sttProvider: spoken === undefined ? null : 'browser',

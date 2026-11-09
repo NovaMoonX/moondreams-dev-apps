@@ -5,7 +5,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 
 interface MuteControlProps {
-  /** Where it is drawn: beside the line being spoken (offers Mute), or in home's header once muted (offers it back). */
+  /** Offers Mute while a line is spoken, or, once muted, says so and offers the voice back. */
   shows: 'whileSpeaking' | 'whileMuted';
 }
 
@@ -26,7 +26,7 @@ function MuteControl({ shows }: MuteControlProps) {
       rounded='full'
       aria-label={voice.isMuted ? HELM_COPY.talkUnmute : HELM_COPY.talkMute}
       aria-pressed={voice.isMuted}
-      className="relative h-7 min-h-0 gap-1 px-2.5 text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+      className="relative h-8 min-h-0 gap-1 px-3 text-[13px] before:absolute before:-inset-x-1 before:-inset-y-1 before:content-['']"
       onClick={() => voice.setMuted(!voice.isMuted)}
     >
       {voice.isMuted ? (

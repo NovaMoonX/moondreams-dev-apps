@@ -53,6 +53,12 @@ function Helm() {
     }
   }, [loading, isAskRequested, isLocked, view, closeAsk]);
 
+  const isVoiceShown =
+    !isLocked && (VIEW_KINDS[view] === 'home' || isAskRequested);
+  useEffect(() => {
+    voice.setSurfaceShown(isVoiceShown);
+  });
+
   if (loading) return <Loading />;
 
   const focusComposer = () => composerRef.current?.focus();
