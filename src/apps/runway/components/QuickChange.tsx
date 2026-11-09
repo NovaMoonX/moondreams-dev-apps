@@ -111,7 +111,7 @@ function QuickChange({
       ) : (
         <>
           {rows.length > 0 && (
-            <div className='[@media(max-height:419px)]:[&_.space-y-2]:grid [@media(max-height:419px)]:[&_.space-y-2]:grid-cols-3 [@media(max-height:419px)]:[&_.space-y-2]:gap-2 [@media(max-height:419px)]:[&_.space-y-2>*]:m-0!'>
+            <div className='[@media(max-height:419px)]:[&_.space-y-2]:grid [@media(max-height:419px)]:[&_.space-y-2]:grid-cols-[repeat(auto-fit,minmax(0,1fr))] [@media(max-height:419px)]:[&_.space-y-2]:gap-2 [@media(max-height:419px)]:[&_.space-y-2>*]:m-0!'>
               <QuestionFlow flow={toRows(rows)} shouldFocus={false} />
             </div>
           )}
