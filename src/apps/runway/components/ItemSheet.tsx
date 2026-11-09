@@ -51,7 +51,6 @@ import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import HorizonPlanView from '@apps/runway/components/HorizonPlanView';
 import HorizonUnlinkView from '@apps/runway/components/HorizonUnlinkView';
 import HorizonForm, { type HorizonSeed } from '@apps/runway/forms/HorizonForm';
-import { getLinkedEventId } from '@apps/runway/engine/horizonGoal';
 import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
 import ChargePickerView from '@apps/runway/components/ChargePickerView';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -451,9 +450,8 @@ function ItemSheet({
       ? null
       : (events.find(
           ({ version: eventVersion }) =>
-            getLinkedEventId(itemId, [
-              { id: itemId, horizon: eventVersion.payload },
-            ]) !== null,
+            eventVersion.payload.goalId === itemId &&
+            eventVersion.payload.state === 'open',
         ) ?? null);
   const canPlanOnHorizon =
     canChange &&

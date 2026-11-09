@@ -687,7 +687,6 @@ export const MAKE_BILL_WORDS = {
 const listNamesAndMore = (names: readonly string[], more: number) =>
   more > 0 ? `${names.join(', ')} and ${more} more` : names.join(' and ');
 
-/** Issue 88: finishing an event, calling it off and bringing it back. */
 /** Planning a goal or an envelope on the Horizon: which event, linking a goal, moving an envelope in, and the nudge. */
 export const HORIZON_PLAN_WORDS = {
   door: 'Plan it on your Horizon',
@@ -723,8 +722,6 @@ export const HORIZON_PLAN_WORDS = {
   unlinkAction: 'Unlink the goal',
   envelopeConfirm: (envelope: string, amount: string, event: string) =>
     `${envelope} closes and its ${amount} moves to ${event}`,
-  envelopeConfirmEmpty: (envelope: string, event: string) =>
-    `${envelope} closes. It holds nothing to move to ${event}`,
   envelopeAction: (envelope: string) => `Close ${envelope}`,
   envelopeMoved: (envelope: string, amount: string, event: string) =>
     `${envelope} closed and its ${amount} moved to ${event}`,
@@ -741,12 +738,13 @@ export const HORIZON_PLAN_WORDS = {
   offline: 'You are offline, so nothing was changed.',
   failed: 'This did not save. Nothing was changed.',
   nudgeTitle: "Know what it'll cost?",
-  nudgeSub: (goal: string, date: string) => `${goal} is due ${date}.`,
-  nudgeAction: 'Plan it on your Horizon',
+  nudgeSub: (goal: string, date: string) =>
+    `${goal} is on ${date}. Plan it on your Horizon.`,
   nudgeDismiss: "Don't ask again",
   nudgeDismissFailed: 'That did not save. Try again.',
 } as const;
 
+/** Issue 88: finishing an event, calling it off and bringing it back. */
 export const HORIZON_END_WORDS = {
   readyTitle: 'Everything is paid or a bill',
   readySub: 'Nothing is left to pay, so it is ready to finish.',

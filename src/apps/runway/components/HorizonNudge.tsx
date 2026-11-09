@@ -11,7 +11,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import HorizonPlanView from '@apps/runway/components/HorizonPlanView';
-import { HORIZON_PLAN_WORDS } from '@apps/runway/constants';
+import { HORIZON_PLAN_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
   getLinkedEventId,
@@ -43,7 +43,9 @@ function HorizonNudge({ otherwise = null }: HorizonNudgeProps) {
   const dismissed = useAppSelector(
     (state) => state.runway.plan?.horizonNudgeDismissed ?? null,
   );
+  const isPlanLoaded = useAppSelector((state) => state.runway.plan !== null);
   const [isPlanning, setIsPlanning] = useState(false);
+  const [isDismissing, setIsDismissing] = useState(false);
   const [seed, setSeed] = useState<HorizonSeed | null>(null);
 
   const asking = goals
@@ -84,18 +86,21 @@ function HorizonNudge({ otherwise = null }: HorizonNudgeProps) {
         (b.version.payload.targetDate ?? 0),
     )[0];
 
-  if (!asking) return otherwise;
+  if (!asking || !isPlanLoaded) return otherwise;
   const { item, version } = asking;
   const goal = version.payload;
   const targetDate = goal.targetDate ?? today;
 
   const dismiss = async () => {
-    if (!user) return;
+    if (!user || isDismissing) return;
+    setIsDismissing(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
       await dismissHorizonNudge(user.uid, encryption, item.id, targetDate);
     } catch {
       addToast({ title: HORIZON_PLAN_WORDS.nudgeDismissFailed, type: 'error' });
+    } finally {
+      setIsDismissing(false);
     }
   };
 
@@ -173,7 +178,7 @@ function HorizonNudge({ otherwise = null }: HorizonNudgeProps) {
       {seed !== null && (
         <HorizonForm
           isOpen
-          title={HORIZON_PLAN_WORDS.newEvent}
+          title={HORIZON_WORDS.formTitle}
           seed={seed}
           onClose={() => setSeed(null)}
           onSaved={close}
