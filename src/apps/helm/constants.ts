@@ -7,8 +7,8 @@ export const DEFAULT_PLAN_FILL_PERCENT = 50;
 /** The version every sealed payload carries inside it; a reader refuses a newer one. */
 export const SEALED_SCHEMA_VERSION = 1;
 
-/** A run of turns with no gap over this is one session. */
 export const CAPTURE_COUNTER_FROM = 3_600;
+/** A run of turns with no gap over this is one session. */
 export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;

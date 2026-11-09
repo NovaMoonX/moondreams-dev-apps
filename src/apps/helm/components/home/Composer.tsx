@@ -63,7 +63,7 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
     const turn = { ...getNextTurn(), createdAt: Date.now() };
     const restore = (error: unknown) => {
       console.error('Helm turn did not send', error);
-      setText((current) => (current ? current : sent));
+      setText((current) => (current ? `${current}\n${sent}` : sent));
       addToast({ title: HELM_COPY.sendFailed, type: 'error' });
     };
     setIsSending(true);
@@ -74,7 +74,7 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
         text: sent,
         ...turn,
       });
-      recordSentTurn(turn);
+      recordSentTurn(uid, turn);
       setText('');
       write.catch(restore);
     } catch (error) {

@@ -78,7 +78,7 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
     const stop = () => {
       follow.isOn = false;
     };
-    const intents = ['wheel', 'touchstart', 'keydown'] as const;
+    const intents = ['wheel', 'touchstart', 'pointerdown', 'keydown'] as const;
     const observer = new ResizeObserver(toBottom);
     observer.observe(document.body);
     intents.forEach((name) =>

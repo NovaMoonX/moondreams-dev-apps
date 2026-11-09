@@ -23,16 +23,21 @@ export function useSession() {
 type Turn = { sessionId: string; turnIndex: number; createdAt: number };
 
 // A send isn't awaited, so the store lags the last turn by its snapshot; the next turn reads this too.
-const lastSent: { turn: Turn | null } = { turn: null };
+const lastSent: { uid: string | null; turn: Turn | null } = {
+  uid: null,
+  turn: null,
+};
 
-export const recordSentTurn = (turn: Turn) => {
+export const recordSentTurn = (uid: string, turn: Turn) => {
+  lastSent.uid = uid;
   lastSent.turn = turn;
 };
 
 /** Which session the next turn joins and its place in it. Read when the person taps Send, so a session that went quiet while they typed starts a new one. */
 export function getNextTurn() {
   const stored = selectAllCaptures(store.getState()).at(-1) ?? null;
-  const pending = lastSent.turn;
+  const pending =
+    lastSent.uid === store.getState().helm.uid ? lastSent.turn : null;
   const last =
     pending && (!stored || pending.createdAt > stored.createdAt)
       ? pending
