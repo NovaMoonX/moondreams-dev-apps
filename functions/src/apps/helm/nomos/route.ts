@@ -39,20 +39,20 @@ export const pickRoute = ({
 export const HAND_OVER_TOOL: TerminalTool = {
   name: 'hand_over',
   description:
-    'Hands the turn to the fuller model when it needs planning, an answer, or more than a few simple changes. Call it instead of file_results.',
+    'Hands the turn to the fuller model when it needs planning, an answer, or more than a few simple changes. Call it instead of file_results. Give the reason in at most 120 characters.',
   inputSchema: {
     type: 'object',
     additionalProperties: false,
     required: ['reason'],
     properties: {
-      reason: { type: 'string', maxLength: 120 },
+      reason: { type: 'string' },
     },
   },
 };
 
 type RunRole = 'quick' | 'interpret';
 
-/** Runs a turn on its route; a quick run may hand the turn over once, and the full run it starts is never offered the hand-over. Each run reserves its own allowance first. */
+/** Runs a turn on its route; a quick run may hand the turn over once, and the full run it starts is never offered the hand-over. Each run reserves its own allowance first; a quick run cut short by an abort returns as it is, reserving nothing more. */
 export async function runRouted<T>(input: {
   route: Route;
   runOn: (
@@ -60,15 +60,18 @@ export async function runRouted<T>(input: {
     canHandOver: boolean,
   ) => Promise<{ handedOver: boolean; value: T }>;
   reserve: (route: Route) => Promise<HeldReason | null>;
+  isAborted: () => boolean;
 }): Promise<{ value: T; route: Route } | { held: HeldReason }> {
-  const { route, runOn, reserve } = input;
+  const { route, runOn, reserve, isAborted } = input;
   const heldFirst = await reserve(route);
   if (heldFirst) return { held: heldFirst };
   if (route === 'full') {
     return { value: (await runOn('interpret', false)).value, route: 'full' };
   }
   const quick = await runOn('quick', true);
-  if (!quick.handedOver) return { value: quick.value, route: 'quick' };
+  if (!quick.handedOver || isAborted()) {
+    return { value: quick.value, route: 'quick' };
+  }
   const heldFull = await reserve('full');
   if (heldFull) return { held: heldFull };
   return { value: (await runOn('interpret', false)).value, route: 'full' };

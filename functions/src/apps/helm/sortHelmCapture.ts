@@ -91,7 +91,7 @@ const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
-// Leaves the rest of the call for a hand-over to the full route.
+// Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
 const QUICK_LOOP_MILLIS = 15_000;
 const CALL_BUDGET_MS = 55_000;
 const RESTART_MARGIN_MS = 5_000;
@@ -595,6 +595,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const run = async (
     read: JoinedRead & { messages: JoinedMessage[] },
     signal: AbortSignal,
+    isRestart: boolean,
   ) => {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
@@ -644,8 +645,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         })
         .finally(() => mcp.close().catch(() => undefined));
       const handedOver =
-        loop.endedBy === 'terminal' &&
-        loop.terminalName === HAND_OVER_TOOL.name;
+        canHandOver &&
+        ((loop.endedBy === 'terminal' &&
+          loop.terminalName === HAND_OVER_TOOL.name) ||
+          loop.endedBy === 'limit');
       logger.info('helm.ai.call', {
         role,
         endedBy: loop.endedBy,
@@ -663,9 +666,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       return { handedOver, value: loop };
     };
     const routed = await runRouted({
-      route: pickRoute({ text: combined.text, mode }),
+      route:
+        isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS
+          ? 'full'
+          : pickRoute({ text: combined.text, mode }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
+      isAborted: () => signal.aborted,
     });
     if ('held' in routed) {
       await failClaim(

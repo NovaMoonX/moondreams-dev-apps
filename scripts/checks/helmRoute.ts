@@ -83,6 +83,7 @@ const harness = (input: {
   route: Route;
   handsOver?: boolean;
   held?: Partial<Record<Route, HeldReason>>;
+  abortsDuringQuick?: boolean;
 }) => {
   const reserved: Route[] = [];
   const ran: [string, boolean][] = [];
@@ -92,6 +93,7 @@ const harness = (input: {
       reserved.push(route);
       return input.held?.[route] ?? null;
     },
+    isAborted: () => !!input.abortsDuringQuick,
     runOn: async (role, canHandOver) => {
       ran.push([role, canHandOver]);
       return { handedOver: role === 'quick' && !!input.handsOver, value: role };
@@ -118,6 +120,17 @@ test('a hand-over reserves on quick then full and the full run cannot hand over'
     ['quick', true],
     ['interpret', false],
   ]);
+});
+
+test('an abort during a hand-over reserves nothing more and runs no full turn', async () => {
+  const { result, reserved, ran } = harness({
+    route: 'quick',
+    handsOver: true,
+    abortsDuringQuick: true,
+  });
+  assert.deepEqual(await result, { value: 'quick', route: 'quick' });
+  assert.deepEqual(reserved, ['quick']);
+  assert.deepEqual(ran, [['quick', true]]);
 });
 
 test('a full start reserves once on full and never offers a hand-over', async () => {
@@ -148,15 +161,12 @@ test('held on full after a hand-over returns held', async () => {
   assert.deepEqual(ran, [['quick', true]]);
 });
 
-test('the hand-over tool is named and bounded', () => {
+test('the hand-over tool is named and its strict schema has no length keywords', () => {
   assert.equal(HAND_OVER_TOOL.name, 'hand_over');
-  const reason = (
-    HAND_OVER_TOOL.inputSchema.properties as Record<
-      string,
-      { maxLength: number }
-    >
-  ).reason;
-  assert.equal(reason.maxLength, 120);
+  assert.doesNotMatch(
+    JSON.stringify(HAND_OVER_TOOL.inputSchema),
+    /maxLength|minLength|maxItems|minItems/,
+  );
 });
 
 test('each route holds at its own limits, the day first', () => {
