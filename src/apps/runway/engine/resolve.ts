@@ -262,42 +262,64 @@ export function planStretches<
     };
   }
   const changed = getChangedKeys(current, candidate);
-  const holds = (index: number, other: number) =>
-    changed.every((key) =>
-      isSameValue(clipped[index].payload[key], clipped[other].payload[key]),
-    );
-  const isChange = (index: number) =>
-    index > 0 &&
-    changed.some(
-      (key) =>
-        !isSameValue(
-          clipped[index].payload[key],
-          clipped[index - 1].payload[key],
-        ) && !isSameValue(clipped[index].payload[key], candidate[key]),
-    );
-  /** The stretch after a bounded change that only brings back what held before it. */
-  const isReturn = (index: number) =>
-    index > 1 && isChange(index - 1) && holds(index, index - 2);
-  const replaced = clipped.flatMap((stretch, index): ReplacedChange<P>[] => {
-    if (!isChange(index) || isReturn(index)) return [];
-    const previous = clipped[index - 1];
+  const readList = (list: readonly VersionStretch<P>[]) => {
+    const holds = (index: number, other: number) =>
+      changed.every((key) =>
+        isSameValue(list[index].payload[key], list[other].payload[key]),
+      );
+    const isChange = (index: number) =>
+      index > 0 &&
+      changed.some(
+        (key) =>
+          !isSameValue(
+            list[index].payload[key],
+            list[index - 1].payload[key],
+          ) && !isSameValue(list[index].payload[key], candidate[key]),
+      );
+    /** The stretch after a bounded change that only brings back what held before it. */
+    const isReturn = (index: number) =>
+      index > 1 && isChange(index - 1) && holds(index, index - 2);
+    const toReplaced = (index: number, until: number | null) => ({
+      effectiveFrom: list[index].effectiveFrom,
+      effectiveUntil: until,
+      before: {
+        ...list[index].payload,
+        ...Object.fromEntries(
+          changed.map((key) => [key, list[index - 1].payload[key]]),
+        ),
+      },
+      after: list[index].payload,
+    });
+    return { isChange, isReturn, toReplaced };
+  };
+  const own = readList(clipped);
+  const replaced = clipped.flatMap((_, index): ReplacedChange<P>[] => {
+    if (!own.isChange(index) || own.isReturn(index)) return [];
     const next = clipped[index + 1];
     return [
-      {
-        effectiveFrom: stretch.effectiveFrom,
-        effectiveUntil: next && isReturn(index + 1) ? next.effectiveFrom : null,
-        before: {
-          ...stretch.payload,
-          ...Object.fromEntries(
-            changed.map((key) => [key, previous.payload[key]]),
-          ),
-        },
-        after: stretch.payload,
-      },
+      own.toReplaced(
+        index,
+        next && own.isReturn(index + 1) ? next.effectiveFrom : null,
+      ),
     ];
   });
+  const starts = versions
+    .filter((version) => version.itemId === itemId)
+    .map((version) => version.effectiveFrom);
+  const whole =
+    starts.length === 0
+      ? []
+      : getVersionStretches<V, P>(versions, itemId, Math.min(...starts));
+  const atStart = whole.findIndex(
+    (stretch) => stretch.effectiveFrom === effectiveFrom,
+  );
+  const wholeRead = readList(whole);
+  const returnReplaced =
+    atStart > 0 && wholeRead.isReturn(atStart)
+      ? [wholeRead.toReplaced(atStart, null)]
+      : [];
   return {
     written: applyFieldChanges(clipped, current, candidate),
-    replaced,
+    replaced: [...returnReplaced, ...replaced],
   };
 }

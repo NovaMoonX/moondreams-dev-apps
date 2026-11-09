@@ -12088,6 +12088,38 @@ const version = (
     'the return to what held before a temporary change is part of its entry, not a change of its own',
   );
 
+  const fromReturn = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 30 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 100 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    fromReturn.replaced.map(
+      ({ effectiveFrom, effectiveUntil, before, after }) => [
+        effectiveFrom,
+        effectiveUntil,
+        before.cents,
+        after.cents,
+      ],
+    ),
+    [[30 * D, null, 200, 100]],
+    'a change dated from the day a temporary change ends says it replaces that return',
+  );
+  const insideTemp = planStretches(
+    bounded,
+    'x',
+    { effectiveFrom: 25 * D, effectiveUntil: null },
+    { name: 'Rent', cents: 200 },
+    { name: 'Rent', cents: 150 },
+  );
+  assert.deepEqual(
+    insideTemp.replaced.map(({ effectiveFrom }) => effectiveFrom),
+    [30 * D],
+    'a change from inside a temporary change lists the return once',
+  );
+
   assert.deepEqual(
     getChangedKeys(
       { a: 1, b: { x: 1, y: null } },
