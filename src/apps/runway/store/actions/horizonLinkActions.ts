@@ -79,6 +79,8 @@ export async function setChangeLink(
   encryption: RunwayEncryption,
   input: SetChangeLinkInput,
 ): Promise<void> {
+  if (input.from && input.to && input.from.eventId === input.to.eventId)
+    throw new Error(PART_OF_WORDS.eventChanged);
   const now = Date.now();
   const writes = await Promise.all([
     ...(input.from

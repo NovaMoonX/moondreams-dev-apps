@@ -10,15 +10,18 @@ import BackLink from '@/components/BackLink';
 import InlineNotice from '@/components/InlineNotice';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
-import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   ActionSection,
   ActionTitle,
 } from '@apps/runway/components/ActionSection';
 import ItemMark from '@apps/runway/components/ItemMark';
-import { COMING_WORDS, PART_OF_WORDS } from '@apps/runway/constants';
-import { DAY_MS } from '@apps/runway/engine/dates';
+import {
+  COMING_WORDS,
+  HORIZON_END_WORDS,
+  PART_OF_WORDS,
+} from '@apps/runway/constants';
+import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findLinkHolder } from '@apps/runway/engine/horizonLinks';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import {
@@ -62,6 +65,14 @@ const toEdit = (event: ResolvedHorizon, summary: string): LinkEventEdit => ({
 });
 
 /** One coming change on its own: what changes, when, until when and which event it is part of, with the ways to tie it to an event, untie it or cancel it. */
+const KNOWN_FAILURES: readonly string[] = [
+  PART_OF_WORDS.alreadyStarted,
+  PART_OF_WORDS.eventChanged,
+  PART_OF_WORDS.eventGone,
+  HORIZON_END_WORDS.changedJustNow,
+  COMING_WORDS.gone,
+];
+
 function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -74,6 +85,7 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
     selectOpenHorizonItems(state, today),
   );
   const stance = useAppSelector(selectStance);
+  const versions = useAppSelector((state) => state.runway.versions);
   const [isPicking, setIsPicking] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -94,16 +106,20 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
   const lastDay = formatDateOrdinalUTC(change.on - DAY_MS);
   const back = change.isReturn ? getChangeFigure(change.after) : null;
   const canCancel = canCancelComingChange(change);
-  const choices = openEvents.filter(({ item }) => item.id !== holder?.item.id);
+  const choices =
+    holder === null || isOpenHolder
+      ? openEvents.filter(({ item }) => item.id !== holder?.item.id)
+      : [];
 
-  const run = async (task: () => Promise<void>) => {
+  const run = async (task: () => Promise<void>, fallback: string) => {
     if (isBusy) return;
     setError(null);
     setIsBusy(true);
     try {
       await task();
     } catch (failure) {
-      setError(getErrorMessage(failure, COMING_WORDS.tieFailed));
+      const message = failure instanceof Error ? failure.message : '';
+      setError(KNOWN_FAILURES.includes(message) ? message : fallback);
     } finally {
       setIsBusy(false);
     }
@@ -115,6 +131,7 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
   ) =>
     run(async () => {
       if (!user) return;
+      if (change.on <= todayAsUtcDate()) throw new Error(COMING_WORDS.gone);
       const latest = selectAllHorizonItems(store.getState(), today);
       const fresh = (event: ResolvedHorizon | null) =>
         event === null
@@ -158,7 +175,7 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
         type: 'success',
       });
       setIsPicking(false);
-    });
+    }, COMING_WORDS.tieFailed);
 
   const askCancel = async () => {
     const isConfirmed = await confirm({
@@ -177,7 +194,7 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
       }
       addToast({ title: COMING_WORDS.cancelled(name), type: 'success' });
       onBack();
-    });
+    }, COMING_WORDS.cancelFailed);
   };
 
   if (isPicking) {
@@ -224,15 +241,13 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
     return COMING_WORDS.from(formatDateOrdinalUTC(change.on));
   };
   const getUntil = () => {
-    const ends = store
-      .getState()
-      .runway.versions.flatMap((version) =>
-        version.itemId === change.itemId &&
-        version.changeId === ref.changeId &&
-        version.effectiveUntil !== null
-          ? [version.effectiveUntil]
-          : [],
-      );
+    const ends = versions.flatMap((version) =>
+      version.itemId === change.itemId &&
+      version.changeId === ref.changeId &&
+      version.effectiveUntil !== null
+        ? [version.effectiveUntil]
+        : [],
+    );
     return change.what === 'change' && !change.isReturn && ends.length > 0
       ? COMING_WORDS.until(formatDateOrdinalUTC(Math.max(...ends) - DAY_MS))
       : null;
@@ -248,8 +263,8 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
       {lines.length > 0 && (
         <ActionSection caption={COMING_WORDS.whatChanges}>
           <ul className='border-border bg-card divide-border divide-y rounded-2xl border text-[15px]'>
-            {lines.map((line) => (
-              <li key={line} className='px-3 py-2.5'>
+            {lines.map((line, index) => (
+              <li key={`${index}${line}`} className='px-3 py-2.5'>
                 {mask(line)}
               </li>
             ))}

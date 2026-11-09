@@ -6,8 +6,10 @@ import FormSheet from '@/components/FormSheet';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ComingChangesList from '@apps/runway/components/ComingChangesList';
 import ItemRow from '@apps/runway/components/ItemRow';
-import { COMING_WORDS } from '@apps/runway/constants';
+import ItemSheet from '@apps/runway/components/ItemSheet';
+import { COMING_WORDS, PLAN_CHANGE_WORDS } from '@apps/runway/constants';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
+import { getChangeRef } from '@apps/runway/utils/comingChangeText';
 import { describePlanChangeGoes } from '@apps/runway/utils/planChangeText';
 
 interface PlanChangesDoorProps {
@@ -17,9 +19,10 @@ interface PlanChangesDoorProps {
   today: number;
 }
 
-/** A day with more changes than its agenda lists one by one: a single "5 things change" row that opens them all, each opening its own sheet. */
+/** A day with more changes than its agenda lists one by one: a single "5 things change" row that opens them all; a change opens its item's sheet in place of the list, and closing it returns to the list. */
 function PlanChangesDoor({ changes, day, today }: PlanChangesDoorProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [chosen, setChosen] = useState<PlanChange | null>(null);
   const title = COMING_WORDS.thingsChange(changes.length);
 
   return (
@@ -46,8 +49,25 @@ function PlanChangesDoor({ changes, day, today }: PlanChangesDoorProps) {
             changes={changes}
             today={today}
             textOf={describePlanChangeGoes}
+            onOpen={(change) => {
+              setIsOpen(false);
+              setChosen(change);
+            }}
           />
         </FormSheet>
+      )}
+      {chosen && (
+        <ItemSheet
+          itemId={chosen.itemId}
+          kind={chosen.kind}
+          today={today}
+          figureLabel={PLAN_CHANGE_WORDS.sheetLabel}
+          presetChange={getChangeRef(chosen)}
+          onClose={() => {
+            setChosen(null);
+            setIsOpen(true);
+          }}
+        />
       )}
     </>
   );

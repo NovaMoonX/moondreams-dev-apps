@@ -410,7 +410,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
             {otherEntries.map(getRow)}
             {changeEntries.length > MAX_AGENDA_CHANGES ? (
               <PlanChangesDoor
-                changes={changeEntries.flatMap((entry) => entry.change)}
+                changes={changeEntries.map((entry) => entry.change)}
                 day={formatDayTitle(selectedOn)}
                 today={today}
               />

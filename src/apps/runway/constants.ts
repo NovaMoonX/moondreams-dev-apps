@@ -1291,8 +1291,6 @@ export const PART_OF_WORDS = {
     `Linked ${name}: ${what}, from ${from}, to ${event}.`,
   unlinkedLine: (name: string, event: string) =>
     `Unlinked ${name} from ${event}.`,
-  comingCaption: 'Coming changes',
-  comingFrom: 'From',
   comingBackTo: (figure: string, lastDay: string) =>
     `Back to ${figure} after ${lastDay}`,
   comingBack: (lastDay: string, difference: string) =>
@@ -3259,9 +3257,6 @@ export const PLAN_CHANGE_WORDS = {
   viewSub: 'Planned changes that start or end since the last pay.',
   fromDate: (date: string) => `From ${date}`,
   sheetLabel: 'Planned change',
-  sheetFact: (date: string) => `Starts ${date}`,
-  sheetFactReturns: (date: string) => `Goes back on ${date}`,
-  sheetFactStops: (lastDay: string) => `Ends after ${lastDay}`,
 } as const;
 
 /** The coming-changes row, a change's own sheet and the "What will change?" question. */
