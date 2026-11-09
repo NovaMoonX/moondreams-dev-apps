@@ -691,7 +691,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     }
     const loop = routed.value;
     return {
-      endedBy: loop.endedBy,
+      endedBy: routed.aborted ? ('aborted' as const) : loop.endedBy,
       loop,
       context,
       combined,

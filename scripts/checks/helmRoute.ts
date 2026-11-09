@@ -104,7 +104,11 @@ const harness = (input: {
 
 test('a quick run that does not hand over reserves once on quick', async () => {
   const { result, reserved, ran } = harness({ route: 'quick' });
-  assert.deepEqual(await result, { value: 'quick', route: 'quick' });
+  assert.deepEqual(await result, {
+    value: 'quick',
+    route: 'quick',
+    aborted: false,
+  });
   assert.deepEqual(reserved, ['quick']);
   assert.deepEqual(ran, [['quick', true]]);
 });
@@ -114,7 +118,11 @@ test('a hand-over reserves on quick then full and the full run cannot hand over'
     route: 'quick',
     handsOver: true,
   });
-  assert.deepEqual(await result, { value: 'interpret', route: 'full' });
+  assert.deepEqual(await result, {
+    value: 'interpret',
+    route: 'full',
+    aborted: false,
+  });
   assert.deepEqual(reserved, ['quick', 'full']);
   assert.deepEqual(ran, [
     ['quick', true],
@@ -128,14 +136,22 @@ test('an abort during a hand-over reserves nothing more and runs no full turn', 
     handsOver: true,
     abortsDuringQuick: true,
   });
-  assert.deepEqual(await result, { value: 'quick', route: 'quick' });
+  assert.deepEqual(await result, {
+    value: 'quick',
+    route: 'quick',
+    aborted: true,
+  });
   assert.deepEqual(reserved, ['quick']);
   assert.deepEqual(ran, [['quick', true]]);
 });
 
 test('a full start reserves once on full and never offers a hand-over', async () => {
   const { result, reserved, ran } = harness({ route: 'full' });
-  assert.deepEqual(await result, { value: 'interpret', route: 'full' });
+  assert.deepEqual(await result, {
+    value: 'interpret',
+    route: 'full',
+    aborted: false,
+  });
   assert.deepEqual(reserved, ['full']);
   assert.deepEqual(ran, [['interpret', false]]);
 });

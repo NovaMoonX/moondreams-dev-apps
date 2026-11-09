@@ -52,7 +52,7 @@ export const HAND_OVER_TOOL: TerminalTool = {
 
 type RunRole = 'quick' | 'interpret';
 
-/** Runs a turn on its route; a quick run may hand the turn over once, and the full run it starts is never offered the hand-over. Each run reserves its own allowance first; a quick run cut short by an abort returns as it is, reserving nothing more. */
+/** Runs a turn on its route; a quick run may hand the turn over once, and the full run it starts is never offered the hand-over. Each run reserves its own allowance first; a hand-over cut short by an abort reserves nothing more and comes back marked aborted, so the caller restarts the turn. */
 export async function runRouted<T>(input: {
   route: Route;
   runOn: (
@@ -61,18 +61,23 @@ export async function runRouted<T>(input: {
   ) => Promise<{ handedOver: boolean; value: T }>;
   reserve: (route: Route) => Promise<HeldReason | null>;
   isAborted: () => boolean;
-}): Promise<{ value: T; route: Route } | { held: HeldReason }> {
+}): Promise<
+  { value: T; route: Route; aborted: boolean } | { held: HeldReason }
+> {
   const { route, runOn, reserve, isAborted } = input;
   const heldFirst = await reserve(route);
   if (heldFirst) return { held: heldFirst };
   if (route === 'full') {
-    return { value: (await runOn('interpret', false)).value, route: 'full' };
+    const full = await runOn('interpret', false);
+    return { value: full.value, route: 'full', aborted: false };
   }
   const quick = await runOn('quick', true);
-  if (!quick.handedOver || isAborted()) {
-    return { value: quick.value, route: 'quick' };
+  if (!quick.handedOver) {
+    return { value: quick.value, route: 'quick', aborted: false };
   }
+  if (isAborted()) return { value: quick.value, route: 'quick', aborted: true };
   const heldFull = await reserve('full');
   if (heldFull) return { held: heldFull };
-  return { value: (await runOn('interpret', false)).value, route: 'full' };
+  const full = await runOn('interpret', false);
+  return { value: full.value, route: 'full', aborted: false };
 }
