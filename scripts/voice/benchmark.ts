@@ -518,12 +518,6 @@ const renderTable = (providers: ProviderResult[]) => {
 };
 
 const writeDoc = (providers: ProviderResult[], ranAt: string) => {
-  if (providers.every((provider) => provider.skipped !== null)) {
-    console.log(
-      'No provider ran, so docs/voice-benchmark.md was left as it was.',
-    );
-    return;
-  }
   const doc = readFileSync(DOC_PATH, 'utf8');
   const start = '<!-- results:start -->';
   const end = '<!-- results:end -->';
@@ -600,6 +594,18 @@ const main = async () => {
   const providers: ProviderResult[] = isFixture
     ? runFixture()
     : await runProviders();
+  const hasAudio = providers.some((provider) =>
+    provider.voices.some((voice) =>
+      voice.samples.some((sample) => sample.error === null),
+    ),
+  );
+  if (!hasAudio) {
+    console.log(
+      'Nothing came back, so voice-benchmark/ and docs/voice-benchmark.md were left as they were.',
+    );
+    rmSync(NEXT_DIR, { recursive: true, force: true });
+    return;
+  }
   writeFileSync(
     new URL('results.json', NEXT_DIR),
     JSON.stringify({ ranAt, isFixture, replies: REPLIES, providers }, null, 2),
