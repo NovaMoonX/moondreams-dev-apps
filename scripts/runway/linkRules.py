@@ -99,6 +99,16 @@ def main():
         check(f'{c} create [o]', commit(o_tok, [put_new(f'{base}/{c}/l2', dict(id='l2', sealed=SEAL))]), False)
         check(f'{c} update [o]', commit(o_tok, [put(f'{base}/{c}/l1', dict(id='l1', sealed=SEAL, x=1))]), False)
         check(f'{c} delete [o]', commit(o_tok, [rm(f'{base}/{c}/l1')]), False)
+    rel = f'{base}/releasedCharges/r1'
+    rdoc = dict(id='r1', date=NOW, createdAt=NOW, sealed=SEAL)
+    admin([put(rel, rdoc)])
+    check('releasedCharges read [o]', get(rel, o_tok), True)
+    check('releasedCharges read [x]', get(rel, x_tok), False)
+    check('releasedCharges read [-]', get(rel, None), False)
+    check('releasedCharges create [o]', commit(o_tok, [put_new(f'{base}/releasedCharges/r2', dict(rdoc, id='r2'))]), False)
+    check('releasedCharges update [o]', commit(o_tok, [put(rel, dict(rdoc, x=1))]), False)
+    check('releasedCharges delete [x]', commit(x_tok, [rm(rel)]), False)
+    check('releasedCharges delete [o]', commit(o_tok, [rm(rel)]), True)
     for c in ('cards', 'accounts'):
         check(f'{c} create linkId null [o]',
               commit(o_tok, [put_new(f'{base}/{c}/a1', dict(id='a1', linkId=None, sealed=SEAL))]), True)

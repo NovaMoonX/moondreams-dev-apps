@@ -9,6 +9,9 @@ import type {
   LinkSealed,
   OpenAccountBalance,
   OpenLink,
+  OpenReleasedCharge,
+  ReleasedChargeDoc,
+  ReleasedChargeSealed,
   RunwayEncryption,
 } from '@apps/runway/types';
 
@@ -107,6 +110,32 @@ export function startAccountBalancesListener(
     async (data) => {
       const payload = await read<{ cents: number }>(data.sealed);
       return { id: data.id, asOf: data.asOf, cents: payload.cents };
+    },
+    onChange,
+    onError,
+  );
+}
+
+/** Notes Functions leave when the bank drops a pending charge the person had placed; read once and deleted by the app. */
+export function startReleasedChargesListener(
+  uid: string,
+  encryption: RunwayEncryption,
+  onChange: (charges: OpenReleasedCharge[]) => void,
+  onError: (error: Error) => void,
+) {
+  const read = createSealedReader(encryption);
+  return startOpenedListener<ReleasedChargeDoc, OpenReleasedCharge>(
+    uid,
+    'releasedCharges',
+    async (data) => {
+      const payload = await read<ReleasedChargeSealed>(data.sealed);
+      return {
+        id: data.id,
+        date: data.date,
+        title: payload.title ?? null,
+        amountCents: payload.amountCents,
+        lines: payload.lines ?? [],
+      };
     },
     onChange,
     onError,
