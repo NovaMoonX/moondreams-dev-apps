@@ -174,14 +174,16 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
         title={TRUST_BROWSER_WORDS.others}
         footer={
           others.length > 1 && (
-            <Button
-              type='button'
-              variant='secondary'
-              className='text-destructive! w-full'
-              onClick={() => void removeAll()}
-            >
-              {TRUST_BROWSER_WORDS.removeAll}
-            </Button>
+            <div className='p-4'>
+              <Button
+                type='button'
+                variant='secondary'
+                className='text-destructive! w-full'
+                onClick={() => void removeAll()}
+              >
+                {TRUST_BROWSER_WORDS.removeAll}
+              </Button>
+            </div>
           )
         }
       >
