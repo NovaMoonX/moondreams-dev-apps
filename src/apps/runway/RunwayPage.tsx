@@ -70,6 +70,7 @@ import {
 } from '@apps/runway/hooks/useBankMatch';
 import { useAutoPay } from '@apps/runway/hooks/useAutoPay';
 import { useLinkHistory } from '@apps/runway/hooks/useLinkHistory';
+import { useReleasedCharges } from '@apps/runway/hooks/useReleasedCharges';
 import { usePlaceByRules } from '@apps/runway/hooks/useRuleMatch';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
 import { selectHistory } from '@apps/runway/store/selectors/historySelectors';
@@ -260,6 +261,7 @@ function RunwayContent() {
   useMatchAccountPairs(user?.uid ?? null);
   usePlaceByRules(user?.uid ?? null);
   useLinkHistory(user?.uid ?? null);
+  useReleasedCharges(user?.uid ?? null);
   useMatchLinkHistory(user?.uid ?? null);
   const isDeletingPlan = moreEntry === 'settings' && settingsView === 'delete';
   const { retry: retryHistory } = useClosings(
