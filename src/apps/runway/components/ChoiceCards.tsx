@@ -36,13 +36,13 @@ function ChoiceCards<T extends string>({
               index === options.length - 1 &&
                 options.length % 2 === 1 &&
                 'col-span-2 max-[359px]:col-span-1',
-              'text-foreground! border-border relative h-auto w-full flex-col items-center justify-center gap-0 rounded-2xl border px-7! py-2! text-center font-normal whitespace-normal',
+              'text-foreground! border-border relative h-auto w-full flex-col items-center justify-center gap-0 rounded-2xl border px-6! py-2! text-center font-normal whitespace-normal',
               isChosen &&
                 'bg-accent! shadow-[inset_0_0_0_1.5px_var(--color-primary)]',
             )}
             onClick={() => onChange(option.value)}
           >
-            <span className='text-[15px] leading-[1.125rem] font-medium'>
+            <span className='text-[15px] leading-[1.125rem] font-medium text-balance'>
               {option.title}
             </span>
             <span
@@ -73,7 +73,7 @@ function ChoiceCards<T extends string>({
                 </span>
               )}
             </span>
-            <span className='text-muted-foreground mt-0.5 block text-[13px] leading-[1.125rem]'>
+            <span className='text-muted-foreground mt-0.5 block text-[13px] leading-[1.125rem] text-balance'>
               {option.body}
             </span>
           </Button>
