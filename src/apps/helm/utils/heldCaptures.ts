@@ -46,9 +46,12 @@ export function toHeldItems(captures: OpenCapture[]): {
   };
 }
 
-// The day's allowance is counted per UTC day, so it comes back at UTC midnight, shown in local time.
+// The day's allowance is counted per UTC day, so it comes back at UTC midnight, shown in local time and never split across lines.
 const getLimitResetTime = () =>
-  formatTime((Math.floor(Date.now() / DAY_MS) + 1) * DAY_MS);
+  formatTime((Math.floor(Date.now() / DAY_MS) + 1) * DAY_MS).replace(
+    /\s/g,
+    '\u00a0',
+  );
 
 /** Why a waiting turn waits, in the words the Inbox and its sheet use. */
 export function getWaitingReason(capture: OpenCapture, isUnreachable: boolean) {
