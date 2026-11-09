@@ -15417,6 +15417,29 @@ const version = (
     'stop',
     'the last day itself is still ahead of the day it takes effect',
   );
+  const covered = [
+    ...versions,
+    {
+      ...v('r2', 'rent', t + 10 * D, 9, 'c2'),
+      effectiveUntil: t + 15 * D,
+    },
+  ];
+  assert.deepEqual(
+    getCancelTarget(covered, rentItem, 'c1', t)?.segments.map(
+      ({ effectiveFrom, effectiveUntil }) => [effectiveFrom, effectiveUntil],
+    ),
+    [[t + 10 * D, null]],
+    'a change hidden on its first day by a later stretch still wins after it, so it can be cancelled',
+  );
+  const alreadyCancelled = [
+    ...versions,
+    v('rx', 'rent', t + 10 * D, 3, 'cancel_c1'),
+  ];
+  assert.equal(
+    getCancelTarget(alreadyCancelled, rentItem, 'c1', t),
+    null,
+    'a change already cancelled wins on none of its days',
+  );
   assert.equal(canCancelChange({ on: t + 1 * D }, t), true);
   assert.equal(canCancelChange({ on: t }, t), false);
   assert.equal(canCancelChange({ startsOn: t + 1 * D }, t), true);

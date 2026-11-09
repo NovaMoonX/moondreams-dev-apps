@@ -103,7 +103,27 @@ export type CancelTarget =
 export const getEndEntryId = (itemId: string, isTaken: boolean, now: number) =>
   isTaken ? `${getEndChangeId(itemId)}_${now}` : getEndChangeId(itemId);
 
-/** What cancelling `changeId` would write, read from the versions loaded; null when it is not there, has started, was already cancelled (another version now wins on its first day), or has no earlier version under part of its days (an item's own first version is cancelled by archiving it). A restored segment is made one millisecond after the change, so it wins over the change and still loses to anything made after it. */
+const winsAnywhere = <V extends LinkVersion>(
+  own: readonly V[],
+  itemId: string,
+  made: readonly V[],
+  changeId: string,
+) =>
+  made.some((version) =>
+    [
+      version.effectiveFrom,
+      ...own.flatMap((other) =>
+        [other.effectiveFrom, other.effectiveUntil].filter(
+          (on): on is number =>
+            on !== null &&
+            on > version.effectiveFrom &&
+            (version.effectiveUntil === null || on < version.effectiveUntil),
+        ),
+      ),
+    ].some((on) => resolveVersion(own, itemId, on)?.changeId === changeId),
+  );
+
+/** What cancelling `changeId` would write, read from the versions loaded; null when it is not there, has started, was already cancelled (it wins on none of its days), or has no earlier version under part of its days (an item's own first version is cancelled by archiving it). A restored segment is made one millisecond after the change, so it wins over the change and still loses to anything made after it. */
 export function getCancelTarget<V extends LinkVersion>(
   versions: readonly V[],
   item: { id: string; endedAt: DateOnly | null },
@@ -120,10 +140,7 @@ export function getCancelTarget<V extends LinkVersion>(
   if (made.length === 0) return null;
   const startsOn = Math.min(...made.map(({ effectiveFrom }) => effectiveFrom));
   const madeAt = Math.max(...made.map(({ createdAt }) => createdAt));
-  if (
-    startsOn <= today ||
-    resolveVersion(own, item.id, startsOn)?.changeId !== changeId
-  )
+  if (startsOn <= today || !winsAnywhere(own, item.id, made, changeId))
     return null;
   const before = own.filter(
     (version) => version.changeId !== changeId && version.createdAt <= madeAt,

@@ -1152,7 +1152,7 @@ export interface CancelChangeInput {
  * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
  * nothing is deleted. A version change gets new versions that restore what held before it over each of
  * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
- * to anything made later, all under one new change entry. A coming end sets `endedAt` back to null and
+ * to anything made later, all under one entry whose id is `cancel_<changeId>`, so a second cancel writes nothing. A coming end sets `endedAt` back to null and
  * clears the release day the ending set (unless the item was archived, whose release it may be), with a
  * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
  * is refused when the event changed on another device. Refuses a change whose first day has come.
@@ -1165,7 +1165,8 @@ export async function cancelChange(
 ): Promise<boolean> {
   const { itemId, changeId, target } = input;
   const now = Date.now();
-  const cancelId = generateUuid();
+  const cancelId =
+    target.kind === 'versions' ? `cancel_${changeId}` : generateUuid();
   const linked = input.link
     ? await sealEventVersion(
         encryption,
@@ -1184,7 +1185,8 @@ export async function cancelChange(
   ]);
   const headerRef = itemPath(uid, 'items', itemId);
   return runTransaction(db, async (transaction) => {
-    const [header, versionDocs, eventTaken] = await Promise.all([
+    const [cancelled, header, versionDocs, eventTaken] = await Promise.all([
+      transaction.get(itemPath(uid, 'changes', cancelId)),
       target.kind === 'stop'
         ? transaction.get(headerRef)
         : Promise.resolve(null),
@@ -1199,6 +1201,7 @@ export async function cancelChange(
         ? Promise.resolve(null)
         : transaction.get(itemPath(uid, 'versions', linked.version.id)),
     ]);
+    if (cancelled.exists()) return false;
     if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
     const writeEntry = (effectiveFrom: DateOnly) => {
       const entry: ChangeDoc = {
@@ -1222,6 +1225,8 @@ export async function cancelChange(
       const stored = header.data() as Partial<PlanItemDoc>;
       const endedAt = stored.endedAt ?? null;
       if (endedAt === null) return false;
+      if (endedAt + DAY_MS !== target.startsOn)
+        throw new Error(HORIZON_END_WORDS.changedJustNow);
       if (endedAt + DAY_MS <= input.today)
         throw new Error(PART_OF_WORDS.alreadyStarted);
       transaction.update(headerRef, {
