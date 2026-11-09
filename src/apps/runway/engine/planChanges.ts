@@ -28,11 +28,7 @@ const isLive = (item: PlanItemDoc, on: DateOnly) =>
   (item.archivedAt === null || on < item.archivedAt) &&
   (item.endedAt === null || on <= item.endedAt);
 
-/**
- * What differs for one item between two days because a version starts or ends in between. Null
- * when the item had nothing in force on the earlier day (its first version is a start, not a
- * change), or when both days read the same.
- */
+/** What differs for one item between two days because a version starts or ends in between; null when nothing was in force the day before (a start, not a change) or both days read the same. */
 const compareDays = (
   own: readonly OpenVersion[],
   item: PlanItemDoc,
@@ -71,11 +67,7 @@ const compareDays = (
 const byDayThenItem = (a: PlanChange, b: PlanChange) =>
   a.on - b.on || a.itemId.localeCompare(b.itemId);
 
-/**
- * The days from `from` through `to` on which a version of a pay, bill, envelope or goal takes effect
- * and what is planned for it differs from the day before, among them the day a stretch ends and the
- * earlier version returns. Callers pass a `from` after today so what already happened is left out.
- */
+/** The days a pay, bill, envelope or goal changes from the day before, a stretch's return included; pass a start after today so what already happened is left out. */
 export function listPlanChangeDays(
   versions: readonly OpenVersion[],
   items: readonly PlanItemDoc[],
@@ -109,11 +101,7 @@ export function listPlanChangeDays(
   return result;
 }
 
-/**
- * What a coming income day plans differently from the income day before it of the same pay, because
- * a version started or ended between them. Day choices and bill timing are never versions, so they
- * never count; the pay's own amount is the day's headline, so `exceptItemId` leaves it out.
- */
+/** What a coming income day plans differently from the same pay's day before, by versions only (day choices and bill timing never count); the pay's own item is left out, since its amount is the headline. */
 export function listChangesBetweenIncomeDays(
   versions: readonly OpenVersion[],
   items: readonly PlanItemDoc[],
