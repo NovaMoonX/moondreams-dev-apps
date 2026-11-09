@@ -95,7 +95,8 @@
     "merge:lock": "bash scripts/mergeLock.sh",
     "pipeline:secrets": "bash scripts/pipelineSecrets.sh",
     "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh",
-    "helm:keyring": "bash scripts/helm/keyring.sh"
+    "helm:keyring": "bash scripts/helm/keyring.sh",
+    "helm:alerts": "bash scripts/helm/alerts.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
