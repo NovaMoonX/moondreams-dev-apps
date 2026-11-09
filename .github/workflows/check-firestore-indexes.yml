@@ -74,3 +74,4 @@ jobs:
       - run: npm run check:waypoint-pushes
       - run: npm run check:a-list
       - run: npm run check:receipts
+      - run: npm run check:helm-copy
