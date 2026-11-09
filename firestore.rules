@@ -235,7 +235,7 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    // A profile is private to one person. Only `deleteHelmData` removes it, so a stray client can't half-delete a Helm.
+    // A profile is private to one person and only the server deletes it, so a stray client can't half-delete a Helm.
     match /apps/helm/users/{uid} {
       allow read, create, update: if isHelmOwner(uid);
     }

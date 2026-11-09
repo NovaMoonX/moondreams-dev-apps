@@ -18,6 +18,7 @@ import { groupSessionsByDay, type Session } from '@apps/helm/utils/sessions';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
+  onComposerFocusChange: (isFocused: boolean) => void;
 }
 
 const TURN_ESTIMATED_HEIGHT = 88;
@@ -45,8 +46,8 @@ function SessionTurns({ session }: { session: Session }) {
   );
 }
 
-/** Home is the conversation: the assistant's name, one quiet line, earlier sessions a scroll up (a day at a time), the session in progress at the bottom and, before anything is said, one card saying how to begin. */
-function HomeSurface({ composerRef }: HomeSurfaceProps) {
+/** Home is the conversation: the assistant's name, one quiet line, earlier sessions a scroll up (a day at a time), the session in progress at the bottom and, before anything is said, one card saying how to begin, with the field resting just above the dock. */
+function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const { sessions, openSessionId } = useSession();
@@ -60,7 +61,7 @@ function HomeSurface({ composerRef }: HomeSurfaceProps) {
     <main className='flex flex-1 flex-col gap-8'>
       <div className='flex flex-col items-center gap-2 pt-10 text-center'>
         <div className='flex items-center gap-2'>
-          <AssistantMark name={name} />
+          <AssistantMark name={name} isLarge />
           <h1 className='helm-serif text-[28px] leading-[34px]'>{name}</h1>
         </div>
         <p className='text-muted-foreground text-[15px]'>
@@ -111,7 +112,12 @@ function HomeSurface({ composerRef }: HomeSurfaceProps) {
           ))}
         </div>
       )}
-      <Composer fieldRef={composerRef} />
+      <div className='mt-auto'>
+        <Composer
+          fieldRef={composerRef}
+          onFocusChange={onComposerFocusChange}
+        />
+      </div>
     </main>
   );
 }

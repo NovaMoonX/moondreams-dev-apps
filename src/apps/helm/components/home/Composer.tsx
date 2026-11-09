@@ -1,4 +1,10 @@
-import { useState, type KeyboardEvent, type Ref } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type Ref,
+} from 'react';
 
 import { Button, Textarea } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -14,15 +20,26 @@ import { sendCapture } from '@apps/helm/store/actions/captureActions';
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: Ref<HTMLTextAreaElement>;
+  onFocusChange: (isFocused: boolean) => void;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
-function Composer({ fieldRef }: ComposerProps) {
+function Composer({ fieldRef, onFocusChange }: ComposerProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [text, setText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const stopKeepingInView = useRef<(() => void) | null>(null);
+
+  // A field removed while focused gets no blur, so leaving home mid-typing must hand the dock back too.
+  useEffect(
+    () => () => {
+      stopKeepingInView.current?.();
+      onFocusChange(false);
+    },
+    [onFocusChange],
+  );
 
   const canSend = text.trim().length > 0 && !isSending && user !== null;
 
@@ -62,10 +79,25 @@ function Composer({ fieldRef }: ComposerProps) {
         maxLength={CAPTURE_MAX_CHARS}
         aria-label={HELM_COPY.composerLabel(name)}
         placeholder={HELM_COPY.composerPlaceholder(name)}
-        className='bg-card'
+        className='helm-field'
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={handleKeyDown}
+        onFocus={(event) => {
+          onFocusChange(true);
+          // The keyboard shrinks the viewport after focus lands, so the field is brought back into view each time it does.
+          const field = event.currentTarget;
+          const keepInView = () => field.scrollIntoView({ block: 'nearest' });
+          stopKeepingInView.current?.();
+          window.visualViewport?.addEventListener('resize', keepInView);
+          stopKeepingInView.current = () =>
+            window.visualViewport?.removeEventListener('resize', keepInView);
+        }}
+        onBlur={() => {
+          stopKeepingInView.current?.();
+          stopKeepingInView.current = null;
+          onFocusChange(false);
+        }}
       />
       <div className='flex items-center justify-between gap-3'>
         <span className='text-muted-foreground text-[13px] tabular-nums'>

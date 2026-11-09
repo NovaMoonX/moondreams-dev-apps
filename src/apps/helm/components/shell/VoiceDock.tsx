@@ -14,7 +14,7 @@ const SIDE_BUTTON =
 function VoiceDock({ onBrowse, onTalk, onType }: VoiceDockProps) {
   return (
     <nav
-      aria-label='Helm'
+      aria-label='Talk, type or browse'
       className='from-background via-background/95 pointer-events-none fixed inset-x-0 bottom-0 z-20 bg-gradient-to-t to-transparent px-4 pt-10 pb-[max(1rem,env(safe-area-inset-bottom))]'
     >
       <div className='pointer-events-auto mx-auto flex max-w-xl items-end justify-center gap-7'>

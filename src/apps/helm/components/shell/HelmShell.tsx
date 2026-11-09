@@ -9,8 +9,8 @@ interface HelmShellProps {
 /** The page every Helm view sits in: one column, with the dock fixed at the foot when the view has one. */
 function HelmShell({ children, dock }: HelmShellProps) {
   return (
-    <div className='page pb-40'>
-      <div className='mx-auto flex w-full max-w-xl flex-col pt-4'>
+    <div className='page flex min-h-dvh flex-col pb-40'>
+      <div className='mx-auto flex w-full max-w-xl flex-1 flex-col pt-4'>
         {children}
       </div>
       {dock}

@@ -15,15 +15,15 @@ export const CAPTURE_MAX_CHARS = 4_000;
 /** How many earlier sessions each scroll up brings in. */
 export const EARLIER_SESSIONS_PAGE = 20;
 
-/** Every line that names the assistant is a template filled with `useAssistantName()`, so a renamed assistant is renamed everywhere. */
+/** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   firstOpen: (name: string) =>
     `Tap Talk and tell ${name} the first thing on your mind. A task, a date, a name: ${name} sorts it.`,
   composerPlaceholder: (name: string) => `Type to ${name}`,
   composerLabel: (name: string) => `Message to ${name}`,
-  todayFirstRun:
-    'Nothing is planned for today yet. Once you have told Helm about a task or an event, it appears here.',
+  todayFirstRun: (name: string) =>
+    `Nothing is planned for today yet. Once you have told ${name} about a task or an event, it appears here.`,
   send: 'Send',
   sendFailed: "That didn't send. Your words are still here.",
   savedAsWritten: 'Saved as written',
