@@ -694,7 +694,8 @@ export const HORIZON_PLAN_WORDS = {
   title: 'Which event?',
   newEvent: 'New event',
   newEventSubGoal: (goal: string) => `Starts with ${goal}`,
-  newEventSubEnvelope: (envelope: string) => `Starts with ${envelope}'s money`,
+  newEventSubEnvelope: (envelope: string) =>
+    `Starts with the money in ${envelope}`,
   search: 'Search',
   noMatch: 'No event matches',
   goalTaken: (goal: string, event: string) =>
@@ -715,7 +716,8 @@ export const HORIZON_PLAN_WORDS = {
     `${goal}, ${saved} of ${target}`,
   partOf: (event: string) => `Part of ${event}`,
   partOfSub: 'Saving for it',
-  unlinkTitle: (event: string) => `Stop saving for ${event}?`,
+  unlinkTitle: (goal: string, event: string) =>
+    `Unlink ${goal} from ${event}?`,
   unlinkBody:
     'The goal keeps saving at its own pace. What should happen to its cost on the event?',
   unlinkBodyKept: (event: string) =>
