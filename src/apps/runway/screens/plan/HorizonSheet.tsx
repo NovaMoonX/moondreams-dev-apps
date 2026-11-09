@@ -67,6 +67,7 @@ import {
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
 import {
+  getLinkDoneOn,
   getLinkSpan,
   hasLinkHappened,
   removeLink,
@@ -94,6 +95,7 @@ import {
   selectGoals,
   selectCostPaid,
   selectCostPayments,
+  selectItemStops,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -164,6 +166,7 @@ function HorizonSheet({
   const [unlinkId, setUnlinkId] = useState<string | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
+  const stops = useAppSelector(selectItemStops);
   const allCards = useAppSelector(selectAllCards);
   const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
@@ -472,7 +475,7 @@ function HorizonSheet({
     return latest && 'name' in latest.payload ? latest.payload.name : '';
   };
   const linkLines = sortLinksByDate(horizon.links, versions).flatMap((link) => {
-    const span = getLinkSpan(versions, link);
+    const span = getLinkSpan(versions, link, stops);
     if (!span) return [];
     const difference = span.before
       ? describeChange(
@@ -482,14 +485,19 @@ function HorizonSheet({
         ).replace(/ to /g, ' → ')
       : '';
     const isHappened = hasLinkHappened(span, today);
-    const when = isHappened
-      ? HORIZON_WORDS.changeHappened(
-          formatDateOrdinalUTC(span.lastDay ?? span.startsOn),
-        )
-      : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
+    const getWhen = () => {
+      if (!span.isLive) return HORIZON_WORDS.changeNoLonger;
+      return isHappened
+        ? HORIZON_WORDS.changeHappened(
+            formatDateOrdinalUTC(getLinkDoneOn(span)),
+          )
+        : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
+    };
+    const when = getWhen();
     return [
       {
         link,
+        isLive: span.isLive,
         itemName: getItemName(link.itemId),
         line: HORIZON_WORDS.changeLine(
           getItemName(link.itemId),
@@ -499,6 +507,7 @@ function HorizonSheet({
       },
     ];
   });
+  const liveCount = linkLines.filter(({ isLive }) => isLive).length;
   const unlinking = linkLines.find(({ link }) => link.changeId === unlinkId);
   const unlinkChange = async () => {
     if (!user || isUnlinking || !unlinking) return;
@@ -843,9 +852,9 @@ function HorizonSheet({
           {isChangesOnly ? (
             <SheetHead
               label={
-                linkLines.length === 0
+                liveCount === 0
                   ? HORIZON_WORDS.noChangesYet
-                  : HORIZON_WORDS.changesCount(linkLines.length)
+                  : HORIZON_WORDS.changesCount(liveCount)
               }
               fact={when}
             />

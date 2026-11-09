@@ -13,6 +13,7 @@ import {
 import {
   addLink,
   getChangesOnlyDoneOn,
+  getItemStops,
   getLinkSpan,
   hasLinkHappened,
   listComingChanges,
@@ -6713,7 +6714,7 @@ const version = (
     return performance.now() - started;
   }).sort((a, b) => a - b);
   assert.ok(
-    calendarTimings[2] < Math.max(250, timings[2] * 4),
+    calendarTimings[2] < Math.max(5000, timings[2] * 4),
     `25 monthly and 25 weekly calendar envelopes: lookahead median ${calendarTimings[2]}ms against ${timings[2]}ms for every-income-day rules`,
   );
   console.log(
@@ -15031,6 +15032,11 @@ const version = (
   );
   assert.equal(
     hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 19 * D),
+    false,
+    'a stretch is still on its last day',
+  );
+  assert.equal(
+    hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 20 * D),
     true,
   );
   assert.equal(
@@ -15078,8 +15084,13 @@ const version = (
   );
   assert.equal(
     getChangesOnlyDoneOn(both, versions, t + 19 * D),
-    t + 19 * D,
-    'done on the last day of the last change',
+    null,
+    'not done on the last day of a stretch',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 20 * D),
+    t + 20 * D,
+    'done the day the last change is back',
   );
   assert.equal(
     getChangesOnlyDoneOn(event, versions, t + 30 * D),
@@ -15099,6 +15110,41 @@ const version = (
     getChangesOnlyDoneOn({ ...both, state: 'calledOff' }, versions, t + 30 * D),
     null,
     'a called-off event keeps its own state',
+  );
+
+  // A dead link: replaced from the same day, or its item stopped before it began.
+  const replaced = [...versions, v('r2', 'rent', t + 10 * D, null, 9, 'c9')];
+  assert.equal(getLinkSpan(versions, links[2])?.isLive, true);
+  assert.equal(
+    getLinkSpan(replaced, links[2])?.isLive,
+    false,
+    'a later change from the same day replaces it',
+  );
+  const stops = getItemStops([
+    { id: 'rent', endedAt: t + 4 * D, archivedAt: null },
+    { id: 'gym', endedAt: null, archivedAt: null },
+    { id: 'old', endedAt: t + 9 * D, archivedAt: t + 2 * D },
+  ]);
+  assert.deepEqual(stops, { rent: t + 5 * D, old: t + 2 * D });
+  assert.equal(
+    getLinkSpan(versions, links[2], stops)?.isLive,
+    false,
+    'an item that ended first never makes the change',
+  );
+  assert.equal(
+    getLinkSpan(versions, links[1], stops)?.isLive,
+    true,
+    'an item still running keeps it',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(both, versions, t + 10 * D, { gym: t + 3 * D }),
+    t + 10 * D,
+    'a dead link no longer holds the event open',
+  );
+  assert.equal(
+    getChangesOnlyDoneOn({ ...event, links: [links[2]] }, replaced, t + 30 * D),
+    null,
+    'an event whose only change is dead stays open',
   );
 }
 

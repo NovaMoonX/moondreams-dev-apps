@@ -12,7 +12,10 @@ import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import { HORIZON_END_WORDS, HORIZON_WORDS } from '@apps/runway/constants';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
-import { selectCostPaid } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectCostPaid,
+  selectItemStops,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
@@ -57,13 +60,15 @@ function HorizonRow({
   const { shortfall } = plan;
   const isDone = horizon.state !== 'open';
   const versions = useAppSelector((state) => state.runway.versions);
+  const stops = useAppSelector(selectItemStops);
   const isChangesOnly = horizon.costs.length === 0;
-  const isChangesDone = getChangesOnlyDoneOn(horizon, versions, today) !== null;
+  const isChangesDone =
+    getChangesOnlyDoneOn(horizon, versions, today, stops) !== null;
   const getDetail = () => {
     if (isChangesOnly && !isDone) {
       if (isChangesDone) return HORIZON_WORDS.changesHappened;
-      const count = horizon.links.filter((link) =>
-        getLinkSpan(versions, link),
+      const count = horizon.links.filter(
+        (link) => getLinkSpan(versions, link, stops)?.isLive,
       ).length;
       return count === 0
         ? HORIZON_WORDS.noChangesYet

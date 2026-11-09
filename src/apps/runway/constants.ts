@@ -372,6 +372,7 @@ export const HORIZON_WORDS = {
   planChangeNoMatch: 'Nothing in your plan matches that.',
   changeFrom: (from: string) => `From\u00A0${from}`,
   changeHappened: (on: string) => `Happened\u00A0${on}`,
+  changeNoLonger: 'No longer planned',
   changeLine: (item: string, what: string, when: string) =>
     [item, what, when].filter(Boolean).join('\u00A0\u00b7 '),
   unlinkTitle: 'Linked change',
@@ -1208,6 +1209,8 @@ export const PART_OF_WORDS = {
   label: 'Part of',
   none: 'Not part of an event',
   eventGone: 'That event is no longer open. Pick another, or save without one.',
+  eventChanged:
+    'That event changed on another device, so nothing was saved. Try again.',
   linkedLine: (name: string, what: string, from: string, event: string) =>
     `Linked ${name}: ${what}, from ${from}, to ${event}.`,
   unlinkedLine: (name: string, event: string) =>
@@ -3160,6 +3163,7 @@ export const PLAN_CHANGE_WORDS = {
 export const PAUSE_PAY_WORDS = {
   label: 'Pause it',
   subtitle: 'Stop it for a while, then it comes back',
+  zeroOnlyPause: 'Zero pay is only for a while. Pick when it comes back.',
 } as const;
 
 export const DAYS_WORDS = {

@@ -1,7 +1,11 @@
 import { doc, runTransaction, writeBatch } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
-import { GROUP_WORDS, HORIZON_END_WORDS } from '@apps/runway/constants';
+import {
+  GROUP_WORDS,
+  HORIZON_END_WORDS,
+  PART_OF_WORDS,
+} from '@apps/runway/constants';
 import { generateUuid } from '@/utils/idUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -611,15 +615,15 @@ export async function changeItem(
   if (base !== undefined || linked !== null) {
     await runTransaction(db, async (transaction) => {
       const [taken, eventTaken] = await Promise.all([
-        transaction.get(itemPath(uid, 'versions', versions[0].id)),
+        base === undefined
+          ? Promise.resolve(null)
+          : transaction.get(itemPath(uid, 'versions', versions[0].id)),
         linked === null
           ? Promise.resolve(null)
           : transaction.get(itemPath(uid, 'versions', linked.version.id)),
       ]);
-      if (base !== undefined && taken.exists())
-        throw new Error(HORIZON_END_WORDS.changedJustNow);
-      if (eventTaken?.exists())
-        throw new Error(HORIZON_END_WORDS.changedJustNow);
+      if (taken?.exists()) throw new Error(HORIZON_END_WORDS.changedJustNow);
+      if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
       if (groupDocs) {
         transaction.set(
           itemPath(uid, 'items', groupDocs.groupId),

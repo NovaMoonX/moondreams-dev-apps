@@ -33,6 +33,7 @@ import {
   INCOME_FREQUENCIES,
   MAX_ENDING_COUNT,
   MAX_NAME_LENGTH,
+  PAUSE_PAY_WORDS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -852,7 +853,15 @@ function IncomeFormBody({
     initialNote: kept.restored?.note,
     initialFrom: kept.restored?.from ?? initialFrom,
   });
-  const editBlocker = flow.getBlocker(blocker);
+  const zeroBlocker =
+    candidate !== null &&
+    'amount' in candidate &&
+    candidate.amount.highCents === 0 &&
+    flow.from.choice !== 'stretch' &&
+    flow.from.choice !== 'dayOnly'
+      ? PAUSE_PAY_WORDS.zeroOnlyPause
+      : null;
+  const editBlocker = flow.getBlocker(blocker ?? zeroBlocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
     JSON.stringify(flow.from) !== JSON.stringify(initialFrom);

@@ -51,7 +51,10 @@ import {
   type CostPaidEntry,
   type CostPayment,
 } from '@apps/runway/engine/horizon';
-import { getChangesOnlyDoneOn } from '@apps/runway/engine/horizonLinks';
+import {
+  getChangesOnlyDoneOn,
+  getItemStops,
+} from '@apps/runway/engine/horizonLinks';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
@@ -713,14 +716,17 @@ export const selectHorizonVersionId = (
   selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
     ?.version.id;
 
+/** The day each archived or ended item stops counting, by item id. */
+export const selectItemStops = createSelector([selectItems], getItemStops);
+
 /** The Horizon items still in the plan on a date: the ones that are not finished or called off, and not an event of changes alone whose changes have all happened. */
 export const selectHorizonItems = createSelector(
-  [selectAllHorizonItems, selectVersions, selectOn],
-  (all, versions, on): ResolvedHorizon[] =>
+  [selectAllHorizonItems, selectVersions, selectOn, selectItemStops],
+  (all, versions, on, stops): ResolvedHorizon[] =>
     all.filter(
       ({ version }) =>
         version.payload.state === 'open' &&
-        getChangesOnlyDoneOn(version.payload, versions, on) === null,
+        getChangesOnlyDoneOn(version.payload, versions, on, stops) === null,
     ),
 );
 
@@ -733,12 +739,12 @@ export const selectOpenHorizonItems = createSelector(
 
 /** The finished and called-off Horizon items, and the events of changes alone that have all happened, the latest first. */
 export const selectDoneHorizonItems = createSelector(
-  [selectAllHorizonItems, selectVersions, selectOn],
-  (all, versions, on): ResolvedHorizon[] => {
+  [selectAllHorizonItems, selectVersions, selectOn, selectItemStops],
+  (all, versions, on, stops): ResolvedHorizon[] => {
     const getDoneOn = ({ version }: ResolvedHorizon) =>
       version.payload.state !== 'open'
         ? (version.payload.stateOn ?? 0)
-        : getChangesOnlyDoneOn(version.payload, versions, on);
+        : getChangesOnlyDoneOn(version.payload, versions, on, stops);
     return all
       .filter((entry) => getDoneOn(entry) !== null)
       .sort(
