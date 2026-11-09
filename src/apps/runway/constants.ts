@@ -792,6 +792,15 @@ export const HORIZON_END_WORDS = {
   stopsRow: (cost: string, when: string, figure: string | null) =>
     [cost, when, figure].filter(Boolean).join('\u00a0\u00b7 '),
   callOffConfirm: 'Call off',
+  changesQuestion: 'What happens to its planned changes?',
+  changesCancelTitle: 'Cancel these changes too',
+  changesKeepTitle: (event: string) => `Keep them, not part of ${event}`,
+  changesKeepBody: 'They stay planned, on their own.',
+  changesCancelBody: (outcomes: readonly string[], more: number) =>
+    listNamesAndMore(outcomes, more),
+  cancelsRow: (line: string) => `Cancelled \u00b7 ${line}`,
+  needsChangesChoice: 'Choose what happens to its planned changes.',
+  changesStayCancelled: 'Its changes stay cancelled.',
   calledOff: (name: string) => `${name} is called off`,
   undo: 'Undo',
   needsChoice: 'Choose what happens to the money it holds.',
@@ -3260,7 +3269,7 @@ export const PLAN_CHANGE_WORDS = {
 
 /** The coming-changes row, a change's own sheet and the "What will change?" question. */
 export const COMING_WORDS = {
-  changesOn: (date: string, figures: string) => `Changes ${date}: ${figures}`,
+  changesOn: (date: string, figures: string) => `${figures} from ${date}`,
   changesOnPlain: (date: string) => `Changes ${date}`,
   startsOn: (date: string) => `Starts ${date}`,
   withEvent: (text: string, event: string) => `${text} \u00b7 ${event}`,
@@ -3319,6 +3328,10 @@ export const COMING_WORDS = {
   cancelEntry: (name: string, what: string, date: string) =>
     `Cancelled: ${name} ${what} from ${date}`,
   cancelEntryStop: (name: string) => `${name} won't end after all`,
+  outcomeStop: (name: string) => `${name} keeps going`,
+  outcomeStart: (name: string) => `${name} does not start`,
+  outcomeStays: (name: string, figure: string) => `${name} stays at ${figure}`,
+  outcomePlain: (name: string) => `${name} stays as it is`,
   cancelled: (name: string) => `Cancelled the change to ${name}`,
   cancelFailed: 'This did not cancel. Nothing was changed.',
   gone: 'That change is no longer there.',

@@ -22,8 +22,10 @@ import {
   getItemStops,
   getLinkSpan,
   hasLinkHappened,
+  listCancellableLinks,
   listComingChanges,
   removeLink,
+  removeLinks,
   sortLinksByDate,
 } from '../../src/apps/runway/engine/horizonLinks.ts';
 import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
@@ -15232,6 +15234,57 @@ const version = (
     getLinkSpan(versions, { changeId: 'c4', itemId: 'new' })?.kind,
     'start',
     'a link to an item that begins later is a start',
+  );
+
+  // Calling an event off asks only about live links whose change has not started.
+  const callOffItems = [
+    { id: 'rent', endedAt: null, archivedAt: null },
+    { id: 'gym', endedAt: null, archivedAt: null },
+    { id: 'new', endedAt: null, archivedAt: null },
+  ];
+  const callOffLinks = [
+    { changeId: 'c1', itemId: 'rent' },
+    { changeId: 'c3', itemId: 'gym' },
+    { changeId: 'c0', itemId: 'rent' },
+    { changeId: 'gone', itemId: 'rent' },
+  ];
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, versions, callOffItems, t).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c1', 'c3'],
+    'a coming change and a coming stretch are asked about; a first version and an unknown change are not',
+  );
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, versions, callOffItems, t + 5 * D).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c1'],
+    'a change that has started is left alone',
+  );
+  assert.deepEqual(
+    listCancellableLinks(callOffLinks, replaced, callOffItems, t).map(
+      ({ link }) => link.changeId,
+    ),
+    ['c3'],
+    'a replaced change is dead and not asked about',
+  );
+  assert.deepEqual(
+    listCancellableLinks(
+      callOffLinks,
+      versions,
+      [
+        { id: 'rent', endedAt: t + 4 * D, archivedAt: null },
+        ...callOffItems.slice(1),
+      ],
+      t,
+    ).map(({ link }) => link.changeId),
+    ['c3'],
+    'an item that ends first never makes the change',
+  );
+  assert.deepEqual(
+    removeLinks({ ...event, links: callOffLinks }, ['c1', 'c0']).links,
+    [callOffLinks[1], callOffLinks[3]],
   );
 }
 

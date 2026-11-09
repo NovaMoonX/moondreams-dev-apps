@@ -216,6 +216,8 @@ export interface ReplacedChange<P> {
   /** The later version as it stands, with only the changed fields taken from the stretch before it. */
   before: P;
   after: P;
+  /** The day a bounded change ends and what held before it comes back, rather than a change of its own. */
+  isReturn: boolean;
 }
 
 export interface StretchPlan<P> {
@@ -279,7 +281,11 @@ export function planStretches<
     /** The stretch after a bounded change that only brings back what held before it. */
     const isReturn = (index: number) =>
       index > 1 && isChange(index - 1) && holds(index, index - 2);
-    const toReplaced = (index: number, until: number | null) => ({
+    const toReplaced = (
+      index: number,
+      until: number | null,
+      isReturnDay = false,
+    ): ReplacedChange<P> => ({
       effectiveFrom: list[index].effectiveFrom,
       effectiveUntil: until,
       before: {
@@ -289,6 +295,7 @@ export function planStretches<
         ),
       },
       after: list[index].payload,
+      isReturn: isReturnDay,
     });
     return { isChange, isReturn, toReplaced };
   };
@@ -316,7 +323,7 @@ export function planStretches<
   const wholeRead = readList(whole);
   const returnReplaced =
     atStart > 0 && wholeRead.isReturn(atStart)
-      ? [wholeRead.toReplaced(atStart, null)]
+      ? [wholeRead.toReplaced(atStart, null, true)]
       : [];
   return {
     written: applyFieldChanges(clipped, current, candidate),

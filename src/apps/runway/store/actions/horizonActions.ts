@@ -21,11 +21,17 @@ import {
   setHorizonState,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import { removeLinks } from '@apps/runway/engine/horizonLinks';
 import { newTransferMoveId } from '@apps/runway/store/actions/transferActions';
 import { getCostPaidMoveId, getUndoMoveId } from '@apps/runway/engine/progress';
 import { sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
-import { buildGroupDocs } from '@apps/runway/store/actions/itemActions';
+import {
+  buildGroupDocs,
+  prepareCancel,
+  readCancel,
+  type CancelChangeInput,
+} from '@apps/runway/store/actions/itemActions';
 import {
   assertPlanStarted,
   assertSourceLive,
@@ -796,6 +802,8 @@ export interface SetHorizonStateInput {
   isUndo?: boolean;
   /** Other items the change entry is listed on, such as the goal an event draws from. */
   alsoItemIds?: string[];
+  /** Changes that have not started, cancelled in this same transaction; one already cancelled or started refuses the whole write. */
+  cancels?: readonly CancelChangeInput[];
 }
 
 /**
@@ -826,7 +834,7 @@ export async function setHorizonStateWith(
   const placeIds = [move?.fromId, move?.toId].filter(
     (id): id is string => typeof id === 'string' && id !== input.itemId,
   );
-  const [horizonSealed, changeSealed, moveSealed] = await Promise.all([
+  const [horizonSealed, changeSealed, moveSealed, cancels] = await Promise.all([
     sealJson(input.horizon, encryption),
     sealJson(
       { summary: input.summary, note: input.note } satisfies ChangeSealed,
@@ -844,22 +852,33 @@ export async function setHorizonStateWith(
           encryption,
         )
       : Promise.resolve(null),
+    Promise.all(
+      (input.cancels ?? []).map((cancel) => prepareCancel(encryption, cancel)),
+    ),
   ]);
 
   return runTransaction(db, async (transaction) => {
-    const [plan, item, version, existing, ...places] = await Promise.all([
-      transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
-      transaction.get(planDoc(uid, 'items', input.itemId)),
-      transaction.get(planDoc(uid, 'versions', input.versionId)),
-      moveId === null
-        ? Promise.resolve(null)
-        : transaction.get(planDoc(uid, 'moves', moveId)),
-      ...(isUndo
-        ? []
-        : placeIds.map((id) => transaction.get(planDoc(uid, 'items', id)))),
-    ]);
+    const [[plan, item, version, existing, ...places], writes] =
+      await Promise.all([
+        Promise.all([
+          transaction.get(doc(db, 'apps', 'runway', 'plans', uid)),
+          transaction.get(planDoc(uid, 'items', input.itemId)),
+          transaction.get(planDoc(uid, 'versions', input.versionId)),
+          moveId === null
+            ? Promise.resolve(null)
+            : transaction.get(planDoc(uid, 'moves', moveId)),
+          ...(isUndo
+            ? []
+            : placeIds.map((id) => transaction.get(planDoc(uid, 'items', id)))),
+        ]),
+        Promise.all(
+          cancels.map((cancel) => readCancel(transaction, uid, cancel)),
+        ),
+      ]);
     if (version.exists() || existing?.exists()) return false;
     if (!item.exists()) throw new Error(HORIZON_END_WORDS.gone);
+    if (writes.includes(null))
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
     if (move) assertPlanStarted(plan.data(), move.date);
     places.forEach((place) => {
       assertSourceLive(place.data() as Partial<PlanItemDoc> | undefined);
@@ -882,6 +901,7 @@ export async function setHorizonStateWith(
       itemIds: [input.itemId, ...placeIds, ...(input.alsoItemIds ?? [])],
       sealed: changeSealed,
     } satisfies ChangeDoc);
+    writes.forEach((write) => write?.());
     if (move && moveId !== null && moveSealed !== null) {
       markLedgerWrite(transaction, uid, plan.data(), [
         ...new Set([input.on, move.date]),
@@ -928,6 +948,10 @@ interface EndHorizonInput {
   leftCents: Cents;
   where: HorizonWhere;
   note: string | null;
+  /** Links the called-off version drops: changes the person kept without the event, or cancelled in the same write. */
+  unlinkIds?: readonly string[];
+  /** Changes cancelled in the same transaction; their links are in `unlinkIds`, and an Undo reopens the event only. */
+  cancels?: readonly CancelChangeInput[];
 }
 
 async function endHorizon(
@@ -960,7 +984,13 @@ async function endHorizon(
           cents: left,
           moveId: move === null ? null : moveId,
         };
-  const after = setHorizonState(horizon, state, today, money);
+  const unlinkIds = input.unlinkIds ?? [];
+  const after = removeLinks(
+    setHorizonState(horizon, state, today, money),
+    unlinkIds,
+  );
+  const cancelledIds = (input.cancels ?? []).map(({ changeId }) => changeId);
+  const before = removeLinks(horizon, cancelledIds);
   const versionId = getNextVersionId(input.baseVersionId);
   const summary = HORIZON_END_WORDS.endSummary(
     horizon.name,
@@ -981,9 +1011,10 @@ async function endHorizon(
     note: input.note,
     on: today,
     move,
+    cancels: input.cancels,
   });
   return isWritten
-    ? { itemId: input.itemId, versionId, before: horizon, after, move }
+    ? { itemId: input.itemId, versionId, before, after, move }
     : null;
 }
 

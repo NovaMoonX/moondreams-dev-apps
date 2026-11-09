@@ -411,7 +411,7 @@ function ItemSheet({
   );
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);
-  const [endPick, setEndPick] = useState<string>(String(today));
+  const [endPick, setEndPick] = useState<string>('');
   const [endDate, setEndDate] = useState('');
   const [pauseDate, setPauseDate] = useState(toDateInputValue(today));
   const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
@@ -1650,7 +1650,7 @@ function ItemSheet({
               subtitle={ITEM_SHEET_R2_WORDS.endSub}
               onClick={() => {
                 goTo('end');
-                setEndPick(String(today));
+                setEndPick('');
               }}
             />
           )}
@@ -2024,7 +2024,7 @@ function ItemSheet({
   );
 
   const getPrimaryLabel = () => {
-    if (fromPlan && view === 'end' && isEndValid)
+    if (view === 'end' && isEndValid)
       return LIFECYCLE_WORDS.endAfterConfirm(formatDateOrdinalUTC(endOn));
     if (fromPlan && view === 'pause' && isPauseValid)
       return LIFECYCLE_WORDS.stopSavingFromConfirm(

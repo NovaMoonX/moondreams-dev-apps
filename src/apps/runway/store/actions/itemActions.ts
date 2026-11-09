@@ -1,4 +1,9 @@
-import { doc, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  doc,
+  runTransaction,
+  writeBatch,
+  type Transaction,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import {
@@ -50,6 +55,7 @@ import type {
   PlanVersionDoc,
   RunwayEncryption,
   Schedule,
+  Sealed,
   SourceSealed,
   Stance,
 } from '@apps/runway/types';
@@ -1148,22 +1154,21 @@ export interface CancelChangeInput {
   link: EventLink | null;
 }
 
-/**
- * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
- * nothing is deleted. A version change gets new versions that restore what held before it over each of
- * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
- * to anything made later, all under one entry whose id is `cancel_<changeId>`, so a second cancel writes nothing. A coming end sets `endedAt` back to null and
- * clears the release day the ending set (unless the item was archived, whose release it may be), with a
- * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
- * is refused when the event changed on another device. Refuses a change whose first day has come.
- * Returns false when there is nothing left to cancel (another device already did).
- */
-export async function cancelChange(
-  uid: string,
+/** A cancellation sealed and ready to join a transaction: `readCancel` reads, then returns what it writes. */
+export interface PreparedCancel {
+  input: CancelChangeInput;
+  cancelId: string;
+  now: number;
+  linked: Awaited<ReturnType<typeof sealEventVersion>> | null;
+  entrySealed: Sealed;
+  segmentsSealed: Sealed[];
+}
+
+export async function prepareCancel(
   encryption: RunwayEncryption,
   input: CancelChangeInput,
-): Promise<boolean> {
-  const { itemId, changeId, target } = input;
+): Promise<PreparedCancel> {
+  const { changeId, target } = input;
   const now = Date.now();
   const cancelId =
     target.kind === 'versions' ? `cancel_${changeId}` : generateUuid();
@@ -1183,52 +1188,66 @@ export async function cancelChange(
         )
       : []),
   ]);
+  return { input, cancelId, now, linked, entrySealed, segmentsSealed };
+}
+
+/**
+ * The read half of a cancellation, for a transaction that reads everything before it writes: reads and
+ * checks, then returns the function that writes. Null when there is nothing left to cancel (another
+ * device already did). Throws a sentence when the change started or the item changed meanwhile.
+ */
+export async function readCancel(
+  transaction: Transaction,
+  uid: string,
+  prepared: PreparedCancel,
+): Promise<(() => void) | null> {
+  const { input, cancelId, now, linked, entrySealed, segmentsSealed } =
+    prepared;
+  const { itemId, changeId, target } = input;
   const headerRef = itemPath(uid, 'items', itemId);
-  return runTransaction(db, async (transaction) => {
-    const [cancelled, header, versionDocs, eventTaken] = await Promise.all([
-      transaction.get(itemPath(uid, 'changes', cancelId)),
-      target.kind === 'stop'
-        ? transaction.get(headerRef)
-        : Promise.resolve(null),
-      Promise.all(
-        target.kind === 'versions'
-          ? target.versionIds.map((id) =>
-              transaction.get(itemPath(uid, 'versions', id)),
-            )
-          : [],
-      ),
-      linked === null
-        ? Promise.resolve(null)
-        : transaction.get(itemPath(uid, 'versions', linked.version.id)),
-    ]);
-    if (cancelled.exists()) return false;
-    if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
-    const writeEntry = (effectiveFrom: DateOnly) => {
-      const entry: ChangeDoc = {
-        id: cancelId,
-        kind: 'planChange',
-        createdAt: now,
-        effectiveFrom,
-        itemIds: [itemId],
-        sealed: entrySealed,
-      };
-      transaction.set(itemPath(uid, 'changes', cancelId), entry);
-      if (linked === null) return;
-      transaction.set(
-        itemPath(uid, 'versions', linked.version.id),
-        linked.version,
-      );
-      transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+  const [cancelled, header, versionDocs, eventTaken] = await Promise.all([
+    transaction.get(itemPath(uid, 'changes', cancelId)),
+    target.kind === 'stop' ? transaction.get(headerRef) : Promise.resolve(null),
+    Promise.all(
+      target.kind === 'versions'
+        ? target.versionIds.map((id) =>
+            transaction.get(itemPath(uid, 'versions', id)),
+          )
+        : [],
+    ),
+    linked === null
+      ? Promise.resolve(null)
+      : transaction.get(itemPath(uid, 'versions', linked.version.id)),
+  ]);
+  if (cancelled.exists()) return null;
+  if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
+  const writeEntry = (effectiveFrom: DateOnly) => {
+    const entry: ChangeDoc = {
+      id: cancelId,
+      kind: 'planChange',
+      createdAt: now,
+      effectiveFrom,
+      itemIds: [itemId],
+      sealed: entrySealed,
     };
-    if (target.kind === 'stop') {
-      if (!header?.exists()) throw new Error('This item no longer exists.');
-      const stored = header.data() as Partial<PlanItemDoc>;
-      const endedAt = stored.endedAt ?? null;
-      if (endedAt === null) return false;
-      if (endedAt + DAY_MS !== target.startsOn)
-        throw new Error(HORIZON_END_WORDS.changedJustNow);
-      if (endedAt + DAY_MS <= input.today)
-        throw new Error(PART_OF_WORDS.alreadyStarted);
+    transaction.set(itemPath(uid, 'changes', cancelId), entry);
+    if (linked === null) return;
+    transaction.set(
+      itemPath(uid, 'versions', linked.version.id),
+      linked.version,
+    );
+    transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+  };
+  if (target.kind === 'stop') {
+    if (!header?.exists()) throw new Error('This item no longer exists.');
+    const stored = header.data() as Partial<PlanItemDoc>;
+    const endedAt = stored.endedAt ?? null;
+    if (endedAt === null) return null;
+    if (endedAt + DAY_MS !== target.startsOn)
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
+    if (endedAt + DAY_MS <= input.today)
+      throw new Error(PART_OF_WORDS.alreadyStarted);
+    return () => {
       transaction.update(headerRef, {
         endedAt: null,
         ...((stored.archivedAt ?? null) === null
@@ -1236,20 +1255,21 @@ export async function cancelChange(
           : {}),
       });
       writeEntry(endedAt + DAY_MS);
-      return true;
-    }
-    const existing = versionDocs.filter((snapshot) => snapshot.exists());
-    if (existing.length === 0) return false;
-    const stored = existing.map(
-      (snapshot) => snapshot.data() as Partial<PlanVersionDoc>,
-    );
-    stored.forEach((version) => {
-      if (version.itemId !== itemId || version.changeId !== changeId)
-        throw new Error(HORIZON_END_WORDS.changedJustNow);
-      if ((version.effectiveFrom ?? 0) <= input.today)
-        throw new Error(PART_OF_WORDS.alreadyStarted);
-    });
-    const madeAt = Math.max(...stored.map((version) => version.createdAt ?? 0));
+    };
+  }
+  const existing = versionDocs.filter((snapshot) => snapshot.exists());
+  if (existing.length === 0) return null;
+  const stored = existing.map(
+    (snapshot) => snapshot.data() as Partial<PlanVersionDoc>,
+  );
+  stored.forEach((version) => {
+    if (version.itemId !== itemId || version.changeId !== changeId)
+      throw new Error(HORIZON_END_WORDS.changedJustNow);
+    if ((version.effectiveFrom ?? 0) <= input.today)
+      throw new Error(PART_OF_WORDS.alreadyStarted);
+  });
+  const madeAt = Math.max(...stored.map((version) => version.createdAt ?? 0));
+  return () => {
     target.segments.forEach((segment, index) => {
       const version: PlanVersionDoc = {
         id: generateUuid(),
@@ -1264,6 +1284,29 @@ export async function cancelChange(
       transaction.set(itemPath(uid, 'versions', version.id), version);
     });
     writeEntry(target.startsOn);
+  };
+}
+
+/**
+ * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
+ * nothing is deleted. A version change gets new versions that restore what held before it over each of
+ * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
+ * to anything made later, all under one entry whose id is `cancel_<changeId>`, so a second cancel writes nothing. A coming end sets `endedAt` back to null and
+ * clears the release day the ending set (unless the item was archived, whose release it may be), with a
+ * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
+ * is refused when the event changed on another device. Refuses a change whose first day has come.
+ * Returns false when there is nothing left to cancel (another device already did).
+ */
+export async function cancelChange(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: CancelChangeInput,
+): Promise<boolean> {
+  const prepared = await prepareCancel(encryption, input);
+  return runTransaction(db, async (transaction) => {
+    const write = await readCancel(transaction, uid, prepared);
+    if (write === null) return false;
+    write();
     return true;
   });
 }

@@ -395,6 +395,29 @@ export const hasLinkHappened = (
   today: DateOnly,
 ) => getLinkDoneOn(span) <= today;
 
+/** The links calling off an event can ask about: live, not started (it starts after `today`) and with something left to write when cancelled, each with what cancelling writes. A link that has happened, is dead or whose item is gone is not among them. */
+export function listCancellableLinks<V extends LinkVersion>(
+  links: readonly HorizonLink[],
+  versions: readonly V[],
+  items: readonly {
+    id: string;
+    endedAt: DateOnly | null;
+    archivedAt: number | null;
+  }[],
+  today: DateOnly,
+): { link: HorizonLink; target: CancelTarget }[] {
+  const stops = getItemStops(items);
+  const ends = getItemEnds(items);
+  return links.flatMap((link) => {
+    const item = items.find(({ id }) => id === link.itemId);
+    const span = getLinkSpan(versions, link, stops, ends);
+    if (!item || !span || !span.isLive || !canCancelChange(span, today))
+      return [];
+    const target = getCancelTarget(versions, item, link.changeId, today);
+    return target === null ? [] : [{ link, target }];
+  });
+}
+
 /** The links of an event in date order; a link whose versions are not loaded keeps its place last. */
 export function sortLinksByDate<V extends LinkVersion>(
   links: readonly HorizonLink[],
@@ -438,6 +461,15 @@ export const removeLink = (
 ): HorizonSealed => ({
   ...horizon,
   links: horizon.links.filter((link) => link.changeId !== changeId),
+});
+
+/** The event with several linked changes let go. */
+export const removeLinks = (
+  horizon: HorizonSealed,
+  changeIds: readonly string[],
+): HorizonSealed => ({
+  ...horizon,
+  links: horizon.links.filter((link) => !changeIds.includes(link.changeId)),
 });
 
 /** The event with a change linked, replacing any earlier link to the same change. */

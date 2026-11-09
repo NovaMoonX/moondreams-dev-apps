@@ -10,11 +10,13 @@ import {
   getItemEnds,
   getItemStops,
   getLinkSpan,
+  listCancellableLinks,
   listComingChanges,
+  type CancelTarget,
   type ComingChange,
 } from '@apps/runway/engine/horizonLinks';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
-import type { OpenVersion, PlanItemDoc } from '@apps/runway/types';
+import type { HorizonLink, OpenVersion, PlanItemDoc } from '@apps/runway/types';
 import {
   describeChange,
   type ItemPayload,
@@ -63,7 +65,7 @@ export function describeChangeFigures(
   return difference === '' ? null : difference.replace(/ to /g, ' → ');
 }
 
-/** The one line a coming change gets on an item's sheet: "Changes Dec 1st: $80 → $40", "Ends after Dec 1st", "Starts Dec 1st", "Back to $80 after Jan 3rd". Carries amounts, so it is drawn masked. */
+/** The one line a coming change gets on an item's sheet: "$80 → $40 from Dec 1st" (the change line without the name), "Ends after Dec 1st", "Starts Dec 1st", "Back to $80 after Jan 3rd". Carries amounts, so it is drawn masked. */
 export function describeComingHeadline(
   change: PlanChange,
   cardNamer: CardNamer,
@@ -105,7 +107,7 @@ export function describeCancelTitle(
     : COMING_WORDS.cancelTitleChange(name, figures, date);
 }
 
-/** Pays and bills planned to start later: their first version begins after today, or an event holds their start. A bill added today whose first due day is next month is not a coming change. */
+/** Pays and bills whose start an event holds and is still ahead. A pay or bill added the usual way, whose first money day is simply ahead, is not a coming change. */
 export function listStartChanges(
   versions: readonly OpenVersion[],
   items: readonly PlanItemDoc[],
@@ -135,8 +137,7 @@ export function listStartChanges(
           span.before === null &&
           span.isLive &&
           span.startsOn > today &&
-          (span.version.effectiveFrom > today ||
-            isHeld({ changeId, itemId: item.id }))
+          isHeld({ changeId, itemId: item.id })
           ? [
               {
                 what: 'start',
@@ -193,4 +194,39 @@ export function describeChangeLine(
   return figures === null
     ? COMING_WORDS.lineChangesPlain(name, date)
     : COMING_WORDS.lineChanges(name, figures, date);
+}
+
+/** What calling an event off asks about: each linked change that has not started and can be cancelled, in date order, with what cancelling writes and the change as the screens word it. */
+export function listCallOffChanges(
+  links: readonly HorizonLink[],
+  versions: readonly OpenVersion[],
+  items: readonly PlanItemDoc[],
+  today: number,
+): { link: HorizonLink; target: CancelTarget; change: PlanChange }[] {
+  return listCancellableLinks(links, versions, items, today)
+    .flatMap(({ link, target }) => {
+      const change = listItemChanges(
+        versions,
+        items.find(({ id }) => id === link.itemId) ?? null,
+        link.itemId,
+        today,
+        () => true,
+      ).find(
+        (found) =>
+          !found.isReturn && getChangeRef(found).changeId === link.changeId,
+      );
+      return change ? [{ link, target, change }] : [];
+    })
+    .sort((a, b) => a.change.on - b.change.on);
+}
+
+/** What goes back when a change is cancelled: "Eating out stays at $80", "Streaming keeps going", "Paycheck does not start". */
+export function describeCancelOutcome(change: PlanChange): string {
+  const name = change.after.payload.name;
+  if (change.what === 'stop') return COMING_WORDS.outcomeStop(name);
+  if (change.what === 'start') return COMING_WORDS.outcomeStart(name);
+  const before = getChangeFigure(change.before);
+  return before
+    ? COMING_WORDS.outcomeStays(name, before.text)
+    : COMING_WORDS.outcomePlain(name);
 }

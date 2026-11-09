@@ -7,10 +7,14 @@ import {
   canCancelChange,
   findLinkHolder,
   getCancelTarget,
+  type CancelTarget,
 } from '@apps/runway/engine/horizonLinks';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { cancelChange } from '@apps/runway/store/actions/itemActions';
+import {
+  cancelChange,
+  type CancelChangeInput,
+} from '@apps/runway/store/actions/itemActions';
 import {
   selectAllCards,
   selectAllHorizonItems,
@@ -37,6 +41,56 @@ export const canCancelComingChange = (change: PlanChange) =>
   canCancelChange(change, todayAsUtcDate()) &&
   readTarget(change, todayAsUtcDate()) !== null;
 
+/** What cancelling a coming change writes. `isUnlinked` takes its link out of the event that holds it in the same write; calling the event off drops the links itself and passes false. */
+export function getCancelInput(
+  change: PlanChange,
+  target: CancelTarget,
+  today: number,
+  isUnlinked: boolean,
+): CancelChangeInput {
+  const state = store.getState();
+  const name = change.after.payload.name;
+  const date = formatDateOrdinalUTC(change.on);
+  const figures = describeChangeFigures(
+    change,
+    getCardNamer(selectAllCards(state)),
+  );
+  const isStop = change.what === 'stop';
+  const ref = getChangeRef(change);
+  const holder = isUnlinked
+    ? findLinkHolder(selectAllHorizonItems(state, today), {
+        changeId: ref.changeId,
+        itemId: change.itemId,
+      })
+    : null;
+  const eventName = holder?.version.payload.name ?? '';
+  return {
+    itemId: change.itemId,
+    changeId: ref.changeId,
+    target,
+    today,
+    summary: isStop
+      ? COMING_WORDS.cancelEntryStop(name)
+      : COMING_WORDS.cancelEntry(name, figures ?? 'change', date),
+    link:
+      holder !== null
+        ? {
+            eventId: holder.item.id,
+            horizon: holder.version.payload,
+            baseVersionId: holder.version.id,
+            on: today,
+            summary: PART_OF_WORDS.cancelledLine(
+              name,
+              isStop
+                ? `ending after ${formatDateOrdinalUTC(change.on - DAY_MS)}`
+                : (figures ?? 'change'),
+              eventName,
+            ),
+          }
+        : null,
+  };
+}
+
 /** Cancels a coming change, taking its link out of the event that holds it in the same write; false when another device already did. Throws a sentence the sheet shows. */
 export function useCancelChange() {
   const { user } = useAuth();
@@ -46,44 +100,10 @@ export function useCancelChange() {
     const today = todayAsUtcDate();
     const target = readTarget(change, today);
     if (target === null) return false;
-    const state = store.getState();
-    const name = change.after.payload.name;
-    const date = formatDateOrdinalUTC(change.on);
-    const figures = describeChangeFigures(
-      change,
-      getCardNamer(selectAllCards(state)),
+    return cancelChange(
+      user.uid,
+      await getRunwayEncryption(user.uid),
+      getCancelInput(change, target, today, true),
     );
-    const isStop = change.what === 'stop';
-    const ref = getChangeRef(change);
-    const holder = findLinkHolder(selectAllHorizonItems(state, today), {
-      changeId: ref.changeId,
-      itemId: change.itemId,
-    });
-    const eventName = holder?.version.payload.name ?? '';
-    return cancelChange(user.uid, await getRunwayEncryption(user.uid), {
-      itemId: change.itemId,
-      changeId: ref.changeId,
-      target,
-      today,
-      summary: isStop
-        ? COMING_WORDS.cancelEntryStop(name)
-        : COMING_WORDS.cancelEntry(name, figures ?? 'change', date),
-      link:
-        holder !== null
-          ? {
-              eventId: holder.item.id,
-              horizon: holder.version.payload,
-              baseVersionId: holder.version.id,
-              on: today,
-              summary: PART_OF_WORDS.cancelledLine(
-                name,
-                isStop
-                  ? `ending after ${formatDateOrdinalUTC(change.on - DAY_MS)}`
-                  : (figures ?? 'change'),
-                eventName,
-              ),
-            }
-          : null,
-    });
   };
 }

@@ -461,12 +461,15 @@ export function describeReplaced(
     effectiveUntil: number | null;
     before: ItemPayload;
     after: ItemPayload;
+    isReturn?: boolean;
   }[],
   cardNameOf: (cardId: string | null) => string,
 ) {
   const [first] = replaced;
   if (!first) return null;
   const more = replaced.length - 1;
+  if (first.isReturn)
+    return `This replaces going back to what it was on ${formatDateOrdinalUTC(first.effectiveFrom)}${more > 0 ? ` and ${more} more change${more === 1 ? '' : 's'}` : ''}.`;
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }

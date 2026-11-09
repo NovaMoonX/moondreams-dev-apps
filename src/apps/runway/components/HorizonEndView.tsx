@@ -39,6 +39,7 @@ import {
   listOpenCosts,
   setHorizonState,
 } from '@apps/runway/engine/horizon';
+import { getCancelInput } from '@apps/runway/hooks/useCancelChange';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -55,18 +56,27 @@ import {
 } from '@apps/runway/store/selectors/balanceSelectors';
 import type { PreviewChange } from '@apps/runway/store/selectors/previewSelectors';
 import {
+  selectAllCards,
   selectAllHorizonItems,
   selectCostPaid,
   selectEnvelopes,
   selectGoals,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
+import { getCardNamer } from '@apps/runway/utils/cardText';
+import {
+  describeCancelOutcome,
+  describeChangeLine,
+  listCallOffChanges,
+} from '@apps/runway/utils/comingChangeText';
 import { describeCostWhen, describeCost } from '@apps/runway/utils/horizonText';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 const MAX_STOPS_SHOWN = 3;
+const MAX_CHANGE_OUTCOMES = 2;
 
 type Choice = 'free' | 'keep' | 'place' | null;
+type ChangesChoice = 'cancel' | 'keep' | null;
 
 interface HorizonEndViewProps {
   itemId: string;
@@ -97,7 +107,11 @@ function HorizonEndView({
   const paid = useAppSelector(selectCostPaid)[itemId];
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
+  const versions = useAppSelector((state) => state.runway.versions);
+  const items = useAppSelector((state) => state.runway.items);
+  const allCards = useAppSelector(selectAllCards);
   const [pick, setPick] = useState<Choice>(null);
+  const [changesPick, setChangesPick] = useState<ChangesChoice>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -121,6 +135,14 @@ function HorizonEndView({
         .map(({ cost }) => cost)
     : [];
   const bills = isCallOff ? listMadeBills(horizon) : [];
+  const changeRows = isCallOff
+    ? listCallOffChanges(horizon.links, versions, items, today)
+    : [];
+  const cardNamer = getCardNamer(allCards);
+  const cancelLines =
+    changesPick === 'cancel'
+      ? changeRows.map(({ change }) => describeChangeLine(change, cardNamer))
+      : [];
   const rows = [
     ...stops.map((cost) => ({ cost, isBill: false })),
     ...bills.map((cost) => ({ cost, isBill: true })),
@@ -165,10 +187,14 @@ function HorizonEndView({
   };
   const where = getWhere();
   const getBlocker = () => {
-    if (where !== null) return null;
-    return pick === 'place'
-      ? HORIZON_END_WORDS.needsPlace
-      : HORIZON_END_WORDS.needsChoice;
+    if (where === null) {
+      return pick === 'place'
+        ? HORIZON_END_WORDS.needsPlace
+        : HORIZON_END_WORDS.needsChoice;
+    }
+    return changeRows.length > 0 && changesPick === null
+      ? HORIZON_END_WORDS.needsChangesChoice
+      : null;
   };
   const blocker = getBlocker();
 
@@ -276,6 +302,21 @@ function HorizonEndView({
       setError(HORIZON_END_WORDS.moneyChanged);
       return;
     }
+    const fresh = listCallOffChanges(
+      live.links,
+      store.getState().runway.versions,
+      store.getState().runway.items,
+      todayAsUtcDate(),
+    );
+    const asked = new Set(changeRows.map(({ link }) => link.changeId));
+    if (
+      isCallOff &&
+      (fresh.length !== asked.size ||
+        fresh.some(({ link }) => !asked.has(link.changeId)))
+    ) {
+      setError(HORIZON_END_WORDS.changedJustNow);
+      return;
+    }
     const why = reason.trim() === '' ? null : reason.trim();
     isSavingRef.current = true;
     setError(null);
@@ -291,6 +332,13 @@ function HorizonEndView({
         leftCents,
         where,
         note: why,
+        unlinkIds: fresh.map(({ link }) => link.changeId),
+        cancels:
+          changesPick === 'cancel'
+            ? fresh.map(({ target, change }) =>
+                getCancelInput(change, target, todayAsUtcDate(), false),
+              )
+            : [],
       });
       if (written === null) {
         setError(HORIZON_END_WORDS.alreadyDone);
@@ -303,15 +351,23 @@ function HorizonEndView({
             ? HORIZON_END_WORDS.calledOff(live.name)
             : HORIZON_END_WORDS.finished(live.name),
         ),
-        description: !holdsMoney
-          ? undefined
-          : mask(
-              where.kind === 'free'
-                ? HORIZON_END_WORDS.movedFree(money)
-                : where.kind === 'place'
-                  ? HORIZON_END_WORDS.movedPlace(money, where.name)
-                  : HORIZON_END_WORDS.movedHeld(money),
-            ),
+        description:
+          [
+            holdsMoney
+              ? mask(
+                  where.kind === 'free'
+                    ? HORIZON_END_WORDS.movedFree(money)
+                    : where.kind === 'place'
+                      ? HORIZON_END_WORDS.movedPlace(money, where.name)
+                      : HORIZON_END_WORDS.movedHeld(money),
+                )
+              : null,
+            changesPick === 'cancel' && fresh.length > 0
+              ? HORIZON_END_WORDS.changesStayCancelled
+              : null,
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
         type: 'success',
         action: {
           label: HORIZON_END_WORDS.undo,
@@ -468,6 +524,50 @@ function HorizonEndView({
           />
         </ActionSection>
       )}
+      {changeRows.length > 0 && (
+        <ActionSection caption={HORIZON_END_WORDS.changesQuestion}>
+          <div className='space-y-2'>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {changeRows.map(({ link, change }) => (
+                <li
+                  key={`${link.itemId}-${link.changeId}`}
+                  className='px-3 py-2 text-sm break-words'
+                >
+                  <MaskedText>
+                    {describeChangeLine(change, cardNamer)}
+                  </MaskedText>
+                </li>
+              ))}
+            </ul>
+            <ChoiceCards
+              options={[
+                {
+                  value: 'cancel' as const,
+                  title: HORIZON_END_WORDS.changesCancelTitle,
+                  body: mask(
+                    HORIZON_END_WORDS.changesCancelBody(
+                      changeRows
+                        .slice(0, MAX_CHANGE_OUTCOMES)
+                        .map(({ change }) => describeCancelOutcome(change)),
+                      Math.max(0, changeRows.length - MAX_CHANGE_OUTCOMES),
+                    ),
+                  ),
+                },
+                {
+                  value: 'keep' as const,
+                  title: HORIZON_END_WORDS.changesKeepTitle(horizon.name),
+                  body: HORIZON_END_WORDS.changesKeepBody,
+                },
+              ]}
+              value={changesPick}
+              onChange={(choice) => {
+                setChangesPick(choice);
+                setError(null);
+              }}
+            />
+          </div>
+        </ActionSection>
+      )}
       {changeJson !== null && (
         <EffectPreview
           changeJson={changeJson}
@@ -482,9 +582,14 @@ function HorizonEndView({
           }
         />
       )}
-      {isCallOff && rows.length > 0 && (
+      {isCallOff && (rows.length > 0 || cancelLines.length > 0) && (
         <ActionSection caption={HORIZON_END_WORDS.whatStops}>
           <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+            {cancelLines.map((line) => (
+              <li key={line} className='px-3 py-2 text-sm break-words'>
+                <MaskedText>{HORIZON_END_WORDS.cancelsRow(line)}</MaskedText>
+              </li>
+            ))}
             {rows.slice(0, MAX_STOPS_SHOWN).map(({ cost, isBill }) =>
               isBill ? (
                 <li
