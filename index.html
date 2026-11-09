@@ -36,10 +36,23 @@
             return 'system';
           }
         };
+        // Sunset: today's sunrise and sunset in minutes after midnight, stored by the app on its last visit.
+        const isSunsetDark = function () {
+          const now = new Date();
+          const minute = now.getHours() * 60 + now.getMinutes();
+          try {
+            const times = JSON.parse(localStorage.getItem('moondreams-sunset-minutes'));
+            return minute < times.rise || minute >= times.set;
+          } catch (error) {
+            return minute < 7 * 60 || minute >= 19 * 60;
+          }
+        };
         const theme = readTheme();
         const isDark =
           theme === 'dark' ||
+          (theme === 'sunset' && isSunsetDark()) ||
           (theme !== 'light' &&
+            theme !== 'sunset' &&
             window.matchMedia('(prefers-color-scheme: dark)').matches);
         document.documentElement.classList.toggle('dark', isDark);
         document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');

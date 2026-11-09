@@ -4,6 +4,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
+import AppToggle from '@/components/AppToggle';
 import RevealChip from '@/components/RevealChip';
 import SummaryRow from '@/components/SummaryRow';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -41,6 +42,7 @@ import {
   CHANGE_WORDS,
   BILL_QUICK_PICKS,
   ACCOUNT_WORDS,
+  AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
@@ -211,6 +213,8 @@ interface BillFormData {
   paidByCardId: string | null;
   /** The account it is paid from; null follows the plan's one pull account. */
   accountId: string | null;
+  /** The app counts each payment as paid on its due day. */
+  paysItself: boolean;
 }
 
 interface BillDraft extends KeptChange {
@@ -226,7 +230,10 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
   });
   const formData = draft
     ? readDraftFields<BillFormData>(
-        withDraftDefaults(draft.formData, { accountId: null }),
+        withDraftDefaults(draft.formData, {
+          accountId: null,
+          paysItself: false,
+        }),
         {
           name: isText,
           amount: isAmountDraft,
@@ -246,6 +253,7 @@ const parseBillDraft = (stored: unknown): BillDraft | null => {
           group: isPickOrCreate,
           paidByCardId: isNullableText,
           accountId: isNullableText,
+          paysItself: isFlag,
           isLater: isFlag,
         },
       )
@@ -318,6 +326,7 @@ const EMPTY_BILL: BillSealed = {
   groupId: null,
   paidByCardId: null,
   accountId: null,
+  paysItself: false,
 };
 
 const priorityOptions = PRIORITIES.map((value) => ({
@@ -571,6 +580,7 @@ const getEditingData = (
     group: { choice: payload.groupId ?? '', newText: '' },
     paidByCardId: payload.paidByCardId ?? null,
     accountId: payload.accountId ?? null,
+    paysItself: payload.paysItself === true,
   };
 };
 
@@ -715,6 +725,7 @@ function BillFormBody({
           group: { choice: presetGroupId ?? '', newText: '' },
           paidByCardId: null,
           accountId: null,
+          paysItself: false,
         },
   );
   const startsChosen =
@@ -1394,48 +1405,71 @@ function BillFormBody({
         />
       ),
     },
-    ...(shownCards.length > 0 || shownAccounts.length > 0
+    ...(shownCards.length > 0 || shownAccounts.length > 0 || isTracking
       ? [
           {
             id: 'paidWith',
             title: BILL_PAY_WORDS.title,
             summaryLabel: BILL_PAY_WORDS.label,
-            summaryValue: nameOfPayWay(payWay),
+            summaryValue: `${nameOfPayWay(payWay)}${isTracking && formData.paysItself ? ` · ${AUTO_PAY_WORDS.formSummary}` : ''}`,
             isAnswered: true,
             isPreAnswered: true,
             render: ({ moveOn }: QuestionControls) => (
-              <PillGroup
-                label={BILL_PAY_WORDS.label}
-                options={[
-                  { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
-                  ...shownCards.map((card) => ({
-                    value: card.id,
-                    label: getCardName(card, allCards),
-                    detail: BILL_PAY_WORDS.cardDetail,
-                  })),
-                  ...shownAccounts.map((account) => ({
-                    value: account.id,
-                    label: account.name,
-                    detail: describeAccountLine(account),
-                  })),
-                ]}
-                value={payWay}
-                onChange={(value) => {
-                  const isCard = shownCards.some((card) => card.id === value);
-                  const isAccount = shownAccounts.some(
-                    (account) => account.id === value,
-                  );
-                  set({
-                    ...(isTracking
-                      ? { paidByCardId: isCard ? value : null }
-                      : {}),
-                    ...(shownAccounts.length > 0
-                      ? { accountId: isAccount ? value : null }
-                      : {}),
-                  });
-                  moveOn();
-                }}
-              />
+              <div className='space-y-4'>
+                {(shownCards.length > 0 || shownAccounts.length > 0) && (
+                  <div className='[&_button]:min-h-10!'>
+                    <PillGroup
+                      label={BILL_PAY_WORDS.label}
+                      options={[
+                        { value: NO_PAY_WAY_VALUE, label: noPayWayLabel },
+                        ...shownCards.map((card) => ({
+                          value: card.id,
+                          label: getCardName(card, allCards),
+                          detail: BILL_PAY_WORDS.cardDetail,
+                        })),
+                        ...shownAccounts.map((account) => ({
+                          value: account.id,
+                          label: account.name,
+                          detail: describeAccountLine(account),
+                        })),
+                      ]}
+                      value={payWay}
+                      onChange={(value) => {
+                        const isCard = shownCards.some(
+                          (card) => card.id === value,
+                        );
+                        const isAccount = shownAccounts.some(
+                          (account) => account.id === value,
+                        );
+                        set({
+                          ...(isTracking
+                            ? { paidByCardId: isCard ? value : null }
+                            : {}),
+                          ...(shownAccounts.length > 0
+                            ? { accountId: isAccount ? value : null }
+                            : {}),
+                        });
+                        if (!isTracking) moveOn();
+                      }}
+                    />
+                  </div>
+                )}
+                {isTracking && (
+                  <div className='flex items-start justify-between gap-3'>
+                    <div className='min-w-0 space-y-0.5'>
+                      <p className='font-medium'>{AUTO_PAY_WORDS.formToggle}</p>
+                      <p className='text-muted-foreground text-sm'>
+                        {AUTO_PAY_WORDS.formLine}
+                      </p>
+                    </div>
+                    <AppToggle
+                      aria-label={AUTO_PAY_WORDS.formToggle}
+                      checked={formData.paysItself}
+                      onCheckedChange={(paysItself) => set({ paysItself })}
+                    />
+                  </div>
+                )}
+              </div>
             ),
           },
         ]
@@ -1539,6 +1573,7 @@ function BillFormBody({
         openAccounts,
         isAccountsLoaded,
       ),
+      paysItself: isTracking ? data.paysItself : startData.paysItself,
     };
     return result;
   };
@@ -1627,6 +1662,7 @@ function BillFormBody({
             openAccounts,
             isAccountsLoaded,
           ),
+          paysItself: editing.payload.paysItself === true,
         }
       : EMPTY_BILL,
     candidate,

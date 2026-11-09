@@ -254,7 +254,14 @@ function SettingsScreen({ onClose }: SettingsScreenProps) {
                   value={
                     link.status === 'revoked'
                       ? LINK_WORDS.unlinkedRowValue(countBroughtIn(link))
-                      : LINK_WORDS.linkedRowValue(
+                      : link.status === 'needsAttention'
+                        ? LINK_WORDS.needsSignInRowValue(
+                            formatUpdatedAgo(
+                              link.lastSyncAt ?? link.createdAt,
+                              now,
+                            ),
+                          )
+                        : LINK_WORDS.linkedRowValue(
                           countBroughtIn(link),
                           formatUpdatedAgo(
                             link.lastSyncAt ?? link.createdAt,

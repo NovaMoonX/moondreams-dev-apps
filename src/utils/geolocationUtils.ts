@@ -3,7 +3,10 @@ export interface Coordinates {
   longitude: number;
 }
 
-/** Asks the browser for the current position (it prompts the person), rounded to about a kilometre. */
+/** The rejection `getCurrentCoordinates` gives when the person or the browser refused, as opposed to a timeout or no fix. */
+export const LOCATION_DENIED = 'location-denied';
+
+/** Asks the browser for the current position (it prompts the person), rounded to about a kilometre; a refusal rejects with `cause` `LOCATION_DENIED`. */
 export function getCurrentCoordinates(): Promise<Coordinates> {
   return new Promise((resolve, reject) => {
     if (!('geolocation' in navigator)) {
@@ -19,11 +22,11 @@ export function getCurrentCoordinates(): Promise<Coordinates> {
         }),
       (error) =>
         reject(
-          new Error(
-            error.code === error.PERMISSION_DENIED
-              ? 'Location is turned off for this site.'
-              : 'We couldn’t find your location just now.',
-          ),
+          error.code === error.PERMISSION_DENIED
+            ? new Error('Location is turned off for this site.', {
+                cause: LOCATION_DENIED,
+              })
+            : new Error('We couldn’t find your location just now.'),
         ),
       { timeout: 10_000, maximumAge: 5 * 60_000 },
     );

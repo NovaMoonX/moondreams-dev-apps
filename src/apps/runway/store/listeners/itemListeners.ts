@@ -2,7 +2,11 @@ import { collection, onSnapshot, type Unsubscribe } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { createSealedReader, type SealedReader } from '@apps/runway/security';
+import {
+  createSealedReader,
+  openJson,
+  type SealedReader,
+} from '@apps/runway/security';
 import type {
   BillSealed,
   EnvelopeSealed,
@@ -10,6 +14,7 @@ import type {
   HorizonStored,
   Cents,
   GroupSealed,
+  MatchSealed,
   OpenVersion,
   Pairing,
   PayLineSealed,
@@ -133,31 +138,66 @@ async function openVersion(
   return null;
 }
 
+/** The merchant names each bill has learned, opened from its header; a header that does not open learns nothing. */
+async function openMatchKeys(
+  headers: readonly Partial<PlanItemDoc>[],
+  encryption: RunwayEncryption,
+): Promise<Record<string, string[]>> {
+  const opened = await Promise.all(
+    headers.flatMap((header) =>
+      header.id && header.matchSealed
+        ? [
+            openJson<MatchSealed>(header.matchSealed, encryption)
+              .then((payload): [string, string[]] => [
+                header.id as string,
+                Array.isArray(payload.merchantKeys) ? payload.merchantKeys : [],
+              ])
+              .catch((): [string, string[]] => [header.id as string, []]),
+          ]
+        : [],
+    ),
+  );
+  return Object.fromEntries(opened.filter(([, keys]) => keys.length > 0));
+}
+
 export function startItemsListener(
   uid: string,
+  encryption: RunwayEncryption,
   onChange: (items: PlanItemDoc[]) => void,
+  onMatchKeys: (keys: Record<string, string[]>) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
+  const sequence = { latest: 0 };
   const stop = onSnapshot(
     planPath(uid, 'items'),
-    (snapshot) =>
+    (snapshot) => {
+      const headers = snapshot.docs.map((entry) => ({
+        ...(entry.data() as Partial<PlanItemDoc>),
+        id: entry.id,
+      }));
       onChange(
-        snapshot.docs.map((entry) => {
-          const data = entry.data() as Partial<PlanItemDoc>;
-          return {
-            id: entry.id,
-            kind: data.kind as PlanItemDoc['kind'],
-            parentId: data.parentId ?? null,
-            createdAt: data.createdAt ?? 0,
-            endedAt: data.endedAt ?? null,
-            archivedAt: data.archivedAt ?? null,
-            heldReleasedOn: readHeldReleasedOn(data),
-          };
-        }),
-      ),
+        headers.map((data) => ({
+          id: data.id,
+          kind: data.kind as PlanItemDoc['kind'],
+          parentId: data.parentId ?? null,
+          createdAt: data.createdAt ?? 0,
+          endedAt: data.endedAt ?? null,
+          archivedAt: data.archivedAt ?? null,
+          heldReleasedOn: readHeldReleasedOn(data),
+        })),
+      );
+      sequence.latest += 1;
+      const mine = sequence.latest;
+      void openMatchKeys(headers, encryption).then((keys) => {
+        if (mine === sequence.latest) onMatchKeys(keys);
+      });
+    },
     (error) => onError(toError(error)),
   );
-  return stop;
+  return () => {
+    sequence.latest += 1;
+    stop();
+  };
 }
 
 /** Each snapshot is opened before it is delivered; a slow open never overwrites a newer snapshot or lands after the listener stopped. */

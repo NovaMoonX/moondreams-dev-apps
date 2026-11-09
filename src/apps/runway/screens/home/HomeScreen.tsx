@@ -10,6 +10,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { HoldsThroughLine } from '@apps/runway/components/CoverageHeadline';
+import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import ReconnectLinkRows from '@apps/runway/components/ReconnectLinkRows';
 import HoldsPromptRow from '@apps/runway/components/HoldsPromptRow';
@@ -70,6 +71,7 @@ function HomeScreen() {
   const balances = useAppSelector(selectBalances);
   const lookahead = useDeferredLookahead(today, isLedgerReady);
   const dueCosts = useDueCostRows(lookahead, today);
+  const { checks } = useAutoChecks();
   const rangeSides = useAppSelector((state) => selectRangeSides(state, today));
   const stance = useAppSelector(selectStance);
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
@@ -176,7 +178,8 @@ function HomeScreen() {
           lookahead === null ||
           hasWarnings ||
           lookahead.due.length > 0 ||
-          dueCosts.length > 0
+          dueCosts.length > 0 ||
+          checks.length > 0
         }
         otherwise={<TrackInviteCard />}
       />

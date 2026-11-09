@@ -68,6 +68,7 @@ import {
   useMatchAccountPairs,
   useMatchDeposits,
 } from '@apps/runway/hooks/useBankMatch';
+import { useAutoPay } from '@apps/runway/hooks/useAutoPay';
 import { useLinkHistory } from '@apps/runway/hooks/useLinkHistory';
 import { usePlaceByRules } from '@apps/runway/hooks/useRuleMatch';
 import { useClearPriorityDialOnLeave } from '@apps/runway/hooks/usePriorityDial';
@@ -254,6 +255,7 @@ function RunwayContent() {
   useRunwaySync(user?.uid ?? null, attempt);
   useSyncOnReturn();
   useMatchBankPurchases(user?.uid ?? null);
+  useAutoPay(user?.uid ?? null);
   useMatchDeposits(user?.uid ?? null);
   useMatchAccountPairs(user?.uid ?? null);
   usePlaceByRules(user?.uid ?? null);

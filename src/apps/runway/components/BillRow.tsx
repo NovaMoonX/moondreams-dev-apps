@@ -13,6 +13,7 @@ import ItemSheet, {
 } from '@apps/runway/components/ItemSheet';
 import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
+  AUTO_PAY_WORDS,
   BILL_WORDS,
   GROUP_WORDS,
   MAKE_BILL_WORDS,
@@ -30,6 +31,8 @@ import {
   joinPaymentAndState,
 } from '@apps/runway/utils/billText';
 import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
+import { useBillCardName } from '@apps/runway/hooks/paidAmountPayment';
+import { useIsSelfPaying } from '@apps/runway/hooks/useSelfPaying';
 import { usePaidFromAction } from '@apps/runway/hooks/usePaidFromAction';
 import { describeRange } from '@apps/runway/utils/rangeText';
 
@@ -130,6 +133,17 @@ function BillRow({
     today,
     isSavingUp && monthly === null,
   );
+  const isSelfPaying = useIsSelfPaying(
+    itemId ?? '',
+    payment?.dueOn ?? null,
+    today,
+  );
+  const payerCard = useBillCardName(itemId ?? '', payment?.dueOn ?? null);
+  const payer = !isSelfPaying
+    ? null
+    : payerCard === null
+      ? AUTO_PAY_WORDS.payerBank
+      : payerCard;
   const figureWord = monthly
     ? BILL_WORDS.aMonth
     : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
@@ -145,7 +159,10 @@ function BillRow({
     <ItemRow
       name={bill.name}
       emoji={emoji}
-      detail={detailOverride ?? dueLine}
+      detail={
+        detailOverride ??
+        (payer === null ? dueLine : AUTO_PAY_WORDS.dueLinePayer(dueLine, payer))
+      }
       isDetailWarning={isUndated && detailOverride === null}
       figure={amount}
       figureWord={figureWord}
@@ -180,6 +197,8 @@ export function BillSheet({
       .filter((cost) => cost.becameBillId === billId)
       .map((cost) => ({ item: version.payload.name, cost: cost.name })),
   )[0];
+  const isSelfPaying = useIsSelfPaying(billId, payment?.dueOn ?? null, today);
+  const autoCardName = useBillCardName(billId, payment?.dueOn ?? today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const amount = formatCents(pick(stance, bill.amount, 'expense'));
   const { schedule } = bill.timing;
@@ -200,6 +219,11 @@ export function BillSheet({
   ]
     .filter(Boolean)
     .join(' · ');
+  const payerFact = !isSelfPaying
+    ? null
+    : autoCardName === null
+      ? AUTO_PAY_WORDS.paysItselfFromBank
+      : AUTO_PAY_WORDS.paysItselfFromCard(autoCardName);
   const rangeText = describeRange(
     bill.amount,
     stance,
@@ -221,6 +245,7 @@ export function BillSheet({
       }
       figure={amount}
       fact={fact}
+      secondFact={payerFact}
       help={rangeText}
       quickChange={
         isUndated

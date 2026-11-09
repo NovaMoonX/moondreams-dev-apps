@@ -36,7 +36,7 @@ const readStaleOnly = (data: unknown): boolean => {
 };
 
 /**
- * `{ staleOnly?: boolean }` → `{ results: [{ linkId, state, created, updated, removed }] }`: every active link of the caller (with `staleOnly`, only those not synced for 15 minutes), plus a retry of any revoke the bank refused. Safe to repeat.
+ * `{ staleOnly?: boolean }` → `{ results: [{ linkId, state, created, updated, removed }] }`: every active link of the caller and every one waiting on a sign-in (so one the bank let back in clears) (with `staleOnly`, only those not synced for 15 minutes), plus a retry of any revoke the bank refused. Safe to repeat.
  */
 export const syncRunwayLinks = onCall(
   {
@@ -53,7 +53,7 @@ export const syncRunwayLinks = onCall(
     const firestore = getFirestore();
     const links = await firestore
       .collection(`apps/runway/plans/${uid}/links`)
-      .where('status', '==', 'active')
+      .where('status', 'in', ['active', 'needsAttention'])
       .get();
     const cutoff = Date.now() - STALE_AFTER_MS;
     const due = staleOnly

@@ -2437,6 +2437,99 @@ export const PAID_HISTORY_WORDS = {
   undoTitle: 'Take back this payment?',
 } as const;
 
+/** The windows around a due day that automatic payments use. */
+export const AUTO_PAY_DAYS = {
+  /** The most merchant names a bill keeps from charges it has matched. */
+  maxLearnedNames: 10,
+  /** A charge dated this many days either side of the due day can be the payment. */
+  matchDays: 3,
+  /** The picker looks this far before and after the due day. */
+  pickDaysBefore: 5,
+  pickDaysAfter: 10,
+  /** A question about a payment stops being asked this many days after it was due. */
+  askDays: 45,
+  /** "Not here yet" hides a payment's question for this many days, on this device. */
+  snoozeDays: 3,
+} as const;
+
+/** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
+export const AUTO_PAY_WORDS = {
+  changeLabel: 'Pays itself',
+  formToggle: 'It pays itself',
+  formSummary: 'pays itself',
+  formLine: 'Counted as paid on its due day',
+  paysItselfFromCard: (card: string) =>
+    `Pays itself from ${card}`.replaceAll(' ', '\u00a0'),
+  paysItselfFromBank: 'Pays\u00a0itself\u00a0from\u00a0your\u00a0bank',
+  dueLinePayer: (due: string, payer: string) => `${due} · ${payer}`,
+  payerBank: 'from your bank',
+  paysItselfLine: 'Pays itself',
+  enterAmount: 'Enter what it charged',
+  enterAmountSub: (due: string) =>
+    `${due}\u2019s payment \u00b7 counted at the top of its range`,
+  countedAt: (amount: string) =>
+    `We counted ${amount}, the top of its range, until you tell us.`,
+  whichChargeSub: (due: string) =>
+    `${due}\u2019s payment \u00b7 no charge matched yet`,
+  save: 'Save',
+  whichCharge: 'Which charge was this?',
+  chargedOn: (date: string) => `Charged ${date} · enter the amount`,
+  checksHeading: 'To check',
+  forgetRow: (name: string) => `Forget what ${name}\u2019s charge looks like`,
+  paidByCharge: (name: string, amount: string, date: string) =>
+    `Paid by ${name} \u00b7 ${amount} \u00b7 ${date}`,
+  forgetSub: "We'll ask which charge it is next time",
+  forgetTitle: (name: string) => `Forget the charges matched to ${name}?`,
+  forgetConfirm: 'Forget',
+  pickTitle: (due: string) => `Which charge was it on ${due}?`,
+  pickEmpty: (due: string) => `No charge near ${due} yet`,
+  pickSearch: 'Search charges',
+  pickRow: (date: string, source: string | null) =>
+    source === null ? date : `${date} · ${source}`,
+  pickSameAmount: 'Same amount',
+  pickInRange: 'In range',
+  noMerchant: 'A charge',
+  cardBills: 'Bills on this card',
+  cardBillLine: (due: string) => `Due ${due}`,
+  cardBillNoDue: 'No due date yet',
+  cardBillsMore: (count: number) => `Show ${count} more`,
+  cardBillsFewer: 'Show fewer',
+  autoSummary: (name: string, due: string, amount: string) =>
+    `${name} paid itself: ${amount} due\u00a0${due}.`,
+  correctedSummary: (name: string, due: string, amount: string) =>
+    `Changed ${name}'s ${due} payment to ${amount}.`,
+  matchedSummary: (name: string, due: string, amount: string) =>
+    `Matched a charge of ${amount} to ${name}'s ${due} payment.`,
+  matchUndoneSummary: (name: string, due: string) =>
+    `Undid the match of ${name}'s ${due} payment.`,
+  matchedOne: (name: string) => `Matched the ${name} charge to its bill`,
+  matchedMany: (count: number) => `Matched ${count} charges to their bills`,
+  matchedSub: 'It no longer counts as spending. Undo puts it back.',
+  undo: 'Undo',
+  undone: 'Match undone',
+  undoFailed: 'The match was not undone',
+  pickedOne: (name: string) => `Matched the charge to ${name}`,
+  amountSaved: (name: string) => `${name} updated`,
+  amountFailed: (name: string) => `${name} was not updated`,
+  forgot: (name: string) => `${name} forgot the charges it learned`,
+  forgetFailed: (name: string) => `${name} was not changed`,
+  matchFailed: 'The charge was not matched',
+  matchedJustNow: 'That charge was matched on its own a moment ago',
+  amountTask: (name: string) => `Enter what ${name} actually charged`,
+  notHereYet: 'Not here yet',
+  changedElsewhere:
+    'This charge or payment changed on another device. Nothing was changed.',
+  alreadyMatched: 'This payment already has a charge.',
+  needsConnection: 'This needs a connection.',
+  paidBill: (name: string, due: string) => `Paid ${name}'s ${due} bill`,
+  notThisCharge: "Not this bill's charge",
+  notThisChargeSub: 'It goes back to waiting for a home',
+  matchedNoEnvelope: 'This charge paid a bill, so it has no envelope.',
+  unmatched: 'Charge taken off the bill',
+  unmatchFailed: 'The charge was not taken off the bill',
+  fallbackBillName: 'A bill',
+} as const;
+
 /** A Horizon cost's payment marked paid, or taken back. */
 export const COST_PAID_WORDS = {
   summary: (cost: string, item: string, due: string, amount: string) =>
@@ -4444,6 +4537,8 @@ export const LINK_WORDS = {
   methodManual: 'Add it myself',
   methodManualHelp: 'Type its details',
   newCardSummary: (name: string) => `Added the card ${name} from your bank`,
+  needsSignInRowValue: (when: string) =>
+    `Needs you to sign in again \u00b7 last updated ${when}`,
   linkedRowValue: (count: number, when: string) =>
     `Linked \u00b7 ${count === 1 ? '1 account' : `${count} accounts`} \u00b7 updated ${when}`,
   unlinkedRowValue: (count: number) =>
