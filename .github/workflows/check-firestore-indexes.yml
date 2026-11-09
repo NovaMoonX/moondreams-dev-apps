@@ -75,3 +75,4 @@ jobs:
       - run: npm run check:a-list
       - run: npm run check:receipts
       - run: npm run check:helm-copy
+      - run: npm run check:natural-dates

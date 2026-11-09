@@ -7,10 +7,12 @@ import {
 } from '../../functions/src/apps/helm/helmKey.ts';
 import {
   DEFAULT_DAY_END_TIME,
+  DEFAULT_ASSISTANT_NAME,
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
 import { sealJson } from '../../src/apps/helm/security.ts';
+import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import type {
   Capture,
   CaptureSealed,
@@ -107,7 +109,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             createdAt: turnTime,
             sealed: await sealJson<CaptureSealed>(
-              { text: turn.text, reading: {} },
+              {
+                text: turn.text,
+                reading: readCapture(turn.text, {
+                  now: turnTime,
+                  timeZone,
+                  assistantName: DEFAULT_ASSISTANT_NAME,
+                }),
+              },
               encryption,
             ),
           };

@@ -16,6 +16,10 @@ import type { SealedReader } from '@lib/security';
 
 import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type { Capture, CaptureSealed, OpenCapture } from '@apps/helm/types';
+import {
+  EMPTY_READING,
+  normalizeReading,
+} from '@apps/helm/utils/captureReading';
 import { groupSessions } from '@apps/helm/utils/sessions';
 
 const EARLIER_FETCH_LIMIT = 200;
@@ -49,11 +53,11 @@ async function openCapture(
     return {
       ...base,
       text: payload.text ?? '',
-      reading: payload.reading ?? {},
+      reading: normalizeReading(payload.reading),
       isUnreadable: false,
     };
   } catch {
-    return { ...base, text: '', reading: {}, isUnreadable: true };
+    return { ...base, text: '', reading: EMPTY_READING, isUnreadable: true };
   }
 }
 

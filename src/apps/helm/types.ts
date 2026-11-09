@@ -22,8 +22,32 @@ export interface HelmProfile {
 export type CaptureStatus =
   'received' | 'interpreting' | 'sorted' | 'needsYou' | 'failed';
 
-/** What Helm read in a turn for certain. Empty until the issue that reads something; readers default every field they add. */
-export type CaptureReading = Record<string, never>;
+/** A day (UTC midnight of its calendar day) or a moment (an instant). */
+export type TaskDue =
+  { kind: 'day'; date: number } | { kind: 'moment'; at: number };
+
+/** A stretch of the turn's words, by offsets into the text. */
+export interface Token {
+  id: string;
+  text: string;
+  start: number;
+  end: number;
+}
+
+export interface DateSpan extends Token {
+  due: TaskDue;
+}
+
+/** What Helm read in a turn for certain. A reader of an older turn defaults every field, so none is optional. */
+export interface CaptureReading {
+  people: Token[];
+  places: Token[];
+  documents: Token[];
+  commands: Token[];
+  isUrgent: boolean;
+  dates: DateSpan[];
+  addressedAs: Token | null;
+}
 
 /** One turn: what the person said, with the words sealed. */
 export interface Capture {

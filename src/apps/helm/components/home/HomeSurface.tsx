@@ -60,6 +60,7 @@ function SessionTurns({
           key={turn.id}
           capture={turn}
           showsOutcome={turn.id === latestId}
+          showsReading={false}
         />
       ))}
     </div>

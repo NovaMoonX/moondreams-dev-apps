@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -14,18 +15,25 @@ import { useAuth } from '@/hooks/useAuth';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 
 import {
   CAPTURE_COUNTER_FROM,
   CAPTURE_MAX_CHARS,
   HELM_COPY,
 } from '@apps/helm/constants';
+import ReadChips from '@apps/helm/components/home/ReadChips';
+import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
+import {
+  applyReadingEdits,
+  readCapture,
+} from '@apps/helm/utils/captureReading';
 
 const DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
@@ -68,6 +76,29 @@ function Composer({
     keepOnUnmount: true,
   });
   const [isSending, setIsSending] = useState(false);
+  // The clock the words are read against, taken when they last changed.
+  const [typedAt, setTypedAt] = useState(() => Date.now());
+  const [isFocused, setIsFocused] = useState(false);
+  const [dismissed, setDismissed] = useState<string[]>([]);
+  const [fixedDays, setFixedDays] = useState<Record<string, number>>({});
+  const root = useRef<HTMLDivElement>(null);
+  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  // The reading is of the words as they will be sealed, so its offsets match the trimmed text.
+  const read = useMemo(
+    () =>
+      readCapture(text.trimStart(), {
+        now: typedAt,
+        timeZone,
+        assistantName: name,
+      }),
+    [text, typedAt, timeZone, name],
+  );
+  const reading = applyReadingEdits(read, {
+    dismissed,
+    days: fixedDays,
+    timeZone,
+  });
   const stopKeepingInView = useRef<(() => void) | null>(null);
 
   // A field removed while focused gets no blur, so leaving home mid-typing must hand the dock back too.
@@ -88,14 +119,24 @@ function Composer({
     text.trim().length > 0 &&
     !isSending &&
     isCapturesLoaded &&
-    user !== null;
+    user !== null &&
+    text.length <= CAPTURE_MAX_CHARS;
   const isNearLimit = text.length >= CAPTURE_COUNTER_FROM;
+  const isTooLong = text.length > CAPTURE_MAX_CHARS;
 
   const send = async () => {
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
     const turn = { ...getNextTurn(), createdAt: Date.now() };
+    const sentReading = applyReadingEdits(
+      readCapture(sent.trimStart(), {
+        now: turn.createdAt,
+        timeZone,
+        assistantName: name,
+      }),
+      { dismissed, days: fixedDays, timeZone },
+    );
     const restore = (error: unknown) => {
       console.error('Helm turn did not send', error);
       const withSent = (current: string) =>
@@ -115,10 +156,13 @@ function Composer({
       // The write is not awaited: offline it waits in the queue, and the field is free for the next line.
       const { write } = await sendCapture(uid, encryption, {
         text: sent,
+        reading: sentReading,
         ...turn,
       });
       recordSentTurn(uid, turn);
       setText('');
+      setDismissed([]);
+      setFixedDays({});
       write.catch(restore);
     } catch (error) {
       restore(error);
@@ -138,22 +182,51 @@ function Composer({
     void send();
   };
 
+  const insertShorthand = (insert: string) => {
+    const field = root.current?.querySelector('textarea');
+    if (!field) return;
+    const from = field.selectionStart;
+    const to = field.selectionEnd;
+    const before = text.slice(0, from);
+    const spacer = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
+    const added = `${spacer}${insert}`;
+    setText(`${before}${added}${text.slice(to)}`);
+    setTypedAt(Date.now());
+    const caret = before.length + added.length;
+    requestAnimationFrame(() => field.setSelectionRange(caret, caret));
+  };
+
   return (
-    <div data-composer className='space-y-2'>
+    <div
+      ref={root}
+      data-composer
+      className='space-y-2'
+      // A press on any control here keeps the field focused: a blur would drop the shorthand row and move what was pressed before the tap lands.
+      onPointerDown={(event) => {
+        const target = event.target;
+        if (target instanceof Element && target.closest('button')) {
+          event.preventDefault();
+        }
+      }}
+    >
+      {isFocused && isReady && <ShorthandRow onInsert={insertShorthand} />}
       <Textarea
         ref={fieldRef}
         variant='outline'
         rows={2}
-        maxLength={CAPTURE_MAX_CHARS}
         aria-label={HELM_COPY.composerLabel(name)}
         placeholder={waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)}
         className='helm-field'
         disabled={!isReady}
         value={text}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value);
+          setTypedAt(Date.now());
+        }}
         onKeyDown={handleKeyDown}
         onFocus={(event) => {
           onFocusChange(true);
+          setIsFocused(true);
           // The keyboard shrinks the viewport after focus lands, so the field and its Send row are brought back into view each time it does.
           const block = event.currentTarget.closest('[data-composer]');
           const keepInView = () => block?.scrollIntoView({ block: 'nearest' });
@@ -163,19 +236,31 @@ function Composer({
             window.visualViewport?.removeEventListener('resize', keepInView);
         }}
         onBlur={() => {
+          setIsFocused(false);
           stopKeepingInView.current?.();
           stopKeepingInView.current = null;
           onFocusChange(false);
         }}
       />
+      <ReadChips
+        reading={reading}
+        timeZone={timeZone}
+        onDismiss={(key) => setDismissed((current) => [...current, key])}
+        onPickDay={(key, day) =>
+          setFixedDays((current) => ({ ...current, [key]: day }))
+        }
+      />
+      {isTooLong && (
+        <p className='text-destructive text-[13px]' aria-live='polite'>
+          {HELM_COPY.tooLong(text.length - CAPTURE_MAX_CHARS)}
+        </p>
+      )}
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
           <span
             className={join(
               'text-[13px] tabular-nums',
-              text.length >= CAPTURE_MAX_CHARS
-                ? 'text-destructive'
-                : 'text-muted-foreground',
+              isTooLong ? 'text-destructive' : 'text-muted-foreground',
             )}
             aria-live='polite'
           >

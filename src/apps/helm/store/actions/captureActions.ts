@@ -41,14 +41,17 @@ export async function sendCapture(
     sessionId: string;
     turnIndex: number;
     createdAt: number;
+    reading: CaptureReading;
   },
 ) {
   const text = turn.text.trim();
   if (!text || text.length > CAPTURE_MAX_CHARS) {
     throw new Error('A turn is 1 to 4,000 characters.');
   }
-  const reading: CaptureReading = {};
-  const sealed = await sealJson<CaptureSealed>({ text, reading }, encryption);
+  const sealed = await sealJson<CaptureSealed>(
+    { text, reading: turn.reading },
+    encryption,
+  );
   const { createdAt } = turn;
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {

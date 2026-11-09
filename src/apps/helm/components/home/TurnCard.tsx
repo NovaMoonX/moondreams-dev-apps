@@ -1,4 +1,7 @@
 import { formatTime } from '@/utils/formatUtils';
+import { useAppSelector } from '@/store';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import ReadChips from '@apps/helm/components/home/ReadChips';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenCapture } from '@apps/helm/types';
 
@@ -6,10 +9,13 @@ interface TurnCardProps {
   capture: OpenCapture;
   /** On home only the newest turn says what became of it, since every turn so far is kept the same way. */
   showsOutcome: boolean;
+  /** The chips of what was read, shown as they were sealed, with nothing to change. */
+  showsReading: boolean;
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
-function TurnCard({ capture, showsOutcome }: TurnCardProps) {
+function TurnCard({ capture, showsOutcome, showsReading }: TurnCardProps) {
+  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   return (
     <article className='flex flex-col items-end gap-1'>
       {capture.isUnreadable ? (
@@ -27,6 +33,16 @@ function TurnCard({ capture, showsOutcome }: TurnCardProps) {
       >
         {formatTime(capture.createdAt)}
       </time>
+      {showsReading && !capture.isUnreadable && (
+        <div className='flex max-w-[84%] justify-end'>
+          <ReadChips
+            reading={capture.reading}
+            timeZone={profileZone ?? getDeviceTimeZone() ?? 'UTC'}
+            onDismiss={null}
+            onPickDay={null}
+          />
+        </div>
+      )}
       {showsOutcome && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>
           {HELM_COPY.savedAsWritten}
