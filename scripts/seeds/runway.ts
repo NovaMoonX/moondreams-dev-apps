@@ -10,7 +10,9 @@ import {
 } from '../../functions/src/apps/runway/planKey.ts';
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
+  AUTO_PAY_WORDS,
   DEFAULT_CURRENCY_CODE,
+  PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
   LINK_BANKS_GATE_ID,
 } from '../../src/apps/runway/constants.ts';
@@ -104,8 +106,10 @@ import {
 } from './types.ts';
 
 /** Plain placeholder marks standing in for the logos the bank sends. */
-const SEED_LOGO_RED = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwEeYkP8f3+S68eEChQ2K3bpPE6k8WorSmpAtV1nHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAe54d74r6pqBcAAAAASUVORK5CYII=';
-const SEED_LOGO_PURPLE = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwE+ZkP8d9+R68eEChQ2K3bpPE6k8WorSmpAtV5XHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAeNE1GEElmoxYAAAAASUVORK5CYII=';
+const SEED_LOGO_RED =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwEeYkP8f3+S68eEChQ2K3bpPE6k8WorSmpAtV1nHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAe54d74r6pqBcAAAAASUVORK5CYII=';
+const SEED_LOGO_PURPLE =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAAAuUlEQVR42u2aQQ6AIAwE+ZkP8d9+R68eEChQ2K3bpPE6k8WorSmpAtV5XHfLlRIaUiYHVevtMj3QFqll8LPbXcITvnS8aODdEtkBP01iJ/xbgha+WwINvlsCpc0SSPBmCaTjY74XkOFNEsjwRQnqBFjgqxLo/SnBkEDTMVICSkAJKAE9zMI+zGK/C4VIQF9kKNMJRAmNVujgESSoZ6PU02nX/cDKJYfWTCskoLaVI6tWLbt//buBaqAeNE1GEElmoxYAAAAASUVORK5CYII=';
 
 const SECRET_FILE = new URL('../../functions/.secret.local', import.meta.url);
 
@@ -1813,6 +1817,8 @@ async function writeSeedIncome(
   uid: string,
   encryption: Parameters<typeof sealJson>[1],
   payAccountId: string | null = null,
+  /** A bill the latest confirmed payday also set money aside for, in full. */
+  extraBillLine: ExtraBillLine | null = null,
 ) {
   const plan = `apps/runway/plans/${uid}`;
   const today = startOfUtcDay(context.now);
@@ -2033,6 +2039,7 @@ async function writeSeedIncome(
       addedAt,
       today,
     },
+    extraBillLine,
   );
   await batch.commit();
   return 12 + pastDays;
@@ -2068,6 +2075,7 @@ async function writeSeedConfirmedDays(
   encryption: Parameters<typeof sealJson>[1],
   batch: ReturnType<SeedContext['firestore']['batch']>,
   when: { addedAt: number; today: number },
+  extraBillLine: ExtraBillLine | null,
 ) {
   const days = [
     {
@@ -2198,6 +2206,18 @@ async function writeSeedConfirmedDays(
                 'should',
                 5_000,
               ),
+              ...(extraBillLine
+                ? [
+                    seedLine(
+                      dayId,
+                      extraBillLine.itemId,
+                      extraBillLine.name,
+                      extraBillLine.emoji,
+                      extraBillLine.tier,
+                      extraBillLine.cents,
+                    ),
+                  ]
+                : []),
             ]
           : []),
       ];
@@ -2975,6 +2995,341 @@ async function writeSeedBills(
   return (bills.length + groups.length) * 3 + 2;
 }
 
+const SEED_TAYLOR_CARD = 'seed-card-taylor-citi';
+
+type ExtraBillLine = Pick<RecordLine, 'itemId' | 'name' | 'emoji' | 'tier'> & {
+  cents: number;
+};
+
+/** Jamie's cloud storage, which pays itself on the Venture X; their last payday set its next payment aside in full. */
+const JAMIE_CLOUD_LINE: ExtraBillLine = {
+  itemId: 'seed-bill-jamie-cloud',
+  name: 'Cloud storage',
+  emoji: '☁️',
+  tier: 'want',
+  cents: 999,
+};
+
+interface SelfPayingBill {
+  id: string;
+  payload: BillSealed;
+  /** The payment the app already marked paid by itself, with what it marked. */
+  mark: { dueOn: number; amountCents: number; isEstimate: boolean } | null;
+}
+
+/**
+ * Bills that pay themselves (Track and up). Taylor (Track): a card for Streaming, which marked itself paid, and Electric ($60 to $90),
+ * marked at the top of its range and waiting for what it really charged, beside Phone, due today and paid by hand. Jamie (Link): Phone on
+ * the Venture X, left unmarked since Link waits for its charge, beside three card charges near its due day, so it asks which charge
+ * it was, and Cloud storage, which their last payday set aside in full.
+ */
+async function writeSeedSelfPaying(
+  context: SeedContext,
+  uid: string,
+  encryption: Parameters<typeof sealJson>[1],
+  who: 'track' | 'link',
+) {
+  const plan = `apps/runway/plans/${uid}`;
+  const today = startOfUtcDay(context.now);
+  const addedAt = context.now - (who === 'track' ? 12 : 11) * DAY_MS;
+  const dayOf = (offset: number) =>
+    new Date(today + offset * DAY_MS).getUTCDate();
+  const monthlyOn = (dueOn: number) => ({
+    kind: 'date' as const,
+    schedule: {
+      kind: 'monthly' as const,
+      anchor: dueOn,
+      monthDays: [new Date(dueOn).getUTCDate()],
+    },
+  });
+  const base = {
+    ending: { onDate: null, afterCount: null },
+    fundedBy: { kind: 'suggested' as const },
+    stanceOverride: null,
+    groupId: null,
+    accountId: null,
+    paysItself: true,
+  };
+  const streamingDue = today - 4 * DAY_MS;
+  const electricDue = today - 6 * DAY_MS;
+  const phoneDue = today - 5 * DAY_MS;
+  const bills: SelfPayingBill[] =
+    who === 'track'
+      ? [
+          {
+            id: 'seed-bill-taylor-streaming',
+            payload: {
+              ...base,
+              name: 'Streaming',
+              emoji: '📺',
+              priority: 'want',
+              orderIndex: 1,
+              amount: { lowCents: 1_549, highCents: 1_549 },
+              timing: monthlyOn(streamingDue),
+              paidByCardId: SEED_TAYLOR_CARD,
+            },
+            mark: {
+              dueOn: streamingDue,
+              amountCents: 1_549,
+              isEstimate: false,
+            },
+          },
+          {
+            id: 'seed-bill-taylor-electric',
+            payload: {
+              ...base,
+              name: 'Electric',
+              emoji: '⚡',
+              priority: 'must',
+              orderIndex: 1,
+              amount: { lowCents: 6_000, highCents: 9_000 },
+              timing: monthlyOn(electricDue),
+              paidByCardId: null,
+            },
+            mark: { dueOn: electricDue, amountCents: 9_000, isEstimate: true },
+          },
+          {
+            id: 'seed-bill-taylor-phone',
+            payload: {
+              ...base,
+              name: 'Phone',
+              emoji: null,
+              priority: 'must',
+              orderIndex: 2,
+              amount: { lowCents: 4_000, highCents: 4_000 },
+              timing: monthlyOn(today),
+              paidByCardId: null,
+              paysItself: null,
+            },
+            mark: null,
+          },
+        ]
+      : [
+          {
+            id: 'seed-bill-jamie-phone',
+            payload: {
+              ...base,
+              name: 'Phone',
+              emoji: '📱',
+              priority: 'must',
+              orderIndex: 6,
+              amount: { lowCents: 4_500, highCents: 4_500 },
+              timing: monthlyOn(phoneDue),
+              groupId: 'seed-group-home',
+              paidByCardId: SEED_VENTURE_CARD,
+            },
+            mark: null,
+          },
+          {
+            id: JAMIE_CLOUD_LINE.itemId,
+            payload: {
+              ...base,
+              name: JAMIE_CLOUD_LINE.name,
+              emoji: JAMIE_CLOUD_LINE.emoji,
+              priority: JAMIE_CLOUD_LINE.tier,
+              orderIndex: 3,
+              amount: {
+                lowCents: JAMIE_CLOUD_LINE.cents,
+                highCents: JAMIE_CLOUD_LINE.cents,
+              },
+              timing: monthlyOn(today + 11 * DAY_MS),
+              groupId: 'seed-group-subscriptions',
+              paidByCardId: SEED_VENTURE_CARD,
+            },
+            mark: null,
+          },
+        ];
+
+  const batch = context.firestore.batch();
+  if (who === 'track') {
+    batch.set(context.firestore.doc(`${plan}/cards/${SEED_TAYLOR_CARD}`), {
+      id: SEED_TAYLOR_CARD,
+      createdAt: addedAt - 60_000,
+      updatedAt: addedAt - 60_000,
+      archivedAt: null,
+      linkId: null,
+      sealed: await sealJson(
+        {
+          issuer: 'Citi',
+          name: 'Double Cash',
+          dueDay: dayOf(16),
+          lastFour: '2208',
+        } satisfies CardSealed,
+        encryption,
+      ),
+    } satisfies CardDoc);
+  }
+  await Promise.all(
+    bills.map(async ({ id, payload, mark }, index) => {
+      const createdAt = addedAt + index * 1000;
+      const changeId = `seed-change-${id}`;
+      batch.set(
+        context.firestore.doc(`${plan}/items/${id}`),
+        header(id, 'bill', null, createdAt),
+      );
+      batch.set(
+        context.firestore.doc(`${plan}/versions/seed-version-${id}`),
+        version(
+          `seed-version-${id}`,
+          id,
+          'bill',
+          createdAt,
+          startOfUtcDay(createdAt),
+          changeId,
+          await sealJson(payload, encryption),
+        ),
+      );
+      batch.set(
+        context.firestore.doc(`${plan}/changes/${changeId}`),
+        change(
+          changeId,
+          createdAt,
+          startOfUtcDay(createdAt),
+          [id],
+          await sealJson(
+            { summary: `Added ${payload.name}.` } satisfies ChangeSealed,
+            encryption,
+          ),
+        ),
+      );
+      if (!mark) return;
+      const moveId = getPaidMoveId(id, mark.dueOn, 0);
+      const markedAt = mark.dueOn + 9 * 3_600_000;
+      const cardId = payload.paidByCardId ?? null;
+      const paid = {
+        amountCents: mark.amountCents,
+        paidOn: mark.dueOn,
+        fromFreeCents: mark.amountCents,
+        cardId,
+        auto: { isEstimate: mark.isEstimate, purchaseId: null },
+      } satisfies BillPaidSealed;
+      batch.set(context.firestore.doc(`${plan}/moves/${moveId}`), {
+        id: moveId,
+        kind: 'billPaid',
+        date: mark.dueOn,
+        refId: id,
+        reversesMoveId: null,
+        createdAt: markedAt,
+        sealed: await sealJson(paid, encryption),
+      } satisfies MoveDoc);
+      const due = formatDateOrdinalUTC(mark.dueOn);
+      const undoText = PAID_HISTORY_WORDS.undoText(payload.name, due);
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-${moveId}`),
+        {
+          id: `seed-change-${moveId}`,
+          kind: 'paymentChange',
+          createdAt: markedAt,
+          effectiveFrom: null,
+          itemIds: [id],
+          sealed: await sealJson(
+            {
+              summary: AUTO_PAY_WORDS.autoSummary(
+                payload.name,
+                due,
+                formatCents(mark.amountCents),
+              ),
+              note: null,
+              move: {
+                moveId,
+                date: mark.dueOn,
+                fromId: null,
+                toId: null,
+                cents: mark.amountCents,
+                note: null,
+                isOutside: false,
+                undoText,
+                isUndo: false,
+                bill: {
+                  billId: id,
+                  name: payload.name,
+                  dueOn: mark.dueOn,
+                  paidOn: mark.dueOn,
+                  amountCents: mark.amountCents,
+                  fromFreeCents: mark.amountCents,
+                  cardId,
+                },
+              },
+            } satisfies ChangeSealed,
+            encryption,
+          ),
+        } satisfies ChangeDoc,
+      );
+    }),
+  );
+  const charges =
+    who === 'link'
+      ? [
+          {
+            id: 'seed-link-purchase-mint',
+            offset: 0,
+            merchant: 'Mint Mobile',
+            cents: 4_500,
+          },
+          {
+            id: 'seed-link-purchase-uber',
+            offset: -1,
+            merchant: 'Uber',
+            cents: 4_310,
+          },
+          {
+            id: 'seed-link-purchase-traderjoes',
+            offset: 1,
+            merchant: "Trader Joe's",
+            cents: 4_782,
+          },
+        ]
+      : [];
+  await Promise.all(
+    charges.map(async (entry) => {
+      const date = phoneDue + entry.offset * DAY_MS;
+      const createdAt = date + 12 * 3_600_000;
+      batch.set(context.firestore.doc(`${plan}/purchases/${entry.id}`), {
+        id: entry.id,
+        date,
+        source: 'link',
+        status: 'posted',
+        needsHome: true,
+        accountId: null,
+        expenseId: null,
+        dedupeKey: `${entry.id}-dedupe`,
+        createdAt,
+        updatedAt: createdAt,
+        sealed: await sealJson(
+          {
+            amountCents: entry.cents,
+            merchant: entry.merchant,
+            label: null,
+            note: null,
+            lines: [{ envelopeId: null, cents: entry.cents, via: 'free' }],
+            refundOfId: null,
+            paidByCardId: SEED_VENTURE_CARD,
+            link: null,
+            receiptText: null,
+            costRef: null,
+            billRef: null,
+            notSameAs: null,
+            incomeDayId: null,
+            assignedBy: null,
+            pairedWithId: null,
+            pairKind: null,
+            cardPaymentMoveId: null,
+            tickedDayKey: null,
+            category: null,
+            ruleId: null,
+          } satisfies PurchaseSealed,
+          encryption,
+        ),
+      } satisfies PurchaseDoc);
+    }),
+  );
+  await batch.commit();
+  const marks = bills.filter(({ mark }) => mark !== null).length;
+  return (
+    (who === 'track' ? 1 : 0) + bills.length * 3 + marks * 2 + charges.length
+  );
+}
+
 /** Goals with and without a date: one lands exactly on pace, one the plan fills on the first income day, and one whose income days can't reach it by its date. */
 async function writeSeedGoals(
   context: SeedContext,
@@ -3214,6 +3569,7 @@ async function seedTrackingPlan(
       owner.uid,
       encryption,
       'seed-account-checking-a',
+      JAMIE_CLOUD_LINE,
     ),
     await writeSeedEnvelopes(context, owner.uid, encryption, true),
     await writeSeedBills(context, owner.uid, encryption),
@@ -3251,6 +3607,12 @@ async function seedTrackingPlan(
     owner.uid,
     encryption,
   );
+  const selfPayingDocuments = await writeSeedSelfPaying(
+    context,
+    owner.uid,
+    encryption,
+    'link',
+  );
   const closingDocuments = await seedClosings(
     context,
     owner.uid,
@@ -3268,7 +3630,8 @@ async function seedTrackingPlan(
     cardDocuments +
     accountDocuments +
     horizonDocuments +
-    purchaseDocuments
+    purchaseDocuments +
+    selfPayingDocuments
   );
 }
 
@@ -3504,7 +3867,8 @@ async function seedUnlinkedPlan(
 
   const itemDocuments =
     (await writeSeedIncome(context, owner.uid, encryption, accountId)) +
-    (await writeSeedEnvelopes(context, owner.uid, encryption, true));
+    (await writeSeedEnvelopes(context, owner.uid, encryption, true)) +
+    (await writeSeedSelfPaying(context, owner.uid, encryption, 'track'));
   return (
     2 +
     envelopeStarts.length +
