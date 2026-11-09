@@ -3082,6 +3082,7 @@ export const DAYS_CALENDAR_WORDS = {
     card: 'Card due',
     goal: 'Goal date',
     goalBehind: 'Goal behind',
+    planChange: 'Plan change',
   },
   monthTotals: (income: string, bills: string) =>
     `In ${income} · Bills ${bills}`,
@@ -3094,6 +3095,31 @@ export const DAYS_CALENDAR_WORDS = {
     count === 0
       ? date
       : `${date}, ${count} ${count === 1 ? 'thing' : 'things'}`,
+} as const;
+
+export const PLAN_CHANGE_WORDS = {
+  rowChanges: (name: string, from: string, to: string) =>
+    `${name} · ${from} → ${to}`,
+  rowReturns: (name: string, to: string) => `${name} returns to ${to}`,
+  rowReturnsPlain: (name: string) => `${name} returns`,
+  rowChangesPlain: (name: string) => `${name} changes`,
+  stops: (name: string) => `${name} stops`,
+  returns: (name: string) => `${name} returns`,
+  changes: (name: string) => `${name} changes`,
+  noticeLead: 'Different this time',
+  notice: (names: string) => `Different this time: ${names}`,
+  more: (count: number) => `and ${count} more`,
+  viewTitle: 'Different this time',
+  viewSub: 'Planned changes that start or end since the last pay.',
+  fromDate: (date: string) => `From ${date}`,
+  sheetLabel: 'Planned change',
+  sheetFact: (date: string) => `Starts ${date}`,
+  sheetFactReturns: (date: string) => `Goes back on ${date}`,
+} as const;
+
+export const PAUSE_PAY_WORDS = {
+  label: 'Pause it',
+  subtitle: 'Stop it for a while, then it comes back',
 } as const;
 
 export const DAYS_WORDS = {

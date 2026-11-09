@@ -2,6 +2,11 @@
 import assert from 'node:assert/strict';
 
 import {
+  listChangesBetweenIncomeDays,
+  listPlanChangeDays,
+} from '../../src/apps/runway/engine/planChanges.ts';
+import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
+import {
   createSealedReader,
   sealJson,
 } from '../../src/apps/runway/security.ts';
@@ -12309,6 +12314,7 @@ const version = (
         { goalId: 'g1', targetDate: utc(2026, 11, 6), track: 'behind' },
         { goalId: 'g2', targetDate: null, track: null },
       ],
+      planChanges: [],
     },
     from,
     to,
@@ -14788,6 +14794,164 @@ const version = (
     [...contested.offers.keys()],
     ['p'],
     'only history purchases are offered from the history check',
+  );
+}
+
+// Planned changes: the calendar's dots and an income day's "Different this time".
+{
+  const d = (day: number) => Date.UTC(2026, 10, day);
+  const today = d(9);
+  const header = (id: string, kind: string, over: object = {}) =>
+    ({
+      id,
+      kind,
+      parentId: null,
+      createdAt: 1,
+      endedAt: null,
+      archivedAt: null,
+      heldReleasedOn: null,
+      ...over,
+    }) as never;
+  const bill = (cents: number, name = 'Rent') => ({
+    name,
+    emoji: null,
+    amount: { lowCents: cents, highCents: cents },
+  });
+  const version = (
+    id: string,
+    itemId: string,
+    kind: string,
+    createdAt: number,
+    effectiveFrom: number,
+    effectiveUntil: number | null,
+    payload: object,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt,
+      effectiveFrom,
+      effectiveUntil,
+      changeId: 'c',
+      payload,
+    }) as never;
+  const items = [
+    header('rent', 'bill'),
+    header('gym', 'bill'),
+    header('src', 'source'),
+    header('pay', 'payLine'),
+  ];
+  const versions = [
+    version('rent1', 'rent', 'bill', 1, d(1), null, bill(125_000)),
+    version('rent2', 'rent', 'bill', 5, d(20), null, bill(0)),
+    version('gym1', 'gym', 'bill', 1, d(1), null, bill(4_000, 'Gym')),
+    version('gym2', 'gym', 'bill', 6, d(9), d(18), bill(0, 'Gym')),
+    version('later', 'rent', 'bill', 7, d(28), null, bill(130_000)),
+    version('pay1', 'pay', 'payLine', 1, d(30), null, {
+      name: 'Pay',
+      amount: { lowCents: 100, highCents: 100 },
+    }),
+  ] as never[];
+
+  const found = listPlanChangeDays(versions, items, today + DAY_MS, d(30));
+  assert.deepEqual(
+    found.map((change) => [change.on, change.itemId, change.isReturn]),
+    [
+      [d(18), 'gym', true],
+      [d(20), 'rent', false],
+      [d(28), 'rent', false],
+    ],
+    'a change ahead and the day a stretch ends are marked; a first version, and a stretch that started today, are not',
+  );
+  assert.equal(
+    listPlanChangeDays(versions, items, d(19), d(19)).length,
+    0,
+    'a day with nothing starting or ending has no change',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      versions,
+      [header('rent', 'bill', { archivedAt: d(10) }), ...items.slice(1)],
+      today + DAY_MS,
+      d(30),
+    ).filter((change) => change.itemId === 'rent').length,
+    0,
+    'an archived item shows no change',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [version('s', 'rent', 'bill', 9, d(20), null, bill(125_000))].concat(
+        versions.filter((entry) => (entry as { id: string }).id === 'rent1'),
+      ) as never[],
+      items,
+      today + DAY_MS,
+      d(30),
+    ).length,
+    0,
+    'a version that says the same thing is no change',
+  );
+
+  const calendar = buildCalendarEntries(
+    {
+      incomeDays: [],
+      billPayments: [],
+      cards: [],
+      goals: [],
+      planChanges: found,
+    },
+    d(1),
+    d(30),
+  );
+  assert.deepEqual(
+    [...calendar.keys()].sort(),
+    [d(18), d(20), d(28)],
+    'each change lands on its day as one entry',
+  );
+
+  const between = listChangesBetweenIncomeDays(
+    versions,
+    items,
+    d(12),
+    d(19),
+    'pay',
+  );
+  assert.deepEqual(
+    between.map((change) => [change.itemId, change.isReturn]),
+    [['gym', true]],
+    'a stretch that ran out between two income days is what is different',
+  );
+  assert.deepEqual(
+    listChangesBetweenIncomeDays(versions, items, d(12), d(15), 'pay').map(
+      (change) => change.itemId,
+    ),
+    [],
+    'a stretch still running at both days is nothing new',
+  );
+  assert.deepEqual(
+    listChangesBetweenIncomeDays(versions, items, d(2), d(10), 'pay').map(
+      (change) => [change.itemId, change.isReturn],
+    ),
+    [['gym', false]],
+    'a stretch that started between the days is different, from its day',
+  );
+  assert.equal(
+    listChangesBetweenIncomeDays(versions, items, d(12), d(19), 'gym').length,
+    0,
+    "the pay's own item is left out",
+  );
+
+  const zeroDraft = {
+    mode: 'exact' as const,
+    low: '0.00',
+    high: '',
+    stance: 'follow' as never,
+  };
+  assert.equal(parseAmountDraft(zeroDraft), null, 'zero is not a new amount');
+  assert.deepEqual(
+    parseAmountDraft(zeroDraft, true),
+    { lowCents: 0, highCents: 0 },
+    'zero is an amount for a pause',
   );
 }
 

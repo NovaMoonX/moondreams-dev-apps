@@ -17,7 +17,13 @@ import GoalRow from '@apps/runway/components/GoalRow';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { DAYS_CALENDAR_WORDS, LOOKAHEAD_MONTHS } from '@apps/runway/constants';
-import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import {
+  addUtcMonths,
+  DAY_MS,
+  todayAsUtcDate,
+} from '@apps/runway/engine/dates';
+import { listPlanChangeDays } from '@apps/runway/engine/planChanges';
+import PlanChangeRow from '@apps/runway/components/PlanChangeRow';
 import {
   buildCalendarEntries,
   type CalendarEntry,
@@ -90,6 +96,8 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const paces = useGoalPaces(today);
+  const planItems = useAppSelector((state) => state.runway.items);
+  const planVersions = useAppSelector((state) => state.runway.versions);
   const { openDay } = useRunwayUrlState();
 
   const thisIndex = toIndex(today);
@@ -139,8 +147,24 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           ? []
           : [{ goalId: item.id, targetDate: payload.targetDate, track }],
       ),
+      planChanges: listPlanChangeDays(
+        planVersions,
+        planItems,
+        today + DAY_MS,
+        addUtcMonths(today, LOOKAHEAD_MONTHS + 1),
+      ),
     }),
-    [days, payments, cards, isTracking, paces, today, startDate],
+    [
+      days,
+      payments,
+      cards,
+      isTracking,
+      paces,
+      today,
+      startDate,
+      planVersions,
+      planItems,
+    ],
   );
   const monthStart = monthStartOf(monthIndex);
   const monthEnd = monthStartOf(monthIndex + 1) - DAY_MS;
@@ -207,6 +231,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       ['card', DAYS_CALENDAR_WORDS.legend.card],
       ['goal', DAYS_CALENDAR_WORDS.legend.goal],
       ['goalBehind', DAYS_CALENDAR_WORDS.legend.goalBehind],
+      ['change', DAYS_CALENDAR_WORDS.legend.planChange],
     ] as const
   ).filter(([kind]) => dotKinds.has(kind));
 
@@ -254,6 +279,15 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           onOpen={() => setOpenCard({ cardId: card.id, view: 'menu' })}
         />
       ) : null;
+    }
+    if (entry.kind === 'change') {
+      return (
+        <PlanChangeRow
+          key={`${entry.change.itemId}${entry.on}`}
+          change={entry.change}
+          today={today}
+        />
+      );
     }
     const goal = paces.find(({ item }) => item.id === entry.goalId);
     return goal ? (

@@ -66,7 +66,10 @@ import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
+import {
+  INITIAL_FROM_WHEN,
+  type FromWhenValue,
+} from '@apps/runway/utils/fromWhen';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import {
   describeAmountDraft,
@@ -151,7 +154,11 @@ interface IncomeFormProps {
   openStep?: IncomeStepId | null;
   /** Hands the built income over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<CreateIncomeInput>;
+  /** Changing a pay line to nothing for a while: the amount starts at $0 and "For a while, then back" is chosen, so only the dates are left to pick. */
+  isPause?: boolean;
 }
+
+const PAUSE_FROM: FromWhenValue = { ...INITIAL_FROM_WHEN, choice: 'stretch' };
 
 export type IncomeStepId =
   | 'source'
@@ -383,6 +390,7 @@ function IncomeFormBody({
   editing,
   openStep = null,
   draft,
+  isPause = false,
 }: IncomeFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -392,7 +400,12 @@ function IncomeFormBody({
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const [startData] = useState<IncomeFormData>(() =>
     editing
-      ? getEditingData(editing)
+      ? {
+          ...getEditingData(editing),
+          ...(isPause
+            ? { amount: toAmountDraft({ lowCents: 0, highCents: 0 }, null) }
+            : {}),
+        }
       : draft?.initial
         ? {
             ...getDraftData(draft.initial),
@@ -417,7 +430,7 @@ function IncomeFormBody({
   );
   const draftKey = draft
     ? null
-    : `${FORM_DRAFT_PREFIX}income:${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
+    : `${FORM_DRAFT_PREFIX}income:${isPause ? 'pause:' : ''}${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
   const kept = useFormDraft({
@@ -430,6 +443,8 @@ function IncomeFormBody({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const allowsZero = editing?.kind === 'payLine';
+  const initialFrom = isPause ? PAUSE_FROM : INITIAL_FROM_WHEN;
   const set = (patch: Partial<IncomeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -491,7 +506,7 @@ function IncomeFormBody({
     : getBlocker(
         formData,
         sourceName,
-        parseAmountDraft(formData.amount) !== null,
+        parseAmountDraft(formData.amount, allowsZero) !== null,
         isEditing,
       );
   const isOnce = formData.frequency === 'once';
@@ -610,9 +625,9 @@ function IncomeFormBody({
           ? FORM_FLOW_WORDS.expectedIncomeTitle
           : FORM_FLOW_WORDS.takeHomeTitle,
       summaryLabel: FORM_FLOW_WORDS.takeHome,
-      summaryValue: describeAmountDraft(formData.amount),
-      isAnswered: parseAmountDraft(formData.amount) !== null,
-      blocker: getAmountDraftProblem(formData.amount),
+      summaryValue: describeAmountDraft(formData.amount, allowsZero),
+      isAnswered: parseAmountDraft(formData.amount, allowsZero) !== null,
+      blocker: getAmountDraftProblem(formData.amount, allowsZero),
       render: () => (
         <RangeAmountField
           isHero
@@ -788,7 +803,7 @@ function IncomeFormBody({
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
-    const amount = parseAmountDraft(data.amount);
+    const amount = parseAmountDraft(data.amount, allowsZero);
     if (!editing || editing.kind !== 'payLine') return null;
     if (!schedule || !ending || amount === null) return null;
     const result: PayLineSealed = {
@@ -831,12 +846,12 @@ function IncomeFormBody({
     candidate,
     onDone: onClose,
     initialNote: kept.restored?.note,
-    initialFrom: kept.restored?.from,
+    initialFrom: kept.restored?.from ?? initialFrom,
   });
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
   const keptValue = useMemo(
@@ -877,7 +892,7 @@ function IncomeFormBody({
     const data = formData;
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
-    const amount = parseAmountDraft(data.amount);
+    const amount = parseAmountDraft(data.amount, allowsZero);
     const startDate = fromDateInputValue(data.startDate);
     if (
       (!draft && !user) ||

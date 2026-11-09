@@ -85,6 +85,7 @@ import {
   ITEM_KIND_NOUNS,
   ITEM_VIEW_WORDS,
   LIFECYCLE_WORDS,
+  PAUSE_PAY_WORDS,
   PAIRING_STOP_WORDS,
   HELD_WORDS,
   RELEASE_UNDO_WORDS,
@@ -365,6 +366,7 @@ function ItemSheet({
     startsAtStep === undefined ? 'sheet' : 'change',
   );
   const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
+  const [isPausing, setIsPausing] = useState(false);
   const [view, setView] = useState<View>('menu');
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);
@@ -934,6 +936,7 @@ function ItemSheet({
         isOpen
         title={payload.name}
         defaultFrequency={null}
+        isPause={isPausing}
         openStep={openStep as IncomeStepId | null}
         editing={
           version.kind === 'source'
@@ -1011,7 +1014,13 @@ function ItemSheet({
     itemKind === 'bill' && isTrackingLevel(level) && learnedCount > 0;
 
   const openChange = (step: string | null) => {
+    setIsPausing(false);
     setOpenStep(step);
+    setPhase('change');
+  };
+  const openPause = () => {
+    setIsPausing(true);
+    setOpenStep(null);
     setPhase('change');
   };
   const openHistory = () => goTo('history');
@@ -1346,6 +1355,16 @@ function ItemSheet({
               label={LIFECYCLE_WORDS.resume}
               subtitle={ITEM_SHEET_R2_WORDS.startSavingSub}
               onClick={() => openChange('often')}
+            />
+          )}
+          {canChange && isStoppable && itemKind === 'payLine' && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Pause />}
+              label={PAUSE_PAY_WORDS.label}
+              subtitle={PAUSE_PAY_WORDS.subtitle}
+              onClick={openPause}
             />
           )}
           {isStoppable && goal && !isPaused && !isUnfunded && (
