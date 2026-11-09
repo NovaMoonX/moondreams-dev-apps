@@ -8,6 +8,7 @@ export const DEFAULT_PLAN_FILL_PERCENT = 50;
 export const SEALED_SCHEMA_VERSION = 1;
 
 /** A run of turns with no gap over this is one session. */
+export const CAPTURE_COUNTER_FROM = 3_600;
 export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;
@@ -37,4 +38,6 @@ export const HELM_COPY = {
   seenFailed: "That couldn't be marked seen. Try again.",
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
+  newSinceLooked: (count: number) => `${count} new since you looked`,
+  turnsFailed: "Your turns didn't open. Close Helm and open it again.",
 } as const;

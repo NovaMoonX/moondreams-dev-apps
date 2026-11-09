@@ -1448,7 +1448,7 @@ functions/src/apps/runway/
 scripts/seeds/runway.ts  runwayScale.ts
 scripts/checks/runwayEngine.ts
 scripts/checks/runwayKeyGuard.ts     fake keyrings: every publish refusal and every check failure, against the Firestore emulator
-scripts/runway/publishKeyring.ts     maintainer-only: validate and publish the keyring; refuses a missing key id
+scripts/appKeys/publishKeyring.ts    maintainer-only (--app runway): validate and publish the keyring; refuses a missing key id
 scripts/runway/retireMasterKey.ts   maintainer-only, Admin SDK; see Retiring a master key
 ```
 

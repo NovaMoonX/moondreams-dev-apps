@@ -20,6 +20,8 @@ interface BrowseTileProps {
   grows: 'openQuestions' | null;
   /** What a growing tile counts. */
   openQuestions: number;
+  /** Turns not seen yet, said on a growing tile while it is small. */
+  newSinceLooked: number;
   /** Spans the row, so a last tile that would sit alone fills it. */
   isWide: boolean;
   onOpen: (view: HelmView) => void;
@@ -31,6 +33,7 @@ function BrowseTile({
   importance,
   grows,
   openQuestions,
+  newSinceLooked,
   isWide,
   onOpen,
 }: BrowseTileProps) {
@@ -62,7 +65,9 @@ function BrowseTile({
       </span>
       {isShrunk && (
         <span className='text-muted-foreground -mt-2 text-[13px]'>
-          {HELM_COPY.nothingWaiting}
+          {newSinceLooked > 0
+            ? HELM_COPY.newSinceLooked(newSinceLooked)
+            : HELM_COPY.nothingWaiting}
         </span>
       )}
     </Button>

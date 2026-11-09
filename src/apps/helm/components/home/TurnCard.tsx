@@ -4,10 +4,12 @@ import type { OpenCapture } from '@apps/helm/types';
 
 interface TurnCardProps {
   capture: OpenCapture;
+  /** On home only the newest turn says what became of it, since every turn so far is kept the same way. */
+  showsOutcome: boolean;
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
-function TurnCard({ capture }: TurnCardProps) {
+function TurnCard({ capture, showsOutcome }: TurnCardProps) {
   return (
     <article className='flex flex-col items-end gap-1'>
       {capture.isUnreadable ? (
@@ -25,7 +27,7 @@ function TurnCard({ capture }: TurnCardProps) {
       >
         {formatTime(capture.createdAt)}
       </time>
-      {!capture.isUnreadable && (
+      {showsOutcome && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>
           {HELM_COPY.savedAsWritten}
         </p>

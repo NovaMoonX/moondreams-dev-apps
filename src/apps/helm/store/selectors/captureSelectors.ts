@@ -7,15 +7,12 @@ const selectRecent = (state: RootState) => state.helm.recentCaptures.captures;
 const selectUnseen = (state: RootState) => state.helm.unseenCaptures.captures;
 const selectEarlier = (state: RootState) => state.helm.earlier.captures;
 
-/** Every loaded turn once, oldest first; a turn in two sets takes the newest snapshot (recent, then unseen, then earlier). */
+/** Every turn home has loaded once, oldest first; a turn in both sets takes the live snapshot. */
 export const selectAllCaptures = createSelector(
-  [selectRecent, selectUnseen, selectEarlier],
-  (recent, unseen, earlier): OpenCapture[] => {
+  [selectRecent, selectEarlier],
+  (recent, earlier): OpenCapture[] => {
     const byId = new Map(
-      [...earlier, ...unseen, ...recent].map((capture) => [
-        capture.id,
-        capture,
-      ]),
+      [...earlier, ...recent].map((capture) => [capture.id, capture]),
     );
     return [...byId.values()].sort(
       (a, b) => a.createdAt - b.createdAt || a.turnIndex - b.turnIndex,

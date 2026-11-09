@@ -32,11 +32,16 @@ const BATCH_LIMIT = 400;
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
 
-/** Seals what the person typed and keeps it as a received turn. The words are never edited afterwards. */
+/** Seals what the person typed and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
   encryption: HelmEncryption,
-  turn: { text: string; sessionId: string; turnIndex: number },
+  turn: {
+    text: string;
+    sessionId: string;
+    turnIndex: number;
+    createdAt: number;
+  },
 ) {
   const text = turn.text.trim();
   if (!text || text.length > CAPTURE_MAX_CHARS) {
@@ -44,17 +49,19 @@ export async function sendCapture(
   }
   const reading: CaptureReading = {};
   const sealed = await sealJson<CaptureSealed>({ text, reading }, encryption);
+  const { createdAt } = turn;
+  // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
     inputMode: 'typed',
     medium: 'web',
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
     status: 'received',
-    seenAt: null,
-    createdAt: Date.now(),
+    seenAt: createdAt,
+    createdAt,
     sealed,
   };
-  await setDoc(doc(capturesOf(uid)), capture);
+  return { write: setDoc(doc(capturesOf(uid)), capture) };
 }
 
 /** Brings in the next page of earlier sessions, once at a time; reads the store at the call, and stops if another person's Helm is open. */

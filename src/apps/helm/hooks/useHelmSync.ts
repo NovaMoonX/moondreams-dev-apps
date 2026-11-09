@@ -75,9 +75,13 @@ export function useHelmSync(uid: string | null) {
           ),
         );
       })
-      .catch((error: unknown) =>
-        console.error('Helm could not get its key', error),
-      );
+      .catch((error: unknown) => {
+        // A cleanup that clears the key cancels its fetch; that is not a failure.
+        if (!isCurrent) return;
+        console.error('Helm could not get its key', error);
+        dispatch(setRecentCapturesFailed());
+        dispatch(setUnseenCapturesFailed());
+      });
 
     return () => {
       isCurrent = false;

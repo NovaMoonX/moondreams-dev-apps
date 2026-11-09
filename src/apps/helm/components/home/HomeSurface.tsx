@@ -36,26 +36,60 @@ function EarlierLoader({ uid }: { uid: string }) {
   );
 }
 
-function SessionTurns({ session }: { session: Session }) {
+function SessionTurns({
+  session,
+  latestId,
+}: {
+  session: Session;
+  latestId: string | null;
+}) {
   return (
     <div className='flex flex-col gap-4'>
       {session.turns.map((turn) => (
-        <TurnCard key={turn.id} capture={turn} />
+        <TurnCard
+          key={turn.id}
+          capture={turn}
+          showsOutcome={turn.id === latestId}
+        />
       ))}
     </div>
   );
 }
 
-/** Home is the conversation: the assistant's name, one quiet line, earlier sessions a scroll up (a day at a time), the session in progress at the bottom and, before anything is said, one card saying how to begin, with the field resting just above the dock. */
 function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const { sessions, openSessionId } = useSession();
-  const isCapturesLoaded = useAppSelector(
-    (state) => state.helm.recentCaptures.isLoaded,
-  );
+  const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
+    useAppSelector((state) => state.helm.recentCaptures);
   const earlier = useAppSelector((state) => state.helm.earlier);
   const hasTurns = sessions.length > 0;
+  const latestId = sessions.at(-1)?.turns.at(-1)?.id ?? null;
+
+  // Home rests on the newest turn while earlier sessions mount above it, until the person scrolls or types.
+  useEffect(() => {
+    if (!latestId) return;
+    const follow = { isOn: true };
+    const toBottom = () => {
+      if (follow.isOn) {
+        window.scrollTo({ top: document.documentElement.scrollHeight });
+      }
+    };
+    const stop = () => {
+      follow.isOn = false;
+    };
+    const intents = ['wheel', 'touchstart', 'keydown'] as const;
+    const observer = new ResizeObserver(toBottom);
+    observer.observe(document.body);
+    intents.forEach((name) =>
+      window.addEventListener(name, stop, { passive: true }),
+    );
+    toBottom();
+    return () => {
+      observer.disconnect();
+      intents.forEach((name) => window.removeEventListener(name, stop));
+    };
+  }, [latestId]);
 
   return (
     <main className='flex flex-1 flex-col gap-8'>
@@ -68,6 +102,11 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
           {HELM_COPY.homeHint}
         </p>
       </div>
+      {isCapturesFailed && !isCapturesLoaded && (
+        <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+          {HELM_COPY.turnsFailed}
+        </p>
+      )}
       {isCapturesLoaded && !hasTurns && (
         <p className='helm-card p-4 text-[15px] text-pretty'>
           {HELM_COPY.firstOpen(name)}
@@ -96,7 +135,11 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
               <SectionDivider label={formatDate(day.dayStart)} />
               {day.sessions.map((session) =>
                 session.sessionId === openSessionId ? (
-                  <SessionTurns key={session.sessionId} session={session} />
+                  <SessionTurns
+                    key={session.sessionId}
+                    session={session}
+                    latestId={latestId}
+                  />
                 ) : (
                   <LazyMount
                     key={session.sessionId}
@@ -104,7 +147,7 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
                       TURN_ESTIMATED_HEIGHT * session.turns.length
                     }
                   >
-                    <SessionTurns session={session} />
+                    <SessionTurns session={session} latestId={latestId} />
                   </LazyMount>
                 ),
               )}

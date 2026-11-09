@@ -19,8 +19,10 @@ export function getRecentWindowStart(now: number) {
 /** The sessions in a list of turns, oldest first, each with its turns in order. */
 export function groupSessions(captures: OpenCapture[]): Session[] {
   const bySession = captures.reduce((sessions, capture) => {
-    const turns = sessions.get(capture.sessionId) ?? [];
-    return sessions.set(capture.sessionId, [...turns, capture]);
+    const turns = sessions.get(capture.sessionId);
+    if (turns) turns.push(capture);
+    else sessions.set(capture.sessionId, [capture]);
+    return sessions;
   }, new Map<string, OpenCapture[]>());
   return [...bySession.entries()]
     .map(([sessionId, entries]) => {

@@ -87,7 +87,7 @@ export interface KeyCheckSpec {
   eventPrefix: string;
 }
 
-/** Reads the keyring the way the key callable does; the reason tells a version Secret Manager would not give from a keyring that is damaged. */
+/** Reads the keyring as a request would; the reason tells a version Secret Manager would not give from a keyring that is damaged. */
 function readKeyringOrReason(
   load: () => Keyring,
 ): { keyring: Keyring } | { failure: KeyFailure } {

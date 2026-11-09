@@ -29,8 +29,8 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const unseen = useAppSelector(selectUnseenCaptures);
-  const isLoaded = useAppSelector(
-    (state) => state.helm.unseenCaptures.isLoaded,
+  const { isLoaded, isFailed } = useAppSelector(
+    (state) => state.helm.unseenCaptures,
   );
   const [opened, setOpened] = useState<OpenCapture | null>(null);
 
@@ -66,8 +66,9 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             unseen.length >= 2 && (
               <Button
                 type='button'
-                variant='tertiary'
+                variant='secondary'
                 size='sm'
+                rounded='full'
                 onClick={markEverythingSeen}
               >
                 {HELM_COPY.markAllSeen}
@@ -75,44 +76,53 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             )
           }
         />
+        {isFailed && !isLoaded && (
+          <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+            {HELM_COPY.turnsFailed}
+          </p>
+        )}
         {isLoaded && unseen.length === 0 && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.inboxEmpty}
           </p>
         )}
-        <ul className='space-y-2'>
-          {unseen.map((capture) => (
-            <li key={capture.id}>
-              <Button
-                type='button'
-                variant='tertiary'
-                className='helm-card flex h-auto w-full items-center justify-between gap-3 p-4 text-left'
-                onClick={() => open(capture)}
-              >
-                <span className='min-w-0 flex-1'>
-                  <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
-                    {capture.isUnreadable ? HELM_COPY.unreadable : capture.text}
+        {unseen.length > 0 && (
+          <ul className='helm-card divide-border divide-y overflow-hidden'>
+            {unseen.map((capture) => (
+              <li key={capture.id}>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  className='flex h-auto w-full items-center justify-between gap-3 rounded-none border-0 px-4 py-3 text-left focus-visible:-outline-offset-2'
+                  onClick={() => open(capture)}
+                >
+                  <span className='min-w-0 flex-1'>
+                    <span className='text-foreground line-clamp-2 text-[15px] leading-[21px] break-words'>
+                      {capture.isUnreadable
+                        ? HELM_COPY.unreadable
+                        : capture.text}
+                    </span>
+                    <span className='text-muted-foreground block text-[13px] tabular-nums'>
+                      {formatDate(capture.createdAt)},{' '}
+                      {formatTime(capture.createdAt)}
+                    </span>
                   </span>
-                  <span className='text-muted-foreground block text-[13px] tabular-nums'>
-                    {formatDate(capture.createdAt)},{' '}
-                    {formatTime(capture.createdAt)}
-                  </span>
-                </span>
-                <ChevronRight
-                  className='text-muted-foreground size-4 shrink-0'
-                  aria-hidden='true'
-                />
-              </Button>
-            </li>
-          ))}
-        </ul>
+                  <ChevronRight
+                    className='text-muted-foreground size-4 shrink-0'
+                    aria-hidden='true'
+                  />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
       </main>
       <DetailSheet
         isOpen={opened !== null}
         onClose={() => setOpened(null)}
         title={HELM_COPY.turnSheetTitle}
       >
-        {opened && <TurnCard capture={opened} />}
+        {opened && <TurnCard showsOutcome capture={opened} />}
       </DetailSheet>
     </>
   );

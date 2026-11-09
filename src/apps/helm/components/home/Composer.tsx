@@ -11,10 +11,17 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ArrowUp } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
-import { CAPTURE_MAX_CHARS, HELM_COPY } from '@apps/helm/constants';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+
+import {
+  CAPTURE_COUNTER_FROM,
+  CAPTURE_MAX_CHARS,
+  HELM_COPY,
+} from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { getNextTurn } from '@apps/helm/hooks/useSession';
+import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { useAppSelector } from '@/store';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
 
 interface ComposerProps {
@@ -41,19 +48,37 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
     [onFocusChange],
   );
 
-  const canSend = text.trim().length > 0 && !isSending && user !== null;
+  // Before the first snapshot the open session isn't known, so a turn sent then would start a new one.
+  const isCapturesLoaded = useAppSelector(
+    (state) => state.helm.recentCaptures.isLoaded,
+  );
+  const canSend =
+    text.trim().length > 0 && !isSending && isCapturesLoaded && user !== null;
+  const isNearLimit = text.length >= CAPTURE_COUNTER_FROM;
 
   const send = async () => {
     if (!canSend || !user) return;
     const { uid } = user;
+    const sent = text;
+    const turn = { ...getNextTurn(), createdAt: Date.now() };
+    const restore = (error: unknown) => {
+      console.error('Helm turn did not send', error);
+      setText((current) => (current ? current : sent));
+      addToast({ title: HELM_COPY.sendFailed, type: 'error' });
+    };
     setIsSending(true);
     try {
       const encryption = await getHelmEncryption(uid);
-      await sendCapture(uid, encryption, { text, ...getNextTurn() });
+      // The write is not awaited: offline it waits in the queue, and the field is free for the next line.
+      const { write } = await sendCapture(uid, encryption, {
+        text: sent,
+        ...turn,
+      });
+      recordSentTurn(turn);
       setText('');
+      write.catch(restore);
     } catch (error) {
-      console.error('Helm turn did not send', error);
-      addToast({ title: HELM_COPY.sendFailed, type: 'error' });
+      restore(error);
     } finally {
       setIsSending(false);
     }
@@ -71,7 +96,7 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
   };
 
   return (
-    <div className='space-y-2'>
+    <div data-composer className='space-y-2'>
       <Textarea
         ref={fieldRef}
         variant='outline'
@@ -85,9 +110,9 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
         onKeyDown={handleKeyDown}
         onFocus={(event) => {
           onFocusChange(true);
-          // The keyboard shrinks the viewport after focus lands, so the field is brought back into view each time it does.
-          const field = event.currentTarget;
-          const keepInView = () => field.scrollIntoView({ block: 'nearest' });
+          // The keyboard shrinks the viewport after focus lands, so the field and its Send row are brought back into view each time it does.
+          const block = event.currentTarget.closest('[data-composer]');
+          const keepInView = () => block?.scrollIntoView({ block: 'nearest' });
           stopKeepingInView.current?.();
           window.visualViewport?.addEventListener('resize', keepInView);
           stopKeepingInView.current = () =>
@@ -100,8 +125,17 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
         }}
       />
       <div className='flex items-center justify-between gap-3'>
-        <span className='text-muted-foreground text-[13px] tabular-nums'>
-          {text.length.toLocaleString()} / {CAPTURE_MAX_CHARS.toLocaleString()}
+        <span
+          className={join(
+            'text-[13px] tabular-nums',
+            text.length >= CAPTURE_MAX_CHARS
+              ? 'text-destructive'
+              : 'text-muted-foreground',
+          )}
+          aria-live='polite'
+        >
+          {isNearLimit &&
+            `${text.length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
         </span>
         <Button
           type='button'

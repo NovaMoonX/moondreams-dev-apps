@@ -1,4 +1,6 @@
 import Drawer from '@/components/Drawer';
+import { useAppSelector } from '@/store';
+import { selectUnseenCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { BROWSE_FOOT, BROWSE_TILES } from '@apps/helm/screen/views';
 import type { HelmView } from '@apps/helm/types';
 
@@ -17,6 +19,7 @@ const SINGLE_TILES = BROWSE_TILES.filter((tile) => tile.importance !== 'lead');
 
 /** Every view as a bento of tiles by importance: the lead is wide, and a last small tile that would sit alone fills its row, so the grid has no holes. */
 function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
+  const unseenCount = useAppSelector(selectUnseenCaptures).length;
   const lastSingleView =
     SINGLE_TILES.length % 2 === 1 ? SINGLE_TILES.at(-1)?.view : null;
 
@@ -31,6 +34,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
               importance={tile.importance}
               grows={tile.grows}
               openQuestions={OPEN_QUESTIONS}
+              newSinceLooked={unseenCount}
               isWide={
                 tile.importance === 'lead' || tile.view === lastSingleView
               }
@@ -47,6 +51,7 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
                 importance='minor'
                 grows={null}
                 openQuestions={0}
+                newSinceLooked={0}
                 isWide={false}
                 onOpen={onOpenView}
               />

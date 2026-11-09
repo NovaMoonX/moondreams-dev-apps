@@ -55,7 +55,7 @@ export interface HelmKey {
   key: Buffer;
 }
 
-/** The only server code besides `getHelmKey` that touches a raw data key; it stays in the calling request. Throws when the person has no key yet or it no longer opens. */
+/** The only other server code that touches a raw data key; it stays in the calling request. Throws when the person has no key yet or it no longer opens. */
 export const unwrapHelmKey = (
   firestore: Firestore,
   keyring: Keyring,

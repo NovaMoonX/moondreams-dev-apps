@@ -19,6 +19,7 @@ import type { Capture, CaptureSealed, OpenCapture } from '@apps/helm/types';
 import { groupSessions } from '@apps/helm/utils/sessions';
 
 const EARLIER_FETCH_LIMIT = 200;
+const UNSEEN_LIMIT = 200;
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -104,7 +105,7 @@ export const startRecentCapturesListener = (
     onError,
   );
 
-/** Every turn the person hasn't seen in the Inbox yet. */
+/** The newest turns the person hasn't seen yet, at most a page of them. */
 export const startUnseenCapturesListener = (
   uid: string,
   read: SealedReader,
@@ -114,7 +115,11 @@ export const startUnseenCapturesListener = (
   startCapturesListener(
     uid,
     read,
-    [where('seenAt', '==', null)],
+    [
+      where('seenAt', '==', null),
+      orderBy('createdAt', 'desc'),
+      limit(UNSEEN_LIMIT),
+    ],
     onChange,
     onError,
   );

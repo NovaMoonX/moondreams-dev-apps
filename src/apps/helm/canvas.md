@@ -8,22 +8,22 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 "The household's private secretary": ink navy, pewter and silver, white paper, one restrained cool accent (verdigris), serif titles over the site's sans. No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.75:1 light); the dashed edge is at least 4.4:1 against the page and card.
 
-| Token                                 | Light             | Dark              | Used for                                                                                                                 |
-| ------------------------------------- | ----------------- | ----------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| background (pewter page)              | #F3F4F7           | #0C111B           | page                                                                                                                     |
-| card / popover                        | #FFFFFF           | #151C29           | cards, sheets, menus                                                                                                     |
-| foreground (ink) / popover-foreground | #141B2D           | #E7EAF0           | text (17.2:1 / 14.2:1 on card)                                                                                           |
-| muted / muted-foreground              | #E9EBF0 / #566074 | #1B2331 / #9BA4B5 | quiet fills / meta text (6.3:1 / 6.8:1 on card)                                                                          |
-| border                                | #D8DCE4           | #2B3547           | hairlines                                                                                                                |
-| primary (ink navy) / fg               | #1D2B4C / #FFFFFF | #C3CEE4 / #0C111B | the one filled button, Talk (and Stop), the wave (14.0:1 / 11.9:1)                                                       |
-| secondary (pewter tint) / fg          | #E7EBF3 / #1D2B4C | #222F47 / #D8DFEC | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (11.7:1 / 10.0:1) |
-| accent (verdigris tint) / fg          | #DDEEEA / #1E4D48 | #173834 / #BFE4DD | "Suggested" tag fill, Needs you row tint (7.9:1 / 9.3:1)                                                                 |
-| verdigris (edge)                      | #3D7C75           | #71B5AB           | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.8:1 / 7.2:1 on card)                        |
-| tooltip / fg                          | #141B2D / #FFFFFF | #E7EAF0 / #0C111B | tooltips                                                                                                                 |
-| warning text                          | #9A4B0B           | #F2B26B           | "overdue" only (6.2:1 / 9.2:1)                                                                                           |
-| destructive                           | #B42318           | #F97066           | Forget, delete (6.6:1 / 6.1:1)                                                                                           |
-| subview backdrop                      | #D5D8DF           | #080C14           | behind a subview card                                                                                                    |
-| rings                                 | foreground        | foreground        | filled = said or confirmed, hollow 1.5px = inferred (10px)                                                               |
+| Token | Light | Dark | Used for |
+|---|---|---|---|
+| background (pewter page) | #F3F4F7 | #0C111B | page |
+| card / popover | #FFFFFF | #151C29 | cards, sheets, menus |
+| foreground (ink) / popover-foreground | #141B2D | #E7EAF0 | text (17.2:1 / 14.2:1 on card) |
+| muted / muted-foreground | #E9EBF0 / #566074 | #1B2331 / #9BA4B5 | quiet fills / meta text (6.3:1 / 6.8:1 on card) |
+| border | #D8DCE4 | #2B3547 | hairlines |
+| primary (ink navy) / fg | #1D2B4C / #FFFFFF | #C3CEE4 / #0C111B | the one filled button, Talk (and Stop), the wave (14.0:1 / 11.9:1) |
+| secondary (pewter tint) / fg | #E7EBF3 / #1D2B4C | #222F47 / #D8DFEC | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (11.7:1 / 10.0:1) |
+| accent (verdigris tint) / fg | #DDEEEA / #1E4D48 | #173834 / #BFE4DD | "Suggested" tag fill, Needs you row tint (7.9:1 / 9.3:1) |
+| verdigris (edge) | #3D7C75 | #71B5AB | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.8:1 / 7.2:1 on card) |
+| tooltip / fg | #141B2D / #FFFFFF | #E7EAF0 / #0C111B | tooltips |
+| warning text | #9A4B0B | #F2B26B | "overdue" only (6.2:1 / 9.2:1) |
+| destructive | #B42318 | #F97066 | Forget, delete (6.6:1 / 6.1:1) |
+| subview backdrop | #D5D8DF | #080C14 | behind a subview card |
+| rings | foreground | foreground | filled = said or confirmed, hollow 1.5px = inferred (10px) |
 
 **Type.** Titles in a serif: **Source Serif 4** 600 (OFL, self-hosted, Latin subset; fallback `"Iowan Old Style", Charter, Georgia, serif`). Page title 28/34 serif 600, letter-spacing -0.01em; sheet title and identity name 22/28 serif 600; section 15/600 sans; row title 15/500; body 15/400; meta 13/400 muted. Figures tabular. Sentence case; no eyebrows.
 
@@ -115,7 +115,6 @@ Round 6: the capture sheet is gone. A1 and A3 are V2 and the compose bar (row 11
 **A4 Reading, past 15 seconds (board StillReading).** Field empty, ready for the next thing. Above it the result card (secondary): quote "Wedding stuff from Maya: book the hair trial, ask about the playlist, call the caterer about the vegetarian menu", the mark and "{Name} is reading this…", a two-line shimmer, then 13 "Still reading. You can close this; it'll be in your Inbox." Board note: before 15 s only the shimmer shows.
 
 **A5 Sorted, with Undo.** Result card:
-
 - Quote, 13 muted.
 - AssistantLine: "Made a task: Call Grandpa about the wedding questions" ›
 - AssistantLine: "Set it for when you get home"
@@ -138,10 +137,9 @@ Round 6: the capture sheet is gone. A1 and A3 are V2 and the compose bar (row 11
 **B2 Which Sam? (round 6: asked on home).** Home with the dock: what you said "Lunch with Sam Thursday" · "8:50 AM"; the reply card with the mark and "Which Sam did you mean for lunch Thursday?", the three tall choices indented under it and "Skip" (small outline); hint "Say the name, or tap one. 1 more question after this." Board note: spoken, answered by voice or a tap; then the card shows the made line with Undo. The round-5 drawer below stays as the Needs you view's sheet. Was: Drawer. Title "Which Sam?" (serif). Quote 13 muted "Lunch with Sam Thursday". Three tall choices (56px, hairline, stacked): "Sam Ortiz" · "Work · Design team"; "Sam Lee" · "Cousin"; "Someone new". Below, 13 muted: "{Name} will make the lunch task for Thu, Nov 12 once you pick." Board note: after Sam Lee, the sheet shows AssistantLine "Made a task: Lunch with Sam Lee, Thu, Nov 12" with Undo on the line, and "Done" primary.
 
 **B3 Which is true now?** Drawer. Title "Which is true now?". Subject "Dana's centerpiece quote". Two choice cards side by side (170 wide, nothing preselected):
-
 - "$2,100" · filled ring "You said · yesterday" · "Dana says centerpieces are $2,100 now"
 - "$1,800" · filled ring "You said · Oct 30" · "Centerpiece quote from Dana: $1,800"
-  Footer note 13 muted: "The other is kept as what it was until today."
+Footer note 13 muted: "The other is kept as what it was until today."
 
 **B4 Capture result.** Drawer. Quote (15 ink): "Mom's birthday is June 3, buy the rings, call Dana Friday" · "8:32 AM". Card of lines: filled ring "Mom's birthday is June 3" ›; round tick "Buy the rings" · "💍 Wedding" ›; round tick "Call Dana Ruiz" · "Fri, Nov 13" ›. Footer: "Undo all of this" (outline, left), "Done" (primary, widest).
 
@@ -152,7 +150,6 @@ Round 6: the capture sheet is gone. A1 and A3 are V2 and the compose bar (row 11
 **B8 Held captures, by reason (board Waiting).** Inbox, badge 3 (an edge-state morning). "Needs you" (verdigris dot) card: "the thing with the" · "Couldn't read this · 7:40 AM"; "Wedding list from Maya's email" · "20 filed, the rest waits · Sort the rest · 7:58 AM"; "Ask Priya about the offsite budget" · "Couldn't sort this · 9:02 AM". "Waiting to be read" (hourglass) card: "Pick up the dry cleaning Tuesday" · "Saved on this device · waits for a connection"; "Order more printer paper" · "Today's limit reached · sorted after midnight"; "Call the caterer back" · "A lot at once · sorted in a few minutes". 13 muted: "Waiting needs nothing from you: {Name} reads these on its own." Titles clamp to one line.
 
 **B11 Questions in every shape (QuestionShapes, Shape Tweak, new in round 6b).** Home with the dock, the hint above the dock. Every shape: what you said · time; the reply card (secondary) with the mark and the question 15; its control indented 32 under it; Skip (small outline) at the foot left, the shape's own action right.
-
 - Pick one: "The caterer needs our menu choice by Friday" · 9:50 AM → "Which menu did you and Maya pick?"; tall choices "Garden menu" · "From the caterer's PDF, Oct 30", "Harvest menu", "Not decided yet"; then a text button with `PenLine` "Something else". Hint "Say "the garden menu", "the first one" or "skip"."
 - Pick several: "We need to count the vegetarian meals for the caterer" · 9:52 AM → "Which of these need a vegetarian meal?"; a card of 52px `Checkbox` rows (square, 5 radius; ticked = primary fill with a check): Sam Lee ✓ "Cousin · {Name} inferred vegetarian", Jordan Hayes ✓ "Cousin", Priya Shah "Your manager", Dana Ruiz "Florist", "None of these"; right: "Done · 2" (small primary). Hint "Say "the first two", "all of them" or "none of these"."
 - Yes or no: "Grandpa can't do Friday, he's free Saturday" · 9:55 AM → "Move Call Grandpa about the wedding questions to Saturday?"; two equal outlined 48px buttons No · Yes. Hint "Say yes or no."
@@ -184,7 +181,6 @@ Round 6: the capture sheet is gone. A1 and A3 are V2 and the compose bar (row 11
 **C7 Event sheet (Cake tasting).** Drawer. Calendar mark + "Wedding calendar" (13 muted). Title "Cake tasting" (serif). Facts line: "Today · 3:00 to 4:00 PM". Group "What Helm knows": filled ring "The cake tasting is at Sweet Layer Bakery" · "You said · Oct 28". Group "Checklist": dashed row "Suggested checklist · 6 items ›" → D13. Footer: "Open in Google Calendar" (secondary, `ExternalLink` icon). Board note: an all-day event shows an `AppToggle` row "Keeps me busy all day" above the footer.
 
 **C8 Calendar trouble.** Two boards.
-
 - **CalStopped:** under the strip an accent-tint row (a `div`, not a button, so its "Reconnect" pill is the one control) with `CalendarX` "Google Calendar stopped sharing your events" · "Reconnect". Summary "No calendar · 1 planned". 10:00 AM "Pay venue deposit" (kept); `SectionDivider` "Worth doing today": dashed "Reply to Dana about the centerpiece quote · 20 min · Suggested"; "When you get home" with "I'm home": "Call Grandpa about the wedding questions".
 - **CalFailed:** under the strip `CloudOff` "Couldn't load your calendar. Your plan is below; check it against your calendar." with small outline "Try again" (`RotateCw`). 10:00 AM "Pay venue deposit"; 13 muted "No suggestions until your calendar loads."; "When you get home" and "Any time today" as usual.
 
@@ -195,14 +191,13 @@ Round 6: the capture sheet is gone. A1 and A3 are V2 and the compose bar (row 11
 **D1 Projects.** As Board 1.
 
 **D2 Wedding · Tasks (Subview).** BackLink "Projects" and ⋯ on the title line. Identity: 💍 in a 40px pewter disc, "Wedding" (28 serif), line "Married at Ridgeline Barn, with both families there", meta "Sat, Jul 10, 2027". Evidence line: "**2 overdue** · Final guest list in 9 days · 14 open". Pill tabs: **Tasks** · Milestones · Checklists · Facts. List:
-
 - "Send Dana the color palette" · "Was due Thursday" (warning)
 - "Book hair trial" · "Was due Friday" (warning)
 - "Pay venue deposit" · "Planned today 10:00 AM"
 - "Call Grandpa about the wedding questions" · "When you get home"
 - "Call Dana Ruiz" · "Due Fri, Nov 13"
 - "Buy the rings" · "No date"
-  `ShowMoreButton` "Show all 14". (Clipped below: `SectionDivider` "Not yet · 2".)
+`ShowMoreButton` "Show all 14". (Clipped below: `SectionDivider` "Not yet · 2".)
 
 **D3 Wedding · Milestones.** Same header, Milestones tab, header add "Add milestone" on the tab's `SectionHeader`. Fold row "Reached · 2" (muted, chevron). Rows: "Final guest list" · "Tue, Nov 17 · in 9 days"; "Florist contract" · "Fri, Dec 4"; "Invitations out" · "Mon, Mar 1, 2027"; "Wedding day" · "Sat, Jul 10, 2027".
 
@@ -239,7 +234,6 @@ D10 Checklist and D13 Suggested checklist are retired with the board file `Check
 **E1 People.** As Board 1's People view (round 6: Memory's doors became tiles).
 
 **E2 Grandpa (Subview, round 6e, tap the tabs).** App bar: BackLink "People", Home, ⋯; the ask bar "Ask about Grandpa" at the foot. Photo 64 (tonal), "Grandpa" (28 serif), line "Walter Hayes · your mom's dad · Dayton". A card: "In your life" · "Close" ›; "Projects" · "💍 Wedding · key person" ›. Pill tabs **Facts** · Tasks · Mentions · Media. Facts opens with `SectionHeader` "Key dates" and a card of the dates that come back: `Cake` "Birthday · November 14" with muted "Year not known · Add year" ›; `Heart` "Anniversary · June 20 · 65 years on Jun 20" with "With Grandma Ruth" ›. A muted `SectionDivider` "Moments", then a card of the latest 3: `MapPin` "Moved · Aug 2024 · to Dayton", `BriefcaseBusiness` "Started a job · 2022 · Dayton Metro Library", `MapPin` "Moved · 2013 · to Kettering" (each with its source line), "See all 14 moments" › (E9) and `Plus` "Add a date". Then the facts:
-
 - Hollow ring "Finds video calls easier than phone calls" · "{Name} inferred · Nov 2"
 - Filled ring "Will give a reading at the ceremony" · "You said · Nov 6"
 - Filled ring "Lives in Dayton, Ohio" · "You said · Oct 30"
@@ -273,20 +267,18 @@ D10 Checklist and D13 Suggested checklist are retired with the board file `Check
 ## Row S: "Settings: your assistant, connected apps, trusted browsers, your calendars"
 
 **S1 Settings (Subview; board Settings, and the shell's gear).** BackLink "Today", title "Settings" (28 serif). Groups (muted captions, one hairline frame each), filling the board to its bottom edge after round 5 (measured at 390x844, nothing clipped):
-
 - "Your assistant": mark + "{Name}" · "Composed" ›; "Connected apps" · `TriangleAlert` 14 + "5 · 1 stopped sharing" in ink › (L1); with no trouble "5 connected" (r5)
 - "Trusted browsers" (r5, S8): one frame: `ShieldCheck` 20 "Trust this browser" (15/500) over 13 muted "Open Helm in this browser without a connection. Anyone using it could open your data, so leave it off on a shared device." with an `AppToggle` off; `Laptop` 20 "Other trusted browsers" over "Chrome on Mac and Firefox on Windows" › (S10); `Smartphone` 20 "Lost a phone? Sign out everywhere" (15/500, ink, no chevron) (S11)
 - "Planning": "Your day" · "8 AM to 10 PM" › (one sheet: time zone, day hours, how full a day); "Calendars that count" · "3 of 5" › (F3, every Google account's calendars and the shifts calendar; r5)
 - "Your data" (r5: absorbs What {Name} does): "Activity" ›; "What the AI sees" ›; "Delete all my Helm data" (destructive text)
-  Without a calendar the Calendars that count row reads "Connect Google" › (L3 with Calendar ticked). Round 2's clipping came from the browser's default bottom border on each group's last row (drawn as a dark line) and six stacked rows; both are gone.
+Without a calendar the Calendars that count row reads "Connect Google" › (L3 with Calendar ticked). Round 2's clipping came from the browser's default bottom border on each group's last row (drawn as a dark line) and six stacked rows; both are gone.
 
 **S2 Your assistant.** `FormSheet` "Your assistant" (drawer). Field "Name", value "{Name}", placeholder "Nomos", helper 13 muted "Up to 16 letters. Leave it empty for Nomos." Section "How it sounds", four stacked choice cards (hairline, 14 radius; the chosen one secondary fill with an ink ring), each: tone name (15/600) and its sample (13, ink, the same answer):
-
 - **Composed** · "The cake tasting is today, 3:00 to 4:00 PM, at Sweet Layer Bakery."
 - Warm · "It's this afternoon, 3:00 to 4:00 PM at Sweet Layer Bakery. Enjoy it."
 - Brief · "Today, 3–4 PM, Sweet Layer Bakery."
 - Formal · "Your cake tasting is this afternoon from three until four, at Sweet Layer Bakery."
-  13 muted under the cards: "Tone changes answers and drafts from {Name}. What it did is always said plainly." Footer "Cancel", "Save" (primary). Board note: with the name Tweak at Bartholomew, the field shows it and the mark reads "B".
+13 muted under the cards: "Tone changes answers and drafts from {Name}. What it did is always said plainly." Footer "Cancel", "Save" (primary). Board note: with the name Tweak at Bartholomew, the field shows it and the mark reads "B".
 
 **S3 How full a day.** Small drawer "How full a day". `NotchedSlider` A little · **About half** · Most. One line: "Helm plans into about half of your free time and leaves the rest open." Footer "Done".
 
