@@ -10,6 +10,9 @@ import {
   interpretWithJoins,
   type JoinedRead,
 } from '../../functions/src/apps/helm/nomos/joinedTurn.ts';
+import { groupTurns } from '../../src/apps/helm/utils/sessions.ts';
+import { toHeldItems } from '../../src/apps/helm/utils/heldCaptures.ts';
+import type { OpenCapture } from '../../src/apps/helm/types.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
 
 const tests: [string, () => void | Promise<void>][] = [];
@@ -256,6 +259,82 @@ test('several messages prefix every token id, not only dates', () => {
       { text: '@Ann', reading: { ...READING, people: [token('p1', '@Ann')] } },
     ]).reading.people[0].id,
     'p1',
+  );
+});
+
+const turn = (
+  id: string,
+  status: OpenCapture['status'],
+  extra: Partial<OpenCapture> = {},
+) =>
+  ({
+    id,
+    status,
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    executionIds: [],
+    questionState: {},
+    createdAt: Number(id.slice(1)),
+    ...extra,
+  }) as unknown as OpenCapture;
+const folded = (turns: OpenCapture[]) =>
+  groupTurns(turns).map((group) => [
+    group.lead.id,
+    group.joined.map((entry) => entry.id),
+  ]);
+
+test('a message folds by its own status under the lead that waits, is sorted or asks', () => {
+  const lead = (status: OpenCapture['status']) =>
+    turn('m1', status, { joinedCaptureIds: ['m2'] });
+  const joined = (status: OpenCapture['status'], executionIds: string[] = []) =>
+    turn('m2', status, { turnLeadId: 'm1', executionIds });
+  assert.deepEqual(folded([lead('received'), joined('received')]), [
+    ['m1', ['m2']],
+  ]);
+  assert.deepEqual(folded([lead('interpreting'), joined('received')]), [
+    ['m1', ['m2']],
+  ]);
+  assert.deepEqual(folded([lead('sorted'), joined('sorted')]), [
+    ['m1', ['m2']],
+  ]);
+  assert.deepEqual(folded([lead('needsYou'), joined('sorted')]), [
+    ['m1', ['m2']],
+  ]);
+  assert.deepEqual(folded([lead('needsYou'), joined('received')]), [
+    ['m1', []],
+    ['m2', []],
+  ]);
+  assert.deepEqual(folded([lead('sorted'), joined('received')]), [
+    ['m1', []],
+    ['m2', []],
+  ]);
+  assert.deepEqual(folded([lead('failed'), joined('received')]), [
+    ['m1', []],
+    ['m2', []],
+  ]);
+  assert.deepEqual(folded([lead('sorted'), joined('sorted', ['e1'])]), [
+    ['m1', []],
+    ['m2', []],
+  ]);
+});
+
+test('a joined message is not its own held row while its lead waits, and is once the lead settles', () => {
+  const joined = turn('m2', 'received', { turnLeadId: 'm1' });
+  const waiting = toHeldItems([
+    turn('m1', 'interpreting', { joinedCaptureIds: ['m2'] }),
+    joined,
+  ]);
+  assert.deepEqual(
+    waiting.waiting.map((item) => item.capture.id),
+    [],
+  );
+  const failed = toHeldItems([
+    turn('m1', 'failed', { joinedCaptureIds: ['m2'] }),
+    joined,
+  ]);
+  assert.deepEqual(
+    failed.waiting.map((item) => item.capture.id),
+    ['m2'],
   );
 });
 

@@ -87,7 +87,7 @@ const MAX_LISTED = 50;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 const CALL_BUDGET_MS = 55_000;
 const RESTART_MARGIN_MS = 5_000;
-const MIN_RESTART_MS = 12_000;
+const MIN_RESTART_MS = 22_000;
 const SETTLE_QUIET_MS = 1_000;
 const SETTLE_MAX_MS = 3_000;
 
@@ -258,8 +258,10 @@ async function claimCapture(
       return { claimId, capture };
     }
     if (!isLeaseOpen(capture, now)) return null;
+    const ownTurn = capture.turnLeadId ? { turnLeadId: null } : {};
     if (hasMore) {
       transaction.update(ref, {
+        ...ownTurn,
         status: 'needsYou',
         claimId: null,
         claimedAt: null,
@@ -269,6 +271,7 @@ async function claimCapture(
     const attempts = claimAttempts(capture.attempts ?? 0);
     if (attempts === null) {
       transaction.update(ref, {
+        ...ownTurn,
         status: 'failed',
         lastErrorCode: 'attemptsSpent',
         claimId: null,
@@ -278,6 +281,7 @@ async function claimCapture(
     }
     const claimId = crypto.randomUUID();
     transaction.update(ref, {
+      ...ownTurn,
       status: 'interpreting',
       attempts,
       heldReason: null,
@@ -539,9 +543,6 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const readJoined = async (): Promise<
     JoinedRead & { messages: JoinedMessage[] }
   > => {
-    if (mode === 'rest') {
-      return { ids: [], joinedCount: 0, messages: [leadMessage] };
-    }
     const lead = (await claimed.captureRef.get()).data() as
       CaptureDoc | undefined;
     const listed = (lead?.joinedCaptureIds ?? []).filter(
@@ -556,7 +557,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const joined = snapshots.filter((snapshot) => {
       const data = snapshot.data() as CaptureDoc | undefined;
       return (
-        data?.turnLeadId === claimed.captureRef.id && data.status === 'received'
+        data?.turnLeadId === claimed.captureRef.id &&
+        (data.status === 'received' ||
+          (mode === 'rest' && data.status === 'sorted'))
       );
     });
     const messages = joined.flatMap((snapshot): JoinedMessage[] => {
@@ -574,7 +577,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : [];
     });
     return {
-      ids: joined.map((snapshot) => snapshot.id),
+      ids: mode === 'rest' ? [] : joined.map((snapshot) => snapshot.id),
       joinedCount: listed.length,
       messages: [leadMessage, ...messages],
     };
@@ -707,7 +710,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     hasMore: reply.hasMore,
     base,
     joinedIds: read.ids,
-    messageCount: read.messages.length,
+    messageCount: mode === 'rest' ? 1 : read.messages.length,
   });
 }
 

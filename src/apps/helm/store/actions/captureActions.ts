@@ -31,7 +31,10 @@ import {
 } from '@apps/helm/store/helmSlice';
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
-import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import {
+  selectAllCaptures,
+  selectExecutionsById,
+} from '@apps/helm/store/selectors/captureSelectors';
 import {
   canMakeTaskAsWritten,
   toTaskTitle,
@@ -224,13 +227,29 @@ export async function retryCapture(
       .filter(([, question]) => question.answeredAt === null)
       .map(([id]) => [`questionState.${id}.answeredAt`, now]),
   );
-  await updateDoc(doc(capturesOf(uid), capture.id), {
+  const joined = selectAllCaptures(store.getState()).filter(
+    (entry) =>
+      entry.turnLeadId === capture.id &&
+      capture.joinedCaptureIds.includes(entry.id) &&
+      entry.status !== 'received',
+  );
+  const batch = writeBatch(db);
+  batch.update(doc(capturesOf(uid), capture.id), {
     status: 'received',
     attempts: 0,
     lastErrorCode: null,
     heldReason: null,
     ...closedQuestions,
   });
+  joined.forEach((entry) =>
+    batch.update(doc(capturesOf(uid), entry.id), {
+      status: 'received',
+      sortedAt: null,
+      claimId: null,
+      claimedAt: null,
+    }),
+  );
+  await batch.commit();
   return sortCapture(capture.id);
 }
 
@@ -241,7 +260,7 @@ export const sortRestOfCapture = (captureId: string) =>
 export const deleteCapture = (uid: string, captureId: string) =>
   deleteDoc(doc(capturesOf(uid), captureId));
 
-/** Makes one task from a held turn's words as written and marks the turn sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
+/** Makes one task from a held turn's words as written (the messages that joined it follow, one per line) and marks the turn and its waiting messages sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
 export async function makeTaskAsWritten(
   uid: string,
   encryption: HelmEncryption,
@@ -255,7 +274,14 @@ export async function makeTaskAsWritten(
   if (!canMakeTaskAsWritten(current, isSorting(capture.id), Date.now())) {
     throw new Error('This turn is being read.');
   }
-  const title = toTaskTitle(current.text);
+  const joined = selectAllCaptures(store.getState()).filter(
+    (entry) =>
+      entry.turnLeadId === current.id &&
+      current.joinedCaptureIds.includes(entry.id),
+  );
+  const title = toTaskTitle(
+    [current, ...joined].map((entry) => entry.text).join('\n'),
+  );
   if (!title) throw new Error('A turn with no words can not become a task.');
   const now = Date.now();
   const task: Task = {
@@ -306,6 +332,15 @@ export async function makeTaskAsWritten(
     seenAt: now,
     ...questionFields(now),
   });
+  const waitingJoined = joined.filter((entry) => entry.status === 'received');
+  waitingJoined.forEach((entry) =>
+    batch.update(doc(capturesOf(uid), entry.id), {
+      status: 'sorted',
+      sortedAt: now,
+      claimId: null,
+      claimedAt: null,
+    }),
+  );
   const write = batch.commit();
   const undo = async () => {
     const task = store
@@ -329,6 +364,12 @@ export async function makeTaskAsWritten(
       seenAt: current.seenAt,
       ...questionFields(null),
     });
+    waitingJoined.forEach((entry) =>
+      reverse.update(doc(capturesOf(uid), entry.id), {
+        status: 'received',
+        sortedAt: null,
+      }),
+    );
     await reverse.commit();
     return true;
   };

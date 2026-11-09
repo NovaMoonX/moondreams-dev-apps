@@ -31,6 +31,8 @@ export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
 
 const ridesWithLead = (capture: OpenCapture, captures: OpenCapture[]) =>
   capture.turnLeadId !== null &&
+  capture.status === 'received' &&
+  capture.executionIds.length === 0 &&
   captures.some(
     (entry) =>
       entry.id === capture.turnLeadId &&
