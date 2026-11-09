@@ -21,6 +21,8 @@ export interface ToolLoopRequest {
   mcpClient: Pick<Client, 'listTools' | 'callTool'>;
   terminalTool: TerminalTool;
   limits: ToolLoopLimits;
+  /** Called with each response's usage as it arrives, so spend is recorded even if the call is cut short. */
+  onUsage?: (usage: ModelUsage) => void | Promise<void>;
 }
 
 export type ToolLoopEnd =

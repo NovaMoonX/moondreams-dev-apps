@@ -5,7 +5,7 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
-import { HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY, OPEN_TASKS_LIMIT } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   DUE_SOON_DAYS,
@@ -43,6 +43,8 @@ function TodayView({ onBack, onHome }: TodayViewProps) {
     [tasks, timeZone, now],
   );
 
+  const isCapped = tasks.length >= OPEN_TASKS_LIMIT;
+
   return (
     <>
       <HelmHeader backLabel='Home' onBack={onBack} onHome={onHome} />
@@ -62,9 +64,11 @@ function TodayView({ onBack, onHome }: TodayViewProps) {
           <section className='space-y-3'>
             <SectionDivider label={HELM_COPY.todayDueSoon} />
             {dueSoon.length === 0 ? (
-              <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
-                {HELM_COPY.nothingDueSoon}
-              </p>
+              !isCapped && (
+                <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+                  {HELM_COPY.nothingDueSoon}
+                </p>
+              )
             ) : (
               <ul className='helm-card divide-border divide-y overflow-hidden'>
                 {dueSoon.map(({ task, due }) => {
@@ -88,6 +92,11 @@ function TodayView({ onBack, onHome }: TodayViewProps) {
                   );
                 })}
               </ul>
+            )}
+            {isCapped && (
+              <p className='text-muted-foreground text-[13px] text-pretty'>
+                {HELM_COPY.openTasksCapped(OPEN_TASKS_LIMIT)}
+              </p>
             )}
           </section>
         )}

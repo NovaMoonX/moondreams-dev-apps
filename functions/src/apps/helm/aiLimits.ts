@@ -20,7 +20,7 @@ interface UsageDoc {
   full?: { day: number; recent: number[] };
 }
 
-/** Counts one call against the person's allowance and the project's day in one transaction; says why when either is spent. */
+/** Counts one call against the person's allowance, after an advisory read of the project's day so concurrent calls never lock on the shared budget; says why when either is spent. */
 export async function reserveAiCall(
   firestore: Firestore,
   uid: string,
@@ -28,17 +28,15 @@ export async function reserveAiCall(
 ): Promise<HeldReason | null> {
   const dayKey = getDayKey(now);
   const usageRef = firestore.doc(usagePath(uid, dayKey));
-  const budgetRef = firestore.doc(budgetPath(dayKey));
+  const budgetSnap = await firestore.doc(budgetPath(dayKey)).get();
+  const spent =
+    (budgetSnap.data()?.hundredthsOfCent as number | undefined) ?? 0;
+  if (spent >= AI_DAILY_BUDGET_CENTS * HUNDREDTHS_PER_CENT) {
+    logger.warn('helm.ai.budgetReached');
+    return 'budgetReached';
+  }
   const held = await firestore.runTransaction(async (transaction) => {
-    const [usageSnap, budgetSnap] = await Promise.all([
-      transaction.get(usageRef),
-      transaction.get(budgetRef),
-    ]);
-    const spent =
-      (budgetSnap.data()?.hundredthsOfCent as number | undefined) ?? 0;
-    if (spent >= AI_DAILY_BUDGET_CENTS * HUNDREDTHS_PER_CENT) {
-      return 'budgetReached' as const;
-    }
+    const usageSnap = await transaction.get(usageRef);
     const usage = (usageSnap.data() as UsageDoc | undefined)?.full ?? {
       day: 0,
       recent: [],
@@ -55,7 +53,6 @@ export async function reserveAiCall(
     });
     return null;
   });
-  if (held === 'budgetReached') logger.warn('helm.ai.budgetReached');
   if (held === 'dailyLimit') logger.info('helm.ai.dailyLimit');
   return held;
 }

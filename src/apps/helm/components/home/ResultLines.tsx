@@ -36,12 +36,12 @@ function AiNotice() {
   // Decided when the line first appears, so it stays while it is read and the profile then changes.
   const [isShown] = useState(hasSeen === false);
   const ref = useRef<HTMLParagraphElement>(null);
-  useOnceVisible(ref, isShown && user !== null, () => {
-    if (user) {
-      markAiNoticeSeen(user.uid).catch((error: unknown) =>
-        console.error('Helm AI notice was not marked seen', error),
-      );
-    }
+  useOnceVisible(ref, isShown && user !== null, async () => {
+    if (!user) return;
+    await markAiNoticeSeen(user.uid).catch((error: unknown) => {
+      console.error('Helm AI notice was not marked seen', error);
+      throw error;
+    });
   });
   if (!isShown) return null;
   return (
@@ -67,49 +67,51 @@ function ResultLines({
   const tasksById = useAppSelector(selectOpenTasksById);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
-  const card = useRef<HTMLUListElement>(null);
+  const card = useRef<HTMLDivElement>(null);
   const lines = buildResultLines(execution, tasksById, timeZone, now);
 
-  useOnceVisible(card, isOnHome && !isSeen && user !== null, () => {
-    if (user) {
-      markCaptureSeen(user.uid, captureId).catch((error: unknown) =>
-        console.error('Helm turn was not marked seen', error),
-      );
-    }
+  useOnceVisible(card, isOnHome && !isSeen && user !== null, async () => {
+    if (!user) return;
+    await markCaptureSeen(user.uid, captureId).catch((error: unknown) => {
+      console.error('Helm turn was not marked seen', error);
+      throw error;
+    });
   });
 
-  if (execution.isUnreadable) {
-    return (
-      <p className='text-muted-foreground pl-[30px] text-[13px]'>
-        {HELM_COPY.unreadable}
-      </p>
-    );
-  }
   return (
-    <>
-      {execution.summary && (
-        <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
+    <div ref={card} className='flex w-full flex-col items-start gap-2'>
+      {execution.isUnreadable ? (
+        <p className='text-muted-foreground pl-[30px] text-[13px]'>
+          {HELM_COPY.unreadable}
+        </p>
+      ) : (
+        <>
+          {execution.summary && (
+            <AssistantLine>{toSentence(execution.summary)}</AssistantLine>
+          )}
+          {lines.length > 0 && (
+            <ul
+              aria-label={HELM_COPY.resultLabel}
+              className='helm-card divide-border ml-[30px] w-[calc(100%-30px)] divide-y overflow-hidden'
+            >
+              {lines.map((line) => (
+                <li key={line.key} className='px-3.5 py-2.5'>
+                  <p className='text-[15px] leading-[21px] break-words'>
+                    {line.title}
+                  </p>
+                  {line.detail && (
+                    <p className='text-muted-foreground text-[13px] break-words'>
+                      {line.detail}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {isOnHome && showsNotice && <AiNotice />}
+        </>
       )}
-      {lines.length > 0 && (
-        <ul
-          ref={card}
-          aria-label={HELM_COPY.resultLabel}
-          className='helm-card divide-border ml-[30px] w-[calc(100%-30px)] divide-y overflow-hidden'
-        >
-          {lines.map((line) => (
-            <li key={line.key} className='px-3.5 py-2.5'>
-              <p className='text-[15px] leading-[21px] break-words'>
-                {line.title}
-              </p>
-              <p className='text-muted-foreground text-[13px] break-words'>
-                {line.detail}
-              </p>
-            </li>
-          ))}
-        </ul>
-      )}
-      {isOnHome && showsNotice && <AiNotice />}
-    </>
+    </div>
   );
 }
 

@@ -1,5 +1,6 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 
+import { useAuth } from '@/hooks/useAuth';
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -8,6 +9,7 @@ import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
 import { HELM_COPY } from '@apps/helm/constants';
 import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
+import { loadExecutionsById } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 
@@ -33,6 +35,8 @@ function TurnCard({
 }: TurnCardProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const executionsById = useAppSelector(selectExecutionsById);
+  const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
+  const { user } = useAuth();
   const isCallOut = useSyncExternalStore(subscribeSorting, () =>
     isSorting(capture.id),
   );
@@ -42,6 +46,18 @@ function TurnCard({
     const execution = executionsById.get(id);
     return execution ? [execution] : [];
   });
+  const missingKey = isSorted
+    ? capture.executionIds.filter((id) => !executionsById.has(id)).join(',')
+    : '';
+  const uid = user?.uid;
+  useEffect(() => {
+    if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
+  }, [uid, missingKey]);
+  const hasCard = isSorted && !capture.isUnreadable && executions.length > 0;
+  const hasLost =
+    isSorted &&
+    !capture.isUnreadable &&
+    missingKey.split(',').some((id) => failedIds.includes(id));
   return (
     <article className='flex flex-col items-end gap-1'>
       {capture.isUnreadable ? (
@@ -59,7 +75,7 @@ function TurnCard({
       >
         {formatTime(capture.createdAt)}
       </time>
-      {showsReading && !capture.isUnreadable && (
+      {showsReading && !capture.isUnreadable && !hasCard && (
         <div className='flex max-w-[84%] justify-end'>
           <ReadChips
             reading={capture.reading}
@@ -74,7 +90,7 @@ function TurnCard({
           <AssistantLine isQuiet>{HELM_COPY.reading}</AssistantLine>
         </div>
       )}
-      {isSorted && !capture.isUnreadable && executions.length > 0 && (
+      {hasCard && (
         <div className='flex w-full flex-col items-start gap-2'>
           {executions.map((execution) => (
             <ResultLines
@@ -87,6 +103,11 @@ function TurnCard({
             />
           ))}
         </div>
+      )}
+      {hasLost && (
+        <p className='text-muted-foreground pl-[30px] text-[13px]'>
+          {HELM_COPY.unreadable}
+        </p>
       )}
       {showsOutcome && !isReading && !isSorted && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>

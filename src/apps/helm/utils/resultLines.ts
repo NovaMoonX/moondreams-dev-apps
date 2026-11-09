@@ -5,7 +5,7 @@ import { formatTaskDue, toTaskDue } from '@apps/helm/utils/taskDue';
 export interface ResultLine {
   key: string;
   title: string;
-  detail: string;
+  detail: string | null;
 }
 
 const toText = (value: unknown) =>
@@ -35,7 +35,7 @@ export function buildResultLines(
       ? HELM_COPY.resultDone
       : due
         ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
-        : HELM_COPY.resultTask;
+        : null;
     return { key: `${ref.docId}:${index}`, title, detail };
   });
 }

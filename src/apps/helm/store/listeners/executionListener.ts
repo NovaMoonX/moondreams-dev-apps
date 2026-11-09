@@ -1,10 +1,12 @@
 import {
   collection,
-  getDocs,
+  doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
   where,
+  type DocumentSnapshot,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -26,10 +28,10 @@ const toError = (error: unknown) =>
 
 /** An execution that won't open is kept, saying nothing, so its turn can say it couldn't be opened. */
 async function openExecution(
-  entry: QueryDocumentSnapshot,
+  entry: DocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenExecution> {
-  const data = entry.data() as Partial<Execution>;
+  const data = (entry.data() ?? {}) as Partial<Execution>;
   const base = {
     id: entry.id,
     captureId: data.captureId ?? null,
@@ -103,21 +105,28 @@ export function startRecentExecutionsListener(
   };
 }
 
-/** The executions made in `[from, before)`, for a page of earlier turns brought in by scrolling up. */
-export async function loadEarlierExecutions(
+/** The executions with these ids, for turns whose execution isn't in the store; an id that is missing or won't be read comes back as failed. */
+export async function fetchExecutionsById(
   uid: string,
   read: SealedReader,
-  from: number,
-  before: number,
+  ids: string[],
 ) {
-  const snapshot = await getDocs(
-    query(
-      executionsOf(uid),
-      where('createdAt', '>=', from),
-      where('createdAt', '<', before),
-      orderBy('createdAt', 'asc'),
+  const results = await Promise.all(
+    ids.map((id) =>
+      getDoc(doc(executionsOf(uid), id)).then(
+        (snapshot) =>
+          snapshot.exists() ? openExecution(snapshot, read) : null,
+        () => null,
+      ),
     ),
   );
-  const result = await openExecutions(snapshot.docs, read);
-  return result;
+  return {
+    opened: results.flatMap((result) =>
+      result && !result.isUnreadable ? [result] : [],
+    ),
+    failedIds: ids.filter(
+      (id) =>
+        !results.some((result) => result?.id === id && !result.isUnreadable),
+    ),
+  };
 }

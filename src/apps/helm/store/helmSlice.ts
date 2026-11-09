@@ -47,6 +47,8 @@ export interface HelmState {
   recentExecutions: LoadedSet<OpenExecution>;
   /** What it did for the earlier sessions scrolled into view. */
   earlierExecutions: OpenExecution[];
+  /** Executions fetched by id that couldn't be opened, so their turns can say so. */
+  failedExecutionIds: string[];
   /** Older sessions, brought in a page at a time as the person scrolls up. */
   earlier: {
     captures: OpenCapture[];
@@ -73,6 +75,7 @@ const initialState: HelmState = {
   openTasks: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
+  failedExecutionIds: [],
   earlier: {
     captures: [],
     isLoading: false,
@@ -144,7 +147,16 @@ const helmSlice = createSlice({
       state.recentExecutions.isFailed = true;
     },
     addEarlierExecutions: (state, action: PayloadAction<OpenExecution[]>) => {
-      state.earlierExecutions = [...state.earlierExecutions, ...action.payload];
+      const known = new Set(state.earlierExecutions.map((entry) => entry.id));
+      state.earlierExecutions = [
+        ...state.earlierExecutions,
+        ...action.payload.filter((entry) => !known.has(entry.id)),
+      ];
+    },
+    addFailedExecutions: (state, action: PayloadAction<string[]>) => {
+      state.failedExecutionIds = [
+        ...new Set([...state.failedExecutionIds, ...action.payload]),
+      ];
     },
     startLoadingEarlier: (state) => {
       state.earlier.isLoading = true;
@@ -183,6 +195,7 @@ export const {
   setRecentExecutions,
   setRecentExecutionsFailed,
   addEarlierExecutions,
+  addFailedExecutions,
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,

@@ -2,11 +2,20 @@ import assert from 'node:assert/strict';
 
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { createAnthropicProvider } from '../../functions/src/ai/providers/anthropic.ts';
-import { getUsageCost } from '../../functions/src/ai/models.ts';
+import {
+  getUsageCost,
+  type ModelUsage,
+} from '../../functions/src/ai/models.ts';
 import {
   openForHelm,
   sealForHelm,
 } from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  claimAttempts,
+  isTransientCode,
+  readStoredResult,
+  settleAttempts,
+} from '../../functions/src/apps/helm/sortAttempts.ts';
 import { createHelmMcpServer } from '../../functions/src/apps/helm/mcp/server.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
@@ -279,6 +288,14 @@ test('summaries are past-tense code templates', () => {
   );
 });
 
+const createIdCounter = () => {
+  const state = { n: 0 };
+  return () => {
+    state.n += 1;
+    return `new-${state.n}`;
+  };
+};
+
 test('the fixture reading goes through the same checks and the same plan', async () => {
   const provider = createFixtureProvider(TEXT, READING);
   const run = await provider.runToolLoop({
@@ -304,8 +321,7 @@ test('the fixture reading goes through the same checks and the same plan', async
           due: null,
           isUrgent: false,
           title: 'Order the rings',
-          notes: null,
-          steps: {},
+          sealed: { title: 'Order the rings', notes: null, steps: {} },
         },
       ],
     ]),
@@ -313,10 +329,7 @@ test('the fixture reading goes through the same checks and the same plan', async
     executionId: 'exec-1',
     now: 5000,
     seal,
-    newId: (() => {
-      let n = 0;
-      return () => `new-${++n}`;
-    })(),
+    newId: createIdCounter(),
   });
   assert.equal(plan.creates.length, 3);
   assert.equal(plan.effectRefs.length, 4);
@@ -379,6 +392,7 @@ test('a loop that hits its limit ends as a failed reading, after one ask', async
     aliases: createAliasBook('t'),
     firestore: fakeFirestore as never,
   });
+  const spent: ModelUsage[] = [];
   const run = await provider.runToolLoop({
     role: 'interpret',
     system: 'system',
@@ -386,14 +400,248 @@ test('a loop that hits its limit ends as a failed reading, after one ask', async
     mcpClient: server.client,
     terminalTool: FILE_RESULTS_TOOL,
     limits: { maxTurns: 3, maxToolCalls: 12, maxMillis: 40_000 },
+    onUsage: (usage) => {
+      spent.push(usage);
+    },
   });
   await server.close();
   assert.equal(run.endedBy, 'limit');
   assert.equal(run.terminalInput, null);
-  assert.equal(calls, 4, 'three turns, then one asked for the terminal tool');
-  assert.deepEqual(asks, [false, false, false, true]);
-  assert.equal(run.usage.inputTokens, 400);
+  assert.equal(calls, 3, 'the ask is one of the three turns');
+  assert.deepEqual(asks, [false, false, true]);
+  assert.equal(run.usage.inputTokens, 300);
+  assert.equal(spent.length, 3, 'usage is reported per turn');
+  assert.equal(
+    spent.reduce((sum, usage) => sum + usage.inputTokens, 0),
+    300,
+  );
   assert.ok(getUsageCost('interpret', run.usage) > 0);
+});
+
+test('a tool result is never cut mid-JSON; a long list loses items and says so', async () => {
+  const longDocs = TASK_IDS.concat(['t3', 't4', 't5', 't6']).map(
+    (id, index) => ({
+      id,
+      data: () => ({
+        status: 'open',
+        due: null,
+        createdAt: 1000 + index,
+        sealed: seal({
+          title: `Order the rings ${'x'.repeat(1500)}`,
+          notes: null,
+          steps: {},
+        }),
+      }),
+    }),
+  );
+  const longFirestore = {
+    collection: () => {
+      const query = {
+        where: () => query,
+        orderBy: () => query,
+        limit: () => query,
+        get: async () => ({ docs: longDocs }),
+      };
+      return query;
+    },
+  };
+  const server = await createHelmMcpServer({
+    uid: UID,
+    key: KEY,
+    aliases: createAliasBook('t'),
+    firestore: longFirestore as never,
+  });
+  const reply = await server.client.callTool({
+    name: 'search_tasks',
+    arguments: { query: 'rings', includeDone: false },
+  });
+  await server.close();
+  const text = (reply.content as { text: string }[])[0].text;
+  const parsed = JSON.parse(text) as { tasks: unknown[]; truncated?: boolean };
+  assert.ok(text.length <= 6_000);
+  assert.equal(parsed.truncated, true);
+  assert.ok(parsed.tasks.length > 0 && parsed.tasks.length < 6);
+  assert.equal(
+    JSON.parse(((await shortReply()).content as { text: string }[])[0].text)
+      .truncated,
+    undefined,
+  );
+});
+
+const shortReply = async () => {
+  const server = await createHelmMcpServer({
+    uid: UID,
+    key: KEY,
+    aliases: createAliasBook('t'),
+    firestore: fakeFirestore as never,
+  });
+  const reply = await server.client.callTool({
+    name: 'search_tasks',
+    arguments: { query: 'rings', includeDone: false },
+  });
+  await server.close();
+  return reply;
+};
+
+test('every task effect carries the title, so a card can name the task', () => {
+  const existing = new Map([
+    [
+      TASK_IDS[0],
+      {
+        status: 'open' as const,
+        due: null,
+        isUrgent: false,
+        title: 'Order the rings',
+        sealed: {
+          title: 'Order the rings',
+          notes: 'gold',
+          steps: {},
+          extra: 1,
+        },
+      },
+    ],
+  ]);
+  const plan = planWrites({
+    commands: [
+      { kind: 'completeTask', taskId: TASK_IDS[0] },
+      {
+        kind: 'updateTask',
+        taskId: TASK_IDS[0],
+        title: null,
+        hasDue: true,
+        due: { kind: 'day', date: FRIDAY },
+        isUrgent: null,
+      },
+    ],
+    existing,
+    captureId: CAPTURE_ID,
+    executionId: 'exec-2',
+    now: 6000,
+    seal,
+    newId: createIdCounter(),
+  });
+  assert.equal(plan.effects.length, 2);
+  plan.effects.forEach(({ written, previous }) => {
+    assert.equal(written['sealed.title'], 'Order the rings');
+    assert.equal(previous?.['sealed.title'], 'Order the rings');
+  });
+  const renamed = planWrites({
+    commands: [
+      {
+        kind: 'updateTask',
+        taskId: TASK_IDS[0],
+        title: 'Order the gold rings',
+        hasDue: false,
+        due: null,
+        isUrgent: null,
+      },
+    ],
+    existing,
+    captureId: CAPTURE_ID,
+    executionId: 'exec-3',
+    now: 6000,
+    seal,
+    newId: createIdCounter(),
+  });
+  assert.equal(
+    renamed.effects[0].written['sealed.title'],
+    'Order the gold rings',
+  );
+  assert.equal(
+    renamed.effects[0].previous?.['sealed.title'],
+    'Order the rings',
+  );
+  const resealed = openForHelm(
+    KEY,
+    renamed.updates[0].data.sealed as SealedPayload,
+  );
+  assert.equal(resealed.title, 'Order the gold rings');
+  assert.equal(resealed.extra, 1, 'other sealed keys survive a rename');
+});
+
+test('a loop stays inside its turns and its time, and the ask counts as a turn', async () => {
+  const fakeClient = (counter: { calls: number; timeouts: number[] }) => ({
+    beta: {
+      messages: {
+        create: async (_params: unknown, options: { timeout: number }) => {
+          counter.calls += 1;
+          counter.timeouts.push(options.timeout);
+          return {
+            stop_reason: 'end_turn',
+            content: [{ type: 'text', text: 'thinking' }],
+            usage: { input_tokens: 1, output_tokens: 1 },
+          };
+        },
+      },
+    },
+  });
+  const mcpClient = {
+    listTools: async () => ({ tools: [] }),
+    callTool: async () => ({ content: [] }),
+  } as never;
+  const counter = { calls: 0, timeouts: [] as number[] };
+  const run = await createAnthropicProvider(
+    'test',
+    fakeClient(counter) as never,
+  ).runToolLoop({
+    role: 'interpret',
+    system: 's',
+    messages: [{ role: 'user', content: 'hi' }],
+    mcpClient,
+    terminalTool: FILE_RESULTS_TOOL,
+    limits: { maxTurns: 2, maxToolCalls: 12, maxMillis: 5_000 },
+  });
+  assert.equal(counter.calls, 2, 'never more than maxTurns requests');
+  assert.equal(run.endedBy, 'limit');
+  assert.ok(counter.timeouts.every((ms) => ms <= 5_000));
+
+  const none = { calls: 0, timeouts: [] as number[] };
+  const spentTime = await createAnthropicProvider(
+    'test',
+    fakeClient(none) as never,
+  ).runToolLoop({
+    role: 'interpret',
+    system: 's',
+    messages: [{ role: 'user', content: 'hi' }],
+    mcpClient,
+    terminalTool: FILE_RESULTS_TOOL,
+    limits: { maxTurns: 6, maxToolCalls: 12, maxMillis: 0 },
+  });
+  assert.equal(none.calls, 0, 'no request once the time is spent');
+  assert.equal(spentTime.endedBy, 'limit');
+});
+
+test('an attempt is counted at the claim and given back for a busy or missing service', () => {
+  assert.equal(claimAttempts(0), 1);
+  assert.equal(claimAttempts(2), 3);
+  assert.equal(claimAttempts(3), null, 'a spent capture is not read again');
+  ['timeout', 'network', 'http429', 'http500', 'http529'].forEach((code) =>
+    assert.equal(isTransientCode(code), true, code),
+  );
+  ['http400', 'modelError', 'badShape', 'noTerminal', 'limit'].forEach((code) =>
+    assert.equal(isTransientCode(code), false, code),
+  );
+  assert.deepEqual(settleAttempts(1, true), {
+    attempts: 1,
+    status: 'received',
+  });
+  assert.deepEqual(settleAttempts(3, true), { attempts: 3, status: 'failed' });
+  assert.deepEqual(settleAttempts(3, false), {
+    attempts: 2,
+    status: 'received',
+  });
+  assert.deepEqual(settleAttempts(0, false), {
+    attempts: 0,
+    status: 'received',
+  });
+});
+
+test('a stored answer is returned only to the capture it was made for', () => {
+  const stored = { captureId: 'a', result: { status: 'sorted' } };
+  assert.deepEqual(readStoredResult(stored, 'a'), { status: 'sorted' });
+  assert.equal(readStoredResult(stored, 'b'), null);
+  assert.equal(readStoredResult({ result: { status: 'sorted' } }, 'a'), null);
+  assert.equal(readStoredResult(undefined, 'a'), null);
 });
 
 test('a refusal ends the loop as refused', async () => {

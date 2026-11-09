@@ -17,11 +17,13 @@ import { openJson, sealJson } from '@apps/helm/security';
 import {
   addEarlierCaptures,
   addEarlierExecutions,
+  addFailedExecutions,
   setEarlierFailed,
   startLoadingEarlier,
 } from '@apps/helm/store/helmSlice';
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
-import { loadEarlierExecutions } from '@apps/helm/store/listeners/executionListener';
+import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
+import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -31,8 +33,7 @@ import type {
 } from '@apps/helm/types';
 
 const BATCH_LIMIT = 400;
-/** An execution is made seconds after its turn, so a page's window reaches a little past its newest turn. */
-const EXECUTION_LAG_MS = 5 * 60 * 1000;
+const executionsInFlight = new Set<string>();
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -87,6 +88,36 @@ export async function sendCapture(
   return { write };
 }
 
+/** Fetches the executions of sorted turns that aren't in the store, once each; one that can't be opened is recorded so its turn says so. Reads the store at the call and stops if another person's Helm is open. */
+export async function loadExecutionsById(uid: string, ids: string[]) {
+  const { helm } = store.getState();
+  if (helm.uid !== uid) return;
+  const known = selectExecutionsById(store.getState());
+  const wanted = ids.filter(
+    (id) =>
+      !known.has(id) &&
+      !executionsInFlight.has(id) &&
+      !helm.failedExecutionIds.includes(id),
+  );
+  if (wanted.length === 0) return;
+  wanted.forEach((id) => executionsInFlight.add(id));
+  try {
+    const encryption = await getHelmEncryption(uid);
+    const read = createSealedReader(encryption, openJson);
+    const { opened, failedIds } = await fetchExecutionsById(uid, read, wanted);
+    if (store.getState().helm.uid !== uid) return;
+    store.dispatch(addEarlierExecutions(opened));
+    store.dispatch(addFailedExecutions(failedIds));
+  } catch (error) {
+    console.error('Helm activity did not load', error);
+    if (store.getState().helm.uid === uid) {
+      store.dispatch(addFailedExecutions(wanted));
+    }
+  } finally {
+    wanted.forEach((id) => executionsInFlight.delete(id));
+  }
+}
+
 /** Brings in the next page of earlier sessions, once at a time; reads the store at the call, and stops if another person's Helm is open. */
 export async function loadEarlierSessions(uid: string) {
   const { helm } = store.getState();
@@ -102,22 +133,12 @@ export async function loadEarlierSessions(uid: string) {
     const encryption = await getHelmEncryption(uid);
     const read = createSealedReader(encryption, openJson);
     const page = await loadEarlierCaptures(uid, read, before);
-    const from = Math.min(...page.captures.map((capture) => capture.createdAt));
-    // What the page's turns did is brought with them; a failure here leaves the turns, which then show only their words.
-    const executions =
-      page.captures.length > 0
-        ? await loadEarlierExecutions(
-            uid,
-            read,
-            from,
-            before + EXECUTION_LAG_MS,
-          ).catch((error: unknown) => {
-            console.error('Helm earlier activity did not load', error);
-            return [];
-          })
-        : [];
+    // What the page's turns did is brought with them; one that can't be opened is marked, so its turn says so.
+    await loadExecutionsById(
+      uid,
+      page.captures.flatMap((capture) => capture.executionIds),
+    );
     if (store.getState().helm.uid !== uid) return;
-    store.dispatch(addEarlierExecutions(executions));
     store.dispatch(addEarlierCaptures(page));
   } catch (error) {
     console.error('Helm earlier turns did not load', error);

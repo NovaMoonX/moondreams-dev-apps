@@ -22,6 +22,12 @@ import {
   type HelmKey,
 } from './helmKey.js';
 import { recordAiSpend, reserveAiCall } from './aiLimits.js';
+import {
+  claimAttempts,
+  isTransientCode,
+  readStoredResult,
+  settleAttempts,
+} from './sortAttempts.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import { buildContext, type ContextTask } from './nomos/buildContext.js';
 import {
@@ -51,7 +57,6 @@ if (getApps().length === 0) {
 export const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const LEASE_MS = 90_000;
-const MAX_ATTEMPTS = 3;
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 
@@ -93,6 +98,9 @@ class SortFailure extends Error {
     super(code);
   }
 }
+
+const toFailure = (code: string) =>
+  new SortFailure(code, !isTransientCode(code));
 
 const isLeaseOpen = (capture: CaptureDoc, now: number) =>
   capture.status === 'received' ||
@@ -142,8 +150,7 @@ const openTitle = (key: HelmKey, sealed: SealedPayload) => {
     const opened = openForHelm(key, sealed);
     return {
       title: typeof opened.title === 'string' ? opened.title : null,
-      notes: typeof opened.notes === 'string' ? opened.notes : null,
-      steps: (opened.steps ?? {}) as Record<string, { text: string }>,
+      sealed: opened as Record<string, unknown>,
     };
   } catch {
     return null;
@@ -159,9 +166,20 @@ async function claimCapture(
     const snapshot = await transaction.get(ref);
     const capture = snapshot.data() as CaptureDoc | undefined;
     if (!capture || !isLeaseOpen(capture, now)) return null;
+    const attempts = claimAttempts(capture.attempts ?? 0);
+    if (attempts === null) {
+      transaction.update(ref, {
+        status: 'failed',
+        lastErrorCode: 'attemptsSpent',
+        claimId: null,
+        claimedAt: null,
+      });
+      return 'failed' as const;
+    }
     const claimId = crypto.randomUUID();
     transaction.update(ref, {
       status: 'interpreting',
+      attempts,
       claimId,
       claimedAt: now,
     });
@@ -174,19 +192,23 @@ async function failClaim(
   ref: DocumentReference,
   claimId: string,
   failure: SortFailure,
+  extra: Record<string, unknown> = {},
 ): Promise<SortResult> {
   return firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const capture = snapshot.data() as CaptureDoc | undefined;
     if (!capture || capture.claimId !== claimId) return toResult('received');
-    const attempts = (capture.attempts ?? 0) + (failure.countsAttempt ? 1 : 0);
-    const status = attempts >= MAX_ATTEMPTS ? 'failed' : 'received';
+    const { attempts, status } = settleAttempts(
+      capture.attempts ?? 0,
+      failure.countsAttempt,
+    );
     transaction.update(ref, {
       status,
       attempts,
       lastErrorCode: failure.code,
       claimId: null,
       claimedAt: null,
+      ...extra,
     });
     return toResult(status);
   });
@@ -225,9 +247,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
-    return words?.title
-      ? [{ id: doc.id, title: words.title, due: (doc.data() as TaskDoc).due }]
-      : [];
+    if (!words?.title) {
+      logger.warn('helm.sort.taskUnreadable', { taskId: doc.id });
+      return [];
+    }
+    return [
+      { id: doc.id, title: words.title, due: (doc.data() as TaskDoc).due },
+    ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
   const context = buildContext({
@@ -239,6 +265,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
 
   const provider = pickProvider(text, reading);
+  const held = await reserveAiCall(firestore, uid, Date.now());
+  if (held) {
+    await failClaim(
+      firestore,
+      claimed.captureRef,
+      claimed.claimId,
+      new SortFailure('held', false),
+      { heldReason: held, lastErrorCode: null },
+    );
+    throw new HttpsError(
+      'resource-exhausted',
+      'This will be sorted a little later.',
+    );
+  }
   const mcp = await createHelmMcpServer({
     uid,
     key,
@@ -253,11 +293,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mcpClient: mcp.client,
       terminalTool: FILE_RESULTS_TOOL,
       limits: LOOP_LIMITS,
+      onUsage: async (usage) => {
+        const cost = getUsageCost('interpret', usage);
+        if (cost <= 0) return;
+        await recordAiSpend(firestore, Date.now(), cost).catch(() =>
+          logger.error('helm.ai.spendNotRecorded'),
+        );
+      },
     })
     .finally(() => mcp.close().catch(() => undefined));
 
-  const cost = getUsageCost('interpret', loop.usage);
-  if (cost > 0) await recordAiSpend(firestore, Date.now(), cost);
   logger.info('helm.ai.call', {
     role: 'interpret',
     endedBy: loop.endedBy,
@@ -266,7 +311,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ...loop.usage,
   });
   if (loop.endedBy !== 'terminal') {
-    throw new SortFailure(
+    throw toFailure(
       loop.endedBy === 'error'
         ? (loop.errorCode ?? 'modelError')
         : loop.endedBy,
@@ -304,7 +349,11 @@ async function writeResult(
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
     ]);
-    if (requestSnap.exists) return requestSnap.data()?.result as SortResult;
+    const answered = readStoredResult<SortResult>(
+      requestSnap.data(),
+      captureRef.id,
+    );
+    if (answered) return answered;
     const capture = captureSnap.data() as CaptureDoc | undefined;
     if (
       !capture ||
@@ -316,22 +365,24 @@ async function writeResult(
     const existing = new Map<string, ExistingTask>(
       targetSnaps.flatMap((snapshot): [string, ExistingTask][] => {
         const task = snapshot.data() as TaskDoc | undefined;
-        const words = task ? openTitle(key, task.sealed) : null;
-        return task && words?.title
-          ? [
-              [
-                snapshot.id,
-                {
-                  status: task.status,
-                  due: task.due,
-                  isUrgent: task.isUrgent,
-                  title: words.title,
-                  notes: words.notes,
-                  steps: words.steps,
-                },
-              ],
-            ]
-          : [];
+        if (!task) return [];
+        const words = openTitle(key, task.sealed);
+        if (!words?.title) {
+          logger.warn('helm.sort.taskUnreadable', { taskId: snapshot.id });
+          return [];
+        }
+        return [
+          [
+            snapshot.id,
+            {
+              status: task.status,
+              due: task.due,
+              isUrgent: task.isUrgent,
+              title: words.title,
+              sealed: words.sealed,
+            },
+          ],
+        ];
       }),
     );
     const now = Date.now();
@@ -370,7 +421,11 @@ async function writeResult(
       seenAt: null,
     });
     const sorted = toResult('sorted', executionRef.id);
-    transaction.create(requestRef, { result: sorted, createdAt: now });
+    transaction.set(requestRef, {
+      result: sorted,
+      captureId: captureRef.id,
+      createdAt: now,
+    });
     logger.info('helm.sort.done', {
       commands: commands.length,
       effects: plan.effects.length,
@@ -429,26 +484,17 @@ export const sortHelmCapture = onCall(
       requestRef.get(),
       captureRef.get(),
     ]);
-    if (stored.exists) return stored.data()?.result as SortResult;
+    const answered = readStoredResult<SortResult>(stored.data(), captureId);
+    if (answered) return answered;
     const early = snapshot.data() as CaptureDoc | undefined;
     if (!early) throw new HttpsError('not-found', 'This capture is gone.');
     const answer = readEarlyAnswer(early, Date.now());
     if (answer) return answer;
 
-    const held = await reserveAiCall(firestore, uid, Date.now());
-    if (held) {
-      if (early.status === 'received') {
-        await captureRef.update({ heldReason: held });
-      }
-      throw new HttpsError(
-        'resource-exhausted',
-        'Helm will sort this a little later.',
-      );
-    }
-
     const keyring = loadKeyringOrFail();
     const claim = await claimCapture(firestore, captureRef, Date.now());
     if (!claim) return toResult('received');
+    if (claim === 'failed') return toResult('failed');
 
     return sortClaimed({
       firestore,
@@ -458,6 +504,7 @@ export const sortHelmCapture = onCall(
       requestRef,
       ...claim,
     }).catch((error: unknown) => {
+      if (error instanceof HttpsError) throw error;
       const failure =
         error instanceof SortFailure
           ? error

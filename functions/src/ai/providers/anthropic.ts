@@ -15,7 +15,7 @@ import {
 type Message = Anthropic.Beta.Messages.BetaMessageParam;
 type Block = Anthropic.Beta.Messages.BetaContentBlockParam;
 
-const TURN_TIMEOUT_MS = 25_000;
+const TURN_TIMEOUT_MS = 15_000;
 const MAX_OUTPUT_TOKENS = 8_000;
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
@@ -44,7 +44,7 @@ const toText = (content: unknown): string => {
 /** The Anthropic API with `tool_choice` auto: the models used here refuse a forced tool, so the loop asks for the terminal tool in words when a turn ends without it. */
 export function createAnthropicProvider(
   apiKey: string,
-  client: Pick<Anthropic, 'beta'> = new Anthropic({ apiKey, maxRetries: 1 }),
+  client: Pick<Anthropic, 'beta'> = new Anthropic({ apiKey, maxRetries: 0 }),
 ): ModelProvider {
   async function runToolLoop({
     role,
@@ -53,6 +53,7 @@ export function createAnthropicProvider(
     mcpClient,
     terminalTool,
     limits,
+    onUsage,
   }: ToolLoopRequest): Promise<ToolLoopResult> {
     const spec = getModelSpec(role);
     const startedAt = Date.now();
@@ -63,10 +64,11 @@ export function createAnthropicProvider(
     }));
     const ask = `Call ${terminalTool.name} now with what you have.`;
     const state = { usage: EMPTY_USAGE, turns: 0, asked: false };
+    const timeLeft = () => limits.maxMillis - (Date.now() - startedAt);
     const isOver = () =>
       state.turns >= limits.maxTurns ||
       toolCalls.length >= limits.maxToolCalls ||
-      Date.now() - startedAt >= limits.maxMillis;
+      timeLeft() <= 0;
     const end = (
       endedBy: ToolLoopResult['endedBy'],
       terminalInput: unknown = null,
@@ -108,6 +110,9 @@ export function createAnthropicProvider(
       ];
 
       for (;;) {
+        if (state.turns >= limits.maxTurns || timeLeft() <= 0) {
+          return end('limit');
+        }
         const response = await client.beta.messages.create(
           {
             model: spec.id,
@@ -120,10 +125,12 @@ export function createAnthropicProvider(
             betas: [FALLBACK_BETA],
             fallbacks: 'default',
           },
-          { timeout: TURN_TIMEOUT_MS },
+          { timeout: Math.min(TURN_TIMEOUT_MS, timeLeft()) },
         );
         state.turns += 1;
-        state.usage = addUsage(state.usage, toUsage(response.usage));
+        const turnUsage = toUsage(response.usage);
+        state.usage = addUsage(state.usage, turnUsage);
+        await Promise.resolve(onUsage?.(turnUsage)).catch(() => undefined);
 
         if (response.stop_reason === 'refusal') return end('refused');
         if (response.stop_reason === 'max_tokens') {
@@ -142,6 +149,10 @@ export function createAnthropicProvider(
         if (terminalUse) return end('terminal', terminalUse.input);
 
         if (state.asked) return end(isOver() ? 'limit' : 'noTerminal');
+
+        if (state.turns >= limits.maxTurns || timeLeft() <= 0) {
+          return end('limit');
+        }
 
         const results: Block[] = [];
         for (const use of uses) {
@@ -167,7 +178,11 @@ export function createAnthropicProvider(
           });
         }
 
-        if (uses.length === 0 || isOver()) {
+        if (
+          uses.length === 0 ||
+          isOver() ||
+          state.turns + 1 >= limits.maxTurns
+        ) {
           state.asked = true;
           results.push({ type: 'text', text: ask });
         }

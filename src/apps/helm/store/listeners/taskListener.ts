@@ -12,9 +12,8 @@ import {
 import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
+import { OPEN_TASKS_LIMIT } from '@apps/helm/constants';
 import type { OpenTask, Task, TaskSealed } from '@apps/helm/types';
-
-const OPEN_TASKS_LIMIT = 150;
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your tasks did not open.');

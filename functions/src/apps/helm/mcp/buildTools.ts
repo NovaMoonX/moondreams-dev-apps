@@ -41,7 +41,7 @@ const searchTasksShape = {
     .describe('true to also search tasks already marked done.'),
 };
 
-/** The tools Helm's server offers; every path is built from the scope's uid and every record leaves as an alias. */
+/** The tools the server offers a model; every path is built from the scope's uid and every record leaves as an alias. */
 export function buildHelmTools(scope: HelmToolScope) {
   const searchTasks: HelmTool<typeof searchTasksShape> = {
     name: 'search_tasks',

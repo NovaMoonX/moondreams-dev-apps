@@ -8,8 +8,7 @@ export interface ExistingTask {
   due: TaskDue | null;
   isUrgent: boolean;
   title: string;
-  notes: string | null;
-  steps: Record<string, { text: string }>;
+  sealed: Record<string, unknown>;
 }
 
 interface EffectRef {
@@ -107,8 +106,8 @@ export function planWrites(input: PlanInput): WritePlan {
       record(
         id,
         'update',
-        { status: 'done', completedAt: now },
-        { status: 'open', completedAt: null },
+        { 'sealed.title': current.title, status: 'done', completedAt: now },
+        { 'sealed.title': current.title, status: 'open', completedAt: null },
       );
       patch(id, { status: 'done', completedAt: now, lastEditedAt: now });
       working.set(id, { ...current, status: 'done' });
@@ -128,19 +127,19 @@ export function planWrites(input: PlanInput): WritePlan {
         : null;
     if (title === null && due === undefined && isUrgent === null) return;
     const written: Record<string, unknown> = {
-      ...(title !== null && { 'sealed.title': title }),
+      'sealed.title': title ?? current.title,
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
     };
     const previous: Record<string, unknown> = {
-      ...(title !== null && { 'sealed.title': current.title }),
+      'sealed.title': current.title,
       ...(due !== undefined && { due: current.due }),
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
     };
     record(id, 'update', written, previous);
     patch(id, {
       ...(title !== null && {
-        sealed: seal({ title, notes: current.notes, steps: current.steps }),
+        sealed: seal({ ...current.sealed, title }),
       }),
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),

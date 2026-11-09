@@ -14,6 +14,9 @@ export const SESSION_IDLE_MS = 10 * 60 * 1000;
 export const CAPTURE_MAX_CHARS = 4_000;
 
 /** How many earlier sessions each scroll up brings in. */
+/** The most open tasks the app keeps listening to. */
+export const OPEN_TASKS_LIMIT = 150;
+
 export const EARLIER_SESSIONS_PAGE = 20;
 
 /** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
@@ -30,14 +33,15 @@ export const HELM_COPY = {
   savedAsWritten: 'Saved as written',
   reading: 'Reading…',
   resultLabel: 'What was done',
-  resultTask: 'Task',
   resultTaskDue: (due: string) => `Task · ${due}`,
   resultDone: 'Marked done',
   resultTaskFallback: 'A task',
   aiNotice: (name: string) =>
     `${name} uses AI services to hear and read what you say.`,
   todayDueSoon: 'Due soon',
-  nothingDueSoon: 'Nothing is due soon.',
+  nothingDueSoon:
+    'Nothing is due this week. Tasks without a day are kept for later.',
+  openTasksCapped: (count: number) => `Showing your newest ${count} tasks.`,
   tasksFailed: "Your tasks didn't open. Close this page and open it again.",
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
