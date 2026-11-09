@@ -7,6 +7,10 @@ const COPY_FILE = 'src/apps/helm/constants.ts';
 const DEFAULT_NAME = 'Nomos';
 const QUOTED_APP_NAME = /['"`>][^'"`<]*\bHelm\b/;
 
+// Line-based: a comment is ignored, and a template literal's continuation line is checked only when it is quoted.
+const withoutComment = (line: string) =>
+  /^\s*(\*|\/\*)/.test(line) ? '' : line.replace(/\s\/\/.*$/, '');
+
 const listFiles = (directory: string): string[] =>
   readdirSync(directory).flatMap((entry) => {
     const path = join(directory, entry);
@@ -32,7 +36,8 @@ const problems = [
     .filter((path) => /\.(ts|tsx)$/.test(path))
     .flatMap(readLines),
   ...copyLines(),
-].flatMap(({ path, line, number }) => {
+].flatMap(({ path, line: rawLine, number }) => {
+  const line = withoutComment(rawLine);
   if (line.includes(DEFAULT_NAME))
     return [
       `${path}:${number} names "${DEFAULT_NAME}"; use useAssistantName() and a template in constants.ts`,

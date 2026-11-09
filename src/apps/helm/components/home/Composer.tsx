@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import { useEffect, useRef, type Ref } from 'react';
 
 import { Textarea } from '@moondreamsdev/dreamer-ui/components';
 
@@ -14,6 +14,16 @@ interface ComposerProps {
 /** The text field at the foot of home's conversation. It has no Send until a turn can be kept. */
 function Composer({ fieldRef, onFocusChange }: ComposerProps) {
   const name = useAssistantName();
+  const stopKeepingInView = useRef<(() => void) | null>(null);
+
+  // A field removed while focused gets no blur, so leaving home mid-typing must hand the dock back too.
+  useEffect(
+    () => () => {
+      stopKeepingInView.current?.();
+      onFocusChange(false);
+    },
+    [onFocusChange],
+  );
 
   return (
     <Textarea
@@ -28,15 +38,16 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
         // The keyboard shrinks the viewport after focus lands, so the field is brought back into view each time it does.
         const field = event.currentTarget;
         const keepInView = () => field.scrollIntoView({ block: 'nearest' });
+        stopKeepingInView.current?.();
         window.visualViewport?.addEventListener('resize', keepInView);
-        field.addEventListener(
-          'blur',
-          () =>
-            window.visualViewport?.removeEventListener('resize', keepInView),
-          { once: true },
-        );
+        stopKeepingInView.current = () =>
+          window.visualViewport?.removeEventListener('resize', keepInView);
       }}
-      onBlur={() => onFocusChange(false)}
+      onBlur={() => {
+        stopKeepingInView.current?.();
+        stopKeepingInView.current = null;
+        onFocusChange(false);
+      }}
     />
   );
 }

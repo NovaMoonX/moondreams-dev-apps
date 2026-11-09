@@ -64,6 +64,7 @@ src/
 - Avoid calling `setState` synchronously inside effects or render just to mirror props or derive values from current data.
 - Prefer deriving values directly during render, or move the update into an event handler or computed value.
 - Keep effects focused on async subscriptions or fetching rather than mirroring prop-driven state.
+- State a parent keeps because a child's field has focus (a dock hidden while typing), and any listener the focus attached, is also undone in the child's unmount cleanup: a field removed while focused gets no `blur` (technical review, Helm's dock stayed hidden after Back from mid-typing).
 
 ```tsx
 // ❌ Bad: setting state in render or effect to follow prop-driven data
