@@ -51,8 +51,9 @@ export async function undoExecution(
           return { kind: 'refused', reason: 'missing', report: null };
         }
         const original = await openExecution(snapshot, read);
-        const refs = original.effectRefs.slice(0, 40);
-        const docIds = [...new Set(refs.map((ref) => ref.docId))];
+        const docIds = [
+          ...new Set(original.effectRefs.map((ref) => ref.docId)),
+        ];
         const targets = new Map<string, UndoTarget>(
           await Promise.all(
             docIds.map(async (docId): Promise<[string, UndoTarget]> => {

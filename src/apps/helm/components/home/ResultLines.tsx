@@ -94,7 +94,7 @@ function ResultLines({
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>
               <ResultRows execution={execution} lines={lines} undo={undo} />
               {hasFoot && (
-                <div className='border-border flex items-center justify-between gap-3 border-t px-3.5 py-2'>
+                <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>
                   {isUndone ? (
                     <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
                       {undo?.undoReport ?? HELM_COPY.takenBackLabel}
@@ -105,12 +105,14 @@ function ResultLines({
                       lineCount={lines.length}
                     />
                   )}
-                  <time
-                    dateTime={new Date(execution.createdAt).toISOString()}
-                    className='text-muted-foreground shrink-0 text-[13px] tabular-nums'
-                  >
-                    {formatTime(execution.createdAt)}
-                  </time>
+                  {!isUndone && (
+                    <time
+                      dateTime={new Date(execution.createdAt).toISOString()}
+                      className='text-muted-foreground shrink-0 text-[13px] tabular-nums'
+                    >
+                      {formatTime(execution.createdAt)}
+                    </time>
+                  )}
                 </div>
               )}
             </div>

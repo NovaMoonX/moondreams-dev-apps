@@ -41,6 +41,7 @@ export type UndoPlan =
       takenBack: string[];
       kept: string[];
       gone: number;
+      goneIds: string[];
       report: string;
     }
   | {
@@ -53,6 +54,9 @@ export type UndoPlan =
 type Values = Record<string, unknown>;
 
 const SEALED_PREFIX = 'sealed.';
+
+/** An undo reads every record in one transaction, and no execution makes more effects than this. */
+const MAX_EFFECTS = 40;
 
 const isSame = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -118,6 +122,9 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   const own = Object.keys(written).filter(
     (path) => !isSame(written[path], previous[path]),
   );
+  if (own.some((path) => previous[path] === undefined)) {
+    return { ...step, isKept: true };
+  }
   const isMatch = own.every((path) =>
     path.startsWith(SEALED_PREFIX)
       ? step.opened !== null &&
@@ -191,7 +198,7 @@ const planRecord = (
     });
   if (updated.isKept) return { kind: 'kept', title };
   if (create) {
-    // The execution's own later effects stamp the record with its time, which is not an edit since.
+    // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
       target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt;
     return isUntouched
@@ -233,7 +240,7 @@ const groupByDoc = (original: OpenExecution) =>
     new Map(),
   );
 
-/** Works out what taking an execution back would write, from the records as they are now; pure, so the same plan serves the device and the check. */
+/** Works out what taking an execution back would write, from the records as they are now. */
 export function planUndo(input: {
   original: OpenExecution;
   targets: Map<string, UndoTarget>;
@@ -251,6 +258,7 @@ export function planUndo(input: {
   }
   if (
     original.isUnreadable ||
+    original.effectRefs.length > MAX_EFFECTS ||
     original.effects.length !== original.effectRefs.length ||
     original.effectRefs.some((ref) => ref.collection !== 'tasks')
   ) {
@@ -269,7 +277,10 @@ export function planUndo(input: {
   const kept = outcomes.flatMap(({ outcome }) =>
     outcome.kind === 'kept' ? [outcome.title] : [],
   );
-  const gone = outcomes.filter(({ outcome }) => outcome.kind === 'gone').length;
+  const goneIds = outcomes.flatMap(({ docId, outcome }) =>
+    outcome.kind === 'gone' ? [docId] : [],
+  );
+  const gone = goneIds.length;
   const done = outcomes.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted' || outcome.kind === 'restored'
       ? [{ docId, outcome }]
@@ -283,7 +294,7 @@ export function planUndo(input: {
     );
   }
 
-  const report = HELM_COPY.undoReport(done.length, kept, gone);
+  const report = HELM_COPY.undoReport(done.length, kept.length, gone);
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted' ? [docId] : [],
   );
@@ -316,14 +327,19 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: HELM_COPY.tookBack(done.length),
+      summary:
+        kept.length + gone > 0
+          ? HELM_COPY.tookBackKept(done.length, kept.length + gone)
+          : HELM_COPY.tookBack(done.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
+      goneIds,
     },
     takenBack: done.map(({ outcome }) => outcome.title),
     kept,
     gone,
+    goneIds,
     report,
   };
 }

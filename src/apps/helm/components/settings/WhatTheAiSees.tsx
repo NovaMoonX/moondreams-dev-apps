@@ -11,7 +11,15 @@ interface WhatTheAiSeesProps {
   onClose: () => void;
 }
 
-function Block({ icon, children }: { icon: ReactNode; children: string }) {
+function Block({
+  icon,
+  lead,
+  children,
+}: {
+  icon: ReactNode;
+  lead: string;
+  children: string;
+}) {
   return (
     <li className='flex items-start gap-3'>
       <span
@@ -20,7 +28,12 @@ function Block({ icon, children }: { icon: ReactNode; children: string }) {
       >
         {icon}
       </span>
-      <p className='min-w-0 flex-1 pt-2 text-[15px] text-pretty'>{children}</p>
+      <div className='min-w-0 flex-1 text-pretty'>
+        <p className='text-[15px] leading-[21px] font-medium'>{lead}</p>
+        <p className='text-muted-foreground text-[15px] leading-[21px]'>
+          {children}
+        </p>
+      </div>
     </li>
   );
 }
@@ -35,16 +48,28 @@ function WhatTheAiSees({ isOpen, onClose }: WhatTheAiSeesProps) {
       title={HELM_COPY.whatTheAiSees}
     >
       <ul className='space-y-4'>
-        <Block icon={<Send className='size-4' />}>
+        <Block
+          icon={<Send className='size-4' />}
+          lead={HELM_COPY.aiSeesSentLead}
+        >
           {HELM_COPY.aiSeesSent(name)}
         </Block>
-        <Block icon={<Server className='size-4' />}>
+        <Block
+          icon={<Server className='size-4' />}
+          lead={HELM_COPY.aiSeesWhereLead}
+        >
           {HELM_COPY.aiSeesWhere(name)}
         </Block>
-        <Block icon={<Lock className='size-4' />}>
+        <Block
+          icon={<Lock className='size-4' />}
+          lead={HELM_COPY.aiSeesStoredLead}
+        >
           {HELM_COPY.aiSeesStored}
         </Block>
-        <Block icon={<History className='size-4' />}>
+        <Block
+          icon={<History className='size-4' />}
+          lead={HELM_COPY.aiSeesKeptLead}
+        >
           {HELM_COPY.aiSeesKept}
         </Block>
       </ul>

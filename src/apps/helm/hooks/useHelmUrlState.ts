@@ -13,17 +13,20 @@ const URL_VIEWS = [
 ] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
+const FROM = 'helmFrom';
 const LOAD_ID = generateUuid();
 
 /** A view or sheet reached from home by an entry of its own, so Back can pop to home. */
-const markStep = () => {
+const markStep = (from: HelmView) => {
   window.history.replaceState(
-    { ...window.history.state, [MARKER]: LOAD_ID },
+    { ...window.history.state, [MARKER]: LOAD_ID, [FROM]: from },
     '',
   );
 };
 // An entry marked before a reload has no home entry of this load beneath it to pop to.
 const isStep = () => window.history.state?.[MARKER] === LOAD_ID;
+const isStepFrom = (view: HelmView) =>
+  isStep() && window.history.state?.[FROM] === view;
 const clearStep = () => {
   window.history.replaceState({ ...window.history.state, [MARKER]: null }, '');
 };
@@ -41,7 +44,7 @@ export function useHelmUrlState() {
 
   const openBrowse = async () => {
     await setUrl({ browse: true }, { history: 'push' });
-    markStep();
+    markStep('home');
   };
 
   const closeBrowse = () => {
@@ -61,11 +64,11 @@ export function useHelmUrlState() {
     }
     if (isBrowseOpen) {
       await setUrl({ view: next, browse: null }, { history: 'replace' });
-      markStep();
+      markStep('home');
       return;
     }
     await setUrl({ view: next, browse: null }, { history: 'push' });
-    markStep();
+    markStep(view);
   };
 
   const goHome = () => {
@@ -76,16 +79,20 @@ export function useHelmUrlState() {
     return setUrl({ view: null, browse: null }, { history: 'replace' });
   };
 
-  const goBack = () => {
-    if (isStep()) {
+  /** Pops the entry only when the one beneath is the view's parent; otherwise replaces this one with the parent, so Back goes where its label says. */
+  const goBack = async () => {
+    const parent = VIEW_PARENTS[view] ?? 'home';
+    if (isStepFrom(parent)) {
       navigate(-1);
       return;
     }
-    const parent = VIEW_PARENTS[view] ?? 'home';
-    return setUrl(
+    const wasStep = isStep();
+    await setUrl(
       { view: parent === 'home' ? null : parent, browse: null },
       { history: 'replace' },
     );
+    if (parent === 'home') clearStep();
+    else if (wasStep) markStep('home');
   };
 
   return {

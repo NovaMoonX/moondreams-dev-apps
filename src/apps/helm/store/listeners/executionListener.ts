@@ -57,6 +57,7 @@ export async function openExecution(
       summary: payload.summary ?? '',
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
+      goneIds: payload.goneIds ?? null,
       isUnreadable: false,
     };
   } catch {
@@ -65,6 +66,7 @@ export async function openExecution(
       summary: '',
       effects: [],
       undoReport: null,
+      goneIds: null,
       isUnreadable: true,
     };
   }
@@ -126,7 +128,9 @@ export function startActivityListener(
       if (current !== sequence.latest || run.isStopped) return;
       onChange(opened);
     },
-    (error) => onError(toError(error)),
+    (error) => {
+      if (!run.isStopped) onError(toError(error));
+    },
   );
 
   return () => {

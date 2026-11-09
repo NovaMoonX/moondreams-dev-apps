@@ -130,7 +130,7 @@ function HomeSurface({
           <div className='absolute top-0 right-0'>
             <HeaderIconButton
               icon={<Settings2 className='size-4' aria-hidden='true' />}
-              label='Settings'
+              label={HELM_COPY.settingsTitle}
               onClick={onOpenSettings}
             />
           </div>

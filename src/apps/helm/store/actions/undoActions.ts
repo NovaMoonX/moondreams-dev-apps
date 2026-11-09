@@ -10,7 +10,7 @@ import {
 } from '@apps/helm/store/helmSlice';
 import { fetchExecutionsById } from '@apps/helm/store/listeners/executionListener';
 
-/** Takes an execution back and brings the new Undo line into the store; the card, the toast and the Activity sheet all call this. */
+/** Takes an execution back and brings the new Undo line into the store. */
 export async function takeBack(
   uid: string,
   executionId: string,

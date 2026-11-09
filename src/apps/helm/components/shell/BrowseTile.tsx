@@ -17,8 +17,8 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   home: { label: 'Home', icon: CalendarDays },
   today: { label: 'Today', icon: CalendarDays },
   inbox: { label: 'Needs you', icon: Inbox },
-  settings: { label: 'Settings', icon: Settings2 },
-  activity: { label: 'Activity', icon: History },
+  settings: { label: HELM_COPY.settingsTitle, icon: Settings2 },
+  activity: { label: HELM_COPY.activityTitle, icon: History },
 };
 
 interface BrowseTileProps {

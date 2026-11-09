@@ -1,6 +1,5 @@
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenExecution } from '@apps/helm/types';
-import { formatDate } from '@/utils/formatUtils';
 
 export interface ActivityDay {
   dayStart: number;
@@ -18,23 +17,15 @@ export const toDayStart = (timestamp: number) => {
 
 /** Newest-first executions under their local days, in the order given. */
 export const groupByDay = (items: OpenExecution[]): ActivityDay[] =>
-  items.reduce<ActivityDay[]>((days, item) => {
-    const dayStart = toDayStart(item.createdAt);
-    const last = days[days.length - 1];
-    return last?.dayStart === dayStart
-      ? [...days.slice(0, -1), { dayStart, items: [...last.items, item] }]
-      : [...days, { dayStart, items: [item] }];
-  }, []);
-
-export function formatDayHeading(dayStart: number, now: number) {
-  const today = toDayStart(now);
-  if (dayStart === today) return HELM_COPY.activityToday;
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  return dayStart === yesterday.getTime()
-    ? HELM_COPY.activityYesterday
-    : formatDate(dayStart);
-}
+  [
+    ...items.reduce((days, item) => {
+      const dayStart = toDayStart(item.createdAt);
+      const day = days.get(dayStart);
+      if (day) day.push(item);
+      else days.set(dayStart, [item]);
+      return days;
+    }, new Map<number, OpenExecution[]>()),
+  ].map(([dayStart, dayItems]) => ({ dayStart, items: dayItems }));
 
 const withoutPeriod = (text: string) => text.replace(/[.!]+$/, '');
 
@@ -45,4 +36,34 @@ export function getActivityLine(execution: OpenExecution) {
   return execution.category === 'undo'
     ? HELM_COPY.youTookBack(withoutPeriod(execution.summary))
     : withoutPeriod(execution.summary);
+}
+
+const toTitle = (execution: OpenExecution) =>
+  execution.effects
+    .map((effect) => effect.written['sealed.title'])
+    .find((title): title is string => typeof title === 'string' && !!title) ??
+  null;
+
+const countRecords = (execution: OpenExecution) =>
+  new Set(execution.effectRefs.map((ref) => ref.docId)).size;
+
+/** The first task an execution touched, with how many more it touched; null when its payload names none. */
+export function getActivitySubject(execution: OpenExecution) {
+  const title = execution.isUnreadable ? null : toTitle(execution);
+  return title
+    ? HELM_COPY.activitySubject(title, countRecords(execution) - 1)
+    : null;
+}
+
+/** Whether a row was taken back in full or in part; `undo` is the execution that took it back, once that is loaded. */
+export function getTakenBackMark(
+  execution: OpenExecution,
+  undo: OpenExecution | null,
+) {
+  if (execution.undoneByExecutionId === null) return null;
+  const isPartial =
+    !!undo &&
+    (!!undo.goneIds?.length ||
+      undo.effectRefs.length < countRecords(execution));
+  return isPartial ? HELM_COPY.partlyTakenBackLabel : HELM_COPY.takenBackLabel;
 }

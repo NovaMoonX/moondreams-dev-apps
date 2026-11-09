@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 
 import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
-import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import ActorMark from '@apps/helm/components/activity/ActorMark';
@@ -18,15 +17,11 @@ import {
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
-import {
-  formatDayHeading,
-  getActivityLine,
-  toDayStart,
-} from '@apps/helm/utils/activity';
+import { getActivityLine } from '@apps/helm/utils/activity';
 
 interface ExecutionSheetProps {
-  /** The execution to show; null keeps the sheet closed. */
-  executionId: string | null;
+  /** The execution to show, as it was when opened; null keeps the sheet closed. The live one in the store replaces it while it is there. */
+  execution: OpenExecution | null;
   onClose: () => void;
 }
 
@@ -66,8 +61,6 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
   const { undo } = useUndoOf(execution);
   const text = useCaptureText(execution.captureId);
-  const now = useNow(60_000);
-  const dayStart = toDayStart(execution.createdAt);
 
   return (
     <div className='space-y-4'>
@@ -75,7 +68,7 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
         <ActorMark actor={execution.actor} />
         <p className='text-muted-foreground text-[13px] tabular-nums'>
           {HELM_COPY.sheetDayTime(
-            formatDayHeading(dayStart, now),
+            formatDate(execution.createdAt),
             formatTime(execution.createdAt),
           )}
         </p>
@@ -86,11 +79,9 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
         </blockquote>
       )}
       {lines.length > 0 && (
-        <section className='space-y-2'>
+        <section className='space-y-1'>
           <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>
-          <div className='helm-card overflow-hidden'>
-            <ResultRows execution={execution} lines={lines} undo={undo} />
-          </div>
+          <ResultRows execution={execution} lines={lines} undo={undo} isFlat />
         </section>
       )}
     </div>
@@ -125,15 +116,15 @@ function SheetFoot({ execution }: { execution: OpenExecution }) {
   if (!canUndo(execution)) return null;
   return (
     <div className='px-6 pt-2 pb-6'>
-      <UndoButton execution={execution} lineCount={lines.length} />
+      <UndoButton execution={execution} lineCount={lines.length} isFull />
     </div>
   );
 }
 
 /** One entry of Activity: what was done, what it came from and what it changed, with its Undo. */
-function ExecutionSheet({ executionId, onClose }: ExecutionSheetProps) {
+function ExecutionSheet({ execution: opened, onClose }: ExecutionSheetProps) {
   const byId = useAppSelector(selectExecutionsById);
-  const execution = executionId ? (byId.get(executionId) ?? null) : null;
+  const execution = opened ? (byId.get(opened.id) ?? opened) : null;
 
   return (
     <DetailSheet

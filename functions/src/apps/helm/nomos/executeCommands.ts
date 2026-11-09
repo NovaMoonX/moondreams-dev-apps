@@ -238,6 +238,7 @@ export function buildExecution(
       commands: input.commands,
       effects: plan.effects,
       undoReport: null,
+      goneIds: null,
     }),
   };
 }

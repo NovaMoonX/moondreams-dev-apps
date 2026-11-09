@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,10 +16,12 @@ interface UndoButtonProps {
   execution: OpenExecution;
   /** How many changes the card lists: "Undo all of this" from two. */
   lineCount: number;
+  /** The sheet's one action: a full-width primary button; cards keep the small secondary. */
+  isFull?: boolean;
 }
 
 /** Takes an execution back. It works alone: nothing else on the surface is locked while it runs. */
-function UndoButton({ execution, lineCount }: UndoButtonProps) {
+function UndoButton({ execution, lineCount, isFull }: UndoButtonProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const isOffline = useNetworkStatus() === 'offline';
@@ -28,7 +31,14 @@ function UndoButton({ execution, lineCount }: UndoButtonProps) {
 
   if (refusal !== null) {
     return (
-      <p className='text-muted-foreground text-[13px] text-pretty'>{refusal}</p>
+      <p
+        className={join(
+          'text-muted-foreground text-[13px] text-pretty',
+          isFull && 'py-2.5',
+        )}
+      >
+        {refusal}
+      </p>
     );
   }
   if (!canUndo(execution)) return null;
@@ -37,7 +47,8 @@ function UndoButton({ execution, lineCount }: UndoButtonProps) {
       <LockedButton
         label={label}
         title={HELM_COPY.undoNeedsConnectionTitle}
-        size='sm'
+        size={isFull ? undefined : 'sm'}
+        className={isFull ? 'w-full' : undefined}
       >
         <p>{HELM_COPY.undoNeedsConnectionBody}</p>
       </LockedButton>
@@ -70,9 +81,9 @@ function UndoButton({ execution, lineCount }: UndoButtonProps) {
   return (
     <Button
       type='button'
-      variant='secondary'
-      size='sm'
-      className='whitespace-nowrap'
+      variant={isFull ? 'primary' : 'secondary'}
+      size={isFull ? undefined : 'sm'}
+      className={join('whitespace-nowrap', isFull && 'w-full')}
       disabled={isWorking}
       onClick={run}
     >

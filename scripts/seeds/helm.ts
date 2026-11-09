@@ -193,7 +193,7 @@ const dueFrom = (
         span.text.toLowerCase().includes(words.toLowerCase()),
       )?.due ?? null);
 
-/** Takes the turn's execution back through the same planner the app uses, after the person has moved the second task's day to Sunday. */
+/** The second task's day moves to Sunday before the undo, so that task is kept. */
 async function buildUndone(input: {
   executionId: string;
   execution: Execution;
@@ -234,6 +234,7 @@ async function buildUndone(input: {
       summary: summarize(effects.length),
       effects,
       undoReport: null,
+      goneIds: null,
       isUnreadable: false,
     },
     targets: new Map(
@@ -405,6 +406,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     })),
                     effects,
                     undoReport: null,
+                    goneIds: null,
                   },
                   encryption,
                 ),

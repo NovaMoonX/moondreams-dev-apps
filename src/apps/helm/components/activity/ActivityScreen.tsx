@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
@@ -6,9 +6,8 @@ import { ChevronRight } from 'lucide-react';
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
-import { useNow } from '@/hooks/useNow';
 import { useAppDispatch, useAppSelector } from '@/store';
-import { formatTime } from '@/utils/formatUtils';
+import { formatDate, formatTime } from '@/utils/formatUtils';
 import ActorMark from '@apps/helm/components/activity/ActorMark';
 import ExecutionSheet from '@apps/helm/components/activity/ExecutionSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -23,10 +22,12 @@ import {
   showMoreActivity,
 } from '@apps/helm/store/helmSlice';
 import { startActivityListener } from '@apps/helm/store/listeners/executionListener';
+import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import {
-  formatDayHeading,
   getActivityLine,
+  getActivitySubject,
+  getTakenBackMark,
   groupByDay,
 } from '@apps/helm/utils/activity';
 import { createSealedReader } from '@lib/security';
@@ -78,10 +79,11 @@ function useActivityFeed(uid: string | null, limit: number) {
 /** Mounts when scrolled near the foot and asks for the next page. */
 function ActivityLoader({ limit }: { limit: number }) {
   const dispatch = useAppDispatch();
+  const [mountedLimit] = useState(limit);
 
   useEffect(() => {
-    dispatch(showMoreActivity(limit));
-  }, [dispatch, limit]);
+    dispatch(showMoreActivity(mountedLimit));
+  }, [dispatch, mountedLimit]);
 
   return (
     <p className='text-muted-foreground text-center text-[13px]' role='status'>
@@ -92,11 +94,16 @@ function ActivityLoader({ limit }: { limit: number }) {
 
 function ActivityRow({
   execution,
+  undo,
   onOpen,
 }: {
   execution: OpenExecution;
+  undo: OpenExecution | null;
   onOpen: () => void;
 }) {
+  const subject = getActivitySubject(execution);
+  const mark = getTakenBackMark(execution, undo);
+
   return (
     <Button
       type='button'
@@ -109,9 +116,14 @@ function ActivityRow({
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {getActivityLine(execution)}
         </span>
-        {execution.undoneByExecutionId !== null && (
+        {subject && (
+          <span className='text-muted-foreground block truncate text-[13px]'>
+            {subject}
+          </span>
+        )}
+        {mark && (
           <span className='text-muted-foreground block text-[13px]'>
-            {HELM_COPY.takenBackLabel}
+            {mark}
           </span>
         )}
       </span>
@@ -130,18 +142,19 @@ function ActivityRow({
 function ActivityScreen({ onBack }: ActivityScreenProps) {
   const { user } = useAuth();
   const name = useAssistantName();
-  const now = useNow(60_000);
   const { items, isLoaded, isFailed, limit, isExhausted } = useAppSelector(
     (state) => state.helm.activity,
   );
-  const [openId, setOpenId] = useState<string | null>(null);
+  const byId = useAppSelector(selectExecutionsById);
+  const [open, setOpen] = useState<OpenExecution | null>(null);
+  const days = useMemo(() => groupByDay(items), [items]);
   useActivityFeed(user?.uid ?? null, limit);
 
   return (
     <>
       <main className='flex flex-1 flex-col gap-6'>
         <HelmHeader
-          backLabel='Settings'
+          backLabel={HELM_COPY.settingsTitle}
           onBack={onBack}
           onHome={onBack}
           showsHome={false}
@@ -164,15 +177,20 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
             {HELM_COPY.activityEmpty(name)}
           </p>
         )}
-        {groupByDay(items).map((day) => (
+        {days.map((day) => (
           <section key={day.dayStart} className='flex flex-col gap-3'>
-            <SectionDivider label={formatDayHeading(day.dayStart, now)} />
+            <SectionDivider label={formatDate(day.dayStart)} />
             <ul className='helm-card divide-border divide-y overflow-hidden'>
               {day.items.map((execution) => (
                 <li key={execution.id}>
                   <ActivityRow
                     execution={execution}
-                    onOpen={() => setOpenId(execution.id)}
+                    undo={
+                      execution.undoneByExecutionId
+                        ? (byId.get(execution.undoneByExecutionId) ?? null)
+                        : null
+                    }
+                    onOpen={() => setOpen(execution)}
                   />
                 </li>
               ))}
@@ -185,7 +203,7 @@ function ActivityScreen({ onBack }: ActivityScreenProps) {
           </LazyMount>
         )}
       </main>
-      <ExecutionSheet executionId={openId} onClose={() => setOpenId(null)} />
+      <ExecutionSheet execution={open} onClose={() => setOpen(null)} />
     </>
   );
 }

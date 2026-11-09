@@ -78,6 +78,7 @@ const execution = (
   summary: 'Made 2 tasks',
   effects: entries.map((entry) => entry.effect),
   undoReport: null,
+  goneIds: null,
   isUnreadable: false,
   ...overrides,
 });
@@ -125,6 +126,7 @@ test('full undo deletes every task the execution made', () => {
   assert.equal(result.report, 'Took back 2 tasks.');
   assert.equal(result.undoSealed.summary, 'Took back 2 tasks');
   assert.deepEqual(result.undoSealed.commands, []);
+  assert.deepEqual(result.undoSealed.goneIds, []);
   assert.deepEqual(
     result.undoExecution.effectRefs.map((ref) => ref.op),
     ['delete', 'delete'],
@@ -153,10 +155,8 @@ test('a task the person changed is kept and the rest is taken back', () => {
   );
   assert.deepEqual(result.deletes, ['t1']);
   assert.deepEqual(result.kept, ['Send the save-the-dates']);
-  assert.equal(
-    result.report,
-    'Took back 1 task. Kept 1 task you changed since: Send the save-the-dates.',
-  );
+  assert.equal(result.report, 'Took back 1 task. Kept 1 you changed since.');
+  assert.equal(result.undoSealed.summary, 'Took back 1 task, kept 1');
   assert.equal(result.undoExecution.effectRefs.length, 1);
 });
 
@@ -183,6 +183,7 @@ test('an update still as written is reverted, resealed with notes and steps kept
     isUrgent: false,
     lastEditedAt: NOW,
   });
+  assert.equal(only.fields.lastEditedAt, NOW);
   assert.deepEqual(only.reseal, { ...opened, title: 'Call Dana' });
   assert.ok(!Object.keys(only.fields).some((key) => key.includes('sealed')));
   assert.deepEqual(result.undoExecution.effectRefs[0].op, 'update');
@@ -283,7 +284,10 @@ test('a deleted task is counted, not an error', () => {
     ]),
   );
   assert.equal(result.gone, 1);
-  assert.equal(result.report, 'Took back 1 task. 1 task was deleted since.');
+  assert.deepEqual(result.goneIds, ['t2']);
+  assert.deepEqual(result.undoSealed.goneIds, ['t2']);
+  assert.equal(result.undoSealed.summary, 'Took back 1 task, kept 1');
+  assert.equal(result.report, 'Took back 1 task. 1 was deleted since.');
 });
 
 test('nothing to take back writes nothing and says why', () => {
@@ -387,6 +391,25 @@ test('unreadable, mismatched or foreign effects are refused', () => {
     effectRefs: base.effectRefs.map((ref) => ({ ...ref, collection: 'notes' })),
   };
   assert.equal(asRefused(plan(foreign, [])).reason, 'unreadable');
+  const many = Array.from({ length: 41 }, (_, index) =>
+    create(`t${index}`, `Task ${index}`),
+  );
+  assert.equal(asRefused(plan(execution(many), [])).reason, 'unreadable');
+});
+
+test('an update path with no previous value keeps the record', () => {
+  const unknown = update(
+    't1',
+    { 'sealed.title': 'Call Dana', due: FRIDAY },
+    { 'sealed.title': 'Call Dana' },
+  );
+  const result = asRefused(
+    plan(execution([unknown]), [
+      target('t1', { due: FRIDAY }, sealedOf('Call Dana')),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Call Dana']);
 });
 
 test('a due day compares by value, whatever the key order', () => {
@@ -427,10 +450,10 @@ test('copy never names the app or the default assistant', () => {
   const lines = [
     HELM_COPY.undoAll,
     HELM_COPY.tookBack(1),
-    HELM_COPY.keptChanged(['A', 'B']),
+    HELM_COPY.tookBackKept(1, 1),
     HELM_COPY.goneSince(3),
     HELM_COPY.nothingToTakeBack([], 0),
-    HELM_COPY.undoReport(1, ['Call Dana'], 1),
+    HELM_COPY.undoReport(1, 1, 1),
     HELM_COPY.alreadyTakenBack('Nov 8'),
     HELM_COPY.undoFailed,
     HELM_COPY.undoNeedsConnectionTitle,
@@ -441,13 +464,10 @@ test('copy never names the app or the default assistant', () => {
     false,
   );
   assert.equal(
-    HELM_COPY.undoReport(1, ['Call Dana'], 0),
-    'Took back 1 task. Kept 1 task you changed since: Call Dana.',
+    HELM_COPY.undoReport(2, 1, 2),
+    'Took back 2 tasks. Kept 1 you changed since. 2 were deleted since.',
   );
-  assert.equal(
-    HELM_COPY.keptChanged(['A', 'B', 'C']),
-    'Kept 3 tasks you changed since: A, B and C.',
-  );
+  assert.equal(HELM_COPY.tookBackKept(2, 1), 'Took back 2 tasks, kept 1');
 });
 
 const failures = tests.flatMap(([name, run]) => {

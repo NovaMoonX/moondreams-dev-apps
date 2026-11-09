@@ -197,6 +197,8 @@ export interface ExecutionSealed {
   commands: unknown[];
   effects: ExecutionEffect[];
   undoReport: string | null;
+  /** The records an undo found deleted, by id; null on every other execution. */
+  goneIds: string[] | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -205,5 +207,6 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   summary: string;
   effects: ExecutionEffect[];
   undoReport: string | null;
+  goneIds: string[] | null;
   isUnreadable: boolean;
 }

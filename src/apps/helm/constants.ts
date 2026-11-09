@@ -41,9 +41,6 @@ const joinTitles = (titles: string[]) =>
     ? (titles[0] ?? '')
     : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
 
-const keptLine = (titles: string[]) =>
-  `Kept ${titles.length} ${titles.length === 1 ? 'task' : 'tasks'} you changed since: ${joinTitles(titles)}.`;
-
 const goneLine = (count: number) =>
   count === 1
     ? '1 task was deleted since.'
@@ -162,7 +159,8 @@ export const HELM_COPY = {
   undoAll: 'Undo all of this',
   tookBack: (count: number) =>
     `Took back ${count} ${count === 1 ? 'task' : 'tasks'}`,
-  keptChanged: keptLine,
+  tookBackKept: (count: number, other: number) =>
+    `Took back ${count} ${count === 1 ? 'task' : 'tasks'}, kept ${other}`,
   goneSince: goneLine,
   nothingToTakeBack: (titles: string[], gone: number) =>
     titles.length > 0
@@ -170,13 +168,11 @@ export const HELM_COPY = {
       : gone > 0
         ? `Nothing was taken back. ${goneLine(gone)}`
         : 'Nothing was taken back.',
-  undoReport: (takenBack: number, kept: string[], gone: number) =>
+  undoReport: (takenBack: number, kept: number, gone: number) =>
     [
-      takenBack > 0
-        ? `Took back ${takenBack} ${takenBack === 1 ? 'task' : 'tasks'}.`
-        : '',
-      kept.length > 0 ? keptLine(kept) : '',
-      gone > 0 ? goneLine(gone) : '',
+      `Took back ${takenBack} ${takenBack === 1 ? 'task' : 'tasks'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
     ]
       .filter(Boolean)
       .join(' '),
@@ -195,24 +191,29 @@ export const HELM_COPY = {
     "Your activity didn't open. Close this page and open it again.",
   activityLoading: 'Opening your activity',
   activityLoadingMore: 'Opening earlier activity',
-  activityYou: 'You',
   activityMadeChange: 'Made a change',
-  activityToday: 'Today',
-  activityYesterday: 'Yesterday',
   youTookBack: (summary: string) =>
     `You ${summary.charAt(0).toLowerCase()}${summary.slice(1)}`,
   takenBackLabel: 'Taken back',
+  partlyTakenBackLabel: 'Partly taken back',
+  activitySubject: (title: string, more: number) =>
+    more > 0 ? `${title} and ${more} more` : title,
   keptRow: 'Kept: you changed it since',
+  deletedRow: 'Deleted since',
   sheetChanged: 'What it changed',
   sheetDayTime: (day: string, time: string) => `${day} ${time}`,
   whatTheAiSees: 'What the AI sees',
-  whatTheAiSeesRowHint: 'What is sent, where it runs and what is kept',
+  whatTheAiSeesRowHint: 'What is sent and kept',
+  aiSeesSentLead: "What's sent",
   aiSeesSent: (name: string) =>
-    `What's sent: what you tell ${name}, and the records it needs to file or answer it.`,
+    `What you tell ${name}, and the records it needs to file or answer it.`,
+  aiSeesWhereLead: 'Where it runs',
   aiSeesWhere: (name: string) =>
-    `Where: ${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+    `${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+  aiSeesStoredLead: 'Stored encrypted',
   aiSeesStored:
-    "Stored encrypted: what you say, your tasks and every line in Activity are encrypted before they're saved.",
+    "What you say, your records and every line in Activity are encrypted before they're saved.",
+  aiSeesKeptLead: "What's kept",
   aiSeesKept:
-    "What's kept: what you say and every change in Activity. The server's logs keep counts and codes, never your words.",
+    "What you say and every change in Activity. The server's logs keep counts and codes, never your words.",
 } as const;
