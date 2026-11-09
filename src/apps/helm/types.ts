@@ -1,7 +1,7 @@
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 /** The views that have a screen so far; each later issue adds its own. */
-export type HelmView = 'home' | 'today' | 'inbox';
+export type HelmView = 'home' | 'today' | 'inbox' | 'settings' | 'activity';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -164,7 +164,8 @@ export type ActionCategory =
 export type AutonomyLevel = 1 | 2 | 3 | 4;
 
 export interface EffectRef {
-  op: 'create' | 'update';
+  /** `delete` appears only in the executions an undo writes. */
+  op: 'create' | 'update' | 'delete';
   collection: string;
   docId: string;
 }

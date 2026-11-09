@@ -2,6 +2,9 @@ import { useEffect, type Ref } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import { Settings2 } from 'lucide-react';
+
+import HeaderIconButton from '@/components/HeaderIconButton';
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +25,7 @@ import { groupSessionsByDay, type Session } from '@apps/helm/utils/sessions';
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
   onComposerFocusChange: (isFocused: boolean) => void;
+  onOpenSettings: () => void;
 }
 
 const TURN_ESTIMATED_HEIGHT = 88;
@@ -71,7 +75,11 @@ function SessionTurns({
   );
 }
 
-function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
+function HomeSurface({
+  composerRef,
+  onComposerFocusChange,
+  onOpenSettings,
+}: HomeSurfaceProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const dispatch = useAppDispatch();
@@ -117,7 +125,16 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
 
   return (
     <main className='flex flex-1 flex-col gap-8'>
-      <div className='flex flex-col items-center gap-2 pt-10 text-center'>
+      <div className='relative flex flex-col items-center gap-2 pt-10 text-center'>
+        {keyStatus === 'ready' && (
+          <div className='absolute top-0 right-0'>
+            <HeaderIconButton
+              icon={<Settings2 className='size-4' aria-hidden='true' />}
+              label='Settings'
+              onClick={onOpenSettings}
+            />
+          </div>
+        )}
         <div className='flex items-center gap-2'>
           <AssistantMark name={name} isLarge />
           <h1 className='helm-serif text-[28px] leading-[34px]'>{name}</h1>

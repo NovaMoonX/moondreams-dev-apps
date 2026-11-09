@@ -9,6 +9,8 @@ import InboxView from '@apps/helm/components/inbox/InboxView';
 import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
+import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
+import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
 import TodayView from '@apps/helm/components/today/TodayView';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
 import { useHelmTheme } from '@apps/helm/hooks/useHelmTheme';
@@ -19,8 +21,15 @@ function Helm() {
   const { user, loading } = useAuth();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
-  const { view, isBrowseOpen, openBrowse, closeBrowse, showView, goHome } =
-    useHelmUrlState();
+  const {
+    view,
+    isBrowseOpen,
+    openBrowse,
+    closeBrowse,
+    showView,
+    goHome,
+    goBack,
+  } = useHelmUrlState();
 
   useHelmTheme();
   useTrackAppUsage('helm', user?.uid ?? null);
@@ -53,6 +62,7 @@ function Helm() {
         <HomeSurface
           composerRef={composerRef}
           onComposerFocusChange={setIsComposing}
+          onOpenSettings={() => showView('settings')}
         />
       )}
       {!isLocked && view === 'today' && (
@@ -60,6 +70,15 @@ function Helm() {
       )}
       {!isLocked && view === 'inbox' && (
         <InboxView onBack={goHome} onHome={goHome} />
+      )}
+      {!isLocked && view === 'settings' && (
+        <SettingsScreen
+          onBack={goBack}
+          onOpenActivity={() => showView('activity')}
+        />
+      )}
+      {!isLocked && view === 'activity' && (
+        <ActivityScreen onBack={goBack} onHome={goHome} />
       )}
       <BrowseSheet
         isOpen={isBrowseOpen && isHome && !isLocked}

@@ -1,5 +1,11 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, Inbox, type LucideIcon } from 'lucide-react';
+import {
+  CalendarDays,
+  History,
+  Inbox,
+  Settings2,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -11,6 +17,8 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   home: { label: 'Home', icon: CalendarDays },
   today: { label: 'Today', icon: CalendarDays },
   inbox: { label: 'Needs you', icon: Inbox },
+  settings: { label: 'Settings', icon: Settings2 },
+  activity: { label: 'Activity', icon: History },
 };
 
 interface BrowseTileProps {

@@ -598,7 +598,7 @@ type ActionCategory = 'organize' | 'remember' | 'plan' | 'draft' | 'answer' | 'u
 interface Execution {
   captureId: string | null; actor: 'nomos' | 'person'; category: ActionCategory;
   autonomyLevel: AutonomyLevel; state: ExecutionState;
-  effectRefs: { op: 'create' | 'update'; collection: HelmCollection; docId: string }[]; // capped 40
+  effectRefs: { op: 'create' | 'update' | 'delete'; collection: HelmCollection; docId: string }[]; // capped 40; 'delete' only in an undo's own execution
   undoesExecutionId: string | null; undoneByExecutionId: string | null;
   questionRef: { captureId: string; questionId: string } | null; // round 6c: the question this answer's effect came from
   errorCode: string | null; createdAt: number; decidedAt: number | null; finishedAt: number | null;
@@ -891,7 +891,7 @@ Capture text, record names, fact statements, note bodies, synced titles and ever
 
 The capture text, the context package above (synced titles and times included) and, for a question that needs them, what the tools return: mail senders, subjects, snippets and up to 4,000 characters of a message or document. They go to Anthropic's API. Nothing from the model or a tool is logged; logs carry codes, tool names, counts and token counts only.
 
-**To do before ship**: "Anthropic doesn't use what Helm sends to train its models." in "What the AI sees" ships only after a check of Anthropic's current commercial API terms and the account's data-retention setting passes; the issue that builds "What the AI sees" (issue 7) records what was checked, and leaves the line out if the check fails or can't be made.
+**To do before ship (owner)**: "Anthropic doesn't use what Helm sends to train its models." is not in "What the AI sees" (issue 7 left it out: the commercial API terms and the account's data-retention setting could not be checked from the build). It ships only after the owner confirms both; the sheet's four blocks are in `HELM_COPY`.
 
 ## 6. Answers: records first, then general knowledge
 
@@ -969,6 +969,15 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
 - **Automatic commands** are written as `succeeded` in the same server transaction as their effects. A capture's automatic commands make one execution, so the result card's single Undo undoes the whole capture; an answer adds an `answer` execution with no effects.
 - **Suggestions** (plan slots, written by the device planner): slots with `status: 'suggested'` plus one `proposed` execution in one batch. Keep, Another time and Not today are dotted-path slot updates (offline-friendly, a quick action that locks nothing); the execution becomes `succeeded` when every slot is decided, or stays `proposed` and lapses with its day.
 - **Undo** (`nomos/undoExecution.ts`, on the device, one transaction): re-reads the execution and each affected document and opens their sealed payloads. An `update` effect restores `previous` only for paths whose current value still equals `written` (sealed fields compared after opening, then the payload resealed). A `create` effect deletes the document only while its `lastEditedAt` is null. Per record it refuses what changed; across records it goes on past the changed ones (logged) and writes a new `undo` execution (`actor: 'person'`, `undoesExecutionId`, `undoReport` "Kept 1 task you changed since") and sets `undoneByExecutionId` on the original, so Activity gains a line and loses none. An undone execution can't be undone again. Undo needs a connection (a transaction); offline the button says so. The toast, the result card and the Activity sheet call the same function.
+- **How Undo decides** (`nomos/planUndo.ts` is pure and checked by `check:helm-undo`; `undoExecution.ts` is the transaction around it):
+  - **D1, per record all-or-nothing.** A record whose every changed path still matches is taken back whole; if any one doesn't, the record is kept as it is.
+  - **D2, a label is not compared.** A path whose `written` equals its `previous` (a task's `sealed.title` on a completion) only names the task, so it is neither compared nor restored: a completion is taken back even after a rename.
+  - **D3, nothing to take back writes nothing.** The person is told "Nothing was taken back: you changed X since." and the original stays undoable.
+  - **D4, a reverted update sets `lastEditedAt` to now** (a create's delete needs it null, an update's restore moves it).
+  - **D5, `op: 'delete'` appears only in an undo's own execution**, never in what the server writes.
+  - **D6, one Undo per execution card**; **D7,** only a readable `succeeded` execution that is not itself an Undo, not yet undone and with effects can be undone, so an Undo can't be undone.
+  - **D8, a kept line is generic** ("Kept: you changed it since"), as the changed value is never repeated.
+  - **Sealed paths** are compared and restored on the opened payload, which is resealed whole (`{...opened, [field]: previous}`); a dotted `sealed.title` field path is never written.
 - **The person's own edits** are `updateDoc` of the fields the form owns, the sealed payload resealed from the opened copy with the form's changes; they make no execution in MVP.
 - **Edits that race**: a form save never `setDoc`s the cached document; ticks, slot changes and milestone dates are dotted-path updates on readable map keys; a form that changes sealed words reseals in a transaction that re-reads the document, so a second device's edit to another field of the same payload is kept; Correct and the `whichIsTrue` answer are transactions over both facts.
 

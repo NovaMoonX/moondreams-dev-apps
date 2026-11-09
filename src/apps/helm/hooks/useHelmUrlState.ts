@@ -2,9 +2,15 @@ import { parseAsBoolean, parseAsStringLiteral, useQueryStates } from 'nuqs';
 import { useNavigate } from 'react-router-dom';
 
 import { generateUuid } from '@/utils';
+import { VIEW_PARENTS } from '@apps/helm/screen/views';
 import type { HelmView } from '@apps/helm/types';
 
-const URL_VIEWS = ['today', 'inbox'] as const satisfies readonly HelmView[];
+const URL_VIEWS = [
+  'today',
+  'inbox',
+  'settings',
+  'activity',
+] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
 const LOAD_ID = generateUuid();
@@ -70,5 +76,25 @@ export function useHelmUrlState() {
     return setUrl({ view: null, browse: null }, { history: 'replace' });
   };
 
-  return { view, isBrowseOpen, openBrowse, closeBrowse, showView, goHome };
+  const goBack = () => {
+    if (isStep()) {
+      navigate(-1);
+      return;
+    }
+    const parent = VIEW_PARENTS[view] ?? 'home';
+    return setUrl(
+      { view: parent === 'home' ? null : parent, browse: null },
+      { history: 'replace' },
+    );
+  };
+
+  return {
+    view,
+    isBrowseOpen,
+    openBrowse,
+    closeBrowse,
+    showView,
+    goHome,
+    goBack,
+  };
 }

@@ -76,5 +76,6 @@ jobs:
       - run: npm run check:receipts
       - run: npm run check:helm-copy
       - run: npm run check:natural-dates
+      - run: npm run check:helm-undo
       - run: npm ci --prefix functions
       - run: npm run check:helm-sort

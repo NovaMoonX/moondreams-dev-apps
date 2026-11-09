@@ -27,7 +27,7 @@ const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your activity did not open.');
 
 /** An execution that won't open is kept, saying nothing, so its turn can say it couldn't be opened. */
-async function openExecution(
+export async function openExecution(
   entry: DocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenExecution> {

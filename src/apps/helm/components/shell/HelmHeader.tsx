@@ -8,10 +8,17 @@ interface HelmHeaderProps {
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
+  /** False on a screen reached only from one parent, where Home would skip a step. */
+  showsHome?: boolean;
 }
 
 /** A content page's header: Back, then Home unless Back already says Home. */
-function HelmHeader({ backLabel, onBack, onHome }: HelmHeaderProps) {
+function HelmHeader({
+  backLabel,
+  onBack,
+  onHome,
+  showsHome = true,
+}: HelmHeaderProps) {
   return (
     <header className='flex min-h-10 items-center gap-3'>
       <Button
@@ -25,7 +32,7 @@ function HelmHeader({ backLabel, onBack, onHome }: HelmHeaderProps) {
         <ChevronLeft className='h-4 w-4 shrink-0' aria-hidden='true' />
         <span className='truncate'>{backLabel}</span>
       </Button>
-      {backLabel !== 'Home' && (
+      {showsHome && backLabel !== 'Home' && (
         <HeaderIconButton
           icon={<House className='size-4' aria-hidden='true' />}
           label='Home'

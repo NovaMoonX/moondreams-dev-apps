@@ -11,7 +11,8 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
-import { sealJson } from '../../src/apps/helm/security.ts';
+import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
+import { openJson, sealJson } from '../../src/apps/helm/security.ts';
 import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import type {
   Capture,
@@ -51,7 +52,15 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
       { title: 'Buy the rings', dueWords: null },
       { title: 'Call Dana', dueWords: 'Friday' },
     ],
+    4: [
+      { title: 'Book the hair trial', dueWords: null },
+      { title: 'Send the save-the-dates', dueWords: 'Saturday' },
+    ],
   };
+
+/** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
+const UNDONE_TURN = 4;
+const UNDO_DELAY_MS = 3 * MINUTE_MS;
 
 const summarize = (count: number) =>
   count === 1 ? 'Made a task' : `Made ${count} tasks`;
@@ -81,6 +90,12 @@ const SEED_TURNS = [
     minutesAgo: 3,
     text: "Mom's birthday is June 3, buy the rings, call Dana Friday",
     isSeen: false,
+  },
+  {
+    session: 'yesterday',
+    minutesAgo: 26 * 60 - 6,
+    text: 'Book the hair trial and send the save-the-dates Saturday',
+    isSeen: true,
   },
 ] as const;
 
@@ -177,6 +192,77 @@ const dueFrom = (
     : (dates.find((span) =>
         span.text.toLowerCase().includes(words.toLowerCase()),
       )?.due ?? null);
+
+/** Takes the turn's execution back through the same planner the app uses, after the person has moved the second task's day to Sunday. */
+async function buildUndone(input: {
+  executionId: string;
+  execution: Execution;
+  effects: { written: Record<string, unknown>; previous: null }[];
+  tasks: { id: string; task: Task }[];
+  sortedAt: number;
+  encryption: HelmEncryption;
+}) {
+  const { executionId, execution, effects, sortedAt, encryption } = input;
+  const keptId = input.tasks[1].id;
+  const tasks = input.tasks.map((entry) =>
+    entry.id === keptId
+      ? {
+          id: entry.id,
+          task: {
+            ...entry.task,
+            due:
+              entry.task.due?.kind === 'day'
+                ? { kind: 'day' as const, date: entry.task.due.date + DAY_MS }
+                : entry.task.due,
+            lastEditedAt: sortedAt + MINUTE_MS,
+          },
+        }
+      : entry,
+  );
+  const now = sortedAt + UNDO_DELAY_MS;
+  const undoId = `seed-execution-undo-${UNDONE_TURN + 1}`;
+  const titles = await Promise.all(
+    tasks.map(async ({ id, task }) => ({
+      id,
+      opened: await openJson<TaskSealed>(task.sealed, encryption),
+    })),
+  );
+  const result = planUndo({
+    original: {
+      ...execution,
+      id: executionId,
+      summary: summarize(effects.length),
+      effects,
+      undoReport: null,
+      isUnreadable: false,
+    },
+    targets: new Map(
+      tasks.map(({ id, task }) => [
+        id,
+        {
+          docId: id,
+          data: task as unknown as Record<string, unknown>,
+          opened: titles.find((entry) => entry.id === id)?.opened ?? null,
+        },
+      ]),
+    ),
+    undoExecutionId: undoId,
+    now,
+  });
+  if (result.kind !== 'write')
+    throw new Error('The seeded undo has no writes.');
+  return {
+    tasks: tasks.filter(({ id }) => !result.deletes.includes(id)),
+    original: { ...execution, undoneByExecutionId: undoId },
+    undo: {
+      id: undoId,
+      execution: {
+        ...result.undoExecution,
+        sealed: await sealJson<ExecutionSealed>(result.undoSealed, encryption),
+      } satisfies Execution,
+    },
+  };
+}
 
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
@@ -281,7 +367,16 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               return { id, task };
             }),
           );
-          const execution: Execution | null = isSorted
+          const effects = sortedTasks.map(({ title, due }) => ({
+            written: {
+              'sealed.title': title,
+              due,
+              status: 'open',
+              isUrgent: false,
+            },
+            previous: null,
+          }));
+          const originalExecution: Execution | null = isSorted
             ? {
                 captureId: `seed-turn-${index + 1}`,
                 actor: 'nomos',
@@ -308,32 +403,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                       title,
                       due,
                     })),
-                    effects: sortedTasks.map(({ title, due }) => ({
-                      written: {
-                        'sealed.title': title,
-                        due,
-                        status: 'open',
-                        isUrgent: false,
-                      },
-                      previous: null,
-                    })),
+                    effects,
                     undoReport: null,
                   },
                   encryption,
                 ),
               }
             : null;
+          const undone =
+            index === UNDONE_TURN && originalExecution
+              ? await buildUndone({
+                  executionId,
+                  execution: originalExecution,
+                  effects,
+                  tasks,
+                  sortedAt,
+                  encryption,
+                })
+              : null;
+          const execution = undone?.original ?? originalExecution;
           return {
             id: `seed-turn-${index + 1}`,
             capture,
-            tasks,
+            tasks: undone?.tasks ?? tasks,
             execution,
             executionId,
+            undo: undone?.undo ?? null,
           };
         }),
       );
       const person = users.doc(user.uid);
-      turns.forEach(({ id, capture, tasks, execution, executionId }) => {
+      turns.forEach(({ id, capture, tasks, execution, executionId, undo }) => {
         batch.set(person.collection('captures').doc(id), capture);
         tasks.forEach((entry) =>
           batch.set(person.collection('tasks').doc(entry.id), entry.task),
@@ -344,10 +444,20 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             execution,
           );
         }
+        if (undo) {
+          batch.set(
+            person.collection('executions').doc(undo.id),
+            undo.execution,
+          );
+        }
       });
       return turns.reduce(
         (total, turn) =>
-          total + 1 + turn.tasks.length + (turn.execution ? 1 : 0),
+          total +
+          1 +
+          turn.tasks.length +
+          (turn.execution ? 1 : 0) +
+          (turn.undo ? 1 : 0),
         0,
       );
     }),

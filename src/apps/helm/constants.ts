@@ -33,6 +33,19 @@ export const OPEN_TASKS_LIMIT = 150;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
+const joinTitles = (titles: string[]) =>
+  titles.length < 2
+    ? (titles[0] ?? '')
+    : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
+
+const keptLine = (titles: string[]) =>
+  `Kept ${titles.length} ${titles.length === 1 ? 'task' : 'tasks'} you changed since: ${joinTitles(titles)}.`;
+
+const goneLine = (count: number) =>
+  count === 1
+    ? '1 task was deleted since.'
+    : `${count} tasks were deleted since.`;
+
 /** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -143,4 +156,44 @@ export const HELM_COPY = {
   savedHeldRecent: 'Saved as written. Read in a few minutes.',
   savedHeldBudget: 'Saved as written. Read once reading is back.',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
+  undoAll: 'Undo all of this',
+  tookBack: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'task' : 'tasks'}`,
+  keptChanged: keptLine,
+  goneSince: goneLine,
+  nothingToTakeBack: (titles: string[], gone: number) =>
+    titles.length > 0
+      ? `Nothing was taken back: you changed ${joinTitles(titles)} since.`
+      : gone > 0
+        ? `Nothing was taken back. ${goneLine(gone)}`
+        : 'Nothing was taken back.',
+  undoReport: (takenBack: number, kept: string[], gone: number) =>
+    [
+      takenBack > 0
+        ? `Took back ${takenBack} ${takenBack === 1 ? 'task' : 'tasks'}.`
+        : '',
+      kept.length > 0 ? keptLine(kept) : '',
+      gone > 0 ? goneLine(gone) : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  alreadyTakenBack: (date: string) => `Already taken back on ${date}`,
+  undoFailed: "That couldn't be taken back. Try again.",
+  undoNeedsConnectionTitle: 'Undo needs a connection',
+  undoNeedsConnectionBody:
+    "Undo checks each record as it is now, so it waits until you're back online.",
+  settingsTitle: 'Settings',
+  settingsYourData: 'Your data',
+  activityTitle: 'Activity',
+  activityRowHint: 'What was done, and when',
+  whatTheAiSees: 'What the AI sees',
+  whatTheAiSeesRowHint: 'What is sent, where it runs and what is kept',
+  aiSeesSent: (name: string) =>
+    `What's sent: what you tell ${name}, and the records it needs to file or answer it.`,
+  aiSeesWhere: (name: string) =>
+    `Where: ${name} runs on its own server, sends that to Claude through Anthropic's API, and checks what comes back. It reaches your things only through its own tools.`,
+  aiSeesStored:
+    "Stored encrypted: what you say, your tasks and every line in Activity are encrypted before they're saved.",
+  aiSeesKept:
+    "What's kept: what you say and every change in Activity. The server's logs keep counts and codes, never your words.",
 } as const;

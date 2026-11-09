@@ -166,6 +166,16 @@ const helmSlice = createSlice({
         ...action.payload.filter((entry) => !known.has(entry.id)),
       ];
     },
+    markExecutionUndone: (
+      state,
+      action: PayloadAction<{ executionId: string; undoExecutionId: string }>,
+    ) => {
+      state.earlierExecutions = state.earlierExecutions.map((entry) =>
+        entry.id === action.payload.executionId
+          ? { ...entry, undoneByExecutionId: action.payload.undoExecutionId }
+          : entry,
+      );
+    },
     addFailedExecutions: (state, action: PayloadAction<string[]>) => {
       state.failedExecutionIds = [
         ...new Set([...state.failedExecutionIds, ...action.payload]),
@@ -210,6 +220,7 @@ export const {
   setRecentExecutions,
   setRecentExecutionsFailed,
   addEarlierExecutions,
+  markExecutionUndone,
   addFailedExecutions,
   startLoadingEarlier,
   addEarlierCaptures,
