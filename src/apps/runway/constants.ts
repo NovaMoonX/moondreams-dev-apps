@@ -972,7 +972,7 @@ export const DAY_RECORD_KINDS = [
   'confirmed',
   'correction',
 ] as const;
-/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money left in an envelope moved to another envelope, a goal or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
+/** The kinds of ledger entry the client writes: a bill marked paid (and its undo, a `billPaid` that names the one it reverses), a `start` holding, a `trackingChange` (tracking turned on or off), a `cardPayment`, a `transfer` (money in an envelope or goal moved to another envelope or goal, or Free to Spend, and its undo, a `transfer` that names it) and a `costPaid` (a Horizon cost's payment marked paid, and its undo). */
 export const MOVE_KINDS = [
   'billPaid',
   'start',
@@ -2641,14 +2641,20 @@ export const PURCHASE_COST_WORDS = {
 /** Moving what is left in an envelope to another envelope, a goal or Free to Spend. */
 export const MOVE_WORDS = {
   open: "Move what's left",
+  openGoal: "Move what's saved",
   title: (name: string) => `Move money from ${name}`,
   amount: 'Amount to move',
   moveTo: 'Move it to',
-  places: 'Places',
   freeToSpend: 'Free to Spend',
+  envelopes: 'Envelopes',
+  goals: 'Goals',
+  search: 'Search envelopes and goals',
+  searchGoals: 'Search goals',
+  noMatch: (query: string) => `Nothing matches “${query}”.`,
   needsAmount: 'Enter how much to move.',
   needsPlace: 'Pick where it goes.',
   tooMuch: 'That is more than is left in it.',
+  tooMuchSaved: 'That is more than it holds.',
   action: (amount: string) => `Move ${amount}`,
   moved: (amount: string, to: string) => `Moved ${amount} to ${to}`,
   undone: (amount: string, from: string, to: string) =>
