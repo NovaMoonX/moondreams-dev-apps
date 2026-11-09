@@ -1225,15 +1225,20 @@ function ItemSheet({
             onClick={() => openChange(maxAction.step)}
           />
         )}
-        {canChange && isTrackEnvelope && isArchivable && heldCents > 0 && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<ArrowRightLeft />}
-            label={MOVE_WORDS.open}
-            onClick={() => goTo('move')}
-          />
-        )}
+        {canChange &&
+          (isTrackEnvelope || (itemKind === 'goal' && hasStarted)) &&
+          isArchivable &&
+          heldCents > 0 && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<ArrowRightLeft />}
+              label={
+                itemKind === 'goal' ? MOVE_WORDS.openGoal : MOVE_WORDS.open
+              }
+              onClick={() => goTo('move')}
+            />
+          )}
         {canChange &&
           (itemKind === 'envelope' || itemKind === 'goal') &&
           isArchivable &&
@@ -1739,9 +1744,11 @@ function ItemSheet({
 
   const moveView = (
     <MoveLeftoverView
-      envelopeId={itemId}
+      itemId={itemId}
+      kind={itemKind === 'goal' ? 'goal' : 'envelope'}
       name={payload.name}
       leftCents={heldCents}
+      hasEnvelopes={isTrackingLevel(level)}
       today={today}
       onBack={() => goTo('menu')}
     />

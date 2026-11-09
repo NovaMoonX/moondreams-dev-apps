@@ -168,7 +168,7 @@ export function writeSealedMove(
   transaction.set(changeRef(uid, change.id), change);
 }
 
-/** Moves money from an envelope to another envelope, a goal or Free to Spend; money on hand changes only for an `isOutside` move. Resolves with the day it is dated, so an Undo can name it. */
+/** Moves money from an envelope or goal to an envelope, another goal or Free to Spend; money on hand changes only for an `isOutside` move. Resolves with the day it is dated, so an Undo can name it. */
 export async function moveLeftover(
   uid: string,
   encryption: RunwayEncryption,
