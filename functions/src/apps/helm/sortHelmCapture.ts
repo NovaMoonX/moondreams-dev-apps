@@ -3,6 +3,7 @@ import {
   getFirestore,
   type DocumentReference,
   type Firestore,
+  type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
@@ -53,6 +54,12 @@ import {
 } from './nomos/executeCommands.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
 import {
+  combineMessages,
+  interpretWithJoins,
+  type JoinedMessage,
+  type JoinedRead,
+} from './nomos/joinedTurn.js';
+import {
   normalizeNomosReply,
   NomosReplyError,
 } from './nomos/normalizeNomosReply.js';
@@ -75,6 +82,7 @@ const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 const EARLIER_TURNS = 6;
 const EARLIER_EXECUTIONS = 3;
 const EARLIER_RECORDS = 10;
+const MAX_JOINED = 9;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 
 type SortMode = 'full' | 'rest';
@@ -82,12 +90,24 @@ type SortMode = 'full' | 'rest';
 interface SortResult {
   status: 'sorted' | 'received' | 'failed' | 'needsYou';
   executionId: string | null;
+  releasedIds: string[];
 }
 
 const toResult = (
   status: SortResult['status'],
   executionId: string | null = null,
-): SortResult => ({ status, executionId });
+  releasedIds: string[] = [],
+): SortResult => ({ status, executionId, releasedIds });
+
+const readAnswered = (stored: unknown, captureId: string) => {
+  const answered = readStoredResult<Partial<SortResult> & SortResult>(
+    stored as { captureId?: unknown; result?: SortResult } | undefined,
+    captureId,
+  );
+  return answered
+    ? { ...answered, releasedIds: answered.releasedIds ?? [] }
+    : null;
+};
 
 interface CaptureDoc {
   status: string;
@@ -98,6 +118,8 @@ interface CaptureDoc {
   questionState?: Record<string, QuestionStateEntry>;
   sessionId?: string;
   turnIndex?: number;
+  turnLeadId?: string | null;
+  joinedCaptureIds?: string[];
   screen?: unknown;
   createdAt: number;
   sealed: SealedPayload;
@@ -184,6 +206,22 @@ const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   }
 };
 
+const readLeadHold = async (
+  transaction: Transaction,
+  ref: DocumentReference,
+  capture: CaptureDoc,
+) => {
+  const leadId = capture.turnLeadId;
+  if (typeof leadId !== 'string' || !ID_RE.test(leadId)) return false;
+  const lead = (await transaction.get(ref.parent.doc(leadId))).data() as
+    CaptureDoc | undefined;
+  return (
+    !!lead &&
+    (lead.status === 'received' || lead.status === 'interpreting') &&
+    (lead.joinedCaptureIds ?? []).includes(ref.id)
+  );
+};
+
 async function claimCapture(
   firestore: Firestore,
   ref: DocumentReference,
@@ -194,6 +232,9 @@ async function claimCapture(
     const snapshot = await transaction.get(ref);
     const capture = snapshot.data() as CaptureDoc | undefined;
     if (!capture) return null;
+    if (mode === 'full' && (await readLeadHold(transaction, ref, capture))) {
+      return null;
+    }
     const hasMore = hasOpenMoreToSort(capture.questionState);
     if (mode === 'rest') {
       if (!hasMore) return null;
@@ -366,11 +407,36 @@ async function readEarlierTurns(
     .orderBy('turnIndex', 'desc')
     .limit(EARLIER_TURNS)
     .get();
+  const fetched = new Set(earlier.docs.map((doc) => doc.id));
+  const readSaid = (data: CaptureDoc) => {
+    const said = openTitle(key, data.sealed)?.sealed.text;
+    return typeof said === 'string' && said ? said : null;
+  };
+  const isFolded = (data: CaptureDoc) =>
+    typeof data.turnLeadId === 'string' && fetched.has(data.turnLeadId);
+  const foldedWords = new Map(
+    earlier.docs
+      .slice()
+      .reverse()
+      .flatMap((doc): [string, string][] => {
+        const data = doc.data() as CaptureDoc;
+        const words = readSaid(data);
+        return isFolded(data) && words
+          ? [[data.turnLeadId as string, words]]
+          : [];
+      })
+      .reduce(
+        (all, [leadId, words]) =>
+          all.set(leadId, [...(all.get(leadId) ?? []), words]),
+        new Map<string, string[]>(),
+      ),
+  );
   const turns = await Promise.all(
     earlier.docs.map(async (doc): Promise<EarlierTurn[]> => {
       const data = doc.data() as CaptureDoc;
-      const said = openTitle(key, data.sealed)?.sealed.text;
-      if (typeof said !== 'string' || !said) return [];
+      const own = readSaid(data);
+      if (!own || isFolded(data)) return [];
+      const said = [own, ...(foldedWords.get(doc.id) ?? [])].join('\n');
       const executions = await Promise.all(
         (data.executionIds ?? [])
           .slice(0, EARLIER_EXECUTIONS)
@@ -423,9 +489,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     throw new SortFailure('noKey', false);
   });
   const opened = openForHelm(key, capture.sealed);
-  const text = typeof opened.text === 'string' ? opened.text : null;
-  if (!text) throw new SortFailure('unreadable');
-  const reading = toReading(opened.reading);
+  const leadText = typeof opened.text === 'string' ? opened.text : null;
+  if (!leadText) throw new SortFailure('unreadable');
+  const leadMessage: JoinedMessage = {
+    text: leadText,
+    reading: toReading(opened.reading),
+  };
 
   const [profile, openTasks, alreadyMade, screen, earlierTurns] =
     await Promise.all([
@@ -453,66 +522,137 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
-  const context = buildContext({
-    text,
-    reading,
-    createdAt: capture.createdAt,
-    timeZone,
-    tasks,
-    alreadyMade,
-    screen,
-    earlierTurns,
-  });
 
-  const provider = pickProvider(text, reading);
-  const held = await reserveAiCall(firestore, uid, Date.now());
-  if (held) {
-    await failClaim(
+  const readJoined = async (): Promise<
+    JoinedRead & { messages: JoinedMessage[] }
+  > => {
+    if (mode === 'rest') {
+      return { ids: [], joinedCount: 0, messages: [leadMessage] };
+    }
+    const lead = (await claimed.captureRef.get()).data() as
+      CaptureDoc | undefined;
+    const listed = (lead?.joinedCaptureIds ?? []).filter(
+      (id) => typeof id === 'string' && ID_RE.test(id),
+    );
+    const wanted = [...new Set(listed)].slice(0, MAX_JOINED);
+    const snapshots = wanted.length
+      ? await firestore.getAll(
+          ...wanted.map((id) => firestore.doc(`${base}/captures/${id}`)),
+        )
+      : [];
+    const joined = snapshots.filter((snapshot) => {
+      const data = snapshot.data() as CaptureDoc | undefined;
+      return (
+        data?.turnLeadId === claimed.captureRef.id && data.status === 'received'
+      );
+    });
+    const messages = joined.flatMap((snapshot): JoinedMessage[] => {
+      const joinedOpened = openTitle(
+        key,
+        (snapshot.data() as CaptureDoc).sealed,
+      )?.sealed;
+      return typeof joinedOpened?.text === 'string' && joinedOpened.text
+        ? [
+            {
+              text: joinedOpened.text,
+              reading: toReading(joinedOpened.reading),
+            },
+          ]
+        : [];
+    });
+    return {
+      ids: joined.map((snapshot) => snapshot.id),
+      joinedCount: listed.length,
+      messages: [leadMessage, ...messages],
+    };
+  };
+
+  const run = async (
+    read: JoinedRead & { messages: JoinedMessage[] },
+    signal: AbortSignal,
+  ) => {
+    const combined = combineMessages(read.messages);
+    const context = buildContext({
+      text: combined.text,
+      texts: combined.texts,
+      reading: combined.reading,
+      createdAt: capture.createdAt,
+      timeZone,
+      tasks,
+      alreadyMade,
+      screen,
+      earlierTurns,
+    });
+    const provider = pickProvider(combined.text, combined.reading);
+    const held = await reserveAiCall(firestore, uid, Date.now());
+    if (held) {
+      await failClaim(
+        firestore,
+        claimed.captureRef,
+        claimed.claimId,
+        new SortFailure('held', false),
+        { heldReason: held, lastErrorCode: null },
+        mode,
+      );
+      throw new HttpsError(
+        'resource-exhausted',
+        'This will be sorted a little later.',
+        { heldReason: held },
+      );
+    }
+    const mcp = await createHelmMcpServer({
+      uid,
+      key,
+      aliases: context.aliases,
       firestore,
-      claimed.captureRef,
-      claimed.claimId,
-      new SortFailure('held', false),
-      { heldReason: held, lastErrorCode: null },
-      mode,
-    );
-    throw new HttpsError(
-      'resource-exhausted',
-      'This will be sorted a little later.',
-      { heldReason: held },
-    );
-  }
-  const mcp = await createHelmMcpServer({
-    uid,
-    key,
-    aliases: context.aliases,
-    firestore,
-  });
-  const loop = await provider
-    .runToolLoop({
-      role: 'interpret',
-      system:
-        mode === 'rest' ? `${SYSTEM_PROMPT}\n\n${REST_PROMPT}` : SYSTEM_PROMPT,
-      messages: [{ role: 'user', content: context.message }],
-      mcpClient: mcp.client,
-      terminalTool: FILE_RESULTS_TOOL,
-      limits: LOOP_LIMITS,
-      onUsage: async (usage) => {
-        const cost = getUsageCost('interpret', usage);
-        if (cost <= 0) return;
-        await recordAiSpend(firestore, Date.now(), cost).catch(() =>
-          logger.error('helm.ai.spendNotRecorded'),
-        );
-      },
-    })
-    .finally(() => mcp.close().catch(() => undefined));
+    });
+    const loop = await provider
+      .runToolLoop({
+        role: 'interpret',
+        system:
+          mode === 'rest'
+            ? `${SYSTEM_PROMPT}\n\n${REST_PROMPT}`
+            : SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: context.message }],
+        mcpClient: mcp.client,
+        terminalTool: FILE_RESULTS_TOOL,
+        limits: LOOP_LIMITS,
+        signal,
+        onUsage: async (usage) => {
+          const cost = getUsageCost('interpret', usage);
+          if (cost <= 0) return;
+          await recordAiSpend(firestore, Date.now(), cost).catch(() =>
+            logger.error('helm.ai.spendNotRecorded'),
+          );
+        },
+      })
+      .finally(() => mcp.close().catch(() => undefined));
 
-  logger.info('helm.ai.call', {
-    role: 'interpret',
-    endedBy: loop.endedBy,
-    errorCode: loop.errorCode,
-    toolCalls: loop.toolCalls,
-    ...loop.usage,
+    logger.info('helm.ai.call', {
+      role: 'interpret',
+      endedBy: loop.endedBy,
+      errorCode: loop.errorCode,
+      toolCalls: loop.toolCalls,
+      messages: read.messages.length,
+      ...loop.usage,
+    });
+    return { endedBy: loop.endedBy, loop, context, combined };
+  };
+
+  const { read, result } = await interpretWithJoins({
+    readJoined,
+    run,
+    watchJoins: (readCount, onGrow) =>
+      claimed.captureRef.onSnapshot(
+        (snapshot) => {
+          const listed = (snapshot.data() as CaptureDoc | undefined)
+            ?.joinedCaptureIds;
+          if ((listed?.length ?? 0) > readCount) onGrow();
+        },
+        () => undefined,
+      ),
   });
+  const { loop, context, combined } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -522,7 +662,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   }
 
   const reply = normalizeNomosReply(loop.terminalInput, {
-    reading,
+    reading: combined.reading,
     aliases: context.aliases,
     alreadyMade,
   });
@@ -536,6 +676,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     commands,
     hasMore: reply.hasMore,
     base,
+    joinedIds: read.ids,
+    messageCount: read.messages.length,
   });
 }
 
@@ -545,6 +687,8 @@ async function writeResult(
     commands: NomosCommand[];
     hasMore: boolean;
     base: string;
+    joinedIds: string[];
+    messageCount: number;
   },
 ): Promise<SortResult> {
   const {
@@ -557,6 +701,8 @@ async function writeResult(
     hasMore,
     base,
     mode,
+    joinedIds,
+    messageCount,
   } = input;
   const tasksPath = `${base}/tasks`;
   const targetIds = [
@@ -576,10 +722,7 @@ async function writeResult(
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
     ]);
-    const answered = readStoredResult<SortResult>(
-      requestSnap.data(),
-      captureRef.id,
-    );
+    const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
     const capture = captureSnap.data() as CaptureDoc | undefined;
     if (
@@ -589,6 +732,28 @@ async function writeResult(
     ) {
       return null;
     }
+    const joinedRefs = (ids: string[]) =>
+      ids.map((id) => captureRef.parent.doc(id));
+    const listedNow = [
+      ...new Set(
+        (capture.joinedCaptureIds ?? []).filter(
+          (id) => typeof id === 'string' && ID_RE.test(id),
+        ),
+      ),
+    ];
+    const lateIds =
+      mode === 'full' ? listedNow.filter((id) => !joinedIds.includes(id)) : [];
+    const [readSnaps, lateSnaps] = await Promise.all(
+      [mode === 'full' ? joinedIds : [], lateIds].map((ids) =>
+        Promise.all(joinedRefs(ids).map((ref) => transaction.get(ref))),
+      ),
+    );
+    const isStillJoined = (snapshot: { data(): unknown }) => {
+      const data = snapshot.data() as CaptureDoc | undefined;
+      return data?.turnLeadId === captureRef.id && data.status === 'received';
+    };
+    const sortedJoined = readSnaps.filter(isStillJoined);
+    const releasedJoined = lateSnaps.filter(isStillJoined);
     const existing = new Map<string, ExistingTask>(
       targetSnaps.flatMap((snapshot): [string, ExistingTask][] => {
         const task = snapshot.data() as TaskDoc | undefined;
@@ -638,7 +803,13 @@ async function writeResult(
       );
       transaction.create(
         executionRef,
-        buildExecution(plan, { commands, captureId: captureRef.id, now, seal }),
+        buildExecution(plan, {
+          commands,
+          captureId: captureRef.id,
+          now,
+          seal,
+          messageCount,
+        }),
       );
     }
     const settled = settleCapture({
@@ -652,7 +823,23 @@ async function writeResult(
       questionState: capture.questionState ?? {},
       executionIds: capture.executionIds ?? [],
     });
+    if (mode === 'full') {
+      sortedJoined.forEach((snapshot) =>
+        transaction.update(snapshot.ref, {
+          status: 'sorted',
+          sortedAt: now,
+          claimId: null,
+          claimedAt: null,
+        }),
+      );
+      releasedJoined.forEach((snapshot) =>
+        transaction.update(snapshot.ref, { turnLeadId: null }),
+      );
+    }
     transaction.update(captureRef, {
+      ...(mode === 'full'
+        ? { joinedCaptureIds: joinedIds, turnLeadId: null }
+        : {}),
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,
@@ -665,7 +852,11 @@ async function writeResult(
       lastErrorCode: null,
       seenAt: null,
     });
-    const sorted = toResult(settled.status, isFiling ? executionRef.id : null);
+    const sorted = toResult(
+      settled.status,
+      isFiling ? executionRef.id : null,
+      releasedJoined.map((snapshot) => snapshot.id),
+    );
     transaction.set(requestRef, {
       result: sorted,
       captureId: captureRef.id,
@@ -741,7 +932,7 @@ export const sortHelmCapture = onCall(
       requestRef.get(),
       captureRef.get(),
     ]);
-    const answered = readStoredResult<SortResult>(stored.data(), captureId);
+    const answered = readAnswered(stored.data(), captureId);
     if (answered) return answered;
     const early = snapshot.data() as CaptureDoc | undefined;
     if (!early) throw new HttpsError('not-found', 'This capture is gone.');

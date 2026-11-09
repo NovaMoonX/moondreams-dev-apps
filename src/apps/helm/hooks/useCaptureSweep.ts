@@ -27,10 +27,20 @@ const isHoldOver = (
     : isUtcDayOver(heldAt, now);
 };
 
-const isDue = (capture: OpenCapture, now: number) =>
-  capture.status === 'received' ||
-  (capture.status === 'interpreting' &&
-    now - (capture.claimedAt ?? 0) > SWEEP_LEASE_MS);
+const isDue = (capture: OpenCapture, now: number, waiting: OpenCapture[]) => {
+  const lead = capture.turnLeadId
+    ? waiting.find((entry) => entry.id === capture.turnLeadId)
+    : undefined;
+  const isLeadWorking =
+    lead !== undefined &&
+    (lead.status === 'received' || lead.status === 'interpreting');
+  return (
+    !isLeadWorking &&
+    (capture.status === 'received' ||
+      (capture.status === 'interpreting' &&
+        now - (capture.claimedAt ?? 0) > SWEEP_LEASE_MS))
+  );
+};
 
 function createSweep() {
   const state = {
@@ -48,11 +58,11 @@ function createSweep() {
   const sweepNext = async (tried: Set<string>): Promise<void> => {
     if (!isActive()) return;
     const now = Date.now();
-    const next = store
-      .getState()
-      .helm.waitingCaptures.captures.filter(
+    const waiting = store.getState().helm.waitingCaptures.captures;
+    const next = waiting
+      .filter(
         (capture) =>
-          isDue(capture, now) &&
+          isDue(capture, now, waiting) &&
           !tried.has(capture.id) &&
           !capture.hasPendingWrites &&
           !isSorting(capture.id) &&

@@ -23,10 +23,12 @@ export interface ToolLoopRequest {
   limits: ToolLoopLimits;
   /** Called with each response's usage as it arrives, so spend is recorded even if the call is cut short. */
   onUsage?: (usage: ModelUsage) => void | Promise<void>;
+  /** Ends the loop at the next step with `aborted`; usage already reported stays reported. */
+  signal?: AbortSignal;
 }
 
 export type ToolLoopEnd =
-  'terminal' | 'limit' | 'refused' | 'noTerminal' | 'error';
+  'terminal' | 'limit' | 'refused' | 'noTerminal' | 'error' | 'aborted';
 
 export interface ToolLoopResult {
   terminalInput: unknown;

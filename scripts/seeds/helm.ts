@@ -401,6 +401,147 @@ async function buildMove(input: {
   return { execution, due: toDue, editedAt: sortedAt };
 }
 
+/** Three messages sent before the reply started, in today's session: the first leads, the other two joined it, and one reply covers them all. */
+const BACK_TO_BACK = {
+  messages: [
+    { text: 'Add milk', secondsAgo: 30 },
+    { text: 'and eggs', secondsAgo: 20 },
+    { text: 'oh and call Dana', secondsAgo: 10 },
+  ],
+  tasks: ['Buy milk', 'Buy eggs', 'Call Dana'],
+  summary: 'Got all three: made 3 tasks',
+};
+
+async function buildBackToBack(input: {
+  uid: string;
+  turnIndexFrom: number;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, turnIndexFrom, now, timeZone, encryption } = input;
+  const captureIds = BACK_TO_BACK.messages.map(
+    (_, order) => `seed-turn-b2b-${order + 1}`,
+  );
+  const [leadId, ...joinedIds] = captureIds;
+  const executionId = 'seed-execution-b2b';
+  const lastAt = now - BACK_TO_BACK.messages.at(-1)!.secondsAgo * 1000;
+  const sortedAt = lastAt + SORT_DELAY_MS;
+  const captures = await Promise.all(
+    BACK_TO_BACK.messages.map(async (message, order) => {
+      const createdAt = now - message.secondsAgo * 1000;
+      const capture: Capture = {
+        inputMode: 'typed',
+        medium: 'web',
+        sessionId: `seed-${uid}-today`,
+        turnIndex: turnIndexFrom + order,
+        route: order === 0 ? 'quick' : null,
+        status: 'sorted',
+        heldReason: null,
+        claimId: null,
+        claimedAt: null,
+        attempts: 0,
+        lastErrorCode: null,
+        questionState: {},
+        executionIds: order === 0 ? [executionId] : [],
+        turnLeadId: order === 0 ? null : leadId,
+        joinedCaptureIds: order === 0 ? joinedIds : [],
+        seenAt: createdAt,
+        createdAt,
+        sortedAt,
+        screen: null,
+        sealed: await sealJson<CaptureSealed>(
+          {
+            text: message.text,
+            reading: readCapture(message.text, {
+              now: createdAt,
+              timeZone,
+              assistantName: DEFAULT_ASSISTANT_NAME,
+            }),
+          },
+          encryption,
+        ),
+      };
+      return { id: captureIds[order], capture };
+    }),
+  );
+  const tasks = await Promise.all(
+    BACK_TO_BACK.tasks.map(async (title, order) => {
+      const task: Task = {
+        status: 'open',
+        importance: null,
+        isUrgent: false,
+        due: null,
+        durationMinutes: null,
+        energy: null,
+        context: null,
+        projectId: null,
+        milestoneId: null,
+        whoIds: [],
+        placeIds: [],
+        notUntil: null,
+        waitsOnTaskIds: [],
+        waitsOnWhoId: null,
+        stepState: {},
+        mediaIds: [],
+        createdBy: 'nomos',
+        sourceCaptureId: leadId,
+        executionId,
+        createdAt: sortedAt,
+        lastEditedAt: null,
+        completedAt: null,
+        sealed: await sealJson<TaskSealed>(
+          { title, notes: null, steps: {} },
+          encryption,
+        ),
+      };
+      return { id: `seed-task-b2b-${order + 1}`, task };
+    }),
+  );
+  const execution: Execution = {
+    captureId: leadId,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: tasks.map(({ id }) => ({
+      op: 'create',
+      collection: 'tasks',
+      docId: id,
+    })),
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: sortedAt,
+    decidedAt: sortedAt,
+    finishedAt: sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: BACK_TO_BACK.summary,
+        commands: BACK_TO_BACK.tasks.map((title) => ({
+          kind: 'createTask',
+          title,
+          due: null,
+        })),
+        effects: BACK_TO_BACK.tasks.map((title) => ({
+          written: {
+            'sealed.title': title,
+            due: null,
+            status: 'open',
+            isUrgent: false,
+          },
+          previous: null,
+        })),
+        undoReport: null,
+        goneIds: null,
+      },
+      encryption,
+    ),
+  };
+  return { captures, tasks, execution, executionId };
+}
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -464,6 +605,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             claimedAt: null,
             ...heldFields,
             executionIds: isSorted ? [executionId] : [],
+            turnLeadId: null,
+            joinedCaptureIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             createdAt: turnTime,
             sortedAt: isSorted ? sortedAt : null,
@@ -693,14 +836,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           );
         }
       });
-      return turns.reduce(
-        (total, turn) =>
-          total +
-          1 +
-          turn.tasks.length +
-          (turn.execution ? 1 : 0) +
-          (turn.undo ? 1 : 0),
-        handTasks.length,
+      const backToBack = await buildBackToBack({
+        uid: user.uid,
+        turnIndexFrom: ALL_TURNS.filter((entry) => entry.session === 'today')
+          .length,
+        now: context.now,
+        timeZone,
+        encryption,
+      });
+      backToBack.captures.forEach(({ id, capture }) =>
+        batch.set(person.collection('captures').doc(id), capture),
+      );
+      backToBack.tasks.forEach((entry) =>
+        batch.set(person.collection('tasks').doc(entry.id), entry.task),
+      );
+      batch.set(
+        person.collection('executions').doc(backToBack.executionId),
+        backToBack.execution,
+      );
+      const backToBackCount =
+        backToBack.captures.length + backToBack.tasks.length + 1;
+      return (
+        backToBackCount +
+        turns.reduce(
+          (total, turn) =>
+            total +
+            1 +
+            turn.tasks.length +
+            (turn.execution ? 1 : 0) +
+            (turn.undo ? 1 : 0),
+          handTasks.length,
+        )
       );
     }),
   );

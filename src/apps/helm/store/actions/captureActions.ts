@@ -1,7 +1,9 @@
 import {
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
+  type DocumentReference,
   getDoc,
   setDoc,
   updateDoc,
@@ -52,6 +54,20 @@ const executionsInFlight = new Set<string>();
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
 
+function writeJoined(
+  uid: string,
+  leadId: string,
+  reference: DocumentReference,
+  capture: Capture,
+) {
+  const batch = writeBatch(db);
+  batch.set(reference, capture);
+  batch.update(doc(capturesOf(uid), leadId), {
+    joinedCaptureIds: arrayUnion(reference.id),
+  });
+  return batch.commit();
+}
+
 /** Seals what the person typed and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
@@ -61,6 +77,7 @@ export async function sendCapture(
     sessionId: string;
     turnIndex: number;
     createdAt: number;
+    leadId: string | null;
     reading: CaptureReading;
     screen: ScreenContext | null;
   },
@@ -89,6 +106,8 @@ export async function sendCapture(
     lastErrorCode: null,
     questionState: {},
     executionIds: [],
+    turnLeadId: turn.leadId,
+    joinedCaptureIds: [],
     seenAt: createdAt,
     createdAt,
     sortedAt: null,
@@ -96,13 +115,16 @@ export async function sendCapture(
     sealed,
   };
   const reference = doc(capturesOf(uid));
-  const write = setDoc(reference, capture);
+  // A message joining a turn is written with its lead's list in one batch, so neither lands without the other.
+  const write = turn.leadId
+    ? writeJoined(uid, turn.leadId, reference, capture)
+    : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
     () => sortCapture(reference.id),
     () => undefined,
   );
-  return { write };
+  return { write, id: reference.id };
 }
 
 /** Fetches the executions of sorted turns that aren't in the store, once each; one that can't be opened is recorded so its turn says so. Reads the store at the call and stops if another person's Helm is open. */

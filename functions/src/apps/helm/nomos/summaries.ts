@@ -13,8 +13,20 @@ export interface EffectCounts {
   completed: number;
 }
 
-/** A code template with no name or tone, past tense: "Made 2 tasks and marked 1 done". */
-export function summarize(counts: EffectCounts): string {
+const NUMBER_WORDS = [
+  'both',
+  'all three',
+  'all four',
+  'all five',
+  'all six',
+  'all seven',
+  'all eight',
+  'all nine',
+  'all ten',
+];
+
+/** A code template with no name or tone, past tense: "Made 2 tasks and marked 1 done"; over several messages sent in a row: "Got both: made 2 tasks". */
+export function summarize(counts: EffectCounts, messageCount = 1): string {
   const made = counts.made
     ? plural(counts.made, 'made a task', `made ${counts.made} tasks`)
     : null;
@@ -33,7 +45,11 @@ export function summarize(counts: EffectCounts): string {
     parts.length < 2
       ? (parts[0] ?? '')
       : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
-  return joined.charAt(0).toUpperCase() + joined.slice(1);
+  const prefix = NUMBER_WORDS[messageCount - 2];
+  if (!prefix || !joined) {
+    return joined.charAt(0).toUpperCase() + joined.slice(1);
+  }
+  return `Got ${prefix}: ${joined}`;
 }
 
 export type CodeQuestionKind = 'couldNotRead' | 'moreToSort';

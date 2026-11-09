@@ -20,6 +20,8 @@ import { getHomeHeldLine } from '@apps/helm/utils/heldCaptures';
 
 interface TurnCardProps {
   capture: OpenCapture;
+  /** Messages that joined this turn, in order: each its own bubble, with one reply for them all. */
+  joined?: OpenCapture[];
   /** On home only the newest turn says it was saved as written; a turn that waits or needs the person says so wherever it is. */
   showsOutcome: boolean;
   /** The chips of what was read, shown as they were sealed, with nothing to change. */
@@ -56,6 +58,7 @@ function LostResult({
 
 function TurnCard({
   capture,
+  joined = [],
   showsOutcome,
   showsReading,
   isOnHome,
@@ -87,25 +90,36 @@ function TurnCard({
   useEffect(() => {
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
+  const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
   const hasLost =
     hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
   return (
     <article className='flex flex-col items-end gap-1'>
-      {capture.isUnreadable ? (
-        <p className='helm-card text-muted-foreground max-w-[84%] px-3.5 py-2.5 text-[15px] leading-[21px]'>
-          {HELM_COPY.unreadable}
-        </p>
-      ) : (
-        <p className='bg-primary text-primary-foreground max-w-[84%] rounded-[18px_18px_4px_18px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
-          {capture.text}
-        </p>
-      )}
+      <div className='flex w-full flex-col items-end gap-1'>
+        {[capture, ...joined].map((message) =>
+          message.isUnreadable ? (
+            <p
+              key={message.id}
+              className='helm-card text-muted-foreground max-w-[84%] px-3.5 py-2.5 text-[15px] leading-[21px]'
+            >
+              {HELM_COPY.unreadable}
+            </p>
+          ) : (
+            <p
+              key={message.id}
+              className='bg-primary text-primary-foreground max-w-[84%] rounded-[18px_18px_4px_18px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'
+            >
+              {message.text}
+            </p>
+          ),
+        )}
+      </div>
       <time
-        dateTime={new Date(capture.createdAt).toISOString()}
+        dateTime={new Date(lastMessage.createdAt).toISOString()}
         className='text-muted-foreground text-[13px] tabular-nums'
       >
-        {formatTime(capture.createdAt)}
+        {formatTime(lastMessage.createdAt)}
       </time>
       {showsReading && !capture.isUnreadable && !hasCard && (
         <div className='flex max-w-[84%] justify-end'>

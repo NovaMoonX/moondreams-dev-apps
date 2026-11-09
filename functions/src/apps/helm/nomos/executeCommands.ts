@@ -217,6 +217,7 @@ export function buildExecution(
   plan: WritePlan,
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     commands: NomosCommand[];
+    messageCount?: number;
   },
 ): Record<string, unknown> {
   return {
@@ -234,7 +235,7 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
-      summary: summarize(plan.counts),
+      summary: summarize(plan.counts, input.messageCount),
       commands: input.commands,
       effects: plan.effects,
       undoReport: null,

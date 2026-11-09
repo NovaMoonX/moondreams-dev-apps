@@ -7,6 +7,7 @@ import type { HeldReason } from '@apps/helm/types';
 interface SortResult {
   status: 'sorted' | 'received' | 'needsYou' | 'failed';
   executionId: string | null;
+  releasedIds?: string[];
 }
 
 export type SortMode = 'full' | 'rest';
@@ -84,7 +85,8 @@ export async function sortCapture(
       mode,
     });
     unreachable.delete(captureId);
-    const { status } = result.data;
+    const { status, releasedIds } = result.data;
+    (releasedIds ?? []).forEach((id) => void sortCapture(id));
     const isSorted =
       mode === 'rest'
         ? status === 'sorted'

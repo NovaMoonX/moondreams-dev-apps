@@ -186,7 +186,10 @@ test('buildContext keeps a typed closing tag inside its string', () => {
 });
 
 test('the prompt names both blocks as data and explains this and these', () => {
-  assert.match(SYSTEM_PROMPT, /<screen>, <earlier_turns> and <capture>/);
+  assert.match(
+    SYSTEM_PROMPT,
+    /<screen>, <earlier_turns>, <messages> and <capture>/,
+  );
   assert.match(SYSTEM_PROMPT, /"this", "it" and "that" mean its focus/);
   assert.match(SYSTEM_PROMPT, /Never file them again/);
 });

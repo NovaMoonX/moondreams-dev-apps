@@ -97,6 +97,10 @@ export interface Capture {
   lastErrorCode: string | null;
   questionState: Record<string, QuestionState>;
   executionIds: string[];
+  /** Set on a message that joined an earlier one's turn; null on a lead and on any other turn. */
+  turnLeadId: string | null;
+  /** On a lead, the messages that joined it in order, at most 9. */
+  joinedCaptureIds: string[];
   seenAt: number | null;
   createdAt: number;
   sortedAt: number | null;

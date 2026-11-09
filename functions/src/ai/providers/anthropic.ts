@@ -63,6 +63,7 @@ export function createAnthropicProvider(
     terminalTool,
     limits,
     onUsage,
+    signal,
   }: ToolLoopRequest): Promise<ToolLoopResult> {
     const spec = getModelSpec(role);
     const startedAt = Date.now();
@@ -119,6 +120,7 @@ export function createAnthropicProvider(
       ];
 
       for (;;) {
+        if (signal?.aborted) return end('aborted');
         if (state.turns >= limits.maxTurns || timeLeft() < MIN_TURN_MS) {
           return end('limit');
         }
@@ -134,7 +136,7 @@ export function createAnthropicProvider(
             betas: [FALLBACK_BETA],
             fallbacks: 'default',
           },
-          { timeout: Math.min(TURN_TIMEOUT_MS, timeLeft()) },
+          { timeout: Math.min(TURN_TIMEOUT_MS, timeLeft()), signal },
         );
         state.turns += 1;
         const turnUsage = toUsage(response.usage);
@@ -165,6 +167,7 @@ export function createAnthropicProvider(
 
         const results: Block[] = [];
         for (const use of uses) {
+          if (signal?.aborted) return end('aborted');
           const isRefused = toolCalls.length >= limits.maxToolCalls;
           if (!isRefused) toolCalls.push(use.name);
           const result = isRefused
@@ -198,6 +201,9 @@ export function createAnthropicProvider(
         messages.push({ role: 'user', content: results });
       }
     } catch (error) {
+      if (signal?.aborted || error instanceof Anthropic.APIUserAbortError) {
+        return end('aborted');
+      }
       return end('error', null, getErrorCode(error));
     }
   }

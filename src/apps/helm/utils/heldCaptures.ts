@@ -29,7 +29,15 @@ export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
   return capture.status === 'received' ? 'waiting' : null;
 };
 
-/** The turns that need the person first, then the ones that wait, each oldest first; any other turn is left out. */
+const ridesWithLead = (capture: OpenCapture, captures: OpenCapture[]) =>
+  capture.turnLeadId !== null &&
+  captures.some(
+    (entry) =>
+      entry.id === capture.turnLeadId &&
+      (entry.status === 'received' || entry.status === 'interpreting'),
+  );
+
+/** The turns that need the person first, then the ones that wait, each oldest first; any other turn is left out, and so is a joined message while its lead is in the list (it is read with its lead). */
 export function toHeldItems(captures: OpenCapture[]): {
   needsYou: HeldItem[];
   waiting: HeldItem[];
@@ -38,7 +46,9 @@ export function toHeldItems(captures: OpenCapture[]): {
     .sort((a, b) => a.createdAt - b.createdAt)
     .flatMap((capture) => {
       const kind = toHeldKind(capture);
-      return kind ? [{ kind, capture }] : [];
+      return kind && !ridesWithLead(capture, captures)
+        ? [{ kind, capture }]
+        : [];
     });
   return {
     needsYou: items.filter((item) => item.kind !== 'waiting'),

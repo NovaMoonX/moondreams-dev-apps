@@ -10,7 +10,11 @@ import { formatDate } from '@/utils/formatUtils';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import { loadEarlierSessions } from '@apps/helm/store/actions/captureActions';
-import { groupSessionsByDay, type Session } from '@apps/helm/utils/sessions';
+import {
+  groupSessionsByDay,
+  groupTurns,
+  type Session,
+} from '@apps/helm/utils/sessions';
 
 const TURN_ESTIMATED_HEIGHT = 88;
 
@@ -47,14 +51,15 @@ function SessionTurns({
 }) {
   return (
     <div className='flex flex-col gap-4'>
-      {session.turns.map((turn) => (
+      {groupTurns(session.turns).map(({ lead, joined }) => (
         <TurnCard
-          key={turn.id}
-          capture={turn}
-          showsOutcome={turn.id === latestId}
+          key={lead.id}
+          capture={lead}
+          joined={joined}
+          showsOutcome={(joined.at(-1) ?? lead).id === latestId}
           showsReading={false}
           isOnHome
-          showsNotice={turn.id === noticeId}
+          showsNotice={lead.id === noticeId}
         />
       ))}
     </div>
@@ -74,7 +79,7 @@ function ConversationThread({
   const latestId = sessions.at(-1)?.turns.at(-1)?.id ?? null;
   const noticeId =
     sessions
-      .flatMap((session) => session.turns)
+      .flatMap((session) => groupTurns(session.turns).map((turn) => turn.lead))
       .filter((turn) => turn.status === 'sorted')
       .at(-1)?.id ?? null;
 

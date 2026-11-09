@@ -32,6 +32,24 @@ export function groupSessions(captures: OpenCapture[]): Session[] {
     .sort((a, b) => a.startedAt - b.startedAt);
 }
 
+export interface TurnGroup {
+  lead: OpenCapture;
+  joined: OpenCapture[];
+}
+
+/** A session's turns as leads with the messages that joined them, in order; a joined message whose lead is not loaded, or that was released, stands as its own turn. */
+export function groupTurns(turns: OpenCapture[]): TurnGroup[] {
+  const ids = new Set(turns.map((turn) => turn.id));
+  const isJoined = (turn: OpenCapture) =>
+    turn.turnLeadId !== null && ids.has(turn.turnLeadId);
+  return turns
+    .filter((turn) => !isJoined(turn))
+    .map((lead) => ({
+      lead,
+      joined: turns.filter((turn) => turn.turnLeadId === lead.id),
+    }));
+}
+
 /** The session still open: the last turn's, while it is under the idle gap. */
 export function getOpenSessionId(sorted: OpenCapture[], now: number) {
   const last = sorted.at(-1);

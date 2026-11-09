@@ -63,6 +63,13 @@ const toScreen = (value: unknown): ScreenContext | null => {
   return screen as ScreenContext;
 };
 
+const toLeadId = (value: unknown) => (typeof value === 'string' ? value : null);
+
+const toIds = (value: unknown) =>
+  Array.isArray(value) && value.every((id) => typeof id === 'string')
+    ? (value as string[])
+    : [];
+
 /** A turn that won't open is kept, with no words, so the surface can say so instead of dropping it. */
 async function openCapture(
   entry: DocumentSnapshot,
@@ -86,6 +93,8 @@ async function openCapture(
     questionState: data.questionState ?? {},
     hasPendingWrites: isMetadataTracked && entry.metadata.hasPendingWrites,
     executionIds: data.executionIds ?? [],
+    turnLeadId: toLeadId(data.turnLeadId),
+    joinedCaptureIds: toIds(data.joinedCaptureIds),
     seenAt: data.seenAt ?? null,
     createdAt: data.createdAt ?? 0,
     sortedAt: data.sortedAt ?? null,

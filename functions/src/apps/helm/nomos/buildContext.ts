@@ -1,5 +1,6 @@
 import { createAliasBook, type AliasBook } from './aliases.js';
 import type { CaptureReading, TaskDue, Token } from './commands.js';
+import { withoutAddress } from './joinedTurn.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
 
 export interface ContextTask {
@@ -10,6 +11,8 @@ export interface ContextTask {
 
 export interface ContextInput {
   text: string;
+  /** Each message of a turn made of several, address already stripped. */
+  texts?: string[];
   reading: CaptureReading;
   createdAt: number;
   timeZone: string;
@@ -68,12 +71,6 @@ const describeNow = (at: number, timeZone: string) => {
 
 const toTokenView = (token: Token) => ({ id: token.id, text: token.text });
 
-const withoutAddress = (text: string, reading: CaptureReading) => {
-  const address = reading.addressedAs;
-  if (!address) return text;
-  return text.slice(address.end).replace(/^\s*,\s*/, '');
-};
-
 /** The whole of what the model is told about this capture. Records come as aliases; no id, no uid. */
 export function buildContext(input: ContextInput): {
   message: string;
@@ -128,7 +125,11 @@ export function buildContext(input: ContextInput): {
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
       : []),
-    `<capture>${toDataJson(text)}</capture>`,
+    input.texts && input.texts.length > 1
+      ? `<messages>${toDataJson(
+          input.texts.map((entry) => entry.slice(0, MAX_CAPTURE_CHARS)),
+        )}</messages>`
+      : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
   return { message, aliases };
 }

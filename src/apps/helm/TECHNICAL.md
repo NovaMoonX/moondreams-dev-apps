@@ -791,10 +791,11 @@ callable sortHelmCapture({ captureId, requestKey, noteIds, mode: 'full' | 'rest'
      restarts once with every message (round 6d; section 21)
   6. the file_results input → normalizeNomosReply → match names → answer guards (section 6)
      → policy → plan the writes
-  7. one transaction: re-read capture (claimId still ours; joinedCaptureIds unchanged since step 3, else back to 3
-     once, and a message that joins after that becomes its own turn) and every doc an update touches;
-     write sealed creates/updates, the Execution(s), the capture (sealed answer/questions, status)
-  8. return { status, executionId, questionIds, planDayKey, hasAnswer, spoken }   (round 6: the line to say)
+  7. one transaction: re-read capture (claimId still ours), its joined messages and every doc an update touches;
+     the joined messages that were read are marked sorted, any that joined after the read are released as
+     their own turns (turnLeadId cleared); write sealed creates/updates, the Execution(s), the capture
+  8. return { status, executionId, questionIds, planDayKey, hasAnswer, spoken, releasedIds }
+     (round 6: the line to say; round 6d: the released messages, which the device sorts next)
         ▼
 device: listeners deliver the sealed records; the home surface draws the turn's result lines + Undo,
         the voice speaks `spoken` (section 20),

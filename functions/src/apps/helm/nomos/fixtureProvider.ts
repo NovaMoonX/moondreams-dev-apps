@@ -19,6 +19,21 @@ const FILLER = new Set([
   'uh',
 ]);
 
+const ANSWER_DELAY_MS = 1_200;
+
+const waitOrAbort = (signal?: AbortSignal) =>
+  new Promise<boolean>((resolve) => {
+    if (signal?.aborted) return resolve(true);
+    const done = (isAborted: boolean) => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
+      resolve(isAborted);
+    };
+    const onAbort = () => done(true);
+    const timer = setTimeout(() => done(false), ANSWER_DELAY_MS);
+    signal?.addEventListener('abort', onAbort);
+  });
+
 const hasMeaning = (title: string) =>
   /\p{L}/u.test(title) &&
   title
@@ -102,7 +117,16 @@ export function createFixtureProvider(
   reading: CaptureReading,
 ): ModelProvider {
   return {
-    runToolLoop: async ({ messages }) => {
+    runToolLoop: async ({ messages, signal }) => {
+      if (await waitOrAbort(signal)) {
+        return {
+          terminalInput: null,
+          endedBy: 'aborted',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
       const followUp = readFollowUp(text, reading, messages[0]?.content ?? '');
       if (followUp) {
         return {

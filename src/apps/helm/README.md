@@ -24,6 +24,7 @@ Built:
 - Every card of what the assistant did has an Undo that takes back what you haven't changed since, and says what it kept; Settings opens Activity, every change newest first, and What the AI sees.
 - Tasks: open one from Today or Tasks to change its day, steps, importance, length, energy, context, when it can start and what it waits on, tick it with an Undo, or delete it with an Undo; New task in a page's ⋯ makes one by hand; Today's All tasks lists every open one, with those that can't start yet folded.
 - Today, Tasks and an open task end in an ask bar ("Ask about today"): it opens the conversation over the page with an "About …" chip you can remove, the assistant reads the records the page shows, and Back returns to the page where it was.
+- Several messages sent before the reply starts are one turn: each stays its own bubble, one reply covers them all, and a message sent after the reply starts is a new turn; it works offline too.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

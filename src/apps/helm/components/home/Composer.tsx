@@ -182,13 +182,13 @@ function Composer({
         }),
         { dismissed: sentDismissed, days: sentDays, timeZone },
       );
-      const { write } = await sendCapture(uid, encryption, {
+      const { write, id } = await sendCapture(uid, encryption, {
         text: sent,
         reading: sentReading,
         screen,
         ...turn,
       });
-      recordSentTurn(uid, turn);
+      recordSentTurn(uid, turn, id);
       setText('');
       setDismissed([]);
       setFixedDays({});
