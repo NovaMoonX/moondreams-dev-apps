@@ -49,9 +49,11 @@ function EarlierLoader({ uid }: { uid: string }) {
 function SessionTurns({
   session,
   latestId,
+  noticeId,
 }: {
   session: Session;
   latestId: string | null;
+  noticeId: string | null;
 }) {
   return (
     <div className='flex flex-col gap-4'>
@@ -61,6 +63,8 @@ function SessionTurns({
           capture={turn}
           showsOutcome={turn.id === latestId}
           showsReading={false}
+          isOnHome
+          showsNotice={turn.id === noticeId}
         />
       ))}
     </div>
@@ -80,6 +84,11 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const earlier = useAppSelector((state) => state.helm.earlier);
   const hasTurns = sessions.length > 0;
   const latestId = sessions.at(-1)?.turns.at(-1)?.id ?? null;
+  const noticeId =
+    sessions
+      .flatMap((session) => session.turns)
+      .filter((turn) => turn.status === 'sorted')
+      .at(-1)?.id ?? null;
 
   // Home rests on the newest turn while earlier sessions mount above it, until the person scrolls or types.
   useEffect(() => {
@@ -156,6 +165,7 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
                     key={session.sessionId}
                     session={session}
                     latestId={latestId}
+                    noticeId={noticeId}
                   />
                 ) : (
                   <LazyMount
@@ -164,7 +174,11 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
                       TURN_ESTIMATED_HEIGHT * session.turns.length
                     }
                   >
-                    <SessionTurns session={session} latestId={latestId} />
+                    <SessionTurns
+                      session={session}
+                      latestId={latestId}
+                      noticeId={noticeId}
+                    />
                   </LazyMount>
                 ),
               )}

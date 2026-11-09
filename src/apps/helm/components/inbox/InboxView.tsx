@@ -122,7 +122,15 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
         onClose={() => setOpened(null)}
         title={HELM_COPY.turnSheetTitle}
       >
-        {opened && <TurnCard showsOutcome showsReading capture={opened} />}
+        {opened && (
+          <TurnCard
+            showsOutcome
+            showsReading
+            isOnHome={false}
+            showsNotice={false}
+            capture={opened}
+          />
+        )}
       </DetailSheet>
     </>
   );

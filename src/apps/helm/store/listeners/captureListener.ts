@@ -43,9 +43,17 @@ async function openCapture(
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,
+    route: data.route ?? null,
     status: data.status ?? 'received',
+    heldReason: data.heldReason ?? null,
+    claimId: data.claimId ?? null,
+    claimedAt: data.claimedAt ?? null,
+    attempts: data.attempts ?? 0,
+    lastErrorCode: data.lastErrorCode ?? null,
+    executionIds: data.executionIds ?? [],
     seenAt: data.seenAt ?? null,
     createdAt: data.createdAt ?? 0,
+    sortedAt: data.sortedAt ?? null,
   } as const;
   try {
     if (!data.sealed) throw new Error('This turn has no sealed words.');

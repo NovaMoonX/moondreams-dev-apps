@@ -21,6 +21,7 @@ export async function ensureHelmProfile(uid: string) {
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+      hasSeenAiNotice: false,
       createdAt: Date.now(),
       lastEditedAt: null,
     };

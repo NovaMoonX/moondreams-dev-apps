@@ -1,7 +1,7 @@
 import { createSelector } from '@reduxjs/toolkit';
 
 import type { RootState } from '@/store';
-import type { OpenCapture } from '@apps/helm/types';
+import type { OpenCapture, OpenExecution, OpenTask } from '@apps/helm/types';
 
 const selectRecent = (state: RootState) => state.helm.recentCaptures.captures;
 const selectUnseen = (state: RootState) => state.helm.unseenCaptures.captures;
@@ -29,3 +29,23 @@ export const selectUnseenCaptures = createSelector(
 
 export const selectIsCapturesLoaded = (state: RootState) =>
   state.helm.recentCaptures.isLoaded;
+
+const selectRecentExecutions = (state: RootState) =>
+  state.helm.recentExecutions.items;
+const selectEarlierExecutions = (state: RootState) =>
+  state.helm.earlierExecutions;
+
+/** Every execution home has loaded, by id. */
+export const selectExecutionsById = createSelector(
+  [selectRecentExecutions, selectEarlierExecutions],
+  (recent, earlier): Map<string, OpenExecution> =>
+    new Map([...earlier, ...recent].map((entry) => [entry.id, entry])),
+);
+
+const selectOpenTasks = (state: RootState) => state.helm.openTasks.items;
+
+export const selectOpenTasksById = createSelector(
+  [selectOpenTasks],
+  (tasks): Map<string, OpenTask> =>
+    new Map(tasks.map((task) => [task.id, task])),
+);

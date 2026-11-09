@@ -1,13 +1,24 @@
 import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { resetAllState } from '@/store/actions/globalActions';
-import type { HelmProfile, OpenCapture } from '@apps/helm/types';
+import type {
+  HelmProfile,
+  OpenCapture,
+  OpenExecution,
+  OpenTask,
+} from '@apps/helm/types';
 
 export interface CaptureSet {
   captures: OpenCapture[];
   /** Whether the first snapshot has arrived, so an empty set is never mistaken for one still loading. */
   isLoaded: boolean;
   /** Set when the listener failed; the last value stays. */
+  isFailed: boolean;
+}
+
+export interface LoadedSet<T> {
+  items: T[];
+  isLoaded: boolean;
   isFailed: boolean;
 }
 
@@ -30,6 +41,12 @@ export interface HelmState {
   recentCaptures: CaptureSet;
   /** Turns not yet seen in the Inbox, whenever they were said. */
   unseenCaptures: CaptureSet;
+  /** The person's open tasks, newest first. */
+  openTasks: LoadedSet<OpenTask>;
+  /** What the assistant did for the turns in the eager window. */
+  recentExecutions: LoadedSet<OpenExecution>;
+  /** What it did for the earlier sessions scrolled into view. */
+  earlierExecutions: OpenExecution[];
   /** Older sessions, brought in a page at a time as the person scrolls up. */
   earlier: {
     captures: OpenCapture[];
@@ -41,6 +58,8 @@ export interface HelmState {
 
 const emptySet: CaptureSet = { captures: [], isLoaded: false, isFailed: false };
 
+const emptyLoadedSet = { items: [], isLoaded: false, isFailed: false };
+
 const initialState: HelmState = {
   keyStatus: 'loading',
   keyAttempt: 0,
@@ -51,6 +70,9 @@ const initialState: HelmState = {
   uid: null,
   recentCaptures: emptySet,
   unseenCaptures: emptySet,
+  openTasks: emptyLoadedSet,
+  recentExecutions: emptyLoadedSet,
+  earlierExecutions: [],
   earlier: {
     captures: [],
     isLoading: false,
@@ -101,6 +123,29 @@ const helmSlice = createSlice({
     setUnseenCapturesFailed: (state) => {
       state.unseenCaptures.isFailed = true;
     },
+    setOpenTasks: (state, action: PayloadAction<OpenTask[]>) => {
+      state.openTasks = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOpenTasksFailed: (state) => {
+      state.openTasks.isFailed = true;
+    },
+    setRecentExecutions: (state, action: PayloadAction<OpenExecution[]>) => {
+      state.recentExecutions = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setRecentExecutionsFailed: (state) => {
+      state.recentExecutions.isFailed = true;
+    },
+    addEarlierExecutions: (state, action: PayloadAction<OpenExecution[]>) => {
+      state.earlierExecutions = [...state.earlierExecutions, ...action.payload];
+    },
     startLoadingEarlier: (state) => {
       state.earlier.isLoading = true;
       state.earlier.isFailed = false;
@@ -133,6 +178,11 @@ export const {
   setRecentCapturesFailed,
   setUnseenCaptures,
   setUnseenCapturesFailed,
+  setOpenTasks,
+  setOpenTasksFailed,
+  setRecentExecutions,
+  setRecentExecutionsFailed,
+  addEarlierExecutions,
   startLoadingEarlier,
   addEarlierCaptures,
   setEarlierFailed,

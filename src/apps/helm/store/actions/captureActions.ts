@@ -12,13 +12,16 @@ import { createSealedReader } from '@lib/security';
 import { store } from '@/store';
 import { CAPTURE_MAX_CHARS } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { sortCapture } from '@apps/helm/queries/nomosMutations';
 import { openJson, sealJson } from '@apps/helm/security';
 import {
   addEarlierCaptures,
+  addEarlierExecutions,
   setEarlierFailed,
   startLoadingEarlier,
 } from '@apps/helm/store/helmSlice';
 import { loadEarlierCaptures } from '@apps/helm/store/listeners/captureListener';
+import { loadEarlierExecutions } from '@apps/helm/store/listeners/executionListener';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -28,6 +31,8 @@ import type {
 } from '@apps/helm/types';
 
 const BATCH_LIMIT = 400;
+/** An execution is made seconds after its turn, so a page's window reaches a little past its newest turn. */
+const EXECUTION_LAG_MS = 5 * 60 * 1000;
 
 const capturesOf = (uid: string) =>
   collection(db, 'apps', 'helm', 'users', uid, 'captures');
@@ -59,12 +64,27 @@ export async function sendCapture(
     medium: 'web',
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
+    route: null,
     status: 'received',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    executionIds: [],
     seenAt: createdAt,
     createdAt,
+    sortedAt: null,
     sealed,
   };
-  return { write: setDoc(doc(capturesOf(uid)), capture) };
+  const reference = doc(capturesOf(uid));
+  const write = setDoc(reference, capture);
+  // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
+  void write.then(
+    () => sortCapture(reference.id),
+    () => undefined,
+  );
+  return { write };
 }
 
 /** Brings in the next page of earlier sessions, once at a time; reads the store at the call, and stops if another person's Helm is open. */
@@ -80,12 +100,24 @@ export async function loadEarlierSessions(uid: string) {
   store.dispatch(startLoadingEarlier());
   try {
     const encryption = await getHelmEncryption(uid);
-    const page = await loadEarlierCaptures(
-      uid,
-      createSealedReader(encryption, openJson),
-      before,
-    );
+    const read = createSealedReader(encryption, openJson);
+    const page = await loadEarlierCaptures(uid, read, before);
+    const from = Math.min(...page.captures.map((capture) => capture.createdAt));
+    // What the page's turns did is brought with them; a failure here leaves the turns, which then show only their words.
+    const executions =
+      page.captures.length > 0
+        ? await loadEarlierExecutions(
+            uid,
+            read,
+            from,
+            before + EXECUTION_LAG_MS,
+          ).catch((error: unknown) => {
+            console.error('Helm earlier activity did not load', error);
+            return [];
+          })
+        : [];
     if (store.getState().helm.uid !== uid) return;
+    store.dispatch(addEarlierExecutions(executions));
     store.dispatch(addEarlierCaptures(page));
   } catch (error) {
     console.error('Helm earlier turns did not load', error);
@@ -95,6 +127,9 @@ export async function loadEarlierSessions(uid: string) {
 
 export const markCaptureSeen = (uid: string, captureId: string) =>
   updateDoc(doc(capturesOf(uid), captureId), { seenAt: Date.now() });
+
+export const markAiNoticeSeen = (uid: string) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });
 
 /** Marks every given turn seen, in batches under Firestore's write limit. */
 export async function markAllSeen(uid: string, captureIds: string[]) {

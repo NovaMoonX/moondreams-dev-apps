@@ -17,9 +17,13 @@ import {
   clearHelm,
   retryKey,
   setKeyStatus,
+  setOpenTasks,
+  setOpenTasksFailed,
   setProfile,
   setRecentCaptures,
   setRecentCapturesFailed,
+  setRecentExecutions,
+  setRecentExecutionsFailed,
   setUnseenCaptures,
   setUnseenCapturesFailed,
 } from '@apps/helm/store/helmSlice';
@@ -27,7 +31,9 @@ import {
   startRecentCapturesListener,
   startUnseenCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
+import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
+import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
@@ -111,6 +117,25 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm unseen turns listener failed', error);
               dispatch(setUnseenCapturesFailed());
+            },
+          ),
+          startOpenTasksListener(
+            uid,
+            read,
+            (tasks) => dispatch(setOpenTasks(tasks)),
+            (error) => {
+              console.error('Helm tasks listener failed', error);
+              dispatch(setOpenTasksFailed());
+            },
+          ),
+          startRecentExecutionsListener(
+            uid,
+            read,
+            getRecentWindowStart(Date.now()),
+            (executions) => dispatch(setRecentExecutions(executions)),
+            (error) => {
+              console.error('Helm activity listener failed', error);
+              dispatch(setRecentExecutionsFailed());
             },
           ),
         );

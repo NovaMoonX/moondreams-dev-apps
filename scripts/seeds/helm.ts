@@ -16,7 +16,12 @@ import { readCapture } from '../../src/apps/helm/utils/captureReading.ts';
 import type {
   Capture,
   CaptureSealed,
+  Execution,
+  ExecutionSealed,
   HelmEncryption,
+  Task,
+  TaskDue,
+  TaskSealed,
 } from '../../src/apps/helm/types.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
@@ -34,6 +39,22 @@ const SEED_PROFILES = [
   { user: FIXTURE_USERS.partnerOne, timeZone: 'America/Los_Angeles' },
   { user: FIXTURE_USERS.partnerTwo, timeZone: 'America/New_York' },
 ];
+
+const SORT_DELAY_MS = 4_000;
+
+/** What the assistant made of each sorted turn, by the turn's place in `SEED_TURNS`: a task's title and the words of the turn its day was read from. The first turn is left as saved, so home shows both kinds of line. */
+const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
+  {
+    1: [{ title: 'Lunch with Sam', dueWords: 'Thursday' }],
+    2: [{ title: 'Call Grandpa about the wedding questions', dueWords: null }],
+    3: [
+      { title: 'Buy the rings', dueWords: null },
+      { title: 'Call Dana', dueWords: 'Friday' },
+    ],
+  };
+
+const summarize = (count: number) =>
+  count === 1 ? 'Made a task' : `Made ${count} tasks`;
 
 /** Two sessions: one yesterday, one a few minutes ago (so it is still the session in progress). `seenAt` is null on the turns the Inbox lists as new. */
 const SEED_TURNS = [
@@ -63,6 +84,16 @@ const SEED_TURNS = [
   },
 ] as const;
 
+const dueFrom = (
+  dates: { text: string; due: TaskDue }[],
+  words: string | null,
+) =>
+  words === null
+    ? null
+    : (dates.find((span) =>
+        span.text.toLowerCase().includes(words.toLowerCase()),
+      )?.due ?? null);
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -79,6 +110,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+        hasSeenAiNotice: false,
         createdAt,
         lastEditedAt: null,
       });
@@ -98,6 +130,19 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       const turns = await Promise.all(
         SEED_TURNS.map(async (turn, index) => {
           const turnTime = context.now - turn.minutesAgo * MINUTE_MS;
+          const reading = readCapture(turn.text, {
+            now: turnTime,
+            timeZone,
+            assistantName: DEFAULT_ASSISTANT_NAME,
+          });
+          const sortedTasks = (SEED_TASKS[index] ?? []).map((entry, order) => ({
+            id: `seed-task-${index + 1}-${order + 1}`,
+            title: entry.title,
+            due: dueFrom(reading.dates, entry.dueWords),
+          }));
+          const executionId = `seed-execution-${index + 1}`;
+          const isSorted = sortedTasks.length > 0;
+          const sortedAt = turnTime + SORT_DELAY_MS;
           const capture: Capture = {
             inputMode: 'typed',
             medium: 'web',
@@ -105,28 +150,124 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             turnIndex: SEED_TURNS.filter(
               (entry) => entry.session === turn.session,
             ).indexOf(turn),
-            status: 'received',
+            route: isSorted ? 'quick' : null,
+            status: isSorted ? 'sorted' : 'received',
+            heldReason: null,
+            claimId: null,
+            claimedAt: null,
+            attempts: 0,
+            lastErrorCode: null,
+            executionIds: isSorted ? [executionId] : [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             createdAt: turnTime,
+            sortedAt: isSorted ? sortedAt : null,
             sealed: await sealJson<CaptureSealed>(
-              {
-                text: turn.text,
-                reading: readCapture(turn.text, {
-                  now: turnTime,
-                  timeZone,
-                  assistantName: DEFAULT_ASSISTANT_NAME,
-                }),
-              },
+              { text: turn.text, reading },
               encryption,
             ),
           };
-          return { id: `seed-turn-${index + 1}`, capture };
+          const tasks = await Promise.all(
+            sortedTasks.map(async ({ id, title, due }) => {
+              const task: Task = {
+                status: 'open',
+                importance: null,
+                isUrgent: false,
+                due,
+                durationMinutes: null,
+                energy: null,
+                context: null,
+                projectId: null,
+                milestoneId: null,
+                whoIds: [],
+                placeIds: [],
+                notUntil: null,
+                waitsOnTaskIds: [],
+                waitsOnWhoId: null,
+                stepState: {},
+                mediaIds: [],
+                createdBy: 'nomos',
+                sourceCaptureId: `seed-turn-${index + 1}`,
+                executionId,
+                createdAt: sortedAt,
+                lastEditedAt: null,
+                completedAt: null,
+                sealed: await sealJson<TaskSealed>(
+                  { title, notes: null, steps: {} },
+                  encryption,
+                ),
+              };
+              return { id, task };
+            }),
+          );
+          const execution: Execution | null = isSorted
+            ? {
+                captureId: `seed-turn-${index + 1}`,
+                actor: 'nomos',
+                category: 'organize',
+                autonomyLevel: 2,
+                state: 'succeeded',
+                effectRefs: sortedTasks.map(({ id }) => ({
+                  op: 'create',
+                  collection: 'tasks',
+                  docId: id,
+                })),
+                undoesExecutionId: null,
+                undoneByExecutionId: null,
+                questionRef: null,
+                errorCode: null,
+                createdAt: sortedAt,
+                decidedAt: sortedAt,
+                finishedAt: sortedAt,
+                sealed: await sealJson<ExecutionSealed>(
+                  {
+                    summary: summarize(sortedTasks.length),
+                    commands: sortedTasks.map(({ title, due }) => ({
+                      kind: 'createTask',
+                      title,
+                      due,
+                    })),
+                    effects: sortedTasks.map(({ title, due }) => ({
+                      written: {
+                        'sealed.title': title,
+                        due,
+                        status: 'open',
+                        isUrgent: false,
+                      },
+                      previous: null,
+                    })),
+                    undoReport: null,
+                  },
+                  encryption,
+                ),
+              }
+            : null;
+          return {
+            id: `seed-turn-${index + 1}`,
+            capture,
+            tasks,
+            execution,
+            executionId,
+          };
         }),
       );
-      turns.forEach(({ id, capture }) =>
-        batch.set(users.doc(user.uid).collection('captures').doc(id), capture),
+      const person = users.doc(user.uid);
+      turns.forEach(({ id, capture, tasks, execution, executionId }) => {
+        batch.set(person.collection('captures').doc(id), capture);
+        tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        if (execution) {
+          batch.set(
+            person.collection('executions').doc(executionId),
+            execution,
+          );
+        }
+      });
+      return turns.reduce(
+        (total, turn) =>
+          total + 1 + turn.tasks.length + (turn.execution ? 1 : 0),
+        0,
       );
-      return turns.length;
     }),
   );
 
@@ -138,7 +279,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns; one canary per master key.
+  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:

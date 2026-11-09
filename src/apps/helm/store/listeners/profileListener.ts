@@ -14,6 +14,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   dayStartTime: data.dayStartTime ?? DEFAULT_DAY_START_TIME,
   dayEndTime: data.dayEndTime ?? DEFAULT_DAY_END_TIME,
   planFillPercent: data.planFillPercent ?? DEFAULT_PLAN_FILL_PERCENT,
+  hasSeenAiNotice: data.hasSeenAiNotice ?? false,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

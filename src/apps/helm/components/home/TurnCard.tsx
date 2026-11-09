@@ -1,8 +1,14 @@
+import { useSyncExternalStore } from 'react';
+
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import ReadChips from '@apps/helm/components/home/ReadChips';
+import ResultLines from '@apps/helm/components/home/ResultLines';
 import { HELM_COPY } from '@apps/helm/constants';
+import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
+import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 
 interface TurnCardProps {
@@ -11,11 +17,31 @@ interface TurnCardProps {
   showsOutcome: boolean;
   /** The chips of what was read, shown as they were sealed, with nothing to change. */
   showsReading: boolean;
+  /** On home its reply card marks the turn seen when it is on screen; elsewhere the person has already opened it. */
+  isOnHome: boolean;
+  /** Under this turn's reply, the one-time line that an AI service reads what is said. */
+  showsNotice: boolean;
 }
 
 /** What the person sent, as their bubble with its time, and under it what became of it. */
-function TurnCard({ capture, showsOutcome, showsReading }: TurnCardProps) {
+function TurnCard({
+  capture,
+  showsOutcome,
+  showsReading,
+  isOnHome,
+  showsNotice,
+}: TurnCardProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const executionsById = useAppSelector(selectExecutionsById);
+  const isCallOut = useSyncExternalStore(subscribeSorting, () =>
+    isSorting(capture.id),
+  );
+  const isReading = isCallOut || capture.status === 'interpreting';
+  const isSorted = capture.status === 'sorted' && !isReading;
+  const executions = capture.executionIds.flatMap((id) => {
+    const execution = executionsById.get(id);
+    return execution ? [execution] : [];
+  });
   return (
     <article className='flex flex-col items-end gap-1'>
       {capture.isUnreadable ? (
@@ -43,7 +69,26 @@ function TurnCard({ capture, showsOutcome, showsReading }: TurnCardProps) {
           />
         </div>
       )}
-      {showsOutcome && !capture.isUnreadable && (
+      {isReading && !capture.isUnreadable && (
+        <div className='flex w-full flex-col items-start gap-2' role='status'>
+          <AssistantLine isQuiet>{HELM_COPY.reading}</AssistantLine>
+        </div>
+      )}
+      {isSorted && !capture.isUnreadable && executions.length > 0 && (
+        <div className='flex w-full flex-col items-start gap-2'>
+          {executions.map((execution) => (
+            <ResultLines
+              key={execution.id}
+              captureId={capture.id}
+              execution={execution}
+              isOnHome={isOnHome}
+              isSeen={capture.seenAt !== null}
+              showsNotice={showsNotice}
+            />
+          ))}
+        </div>
+      )}
+      {showsOutcome && !isReading && !isSorted && !capture.isUnreadable && (
         <p className='text-muted-foreground text-[13px]'>
           {HELM_COPY.savedAsWritten}
         </p>
