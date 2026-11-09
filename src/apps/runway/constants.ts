@@ -320,6 +320,14 @@ const getPaysRoom = (roomCount: number, payCount: number) =>
       ? `None of your ${payCount} pays have room`
       : `Only ${roomCount} of your ${payCount} pays ${roomCount === 1 ? 'has' : 'have'} room`;
 
+/** Headings that section a pick or search list by the kind of thing, in the order the kinds are shown. */
+export const PICK_KIND_HEADINGS = {
+  income: 'Income',
+  bill: 'Bills',
+  envelope: 'Envelopes',
+  goal: 'Goals',
+} as const;
+
 export const HORIZON_WORDS = {
   title: 'Horizon',
   addLabel: 'Add to your horizon',

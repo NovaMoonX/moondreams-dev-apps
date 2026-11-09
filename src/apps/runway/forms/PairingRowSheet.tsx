@@ -11,11 +11,15 @@ import HelpTip from '@/components/HelpTip';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import SearchInput from '@/components/SearchInput';
+import SectionDivider from '@/components/SectionDivider';
 import SummaryRow from '@/components/SummaryRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import { RUNWAY_SEARCH_THRESHOLD } from '@apps/runway/constants';
+import {
+  PICK_KIND_HEADINGS,
+  RUNWAY_SEARCH_THRESHOLD,
+} from '@apps/runway/constants';
 
 export type PairingOf = 'dayMoney' | 'remaining';
 
@@ -33,6 +37,7 @@ export interface PairingChoice {
   text: string;
   emoji: string | null;
   description: string;
+  kind: 'bill' | 'envelope' | 'goal';
 }
 
 type View = 'main' | 'what' | 'how' | 'topUp';
@@ -106,40 +111,52 @@ function PairingRowSheet({
               placeholder='Search your plan'
             />
           )}
-          <ul className='border-border divide-border max-h-[max(12rem,calc(92dvh-26rem))] divide-y overflow-y-auto rounded-2xl border'>
-            {shown.map((choice) => (
-              <li key={choice.value}>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
-                  onClick={() => {
-                    onChange({ targetItemId: choice.value });
-                    setView(isNew ? 'how' : 'main');
-                  }}
-                >
-                  <ItemBadge name={choice.text} emoji={choice.emoji} />
-                  <span className='min-w-0 flex-1 text-left'>
-                    <span className='block break-words'>{choice.text}</span>
-                    <span className='text-muted-foreground block text-xs'>
-                      {choice.description}
-                    </span>
-                  </span>
-                  {choice.value === row.targetItemId && (
-                    <Check
-                      className='mt-0.5 h-4 w-4 shrink-0'
-                      aria-label='Chosen'
-                    />
-                  )}
-                </Button>
-              </li>
-            ))}
+          <div className='max-h-[max(12rem,calc(92dvh-26rem))] space-y-3 overflow-y-auto'>
+            {(['bill', 'envelope', 'goal'] as const).map((kind) => {
+              const group = shown.filter((choice) => choice.kind === kind);
+              return group.length === 0 ? null : (
+                <div key={kind} className='space-y-2'>
+                  <SectionDivider label={PICK_KIND_HEADINGS[kind]} />
+                  <ul className='border-border divide-border divide-y rounded-2xl border'>
+                    {group.map((choice) => (
+                      <li key={choice.value}>
+                        <Button
+                          type='button'
+                          variant='tertiary'
+                          className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
+                          onClick={() => {
+                            onChange({ targetItemId: choice.value });
+                            setView(isNew ? 'how' : 'main');
+                          }}
+                        >
+                          <ItemBadge name={choice.text} emoji={choice.emoji} />
+                          <span className='min-w-0 flex-1 text-left'>
+                            <span className='block break-words'>
+                              {choice.text}
+                            </span>
+                            <span className='text-muted-foreground block text-xs'>
+                              {choice.description}
+                            </span>
+                          </span>
+                          {choice.value === row.targetItemId && (
+                            <Check
+                              className='mt-0.5 h-4 w-4 shrink-0'
+                              aria-label='Chosen'
+                            />
+                          )}
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
             {shown.length === 0 && (
-              <li className='text-muted-foreground p-3 text-sm'>
+              <p className='text-muted-foreground p-3 text-sm'>
                 Nothing matches that.
-              </li>
+              </p>
             )}
-          </ul>
+          </div>
         </div>
       );
     }

@@ -18,6 +18,10 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_QUIET_CLASSES,
+} from '@/components/noticeActionClasses';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -29,10 +33,6 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
-import {
-  NOTICE_MAIN_BUTTON,
-  NOTICE_QUIET_BUTTON,
-} from '@apps/runway/components/noticeButtonClasses';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
@@ -951,9 +951,8 @@ function HorizonSheet({
               <div className='mt-2 flex flex-wrap gap-2'>
                 <Button
                   type='button'
-                  variant='outline'
                   size='sm'
-                  className={NOTICE_MAIN_BUTTON.warning}
+                  className={NOTICE_ACTION_CLASSES.warning}
                   onClick={() =>
                     setPutting({ initialCents: shortfall.shortCents })
                   }
@@ -965,7 +964,7 @@ function HorizonSheet({
                     type='button'
                     variant='tertiary'
                     size='sm'
-                    className={NOTICE_QUIET_BUTTON}
+                    className={NOTICE_QUIET_CLASSES.warning}
                     onClick={() => setIsTakingFromPays(true)}
                   >
                     {HORIZON_WORDS.takeFromPays}

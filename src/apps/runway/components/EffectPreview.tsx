@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import InlineNotice from '@/components/InlineNotice';
+import { NOTICE_ACTION_CLASSES } from '@/components/noticeActionClasses';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -640,20 +641,24 @@ function EffectPreview({
             >
               <InlineNotice tone={block.isStanding ? 'warning' : block.tone}>
                 {renderFigure(block)}
+                {block.isIncomeFix && (
+                  <Button
+                    type='button'
+                    size='sm'
+                    className={join(
+                      'mt-2',
+                      NOTICE_ACTION_CLASSES[
+                        block.isStanding ? 'warning' : block.tone
+                      ],
+                    )}
+                    onClick={incomeFix.open}
+                  >
+                    {incomeFix.hasEndingPay
+                      ? FIX_WORDS.openIncomeEnd
+                      : FIX_WORDS.addIncome}
+                  </Button>
+                )}
               </InlineNotice>
-              {block.isIncomeFix && (
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  className="relative mt-2 before:absolute before:inset-x-0 before:-inset-y-1.5 before:content-['']"
-                  onClick={incomeFix.open}
-                >
-                  {incomeFix.hasEndingPay
-                    ? FIX_WORDS.openIncomeEnd
-                    : FIX_WORDS.addIncome}
-                </Button>
-              )}
             </div>
           ),
         )}
