@@ -46,6 +46,7 @@ export const HELM_COPY = {
   cannotOpenBody:
     "They're safe and nothing was changed. The problem is on our side, not yours.",
   tryAgain: 'Try again',
+  stillCannotOpen: "Still can't open them. Your things are safe.",
   composerOffline: "Typing works again once you're back online",
   composerBlocked: 'Typing works again once your things open',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",

@@ -119,9 +119,9 @@ export function useHelmSync(uid: string | null) {
         // A cleanup that clears the key cancels its fetch; that is not a failure.
         if (!isCurrent) return;
         console.error('Helm could not get its key', error);
-        const isOffline = isOfflineError(error);
-        dispatch(setKeyStatus(isOffline ? 'offline' : 'failed'));
-        if (isOffline) window.addEventListener('online', retryOnline);
+        dispatch(setKeyStatus(isOfflineError(error) ? 'offline' : 'failed'));
+        // A dropped connection can read as a server failure, so both ask again once the device is back online.
+        window.addEventListener('online', retryOnline);
       });
 
     return () => {

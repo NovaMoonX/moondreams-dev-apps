@@ -19,6 +19,8 @@ export interface HelmState {
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
+  /** Refusals in a row, so a Try again that fails again can say so. */
+  keyRefusals: number;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
   profile: HelmProfile | null;
   isProfileLoaded: boolean;
@@ -43,6 +45,7 @@ const initialState: HelmState = {
   keyStatus: 'loading',
   keyAttempt: 0,
   isKeyRetrying: false,
+  keyRefusals: 0,
   profile: null,
   isProfileLoaded: false,
   uid: null,
@@ -63,6 +66,8 @@ const helmSlice = createSlice({
     setKeyStatus: (state, action: PayloadAction<KeyStatus>) => {
       state.keyStatus = action.payload;
       state.isKeyRetrying = false;
+      state.keyRefusals =
+        action.payload === 'failed' ? state.keyRefusals + 1 : 0;
     },
     retryKey: (state) => {
       state.keyAttempt += 1;

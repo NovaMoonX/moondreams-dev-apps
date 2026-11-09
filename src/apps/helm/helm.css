@@ -81,6 +81,16 @@ html.helm-theme .helm-field {
   background-color: var(--color-card);
 }
 
+/* A waiting field carries its reason as the placeholder, so it stays legible: a flatter fill, not the library's half opacity. */
+html.helm-theme .helm-field:disabled {
+  opacity: 1;
+  background-color: var(--color-muted);
+}
+html.helm-theme .helm-field:disabled::placeholder {
+  color: var(--color-muted-foreground);
+  opacity: 1;
+}
+
 /* Hairlines, no shadows on cards. */
 html.helm-theme .helm-card {
   background-color: var(--color-card);

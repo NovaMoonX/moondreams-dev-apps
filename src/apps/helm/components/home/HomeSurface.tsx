@@ -72,6 +72,7 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const dispatch = useAppDispatch();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const isKeyRetrying = useAppSelector((state) => state.helm.isKeyRetrying);
+  const keyRefusals = useAppSelector((state) => state.helm.keyRefusals);
   const { sessions, openSessionId } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
@@ -117,13 +118,6 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
           </p>
         )}
       </div>
-      {keyStatus === 'offline' && <NeedsConnectionState name={name} />}
-      {keyStatus === 'failed' && (
-        <CannotOpenState
-          isRetrying={isKeyRetrying}
-          onRetry={() => dispatch(retryKey())}
-        />
-      )}
       {isCapturesFailed && !isCapturesLoaded && (
         <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
           {HELM_COPY.turnsFailed}
@@ -177,7 +171,15 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
           ))}
         </div>
       )}
-      <div className='mt-auto'>
+      <div className='mt-auto flex flex-col gap-4'>
+        {keyStatus === 'offline' && <NeedsConnectionState name={name} />}
+        {keyStatus === 'failed' && (
+          <CannotOpenState
+            isRetrying={isKeyRetrying}
+            hasRetryFailed={keyRefusals > 1}
+            onRetry={() => dispatch(retryKey())}
+          />
+        )}
         <Composer
           key={keyStatus === 'ready' ? 'ready' : 'waiting'}
           fieldRef={composerRef}

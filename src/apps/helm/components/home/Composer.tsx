@@ -12,6 +12,7 @@ import { ArrowUp } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
+import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import {
@@ -97,7 +98,12 @@ function Composer({
     const turn = { ...getNextTurn(), createdAt: Date.now() };
     const restore = (error: unknown) => {
       console.error('Helm turn did not send', error);
-      setText((current) => (current ? `${current}\n${sent}` : sent));
+      const withSent = (current: string) =>
+        current ? `${current}\n${sent}` : sent;
+      // The field may have unmounted since Send, so the words go back into the kept draft directly.
+      const kept = parseDraft(readFormDraft(uid, DRAFT_KEY, null)) ?? '';
+      writeFormDraft(uid, DRAFT_KEY, null, withSent(kept));
+      setText(withSent);
       addToast({ title: HELM_COPY.sendFailed, type: 'error' });
     };
     setIsSending(true);
@@ -159,30 +165,32 @@ function Composer({
           onFocusChange(false);
         }}
       />
-      <div className='flex items-center justify-between gap-3'>
-        <span
-          className={join(
-            'text-[13px] tabular-nums',
-            text.length >= CAPTURE_MAX_CHARS
-              ? 'text-destructive'
-              : 'text-muted-foreground',
-          )}
-          aria-live='polite'
-        >
-          {isNearLimit &&
-            `${text.length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
-        </span>
-        <Button
-          type='button'
-          size='sm'
-          rounded='full'
-          disabled={!canSend}
-          onClick={() => void send()}
-        >
-          <ArrowUp className='size-4' aria-hidden='true' />
-          {HELM_COPY.send}
-        </Button>
-      </div>
+      {waitingPlaceholder === null && (
+        <div className='flex items-center justify-between gap-3'>
+          <span
+            className={join(
+              'text-[13px] tabular-nums',
+              text.length >= CAPTURE_MAX_CHARS
+                ? 'text-destructive'
+                : 'text-muted-foreground',
+            )}
+            aria-live='polite'
+          >
+            {isNearLimit &&
+              `${text.length.toLocaleString()} / ${CAPTURE_MAX_CHARS.toLocaleString()}`}
+          </span>
+          <Button
+            type='button'
+            size='sm'
+            rounded='full'
+            disabled={!canSend}
+            onClick={() => void send()}
+          >
+            <ArrowUp className='size-4' aria-hidden='true' />
+            {HELM_COPY.send}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

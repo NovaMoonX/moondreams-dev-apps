@@ -51,7 +51,7 @@ export async function openJson<T extends object>(
   return fields as T;
 }
 
-/** Every Helm form draft's key starts with it; declared sealed here, so nothing typed is ever kept readable. */
+/** Every form draft's key starts with it; declared sealed here, so nothing typed is ever kept readable. */
 export const HELM_DRAFT_PREFIX = 'helm:';
 declareSealedFormDrafts(HELM_DRAFT_PREFIX);
 
