@@ -97,7 +97,7 @@ function ChargePickerView({
 
   return (
     <div className='flex flex-col gap-4'>
-      <ActionTitle>{AUTO_PAY_WORDS.pickTitle(billName, due)}</ActionTitle>
+      <ActionTitle>{AUTO_PAY_WORDS.pickTitle(due)}</ActionTitle>
       {candidates.length >= RUNWAY_SEARCH_THRESHOLD && (
         <SearchInput
           value={query}

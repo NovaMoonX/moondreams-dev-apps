@@ -2481,8 +2481,7 @@ export const AUTO_PAY_WORDS = {
   forgetSub: "We'll ask which charge it is next time",
   forgetTitle: (name: string) => `Forget the charges matched to ${name}?`,
   forgetConfirm: 'Forget',
-  pickTitle: (name: string, due: string) =>
-    `Which charge was ${name} on ${due}?`,
+  pickTitle: (due: string) => `Which charge was it on ${due}?`,
   pickEmpty: (due: string) => `No charge near ${due} yet`,
   pickSearch: 'Search charges',
   pickRow: (date: string, source: string | null) =>
@@ -2515,6 +2514,7 @@ export const AUTO_PAY_WORDS = {
   forgot: (name: string) => `${name} forgot the charges it learned`,
   forgetFailed: (name: string) => `${name} was not changed`,
   matchFailed: 'The charge was not matched',
+  matchedJustNow: 'That charge was matched on its own a moment ago',
   amountTask: (name: string) => `Enter what ${name} actually charged`,
   notHereYet: 'Not here yet',
   changedElsewhere:

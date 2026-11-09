@@ -264,8 +264,10 @@ export function useAutoPay(uid: string | null) {
             const current = store
               .getState()
               .runway.purchases.find((entry) => entry.id === match.purchase.id);
-            if (current && current.updatedAt !== match.purchase.updatedAt)
+            if (current && current.updatedAt !== match.purchase.updatedAt) {
+              tried.current.delete(key);
               return list;
+            }
             try {
               const result = await writeMatch(uid, {
                 purchase: match.purchase,
@@ -274,7 +276,11 @@ export function useAutoPay(uid: string | null) {
                 dueOn: match.payment.dueOn,
                 isPicked: false,
               });
-              return result === null ? list : [...list, result];
+              if (result === null) {
+                tried.current.delete(key);
+                return list;
+              }
+              return [...list, result];
             } catch (error) {
               tried.current.delete(key);
               console.error('A charge was not matched to its bill', error);
@@ -348,7 +354,7 @@ export function useChargeCandidates(billId: string, dueOn: DateOnly) {
   }, [bills, billId, dueOn, purchases, needsHome, accounts, isLinkHistory]);
 }
 
-/** Matches the charge a person picked to a payment, learning its name, with an Undo toast; resolves with whether it was written. */
+/** Matches the charge a person picked to a payment, learning its name, with an Undo toast; resolves true once the charge is matched, by this pick or the device's own pass. */
 export function usePickCharge() {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -369,7 +375,10 @@ export function usePickCharge() {
         dueOn,
         isPicked: true,
       });
-      if (result === null) return false;
+      if (result === null) {
+        addToast({ title: AUTO_PAY_WORDS.matchedJustNow, type: 'info' });
+        return true;
+      }
       showMatched(user.uid, [result], AUTO_PAY_WORDS.pickedOne(billName));
       return true;
     } catch (error) {
