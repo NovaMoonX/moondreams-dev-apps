@@ -12,6 +12,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { X } from 'lucide-react';
 
 import { useSheetHistory } from '@/hooks/useBackHistory';
+import { getDialogsAbove } from '@/utils/dialogUtils';
 
 const CLOSE_MS = 200;
 const SWIPE_CLOSE_PX = 72;
@@ -70,6 +71,9 @@ function SideSheetPanel({ onClose, title, children, footer }: Omit<SideSheetProp
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (getDialogsAbove(panelRef.current).length > 0) {
+        return;
+      }
       if (event.key === 'Escape') {
         event.stopPropagation();
         close();

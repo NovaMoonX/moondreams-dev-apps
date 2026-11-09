@@ -1,0 +1,9 @@
+zoneCoordinates.ts is generated from the IANA Time Zone Database (tzdata 2026e):
+zone.tab, zone1970.tab and the Link lines of tzdata.zi.
+
+Source: https://www.iana.org/time-zones
+Licence: the tz database files used here are in the public domain
+("This file is in the public domain." in each file's header).
+No attribution is required.
+
+Rebuild with: python3 scripts/tzdb/generateZoneCoordinates.py (reads /usr/share/zoneinfo).
