@@ -632,6 +632,7 @@ function EnvelopeFormBody({
                 flow={questions}
                 rowIds={['name', 'often', 'max']}
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

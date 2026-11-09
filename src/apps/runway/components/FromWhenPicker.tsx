@@ -32,6 +32,8 @@ interface FromWhenPickerProps {
   isDisabled?: boolean;
   /** The change is planned for a later day (Plan a change): only later starts are offered and they are asked in place. */
   isPlanning?: boolean;
+  /** A pause is always for a while, so only its dates and length are asked. */
+  isPause?: boolean;
 }
 
 const STRETCH_OPTIONS = [
@@ -51,6 +53,7 @@ function FromWhenPicker({
   presetDayKey,
   isDisabled = false,
   isPlanning = false,
+  isPause = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
   const dayFirst: { value: FromWhenChoice; label: string }[] = [
@@ -86,12 +89,14 @@ function FromWhenPicker({
 
   const controls = (
     <div className='space-y-4'>
-      <PillGroup
-        label={CHANGE_WORDS.fromHeading}
-        options={options}
-        value={value.choice}
-        onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
-      />
+      {!isPause && (
+        <PillGroup
+          label={CHANGE_WORDS.fromHeading}
+          options={options}
+          value={value.choice}
+          onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
+        />
+      )}
       {value.choice === 'fromDay' && preset && (
         <p className='text-muted-foreground text-sm'>
           {formatDateOrdinalUTC(preset.on)}

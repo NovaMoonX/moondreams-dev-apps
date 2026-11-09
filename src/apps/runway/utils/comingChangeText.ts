@@ -7,10 +7,14 @@ import {
 import { DAY_MS } from '@apps/runway/engine/dates';
 import {
   getEndChangeId,
+  getItemEnds,
+  getItemStops,
+  getLinkSpan,
+  listComingChanges,
   type ComingChange,
 } from '@apps/runway/engine/horizonLinks';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
-import type { OpenVersion } from '@apps/runway/types';
+import type { OpenVersion, PlanItemDoc } from '@apps/runway/types';
 import {
   describeChange,
   type ItemPayload,
@@ -99,4 +103,94 @@ export function describeCancelTitle(
   return figures === null
     ? COMING_WORDS.cancelTitlePlain(name, date)
     : COMING_WORDS.cancelTitleChange(name, figures, date);
+}
+
+/** Pays and bills planned to start later: their first version begins after today, or an event holds their start. A bill added today whose first due day is next month is not a coming change. */
+export function listStartChanges(
+  versions: readonly OpenVersion[],
+  items: readonly PlanItemDoc[],
+  today: number,
+  isHeld: (link: { changeId: string; itemId: string }) => boolean,
+): PlanChange[] {
+  const stops = getItemStops(items);
+  const ends = getItemEnds(items);
+  return items
+    .filter(({ kind }) => kind === 'payLine' || kind === 'bill')
+    .flatMap((item) =>
+      [
+        ...new Set(
+          versions
+            .filter((version) => version.itemId === item.id)
+            .map(({ changeId }) => changeId),
+        ),
+      ].flatMap((changeId) => {
+        const span = getLinkSpan(
+          versions,
+          { changeId, itemId: item.id },
+          stops,
+          ends,
+        );
+        return span &&
+          span.kind === 'start' &&
+          span.before === null &&
+          span.isLive &&
+          span.startsOn > today &&
+          (span.version.effectiveFrom > today ||
+            isHeld({ changeId, itemId: item.id }))
+          ? [
+              {
+                what: 'start',
+                on: span.startsOn,
+                startsOn: span.startsOn,
+                itemId: item.id,
+                kind: span.version.kind,
+                isReturn: false,
+                before: span.version,
+                after: span.version,
+              } satisfies PlanChange,
+            ]
+          : [];
+      }),
+    );
+}
+
+/** Everything coming for one item in date order: its changes, its ending and a start that is still ahead. */
+export const listItemChanges = (
+  versions: readonly OpenVersion[],
+  item: PlanItemDoc | null,
+  itemId: string,
+  today: number,
+  isHeld: (link: { changeId: string; itemId: string }) => boolean,
+): PlanChange[] =>
+  [
+    ...listComingChanges(versions, itemId, today, item?.endedAt ?? null).map(
+      toPlanChange,
+    ),
+    ...(item ? listStartChanges(versions, [item], today, isHeld) : []),
+  ].sort((a, b) => a.on - b.on);
+
+/** The one wording of a change on every surface: "Eating out: $80 → $40 from Nov 13th", "Streaming ends after Dec 15th", "Paycheck starts Dec 9th". Carries amounts, so it is drawn masked. */
+export function describeChangeLine(
+  change: PlanChange,
+  cardNamer: CardNamer,
+): string {
+  const name = change.after.payload.name;
+  const date = formatDateOrdinalUTC(change.on);
+  const lastDay = formatDateOrdinalUTC(change.on - DAY_MS);
+  if (change.what === 'stop') return COMING_WORDS.lineEnds(name, lastDay);
+  if (change.what === 'start') return COMING_WORDS.lineStarts(name, date);
+  if (change.isReturn) {
+    const back = getChangeFigure(change.after);
+    return back
+      ? COMING_WORDS.lineReturns(name, back.text, lastDay)
+      : COMING_WORDS.lineReturnsPlain(name, lastDay);
+  }
+  const before = getChangeFigure(change.before);
+  const after = getChangeFigure(change.after);
+  if (change.kind === 'goal' && after?.isZero && !before?.isZero)
+    return COMING_WORDS.lineStopsSaving(name, date);
+  const figures = describeChangeFigures(change, cardNamer);
+  return figures === null
+    ? COMING_WORDS.lineChangesPlain(name, date)
+    : COMING_WORDS.lineChanges(name, figures, date);
 }

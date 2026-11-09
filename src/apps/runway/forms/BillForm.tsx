@@ -295,6 +295,8 @@ interface BillFormProps {
   planAhead?: 'date' | 'stretch';
   /** The open event a new bill is part of; the bill starts on its first due day. */
   eventId?: string;
+  /** The day a new bill is planned to start, asked before the form opens; its first due day starts there. */
+  startsOn?: number;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
@@ -647,6 +649,7 @@ function BillFormBody({
   presetEventId,
   planAhead,
   eventId,
+  startsOn,
   noun = 'bill',
   openStep = null,
   draft,
@@ -721,7 +724,7 @@ function BillFormBody({
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
           priority: 'should',
-          startDate: '',
+          startDate: startsOn === undefined ? '' : toDateInputValue(startsOn),
           isLater: false,
           frequency: null,
           everyCount: '',
@@ -1914,6 +1917,7 @@ function BillFormBody({
                   quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
                 }
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

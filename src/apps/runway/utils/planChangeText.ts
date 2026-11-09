@@ -39,24 +39,6 @@ export const getChangeFigure = (version: OpenVersion): Figure | null => {
   return null;
 };
 
-/** A change as one row: "Rent · $1,250 → $0", "Gym returns to $40". Carries amounts, so it is drawn masked. */
-export function describePlanChange(change: PlanChange): string {
-  const name = change.after.payload.name;
-  if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
-  if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
-  const before = getChangeFigure(change.before);
-  const after = getChangeFigure(change.after);
-  if (change.isReturn) {
-    return after
-      ? PLAN_CHANGE_WORDS.rowReturns(name, after.text)
-      : PLAN_CHANGE_WORDS.rowReturnsPlain(name);
-  }
-  if (before && after && before.text !== after.text) {
-    return PLAN_CHANGE_WORDS.rowChanges(name, before.text, after.text);
-  }
-  return PLAN_CHANGE_WORDS.rowChangesPlain(name);
-}
-
 /** A change with no figure in it: "Rent stops", "Gym returns", "Groceries changes". */
 export function describePlanChangeShort(change: PlanChange): string {
   const name = change.after.payload.name;

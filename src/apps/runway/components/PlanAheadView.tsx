@@ -20,6 +20,8 @@ export type PlanAheadChoice =
 interface PlanAheadViewProps {
   /** Which of the later ways to change this item are open to it. */
   choices: readonly PlanAheadChoice[];
+  /** A goal's "It stops on a date" says the goal ends, apart from "Stop saving from a date". */
+  isGoal?: boolean;
   onPick: (choice: PlanAheadChoice) => void;
   onBack: () => void;
 }
@@ -56,7 +58,12 @@ const ROWS: Record<
 };
 
 /** "What will change?": the ways to change an item on a later date, each opening its own form already set to one. */
-function PlanAheadView({ choices, onPick, onBack }: PlanAheadViewProps) {
+function PlanAheadView({
+  choices,
+  isGoal = false,
+  onPick,
+  onBack,
+}: PlanAheadViewProps) {
   return (
     <div className='flex flex-1 flex-col gap-4'>
       <BackLink onBack={onBack} />
@@ -73,7 +80,11 @@ function PlanAheadView({ choices, onPick, onBack }: PlanAheadViewProps) {
               hasChevron
               icon={ROWS[choice].icon}
               label={ROWS[choice].label}
-              subtitle={ROWS[choice].subtitle}
+              subtitle={
+                choice === 'stop' && isGoal
+                  ? COMING_WORDS.planStopGoalSub
+                  : ROWS[choice].subtitle
+              }
               onClick={() => onPick(choice)}
             />
           ))}

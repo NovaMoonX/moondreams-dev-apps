@@ -25,6 +25,8 @@ import {
 import { listPlanChangeDays } from '@apps/runway/engine/planChanges';
 import PlanChangeRow from '@apps/runway/components/PlanChangeRow';
 import PlanChangesDoor from '@apps/runway/screens/days/PlanChangesDoor';
+import { findLinkHolder } from '@apps/runway/engine/horizonLinks';
+import { listStartChanges } from '@apps/runway/utils/comingChangeText';
 import { describePlanChangeGoes } from '@apps/runway/utils/planChangeText';
 import {
   buildCalendarEntries,
@@ -43,6 +45,7 @@ import {
   selectCards,
   selectEffectiveSplit,
   selectHeldByItem,
+  selectAllHorizonItems,
   selectListedDays,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -102,6 +105,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
   const paces = useGoalPaces(today);
   const planItems = useAppSelector((state) => state.runway.items);
   const planVersions = useAppSelector((state) => state.runway.versions);
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const { openDay } = useRunwayUrlState();
 
   const thisIndex = toIndex(today);
@@ -151,12 +155,20 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           ? []
           : [{ goalId: item.id, targetDate: payload.targetDate, track }],
       ),
-      planChanges: listPlanChangeDays(
-        planVersions,
-        planItems,
-        today + DAY_MS,
-        addUtcMonths(today, LOOKAHEAD_MONTHS + 1),
-      ),
+      planChanges: [
+        ...listPlanChangeDays(
+          planVersions,
+          planItems,
+          today + DAY_MS,
+          addUtcMonths(today, LOOKAHEAD_MONTHS + 1),
+        ),
+        ...listStartChanges(
+          planVersions,
+          planItems,
+          today,
+          (link) => findLinkHolder(events, link) !== null,
+        ),
+      ],
     }),
     [
       days,
@@ -168,6 +180,7 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
       startDate,
       planVersions,
       planItems,
+      events,
     ],
   );
   const monthStart = monthStartOf(monthIndex);
@@ -347,6 +360,16 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           />
         </div>
       </div>
+      {legend.length > 0 && (
+        <ul className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
+          {legend.map(([kind, label]) => (
+            <li key={kind} className='flex items-center gap-1'>
+              <Dot kind={kind} />
+              {label}
+            </li>
+          ))}
+        </ul>
+      )}
       <Calendar
         key={monthIndex}
         mode='single'
@@ -384,16 +407,6 @@ function DaysCalendarView({ today, getShorts }: DaysCalendarViewProps) {
           );
         }}
       />
-      {legend.length > 0 && (
-        <ul className='text-muted-foreground flex flex-wrap gap-x-3 gap-y-1 text-xs'>
-          {legend.map(([kind, label]) => (
-            <li key={kind} className='flex items-center gap-1'>
-              <Dot kind={kind} />
-              {label}
-            </li>
-          ))}
-        </ul>
-      )}
       {monthLine && (
         <p className='text-muted-foreground text-sm'>
           <MaskedText>{monthLine}</MaskedText>

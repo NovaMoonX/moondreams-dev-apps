@@ -815,6 +815,7 @@ function GoalFormBody({
                 flow={questions}
                 rowIds={['name', 'often', 'byWhen']}
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

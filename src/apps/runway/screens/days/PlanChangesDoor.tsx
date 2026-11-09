@@ -7,7 +7,7 @@ import ValuesEyeButton from '@/components/ValuesEyeButton';
 import ComingChangesList from '@apps/runway/components/ComingChangesList';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
-import { COMING_WORDS, PLAN_CHANGE_WORDS } from '@apps/runway/constants';
+import { COMING_WORDS } from '@apps/runway/constants';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import { getChangeRef } from '@apps/runway/utils/comingChangeText';
 import { describePlanChangeGoes } from '@apps/runway/utils/planChangeText';
@@ -61,7 +61,6 @@ function PlanChangesDoor({ changes, day, today }: PlanChangesDoorProps) {
           itemId={chosen.itemId}
           kind={chosen.kind}
           today={today}
-          figureLabel={PLAN_CHANGE_WORDS.sheetLabel}
           presetChange={getChangeRef(chosen)}
           onClose={() => {
             setChosen(null);

@@ -6,6 +6,8 @@ interface ComingChangesListProps {
   changes: readonly PlanChange[];
   today: number;
   textOf?: (change: PlanChange) => string;
+  /** The list belongs to one item's own sheet. */
+  isOwnItem?: boolean;
   /** Opens a change inside the sheet that holds the list; without it each row opens its own item's sheet. */
   onOpen?: (change: PlanChange) => void;
 }
@@ -15,6 +17,7 @@ function ComingChangesList({
   changes,
   today,
   textOf,
+  isOwnItem = false,
   onOpen,
 }: ComingChangesListProps) {
   return (
@@ -25,6 +28,7 @@ function ComingChangesList({
           change={change}
           today={today}
           text={textOf?.(change)}
+          isOwnItem={isOwnItem}
           onOpen={onOpen ? () => onOpen(change) : undefined}
         />
       ))}

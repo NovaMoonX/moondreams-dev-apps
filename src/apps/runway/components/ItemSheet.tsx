@@ -112,7 +112,10 @@ import {
   SPILL_WORDS,
   HORIZON_PLAN_WORDS,
   HORIZON_WORDS,
+  PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import { getChangeFigure } from '@apps/runway/utils/planChangeText';
 import { getHolderById } from '@apps/runway/engine/accounts';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
@@ -120,10 +123,7 @@ import {
   getVersionStretches,
   resolveCurrentOrNext,
 } from '@apps/runway/engine/resolve';
-import {
-  findLinkHolder,
-  listComingChanges,
-} from '@apps/runway/engine/horizonLinks';
+import { findLinkHolder } from '@apps/runway/engine/horizonLinks';
 import { occurrences } from '@apps/runway/engine/schedule';
 import BillForm, { type BillStepId } from '@apps/runway/forms/BillForm';
 import EnvelopeForm, {
@@ -164,6 +164,7 @@ import {
   selectAllCards,
   selectGroups,
   selectPairedBy,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -193,9 +194,8 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import {
-  describeComingHeadline,
   getChangeRef,
-  toPlanChange,
+  listItemChanges,
 } from '@apps/runway/utils/comingChangeText';
 import type { PlanChange } from '@apps/runway/engine/planChanges';
 import {
@@ -235,7 +235,7 @@ export interface ItemSheetProps {
   today: number;
   onClose: () => void;
   /** What the figure is ("Each income day", "Next payment", "Saved"). */
-  figureLabel: string;
+  figureLabel?: string;
   /** Left out for an item with no amount of its own (an income source). */
   figure?: string;
   /** Small words after the figure ("of $600"). */
@@ -392,6 +392,7 @@ function ItemSheet({
     return start !== null && start <= today;
   });
   const allVersions = useAppSelector((state) => state.runway.versions);
+  const planStance = useAppSelector(selectStance);
   const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
@@ -511,7 +512,11 @@ function ItemSheet({
     { value: LAST_DAY_OTHER, label: 'A date' },
   ];
   const endOn =
-    endPick === LAST_DAY_OTHER ? fromDateInputValue(endDate) : Number(endPick);
+    endPick === ''
+      ? undefined
+      : endPick === LAST_DAY_OTHER
+        ? fromDateInputValue(endDate)
+        : Number(endPick);
   const isEndValid =
     endOn !== undefined &&
     endOn >= today &&
@@ -580,13 +585,13 @@ function ItemSheet({
     }
   };
 
-  const cardNamer = getCardNamer(allCards);
-  const comingChanges = listComingChanges(
+  const comingChanges = listItemChanges(
     allVersions,
+    header,
     itemId,
     today,
-    endedAt,
-  ).map(toPlanChange);
+    (link) => findLinkHolder(events, link) !== null,
+  );
   const getEventName = (change: PlanChange) =>
     findLinkHolder(events, {
       changeId: getChangeRef(change).changeId,
@@ -1131,6 +1136,62 @@ function ItemSheet({
   const canForget =
     itemKind === 'bill' && isTrackingLevel(level) && learnedCount > 0;
 
+  const getOwnHero = (): {
+    label: string;
+    figure?: string;
+    fact?: string;
+  } => {
+    if (itemKind === 'payLine') {
+      const pay = payload as PayLineSealed;
+      return {
+        label: 'Each pay',
+        figure: formatCents(
+          pick(
+            effectiveStance(planStance, pay.stanceOverride),
+            pay.amount,
+            'income',
+          ),
+        ),
+      };
+    }
+    if (itemKind === 'bill') {
+      const bill = payload as BillSealed;
+      return {
+        label: 'Each payment',
+        figure: formatCents(
+          pick(
+            effectiveStance(planStance, bill.stanceOverride),
+            bill.amount,
+            'expense',
+          ),
+        ),
+        fact: PRIORITY_LABELS[bill.priority],
+      };
+    }
+    if (itemKind === 'envelope' || itemKind === 'goal') {
+      const own = payload as EnvelopeSealed | GoalSealed;
+      return {
+        label: ITEM_SHEET_R2_WORDS.eachTime,
+        figure: getChangeFigure(version)?.text,
+        fact: PRIORITY_LABELS[own.priority],
+      };
+    }
+    return { label: 'Income source' };
+  };
+  const ownQuick: NonNullable<ItemSheetProps['quickChange']> =
+    itemKind === 'source'
+      ? { label: ITEM_SHEET_R2_WORDS.changeName, step: 'sourceName' }
+      : {
+          label: ITEM_SHEET_R2_WORDS.change,
+          subtitle:
+            itemKind === 'goal'
+              ? ITEM_SHEET_R2_WORDS.changeTargetSub
+              : itemKind === 'bill'
+                ? ITEM_SHEET_R2_WORDS.changeBillSub
+                : ITEM_SHEET_R2_WORDS.changeAmountSub,
+          step: itemKind === 'goal' ? 'target' : 'amount',
+        };
+
   const openChange = (step: string | null) => {
     setIsPausing(false);
     setPlanAhead(null);
@@ -1139,7 +1200,7 @@ function ItemSheet({
   };
   const openPause = () => {
     setIsPausing(true);
-    setPlanAhead(null);
+    setPlanAhead('stretch');
     setOpenStep(null);
     setPhase('change');
   };
@@ -1159,7 +1220,7 @@ function ItemSheet({
     if (choice === 'amount' || choice === 'stretch') {
       setIsPausing(false);
       setPlanAhead(choice === 'amount' ? 'date' : 'stretch');
-      setOpenStep(null);
+      setOpenStep('amount');
       setPhase('change');
       return;
     }
@@ -1168,15 +1229,12 @@ function ItemSheet({
       return;
     }
     if (choice === 'stop') {
-      const firstAhead = upcoming.find((on) => on > today);
       goTo('end');
-      setEndPick(
-        firstAhead === undefined ? LAST_DAY_OTHER : String(firstAhead),
-      );
+      setEndPick('');
       setEndDate('');
     } else {
       goTo('pause');
-      setPauseDate(toDateInputValue(addUtcDays(today, 1)));
+      setPauseDate('');
     }
     setFromPlan(true);
   };
@@ -1206,13 +1264,16 @@ function ItemSheet({
     if (isConfirmed) void forgetMatch(itemId, payload.name);
   };
 
+  const ownHero = getOwnHero();
+  const quick =
+    quickChange ?? (figureLabel === undefined ? ownQuick : undefined);
   const menu = (
     <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
-        label={figureLabel}
-        figure={figure}
+        label={figureLabel ?? ownHero.label}
+        figure={figure ?? ownHero.figure}
         suffix={figureSuffix}
-        fact={fact}
+        fact={fact ?? ownHero.fact}
         secondFact={secondFact}
         help={help}
       />
@@ -1319,17 +1380,17 @@ function ItemSheet({
             }}
           />
         )}
-        {canChange && !dayAction && quickChange && (
+        {canChange && !dayAction && quick && (
           <ActionRow
             isGrouped
             hasChevron
             icon={<Pencil />}
-            label={quickChange.label}
-            subtitle={quickChange.subtitle}
-            onClick={() => openChange(quickChange.step)}
+            label={quick.label}
+            subtitle={quick.subtitle}
+            onClick={() => openChange(quick.step)}
           />
         )}
-        {canChange && !quickChange && !dayAction && (
+        {canChange && !quick && !dayAction && (
           <ActionRow
             isGrouped
             hasChevron
@@ -1962,6 +2023,15 @@ function ItemSheet({
     </div>
   );
 
+  const getPrimaryLabel = () => {
+    if (fromPlan && view === 'end' && isEndValid)
+      return LIFECYCLE_WORDS.endAfterConfirm(formatDateOrdinalUTC(endOn));
+    if (fromPlan && view === 'pause' && isPauseValid)
+      return LIFECYCLE_WORDS.stopSavingFromConfirm(
+        formatDateOrdinalUTC(pauseOn),
+      );
+    return getActionTitle(view, itemKind);
+  };
   const leaveAction = () => goTo(fromPlan ? 'planChoice' : 'menu');
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
@@ -2088,7 +2158,7 @@ function ItemSheet({
             disabled={isSaving || blocker !== null}
             onClick={() => void run()}
           >
-            {getActionTitle(view, itemKind)}
+            {getPrimaryLabel()}
           </Button>
         }
       />
@@ -2098,6 +2168,7 @@ function ItemSheet({
   const planChoiceView = (
     <PlanAheadView
       choices={planAheadChoices}
+      isGoal={goal !== null}
       onPick={planAheadOn}
       onBack={() => (presetEventId === undefined ? goTo('menu') : onClose())}
     />
@@ -2110,11 +2181,7 @@ function ItemSheet({
       <ComingChangesList
         changes={comingChanges}
         today={today}
-        textOf={(change) =>
-          [describeComingHeadline(change, cardNamer), getEventName(change)]
-            .filter(Boolean)
-            .join(' \u00b7 ')
-        }
+        isOwnItem
         onOpen={(change) => openChangeSheet(change, true)}
       />
     </div>

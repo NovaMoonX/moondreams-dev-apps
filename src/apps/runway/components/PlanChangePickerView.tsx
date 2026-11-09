@@ -35,7 +35,7 @@ import IncomeForm from '@apps/runway/forms/IncomeForm';
 import type { PlanSection } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
-type NewKind = 'pay' | 'bill' | 'envelope' | 'goal';
+export type NewKind = 'pay' | 'bill' | 'envelope' | 'goal';
 
 const NEW_ROWS: {
   kind: NewKind;
@@ -69,10 +69,74 @@ const NEW_ROWS: {
   },
 ];
 
+interface NewItemFormProps {
+  kind: NewKind;
+  eventId: string;
+  startsOn: number;
+  onClose: () => void;
+  onCancel: () => void;
+}
+
+/** The create form for something new that starts on the day already picked, part of the event; drawn in place of the event's sheet so only one drawer shows. */
+export function NewItemForm({
+  kind,
+  eventId,
+  startsOn,
+  onClose,
+  onCancel,
+}: NewItemFormProps) {
+  if (kind === 'pay')
+    return (
+      <IncomeForm
+        isOpen
+        title='Income'
+        defaultFrequency={null}
+        eventId={eventId}
+        startsOn={startsOn}
+        onClose={onClose}
+        onCancel={onCancel}
+      />
+    );
+  if (kind === 'bill')
+    return (
+      <BillForm
+        isOpen
+        title='Bill'
+        eventId={eventId}
+        startsOn={startsOn}
+        onClose={onClose}
+        onCancel={onCancel}
+      />
+    );
+  if (kind === 'envelope')
+    return (
+      <EnvelopeForm
+        isOpen
+        title='Envelope'
+        eventId={eventId}
+        startsOn={startsOn}
+        onClose={onClose}
+        onCancel={onCancel}
+      />
+    );
+  return (
+    <GoalForm
+      isOpen
+      title='Goal'
+      eventId={eventId}
+      startsOn={startsOn}
+      onClose={onClose}
+      onCancel={onCancel}
+    />
+  );
+}
+
 interface PlanChangePickerViewProps {
   eventId: string;
   today: number;
   onBack: () => void;
+  /** Opens the create form for something new, once its start day is picked. */
+  onStartNew: (kind: NewKind, startsOn: number) => void;
 }
 
 /** The items a change can be planned for (pays, bills, envelopes, goals); the one picked opens its change form with this event already chosen as what the change is part of. */
@@ -80,6 +144,7 @@ function PlanChangePickerView({
   eventId,
   today,
   onBack,
+  onStartNew,
 }: PlanChangePickerViewProps) {
   const { showOnPlan } = useRunwayUrlState();
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
@@ -89,7 +154,6 @@ function PlanChangePickerView({
   const [query, setQuery] = useState('');
   const [step, setStep] = useState<'pick' | 'kind' | 'date'>('pick');
   const [newKind, setNewKind] = useState<NewKind | null>(null);
-  const [isFormOpen, setIsFormOpen] = useState(false);
   const [startDate, setStartDate] = useState('');
   const startsOn = fromDateInputValue(startDate);
   const isStartValid =
@@ -100,7 +164,6 @@ function PlanChangePickerView({
   const options: {
     id: string;
     name: string;
-    noun: string;
     section: PlanSection;
     kind: keyof typeof PICK_KIND_HEADINGS;
   }[] = [
@@ -108,7 +171,6 @@ function PlanChangePickerView({
       payLines.map(({ item, version }) => ({
         id: item.id,
         name: version.payload.name,
-        noun: HORIZON_WORDS.pickPay,
         section: 'income' as const,
         kind: 'income' as const,
       })),
@@ -116,21 +178,18 @@ function PlanChangePickerView({
     ...bills.map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
-      noun: HORIZON_WORDS.pickBill,
       section: 'bills' as const,
       kind: 'bill' as const,
     })),
     ...envelopes.map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
-      noun: HORIZON_WORDS.pickEnvelope,
       section: 'envelopes' as const,
       kind: 'envelope' as const,
     })),
     ...goals.map(({ item, version }) => ({
       id: item.id,
       name: version.payload.name,
-      noun: HORIZON_WORDS.pickGoal,
       section: 'goals' as const,
       kind: 'goal' as const,
     })),
@@ -143,60 +202,8 @@ function PlanChangePickerView({
 
   const pickNew = (kind: NewKind) => {
     setNewKind(kind);
-    if (kind === 'envelope' || kind === 'goal') setStep('date');
-    else setIsFormOpen(true);
+    setStep('date');
   };
-  const closeForm = () => {
-    setIsFormOpen(false);
-    onBack();
-  };
-  const cancelForm = () => {
-    setIsFormOpen(false);
-    if (newKind === 'pay' || newKind === 'bill') setNewKind(null);
-  };
-  const forms = isFormOpen && newKind !== null && (
-    <>
-      {newKind === 'pay' && (
-        <IncomeForm
-          isOpen
-          title='Income'
-          defaultFrequency={null}
-          eventId={eventId}
-          onClose={closeForm}
-          onCancel={cancelForm}
-        />
-      )}
-      {newKind === 'bill' && (
-        <BillForm
-          isOpen
-          title='Bill'
-          eventId={eventId}
-          onClose={closeForm}
-          onCancel={cancelForm}
-        />
-      )}
-      {newKind === 'envelope' && isStartValid && (
-        <EnvelopeForm
-          isOpen
-          title='Envelope'
-          eventId={eventId}
-          startsOn={startsOn}
-          onClose={closeForm}
-          onCancel={cancelForm}
-        />
-      )}
-      {newKind === 'goal' && isStartValid && (
-        <GoalForm
-          isOpen
-          title='Goal'
-          eventId={eventId}
-          startsOn={startsOn}
-          onClose={closeForm}
-          onCancel={cancelForm}
-        />
-      )}
-    </>
-  );
 
   if (step === 'kind') {
     return (
@@ -217,7 +224,6 @@ function PlanChangePickerView({
             />
           ))}
         </ActionGroup>
-        {forms}
       </div>
     );
   }
@@ -241,13 +247,14 @@ function PlanChangePickerView({
             <Button
               type='button'
               disabled={!isStartValid}
-              onClick={() => setIsFormOpen(true)}
+              onClick={() =>
+                newKind && startsOn && onStartNew(newKind, startsOn)
+              }
             >
               {COMING_WORDS.newNext}
             </Button>
           }
         />
-        {forms}
       </div>
     );
   }
@@ -290,14 +297,13 @@ function PlanChangePickerView({
             <div key={kind} className='space-y-2'>
               <SectionDivider label={PICK_KIND_HEADINGS[kind]} />
               <ActionGroup>
-                {group.map(({ id, name, noun, section }) => (
+                {group.map(({ id, name, section }) => (
                   <ActionRow
                     key={id}
                     isGrouped
                     hasChevron
                     icon={<ItemMark itemId={id} name={name} />}
                     label={name}
-                    subtitle={noun}
                     onClick={() =>
                       void showOnPlan(section, {
                         itemId: id,

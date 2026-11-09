@@ -52,6 +52,7 @@ function ChangeSection({
         kind={kind}
         presetDayKey={flow.presetDayKey}
         isPlanning={flow.isPlanning}
+        isPause={value.isPause}
       />
       {flow.isLinkable && (
         <PartOfPicker value={flow.eventId} onChange={flow.setEventId} />

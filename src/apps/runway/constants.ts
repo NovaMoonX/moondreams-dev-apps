@@ -1242,6 +1242,10 @@ export const CHANGE_WORDS = {
   previewHeading: 'What this changes',
   putsInOf: (put: string, asked: string, hasRoom: boolean) =>
     `${hasRoom ? 'Puts' : 'No room: puts'}\u00A0in\u00A0${put}\u00A0of\u00A0${asked}`,
+  noLongerAsked: (was: string | null) =>
+    was === null
+      ? 'No longer asked for'
+      : `No longer asked for \u00b7 was ${was}`,
   previewNone:
     'No income day in the next year moves. Earlier days stay as they are.',
   previewWaiting: 'Finish the form to see what it changes.',
@@ -1323,6 +1327,8 @@ export const LIFECYCLE_WORDS = {
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
   pauseConfirm: 'Stop saving',
+  endAfterConfirm: (date: string) => `End after ${date}`,
+  stopSavingFromConfirm: (date: string) => `Stop saving from ${date}`,
   pauseFromHeading: 'From',
   pauseFromLabel: 'Stop saving from',
   pauseBlocker: 'Pick the day it stops, from today to ten years ahead.',
@@ -3241,11 +3247,6 @@ export const DAYS_CALENDAR_WORDS = {
 } as const;
 
 export const PLAN_CHANGE_WORDS = {
-  rowChanges: (name: string, from: string, to: string) =>
-    `${name} · ${from} → ${to}`,
-  rowReturns: (name: string, to: string) => `${name} returns to ${to}`,
-  rowReturnsPlain: (name: string) => `${name} returns`,
-  rowChangesPlain: (name: string) => `${name} changes`,
   stops: (name: string) => `${name} stops`,
   starts: (name: string) => `${name} starts`,
   returns: (name: string) => `${name} returns`,
@@ -3255,8 +3256,6 @@ export const PLAN_CHANGE_WORDS = {
   more: (count: number) => `and ${count} more`,
   viewTitle: 'Different this time',
   viewSub: 'Planned changes that start or end since the last pay.',
-  fromDate: (date: string) => `From ${date}`,
-  sheetLabel: 'Planned change',
 } as const;
 
 /** The coming-changes row, a change's own sheet and the "What will change?" question. */
@@ -3271,6 +3270,19 @@ export const COMING_WORDS = {
   goesTo: (name: string, figure: string) => `${name} goes to ${figure}`,
   goesBackTo: (name: string, figure: string) =>
     `${name} goes back to ${figure}`,
+  lineChanges: (name: string, figures: string, date: string) =>
+    `${name}: ${figures} from ${date}`,
+  lineChangesPlain: (name: string, date: string) =>
+    `${name} changes from ${date}`,
+  lineStopsSaving: (name: string, date: string) =>
+    `${name} stops saving from ${date}`,
+  lineEnds: (name: string, lastDay: string) => `${name} ends after ${lastDay}`,
+  lineStarts: (name: string, date: string) => `${name} starts ${date}`,
+  lineReturns: (name: string, figure: string, lastDay: string) =>
+    `${name} goes back to ${figure} after ${lastDay}`,
+  lineReturnsPlain: (name: string, lastDay: string) =>
+    `${name} goes back after ${lastDay}`,
+  untilOnly: (lastDay: string) => `Until ${lastDay}`,
   listTitle: 'Coming changes',
   thingsChange: (count: number) => `${count} things change`,
   dayListTitle: (day: string) => `Changing ${day}`,
@@ -3318,10 +3330,11 @@ export const COMING_WORDS = {
   planStretchSub: 'Then it goes back to what it is now',
   planStop: 'It stops on a date',
   planStopSub: 'Its history stays',
+  planStopGoalSub: 'The goal ends. Its history stays.',
   planPause: 'Pause it',
   planPauseSub: 'Stop it for a while, then it comes back',
   planStopSaving: 'Stop saving from a date',
-  planStopSavingSub: 'The balance and history stay',
+  planStopSavingSub: 'The goal stays. No new money goes in.',
   planNone: 'Nothing can be planned for this one.',
   somethingNew: 'Something new',
   somethingNewSub: 'A new pay, bill, envelope or goal that starts later',

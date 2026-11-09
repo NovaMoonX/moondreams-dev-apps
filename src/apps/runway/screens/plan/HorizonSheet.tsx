@@ -38,7 +38,17 @@ import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
-import PlanChangePickerView from '@apps/runway/components/PlanChangePickerView';
+import type { PlanChange } from '@apps/runway/engine/planChanges';
+import {
+  describeChangeLine,
+  getChangeRef,
+  listItemChanges,
+} from '@apps/runway/utils/comingChangeText';
+import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
+import PlanChangePickerView, {
+  NewItemForm,
+  type NewKind,
+} from '@apps/runway/components/PlanChangePickerView';
 import ItemMark from '@apps/runway/components/ItemMark';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
@@ -171,6 +181,11 @@ function HorizonSheet({
     | 'planChange'
   >('main');
   const [unlinkId, setUnlinkId] = useState<string | null>(null);
+  const [creating, setCreating] = useState<{
+    kind: NewKind;
+    startsOn: number;
+  } | null>(null);
+  const [openedChange, setOpenedChange] = useState<PlanChange | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
   const stops = useAppSelector(selectItemStops);
@@ -483,6 +498,18 @@ function HorizonSheet({
       .sort((a, b) => b.createdAt - a.createdAt)[0];
     return latest && 'name' in latest.payload ? latest.payload.name : '';
   };
+  const items = useAppSelector((state) => state.runway.items);
+  const findComing = (link: { changeId: string; itemId: string }) =>
+    listItemChanges(
+      versions,
+      items.find(({ id }) => id === link.itemId) ?? null,
+      link.itemId,
+      today,
+      () => true,
+    ).find(
+      (change) =>
+        !change.isReturn && getChangeRef(change).changeId === link.changeId,
+    ) ?? null;
   const linkLines = sortLinksByDate(horizon.links, versions, ends).flatMap(
     (link) => {
       const span = getLinkSpan(versions, link, stops, ends);
@@ -511,16 +538,20 @@ function HorizonSheet({
           : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
       };
       const when = getWhen();
+      const coming = span.isLive ? findComing(link) : null;
       return [
         {
           link,
           isLive: span.isLive,
+          coming,
           itemName: getItemName(link.itemId),
-          line: HORIZON_WORDS.changeLine(
-            getItemName(link.itemId),
-            difference,
-            when,
-          ),
+          line: coming
+            ? describeChangeLine(coming, getCardNamer(allCards))
+            : HORIZON_WORDS.changeLine(
+                getItemName(link.itemId),
+                difference,
+                when,
+              ),
         },
       ];
     },
@@ -602,7 +633,7 @@ function HorizonSheet({
               {HORIZON_WORDS.changesCaption}
             </p>
             <ActionGroup>
-              {linkLines.map(({ link, line, itemName }) => (
+              {linkLines.map(({ link, line, itemName, coming }) => (
                 <ActionRow
                   key={link.changeId}
                   isGrouped
@@ -610,9 +641,11 @@ function HorizonSheet({
                   icon={<ItemMark itemId={link.itemId} name={itemName} />}
                   label={mask(line)}
                   onClick={() =>
-                    horizon.state === 'open'
-                      ? setUnlinkId(link.changeId)
-                      : undefined
+                    coming && horizon.state === 'open'
+                      ? setOpenedChange(coming)
+                      : horizon.state === 'open'
+                        ? setUnlinkId(link.changeId)
+                        : undefined
                   }
                 />
               ))}
@@ -632,6 +665,20 @@ function HorizonSheet({
       </div>
     );
 
+  if (creating) {
+    return (
+      <NewItemForm
+        kind={creating.kind}
+        eventId={itemId}
+        startsOn={creating.startsOn}
+        onClose={() => {
+          setCreating(null);
+          setView('main');
+        }}
+        onCancel={() => setCreating(null)}
+      />
+    );
+  }
   if (addState === 'form') {
     return (
       <CostForm
@@ -661,6 +708,14 @@ function HorizonSheet({
     );
   }
 
+  const openedLive =
+    openedChange === null
+      ? null
+      : findComing({
+          changeId: getChangeRef(openedChange).changeId,
+          itemId: openedChange.itemId,
+        });
+
   return (
     <FormSheet
       isOpen
@@ -670,7 +725,14 @@ function HorizonSheet({
       actions={<ValuesEyeButton />}
     >
       <div ref={bodyRef} className='contents' />
-      {view === 'finish' || view === 'callOff' ? (
+      {openedLive ? (
+        <ChangeSheetView
+          change={openedLive}
+          today={today}
+          isFromEvent
+          onBack={() => setOpenedChange(null)}
+        />
+      ) : view === 'finish' || view === 'callOff' ? (
         <HorizonEndView
           itemId={itemId}
           horizon={horizon}
@@ -697,6 +759,7 @@ function HorizonSheet({
           eventId={itemId}
           today={today}
           onBack={() => setView('main')}
+          onStartNew={(kind, startsOn) => setCreating({ kind, startsOn })}
         />
       ) : view === 'change' ? (
         <HorizonChangeForm

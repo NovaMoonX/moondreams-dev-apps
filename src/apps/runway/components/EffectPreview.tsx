@@ -112,11 +112,18 @@ const toDayEntry = (
     })),
     ...(day.kind === 'changed' ? day.effect.shortened : []).map((entry) => ({
       name: day.names[entry.key]?.name ?? 'Something removed',
-      text: CHANGE_WORDS.putsInOf(
-        formatCents(entry.putInCents),
-        formatCents(entry.putInCents + entry.afterShortCents),
-        entry.putInCents > 0,
-      ),
+      text:
+        entry.putInCents === 0 && entry.afterShortCents === 0
+          ? CHANGE_WORDS.noLongerAsked(
+              entry.beforeShortCents > 0
+                ? formatCents(entry.beforeShortCents)
+                : null,
+            )
+          : CHANGE_WORDS.putsInOf(
+              formatCents(entry.putInCents),
+              formatCents(entry.putInCents + entry.afterShortCents),
+              entry.putInCents > 0,
+            ),
       isWords: true,
     })),
   ];

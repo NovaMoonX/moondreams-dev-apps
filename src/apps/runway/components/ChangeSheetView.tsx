@@ -45,8 +45,9 @@ import { getCardNamer } from '@apps/runway/utils/cardText';
 import {
   describeCancelTitle,
   describeChangeFigures,
-  describeComingHeadline,
+  describeChangeLine,
   getChangeRef,
+  listItemChanges,
 } from '@apps/runway/utils/comingChangeText';
 import { getChangeFigure } from '@apps/runway/utils/planChangeText';
 import HorizonSheet from '@apps/runway/screens/plan/HorizonSheet';
@@ -55,6 +56,8 @@ interface ChangeSheetViewProps {
   change: PlanChange;
   today: number;
   onBack: () => void;
+  /** Opened from the event's own sheet: the event is where the person already is, so it is not offered as a door, and the sheet closes once the change moves off it. */
+  isFromEvent?: boolean;
 }
 
 const toEdit = (event: ResolvedHorizon, summary: string): LinkEventEdit => ({
@@ -73,7 +76,12 @@ const KNOWN_FAILURES: readonly string[] = [
   COMING_WORDS.gone,
 ];
 
-function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
+function ChangeSheetView({
+  change,
+  today,
+  onBack,
+  isFromEvent = false,
+}: ChangeSheetViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -86,6 +94,10 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
   );
   const stance = useAppSelector(selectStance);
   const versions = useAppSelector((state) => state.runway.versions);
+  const header = useAppSelector(
+    (state) =>
+      state.runway.items.find(({ id }) => id === change.itemId) ?? null,
+  );
   const [isPicking, setIsPicking] = useState(false);
   const [isEventOpen, setIsEventOpen] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
@@ -175,6 +187,7 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
         type: 'success',
       });
       setIsPicking(false);
+      if (isFromEvent) onBack();
     }, COMING_WORDS.tieFailed);
 
   const askCancel = async () => {
@@ -238,6 +251,8 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
       return back
         ? PART_OF_WORDS.comingBackTo(back.text, lastDay)
         : COMING_WORDS.backAfter(lastDay);
+    if (change.what === 'start')
+      return COMING_WORDS.startsOn(formatDateOrdinalUTC(change.on));
     return COMING_WORDS.from(formatDateOrdinalUTC(change.on));
   };
   const getUntil = () => {
@@ -248,76 +263,95 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
         ? [version.effectiveUntil]
         : [],
     );
-    return change.what === 'change' && !change.isReturn && ends.length > 0
-      ? COMING_WORDS.until(formatDateOrdinalUTC(Math.max(...ends) - DAY_MS))
-      : null;
+    if (change.what !== 'change' || change.isReturn || ends.length === 0)
+      return null;
+    const end = Math.max(...ends);
+    const goesBack = listItemChanges(
+      versions,
+      header,
+      change.itemId,
+      today,
+      () => false,
+    ).some((coming) => coming.isReturn && coming.on === end);
+    const lastEnd = formatDateOrdinalUTC(end - DAY_MS);
+    return goesBack
+      ? COMING_WORDS.until(lastEnd)
+      : COMING_WORDS.untilOnly(lastEnd);
   };
   const untilLine = getUntil();
+
+  const eventRows = (
+    <>
+      {holder && (
+        <ActionRow
+          isGrouped
+          hasChevron={!isFromEvent}
+          icon={<CalendarClock />}
+          label={holderName ?? ''}
+          subtitle={
+            isOpenHolder && !isFromEvent
+              ? COMING_WORDS.openEventSub
+              : isOpenHolder
+                ? undefined
+                : PART_OF_WORDS.none
+          }
+          onClick={() => !isFromEvent && setIsEventOpen(true)}
+        />
+      )}
+      {choices.length > 0 && (
+        <ActionRow
+          isGrouped
+          hasChevron
+          icon={<CalendarPlus />}
+          label={isOpenHolder ? COMING_WORDS.changeEvent : COMING_WORDS.tie}
+          subtitle={isOpenHolder ? undefined : COMING_WORDS.tieSub}
+          isDisabled={isBusy}
+          onClick={() => setIsPicking(true)}
+        />
+      )}
+      {isOpenHolder && holderName && (
+        <ActionRow
+          isGrouped
+          icon={<Link2Off />}
+          label={COMING_WORDS.untie(holderName)}
+          subtitle={COMING_WORDS.untieSub}
+          isDisabled={isBusy}
+          onClick={() => void writeLink(null, holder)}
+        />
+      )}
+    </>
+  );
 
   return (
     <div className='flex flex-1 flex-col gap-4'>
       <BackLink onBack={onBack} />
-      <ActionTitle>
-        {mask(describeComingHeadline(change, cardNamer))}
-      </ActionTitle>
-      {lines.length > 0 && (
-        <ActionSection caption={COMING_WORDS.whatChanges}>
-          <ul className='border-border bg-card divide-border divide-y rounded-2xl border text-[15px]'>
+      <ActionTitle>{mask(describeChangeLine(change, cardNamer))}</ActionTitle>
+      <dl className='space-y-3 text-[15px]'>
+        {lines.length > 0 && (
+          <div>
+            <dt className='text-muted-foreground text-xs'>
+              {COMING_WORDS.whatChanges}
+            </dt>
             {lines.map((line, index) => (
-              <li key={`${index}${line}`} className='px-3 py-2.5'>
-                {mask(line)}
-              </li>
+              <dd key={`${index}${line}`}>{mask(line)}</dd>
             ))}
-          </ul>
-        </ActionSection>
-      )}
-      <ActionSection caption={COMING_WORDS.whenCaption}>
-        <div className='border-border bg-card rounded-2xl border px-3 py-2.5 text-[15px]'>
-          <p>{mask(getWhen())}</p>
-          {untilLine && (
-            <p className='text-muted-foreground'>{mask(untilLine)}</p>
-          )}
+          </div>
+        )}
+        <div>
+          <dt className='text-muted-foreground text-xs'>
+            {COMING_WORDS.whenCaption}
+          </dt>
+          <dd>{mask(getWhen())}</dd>
+          {untilLine && <dd>{mask(untilLine)}</dd>}
         </div>
-      </ActionSection>
-      {holder && (
+      </dl>
+      {(holder || choices.length > 0) && (
         <ActionSection caption={COMING_WORDS.partOfCaption}>
-          <ActionGroup>
-            <ActionRow
-              isGrouped
-              hasChevron
-              icon={<CalendarClock />}
-              label={holderName ?? ''}
-              subtitle={
-                isOpenHolder ? COMING_WORDS.openEventSub : PART_OF_WORDS.none
-              }
-              onClick={() => setIsEventOpen(true)}
-            />
-          </ActionGroup>
+          <ActionGroup>{eventRows}</ActionGroup>
         </ActionSection>
       )}
-      <ActionGroup>
-        {choices.length > 0 && (
-          <ActionRow
-            isGrouped
-            hasChevron
-            icon={<CalendarPlus />}
-            label={isOpenHolder ? COMING_WORDS.changeEvent : COMING_WORDS.tie}
-            subtitle={isOpenHolder ? undefined : COMING_WORDS.tieSub}
-            isDisabled={isBusy}
-            onClick={() => setIsPicking(true)}
-          />
-        )}
-        {isOpenHolder && holderName && (
-          <ActionRow
-            isGrouped
-            icon={<Link2Off />}
-            label={COMING_WORDS.untie(holderName)}
-            subtitle={COMING_WORDS.untieSub}
-            isDisabled={isBusy}
-            onClick={() => void writeLink(null, holder)}
-          />
-        )}
-        {canCancel && (
+      {canCancel && (
+        <ActionGroup>
           <ActionRow
             isGrouped
             isDestructive
@@ -327,10 +361,10 @@ function ChangeSheetView({ change, today, onBack }: ChangeSheetViewProps) {
             isDisabled={isBusy}
             onClick={() => void askCancel()}
           />
-        )}
-      </ActionGroup>
+        </ActionGroup>
+      )}
       {error && <InlineNotice tone='warning'>{error}</InlineNotice>}
-      {isEventOpen && holder && (
+      {isEventOpen && holder && !isFromEvent && (
         <HorizonSheet
           itemId={holder.item.id}
           horizon={holder.version.payload}
