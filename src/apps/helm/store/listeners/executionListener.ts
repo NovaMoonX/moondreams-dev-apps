@@ -57,6 +57,7 @@ export async function openExecution(
       summary: payload.summary ?? '',
       effects: payload.effects ?? [],
       undoReport: payload.undoReport ?? null,
+      spoken: payload.spoken ?? null,
       goneIds: payload.goneIds ?? null,
       isUnreadable: false,
     };
@@ -66,6 +67,7 @@ export async function openExecution(
       summary: '',
       effects: [],
       undoReport: null,
+      spoken: null,
       goneIds: null,
       isUnreadable: true,
     };

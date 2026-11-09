@@ -844,7 +844,7 @@ Two routes, picked on the server before any model call by `nomos/route.ts` (pure
 
 Only a spoken turn gets a spoken line (owner, round 6 second set); a typed turn gets the written reply only. "Mute" on home's dock or in the conversation over a page (round 6e) silences spoken lines for the sitting (the current session, device state only, never stored). The line is stored sealed as `spoken`:
 
-- **Action-only turns**: code builds the line from the execution summary ("Got it. Call the florist, Friday." / "Done. Moved to Friday."), priority `ack`, spoken by the device voice (section 20).
+- **Action-only turns** (as built, issue 12: `buildSpokenAck` in `nomos/spoken.ts`, sealed in the execution as `spoken`, null for a typed turn): code builds the line from the execution summary ("Got it. Call the florist, Friday." / "Done. Moved to Friday."), priority `ack`, spoken by the device voice (section 20).
 - **Answers**: the model writes `answer.spoken` (≤280 characters, plain sentences, no lists, no Markdown; toned), priority `reply`, spoken by the cloud voice. A long answer's spoken part is a summary and the screen holds the rest; reading the whole thing aloud is "Read it all", priority `summary`.
 - **Labels and cautions are code's**: a spoken general part is always introduced by "Not from your records" built by code (section 6), and a health answer's caution is a fixed short spoken line, never toned.
 - **Questions** are spoken as code builds them ("Which Dana: your sister or Dana at work?") and answered by voice through the same option matcher as a tap.
@@ -1561,6 +1561,8 @@ The owner chose to bundle an opt-in on-device model in the MVP so voice works of
 - **"Undo that" by voice** (PRODUCT.md light call): the device matches a fixed phrase list ("undo that", "undo", "take that back", in `constants.ts`) on the final transcript before anything is sent; a match runs the same device-side Undo as the button on the session's latest execution and speaks its code-built Undo line. It never calls the model and costs no allowance.
 
 `useVoiceConversation` (`src/hooks/`, general) extends `listeningMode` with the router, the queue, barge-in and the follow-up window; Helm's `VoiceControl` passes its phrases, wake name, identity and the callbacks that make a capture.
+
+**As built (issue 12):** device adapters only, in TAP mode. `voiceRouter` answers `browser` for listening and `natural` or `system` for speaking (cloud inputs are accepted and read by nothing yet); `useVoiceConversation` has no wake word, barge-in, follow-up window or cloud. A tap listens, the words show as heard, and a tap, "that's all" or 8 seconds of quiet sends them; `useHelmVoice` writes the turn with `sendCapture` (`inputMode: 'voice'`, `sttProvider: 'browser'`, joining back-to-back as a typed turn does) and, when that turn is sorted and its execution's sealed `spoken` is set, says it with priority `ack` unless muted, then writes `ttsProvider` with a field-scoped `updateDoc`. A `needsYou` or `failed` turn speaks nothing; answers and questions are spoken in their own issues. "Undo that" is matched on the whole utterance (`UNDO_PHRASES`) and runs `takeBack` on the open session's latest undoable execution, saying its report. Mute is hook state only. Helm does not turn the natural voice on yet, so every line is the system voice.
 
 ### Voice identity
 

@@ -23,6 +23,12 @@ import {
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
+import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
+import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
+import {
+  pickListener,
+  pickSpeaker,
+} from '../../src/lib/speech/voice/voiceRouter.ts';
 import { getVoiceQuality, pickVoice } from '../../src/utils/speechUtils.ts';
 
 const sharedFiles = [
@@ -34,13 +40,25 @@ const sharedFiles = [
     .map((name) => new URL(`../../src/lib/speech/${name}`, import.meta.url)),
   new URL('../../src/hooks/useSpeechCommands.ts', import.meta.url),
   new URL('../../src/hooks/useNaturalVoice.ts', import.meta.url),
+  new URL('../../src/hooks/useVoiceConversation.ts', import.meta.url),
   new URL('../../src/components/NaturalVoiceOption.tsx', import.meta.url),
 ];
 assert.ok(sharedFiles.length >= 12, 'the shared speech files are all found');
+const APP_WORDS =
+  /recipe|cook|pinch|\bsteps?\b|ingredient|shopping|\bhelm\b|nomos/i;
+const sharedPaths = sharedFiles.map((file) => file.pathname);
+assert.ok(
+  sharedPaths.some((path) =>
+    path.endsWith('/lib/speech/voice/playbackQueue.ts'),
+  ) &&
+    sharedPaths.some((path) => path.endsWith('/hooks/useVoiceConversation.ts')),
+  'the voice service and its hook are among the files scanned',
+);
+['a recipe', 'Helm', 'the Nomos voice'].forEach((planted) =>
+  assert.ok(APP_WORDS.test(planted), `"${planted}" is caught as an app word`),
+);
 sharedFiles.forEach((file) => {
-  const found = readFileSync(file, 'utf8').match(
-    /recipe|cook|pinch|\bsteps?\b|ingredient|shopping/i,
-  );
+  const found = readFileSync(file, 'utf8').match(APP_WORDS);
   assert.equal(
     found,
     null,
@@ -443,3 +461,143 @@ SPOKEN.forEach(([written, said]) => {
   assert.equal(toSpokenText(said), said, `"${said}" is already as it is said`);
 });
 console.log('speechShared: spoken text checks passed');
+
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+assert.equal(
+  pickListener({ isOnline: true }),
+  'browser',
+  'online listens with the browser',
+);
+assert.equal(
+  pickListener({ isOnline: false }),
+  'browser',
+  'offline listens with the browser',
+);
+(
+  [
+    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: true }, 'natural'],
+    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: false }, 'system'],
+    [
+      { isOnline: false, priority: 'reply', isNaturalVoiceReady: true },
+      'natural',
+    ],
+    [
+      { isOnline: true, priority: 'summary', isNaturalVoiceReady: false },
+      'system',
+    ],
+    [
+      {
+        isOnline: true,
+        priority: 'reply',
+        isNaturalVoiceReady: false,
+        isCloudAvailable: true,
+      },
+      'system',
+    ],
+  ] as const
+).forEach(([input, expected]) =>
+  assert.equal(
+    pickSpeaker(input),
+    expected,
+    `${JSON.stringify(input)} speaks with ${expected}`,
+  ),
+);
+
+const played: string[] = [];
+const finishers = new Map<string, () => void>();
+const fakeVoice: TtsAdapter = {
+  id: 'fake',
+  route: 'device',
+  isPlayingThroughWebAudio: false,
+  speak: (text, { signal, onStart }) =>
+    new Promise<void>((resolve) => {
+      played.push(`start ${text}`);
+      onStart();
+      finishers.set(text, () => {
+        played.push(`end ${text}`);
+        resolve();
+      });
+      // Ignores the signal on purpose: the queue must free its slot itself.
+      signal.addEventListener('abort', () => played.push(`abort ${text}`));
+    }),
+};
+const active: boolean[] = [];
+const queue = createPlaybackQueue({
+  pick: () => fakeVoice,
+  onActiveChange: (isActive) => active.push(isActive),
+});
+
+const ack1 = queue.enqueue('ack one', { priority: 'ack', turnKey: 1 });
+const reply1 = queue.enqueue('reply one', { priority: 'reply', turnKey: 1 });
+const ack1b = queue.enqueue('ack one b', { priority: 'ack', turnKey: 1 });
+await tick();
+assert.deepEqual(
+  played,
+  ['start ack one'],
+  'a reply waits for the ack that is playing',
+);
+finishers.get('ack one')?.();
+await tick();
+assert.deepEqual(
+  played.slice(-2),
+  ['end ack one', 'start ack one b'],
+  'a later ack of the same turn goes before the waiting reply',
+);
+finishers.get('ack one b')?.();
+await tick();
+assert.equal(
+  played.at(-1),
+  'start reply one',
+  'the reply plays after the acks',
+);
+assert.deepEqual(
+  (await Promise.all([ack1, ack1b])).map((result) => result.status),
+  ['spoken', 'spoken'],
+  'a line that played to its end is spoken',
+);
+
+const ack2 = queue.enqueue('ack two', { priority: 'ack', turnKey: 2 });
+await tick();
+assert.deepEqual(
+  played.slice(-2),
+  ['abort reply one', 'start ack two'],
+  'a newer turn cuts the older turn off and starts at once',
+);
+assert.equal(
+  (await reply1).status,
+  'cancelled',
+  'the cut line says it was cancelled',
+);
+const lateReply = await queue.enqueue('late reply', {
+  priority: 'reply',
+  turnKey: 1,
+});
+assert.equal(
+  lateReply.status,
+  'cancelled',
+  'a line of an older turn is dropped',
+);
+assert.equal(
+  played.includes('start late reply'),
+  false,
+  'a dropped line never plays',
+);
+
+const waitingReply = queue.enqueue('reply two', {
+  priority: 'reply',
+  turnKey: 2,
+});
+queue.clear();
+await tick();
+assert.deepEqual(
+  [
+    (await ack2).status,
+    (await waitingReply).status,
+    queue.isActive(),
+    active.at(-1),
+  ],
+  ['cancelled', 'cancelled', false, false],
+  'clear stops what plays and drops what waits',
+);
+console.log('speechShared: voice router and playback queue checks passed');

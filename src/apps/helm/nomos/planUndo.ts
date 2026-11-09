@@ -334,6 +334,7 @@ export function planUndo(input: {
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
+      spoken: null,
       goneIds,
     },
     takenBack: done.map(({ outcome }) => outcome.title),

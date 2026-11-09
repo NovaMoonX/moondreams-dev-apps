@@ -71,7 +71,7 @@ function writeJoined(
   return batch.commit();
 }
 
-/** Seals what the person typed and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
+/** Seals what the person typed or said and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
   encryption: HelmEncryption,
@@ -83,6 +83,8 @@ export async function sendCapture(
     leadId: string | null;
     reading: CaptureReading;
     screen: ScreenContext | null;
+    /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
+    voice?: { sttProvider: string };
   },
 ) {
   const text = turn.text.trim();
@@ -96,7 +98,9 @@ export async function sendCapture(
   const { createdAt } = turn;
   // Typed on home, its card is seen as it is sent, so it never waits in New since you looked.
   const capture: Capture = {
-    inputMode: 'typed',
+    inputMode: turn.voice ? 'voice' : 'typed',
+    sttProvider: turn.voice?.sttProvider ?? null,
+    ttsProvider: null,
     medium: 'web',
     sessionId: turn.sessionId,
     turnIndex: turn.turnIndex,
@@ -191,6 +195,13 @@ export async function loadEarlierSessions(uid: string) {
 
 export const markCaptureSeen = (uid: string, captureId: string) =>
   updateDoc(doc(capturesOf(uid), captureId), { seenAt: Date.now() });
+
+/** Records which voice said a spoken turn's line; touches only that field. */
+export const markCaptureSpoken = (
+  uid: string,
+  captureId: string,
+  ttsProvider: string,
+) => updateDoc(doc(capturesOf(uid), captureId), { ttsProvider });
 
 export const markAiNoticeSeen = (uid: string) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });

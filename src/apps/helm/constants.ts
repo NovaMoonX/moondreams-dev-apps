@@ -16,6 +16,11 @@ export const SESSION_IDLE_MS = 10 * 60 * 1000;
 
 export const CAPTURE_MAX_CHARS = 4_000;
 
+/** Said at the end of an utterance to send it without a tap. */
+export const END_PHRASES = ["that's all", 'thats all'];
+/** A whole utterance that is one of these takes the open session's latest turn back, on the device, before anything is sent. */
+export const UNDO_PHRASES = ['undo that', 'undo', 'take that back'];
+
 /** A task's title is cut at a word to this many characters, as the server cuts the ones it makes. */
 export const TASK_TITLE_CAP = 200;
 
@@ -85,6 +90,24 @@ const goneLine = (count: number) =>
 /** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
+  talk: 'Talk',
+  talkListening: 'Listening',
+  talkSendLabel: 'Send what you said',
+  talkListeningHint: 'Listening…',
+  talkWorking: 'Working on it…',
+  talkStop: 'Stop',
+  talkCancel: 'Cancel',
+  talkMute: 'Mute',
+  talkUnmute: 'Unmute',
+  talkMuted: 'Muted',
+  talkByVoice: 'Ask by voice',
+  talkByTyping: 'Ask by typing',
+  talkNeedsMicrophone:
+    'Allow the microphone for this site to talk. Type for now.',
+  talkNeedsRecognition: "This browser can't listen. Type for now.",
+  talkNotReady: 'Not ready yet. Try again in a moment.',
+  talkSendFailed: "That didn't send. Say it again.",
+  nothingToUndo: 'Nothing to undo yet.',
   askToday: 'Ask about today',
   chipToday: 'About today',
   backToToday: 'Back to Today',

@@ -133,6 +133,7 @@ interface CaptureDoc {
   sessionId?: string;
   turnIndex?: number;
   turnLeadId?: string | null;
+  inputMode?: string;
   route?: Route | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
@@ -748,6 +749,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     joinedIds: read.ids,
     messageCount: mode === 'rest' ? 1 : read.messages.length,
     route,
+    timeZone,
   });
 }
 
@@ -760,6 +762,7 @@ async function writeResult(
     joinedIds: string[];
     messageCount: number;
     route: Route;
+    timeZone: string;
   },
 ): Promise<SortResult> {
   const {
@@ -775,6 +778,7 @@ async function writeResult(
     joinedIds,
     messageCount,
     route,
+    timeZone,
   } = input;
   const tasksPath = `${base}/tasks`;
   const targetIds = [
@@ -881,6 +885,8 @@ async function writeResult(
           now,
           seal,
           messageCount,
+          inputMode: capture.inputMode,
+          timeZone,
         }),
       );
     }

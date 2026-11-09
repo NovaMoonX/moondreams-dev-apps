@@ -14,6 +14,7 @@ import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
 import TasksView from '@apps/helm/components/tasks/TasksView';
 import TodayView from '@apps/helm/components/today/TodayView';
+import { HelmVoiceContext, useHelmVoice } from '@apps/helm/hooks/useHelmVoice';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
 import { useHelmTheme } from '@apps/helm/hooks/useHelmTheme';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
@@ -39,6 +40,7 @@ function Helm() {
   useHelmTheme();
   useTrackAppUsage('helm', user?.uid ?? null);
   useHelmSync(user?.uid ?? null);
+  const voice = useHelmVoice();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const screen = useAppSelector(selectTopScreen);
   const isLocked = keyStatus === 'offline' || keyStatus === 'failed';
@@ -58,57 +60,59 @@ function Helm() {
   const isHome = isLocked || VIEW_KINDS[view] === 'home';
 
   return (
-    <HelmShell
-      isAskAvailable={!isLocked}
-      dock={
-        // The keyboard takes the dock's place while the field is in use, so what is typed stays in view.
-        isHome &&
-        !isLocked &&
-        !isComposing && (
-          <VoiceDock
-            onBrowse={openBrowse}
-            onTalk={focusComposer}
-            onType={focusComposer}
+    <HelmVoiceContext.Provider value={voice}>
+      <HelmShell
+        isAskAvailable={!isLocked}
+        dock={
+          // The keyboard takes the dock's place while the field is in use, so what is typed stays in view.
+          isHome &&
+          !isLocked &&
+          !isComposing && (
+            <VoiceDock
+              onBrowse={openBrowse}
+              onTalkBlocked={focusComposer}
+              onType={focusComposer}
+            />
+          )
+        }
+      >
+        {isHome && (
+          <HomeSurface
+            composerRef={composerRef}
+            onComposerFocusChange={setIsComposing}
+            onOpenSettings={() => showView('settings')}
           />
-        )
-      }
-    >
-      {isHome && (
-        <HomeSurface
-          composerRef={composerRef}
-          onComposerFocusChange={setIsComposing}
-          onOpenSettings={() => showView('settings')}
+        )}
+        {!isLocked && view === 'today' && (
+          <TodayView
+            onBack={goHome}
+            onHome={goHome}
+            onOpenTasks={() => showView('tasks')}
+          />
+        )}
+        {!isLocked && view === 'tasks' && (
+          <TasksView onBack={goBack} onHome={goHome} />
+        )}
+        {!isLocked && view === 'inbox' && (
+          <InboxView onBack={goHome} onHome={goHome} />
+        )}
+        {!isLocked && view === 'settings' && (
+          <SettingsScreen
+            onBack={goBack}
+            onOpenActivity={() => showView('activity')}
+          />
+        )}
+        {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
+        {isAskRequested && !isLocked && screen && (
+          <AskConversation entry={screen} onClose={() => void closeAsk()} />
+        )}
+        <BrowseSheet
+          isOpen={isBrowseOpen && isHome && !isLocked}
+          onClose={closeBrowse}
+          onOpenView={showView}
         />
-      )}
-      {!isLocked && view === 'today' && (
-        <TodayView
-          onBack={goHome}
-          onHome={goHome}
-          onOpenTasks={() => showView('tasks')}
-        />
-      )}
-      {!isLocked && view === 'tasks' && (
-        <TasksView onBack={goBack} onHome={goHome} />
-      )}
-      {!isLocked && view === 'inbox' && (
-        <InboxView onBack={goHome} onHome={goHome} />
-      )}
-      {!isLocked && view === 'settings' && (
-        <SettingsScreen
-          onBack={goBack}
-          onOpenActivity={() => showView('activity')}
-        />
-      )}
-      {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
-      {isAskRequested && !isLocked && screen && (
-        <AskConversation entry={screen} onClose={() => void closeAsk()} />
-      )}
-      <BrowseSheet
-        isOpen={isBrowseOpen && isHome && !isLocked}
-        onClose={closeBrowse}
-        onOpenView={showView}
-      />
-    </HelmShell>
+      </HelmShell>
+    </HelmVoiceContext.Provider>
   );
 }
 

@@ -85,6 +85,10 @@ export interface ScreenContext {
 /** One turn: what the person said, with the words sealed. */
 export interface Capture {
   inputMode: 'typed' | 'voice' | 'attachment';
+  /** Which listener wrote a spoken turn ('browser'); null on every other turn. */
+  sttProvider: string | null;
+  /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
+  ttsProvider: string | null;
   medium: 'web';
   sessionId: string;
   turnIndex: number;
@@ -218,6 +222,8 @@ export interface ExecutionSealed {
   commands: unknown[];
   effects: ExecutionEffect[];
   undoReport: string | null;
+  /** The line said aloud after a spoken turn, code-built; null for a typed turn, an undo and anything made before voice. */
+  spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
 }
@@ -228,6 +234,7 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   summary: string;
   effects: ExecutionEffect[];
   undoReport: string | null;
+  spoken: string | null;
   goneIds: string[] | null;
   isUnreadable: boolean;
 }

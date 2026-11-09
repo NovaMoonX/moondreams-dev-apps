@@ -24,6 +24,7 @@ import {
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import {
   clearSentTurn,
   getNextTurn,
@@ -70,6 +71,7 @@ function Composer({
   draftKey = HOME_DRAFT_KEY,
 }: ComposerProps) {
   const name = useAssistantName();
+  const voice = useHelmVoiceContext();
   const { user } = useAuth();
   const { addToast } = useToast();
   const { restored } = useFormDraft({
@@ -246,6 +248,11 @@ function Composer({
         }
       }}
     >
+      {voice.notice !== null && (
+        <p className='text-muted-foreground text-[13px]' role='status'>
+          {voice.notice}
+        </p>
+      )}
       {isFocused && isReady && <ShorthandRow onInsert={insertShorthand} />}
       <Textarea
         ref={fieldRef}
@@ -257,6 +264,7 @@ function Composer({
         disabled={!isReady}
         value={text}
         onChange={(event) => {
+          if (voice.notice !== null) voice.clearNotice();
           setText(event.target.value);
           setTypedAt(Date.now());
         }}

@@ -80,6 +80,8 @@ async function openCapture(
   const base = {
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
+    sttProvider: data.sttProvider ?? null,
+    ttsProvider: data.ttsProvider ?? null,
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,
     turnIndex: data.turnIndex ?? 0,

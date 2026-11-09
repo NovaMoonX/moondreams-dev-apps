@@ -1,0 +1,111 @@
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ArrowUp, Mic, Square, X } from 'lucide-react';
+
+import MuteControl from '@apps/helm/components/voice/MuteControl';
+import { HELM_COPY } from '@apps/helm/constants';
+import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import type { ScreenContext } from '@apps/helm/types';
+
+const BUTTON =
+  "relative h-8 min-h-0 rounded-full px-3 before:absolute before:-inset-x-1 before:-inset-y-1 before:content-['']";
+
+interface VoiceStatusProps {
+  /** Draws its own Cancel, Send and Stop, for a place that has no Talk button (the conversation over a page). */
+  hasControls?: boolean;
+  /** Talking isn't possible here, so the person types: needed with `hasControls`. */
+  onBlocked?: () => void;
+  /** What a turn started here is asked about; null from home. */
+  screen?: ScreenContext | null;
+}
+
+/** What the voice is doing, in words: what is heard as it is said, "Working on it…", the line being spoken, or the short line after an undo. Draws nothing while idle unless it carries the controls. */
+function VoiceStatus({
+  hasControls = false,
+  onBlocked,
+  screen = null,
+}: VoiceStatusProps) {
+  const voice = useHelmVoiceContext();
+  const isLoud = voice.state === 'listening' || voice.state === 'speaking';
+  const text =
+    voice.state === 'listening'
+      ? voice.heard || HELM_COPY.talkListeningHint
+      : voice.state === 'thinking'
+        ? HELM_COPY.talkWorking
+        : voice.state === 'speaking'
+          ? voice.saying
+          : (voice.note ?? '');
+  const isIdle = voice.state === 'idle';
+  if (text === '' && !(hasControls && isIdle)) return null;
+
+  return (
+    <div
+      role='status'
+      aria-live='polite'
+      className='flex flex-col items-center gap-3 text-center'
+    >
+      {text !== '' && (
+        <p
+          className={join(
+            'max-h-36 overflow-y-auto text-balance break-words',
+            isLoud
+              ? 'text-[22px] leading-7 font-medium'
+              : 'text-muted-foreground text-[15px]',
+          )}
+        >
+          {text}
+        </p>
+      )}
+      <MuteControl shows='whileSpeaking' />
+      {hasControls && voice.state === 'listening' && (
+        <div className='flex gap-2'>
+          <Button
+            type='button'
+            variant='secondary'
+            className={BUTTON}
+            onClick={voice.cancel}
+          >
+            <X className='size-4' aria-hidden='true' />
+            {HELM_COPY.talkCancel}
+          </Button>
+          <Button
+            type='button'
+            variant='primary'
+            className={BUTTON}
+            onClick={() => voice.talk(null)}
+          >
+            <ArrowUp className='size-4' aria-hidden='true' />
+            {HELM_COPY.send}
+          </Button>
+        </div>
+      )}
+      {hasControls &&
+        (voice.state === 'thinking' || voice.state === 'speaking') && (
+          <Button
+            type='button'
+            variant='secondary'
+            className={BUTTON}
+            onClick={() => voice.talk(null)}
+          >
+            <Square className='size-3.5 fill-current' aria-hidden='true' />
+            {HELM_COPY.talkStop}
+          </Button>
+        )}
+      {hasControls && isIdle && (
+        <Button
+          type='button'
+          variant='secondary'
+          className={BUTTON}
+          onClick={() => {
+            if (voice.talk(screen) === 'blocked') onBlocked?.();
+          }}
+        >
+          <Mic className='size-4' aria-hidden='true' />
+          {HELM_COPY.talk}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+export default VoiceStatus;

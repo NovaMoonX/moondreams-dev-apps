@@ -118,6 +118,12 @@ const SEED_TASKS: Record<number, { title: string; dueWords: string | null }[]> =
     ],
   };
 
+/** Spoken turns, by the turn's place in `SEED_TURNS`: the line the phone said once each was filed. */
+const SEED_VOICE: Record<number, string> = {
+  1: 'Got it. Lunch with Sam, Thursday.',
+  2: 'Got it. Call Grandpa about the wedding questions.',
+};
+
 /** The turn whose two tasks were taken back: the first is deleted, the second kept because its day was moved to Sunday afterwards. */
 const UNDONE_TURN = 4;
 const UNDO_DELAY_MS = 3 * MINUTE_MS;
@@ -314,6 +320,7 @@ async function buildUndone(input: {
       summary: summarize(effects.length),
       effects,
       undoReport: null,
+      spoken: null,
       goneIds: null,
       isUnreadable: false,
     },
@@ -393,6 +400,7 @@ async function buildMove(input: {
           },
         ],
         undoReport: null,
+        spoken: null,
         goneIds: null,
       },
       input.encryption,
@@ -432,6 +440,8 @@ async function buildBackToBack(input: {
       const createdAt = now - message.secondsAgo * 1000;
       const capture: Capture = {
         inputMode: 'typed',
+        sttProvider: null,
+        ttsProvider: null,
         medium: 'web',
         sessionId: `seed-${uid}-today`,
         turnIndex: turnIndexFrom + order,
@@ -534,6 +544,7 @@ async function buildBackToBack(input: {
           previous: null,
         })),
         undoReport: null,
+        spoken: null,
         goneIds: null,
       },
       encryption,
@@ -593,8 +604,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           const isSorted = sortedTasks.length > 0 || isMove;
           const sortedAt = turnTime + SORT_DELAY_MS;
           const heldFields = toHeldFields(turn.held, turnTime, isSorted);
+          const spoken = isSorted ? SEED_VOICE[index] : undefined;
           const capture: Capture = {
-            inputMode: 'typed',
+            inputMode: spoken === undefined ? 'typed' : 'voice',
+            sttProvider: spoken === undefined ? null : 'browser',
+            ttsProvider: spoken === undefined ? null : 'natural',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
             turnIndex: ALL_TURNS.filter(
@@ -691,6 +705,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                     })),
                     effects,
                     undoReport: null,
+                    spoken: spoken ?? null,
                     goneIds: null,
                   },
                   encryption,

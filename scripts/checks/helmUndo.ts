@@ -78,6 +78,7 @@ const execution = (
   summary: 'Made 2 tasks',
   effects: entries.map((entry) => entry.effect),
   undoReport: null,
+  spoken: null,
   goneIds: null,
   isUnreadable: false,
   ...overrides,

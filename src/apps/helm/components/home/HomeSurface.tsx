@@ -7,6 +7,7 @@ import { useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
+import MuteControl from '@apps/helm/components/voice/MuteControl';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -45,6 +46,11 @@ function HomeSurface({
   return (
     <main className='flex flex-1 flex-col gap-8'>
       <div className='relative flex flex-col items-center gap-2 pt-10 text-center'>
+        {keyStatus === 'ready' && (
+          <div className='absolute top-0 left-0'>
+            <MuteControl shows='whileMuted' />
+          </div>
+        )}
         {keyStatus === 'ready' && (
           <div className='absolute top-0 right-0'>
             <HeaderIconButton

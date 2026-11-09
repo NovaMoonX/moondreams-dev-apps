@@ -1,6 +1,7 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { MAX_EFFECTS, type NomosCommand, type TaskDue } from './commands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
+import { buildSpokenAck } from './spoken.js';
 import {
   buildCodeQuestion,
   summarize,
@@ -218,8 +219,21 @@ export function buildExecution(
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
     commands: NomosCommand[];
     messageCount?: number;
+    inputMode?: string;
+    timeZone?: string;
   },
 ): Record<string, unknown> {
+  const created = plan.effectRefs.flatMap((ref, index) => {
+    const { written } = plan.effects[index];
+    return ref.op === 'create'
+      ? [
+          {
+            title: String(written['sealed.title'] ?? ''),
+            due: (written.due ?? null) as TaskDue | null,
+          },
+        ]
+      : [];
+  });
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -240,6 +254,14 @@ export function buildExecution(
       effects: plan.effects,
       undoReport: null,
       goneIds: null,
+      spoken: buildSpokenAck({
+        inputMode: input.inputMode,
+        counts: plan.counts,
+        messageCount: input.messageCount ?? 1,
+        created,
+        timeZone: input.timeZone ?? 'UTC',
+        now: input.now,
+      }),
     }),
   };
 }
