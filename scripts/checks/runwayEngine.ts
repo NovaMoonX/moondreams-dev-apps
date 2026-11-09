@@ -15048,6 +15048,20 @@ const version = (
     getLinkSpan(versions, { changeId: 'nope', itemId: 'gym' }),
     null,
   );
+  const sameDay = [
+    v('p0', 'pay', t + 3 * D, null, 6, 'c5'),
+    v('p1', 'pay', t + 3 * D, t + 17 * D, 7, 'c6'),
+  ];
+  assert.equal(
+    getLinkSpan(sameDay, { changeId: 'c6', itemId: 'pay' })?.before?.id,
+    'p0',
+    'a change on the first day of an item compares with the version it shadows',
+  );
+  assert.equal(
+    getLinkSpan(sameDay, { changeId: 'c5', itemId: 'pay' })?.before,
+    null,
+    'a first version has nothing before it',
+  );
   assert.equal(
     hasLinkHappened({ startsOn: t + 5 * D, lastDay: t + 19 * D }, t + 10 * D),
     false,

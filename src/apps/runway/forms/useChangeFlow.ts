@@ -192,7 +192,12 @@ export function useChangeFlow({
   const { addToast } = useToast();
   const store = useStore<RootState>();
   const today = todayAsUtcDate();
-  const days = useAppSelector((state) => selectComingDays(state, today));
+  const allDays = useAppSelector((state) => selectComingDays(state, today));
+  // A pay changed for a number of income days counts its own days; everything else is funded on every income day.
+  const days =
+    kind === 'payLine'
+      ? allDays.filter(({ payLineId }) => payLineId === itemId)
+      : allDays;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const allCards = useAppSelector(selectAllCards);
   const allAccounts = useAppSelector(selectAllAccounts);

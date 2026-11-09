@@ -9,6 +9,7 @@ import {
   selectBills,
   selectComingDays,
   selectCostPaid,
+  selectGoals,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -18,7 +19,8 @@ import {
   getHorizonPaceCents,
   getLiveCosts,
 } from '@apps/runway/engine/horizon';
-import type { GoalCover } from '@apps/runway/engine/horizonGoal';
+import { getGoalCostId, type GoalCover } from '@apps/runway/engine/horizonGoal';
+import { isSavingFor } from '@apps/runway/engine/pace';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
@@ -62,6 +64,17 @@ export const selectGoalCovers = createSelector(
     ),
 );
 
+/** The goals money goes into today; a linked one's pace already counts its event's goal cost, so the month total leaves that cost out. */
+const selectSavingGoalIds = createSelector(
+  [(state: RootState, on: number) => selectGoals(state, on)],
+  (goals) =>
+    new Set(
+      goals
+        .filter(({ version }) => isSavingFor(version.payload))
+        .map(({ item }) => item.id),
+    ),
+);
+
 /** The steady amount a month the costs of open Horizon items counted at `dial` need, each cost at its own priority, to meet every payment on its due date from what is not yet held; the usual-month basis the dated goals use. */
 export const selectHorizonMonthCents = createSelector(
   [
@@ -72,8 +85,18 @@ export const selectHorizonMonthCents = createSelector(
     selectOn,
     selectDial,
     selectGoalCovers,
+    selectSavingGoalIds,
   ],
-  (items, balances, costPaid, stance, today, dial, covers): number =>
+  (
+    items,
+    balances,
+    costPaid,
+    stance,
+    today,
+    dial,
+    covers,
+    savingGoalIds,
+  ): number =>
     items.reduce(
       (sum, { item, version }) =>
         sum +
@@ -90,11 +113,17 @@ export const selectHorizonMonthCents = createSelector(
           ).plan.covers,
           new Set(
             getLiveCosts(version.payload)
-              .filter((cost) =>
-                isCountedAt(
-                  getCostPriority(cost, version.payload.priority),
-                  dial,
-                ),
+              .filter(
+                (cost) =>
+                  isCountedAt(
+                    getCostPriority(cost, version.payload.priority),
+                    dial,
+                  ) &&
+                  !(
+                    version.payload.goalId !== null &&
+                    cost.id === getGoalCostId(version.payload.goalId) &&
+                    savingGoalIds.has(version.payload.goalId)
+                  ),
               )
               .map(({ id }) => id),
           ),

@@ -103,7 +103,16 @@ export function getLinkSpan<V extends LinkVersion>(
       ? Math.max(...ends.map((until) => until ?? 0)) - DAY_MS
       : null,
     version: first,
-    before: resolveVersion(versions, link.itemId, first.effectiveFrom - DAY_MS),
+    before:
+      resolveVersion(versions, link.itemId, first.effectiveFrom - DAY_MS) ??
+      resolveVersion(
+        versions.filter(
+          ({ changeId, createdAt }) =>
+            changeId !== link.changeId && createdAt < first.createdAt,
+        ),
+        link.itemId,
+        first.effectiveFrom,
+      ),
     isLive:
       resolveVersion(versions, link.itemId, first.effectiveFrom)?.changeId ===
         link.changeId &&
