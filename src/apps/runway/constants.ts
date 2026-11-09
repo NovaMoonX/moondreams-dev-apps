@@ -3084,7 +3084,7 @@ export const ITEM_SHEET_R2_WORDS = {
   archiveSub: 'Off your lists. Its history stays',
   checkSub: 'Try an amount first. Nothing changes.',
   paidFromFreeText: (amount: string) => `${amount} comes out of Free to Spend`,
-  stopsAt: (amount: string) => `Stops at ${amount}`,
+  stopsAt: (amount: string) => `Stops filling at ${amount}`,
   setDueDate: 'Set the due date',
   eachTime: 'Each time',
   balance: 'Balance',

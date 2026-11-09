@@ -753,6 +753,62 @@ const item = (
     10_000,
     'the Nov 20th pay gave the $100 it was set to, so $100 of the $200 left is still to come',
   );
+
+  // An envelope's max counts every planned pay before a day, whether the pay funds it by its own rule or by a pairing.
+  const maxItems = [...payItems('pay4'), item('e', 3, { kind: 'envelope' })];
+  const maxEnvelope = (maxCents: number) =>
+    stored('ve', 'e', 'envelope', 1, T, null, {
+      name: 'Groceries',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      funding: rule(2_200),
+      maxCents,
+    });
+  const maxAsks = (versions: OpenVersion[], held: number) =>
+    Array.from(
+      { length: 7 },
+      (_, index) =>
+        computeDraftView(
+          maxItems,
+          versions,
+          'conservative',
+          [],
+          toDayKey('pay4', utc(2026, 11, 20) + index * 14 * DAY_MS),
+          T,
+          { e: held },
+          '',
+          {},
+        )?.draft.lines.find((line) => line.itemId === 'e')?.cents ?? 0,
+    );
+  const maxPay = payLine('pay4', otherWeek, 500_000);
+  assert.deepEqual(
+    maxAsks([...maxPay, maxEnvelope(40_000)], 30_000),
+    [2_200, 2_200, 2_200, 2_200, 1_200, 0, 0],
+    'a rule that asks $22 a pay stops once the pays would reach the max',
+  );
+  const pairedPay = maxPay.map((version) =>
+    version.kind === 'payLine'
+      ? ({
+          ...version,
+          payload: {
+            ...version.payload,
+            pairings: [
+              {
+                targetItemId: 'e',
+                amount: { kind: 'exact', cents: 30_000 },
+                topUpFromAnySource: false,
+              },
+            ],
+          },
+        } as OpenVersion)
+      : version,
+  );
+  assert.deepEqual(
+    maxAsks([...pairedPay, maxEnvelope(40_000)], 37_800),
+    [2_200, 0, 0, 0, 0, 0, 0],
+    'a pay set to fund it takes only the room left after the earlier pays that fund it',
+  );
 }
 
 console.log('runway engine timeline: ok');

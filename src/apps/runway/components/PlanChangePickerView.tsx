@@ -10,6 +10,7 @@ import FoldedDateField from '@/components/FoldedDateField';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
@@ -312,11 +313,14 @@ function PlanChangePickerView({
                     icon={<ItemMark itemId={id} name={name} />}
                     label={name}
                     onClick={() =>
-                      void showOnPlan(section, {
-                        itemId: id,
-                        eventId,
-                        returnTo: 'horizon',
-                      })
+                      afterBackLayersClose(
+                        () =>
+                          void showOnPlan(section, {
+                            itemId: id,
+                            eventId,
+                            returnTo: 'horizon',
+                          }),
+                      )
                     }
                   />
                 ))}

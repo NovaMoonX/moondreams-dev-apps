@@ -39,6 +39,7 @@ import {
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
 import {
+  compareDays,
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
@@ -1018,14 +1019,27 @@ export function computeDraftView(
     day.on,
     previousOn,
   );
-  const payLinePairings =
-    resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
-      ?.payload.pairings ?? [];
-  const sourcePairings =
-    day.sourceId === null
-      ? []
-      : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
-          ?.payload.pairings ?? []);
+  const payLineVersions = versions.filter(isPayLine);
+  const sourceVersions = versions.filter(isSource);
+  const getPairingSets = (entry: ComingDay) => ({
+    day:
+      openDays.find(({ id }) => id === entry.dayKey)?.override.pairings ?? null,
+    payLine:
+      resolveCurrentOrNext(payLineVersions, entry.payLineId, entry.on)?.payload
+        .pairings ?? [],
+    source:
+      entry.sourceId === null
+        ? []
+        : (resolveCurrentOrNext(sourceVersions, entry.sourceId, entry.on)
+            ?.payload.pairings ?? []),
+  });
+  const { payLine: payLinePairings, source: sourcePairings } =
+    getPairingSets(day);
+  const earlierDays = options.carriesEarlier
+    ? []
+    : days
+        .filter((entry) => compareDays(entry, day) < 0)
+        .map((entry) => ({ ...entry, pairings: getPairingSets(entry) }));
   const priorDays = getPriorDays(
     items,
     versions,
@@ -1057,6 +1071,7 @@ export function computeDraftView(
             getFundingRunsOf(versions, item.id),
           ),
           options.carriesEarlier ?? false,
+          earlierDays.map((entry) => [entry.dayKey, entry.pairings]),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
           resolvedHorizon.map(({ item, version }) => [
@@ -1182,6 +1197,7 @@ export function computeDraftView(
     ],
     plan: {
       carriesEarlier: options.carriesEarlier ?? false,
+      earlierDays,
       envelopes,
       bills,
       goals,

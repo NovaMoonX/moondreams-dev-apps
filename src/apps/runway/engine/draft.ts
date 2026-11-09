@@ -56,6 +56,8 @@ export interface DraftInput {
     returns?: readonly string[];
     /** The income days before the drafted ones are already counted in what the items hold, so no room under a limit or target is taken for them again. */
     carriesEarlier?: boolean;
+    /** The unconfirmed income days before the drafted ones: their pairings fill an item before these do, and are not drafted. Ignored when `carriesEarlier`. */
+    earlierDays?: readonly DraftDayInput[];
     /** Every coming income day, which cadences count over. */
     incomeDays: readonly {
       dayKey: string;
@@ -392,20 +394,21 @@ export function buildDraft(input: DraftInput): Draft {
     list.filter(
       (pairing) => !pinnedKeys.has(`${dayKey}:${pairing.targetItemId}`),
     );
-  const days = input.days
-    .map((day) =>
-      day.pairings && pinnedKeys.size > 0
-        ? {
-            ...day,
-            pairings: {
-              day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
-              payLine: unpinned(day.pairings.payLine, day.dayKey),
-              source: unpinned(day.pairings.source, day.dayKey),
-            },
-          }
-        : day,
-    )
-    .sort(compareDays);
+  const withoutPinned = (day: DraftDayInput): DraftDayInput =>
+    day.pairings && pinnedKeys.size > 0
+      ? {
+          ...day,
+          pairings: {
+            day: day.pairings.day && unpinned(day.pairings.day, day.dayKey),
+            payLine: unpinned(day.pairings.payLine, day.dayKey),
+            source: unpinned(day.pairings.source, day.dayKey),
+          },
+        }
+      : day;
+  const days = input.days.map(withoutPinned).sort(compareDays);
+  const earlierDays = input.plan.carriesEarlier
+    ? []
+    : (input.plan.earlierDays ?? []).map(withoutPinned).sort(compareDays);
   const dayMoney = days.map((day) => ({
     day,
     moneyCents: getDayMoney(day, input.overrides, input.stance),
@@ -477,7 +480,7 @@ export function buildDraft(input: DraftInput): Draft {
     ]),
   ]);
   const pairedIds = new Set(
-    days.flatMap((day) =>
+    [...earlierDays, ...days].flatMap((day) =>
       pickPairings(day).map((pairing) => pairing.targetItemId),
     ),
   );
@@ -522,6 +525,34 @@ export function buildDraft(input: DraftInput): Draft {
       ),
     };
   };
+  const fundDay = (
+    used: Map<string, Cents>,
+    day: DraftDayInput,
+    moneyCents: Cents,
+  ) => {
+    const funded = fundPairings(
+      day,
+      moneyCents,
+      targets,
+      replaced,
+      resolutions,
+      (itemId) => {
+        const need = getNeed(itemId, day.on);
+        return need === null
+          ? null
+          : Math.max(0, need.cents - (used.get(need.key) ?? 0));
+      },
+    );
+    funded.outcomes.forEach(({ line }) => {
+      const key = getNeed(line.itemId, day.on)?.key ?? line.itemId;
+      used.set(key, (used.get(key) ?? 0) + line.cents);
+    });
+    return funded;
+  };
+  const earlierUsed = new Map<string, Cents>();
+  earlierDays.forEach((day) =>
+    fundDay(earlierUsed, day, getDayMoney(day, input.overrides, input.stance)),
+  );
   const pairRun = dayMoney.reduce<{
     used: Map<string, Cents>;
     list: {
@@ -531,26 +562,10 @@ export function buildDraft(input: DraftInput): Draft {
     }[];
   }>(
     (acc, { day, moneyCents }) => {
-      const funded = fundPairings(
-        day,
-        moneyCents,
-        targets,
-        replaced,
-        resolutions,
-        (itemId) => {
-          const need = getNeed(itemId, day.on);
-          return need === null
-            ? null
-            : Math.max(0, need.cents - (acc.used.get(need.key) ?? 0));
-        },
-      );
-      funded.outcomes.forEach(({ line }) => {
-        const key = getNeed(line.itemId, day.on)?.key ?? line.itemId;
-        acc.used.set(key, (acc.used.get(key) ?? 0) + line.cents);
-      });
+      const funded = fundDay(acc.used, day, moneyCents);
       return { used: acc.used, list: [...acc.list, { day, ...funded }] };
     },
-    { used: new Map(), list: [] },
+    { used: earlierUsed, list: [] },
   );
   const paired = pairRun.list;
   const pairedKeys = new Set(

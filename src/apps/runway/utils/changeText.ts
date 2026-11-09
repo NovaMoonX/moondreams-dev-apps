@@ -83,6 +83,15 @@ const diff = <T>(
   show: (value: T) => string,
 ): Part => (same(before, after) ? null : [label, show(before), show(after)]);
 
+const describeMaxMove = (before: number | null, after: number | null): Part =>
+  before === after
+    ? null
+    : after === null
+      ? 'No longer stops filling'
+      : before === null
+        ? `Stops filling at ${formatCents(after)}`
+        : ['Stops filling at', formatCents(before), formatCents(after)];
+
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
@@ -372,11 +381,9 @@ const getParts = (
       ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
-            diff(
-              'Stops at',
+            describeMaxMove(
               (goalBefore as EnvelopeSealed).maxCents ?? null,
               (goalAfter as EnvelopeSealed).maxCents ?? null,
-              (value) => (value === null ? 'no limit' : formatCents(value)),
             ),
           ]
         : []),
