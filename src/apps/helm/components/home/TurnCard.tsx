@@ -20,7 +20,7 @@ import { getHomeHeldLine } from '@apps/helm/utils/heldCaptures';
 
 interface TurnCardProps {
   capture: OpenCapture;
-  /** On home only the newest turn says what became of it, since every turn so far is kept the same way. */
+  /** On home only the newest turn says it was saved as written; a turn that waits or needs the person says so wherever it is. */
   showsOutcome: boolean;
   /** The chips of what was read, shown as they were sealed, with nothing to change. */
   showsReading: boolean;
@@ -70,22 +70,30 @@ function TurnCard({
   );
   const isReading = isCallOut || capture.status === 'interpreting';
   const isSorted = capture.status === 'sorted' && !isReading;
+  const outcomeLine =
+    isReading || isSorted || capture.isUnreadable
+      ? null
+      : getHomeHeldLine(capture);
+  const heldLine =
+    showsOutcome || outcomeLine !== HELM_COPY.savedAsWritten
+      ? outcomeLine
+      : null;
   const executions = capture.executionIds.flatMap((id) => {
     const execution = executionsById.get(id);
     return execution ? [execution] : [];
   });
-  const missingKey = isSorted
+  // A turn that asked to sort the rest has already made something, and shows it while it waits.
+  const hasResults = !capture.isUnreadable && capture.executionIds.length > 0;
+  const missingKey = hasResults
     ? capture.executionIds.filter((id) => !executionsById.has(id)).join(',')
     : '';
   const uid = user?.uid;
   useEffect(() => {
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
-  const hasCard = isSorted && !capture.isUnreadable && executions.length > 0;
+  const hasCard = hasResults && executions.length > 0;
   const hasLost =
-    isSorted &&
-    !capture.isUnreadable &&
-    missingKey.split(',').some((id) => failedIds.includes(id));
+    hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
   return (
     <article className='flex flex-col items-end gap-1'>
       {capture.isUnreadable ? (
@@ -138,10 +146,8 @@ function TurnCard({
           isMarking={isOnHome && capture.seenAt === null}
         />
       )}
-      {showsOutcome && !isReading && !isSorted && !capture.isUnreadable && (
-        <p className='text-muted-foreground text-[13px]'>
-          {getHomeHeldLine(capture)}
-        </p>
+      {heldLine !== null && (
+        <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
       )}
     </article>
   );
