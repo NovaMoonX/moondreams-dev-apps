@@ -15424,8 +15424,9 @@ const version = (
       effectiveUntil: t + 15 * D,
     },
   ];
+  const coveredTarget = getCancelTarget(covered, rentItem, 'c1', t);
   assert.deepEqual(
-    getCancelTarget(covered, rentItem, 'c1', t)?.segments.map(
+    (coveredTarget?.kind === 'versions' ? coveredTarget.segments : []).map(
       ({ effectiveFrom, effectiveUntil }) => [effectiveFrom, effectiveUntil],
     ),
     [[t + 10 * D, null]],
