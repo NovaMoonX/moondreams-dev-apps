@@ -286,7 +286,7 @@ test('a deleted task is counted, not an error', () => {
   assert.equal(result.gone, 1);
   assert.deepEqual(result.goneIds, ['t2']);
   assert.deepEqual(result.undoSealed.goneIds, ['t2']);
-  assert.equal(result.undoSealed.summary, 'Took back 1 task, kept 1');
+  assert.equal(result.undoSealed.summary, 'Took back 1 task');
   assert.equal(result.report, 'Took back 1 task. 1 was deleted since.');
 });
 
@@ -451,10 +451,9 @@ test('copy never names the app or the default assistant', () => {
     HELM_COPY.undoAll,
     HELM_COPY.tookBack(1),
     HELM_COPY.tookBackKept(1, 1),
-    HELM_COPY.goneSince(3),
+    HELM_COPY.nothingToTakeBack(['Call Dana'], 1),
     HELM_COPY.nothingToTakeBack([], 0),
     HELM_COPY.undoReport(1, 1, 1),
-    HELM_COPY.alreadyTakenBack('Nov 8'),
     HELM_COPY.undoFailed,
     HELM_COPY.undoNeedsConnectionTitle,
     HELM_COPY.undoNeedsConnectionBody,
@@ -468,6 +467,10 @@ test('copy never names the app or the default assistant', () => {
     'Took back 2 tasks. Kept 1 you changed since. 2 were deleted since.',
   );
   assert.equal(HELM_COPY.tookBackKept(2, 1), 'Took back 2 tasks, kept 1');
+  assert.equal(
+    HELM_COPY.nothingToTakeBack(['Call Dana'], 1),
+    'Nothing was taken back: you changed Call Dana since. 1 task was deleted since.',
+  );
 });
 
 const failures = tests.flatMap(([name, run]) => {

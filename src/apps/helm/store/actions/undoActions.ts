@@ -20,6 +20,16 @@ export async function takeBack(
   if (result.kind !== 'done' || store.getState().helm.uid !== uid) {
     return result;
   }
+  const { helm } = store.getState();
+  const isKept = [
+    ...helm.earlierExecutions,
+    ...helm.recentExecutions.items,
+  ].some((entry) => entry.id === executionId);
+  const original = helm.activity.items.find(
+    (entry) => entry.id === executionId,
+  );
+  // The undo's own write can push the original out of the activity window while its sheet is open.
+  if (!isKept && original) store.dispatch(addEarlierExecutions([original]));
   store.dispatch(
     markExecutionUndone({
       executionId,

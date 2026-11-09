@@ -105,10 +105,7 @@ function SheetFoot({ execution }: { execution: OpenExecution }) {
     return (
       <div className='px-6 pt-2 pb-6'>
         <p className='text-muted-foreground text-[13px] text-pretty'>
-          {undo?.undoReport ??
-            (undo
-              ? HELM_COPY.alreadyTakenBack(formatDate(undo.createdAt))
-              : HELM_COPY.takenBackLabel)}
+          {undo?.undoReport ?? HELM_COPY.takenBackLabel}
         </p>
       </div>
     );

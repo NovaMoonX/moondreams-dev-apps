@@ -973,10 +973,10 @@ Calendar is one connector on the platform (section 19, connector `google:calenda
   - **D1, per record all-or-nothing.** A record whose every changed path still matches is taken back whole; if any one doesn't, the record is kept as it is.
   - **D2, a label is not compared.** A path whose `written` equals its `previous` (a task's `sealed.title` on a completion) only names the task, so it is neither compared nor restored: a completion is taken back even after a rename.
   - **D3, nothing to take back writes nothing.** The person is told "Nothing was taken back: you changed X since." and the original stays undoable.
-  - **D4, a reverted update sets `lastEditedAt` to now** (a create's delete needs it null, an update's restore moves it).
+  - **D4, a reverted update sets `lastEditedAt` to now** (a create's delete needs it null or equal to the original execution's `createdAt`, an update's restore moves it).
   - **D5, `op: 'delete'` appears only in an undo's own execution**, never in what the server writes.
   - **D6, one Undo per execution card**; **D7,** only a readable `succeeded` execution that is not itself an Undo, not yet undone and with effects can be undone, so an Undo can't be undone.
-  - **D8, a kept line is generic** ("Kept: you changed it since"), as the changed value is never repeated.
+  - **D8, a kept line is generic** ("Kept: you changed it since"), as the changed value is never repeated. Its known limit: a record a later run changed, or a later undo stamped, is kept the same way and the line still says "you".
   - **Sealed paths** are compared and restored on the opened payload, which is resealed whole (`{...opened, [field]: previous}`); a dotted `sealed.title` field path is never written.
 - **The person's own edits** are `updateDoc` of the fields the form owns, the sealed payload resealed from the opened copy with the form's changes; they make no execution in MVP.
 - **Edits that race**: a form save never `setDoc`s the cached document; ticks, slot changes and milestone dates are dotted-path updates on readable map keys; a form that changes sealed words reseals in a transaction that re-reads the document, so a second device's edit to another field of the same payload is kept; Correct and the `whichIsTrue` answer are transactions over both facts.

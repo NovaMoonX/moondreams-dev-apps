@@ -328,8 +328,8 @@ export function planUndo(input: {
     },
     undoSealed: {
       summary:
-        kept.length + gone > 0
-          ? HELM_COPY.tookBackKept(done.length, kept.length + gone)
+        kept.length > 0
+          ? HELM_COPY.tookBackKept(done.length, kept.length)
           : HELM_COPY.tookBack(done.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),

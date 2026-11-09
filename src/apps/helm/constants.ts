@@ -161,10 +161,14 @@ export const HELM_COPY = {
     `Took back ${count} ${count === 1 ? 'task' : 'tasks'}`,
   tookBackKept: (count: number, other: number) =>
     `Took back ${count} ${count === 1 ? 'task' : 'tasks'}, kept ${other}`,
-  goneSince: goneLine,
   nothingToTakeBack: (titles: string[], gone: number) =>
     titles.length > 0
-      ? `Nothing was taken back: you changed ${joinTitles(titles)} since.`
+      ? [
+          `Nothing was taken back: you changed ${joinTitles(titles)} since.`,
+          gone > 0 ? goneLine(gone) : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
       : gone > 0
         ? `Nothing was taken back. ${goneLine(gone)}`
         : 'Nothing was taken back.',
@@ -176,7 +180,6 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
-  alreadyTakenBack: (date: string) => `Already taken back on ${date}`,
   undoFailed: "That couldn't be taken back. Try again.",
   undoNeedsConnectionTitle: 'Undo needs a connection',
   undoNeedsConnectionBody:
