@@ -11,7 +11,14 @@ export interface CaptureSet {
   isFailed: boolean;
 }
 
+/** Whether the data key is here: `offline` when it couldn't be asked for, `failed` when the server refused it. */
+export type KeyStatus = 'loading' | 'ready' | 'offline' | 'failed';
+
 export interface HelmState {
+  keyStatus: KeyStatus;
+  /** Raised by Try again; asking for the key again follows it. */
+  keyAttempt: number;
+  isKeyRetrying: boolean;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
   profile: HelmProfile | null;
   isProfileLoaded: boolean;
@@ -33,6 +40,9 @@ export interface HelmState {
 const emptySet: CaptureSet = { captures: [], isLoaded: false, isFailed: false };
 
 const initialState: HelmState = {
+  keyStatus: 'loading',
+  keyAttempt: 0,
+  isKeyRetrying: false,
   profile: null,
   isProfileLoaded: false,
   uid: null,
@@ -50,6 +60,14 @@ const helmSlice = createSlice({
   name: 'helm',
   initialState,
   reducers: {
+    setKeyStatus: (state, action: PayloadAction<KeyStatus>) => {
+      state.keyStatus = action.payload;
+      state.isKeyRetrying = false;
+    },
+    retryKey: (state) => {
+      state.keyAttempt += 1;
+      state.isKeyRetrying = true;
+    },
     setProfile: (
       state,
       action: PayloadAction<{ uid: string; profile: HelmProfile | null }>,
@@ -114,5 +132,7 @@ export const {
   addEarlierCaptures,
   setEarlierFailed,
   clearHelm,
+  setKeyStatus,
+  retryKey,
 } = helmSlice.actions;
 export const helmReducer = helmSlice.reducer;

@@ -11,6 +11,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ArrowUp } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import {
@@ -22,20 +23,49 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { getNextTurn, recordSentTurn } from '@apps/helm/hooks/useSession';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { useAppSelector } from '@/store';
+import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import { sendCapture } from '@apps/helm/store/actions/captureActions';
+
+const DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
+
+const parseDraft = (stored: unknown) =>
+  typeof stored === 'string' && stored.length > 0 ? stored : null;
 
 interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: Ref<HTMLTextAreaElement>;
   onFocusChange: (isFocused: boolean) => void;
+  /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft. */
+  isReady: boolean;
+  /** Says why the field waits when the key can't come yet (offline, or refused). */
+  waitingPlaceholder: string | null;
 }
 
 /** The text field at the foot of home's conversation. Send keeps the turn sealed; Enter sends and Shift+Enter starts a new line. */
-function Composer({ fieldRef, onFocusChange }: ComposerProps) {
+function Composer({
+  fieldRef,
+  onFocusChange,
+  isReady,
+  waitingPlaceholder,
+}: ComposerProps) {
   const name = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [text, setText] = useState('');
+  const { restored } = useFormDraft({
+    key: isReady ? DRAFT_KEY : null,
+    base: null,
+    parse: parseDraft,
+  });
+  const [text, setText] = useState(restored ?? '');
+  // Kept on unmount too: leaving home for another view, or the phone closing the page, finds the words still here.
+  useKeepFormDraft({
+    key: isReady ? DRAFT_KEY : null,
+    base: null,
+    isRestored: restored !== null,
+    value: text,
+    isDirty: text.length > 0,
+    keepOnUnmount: true,
+  });
   const [isSending, setIsSending] = useState(false);
   const stopKeepingInView = useRef<(() => void) | null>(null);
 
@@ -53,7 +83,11 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
     (state) => state.helm.recentCaptures.isLoaded,
   );
   const canSend =
-    text.trim().length > 0 && !isSending && isCapturesLoaded && user !== null;
+    isReady &&
+    text.trim().length > 0 &&
+    !isSending &&
+    isCapturesLoaded &&
+    user !== null;
   const isNearLimit = text.length >= CAPTURE_COUNTER_FROM;
 
   const send = async () => {
@@ -103,8 +137,9 @@ function Composer({ fieldRef, onFocusChange }: ComposerProps) {
         rows={2}
         maxLength={CAPTURE_MAX_CHARS}
         aria-label={HELM_COPY.composerLabel(name)}
-        placeholder={HELM_COPY.composerPlaceholder(name)}
+        placeholder={waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)}
         className='helm-field'
+        disabled={!isReady}
         value={text}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={handleKeyDown}

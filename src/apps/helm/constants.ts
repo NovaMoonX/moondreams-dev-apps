@@ -39,5 +39,14 @@ export const HELM_COPY = {
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
+  needsConnectionTitle: "Your things open once you're back online.",
+  needsConnectionBody: (name: string) =>
+    `This browser doesn't keep the key to them, so typing to ${name} waits for a connection too.`,
+  cannotOpenTitle: "Your things can't be opened right now.",
+  cannotOpenBody:
+    "They're safe and nothing was changed. The problem is on our side, not yours.",
+  tryAgain: 'Try again',
+  composerOffline: "Typing works again once you're back online",
+  composerBlocked: 'Typing works again once your things open',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
 } as const;

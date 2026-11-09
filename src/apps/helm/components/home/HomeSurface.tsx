@@ -5,15 +5,18 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import LazyMount from '@/components/LazyMount';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
 import { formatDate } from '@/utils/formatUtils';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
 import TurnCard from '@apps/helm/components/home/TurnCard';
+import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
+import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { loadEarlierSessions } from '@apps/helm/store/actions/captureActions';
+import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
 import { groupSessionsByDay, type Session } from '@apps/helm/utils/sessions';
 
 interface HomeSurfaceProps {
@@ -22,6 +25,13 @@ interface HomeSurfaceProps {
 }
 
 const TURN_ESTIMATED_HEIGHT = 88;
+
+const WAITING_PLACEHOLDER: Record<KeyStatus, string | null> = {
+  loading: null,
+  ready: null,
+  offline: HELM_COPY.composerOffline,
+  failed: HELM_COPY.composerBlocked,
+};
 
 /** Mounts when scrolled near and brings in the next page of earlier sessions. */
 function EarlierLoader({ uid }: { uid: string }) {
@@ -59,6 +69,9 @@ function SessionTurns({
 function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
   const name = useAssistantName();
   const { user } = useAuth();
+  const dispatch = useAppDispatch();
+  const keyStatus = useAppSelector((state) => state.helm.keyStatus);
+  const isKeyRetrying = useAppSelector((state) => state.helm.isKeyRetrying);
   const { sessions, openSessionId } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
@@ -98,10 +111,19 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
           <AssistantMark name={name} isLarge />
           <h1 className='helm-serif text-[28px] leading-[34px]'>{name}</h1>
         </div>
-        <p className='text-muted-foreground text-[15px]'>
-          {HELM_COPY.homeHint}
-        </p>
+        {keyStatus !== 'offline' && keyStatus !== 'failed' && (
+          <p className='text-muted-foreground text-[15px]'>
+            {HELM_COPY.homeHint}
+          </p>
+        )}
       </div>
+      {keyStatus === 'offline' && <NeedsConnectionState name={name} />}
+      {keyStatus === 'failed' && (
+        <CannotOpenState
+          isRetrying={isKeyRetrying}
+          onRetry={() => dispatch(retryKey())}
+        />
+      )}
       {isCapturesFailed && !isCapturesLoaded && (
         <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
           {HELM_COPY.turnsFailed}
@@ -157,8 +179,11 @@ function HomeSurface({ composerRef, onComposerFocusChange }: HomeSurfaceProps) {
       )}
       <div className='mt-auto'>
         <Composer
+          key={keyStatus === 'ready' ? 'ready' : 'waiting'}
           fieldRef={composerRef}
           onFocusChange={onComposerFocusChange}
+          isReady={keyStatus === 'ready'}
+          waitingPlaceholder={WAITING_PLACEHOLDER[keyStatus]}
         />
       </div>
     </main>

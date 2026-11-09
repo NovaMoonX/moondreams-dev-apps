@@ -1,15 +1,22 @@
 import { useEffect } from 'react';
 
-import { useAppDispatch } from '@/store';
+import { useAppDispatch, useAppSelector } from '@/store';
+import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { createSealedReader } from '@lib/security';
 import {
   clearHelmKey,
   getHelmEncryption,
 } from '@apps/helm/queries/helmKeyQueries';
-import { openJson } from '@apps/helm/security';
+import {
+  createDraftSealer,
+  HELM_DRAFT_PREFIX,
+  openJson,
+} from '@apps/helm/security';
 import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
 import {
   clearHelm,
+  retryKey,
+  setKeyStatus,
   setProfile,
   setRecentCaptures,
   setRecentCapturesFailed,
@@ -22,6 +29,14 @@ import {
 } from '@apps/helm/store/listeners/captureListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+
+const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
+
+const isOfflineError = (error: unknown) =>
+  !navigator.onLine ||
+  (error instanceof Error &&
+    'code' in error &&
+    OFFLINE_CODES.includes(String(error.code)));
 
 /** Keeps the signed-in person's Helm profile in the store and makes it the first time they open Helm; once the data key is here, keeps their turns there too. */
 export function useHelmSync(uid: string | null) {
@@ -49,9 +64,34 @@ export function useHelmSync(uid: string | null) {
     // A first open made offline has its transaction refused; it is tried again once the device is back online.
     window.addEventListener('online', ensure);
 
+    return () => {
+      isCurrent = false;
+      window.removeEventListener('online', ensure);
+      stops.forEach((stop) => stop());
+      dispatch(clearHelm());
+    };
+  }, [uid, dispatch]);
+
+  const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
+
+  useEffect(() => {
+    if (!uid) return;
+
+    let isCurrent = true;
+    const stops: (() => void)[] = [];
+    const retryOnline = () => dispatch(retryKey());
+
     getHelmEncryption(uid)
-      .then((encryption) => {
+      .then(async (encryption) => {
         if (!isCurrent) return;
+        // Drafts open before the field mounts, so what was typed is there when it does.
+        await unlockSealedFormDrafts(
+          uid,
+          HELM_DRAFT_PREFIX,
+          createDraftSealer(encryption),
+        );
+        if (!isCurrent) return;
+        dispatch(setKeyStatus('ready'));
         const read = createSealedReader(encryption, openJson);
         stops.push(
           startRecentCapturesListener(
@@ -79,16 +119,16 @@ export function useHelmSync(uid: string | null) {
         // A cleanup that clears the key cancels its fetch; that is not a failure.
         if (!isCurrent) return;
         console.error('Helm could not get its key', error);
-        dispatch(setRecentCapturesFailed());
-        dispatch(setUnseenCapturesFailed());
+        const isOffline = isOfflineError(error);
+        dispatch(setKeyStatus(isOffline ? 'offline' : 'failed'));
+        if (isOffline) window.addEventListener('online', retryOnline);
       });
 
     return () => {
       isCurrent = false;
-      window.removeEventListener('online', ensure);
+      window.removeEventListener('online', retryOnline);
       stops.forEach((stop) => stop());
       clearHelmKey();
-      dispatch(clearHelm());
     };
-  }, [uid, dispatch]);
+  }, [uid, keyAttempt, dispatch]);
 }
