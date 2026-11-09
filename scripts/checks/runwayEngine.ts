@@ -12,7 +12,12 @@ import {
 } from '../../src/apps/runway/security.ts';
 import {
   addLink,
+  canCancelChange,
+  findLinkHolder,
+  getCancelTarget,
   getChangesOnlyDoneOn,
+  getEndChangeId,
+  getItemEnds,
   getItemStops,
   getLinkSpan,
   hasLinkHappened,
@@ -15181,6 +15186,309 @@ const version = (
     getChangesOnlyDoneOn({ ...event, links: [links[2]] }, replaced, t + 30 * D),
     null,
     'an event whose only change is dead stays open',
+  );
+
+  // Kinds: a change to a running item is a change; a first version is a start.
+  assert.equal(rent[0].kind, 'change');
+  assert.equal(rent[0].changeId, 'c1');
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'c1', itemId: 'rent' })?.kind,
+    'change',
+  );
+  assert.equal(
+    getLinkSpan(versions, { changeId: 'c4', itemId: 'new' })?.kind,
+    'start',
+    'a link to an item that begins later is a start',
+  );
+}
+
+// A link to an item's stop, a start that is a planned change, and cancelling.
+{
+  const D = LINK_DAY_MS;
+  const t = 20_000 * D;
+  const v = (
+    id: string,
+    itemId: string,
+    effectiveFrom: number,
+    createdAt: number,
+    changeId: string,
+    kind?: string,
+    payload?: object,
+  ) => ({
+    id,
+    itemId,
+    effectiveFrom,
+    effectiveUntil: null,
+    createdAt,
+    changeId,
+    kind,
+    payload,
+  });
+  const idle = { funding: { cadence: { kind: 'none' } } };
+  const funded = { funding: { cadence: { kind: 'everyIncomeDay' } } };
+  const versions = [
+    v('r0', 'rent', t - 100 * D, 1, 'c0'),
+    v('r1', 'rent', t + 10 * D, 2, 'c1'),
+    v('e0', 'env', t - 1 * D, 3, 'ce', 'envelope', idle),
+    v('e1', 'env', t + 12 * D, 4, 'cs', 'envelope', funded),
+    v('g0', 'goal', t, 5, 'cg0', 'goal', funded),
+    v('g1', 'goal', t + 6 * D, 6, 'cg1', 'goal', idle),
+    v('g2', 'goal', t + 20 * D, 7, 'cg2', 'goal', funded),
+    v('b0', 'bill', t, 8, 'cb', 'bill', {
+      timing: {
+        schedule: {
+          kind: 'monthly',
+          anchor: t + 9 * D,
+          monthDays: [new Date(t + 9 * D).getUTCDate()],
+        },
+      },
+      ending: { onDate: null, afterCount: null },
+    }),
+  ];
+  const stopLink = { changeId: getEndChangeId('rent'), itemId: 'rent' };
+  assert.equal(stopLink.changeId, 'ended_rent');
+
+  // A stop resolves from the header: the day after the last day, live while it has it.
+  const ends = getItemEnds([
+    { id: 'rent', endedAt: t + 30 * D },
+    { id: 'goal', endedAt: null },
+  ]);
+  assert.deepEqual(ends, { rent: t + 31 * D });
+  const stop = getLinkSpan(versions, stopLink, {}, ends);
+  assert.deepEqual(
+    [stop?.kind, stop?.startsOn, stop?.lastDay, stop?.isLive],
+    ['stop', t + 31 * D, null, true],
+  );
+  assert.equal(stop?.version.id, 'r1', 'the version in force on the last day');
+  assert.equal(
+    getLinkSpan(versions, stopLink),
+    null,
+    'a stop whose item has no last day (cancelled) resolves to nothing',
+  );
+  assert.equal(
+    getLinkSpan(versions, stopLink, { rent: t + 20 * D }, ends)?.isLive,
+    false,
+    'an item archived before the stop took effect never reaches it',
+  );
+  assert.equal(
+    getLinkSpan(versions, stopLink, { rent: t + 31 * D }, ends)?.isLive,
+    true,
+    'the stop is the item stopping, so it is live when that day is also the stop',
+  );
+  assert.equal(hasLinkHappened(stop!, t + 30 * D), false);
+  assert.equal(
+    hasLinkHappened(stop!, t + 31 * D),
+    true,
+    'happened once the day comes',
+  );
+
+  // An event of changes whose only link is a stop is done once the item is gone.
+  const event = {
+    costs: [],
+    links: [stopLink],
+    state: 'open' as const,
+  };
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 30 * D, {}, ends),
+    null,
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 31 * D, {}, ends),
+    t + 31 * D,
+  );
+  assert.equal(
+    getChangesOnlyDoneOn(event, versions, t + 40 * D, {}, {}),
+    null,
+    'a stop that was cancelled no longer holds or finishes the event',
+  );
+  assert.deepEqual(
+    sortLinksByDate(
+      [stopLink, { changeId: 'c1', itemId: 'rent' }],
+      versions,
+      ends,
+    ).map(({ changeId }) => changeId),
+    ['c1', 'ended_rent'],
+    'a stop sorts by its day',
+  );
+
+  // Coming changes list a future end as a stop; changes after it and a past end are left out.
+  const coming = listComingChanges(versions, 'rent', t, t + 30 * D);
+  assert.deepEqual(
+    coming.map(({ kind, changeId, on }) => [kind, changeId, on]),
+    [
+      ['change', 'c1', t + 10 * D],
+      ['stop', 'ended_rent', t + 31 * D],
+    ],
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'rent', t, t + 5 * D).map(({ kind }) => kind),
+    ['stop'],
+    'a change after the last day never happens',
+  );
+  assert.deepEqual(
+    listComingChanges(versions, 'rent', t + 40 * D, t + 30 * D),
+    [],
+  );
+
+  // A start written as a planned change: lists show the idle first version, the change is a start.
+  const envComing = listComingChanges(versions, 'env', t);
+  assert.deepEqual(
+    envComing.map(({ kind, changeId, on }) => [kind, changeId, on]),
+    [['start', 'cs', t + 12 * D]],
+  );
+  const envSpan = getLinkSpan(versions, { changeId: 'cs', itemId: 'env' });
+  assert.deepEqual(
+    [envSpan?.kind, envSpan?.startsOn, envSpan?.before?.id],
+    ['start', t + 12 * D, 'e0'],
+  );
+  const goalComing = listComingChanges(versions, 'goal', t);
+  assert.deepEqual(
+    goalComing.map(({ kind, changeId }) => [kind, changeId]),
+    [
+      ['change', 'cg1'],
+      ['change', 'cg2'],
+    ],
+    'a goal that was already saving is not starting, whatever it does later',
+  );
+
+  // A bill that starts later: the start is its first due day, not the day its version begins.
+  const billSpan = getLinkSpan(versions, { changeId: 'cb', itemId: 'bill' });
+  assert.deepEqual([billSpan?.kind, billSpan?.startsOn], ['start', t + 9 * D]);
+
+  // Cancelling: only what has not started, and never an item's whole history.
+  const rentItem = { id: 'rent', endedAt: null };
+  assert.deepEqual(getCancelTarget(versions, rentItem, 'c1', t), {
+    kind: 'versions',
+    versionIds: ['r1'],
+    startsOn: t + 10 * D,
+  });
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'c1', t + 10 * D),
+    null,
+    'a change that has started cannot be cancelled',
+  );
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'c0', t),
+    null,
+    'the first version is the item itself',
+  );
+  assert.equal(getCancelTarget(versions, rentItem, 'nope', t), null);
+  assert.deepEqual(
+    getCancelTarget(versions, { id: 'env', endedAt: null }, 'cs', t)?.kind,
+    'versions',
+    'a later start is cancelled by deleting its version',
+  );
+  assert.deepEqual(
+    getCancelTarget(
+      versions,
+      { id: 'rent', endedAt: t + 30 * D },
+      'ended_rent',
+      t,
+    ),
+    { kind: 'stop', startsOn: t + 31 * D },
+  );
+  assert.equal(
+    getCancelTarget(versions, rentItem, 'ended_rent', t),
+    null,
+    'an item with no last day has no ending to cancel',
+  );
+  assert.equal(
+    getCancelTarget(
+      versions,
+      { id: 'rent', endedAt: t - 1 * D },
+      'ended_rent',
+      t,
+    ),
+    null,
+    'an ending whose day has come is not cancelled',
+  );
+  assert.equal(
+    getCancelTarget(versions, { id: 'rent', endedAt: t }, 'ended_rent', t)
+      ?.kind,
+    'stop',
+    'the last day itself is still ahead of the day it takes effect',
+  );
+  assert.equal(canCancelChange({ on: t + 1 * D }, t), true);
+  assert.equal(canCancelChange({ on: t }, t), false);
+  assert.equal(canCancelChange({ startsOn: t + 1 * D }, t), true);
+  assert.equal(
+    canCancelChange({ on: t + 5 * D, isReturn: true }, t),
+    false,
+    'a stretch coming back is not a change of its own',
+  );
+
+  // The event that holds a link is found among the loaded events.
+  const holders = [
+    {
+      id: 'a',
+      version: { payload: { links: [{ changeId: 'c1', itemId: 'gym' }] } },
+    },
+    { id: 'b', version: { payload: { links: [stopLink] } } },
+  ];
+  assert.equal(findLinkHolder(holders, stopLink)?.id, 'b');
+  assert.equal(
+    findLinkHolder(holders, { changeId: 'c1', itemId: 'rent' }),
+    null,
+    'a link is the change and the item together',
+  );
+
+  // The calendar lists a stop on the day the item is gone, beside the changes.
+  const d = (day: number) => Date.UTC(2026, 10, day);
+  const header = (id: string, over: object = {}) =>
+    ({
+      id,
+      kind: 'bill',
+      parentId: null,
+      createdAt: 1,
+      endedAt: null,
+      archivedAt: null,
+      heldReleasedOn: null,
+      ...over,
+    }) as never;
+  const bill = (id: string) =>
+    ({
+      id,
+      itemId: 'gym',
+      kind: 'bill',
+      createdAt: 1,
+      effectiveFrom: d(1),
+      effectiveUntil: null,
+      changeId: 'c',
+      payload: {
+        name: 'Gym',
+        emoji: null,
+        amount: { lowCents: 4_000, highCents: 4_000 },
+      },
+    }) as never;
+  const stopped = listPlanChangeDays(
+    [bill('gym1')],
+    [header('gym', { endedAt: d(14) })],
+    d(10),
+    d(30),
+  );
+  assert.deepEqual(
+    stopped.map((change) => [change.what, change.on, change.itemId]),
+    [['stop', d(15), 'gym']],
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [bill('gym1')],
+      [header('gym', { endedAt: d(14), archivedAt: d(12) })],
+      d(10),
+      d(30),
+    ).length,
+    0,
+    'an item archived before its last day shows no stop',
+  );
+  assert.equal(
+    listPlanChangeDays(
+      [bill('gym1')],
+      [header('gym', { endedAt: d(14) })],
+      d(16),
+      d(30),
+    ).length,
+    0,
+    'a stop that has happened is not ahead',
   );
 }
 

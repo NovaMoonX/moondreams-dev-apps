@@ -2,22 +2,131 @@ import type { DateOnly, HorizonLink, HorizonSealed } from '@apps/runway/types';
 
 import { DAY_MS } from './dates';
 import { resolveVersion, type Versioned } from './resolve';
+import { occurrences } from './schedule';
 
-type LinkVersion = Versioned & { id: string; changeId: string };
+type LinkVersion = Versioned & {
+  id: string;
+  changeId: string;
+  kind?: string;
+  payload?: unknown;
+};
 
-/** A change to an item that has not started: the version that starts on `on`, the one it replaces, and whether it is the earlier version coming back after a stretch. */
+/** What a linked or coming change is: a version that changes an item, the day an item stops, or the day an item starts taking money. */
+export type LinkKind = 'change' | 'stop' | 'start';
+
+/** The id of the change entry an item's ending writes; a link with this id and the item's id points at the item's last day, not at a version. */
+export const getEndChangeId = (itemId: string) => `ended_${itemId}`;
+
+/** Whether a link points at an item's ending. */
+export const isStopLink = (link: HorizonLink) =>
+  link.changeId === getEndChangeId(link.itemId);
+
+const isIdleStart = (version: LinkVersion) => {
+  const payload = version.payload as
+    { funding?: { cadence?: { kind?: string } } } | undefined;
+  return (
+    (version.kind === 'envelope' || version.kind === 'goal') &&
+    payload?.funding?.cadence?.kind === 'none'
+  );
+};
+
+/** Whether `version` is where an envelope or goal that began asking for nothing starts taking money: it replaces the item's first version. A new one that starts later is written this way, so the lists show it before it starts. */
+export const isStartingVersion = <V extends LinkVersion>(
+  own: readonly V[],
+  version: V,
+  before: V | null,
+) =>
+  before !== null &&
+  isIdleStart(before) &&
+  !isIdleStart(version) &&
+  !own.some(({ createdAt }) => createdAt < before.createdAt);
+
+/** The first day a version's item has money to give or take: a bill's first due day, otherwise the day the version starts. */
+export function getFirstMoneyDay(version: LinkVersion): DateOnly {
+  const payload = version.payload as
+    | {
+        timing?: { schedule?: Parameters<typeof occurrences>[0] };
+        ending?: Parameters<typeof occurrences>[1];
+      }
+    | undefined;
+  const schedule = payload?.timing?.schedule;
+  if (version.kind !== 'bill' || !schedule || !payload?.ending)
+    return version.effectiveFrom;
+  return (
+    occurrences(
+      schedule,
+      payload.ending,
+      version.effectiveFrom,
+      version.effectiveFrom + 800 * DAY_MS,
+    )[0] ?? version.effectiveFrom
+  );
+}
+
+/** A change to an item that has not started: the version that starts on `on`, the one it replaces, and whether it is the earlier version coming back after a stretch. A stop is the day after the item's last day, with the version in force on that last day as both versions. */
 export interface ComingChange<V> {
+  kind: LinkKind;
+  /** The id a link to it carries: the version's change, or `ended_<itemId>` for a stop. */
+  changeId: string;
   on: DateOnly;
   version: V;
   before: V;
   isReturn: boolean;
 }
 
-/** The changes to an item still ahead of `today`, soonest first, each against the version in force just before it. An item that has not begun has none: its first version is a start. */
+/** Whether a coming change or linked span can still be cancelled: it has not started, and a stretch's return is not a change of its own. */
+export const canCancelChange = (
+  change: { on: DateOnly; isReturn?: boolean } | { startsOn: DateOnly },
+  today: DateOnly,
+) =>
+  !('isReturn' in change && change.isReturn === true) &&
+  ('on' in change ? change.on : change.startsOn) > today;
+
+/** What cancelling a coming change removes: every version of the change, or an ending. */
+export type CancelTarget =
+  | { kind: 'versions'; versionIds: string[]; startsOn: DateOnly }
+  | { kind: 'stop'; startsOn: DateOnly };
+
+/** What cancelling `changeId` would remove, read from the versions loaded; null when it is not there, has started, or is all of the item's versions (an item is cancelled by archiving it). */
+export function getCancelTarget<V extends LinkVersion>(
+  versions: readonly V[],
+  item: { id: string; endedAt: DateOnly | null },
+  changeId: string,
+  today: DateOnly,
+): CancelTarget | null {
+  if (changeId === getEndChangeId(item.id)) {
+    if (item.endedAt === null) return null;
+    const startsOn = item.endedAt + DAY_MS;
+    return startsOn > today ? { kind: 'stop', startsOn } : null;
+  }
+  const own = versions.filter(({ itemId }) => itemId === item.id);
+  const made = own.filter((version) => version.changeId === changeId);
+  if (made.length === 0 || made.length === own.length) return null;
+  const startsOn = Math.min(...made.map(({ effectiveFrom }) => effectiveFrom));
+  return startsOn > today
+    ? { kind: 'versions', versionIds: made.map(({ id }) => id), startsOn }
+    : null;
+}
+
+/** The event that holds a link, from the events loaded (every state); null when none does. */
+export const findLinkHolder = <
+  E extends { version: { payload: Pick<HorizonSealed, 'links'> } },
+>(
+  events: readonly E[],
+  link: HorizonLink,
+): E | null =>
+  events.find(({ version }) =>
+    version.payload.links.some(
+      ({ changeId, itemId }) =>
+        changeId === link.changeId && itemId === link.itemId,
+    ),
+  ) ?? null;
+
+/** The changes to an item still ahead of `today`, soonest first, each against the version in force just before it, and its ending when `endedAt` is a coming day (a change after the last day is left out). An item that has not begun has no change: its first version is a start. */
 export function listComingChanges<V extends LinkVersion>(
   versions: readonly V[],
   itemId: string,
   today: DateOnly,
+  endedAt: DateOnly | null = null,
 ): ComingChange<V>[] {
   const own = versions.filter((version) => version.itemId === itemId);
   const breaks = [
@@ -30,7 +139,7 @@ export function listComingChanges<V extends LinkVersion>(
     ),
   ].sort((a, b) => a - b);
   const start = resolveVersion(own, itemId, today);
-  return breaks.reduce<{ before: V | null; found: ComingChange<V>[] }>(
+  const changes = breaks.reduce<{ before: V | null; found: ComingChange<V>[] }>(
     (walk, on) => {
       const version = resolveVersion(own, itemId, on);
       if (!version || version.id === walk.before?.id) return walk;
@@ -40,6 +149,10 @@ export function listComingChanges<V extends LinkVersion>(
         found: [
           ...walk.found,
           {
+            kind: isStartingVersion(own, version, walk.before)
+              ? 'start'
+              : 'change',
+            changeId: version.changeId,
             on,
             version,
             before: walk.before,
@@ -50,13 +163,32 @@ export function listComingChanges<V extends LinkVersion>(
     },
     { before: start, found: [] },
   ).found;
+  if (endedAt === null) return changes;
+  const last = resolveVersion(own, itemId, endedAt);
+  const stop: ComingChange<V>[] =
+    endedAt + DAY_MS > today && last
+      ? [
+          {
+            kind: 'stop',
+            changeId: getEndChangeId(itemId),
+            on: endedAt + DAY_MS,
+            version: last,
+            before: last,
+            isReturn: false,
+          },
+        ]
+      : [];
+  return [...changes.filter(({ on }) => on <= endedAt), ...stop];
 }
 
 /** The days a linked change covers: the day it starts and, for a stretch that goes back, the last day it holds. */
 export interface LinkSpan<V> {
+  /** What it is, so a screen can word it: a change to an item, its last day, or the day it starts taking money. */
+  kind: LinkKind;
+  /** The first day it takes effect. A stop starts the day after the item's last day; a start is the item's first money day. */
   startsOn: DateOnly;
   lastDay: DateOnly | null;
-  /** The version the change started with and the one in force just before it; null when the item began with it. */
+  /** The version the change started with, or for a stop the one in force on the item's last day; and the one in force just before it, null when the item began with it. */
   version: V;
   before: V | null;
   /** False once it will never take effect: its item stopped before it began, or a later change from the same day replaced it. */
@@ -81,12 +213,40 @@ export const getItemStops = (
     }),
   );
 
-/** What a link points at in the versions loaded; null when none of the change's versions are there. */
+/** The first day each ended item is gone: the day after its last day. A stop link resolves from it, and is live only while the item still has that last day. */
+export const getItemEnds = (
+  items: readonly { id: string; endedAt: DateOnly | null }[],
+): Readonly<Record<string, DateOnly>> =>
+  Object.fromEntries(
+    items.flatMap(({ id, endedAt }) =>
+      endedAt === null ? [] : [[id, endedAt + DAY_MS]],
+    ),
+  );
+
+/** What a link points at in the versions loaded; null when none of the change's versions are there, or for a stop link when its item no longer has that last day (`ends`, from `getItemEnds`). A stop is dead only when its item was archived before it took effect. */
 export function getLinkSpan<V extends LinkVersion>(
   versions: readonly V[],
   link: HorizonLink,
   stops: Readonly<Record<string, DateOnly>> = {},
+  ends: Readonly<Record<string, DateOnly>> = {},
 ): LinkSpan<V> | null {
+  if (isStopLink(link)) {
+    const startsOn = ends[link.itemId];
+    const last =
+      startsOn === undefined
+        ? null
+        : resolveVersion(versions, link.itemId, startsOn - DAY_MS);
+    return startsOn === undefined || last === null
+      ? null
+      : {
+          kind: 'stop',
+          startsOn,
+          lastDay: null,
+          version: last,
+          before: last,
+          isLive: (stops[link.itemId] ?? Infinity) >= startsOn,
+        };
+  }
   const own = versions
     .filter(
       (version) =>
@@ -95,21 +255,30 @@ export function getLinkSpan<V extends LinkVersion>(
     .sort((a, b) => a.effectiveFrom - b.effectiveFrom);
   if (own.length === 0) return null;
   const first = own[0];
-  const ends = own.map(({ effectiveUntil }) => effectiveUntil);
-  const isStretch = ends.every((until) => until !== null);
+  const untils = own.map(({ effectiveUntil }) => effectiveUntil);
+  const isStretch = untils.every((until) => until !== null);
   const earlier = versions.filter(
     ({ changeId, createdAt }) =>
       changeId !== link.changeId && createdAt < first.createdAt,
   );
+  const before =
+    resolveVersion(earlier, link.itemId, first.effectiveFrom - DAY_MS) ??
+    resolveVersion(earlier, link.itemId, first.effectiveFrom);
+  const isStart =
+    before === null ||
+    isStartingVersion(
+      versions.filter(({ itemId }) => itemId === link.itemId),
+      first,
+      before,
+    );
   return {
-    startsOn: first.effectiveFrom,
+    kind: isStart ? 'start' : 'change',
+    startsOn: before === null ? getFirstMoneyDay(first) : first.effectiveFrom,
     lastDay: isStretch
-      ? Math.max(...ends.map((until) => until ?? 0)) - DAY_MS
+      ? Math.max(...untils.map((until) => until ?? 0)) - DAY_MS
       : null,
     version: first,
-    before:
-      resolveVersion(earlier, link.itemId, first.effectiveFrom - DAY_MS) ??
-      resolveVersion(earlier, link.itemId, first.effectiveFrom),
+    before,
     isLive:
       resolveVersion(versions, link.itemId, first.effectiveFrom)?.changeId ===
         link.changeId &&
@@ -132,10 +301,11 @@ export const hasLinkHappened = (
 export function sortLinksByDate<V extends LinkVersion>(
   links: readonly HorizonLink[],
   versions: readonly V[],
+  ends: Readonly<Record<string, DateOnly>> = {},
 ) {
   const dated = links.map((link) => ({
     link,
-    on: getLinkSpan(versions, link)?.startsOn ?? Infinity,
+    on: getLinkSpan(versions, link, {}, ends)?.startsOn ?? Infinity,
   }));
   return dated.sort((a, b) => a.on - b.on).map(({ link }) => link);
 }
@@ -146,6 +316,7 @@ export function getChangesOnlyDoneOn<V extends LinkVersion>(
   versions: readonly V[],
   today: DateOnly,
   stops: Readonly<Record<string, DateOnly>> = {},
+  ends: Readonly<Record<string, DateOnly>> = {},
 ): DateOnly | null {
   if (
     horizon.state !== 'open' ||
@@ -154,7 +325,7 @@ export function getChangesOnlyDoneOn<V extends LinkVersion>(
   )
     return null;
   const days = horizon.links.flatMap((link) => {
-    const span = getLinkSpan(versions, link, stops);
+    const span = getLinkSpan(versions, link, stops, ends);
     return span?.isLive ? [getLinkDoneOn(span)] : [];
   });
   if (days.length === 0) return null;

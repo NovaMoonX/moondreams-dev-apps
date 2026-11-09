@@ -380,6 +380,8 @@ export const HORIZON_WORDS = {
   changeFrom: (from: string) => `From\u00A0${from}`,
   changeHappened: (on: string) => `Happened\u00A0${on}`,
   changeNoLonger: 'No longer planned',
+  linkEnds: 'Ends',
+  linkStarts: 'Starts',
   changeLine: (item: string, what: string, when: string) =>
     [item, what, when].filter(Boolean).join('\u00A0\u00b7 '),
   unlinkTitle: 'Linked change',
@@ -1293,6 +1295,13 @@ export const PART_OF_WORDS = {
     `Back to ${figure} after ${lastDay}`,
   comingBack: (lastDay: string, difference: string) =>
     `Back after ${lastDay} \u00b7 ${difference}`,
+  comingStarts: 'Starts',
+  starts: 'starts',
+  ends: 'ends',
+  stopsSaving: 'stops saving',
+  alreadyStarted: 'That has already started, so it cannot be cancelled.',
+  cancelledLine: (name: string, what: string, event: string) =>
+    `Cancelled ${name}: ${what}, part of ${event}.`,
 } as const;
 
 export const LIFECYCLE_WORDS = {
@@ -1314,6 +1323,9 @@ export const LIFECYCLE_WORDS = {
   endConfirm: 'End it',
   archiveConfirm: 'Archive',
   pauseConfirm: 'Stop saving',
+  pauseFromHeading: 'From',
+  pauseFromLabel: 'Stop saving from',
+  pauseBlocker: 'Pick the day it stops, from today to ten years ahead.',
   resumeConfirm: 'Start saving',
   whyEnd: 'Why is it ending?',
   endsAfter: 'Ends after',
@@ -3235,6 +3247,7 @@ export const PLAN_CHANGE_WORDS = {
   rowReturnsPlain: (name: string) => `${name} returns`,
   rowChangesPlain: (name: string) => `${name} changes`,
   stops: (name: string) => `${name} stops`,
+  starts: (name: string) => `${name} starts`,
   returns: (name: string) => `${name} returns`,
   changes: (name: string) => `${name} changes`,
   noticeLead: 'Different this time',
@@ -3246,6 +3259,7 @@ export const PLAN_CHANGE_WORDS = {
   sheetLabel: 'Planned change',
   sheetFact: (date: string) => `Starts ${date}`,
   sheetFactReturns: (date: string) => `Goes back on ${date}`,
+  sheetFactStops: (lastDay: string) => `Ends after ${lastDay}`,
 } as const;
 
 export const PAUSE_PAY_WORDS = {

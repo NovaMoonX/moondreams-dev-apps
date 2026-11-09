@@ -24,7 +24,9 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
@@ -45,6 +47,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { addUtcMonths, todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -105,7 +108,7 @@ import {
   selectGoals,
   selectGroups,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { GoalSealed, Priority } from '@apps/runway/types';
+import type { DateOnly, GoalSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -153,6 +156,10 @@ interface GoalFormProps {
   presetDayKey?: string;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** A later day a new goal starts taking money; it is listed from today and gets its funding from this day. */
+  startsOn?: DateOnly;
+  /** The open event a new goal (or its later start) is part of. */
+  eventId?: string;
   /** A question to open first when changing a goal ("target", "amount"); every answer starts folded otherwise. */
   openStep?: GoalStepId | null;
   /** Hands the built goal over instead of writing it, for a person who has no plan yet. */
@@ -253,6 +260,8 @@ function GoalFormBody({
   editing,
   presetDayKey,
   presetEventId,
+  startsOn,
+  eventId,
   openStep = null,
   draft,
   presetGroupId,
@@ -724,8 +733,19 @@ function GoalFormBody({
       const encryption = await getRunwayEncryption(user.uid);
       const { goalId } = await createGoal(user.uid, encryption, {
         startDate: today,
+        startsOn: startsOn ?? null,
         goal,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: goal.name,
+            what: PART_OF_WORDS.starts,
+            from: startsOn ?? today,
+          },
+        ),
       });
       if (plan?.startDate != null && currentCents > 0) {
         const isRecorded = await recordHolding(

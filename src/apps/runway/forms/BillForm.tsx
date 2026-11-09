@@ -26,6 +26,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { generateUuid } from '@/utils/idUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -58,6 +60,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -288,6 +291,8 @@ interface BillFormProps {
   presetDayKey?: string;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** The open event a new bill is part of; the bill starts on its first due day. */
+  eventId?: string;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
@@ -638,6 +643,7 @@ function BillFormBody({
   editing,
   presetDayKey,
   presetEventId,
+  eventId,
   noun = 'bill',
   openStep = null,
   draft,
@@ -1813,6 +1819,16 @@ function BillFormBody({
         startDate: today,
         bill,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: bill.name,
+            what: PART_OF_WORDS.starts,
+            from: bill.timing.schedule.anchor ?? today,
+          },
+        ),
       });
       onClose();
     } catch (saveError) {

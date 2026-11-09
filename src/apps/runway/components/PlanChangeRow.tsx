@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { DAY_MS } from '@apps/runway/engine/dates';
 import ItemRow from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
 import { PLAN_CHANGE_WORDS } from '@apps/runway/constants';
@@ -21,6 +22,15 @@ function PlanChangeRow({ change, today }: PlanChangeRowProps) {
   const emoji =
     'emoji' in change.after.payload ? change.after.payload.emoji : null;
   const date = formatDateOrdinalUTC(change.startsOn);
+  const getFact = () => {
+    if (change.what === 'stop')
+      return PLAN_CHANGE_WORDS.sheetFactStops(
+        formatDateOrdinalUTC(change.startsOn - DAY_MS),
+      );
+    return change.isReturn
+      ? PLAN_CHANGE_WORDS.sheetFactReturns(date)
+      : PLAN_CHANGE_WORDS.sheetFact(date);
+  };
 
   return (
     <>
@@ -37,11 +47,7 @@ function PlanChangeRow({ change, today }: PlanChangeRowProps) {
           kind={change.kind}
           today={today}
           figureLabel={PLAN_CHANGE_WORDS.sheetLabel}
-          fact={
-            change.isReturn
-              ? PLAN_CHANGE_WORDS.sheetFactReturns(date)
-              : PLAN_CHANGE_WORDS.sheetFact(date)
-          }
+          fact={getFact()}
           onClose={() => setIsOpen(false)}
         />
       )}

@@ -99,6 +99,7 @@ import {
   selectGoals,
   selectCostPaid,
   selectCostPayments,
+  selectItemEnds,
   selectItemStops,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -173,6 +174,7 @@ function HorizonSheet({
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
   const stops = useAppSelector(selectItemStops);
+  const ends = useAppSelector(selectItemEnds);
   const allCards = useAppSelector(selectAllCards);
   const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
@@ -481,39 +483,48 @@ function HorizonSheet({
       .sort((a, b) => b.createdAt - a.createdAt)[0];
     return latest && 'name' in latest.payload ? latest.payload.name : '';
   };
-  const linkLines = sortLinksByDate(horizon.links, versions).flatMap((link) => {
-    const span = getLinkSpan(versions, link, stops);
-    if (!span) return [];
-    const difference = span.before
-      ? describeChange(
-          span.before.payload as ItemPayload,
-          span.version.payload as ItemPayload,
-          getCardNamer(allCards),
-        ).replace(/ to /g, ' → ')
-      : '';
-    const isHappened = hasLinkHappened(span, today);
-    const getWhen = () => {
-      if (!span.isLive) return HORIZON_WORDS.changeNoLonger;
-      return isHappened
-        ? HORIZON_WORDS.changeHappened(
-            formatDateOrdinalUTC(getLinkDoneOn(span)),
-          )
-        : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
-    };
-    const when = getWhen();
-    return [
-      {
-        link,
-        isLive: span.isLive,
-        itemName: getItemName(link.itemId),
-        line: HORIZON_WORDS.changeLine(
-          getItemName(link.itemId),
-          difference,
-          when,
-        ),
-      },
-    ];
-  });
+  const linkLines = sortLinksByDate(horizon.links, versions, ends).flatMap(
+    (link) => {
+      const span = getLinkSpan(versions, link, stops, ends);
+      if (!span) return [];
+      const getDifference = () => {
+        if (span.kind === 'stop') return HORIZON_WORDS.linkEnds;
+        const text = span.before
+          ? describeChange(
+              span.before.payload as ItemPayload,
+              span.version.payload as ItemPayload,
+              getCardNamer(allCards),
+            ).replace(/ to /g, ' → ')
+          : '';
+        return text === '' && span.kind === 'start'
+          ? HORIZON_WORDS.linkStarts
+          : text;
+      };
+      const difference = getDifference();
+      const isHappened = hasLinkHappened(span, today);
+      const getWhen = () => {
+        if (!span.isLive) return HORIZON_WORDS.changeNoLonger;
+        return isHappened
+          ? HORIZON_WORDS.changeHappened(
+              formatDateOrdinalUTC(getLinkDoneOn(span)),
+            )
+          : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
+      };
+      const when = getWhen();
+      return [
+        {
+          link,
+          isLive: span.isLive,
+          itemName: getItemName(link.itemId),
+          line: HORIZON_WORDS.changeLine(
+            getItemName(link.itemId),
+            difference,
+            when,
+          ),
+        },
+      ];
+    },
+  );
   const liveCount = linkLines.filter(({ isLive }) => isLive).length;
   const unlinking = linkLines.find(({ link }) => link.changeId === unlinkId);
   const unlinkChange = async () => {

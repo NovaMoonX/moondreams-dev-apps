@@ -31,6 +31,8 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
+import PartOfPicker from '@apps/runway/components/PartOfPicker';
+import { getEventLink } from '@apps/runway/utils/eventLink';
 import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -384,6 +386,8 @@ function ItemSheet({
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [endPick, setEndPick] = useState<string>(String(today));
   const [endDate, setEndDate] = useState('');
+  const [pauseDate, setPauseDate] = useState(toDateInputValue(today));
+  const [eventId, setEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
@@ -486,6 +490,11 @@ function ItemSheet({
     endOn !== undefined &&
     endOn >= today &&
     endOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
+  const pauseOn = fromDateInputValue(pauseDate);
+  const isPauseValid =
+    pauseOn !== undefined &&
+    pauseOn >= today &&
+    pauseOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
   const holdsMoney =
     (itemKind === 'envelope' || itemKind === 'goal' || itemKind === 'bill') &&
     heldCents > 0;
@@ -551,6 +560,13 @@ function ItemSheet({
       version.payload.links.some((link) => link.changeId === changeId),
     )?.version.payload.name;
   const getComingLine = (change: ComingChange<OpenVersion>) => {
+    if (change.kind === 'stop')
+      return [
+        `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(change.on - DAY_MS)}`,
+        getEventName(change.changeId),
+      ]
+        .filter(Boolean)
+        .join(' · ');
     const difference = describeChange(
       change.before.payload as ItemPayload,
       change.version.payload as ItemPayload,
@@ -574,10 +590,10 @@ function ItemSheet({
       .join(' · ');
   };
   const planned = [
-    ...listComingChanges(allVersions, itemId, today)
-      .filter((change) => endedAt === null || change.on <= endedAt)
-      .map(getComingLine),
-    endedAt !== null
+    ...listComingChanges(allVersions, itemId, today, endedAt).map(
+      getComingLine,
+    ),
+    endedAt !== null && endedAt + DAY_MS <= today
       ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(endedAt)}`
       : null,
   ].filter((line): line is string => line !== null);
@@ -592,6 +608,8 @@ function ItemSheet({
     setReason('');
     setIsReasonOpen(false);
     setHeldChoice(null);
+    setEventId(null);
+    setPauseDate(toDateInputValue(today));
     setView(nextView);
   };
 
@@ -858,7 +876,7 @@ function ItemSheet({
         version: {
           itemId,
           kind: 'goal',
-          effectiveFrom: today,
+          effectiveFrom: view === 'pause' && isPauseValid ? pauseOn : today,
           effectiveUntil: null,
           changeId: 'what-if',
           payload: {
@@ -887,12 +905,38 @@ function ItemSheet({
     try {
       const encryption = await getRunwayEncryption(user.uid);
       if (view === 'pause' || view === 'resume') {
+        const state = view === 'pause' ? 'paused' : 'active';
+        const effectiveFrom =
+          view === 'pause' && isPauseValid ? pauseOn : today;
+        const goalVersions = store
+          .getState()
+          .runway.versions.filter(
+            (candidate): candidate is GoalVersion => candidate.kind === 'goal',
+          );
         await setGoalState(user.uid, encryption, {
           itemId,
           goal: payload as GoalSealed,
-          state: view === 'pause' ? 'paused' : 'active',
+          state,
           note: why,
-          effectiveFrom: today,
+          effectiveFrom,
+          stretches: getVersionStretches<GoalVersion, GoalSealed>(
+            goalVersions,
+            itemId,
+            effectiveFrom,
+          ).map((stretch) => ({
+            ...stretch,
+            payload: { ...stretch.payload, state },
+          })),
+          link: getEventLink(
+            selectAllHorizonItems(store.getState(), today),
+            eventId,
+            {
+              today,
+              itemName: payload.name,
+              what: PART_OF_WORDS.stopsSaving,
+              from: effectiveFrom,
+            },
+          ),
         });
         onClose();
         return;
@@ -904,6 +948,16 @@ function ItemSheet({
           summary: `${payload.name}: ended after ${formatDateOrdinalUTC(endOn)}.`,
           note: why,
           heldChoice: isAskingHeld ? heldChoice : null,
+          link: getEventLink(
+            selectAllHorizonItems(store.getState(), today),
+            eventId,
+            {
+              today,
+              itemName: payload.name,
+              what: PART_OF_WORDS.ends,
+              from: endOn + DAY_MS,
+            },
+          ),
         });
         if (written) onClose();
         else setError(LIFECYCLE_WORDS.alreadyEnded);
@@ -1047,6 +1101,7 @@ function ItemSheet({
         : LIFECYCLE_WORDS.chipsPause;
   const getBlocker = () => {
     if (view === 'end' && !isEndValid) return LIFECYCLE_WORDS.endBlocker;
+    if (view === 'pause' && !isPauseValid) return LIFECYCLE_WORDS.pauseBlocker;
     if (isAskingHeld && heldChoice === null) return HELD_WORDS.blocker;
     return null;
   };
@@ -1875,6 +1930,21 @@ function ItemSheet({
             />
           )}
         </ActionSection>
+      )}
+      {view === 'pause' && (
+        <ActionSection caption={LIFECYCLE_WORDS.pauseFromHeading}>
+          <FoldedDateField
+            label={LIFECYCLE_WORDS.pauseFromLabel}
+            todayValue={toDateInputValue(today)}
+            min={toDateInputValue(today)}
+            max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
+            value={pauseDate}
+            onChange={setPauseDate}
+          />
+        </ActionSection>
+      )}
+      {(view === 'pause' || view === 'end') && (
+        <PartOfPicker value={eventId} onChange={setEventId} />
       )}
       <EffectPreview
         changeJson={changeJson}

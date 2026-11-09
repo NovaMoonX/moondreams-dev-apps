@@ -42,6 +42,8 @@ const getFigure = (version: OpenVersion): Figure | null => {
 /** A change as one row: "Rent · $1,250 → $0", "Gym returns to $40". Carries amounts, so it is drawn masked. */
 export function describePlanChange(change: PlanChange): string {
   const name = change.after.payload.name;
+  if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
+  if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
   const before = getFigure(change.before);
   const after = getFigure(change.after);
   if (change.isReturn) {
@@ -58,6 +60,8 @@ export function describePlanChange(change: PlanChange): string {
 /** A change with no figure in it: "Rent stops", "Gym returns", "Groceries changes". */
 export function describePlanChangeShort(change: PlanChange): string {
   const name = change.after.payload.name;
+  if (change.what === 'stop') return PLAN_CHANGE_WORDS.stops(name);
+  if (change.what === 'start') return PLAN_CHANGE_WORDS.starts(name);
   if (change.isReturn) return PLAN_CHANGE_WORDS.returns(name);
   const after = getFigure(change.after);
   const before = getFigure(change.before);

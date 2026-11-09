@@ -14,7 +14,11 @@ import { formatRange } from '@apps/runway/utils/rangeText';
 import { describeBillTiming } from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { getNextVersionId } from '@apps/runway/engine/horizon';
-import { addLink } from '@apps/runway/engine/horizonLinks';
+import {
+  addLink,
+  getEndChangeId,
+  removeLink,
+} from '@apps/runway/engine/horizonLinks';
 import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
 import { sealJson } from '@apps/runway/security';
@@ -32,6 +36,7 @@ import type {
   ChangeSealed,
   DateOnly,
   EnvelopeSealed,
+  FundingRule,
   GoalSealed,
   GroupSealed,
   HorizonSealed,
@@ -47,6 +52,100 @@ import type {
   Stance,
 } from '@apps/runway/types';
 
+type PlanWrite =
+  | { collection: 'items'; id: string; data: PlanItemDoc }
+  | { collection: 'versions'; id: string; data: PlanVersionDoc }
+  | { collection: 'changes'; id: string; data: ChangeDoc };
+
+const planWrite = (
+  collection: 'items' | 'versions' | 'changes',
+  data: PlanItemDoc | PlanVersionDoc | ChangeDoc,
+) => ({ collection, id: data.id, data }) as PlanWrite;
+
+/** Commits new documents in one batch, or, when the write also edits an event, in a transaction that refuses once the event's next version exists (it changed on another device). */
+async function commitPlanWrites(
+  uid: string,
+  writes: PlanWrite[],
+  linked: Awaited<ReturnType<typeof sealEventVersion>> | null,
+): Promise<void> {
+  if (linked === null) {
+    const batch = writeBatch(db);
+    writes.forEach(({ collection, id, data }) =>
+      batch.set(itemPath(uid, collection, id), data),
+    );
+    await batch.commit();
+    return;
+  }
+  await runTransaction(db, async (transaction) => {
+    const eventTaken = await transaction.get(
+      itemPath(uid, 'versions', linked.version.id),
+    );
+    if (eventTaken.exists()) throw new Error(PART_OF_WORDS.eventChanged);
+    writes.forEach(({ collection, id, data }) =>
+      transaction.set(itemPath(uid, collection, id), data),
+    );
+    transaction.set(
+      itemPath(uid, 'versions', linked.version.id),
+      linked.version,
+    );
+    transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+  });
+}
+
+/** A new envelope or goal that starts later: the lists show it from today asking for nothing, and its real payload starts on `startsOn` as a planned change of its own (written a moment later, so it wins on its day). */
+const IDLE_FUNDING: FundingRule = {
+  amount: { kind: 'exact', cents: 0 },
+  cadence: { kind: 'none' },
+};
+
+async function sealLaterStart(
+  encryption: RunwayEncryption,
+  later: {
+    itemId: string;
+    kind: 'envelope' | 'goal';
+    payload: EnvelopeSealed | GoalSealed;
+    startsOn: DateOnly;
+    now: number;
+  },
+) {
+  const startChangeId = generateUuid();
+  const [idleSealed, startSealed, entrySealed] = await Promise.all([
+    sealJson(
+      { ...later.payload, funding: IDLE_FUNDING, extras: null },
+      encryption,
+    ),
+    sealJson(later.payload, encryption),
+    sealJson<ChangeSealed>(
+      {
+        summary: `${later.payload.name}: starts from ${formatDateOrdinalUTC(later.startsOn)}.`,
+      },
+      encryption,
+    ),
+  ]);
+  return {
+    startChangeId,
+    idleSealed,
+    version: {
+      id: generateUuid(),
+      itemId: later.itemId,
+      kind: later.kind,
+      createdAt: later.now + 1,
+      effectiveFrom: later.startsOn,
+      effectiveUntil: null,
+      changeId: startChangeId,
+      sealed: startSealed,
+    } satisfies PlanVersionDoc,
+    change: {
+      id: startChangeId,
+      kind: 'planChange',
+      createdAt: later.now + 1,
+      effectiveFrom: later.startsOn,
+      itemIds: [later.itemId],
+      sealed: entrySealed,
+    } satisfies ChangeDoc,
+  };
+}
+
 export interface CreateIncomeInput {
   /** An existing source to add the pay line to; null names a new one. */
   sourceId: string | null;
@@ -58,8 +157,10 @@ export interface CreateIncomeInput {
   accountId: string | null;
   schedule: Schedule;
   ending: Ending;
-  /** The first day this income is in the plan. */
+  /** The first day this income is in the plan: its first payday, so a pay that starts later is part of an event from that day. */
   startDate: number;
+  /** Makes the new pay part of an open event in the same write. */
+  link?: EventLink | null;
 }
 
 const itemPath = (uid: string, collectionName: string, id: string) =>
@@ -147,21 +248,31 @@ export async function createIncome(
     sealed: changeSealed,
   };
 
-  const batch = writeBatch(db);
-  if (sourceSealed) {
-    const sourceHeader = header(sourceId, 'source', null);
-    const sourceVersion = firstVersion(sourceId, 'source', sourceSealed);
-    batch.set(itemPath(uid, 'items', sourceId), sourceHeader);
-    batch.set(itemPath(uid, 'versions', sourceVersion.id), sourceVersion);
-  }
   const payLineVersion = firstVersion(payLineId, 'payLine', payLineSealed);
-  batch.set(
-    itemPath(uid, 'items', payLineId),
-    header(payLineId, 'payLine', sourceId),
+  const sourceVersion = sourceSealed
+    ? firstVersion(sourceId, 'source', sourceSealed)
+    : null;
+  await commitPlanWrites(
+    uid,
+    [
+      ...(sourceVersion
+        ? [
+            planWrite('items', header(sourceId, 'source', null)),
+            planWrite('versions', sourceVersion),
+          ]
+        : []),
+      planWrite('items', header(payLineId, 'payLine', sourceId)),
+      planWrite('versions', payLineVersion),
+      planWrite('changes', change),
+    ],
+    input.link
+      ? await sealEventLink(encryption, input.link, {
+          changeId,
+          itemId: payLineId,
+          now,
+        })
+      : null,
   );
-  batch.set(itemPath(uid, 'versions', payLineVersion.id), payLineVersion);
-  batch.set(itemPath(uid, 'changes', changeId), change);
-  await batch.commit();
 
   return { sourceId, payLineId };
 }
@@ -172,6 +283,10 @@ export interface CreateEnvelopeInput {
   startDate: number;
   /** A group the person named while adding the envelope; it is written in the same batch and the envelope joins it. */
   newGroup?: GroupSealed | null;
+  /** A day after `startDate` the envelope starts taking money. It is listed from today asking for nothing and a planned change from this day gives it its real payload, so a link to the start points at that change; null or today starts it now. */
+  startsOn?: DateOnly | null;
+  /** Makes the new envelope (or its later start) part of an open event in the same write. */
+  link?: EventLink | null;
 }
 
 /**
@@ -182,7 +297,13 @@ export interface CreateEnvelopeInput {
 export async function createEnvelope(
   uid: string,
   encryption: RunwayEncryption,
-  { envelope: draftEnvelope, startDate, newGroup = null }: CreateEnvelopeInput,
+  {
+    envelope: draftEnvelope,
+    startDate,
+    newGroup = null,
+    startsOn = null,
+    link = null,
+  }: CreateEnvelopeInput,
 ): Promise<{ envelopeId: string; groupId: string | null }> {
   const now = Date.now();
   const envelopeId = generateUuid();
@@ -193,13 +314,23 @@ export async function createEnvelope(
   const envelope: EnvelopeSealed = groupDocs
     ? { ...draftEnvelope, groupId: groupDocs.groupId }
     : draftEnvelope;
+  const laterOn = startsOn !== null && startsOn > startDate ? startsOn : null;
   const changePayload: ChangeSealed = {
-    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding, getExtras(envelope))}.`,
+    summary: `Added ${envelope.name}, ${describeFunding(envelope.funding, getExtras(envelope))}${laterOn === null ? '' : `, from ${formatDateOrdinalUTC(laterOn)}`}.`,
   };
 
-  const [envelopeSealed, changeSealed] = await Promise.all([
+  const [envelopeSealed, changeSealed, later] = await Promise.all([
     sealJson(envelope, encryption),
     sealJson(changePayload, encryption),
+    laterOn === null
+      ? Promise.resolve(null)
+      : sealLaterStart(encryption, {
+          itemId: envelopeId,
+          kind: 'envelope',
+          payload: envelope,
+          startsOn: laterOn,
+          now,
+        }),
   ]);
 
   const header: PlanItemDoc = {
@@ -219,30 +350,45 @@ export async function createEnvelope(
     effectiveFrom: startDate,
     effectiveUntil: null,
     changeId,
-    sealed: envelopeSealed,
+    sealed: later?.idleSealed ?? envelopeSealed,
   };
   const change: ChangeDoc = {
     id: changeId,
     kind: 'planChange',
     createdAt: now,
-    effectiveFrom: startDate,
+    effectiveFrom: later === null ? startDate : null,
     itemIds: [envelopeId],
     sealed: changeSealed,
   };
 
-  const batch = writeBatch(db);
-  if (groupDocs) {
-    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
-    batch.set(
-      itemPath(uid, 'versions', groupDocs.version.id),
-      groupDocs.version,
-    );
-    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
-  }
-  batch.set(itemPath(uid, 'items', envelopeId), header);
-  batch.set(itemPath(uid, 'versions', version.id), version);
-  batch.set(itemPath(uid, 'changes', changeId), change);
-  await batch.commit();
+  await commitPlanWrites(
+    uid,
+    [
+      ...(groupDocs
+        ? [
+            planWrite('items', groupDocs.header),
+            planWrite('versions', groupDocs.version),
+            planWrite('changes', groupDocs.change),
+          ]
+        : []),
+      planWrite('items', header),
+      planWrite('versions', version),
+      planWrite('changes', change),
+      ...(later
+        ? [
+            planWrite('versions', later.version),
+            planWrite('changes', later.change),
+          ]
+        : []),
+    ],
+    link
+      ? await sealEventLink(encryption, link, {
+          changeId: later?.startChangeId ?? changeId,
+          itemId: envelopeId,
+          now,
+        })
+      : null,
+  );
 
   return { envelopeId, groupId: groupDocs?.groupId ?? null };
 }
@@ -304,6 +450,8 @@ export interface CreateBillInput {
   startDate: number;
   /** A group the person named while adding the bill; it is written in the same batch and the bill joins it. */
   newGroup?: GroupSealed | null;
+  /** Makes the new bill part of an open event in the same write; its start is its first due day, which a link to it reads from the schedule. */
+  link?: EventLink | null;
 }
 
 /**
@@ -314,7 +462,7 @@ export interface CreateBillInput {
 export async function createBill(
   uid: string,
   encryption: RunwayEncryption,
-  { bill: draftBill, startDate, newGroup = null }: CreateBillInput,
+  { bill: draftBill, startDate, newGroup = null, link = null }: CreateBillInput,
 ): Promise<{ billId: string; groupId: string | null }> {
   const now = Date.now();
   const billId = generateUuid();
@@ -362,19 +510,28 @@ export async function createBill(
     sealed: changeSealed,
   };
 
-  const batch = writeBatch(db);
-  if (groupDocs) {
-    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
-    batch.set(
-      itemPath(uid, 'versions', groupDocs.version.id),
-      groupDocs.version,
-    );
-    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
-  }
-  batch.set(itemPath(uid, 'items', billId), header);
-  batch.set(itemPath(uid, 'versions', version.id), version);
-  batch.set(itemPath(uid, 'changes', changeId), change);
-  await batch.commit();
+  await commitPlanWrites(
+    uid,
+    [
+      ...(groupDocs
+        ? [
+            planWrite('items', groupDocs.header),
+            planWrite('versions', groupDocs.version),
+            planWrite('changes', groupDocs.change),
+          ]
+        : []),
+      planWrite('items', header),
+      planWrite('versions', version),
+      planWrite('changes', change),
+    ],
+    link
+      ? await sealEventLink(encryption, link, {
+          changeId,
+          itemId: billId,
+          now,
+        })
+      : null,
+  );
 
   return { billId, groupId: groupDocs?.groupId ?? null };
 }
@@ -385,6 +542,10 @@ export interface CreateGoalInput {
   startDate: number;
   /** A group the person named while adding the goal; it is written in the same batch and the goal joins it. */
   newGroup?: GroupSealed | null;
+  /** A day after `startDate` the goal starts taking money; written like an envelope's later start (see `CreateEnvelopeInput`). */
+  startsOn?: DateOnly | null;
+  /** Makes the new goal (or its later start) part of an open event in the same write. */
+  link?: EventLink | null;
 }
 
 /**
@@ -395,7 +556,13 @@ export interface CreateGoalInput {
 export async function createGoal(
   uid: string,
   encryption: RunwayEncryption,
-  { goal: draftGoal, startDate, newGroup = null }: CreateGoalInput,
+  {
+    goal: draftGoal,
+    startDate,
+    newGroup = null,
+    startsOn = null,
+    link = null,
+  }: CreateGoalInput,
 ): Promise<{ goalId: string }> {
   const now = Date.now();
   const goalId = generateUuid();
@@ -410,13 +577,23 @@ export async function createGoal(
     goal.targetDate === null
       ? ''
       : ` by ${formatDateOrdinalUTC(goal.targetDate)}`;
+  const laterOn = startsOn !== null && startsOn > startDate ? startsOn : null;
   const changePayload: ChangeSealed = {
-    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}.`,
+    summary: `Added ${goal.name}, ${formatCents(goal.targetCents)}${dateText}, ${describeFunding(goal.funding, getExtras(goal))}${laterOn === null ? '' : `, from ${formatDateOrdinalUTC(laterOn)}`}.`,
   };
 
-  const [goalSealed, changeSealed] = await Promise.all([
+  const [goalSealed, changeSealed, later] = await Promise.all([
     sealJson(goal, encryption),
     sealJson(changePayload, encryption),
+    laterOn === null
+      ? Promise.resolve(null)
+      : sealLaterStart(encryption, {
+          itemId: goalId,
+          kind: 'goal',
+          payload: goal,
+          startsOn: laterOn,
+          now,
+        }),
   ]);
 
   const header: PlanItemDoc = {
@@ -436,30 +613,45 @@ export async function createGoal(
     effectiveFrom: startDate,
     effectiveUntil: null,
     changeId,
-    sealed: goalSealed,
+    sealed: later?.idleSealed ?? goalSealed,
   };
   const change: ChangeDoc = {
     id: changeId,
     kind: 'planChange',
     createdAt: now,
-    effectiveFrom: startDate,
+    effectiveFrom: later === null ? startDate : null,
     itemIds: [goalId],
     sealed: changeSealed,
   };
 
-  const batch = writeBatch(db);
-  if (groupDocs) {
-    batch.set(itemPath(uid, 'items', groupDocs.groupId), groupDocs.header);
-    batch.set(
-      itemPath(uid, 'versions', groupDocs.version.id),
-      groupDocs.version,
-    );
-    batch.set(itemPath(uid, 'changes', groupDocs.change.id), groupDocs.change);
-  }
-  batch.set(itemPath(uid, 'items', goalId), header);
-  batch.set(itemPath(uid, 'versions', version.id), version);
-  batch.set(itemPath(uid, 'changes', changeId), change);
-  await batch.commit();
+  await commitPlanWrites(
+    uid,
+    [
+      ...(groupDocs
+        ? [
+            planWrite('items', groupDocs.header),
+            planWrite('versions', groupDocs.version),
+            planWrite('changes', groupDocs.change),
+          ]
+        : []),
+      planWrite('items', header),
+      planWrite('versions', version),
+      planWrite('changes', change),
+      ...(later
+        ? [
+            planWrite('versions', later.version),
+            planWrite('changes', later.change),
+          ]
+        : []),
+    ],
+    link
+      ? await sealEventLink(encryption, link, {
+          changeId: later?.startChangeId ?? changeId,
+          itemId: goalId,
+          now,
+        })
+      : null,
+  );
 
   return { goalId };
 }
@@ -494,16 +686,30 @@ export interface ChangeItemInput {
   } | null;
 }
 
+/** An open event as the device reads it just before a write, and the line its log gets: what makes an item's write also edit the event, refused when the event changed on another device. Build it with `getEventLink`. */
+export type EventLink = NonNullable<ChangeItemInput['link']>;
+
 /** The event's next version with the change linked and the line its log gets, ready to write beside the change. */
 async function sealEventLink(
   encryption: RunwayEncryption,
-  link: NonNullable<ChangeItemInput['link']>,
+  link: EventLink,
   made: { changeId: string; itemId: string; now: number },
 ) {
-  const horizon = addLink(link.horizon, {
-    changeId: made.changeId,
-    itemId: made.itemId,
-  });
+  return sealEventVersion(
+    encryption,
+    link,
+    addLink(link.horizon, { changeId: made.changeId, itemId: made.itemId }),
+    made.now,
+  );
+}
+
+/** The event's next version holding `horizon`, and the line its log gets, ready to write in the same transaction as the item's change. */
+async function sealEventVersion(
+  encryption: RunwayEncryption,
+  link: EventLink,
+  horizon: HorizonSealed,
+  now: number,
+) {
   const [eventSealed, logSealed] = await Promise.all([
     sealJson(horizon, encryption),
     sealJson(
@@ -517,7 +723,7 @@ async function sealEventLink(
       id: getNextVersionId(link.baseVersionId),
       itemId: link.eventId,
       kind: 'horizon',
-      createdAt: made.now,
+      createdAt: now,
       effectiveFrom: link.on,
       effectiveUntil: null,
       changeId: logId,
@@ -526,7 +732,7 @@ async function sealEventLink(
     log: {
       id: logId,
       kind: 'planChange',
-      createdAt: made.now,
+      createdAt: now,
       effectiveFrom: null,
       itemIds: [link.eventId],
       sealed: logSealed,
@@ -854,6 +1060,8 @@ export interface EndItemInput {
   note: string | null;
   /** What the person chose for the money it holds; null when it holds none and none was asked. */
   heldChoice: HeldChoice | null;
+  /** Makes the ending part of an open event: the event gets a link to `ended_${itemId}` in the same transaction, refused when the event changed on another device. */
+  link?: EventLink | null;
 }
 
 /**
@@ -867,17 +1075,30 @@ export async function endItem(
   encryption: RunwayEncryption,
   input: EndItemInput,
 ): Promise<boolean> {
-  const changeId = `ended_${input.itemId}`;
+  const changeId = getEndChangeId(input.itemId);
   const sealed = await sealJson<ChangeSealed>(
     { summary: input.summary, note: input.note },
     encryption,
   );
+  const linked = input.link
+    ? await sealEventLink(encryption, input.link, {
+        changeId,
+        itemId: input.itemId,
+        now: Date.now(),
+      })
+    : null;
   const headerRef = itemPath(uid, 'items', input.itemId);
   const written = await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(headerRef);
+    const [snapshot, eventTaken] = await Promise.all([
+      transaction.get(headerRef),
+      linked === null
+        ? Promise.resolve(null)
+        : transaction.get(itemPath(uid, 'versions', linked.version.id)),
+    ]);
     if (!snapshot.exists()) throw new Error('This item no longer exists.');
     const header = snapshot.data() as Partial<PlanItemDoc>;
     if ((header.endedAt ?? null) !== null) return false;
+    if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
     const entry: ChangeDoc = {
       id: changeId,
       kind: 'ended',
@@ -894,9 +1115,107 @@ export async function endItem(
           : getHeldReleaseDay(input.heldChoice, input.endedOn + DAY_MS),
     });
     transaction.set(itemPath(uid, 'changes', changeId), entry);
+    if (linked !== null) {
+      transaction.set(
+        itemPath(uid, 'versions', linked.version.id),
+        linked.version,
+      );
+      transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+    }
     return true;
   });
   return written;
+}
+
+export interface CancelChangeInput {
+  itemId: string;
+  /** The change to cancel: a version change's `changeId`, or `ended_${itemId}` for a coming end. */
+  changeId: string;
+  /** For a version change, the ids of every version of the item written with `changeId` (`getCancelTarget`); the write deletes exactly these. Empty for a coming end. */
+  versionIds: string[];
+  today: DateOnly;
+  /** The event that holds the link (`findLinkHolder`), as the device reads it, with the line its log gets; the link is removed in the same transaction. Null when no event holds it. */
+  link: EventLink | null;
+}
+
+/**
+ * Cancels a change that has not started, in one transaction: a version change deletes every version
+ * written with its `changeId` and its change entry; a coming end sets `endedAt` back to null, clears
+ * the release day the ending set (unless the item was archived, whose release it may be) and deletes
+ * `ended_${itemId}`. The matching link leaves the event in the same transaction, which is refused when
+ * the event changed on another device. Refuses a change whose first day has come. Returns false when
+ * there is nothing left to cancel (another device already did).
+ */
+export async function cancelChange(
+  uid: string,
+  encryption: RunwayEncryption,
+  input: CancelChangeInput,
+): Promise<boolean> {
+  const { itemId, changeId } = input;
+  const isStop = changeId === getEndChangeId(itemId);
+  const linked = input.link
+    ? await sealEventVersion(
+        encryption,
+        input.link,
+        removeLink(input.link.horizon, changeId),
+        Date.now(),
+      )
+    : null;
+  const headerRef = itemPath(uid, 'items', itemId);
+  return runTransaction(db, async (transaction) => {
+    const [header, versionDocs, eventTaken] = await Promise.all([
+      isStop ? transaction.get(headerRef) : Promise.resolve(null),
+      Promise.all(
+        isStop
+          ? []
+          : input.versionIds.map((id) =>
+              transaction.get(itemPath(uid, 'versions', id)),
+            ),
+      ),
+      linked === null
+        ? Promise.resolve(null)
+        : transaction.get(itemPath(uid, 'versions', linked.version.id)),
+    ]);
+    if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
+    const writeLink = () => {
+      if (linked === null) return;
+      transaction.set(
+        itemPath(uid, 'versions', linked.version.id),
+        linked.version,
+      );
+      transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
+    };
+    if (isStop) {
+      if (!header?.exists()) throw new Error('This item no longer exists.');
+      const stored = header.data() as Partial<PlanItemDoc>;
+      const endedAt = stored.endedAt ?? null;
+      if (endedAt === null) return false;
+      if (endedAt + DAY_MS <= input.today)
+        throw new Error(PART_OF_WORDS.alreadyStarted);
+      transaction.update(headerRef, {
+        endedAt: null,
+        ...((stored.archivedAt ?? null) === null
+          ? { heldReleasedOn: null }
+          : {}),
+      });
+      transaction.delete(itemPath(uid, 'changes', changeId));
+      writeLink();
+      return true;
+    }
+    const existing = versionDocs.filter((snapshot) => snapshot.exists());
+    if (existing.length === 0) return false;
+    existing.forEach((snapshot) => {
+      const stored = snapshot.data() as Partial<PlanVersionDoc>;
+      if (stored.itemId !== itemId || stored.changeId !== changeId)
+        throw new Error(HORIZON_END_WORDS.changedJustNow);
+      if ((stored.effectiveFrom ?? 0) <= input.today)
+        throw new Error(PART_OF_WORDS.alreadyStarted);
+      transaction.delete(snapshot.ref);
+    });
+    transaction.delete(itemPath(uid, 'changes', changeId));
+    writeLink();
+    return true;
+  });
 }
 
 export interface ArchiveItemInput {
@@ -999,7 +1318,12 @@ export interface SetGoalStateInput {
   goal: GoalSealed;
   state: GoalSealed['state'];
   note: string | null;
+  /** The day the change takes effect: today, or a later day for a goal that stops saving then. */
   effectiveFrom: number;
+  /** The goal's stretches from `effectiveFrom` on, each with `state` set, so a later change keeps its amounts; defaults to one version from `effectiveFrom`. */
+  stretches?: VersionStretch<ItemPayload>[];
+  /** Makes the change part of an open event in the same write. */
+  link?: EventLink | null;
 }
 
 /** Pauses or resumes a goal as a new version: money stops or starts from the date, the balance and history are untouched. */
@@ -1016,5 +1340,7 @@ export async function setGoalState(
     summary: `${input.goal.name}: ${isPaused ? 'saving paused' : 'saving started again'}, from ${formatDateOrdinalUTC(input.effectiveFrom)}.`,
     note: input.note,
     effectiveFrom: input.effectiveFrom,
+    stretches: input.stretches,
+    link: input.link ?? null,
   });
 }

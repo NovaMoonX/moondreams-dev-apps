@@ -15,6 +15,7 @@ import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
   selectCostPaid,
+  selectItemEnds,
   selectItemStops,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { HorizonSealed, Stance } from '@apps/runway/types';
@@ -65,14 +66,15 @@ function HorizonRow({
   const isDone = horizon.state !== 'open';
   const versions = useAppSelector((state) => state.runway.versions);
   const stops = useAppSelector(selectItemStops);
+  const ends = useAppSelector(selectItemEnds);
   const isChangesOnly = horizon.costs.length === 0;
   const isChangesDone =
-    getChangesOnlyDoneOn(horizon, versions, today, stops) !== null;
+    getChangesOnlyDoneOn(horizon, versions, today, stops, ends) !== null;
   const getDetail = () => {
     if (isChangesOnly && !isDone) {
       if (isChangesDone) return HORIZON_WORDS.changesHappened;
       const count = horizon.links.filter(
-        (link) => getLinkSpan(versions, link, stops)?.isLive,
+        (link) => getLinkSpan(versions, link, stops, ends)?.isLive,
       ).length;
       return count === 0
         ? HORIZON_WORDS.noChangesYet

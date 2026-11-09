@@ -23,7 +23,9 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   centsToInputValue,
@@ -39,6 +41,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { getNextTierRank } from '@apps/runway/engine/priorities';
@@ -97,7 +100,7 @@ import {
   selectEnvelopes,
   selectGroups,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { EnvelopeSealed, Priority } from '@apps/runway/types';
+import type { DateOnly, EnvelopeSealed, Priority } from '@apps/runway/types';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -139,6 +142,10 @@ interface EnvelopeFormProps {
   presetDayKey?: string;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** A later day a new envelope starts taking money; it is listed from today and gets its amount from this day. */
+  startsOn?: DateOnly;
+  /** The open event a new envelope (or its later start) is part of. */
+  eventId?: string;
   /** A question to open first when changing an envelope ("amount"); every answer starts folded otherwise. */
   openStep?: EnvelopeStepId | null;
   /** Hands the built envelope over instead of writing it, for a person who has no plan yet. */
@@ -216,6 +223,8 @@ function EnvelopeFormBody({
   editing,
   presetDayKey,
   presetEventId,
+  startsOn,
+  eventId,
   openStep = null,
   draft,
   presetGroupId,
@@ -561,8 +570,19 @@ function EnvelopeFormBody({
       const encryption = await getRunwayEncryption(user.uid);
       await createEnvelope(user.uid, encryption, {
         startDate: today,
+        startsOn: startsOn ?? null,
         envelope,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: envelope.name,
+            what: PART_OF_WORDS.starts,
+            from: startsOn ?? today,
+          },
+        ),
       });
       onClose();
     } catch (saveError) {

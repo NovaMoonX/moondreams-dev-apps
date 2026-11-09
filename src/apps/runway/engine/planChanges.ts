@@ -1,6 +1,7 @@
 import type { DateOnly, OpenVersion, PlanItemDoc } from '@apps/runway/types';
 
 import { DAY_MS } from './dates';
+import { isStartingVersion, type LinkKind } from './horizonLinks';
 import { isSameValue, resolveVersion } from './resolve';
 
 /** The items whose changes people look ahead for: what a pay brings in and what goes out of it. */
@@ -12,6 +13,8 @@ const CHANGE_KINDS: readonly PlanItemDoc['kind'][] = [
 ];
 
 export interface PlanChange {
+  /** A change to an item, its last day (`before` and `after` are the version in force on it), or an envelope or goal that began idle taking money. A pay's or bill's own first day is not listed: its income day or due day already marks it. */
+  what: LinkKind;
   /** The later of the two days compared: the day a calendar marks, or the income day that is different. */
   on: DateOnly;
   /** The day the new amount starts, or the day after a stretch the earlier amount returns on. */
@@ -51,6 +54,7 @@ const compareDays = (
     before.effectiveUntil <= day &&
     after.createdAt < before.createdAt;
   const result: PlanChange = {
+    what: isStartingVersion(own, after, before) ? 'start' : 'change',
     on: day,
     startsOn: isReturn
       ? (before.effectiveUntil ?? day)
@@ -62,6 +66,33 @@ const compareDays = (
     after,
   };
   return result;
+};
+
+/** The day after an item's last day, when it falls in the window and the item was not archived before it. */
+const getStop = (
+  own: readonly OpenVersion[],
+  item: PlanItemDoc,
+  from: DateOnly,
+  to: DateOnly,
+): PlanChange | null => {
+  const on = item.endedAt === null ? null : item.endedAt + DAY_MS;
+  const last = on === null ? null : resolveVersion(own, item.id, on - DAY_MS);
+  return on === null ||
+    last === null ||
+    on < from ||
+    on > to ||
+    (item.archivedAt !== null && item.archivedAt < on)
+    ? null
+    : {
+        what: 'stop',
+        on,
+        startsOn: on,
+        itemId: item.id,
+        kind: last.kind,
+        isReturn: false,
+        before: last,
+        after: last,
+      };
 };
 
 const byDayThenItem = (a: PlanChange, b: PlanChange) =>
@@ -90,12 +121,16 @@ export function listPlanChangeDays(
             ),
         ),
       ];
-      return days.flatMap((on) => {
-        const change = isLive(item, on)
-          ? compareDays(own, item, on - DAY_MS, on)
-          : null;
-        return change ? [change] : [];
-      });
+      const stop = getStop(own, item, from, to);
+      return [
+        ...days.flatMap((on) => {
+          const change = isLive(item, on)
+            ? compareDays(own, item, on - DAY_MS, on)
+            : null;
+          return change ? [change] : [];
+        }),
+        ...(stop ? [stop] : []),
+      ];
     })
     .sort(byDayThenItem);
   return result;

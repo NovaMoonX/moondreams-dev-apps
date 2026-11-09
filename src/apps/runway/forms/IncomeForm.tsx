@@ -18,7 +18,9 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -35,6 +37,7 @@ import {
   MAX_NAME_LENGTH,
   PAUSE_PAY_WORDS,
   SCHEDULE_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -155,6 +158,8 @@ interface IncomeFormProps {
   openStep?: IncomeStepId | null;
   /** The open event a change from here is part of when the form opens. */
   presetEventId?: string;
+  /** The open event a new pay is part of; the pay starts on its first payday. */
+  eventId?: string;
   /** Hands the built income over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<CreateIncomeInput>;
   /** Changing a pay line to nothing for a while: the amount starts at $0 and "For a while, then back" is chosen, so only the dates are left to pick. */
@@ -393,6 +398,7 @@ function IncomeFormBody({
   editing,
   openStep = null,
   presetEventId,
+  eventId,
   draft,
   isPause = false,
 }: IncomeFormProps & StartOverProps) {
@@ -944,7 +950,19 @@ function IncomeFormBody({
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await createIncome(user.uid, encryption, input);
+      await createIncome(user.uid, encryption, {
+        ...input,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: input.payLineName,
+            what: PART_OF_WORDS.starts,
+            from: input.startDate,
+          },
+        ),
+      });
       onClose();
     } catch (saveError) {
       setError(
