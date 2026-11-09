@@ -1,3 +1,4 @@
+import { formatTime } from '@/utils/formatUtils';
 import { HELM_COPY, TASK_TITLE_CAP } from '@apps/helm/constants';
 import type { OpenCapture } from '@apps/helm/types';
 
@@ -40,9 +41,17 @@ export function toHeldItems(captures: OpenCapture[]): {
   };
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// The day's allowance is counted per UTC day, so it comes back at UTC midnight, shown in local time.
+const getLimitResetTime = () =>
+  formatTime((Math.floor(Date.now() / DAY_MS) + 1) * DAY_MS);
+
 /** Why a waiting turn waits, in the words the Inbox and its sheet use. */
 export function getWaitingReason(capture: OpenCapture) {
-  if (capture.heldReason === 'dailyLimit') return HELM_COPY.waitingDailyLimit;
+  if (capture.heldReason === 'dailyLimit') {
+    return HELM_COPY.waitingDailyLimit(getLimitResetTime());
+  }
   if (capture.heldReason === 'recentLimit') return HELM_COPY.waitingRecentLimit;
   if (capture.heldReason === 'budgetReached') return HELM_COPY.waitingBudget;
   if (capture.hasPendingWrites || capture.heldReason === 'offline') {
@@ -84,7 +93,9 @@ export function getHomeHeldLine(capture: OpenCapture) {
   if (capture.status === 'failed' || capture.status === 'needsYou') {
     return HELM_COPY.waitingInNeedsYou;
   }
-  if (capture.heldReason === 'dailyLimit') return HELM_COPY.savedHeldDaily;
+  if (capture.heldReason === 'dailyLimit') {
+    return HELM_COPY.savedHeldDaily(getLimitResetTime());
+  }
   if (capture.heldReason === 'recentLimit') return HELM_COPY.savedHeldRecent;
   return capture.heldReason === 'budgetReached'
     ? HELM_COPY.savedHeldBudget

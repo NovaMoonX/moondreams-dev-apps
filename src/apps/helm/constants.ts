@@ -99,7 +99,8 @@ export const HELM_COPY = {
   waitingNote: (name: string) =>
     `Waiting needs nothing from you: ${name} reads these on its own.`,
   waitingOnDevice: 'Saved on this device · waits for a connection',
-  waitingDailyLimit: "Today's limit reached · sorted after midnight",
+  waitingDailyLimit: (time: string) =>
+    `Today's limit reached · read after ${time}`,
   waitingRecentLimit: 'A lot at once · sorted in a few minutes',
   waitingBudget: 'Reading is paused for now · sorted when it is back',
   waitingUnavailable:
@@ -121,7 +122,7 @@ export const HELM_COPY = {
   tookBackTask: 'Took back the task',
   heldActionFailed: "That didn't work. Try again.",
   waitingInNeedsYou: 'Waiting in Needs you',
-  savedHeldDaily: 'Saved as written. Read after midnight.',
+  savedHeldDaily: (time: string) => `Saved as written. Read after ${time}.`,
   savedHeldRecent: 'Saved as written. Read in a few minutes.',
   savedHeldBudget: 'Saved as written. Read once reading is back.',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
