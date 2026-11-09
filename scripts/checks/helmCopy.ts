@@ -7,9 +7,9 @@ const COPY_FILE = 'src/apps/helm/constants.ts';
 const DEFAULT_NAME = 'Nomos';
 const QUOTED_APP_NAME = /['"`>][^'"`<]*\bHelm\b/;
 
-// Line-based: a comment is ignored, and a template literal's continuation line is checked only when it is quoted.
+// Line-based: a comment or a console line is ignored, and a template literal's continuation line is checked only when it is quoted.
 const withoutComment = (line: string) =>
-  /^\s*(\*|\/\*)/.test(line) ? '' : line.replace(/\s\/\/.*$/, '');
+  /^\s*(\*|\/\*|console\.)/.test(line) ? '' : line.replace(/\s\/\/.*$/, '');
 
 const listFiles = (directory: string): string[] =>
   readdirSync(directory).flatMap((entry) => {
