@@ -97,6 +97,10 @@ export function getLinkSpan<V extends LinkVersion>(
   const first = own[0];
   const ends = own.map(({ effectiveUntil }) => effectiveUntil);
   const isStretch = ends.every((until) => until !== null);
+  const earlier = versions.filter(
+    ({ changeId, createdAt }) =>
+      changeId !== link.changeId && createdAt < first.createdAt,
+  );
   return {
     startsOn: first.effectiveFrom,
     lastDay: isStretch
@@ -104,15 +108,8 @@ export function getLinkSpan<V extends LinkVersion>(
       : null,
     version: first,
     before:
-      resolveVersion(versions, link.itemId, first.effectiveFrom - DAY_MS) ??
-      resolveVersion(
-        versions.filter(
-          ({ changeId, createdAt }) =>
-            changeId !== link.changeId && createdAt < first.createdAt,
-        ),
-        link.itemId,
-        first.effectiveFrom,
-      ),
+      resolveVersion(earlier, link.itemId, first.effectiveFrom - DAY_MS) ??
+      resolveVersion(earlier, link.itemId, first.effectiveFrom),
     isLive:
       resolveVersion(versions, link.itemId, first.effectiveFrom)?.changeId ===
         link.changeId &&

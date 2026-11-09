@@ -64,13 +64,19 @@ export const selectGoalCovers = createSelector(
     ),
 );
 
-/** The goals money goes into today; a linked one's pace already counts its event's goal cost, so the month total leaves that cost out. */
-const selectSavingGoalIds = createSelector(
-  [(state: RootState, on: number) => selectGoals(state, on)],
-  (goals) =>
+/** The dated goals counted at `dial` whose pace already covers their event's goal cost, so the month total leaves that cost out; a goal funded by whatever is left, or with no date, has no such pace. */
+const selectPacedGoalIds = createSelector(
+  [(state: RootState, on: number) => selectGoals(state, on), selectDial],
+  (goals, dial) =>
     new Set(
       goals
-        .filter(({ version }) => isSavingFor(version.payload))
+        .filter(
+          ({ version: { payload } }) =>
+            isSavingFor(payload) &&
+            payload.targetDate !== null &&
+            payload.funding.amount.kind !== 'rest' &&
+            isCountedAt(payload.priority, dial),
+        )
         .map(({ item }) => item.id),
     ),
 );
@@ -85,7 +91,7 @@ export const selectHorizonMonthCents = createSelector(
     selectOn,
     selectDial,
     selectGoalCovers,
-    selectSavingGoalIds,
+    selectPacedGoalIds,
   ],
   (
     items,
@@ -95,7 +101,7 @@ export const selectHorizonMonthCents = createSelector(
     today,
     dial,
     covers,
-    savingGoalIds,
+    pacedGoalIds,
   ): number =>
     items.reduce(
       (sum, { item, version }) =>
@@ -122,7 +128,7 @@ export const selectHorizonMonthCents = createSelector(
                   !(
                     version.payload.goalId !== null &&
                     cost.id === getGoalCostId(version.payload.goalId) &&
-                    savingGoalIds.has(version.payload.goalId)
+                    pacedGoalIds.has(version.payload.goalId)
                   ),
               )
               .map(({ id }) => id),
