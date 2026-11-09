@@ -134,6 +134,8 @@ export function NewItemForm({
 interface PlanChangePickerViewProps {
   eventId: string;
   today: number;
+  /** The kind and start day picked before the create form was cancelled, so the picker reopens on that date step. */
+  resume?: { kind: NewKind; startsOn: number } | null;
   onBack: () => void;
   /** Opens the create form for something new, once its start day is picked. */
   onStartNew: (kind: NewKind, startsOn: number) => void;
@@ -143,6 +145,7 @@ interface PlanChangePickerViewProps {
 function PlanChangePickerView({
   eventId,
   today,
+  resume = null,
   onBack,
   onStartNew,
 }: PlanChangePickerViewProps) {
@@ -152,9 +155,13 @@ function PlanChangePickerView({
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));
   const [query, setQuery] = useState('');
-  const [step, setStep] = useState<'pick' | 'kind' | 'date'>('pick');
-  const [newKind, setNewKind] = useState<NewKind | null>(null);
-  const [startDate, setStartDate] = useState('');
+  const [step, setStep] = useState<'pick' | 'kind' | 'date'>(
+    resume ? 'date' : 'pick',
+  );
+  const [newKind, setNewKind] = useState<NewKind | null>(resume?.kind ?? null);
+  const [startDate, setStartDate] = useState(
+    resume ? toDateInputValue(resume.startsOn) : '',
+  );
   const startsOn = fromDateInputValue(startDate);
   const isStartValid =
     startsOn !== undefined &&

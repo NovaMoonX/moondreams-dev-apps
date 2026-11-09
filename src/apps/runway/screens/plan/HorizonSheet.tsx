@@ -185,6 +185,10 @@ function HorizonSheet({
     kind: NewKind;
     startsOn: number;
   } | null>(null);
+  const [lastNew, setLastNew] = useState<{
+    kind: NewKind;
+    startsOn: number;
+  } | null>(null);
   const [openedChange, setOpenedChange] = useState<PlanChange | null>(null);
   const [isUnlinking, setIsUnlinking] = useState(false);
   const versions = useAppSelector((state) => state.runway.versions);
@@ -673,9 +677,13 @@ function HorizonSheet({
         startsOn={creating.startsOn}
         onClose={() => {
           setCreating(null);
+          setLastNew(null);
           setView('main');
         }}
-        onCancel={() => setCreating(null)}
+        onCancel={() => {
+          setLastNew(creating);
+          setCreating(null);
+        }}
       />
     );
   }
@@ -758,7 +766,11 @@ function HorizonSheet({
         <PlanChangePickerView
           eventId={itemId}
           today={today}
-          onBack={() => setView('main')}
+          resume={lastNew}
+          onBack={() => {
+            setLastNew(null);
+            setView('main');
+          }}
           onStartNew={(kind, startsOn) => setCreating({ kind, startsOn })}
         />
       ) : view === 'change' ? (
