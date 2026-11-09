@@ -75,6 +75,8 @@ interface ItemRowProps {
   /** The figure is a quiet word, not an amount (a balance not given yet). */
   isFigureMuted?: boolean;
   itemId?: string;
+  /** Stands where a ticked row's checkbox does, on a row with nothing to tick; the row's tap opens it. */
+  slot?: ReactNode;
 }
 
 /** A row is a glance: the badge, the name, one muted line, the figure on the right and a chevron. */
@@ -101,6 +103,7 @@ function ItemRow({
   isFaded = false,
   isFigureMuted = false,
   itemId,
+  slot,
 }: ItemRowProps) {
   const { isHidden } = useValuesHidden();
   const baseAriaLabel =
@@ -315,23 +318,27 @@ function ItemRow({
     );
   }
 
-  if (tick) {
+  if (tick || slot) {
     return (
       <li data-item-id={itemId} className='flex items-start'>
         <span className='flex h-16 shrink-0 items-center pl-3'>
-          <Checkbox
-            className={TICK_HIT_CLASS}
-            checked={tick.checked}
-            onCheckedChange={(next) => tick.onChange(Boolean(next))}
-            aria-label={`${name} done`}
-          />
+          {tick ? (
+            <Checkbox
+              className={TICK_HIT_CLASS}
+              checked={tick.checked}
+              onCheckedChange={(next) => tick.onChange(Boolean(next))}
+              aria-label={`${name} done`}
+            />
+          ) : (
+            slot
+          )}
         </span>
         <Button
           type='button'
           variant='tertiary'
           className={join(rowClass, 'min-w-0 flex-1')}
-          aria-label={ariaLabel ? `${ariaLabel}. Tick it` : undefined}
-          onClick={() => tick.onChange(!tick.checked)}
+          aria-label={tick && ariaLabel ? `${ariaLabel}. Tick it` : ariaLabel}
+          onClick={tick ? () => tick.onChange(!tick.checked) : onOpen}
         >
           {text}
         </Button>

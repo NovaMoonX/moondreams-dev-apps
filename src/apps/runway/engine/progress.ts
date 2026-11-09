@@ -1,4 +1,10 @@
-import type { Cents, DateOnly, OpenMove, OpenRecord } from '@apps/runway/types';
+import type {
+  AutoPaidMark,
+  Cents,
+  DateOnly,
+  OpenMove,
+  OpenRecord,
+} from '@apps/runway/types';
 
 import { START_DAY_KEY } from '@apps/runway/constants';
 
@@ -24,6 +30,8 @@ export interface PaidPayment {
   fromFreeCents: Cents;
   /** The card it was charged to; null when it was paid in cash. */
   cardId: string | null;
+  /** Set when the app wrote the mark for a bill that pays itself; missing or null for one the person made. */
+  auto?: AutoPaidMark | null;
 }
 
 /** A card payment not undone. */
@@ -103,6 +111,7 @@ export function collectPaid(
       paidOn: move.payload.paidOn,
       fromFreeCents: move.payload.fromFreeCents,
       cardId: move.payload.cardId ?? null,
+      ...(move.payload.auto ? { auto: move.payload.auto } : {}),
     });
     return acc;
   }, {});

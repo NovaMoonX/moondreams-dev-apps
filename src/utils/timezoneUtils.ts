@@ -106,3 +106,21 @@ function computeZonedDateTimeToEpoch(date: string, time: string, timeZone: strin
   const result = validInstants[0] ?? wallClockAsUtc - offsetBefore;
   return result;
 }
+
+/** The device's IANA time zone ("America/Los_Angeles"), read fresh each call so a phone that changed zones is seen at once; null when the runtime doesn't say. */
+export function getDeviceTimeZone(): string | null {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where a time zone's principal city is (the tz database's own reference point), loaded on first use; null for a zone it doesn't list. A rough position, never the person's. */
+export async function loadTimeZoneCoordinates(
+  timeZone: string,
+): Promise<{ latitude: number; longitude: number } | null> {
+  const { ZONE_COORDINATES } = await import('@/data/tzdb/zoneCoordinates');
+  const point = ZONE_COORDINATES[timeZone];
+  return point ? { latitude: point[0], longitude: point[1] } : null;
+}

@@ -5,6 +5,11 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { store, useAppSelector } from '@/store';
 import { RULE_WORDS, SPEND_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { resolvePayFromAccountId } from '@apps/runway/engine/accounts';
+import {
+  findBillCandidateIds,
+  getMatchedKeys,
+} from '@apps/runway/engine/autoPay';
 import { findRulePlacements } from '@apps/runway/engine/rules';
 import { useRuleNames } from '@apps/runway/hooks/useRuleNames';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -12,8 +17,13 @@ import {
   assignPurchase,
   returnPurchaseToWaiting,
 } from '@apps/runway/store/actions/purchaseActions';
+import {
+  selectAutoBills,
+  selectIsAutoPayReady,
+} from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
+  selectAccounts,
   selectEnvelopes,
   selectIsAccountsLoaded,
   selectIsDaysLoaded,
@@ -80,10 +90,13 @@ export function usePlaceByRules(uid: string | null) {
   const rules = useAppSelector(selectRules);
   const today = todayAsUtcDate();
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
+  const autoBills = useAppSelector((state) => selectAutoBills(state, today));
+  const accounts = useAppSelector(selectAccounts);
   const looks = useAppSelector(selectItemLooks);
   const { describe } = useRuleNames();
   const isReady = useAppSelector(
     (state) =>
+      selectIsAutoPayReady(state) &&
       selectIsNeedsHomeLoaded(state) &&
       selectIsRulesLoaded(state) &&
       state.runway.purchasesFrom !== null &&
@@ -111,6 +124,14 @@ export function usePlaceByRules(uid: string | null) {
       isWaitingToRun.current = true;
       return;
     }
+    const heldForBills = findBillCandidateIds({
+      level,
+      today,
+      bills: autoBills,
+      waiting,
+      pullAccountId: resolvePayFromAccountId(null, accounts),
+      matched: getMatchedKeys(purchases),
+    });
     const found = findRulePlacements(
       waiting,
       purchases,
@@ -118,7 +139,9 @@ export function usePlaceByRules(uid: string | null) {
       new Set(envelopes.map(({ item }) => item.id)),
     ).flatMap(({ purchase, rule }) => {
       const key = `${purchase.id}:${purchase.updatedAt}`;
-      return tried.current.has(key) || placingByHand.has(purchase.id)
+      return tried.current.has(key) ||
+        placingByHand.has(purchase.id) ||
+        heldForBills.has(purchase.id)
         ? []
         : [{ purchase, rule, key }];
     });
@@ -246,5 +269,17 @@ export function usePlaceByRules(uid: string | null) {
       }
     };
     void run();
-  }, [uid, level, isReady, waiting, purchases, rules, envelopes, runs]);
+  }, [
+    uid,
+    level,
+    isReady,
+    waiting,
+    purchases,
+    rules,
+    envelopes,
+    autoBills,
+    accounts,
+    today,
+    runs,
+  ]);
 }

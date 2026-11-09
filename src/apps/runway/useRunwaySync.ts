@@ -79,6 +79,7 @@ import {
   setDays,
   setItems,
   setKeyStatus,
+  setMatchKeys,
   setLoadDay,
   setMoves,
   clearHistory,
@@ -161,7 +162,13 @@ export function useRunwaySync(uid: string | null, attempt: number) {
           (plan) => dispatch(setPlan(plan)),
           fail,
         ),
-        startItemsListener(uid, (items) => dispatch(setItems(items)), fail),
+        startItemsListener(
+          uid,
+          encryption,
+          (items) => dispatch(setItems(items)),
+          (keys) => dispatch(setMatchKeys(keys)),
+          fail,
+        ),
         startVersionsListener(
           uid,
           encryption,

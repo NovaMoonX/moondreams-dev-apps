@@ -52,9 +52,12 @@ export const runwayPlaidWebhook = onRequest(
       item_id?: unknown;
       error?: { error_code?: unknown } | null;
     };
+    const isSyncNotice =
+      (body.webhook_type === 'TRANSACTIONS' &&
+        body.webhook_code === 'SYNC_UPDATES_AVAILABLE') ||
+      (body.webhook_type === 'ITEM' && body.webhook_code === 'LOGIN_REPAIRED');
     if (
-      body.webhook_type === 'TRANSACTIONS' &&
-      body.webhook_code === 'SYNC_UPDATES_AVAILABLE' &&
+      isSyncNotice &&
       typeof body.item_id === 'string' &&
       body.item_id !== '' &&
       !body.item_id.includes('/')

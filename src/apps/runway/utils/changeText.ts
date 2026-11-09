@@ -4,6 +4,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import {
   ACCOUNT_WORDS,
+  AUTO_PAY_WORDS,
   COST_PAID_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
@@ -327,6 +328,12 @@ const getParts = (
         accountNameOf,
       ),
       diff(
+        AUTO_PAY_WORDS.changeLabel,
+        billBefore.paysItself === true,
+        billAfter.paysItself === true,
+        (value) => (value ? 'on' : 'off'),
+      ),
+      diff(
         'Emoji',
         billBefore.emoji,
         billAfter.emoji,
@@ -403,6 +410,7 @@ const MONEYLESS_KEYS = [
   'groupId',
   'paidByCardId',
   'accountId',
+  'paysItself',
   'spillTo',
 ];
 

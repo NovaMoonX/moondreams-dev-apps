@@ -31,6 +31,10 @@ export interface RunwayState {
   versions: OpenVersion[];
   isItemsLoaded: boolean;
   isVersionsLoaded: boolean;
+  /** The comparable merchant names each bill that pays itself has learned, by bill id, opened from its header. */
+  matchKeys: Record<string, string[]>;
+  /** The learned names have been opened once, so a bill that has some is never read as having none. */
+  isMatchKeysLoaded: boolean;
   days: OpenDay[];
   records: OpenRecord[];
   moves: OpenMove[];
@@ -101,6 +105,8 @@ const initialState: RunwayState = {
   versions: [],
   isItemsLoaded: false,
   isVersionsLoaded: false,
+  matchKeys: {},
+  isMatchKeysLoaded: false,
   days: [],
   records: [],
   moves: [],
@@ -156,6 +162,10 @@ export const runwaySlice = createSlice({
     setItems: (state, action: PayloadAction<PlanItemDoc[]>) => {
       state.items = action.payload;
       state.isItemsLoaded = true;
+    },
+    setMatchKeys: (state, action: PayloadAction<Record<string, string[]>>) => {
+      state.matchKeys = action.payload;
+      state.isMatchKeysLoaded = true;
     },
     setVersions: (state, action: PayloadAction<OpenVersion[]>) => {
       state.versions = action.payload;
@@ -303,6 +313,7 @@ export const {
   clearRunway,
   setPlan,
   setItems,
+  setMatchKeys,
   setVersions,
   setDays,
   setRecords,

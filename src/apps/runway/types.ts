@@ -377,6 +377,8 @@ export interface BillSealed {
   paidByCardId?: string | null;
   /** The account it is paid from; null (or missing) means the plan's one pull account when there is exactly one. */
   accountId?: string | null;
+  /** The bill is charged or pulled on its own: it never asks to be marked paid. Missing or null reads as false; offered from Track up. */
+  paysItself?: boolean | null;
 }
 
 /** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
@@ -516,6 +518,13 @@ export interface PlanItemDoc {
   archivedAt: number | null;
   /** From this day what the item holds is Free to Spend; null while it keeps it (never stopped, or kept when it stopped). A header written before the choice existed has no key and reads as released when it stopped. */
   heldReleasedOn: DateOnly | null;
+  /** A bill's learned merchant names (`MatchSealed`), sealed; null or missing when it has learned none. */
+  matchSealed?: Sealed | null;
+}
+
+/** What a bill that pays itself has learned about its charges: the comparable forms of the merchant names a matched charge carried, newest first. */
+export interface MatchSealed {
+  merchantKeys: string[];
 }
 
 /** A credit card: the reserve it shows is what has been charged to it and not yet paid off. `archivedAt` hides it from new charges. */
@@ -862,6 +871,13 @@ export interface BillPaidSealed {
   fromFreeCents: Cents;
   /** The card it was charged to, which then owes it while the cash stays put; null (or missing on an older move) when it was paid in cash. */
   cardId?: string | null;
+  /** Set when the app wrote the mark itself for a bill that pays itself; null (or missing) for a mark the person made. `isEstimate` is a ranged bill's top of range, awaiting the real amount; `purchaseId` is the charge that settled it. */
+  auto?: AutoPaidMark | null;
+}
+
+export interface AutoPaidMark {
+  isEstimate: boolean;
+  purchaseId: string | null;
 }
 
 /** How a Horizon cost's payment was marked: out of the item's money, by a purchase (which moved the money), or outside the plan (which moves nothing). */
@@ -955,6 +971,13 @@ export interface CostRef {
   dueOn: DateOnly;
 }
 
+/** The bill payment a charge was matched to, and the paid mark it settled. */
+export interface BillRef {
+  billId: string;
+  dueOn: DateOnly;
+  moveId: string;
+}
+
 export interface PurchaseSealed {
   /** Negative for a refund. */
   amountCents: Cents;
@@ -983,6 +1006,8 @@ export interface PurchaseSealed {
   receiptText: string | null;
   /** The cost payment this purchase marks paid; null (or missing on an older purchase) when it pays none. */
   costRef?: CostRef | null;
+  /** The bill payment this charge was matched to: the charge counts nowhere (no lines) because the bill's paid mark already did; null (or missing on an older purchase) when it is matched to none. */
+  billRef?: BillRef | null;
   /** On a purchase typed by hand: the bank purchases the person said it is not, so it is never matched to them again; null when none (and on a purchase saved before matching, read as null). */
   notSameAs: string[] | null;
   /** On a deposit linked to an income day: that day's key (`OpenDay.id`); null when it is linked to none (and on a purchase saved before deposits were matched, read as null). */

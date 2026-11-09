@@ -182,7 +182,9 @@ export function collectCardHistory(
     moves.flatMap((move) => (move.reversesMoveId ? [move.reversesMoveId] : [])),
   );
   const charges = purchases.flatMap((purchase): CardHistoryEntry[] =>
-    (purchase.paidByCardId ?? null) === cardId && purchase.pairedWithId === null
+    (purchase.paidByCardId ?? null) === cardId &&
+    purchase.pairedWithId === null &&
+    (purchase.billRef ?? null) === null
       ? [
           {
             kind: 'purchase',

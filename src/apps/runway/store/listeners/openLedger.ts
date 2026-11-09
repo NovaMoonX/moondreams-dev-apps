@@ -70,7 +70,11 @@ export async function openMove(
   return {
     ...base,
     kind: 'billPaid',
-    payload: { ...payload, cardId: payload.cardId ?? null },
+    payload: {
+      ...payload,
+      cardId: payload.cardId ?? null,
+      auto: payload.auto ?? null,
+    },
   };
 }
 
@@ -148,6 +152,7 @@ export async function openPurchase(
     link: payload.link ?? null,
     receiptText: payload.receiptText ?? null,
     costRef: payload.costRef ?? null,
+    billRef: payload.billRef ?? null,
     notSameAs: payload.notSameAs ?? null,
     incomeDayId: payload.incomeDayId ?? null,
     assignedBy: payload.assignedBy ?? null,

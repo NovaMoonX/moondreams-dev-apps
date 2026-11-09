@@ -15,6 +15,7 @@ import {
   CARD_WORDS,
   CHECKLIST_WORDS,
   MAX_PURCHASE_CENTS,
+  AUTO_PAY_WORDS,
   PAID_AMOUNT_WORDS,
   VARIES_HINT,
 } from '@apps/runway/constants';
@@ -27,10 +28,17 @@ interface PaidAmountSheetProps {
   /** Writes the mark with what it came to; resolves true once it is written or there is nothing more to do. */
   onMark: (amountCents: Cents) => Promise<boolean>;
   onClose: () => void;
+  /** Changes the amount of a payment the app already marked paid: no notice about money set aside, and the button says Save. */
+  isCorrection?: boolean;
 }
 
 /** Asks what a payment whose amount varies came to before it is marked paid, and says where any difference goes. */
-function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
+function PaidAmountSheet({
+  payment,
+  onMark,
+  onClose,
+  isCorrection = false,
+}: PaidAmountSheetProps) {
   const { isHidden } = useValuesHidden();
   const { name, cardName } = payment;
   const [amount, setAmount] = useState('');
@@ -49,7 +57,7 @@ function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
   });
 
   const getNotice = () => {
-    if (paidCents === null || isHidden) return null;
+    if (paidCents === null || isHidden || isCorrection) return null;
     if (cardName !== null)
       return (
         <InlineNotice tone='info'>
@@ -126,6 +134,14 @@ function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
               <InlineNotice tone='info'>
                 {PAID_AMOUNT_WORDS.alreadyPaid(name)}
               </InlineNotice>
+            ) : isCorrection && payment.range ? (
+              <InlineNotice tone='info'>
+                <MaskedText>
+                  {AUTO_PAY_WORDS.countedAt(
+                    formatCents(payment.range.highCents),
+                  )}
+                </MaskedText>
+              </InlineNotice>
             ) : (
               getNotice()
             )}
@@ -150,7 +166,11 @@ function PaidAmountSheet({ payment, onMark, onClose }: PaidAmountSheetProps) {
               disabled={isSaving || (!isPaidElsewhere && paidCents === null)}
               onClick={() => (isPaidElsewhere ? onClose() : void handleMark())}
             >
-              {isPaidElsewhere ? 'Close' : CHECKLIST_WORDS.markPaid}
+              {isPaidElsewhere
+                ? 'Close'
+                : isCorrection
+                  ? AUTO_PAY_WORDS.save
+                  : CHECKLIST_WORDS.markPaid}
             </Button>
           }
         />

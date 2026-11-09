@@ -18,6 +18,7 @@ import {
   GROUP_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
+import { useAutoChecks } from '@apps/runway/hooks/useAutoPay';
 import DueBillsCard from '@apps/runway/components/DueBillsCard';
 import { useDeferredLookahead } from '@apps/runway/useDeferredLookahead';
 import BillRow, { BillSheet } from '@apps/runway/components/BillRow';
@@ -64,7 +65,9 @@ function BillsScreen() {
   const bills = useAppSelector((state) => selectBills(state, today));
   const lookahead = useDeferredLookahead(today, isLoaded);
   const dueCosts = useDueCostRows(lookahead, today);
-  const hasDue = (lookahead?.due.length ?? 0) + dueCosts.length > 0;
+  const { checks } = useAutoChecks();
+  const hasDue =
+    (lookahead?.due.length ?? 0) + dueCosts.length + checks.length > 0;
   const groups = useAppSelector((state) => selectGroups(state, today));
   const payments = useAppSelector((state) => selectBillPayments(state, today));
   const stance = useAppSelector(selectStance);

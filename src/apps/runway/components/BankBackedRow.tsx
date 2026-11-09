@@ -113,14 +113,16 @@ function BankBackedRow() {
         title={BANK_BACKED_WORDS.title}
         actions={<ValuesEyeButton />}
         footer={
-          <Button
-            type='button'
-            className='w-full'
-            disabled={isSaving}
-            onClick={() => void confirm()}
-          >
-            {BANK_BACKED_WORDS.gotIt}
-          </Button>
+          <div className='p-4'>
+            <Button
+              type='button'
+              className='w-full'
+              disabled={isSaving}
+              onClick={() => void confirm()}
+            >
+              {BANK_BACKED_WORDS.gotIt}
+            </Button>
+          </div>
         }
       >
         <div className='space-y-4 text-sm'>

@@ -25,6 +25,7 @@ import {
   useBillCardName,
 } from '@apps/runway/hooks/paidAmountPayment';
 import {
+  AUTO_PAY_WORDS,
   BILL_WORDS,
   CHECKLIST_R3_WORDS,
   CHECKLIST_WORDS,
@@ -62,6 +63,8 @@ import {
   selectStance,
   type ListedDay,
 } from '@apps/runway/store/selectors/runwaySelectors';
+import { useRecordedEmoji } from '@apps/runway/hooks/useItemEmoji';
+import { isSelfPaying } from '@apps/runway/engine/autoPay';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import type {
   Cents,
@@ -69,6 +72,7 @@ import type {
   HorizonSealed,
   RecordLine,
 } from '@apps/runway/types';
+import { selectSelfPayingBills } from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { needsPaidAmount, useBillPaid } from '@apps/runway/hooks/useBillPaid';
 import {
@@ -83,6 +87,8 @@ interface ChecklistBillRowProps {
   payment: BillPayment | null;
   today: number;
   isDone: boolean;
+  /** The app pays it on its due day, so there is nothing to tick. */
+  isAuto: boolean;
   onDone: (isDone: boolean) => void;
 }
 
@@ -92,6 +98,7 @@ function ChecklistBillRow({
   payment,
   today,
   isDone,
+  isAuto,
   onDone,
 }: ChecklistBillRowProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -121,6 +128,7 @@ function ChecklistBillRow({
   const isChecked = pending ?? settled;
 
   const [isAsking, setIsAsking] = useState(false);
+  const emoji = useRecordedEmoji(line.emoji, line.itemId);
   const sheetCardName = useBillCardName(line.itemId, payment?.dueOn ?? null);
 
   /** Resolves true once the tick is written; a bill that varies first asks what it came to. */
@@ -168,10 +176,24 @@ function ChecklistBillRow({
     <>
       <ItemRow
         name={getLineTitle(line)}
-        detail={progress}
+        detail={isAuto ? AUTO_PAY_WORDS.paysItselfLine : progress}
         figure={amount}
+        slot={
+          isAuto ? (
+            <span
+              className='grid size-5 shrink-0 place-items-center text-lg leading-none'
+              aria-hidden='true'
+            >
+              {emoji ?? Array.from(getLineTitle(line).trim())[0]?.toUpperCase()}
+            </span>
+          ) : undefined
+        }
         ariaLabel={`${getLineTitle(line)}, ${amount}`}
-        tick={{ checked: isChecked, onChange: (next) => void toggle(next) }}
+        tick={
+          isAuto
+            ? undefined
+            : { checked: isChecked, onChange: (next) => void toggle(next) }
+        }
         onOpen={payment ? () => setIsOpen(true) : undefined}
       />
       {isOpen && payment && (
@@ -330,6 +352,9 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
   const openDay = useAppSelector((state) => selectOpenDay(state, day.dayKey));
   const doneIds = openDay?.doneLineIds ?? [];
   const moves = useAppSelector((state) => state.runway.moves);
+  const selfPaying = useAppSelector((state) =>
+    selectSelfPayingBills(state, today),
+  );
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const isMarkingRef = useRef(false);
   const [markTries, setMarkTries] = useState(0);
@@ -348,7 +373,13 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
         payment !== null &&
         payment.paid === null &&
         payment.fundedCents < payment.totalCents;
-      return { line, payment, isWaiting };
+      const isAuto =
+        payment !== null &&
+        payment.paid === null &&
+        !isWaiting &&
+        selfPaying[line.itemId] !== undefined &&
+        isSelfPaying(selfPaying[line.itemId], payment.dueOn, today);
+      return { line, payment, isWaiting, isAuto };
     });
   const accounts = useAppSelector(selectAccounts);
   const accountMoves = useAppSelector((state) =>
@@ -379,7 +410,8 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
       : [];
   });
   const costDoneCount = costRows.filter(({ payment }) => payment.paid).length;
-  const ready = rows.filter((row) => !row.isWaiting);
+  const ready = rows.filter((row) => !row.isWaiting && !row.isAuto);
+  const autoRows = rows.filter((row) => row.isAuto);
   const waiting = rows.filter((row) => row.isWaiting);
   const isSettled = (row: (typeof ready)[number]) =>
     row.payment ? row.payment.paid !== null : done.has(row.line.lineId);
@@ -586,7 +618,7 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
           </span>
         </div>
       )}
-      {ready.length > 0 && (
+      {ready.length + autoRows.length > 0 && (
         <ChecklistGroup
           label={CHECKLIST_WORDS.billsGroup}
           doneCount={doneCount}
@@ -599,6 +631,18 @@ function ChecklistScreen({ day, lines }: ChecklistScreenProps) {
               payment={payment}
               today={today}
               isDone={done.has(line.lineId)}
+              isAuto={false}
+              onDone={(isDone) => setDone([line.lineId], isDone)}
+            />
+          ))}
+          {autoRows.map(({ line, payment }) => (
+            <ChecklistBillRow
+              key={line.lineId}
+              line={line}
+              payment={payment}
+              today={today}
+              isDone={false}
+              isAuto
               onDone={(isDone) => setDone([line.lineId], isDone)}
             />
           ))}
