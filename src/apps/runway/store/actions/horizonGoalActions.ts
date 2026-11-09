@@ -95,10 +95,12 @@ export interface UnlinkGoalInput {
   baseVersionId: string;
   horizon: HorizonSealed;
   goalName: string;
+  /** Takes the goal's cost off the event in the same write; false keeps it. */
+  removeCost: boolean;
   today: DateOnly;
 }
 
-/** Unlinks an event from its goal: a new version with `goalId` null and one change entry listed on both. The cost the link added stays on the event. */
+/** Unlinks an event from its goal: a new version with `goalId` null and one change entry listed on both. The cost the link added is removed with it or stays on the event, as asked. */
 export async function unlinkGoalFromHorizon(
   uid: string,
   encryption: RunwayEncryption,
@@ -106,13 +108,26 @@ export async function unlinkGoalFromHorizon(
 ): Promise<HorizonStateWritten | null> {
   const { horizon } = input;
   if (horizon.goalId === null) return null;
-  const after: HorizonSealed = { ...horizon, goalId: null };
+  const costId = getGoalCostId(horizon.goalId);
+  const isRemoved =
+    input.removeCost && horizon.costs.some(({ id }) => id === costId);
+  const after: HorizonSealed = {
+    ...horizon,
+    goalId: null,
+    costs: isRemoved
+      ? horizon.costs.filter(({ id }) => id !== costId)
+      : horizon.costs,
+  };
   const versionId = getNextVersionId(input.baseVersionId);
   const isWritten = await setHorizonStateWith(uid, encryption, {
     versionId,
     itemId: input.eventId,
     horizon: after,
-    summary: HORIZON_PLAN_WORDS.unlinkSummary(input.goalName, horizon.name),
+    summary: HORIZON_PLAN_WORDS.unlinkSummary(
+      input.goalName,
+      horizon.name,
+      isRemoved,
+    ),
     note: null,
     on: input.today,
     move: null,

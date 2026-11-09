@@ -120,6 +120,7 @@ import type { ReceiptReading } from '../../src/lib/receipts/receiptTypes.ts';
 import {
   getGoalBalanceAt,
   getGoalCost,
+  getGoalCostId,
   getGoalCover,
   getGoalLinkBlock,
   getHorizonNudgeFrom,
@@ -207,6 +208,7 @@ import {
 } from '../../src/apps/runway/store/selectors/previewSelectors.ts';
 import {
   computeDraftView,
+  isGoalCovering,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
 import { getCreatedProblems } from '../../src/apps/runway/utils/lookaheadText.ts';
@@ -19189,6 +19191,7 @@ console.log('runway engine: ok');
   const end = utc(2027, 11, 31);
   const payments = listHorizonPayments([venue, suit], end, 'conservative');
   const cover = {
+    goalId: 'g1',
     heldCents: 20_000,
     contributions: [
       { on: utc(2027, 0, 10), cents: 15_000 },
@@ -19207,7 +19210,10 @@ console.log('runway engine: ok');
     'and what the plan has put in through the day',
   );
   assert.equal(
-    getGoalBalanceAt({ heldCents: -500, contributions: [] }, jan15),
+    getGoalBalanceAt(
+      { goalId: 'g1', heldCents: -500, contributions: [] },
+      jan15,
+    ),
     0,
     'a negative balance covers nothing',
   );
@@ -19252,7 +19258,7 @@ console.log('runway engine: ok');
     { rest: { kind: 'later' }, costs: [suit, venue] },
     10_000,
     payments,
-    { heldCents: 20_000, contributions: [] },
+    { goalId: 'g1', heldCents: 20_000, contributions: [] },
   );
   assert.deepEqual(
     tight.covers.map(({ costId, coveredCents, fromGoalCents }) => [
@@ -19275,6 +19281,40 @@ console.log('runway engine: ok');
     tight.shortfall?.dueOn,
     mar1,
     'and names the first payment neither covers',
+  );
+
+  const goalCost = once(getGoalCostId('g1'), 50_000, jan15);
+  const tie = planHorizon(
+    { rest: { kind: 'later' }, costs: [suit, goalCost] },
+    0,
+    listHorizonPayments([suit, goalCost], end, 'conservative'),
+    { goalId: 'g1', heldCents: 50_000, contributions: [] },
+  );
+  assert.deepEqual(
+    tie.covers.map(({ costId, fromGoalCents }) => [costId, fromGoalCents]),
+    [
+      [getGoalCostId('g1'), 50_000],
+      ['suit', 0],
+    ],
+    'on the same day the goal pays its own cost before any other, whatever the cost ids sort to',
+  );
+
+  const live = { archivedAt: null, endedAt: null };
+  assert.equal(isGoalCovering(live, jan15), true, 'a live goal covers');
+  assert.equal(
+    isGoalCovering({ archivedAt: jan1, endedAt: null }, jan1 - 1),
+    false,
+    'an archived goal gives no cover',
+  );
+  assert.equal(
+    isGoalCovering({ archivedAt: null, endedAt: jan15 }, jan15),
+    false,
+    'a goal ended on the day gives no cover',
+  );
+  assert.equal(
+    isGoalCovering({ archivedAt: null, endedAt: jan15 }, jan1),
+    true,
+    'and one that ends later still covers before then',
   );
 
   // Paying: the goal first, then the event's own money, then Free to Spend.
@@ -19607,6 +19647,7 @@ console.log('runway engine: ok');
   );
   assert.equal(
     getGoalCover(
+      'g1',
       {
         name: 'Fund',
         emoji: null,

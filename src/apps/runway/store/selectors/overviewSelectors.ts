@@ -3,13 +3,12 @@ import { createSelector } from '@reduxjs/toolkit';
 import type { RootState } from '@/store';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
-  getPriorDays,
+  getEventGoalCover,
   selectAllHorizonItems,
   selectBillPayments,
   selectBills,
   selectComingDays,
   selectCostPaid,
-  selectGoals,
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -19,8 +18,7 @@ import {
   getHorizonPaceCents,
   getLiveCosts,
 } from '@apps/runway/engine/horizon';
-import { getGoalCover, type GoalCover } from '@apps/runway/engine/horizonGoal';
-import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import type { GoalCover } from '@apps/runway/engine/horizonGoal';
 import { isCountedAt } from '@apps/runway/hooks/usePriorityDial';
 import type { Priority } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
@@ -32,7 +30,6 @@ const selectDial = (_state: RootState, _on: number, dial: Priority) => dial;
 export const selectGoalCovers = createSelector(
   [
     selectAllHorizonItems,
-    selectGoals,
     selectBalances,
     selectComingDays,
     selectStance,
@@ -42,7 +39,6 @@ export const selectGoalCovers = createSelector(
   ],
   (
     events,
-    goals,
     balances,
     comingDays,
     stance,
@@ -52,31 +48,16 @@ export const selectGoalCovers = createSelector(
   ): Record<string, GoalCover> =>
     Object.fromEntries(
       events.flatMap(({ item, version }) => {
-        const goalId =
-          version.payload.state === 'open' ? version.payload.goalId : null;
-        const goal = goals.find(({ item: found }) => found.id === goalId);
-        return goalId === null || !goal
-          ? []
-          : [
-              [
-                item.id,
-                getGoalCover(
-                  goal.version.payload,
-                  balances.assignedByItem[goalId] ?? 0,
-                  comingDays.map((day) => ({
-                    ...day,
-                    moneyCents: pick(
-                      effectiveStance(stance, day.stanceOverride),
-                      day.amount,
-                      'income',
-                    ),
-                  })),
-                  getPriorDays(items, versions, today, comingDays, [
-                    goal.version.payload.funding,
-                  ]),
-                ),
-              ],
-            ];
+        const cover = getEventGoalCover(
+          version.payload,
+          items,
+          versions,
+          today,
+          comingDays,
+          balances.assignedByItem,
+          stance,
+        );
+        return cover === null ? [] : [[item.id, cover]];
       }),
     ),
 );

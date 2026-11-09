@@ -853,7 +853,15 @@ const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 const priorDayCaches = new WeakMap<object, Map<string, ComingDay[]>>();
 
 /** The income days before the ones listed that fall in the first period of a calendar rule, which take their share of a period's amount first; none when no rule is on the calendar. */
-/** What the goal an open event draws from holds and will put in, read at `today` with the days the plan has ahead; null when the event has no live goal. */
+/** Whether a goal covers an event's costs on `on`: not archived and not ended on or before it. */
+export const isGoalCovering = (
+  header: Pick<PlanItemDoc, 'archivedAt' | 'endedAt'>,
+  on: number,
+) =>
+  (header.archivedAt ?? null) === null &&
+  ((header.endedAt ?? null) === null || on < (header.endedAt ?? 0));
+
+/** What the goal an open event draws from holds and will put in, read at `today` with the days the plan has ahead; null when the event has no covering goal. */
 export function getEventGoalCover(
   payload: Pick<HorizonSealed, 'goalId' | 'state'>,
   items: RootState['runway']['items'],
@@ -867,8 +875,9 @@ export function getEventGoalCover(
   if (goalId === null || payload.state !== 'open') return null;
   const goal = resolveCurrentOrNext(versions.filter(isGoal), goalId, today);
   const header = items.find((item) => item.id === goalId);
-  if (!goal || !header || (header.archivedAt ?? null) !== null) return null;
+  if (!goal || !header || !isGoalCovering(header, today)) return null;
   return getGoalCover(
+    goalId,
     goal.payload,
     heldByItem[goalId] ?? 0,
     days.map((day) => ({

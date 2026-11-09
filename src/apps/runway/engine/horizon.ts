@@ -16,7 +16,7 @@ import type {
 import { LOOKAHEAD_MONTHS } from '@apps/runway/constants';
 
 import { addUtcMonths, DAY_MS } from './dates';
-import { getGoalBalanceAt, type GoalCover } from './horizonGoal';
+import { getGoalBalanceAt, getGoalCostId, type GoalCover } from './horizonGoal';
 import { getIntervalMonths, occurrences } from './schedule';
 import { pick } from './stance';
 
@@ -443,7 +443,7 @@ export interface HorizonPlan {
   shortfall: HorizonShortfall | null;
 }
 
-/** Walks the money over the unpaid payments in due order, ties by cost id; the input order changes nothing. With a linked goal, each payment is covered first from what the goal is projected to hold on its due date (less what earlier payments took of it), then from the event's own money. */
+/** Walks the money over the unpaid payments in due order, ties by cost id with the linked goal's own cost first; the input order changes nothing. With a linked goal, each payment is covered first from what the goal is projected to hold on its due date (less what earlier payments took of it), then from the event's own money. */
 export function planHorizon(
   item: Pick<HorizonSealed, 'rest'> & { costs: readonly HorizonCost[] },
   heldCents: Cents,
@@ -453,9 +453,16 @@ export function planHorizon(
   const outsideIds = new Set(
     item.costs.filter(({ isOutside }) => isOutside).map(({ id }) => id),
   );
+  const isGoalCost = (costId: string) =>
+    goal !== null && costId === getGoalCostId(goal.goalId);
   const ordered = payments
     .filter(({ costId, paid }) => paid === null && !outsideIds.has(costId))
-    .sort((a, b) => a.dueOn - b.dueOn || a.costId.localeCompare(b.costId));
+    .sort(
+      (a, b) =>
+        a.dueOn - b.dueOn ||
+        Number(isGoalCost(b.costId)) - Number(isGoalCost(a.costId)) ||
+        a.costId.localeCompare(b.costId),
+    );
   const covers = ordered.reduce<{
     left: Cents;
     goalUsed: Cents;

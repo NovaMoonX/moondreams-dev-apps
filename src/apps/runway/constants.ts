@@ -704,8 +704,8 @@ export const HORIZON_PLAN_WORDS = {
     `${event} already draws from ${goal}. An event draws from one goal.`,
   linkSummary: (goal: string, event: string, amount: string | null) =>
     `${goal} now saves for ${event}.${amount === null ? '' : ` Added ${goal}, ${amount}, as its first cost.`}`,
-  unlinkSummary: (goal: string, event: string) =>
-    `${goal} no longer saves for ${event}. Its cost stays on the event.`,
+  unlinkSummary: (goal: string, event: string, isCostRemoved: boolean) =>
+    `${goal} no longer saves for ${event}. ${isCostRemoved ? `The ${goal} cost is removed from the event.` : 'Its cost stays on the event.'}`,
   newFromGoalSummary: (event: string, goal: string) =>
     `Added ${event}, saving for it from ${goal}.`,
   linked: (goal: string, event: string) => `${goal} now saves for ${event}`,
@@ -717,9 +717,16 @@ export const HORIZON_PLAN_WORDS = {
   partOf: (event: string) => `Part of ${event}`,
   partOfSub: 'Saving for it',
   unlinkTitle: (event: string) => `Stop saving for ${event}?`,
-  unlinkBody: (event: string) =>
-    `${event} keeps its cost and pays it from its own money. The goal keeps saving at its own pace.`,
+  unlinkBody:
+    'The goal keeps saving at its own pace. What should happen to its cost on the event?',
+  unlinkBodyKept: (event: string) =>
+    `${event} keeps the goal's cost and pays it from its own money. The goal keeps saving at its own pace.`,
   unlinkAction: 'Unlink the goal',
+  unlinkRemoveRow: (goal: string) => `Remove the ${goal} cost`,
+  unlinkRemoveSub: (event: string, amount: string) =>
+    `${event} stops planning for its ${amount}`,
+  unlinkKeepRow: (event: string) => `Keep it as a cost of ${event}`,
+  unlinkKeepSub: (event: string) => `${event} plans for it from its own money`,
   envelopeConfirm: (envelope: string, amount: string, event: string) =>
     `${envelope} closes and its ${amount} moves to ${event}`,
   envelopeAction: (envelope: string) => `Close ${envelope}`,
@@ -2656,10 +2663,14 @@ export const COST_PAID_WORDS = {
     item: string,
     heldCents: string | null,
     freeCents: string,
+    goal: string | null = null,
   ) =>
     heldCents === null
       ? `${cost} is ${totalCents}. ${item} has nothing left, so all ${freeCents} comes out of Free to Spend.`
-      : `${cost} is ${totalCents}. ${item} has ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+      : `${cost} is ${totalCents}. ${goal === null ? `${item} has` : item === '' ? `${goal} has` : `${goal} and ${item} have`} ${heldCents} left; the other ${freeCents} comes out of Free to Spend.`,
+  goalFallbackName: 'The goal',
+  goalClosedTakeBack: (goal: string, amount: string) =>
+    `${goal} is closed, so its ${amount} can't go back to it.`,
   confirmTitle: (cost: string) => `Mark ${cost} paid`,
   markRow: 'Mark paid',
   markOutsideRow: (cost: string) => `Mark ${cost} paid`,

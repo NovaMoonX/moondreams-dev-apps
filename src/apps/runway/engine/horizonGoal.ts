@@ -11,6 +11,7 @@ import { isSavingFor, planGoalContributions, type PaceDay } from './pace';
 
 /** What a goal holds now and what its plan puts in on each coming income day; the event it feeds reads the balance on a cost's due date from it. */
 export interface GoalCover {
+  goalId: string;
   heldCents: Cents;
   contributions: readonly { on: DateOnly; cents: Cents }[];
 }
@@ -97,6 +98,7 @@ export function shouldNudgeHorizon(input: {
 
 /** The goal's cover for an event: its balance now and what its cadence puts in on the coming income days. A goal that is not being saved for, or takes what is left (`rest`), puts in nothing a day ahead, so its balance now is all the cover says. */
 export function getGoalCover(
+  goalId: string,
   goal: GoalSealed,
   heldCents: Cents,
   incomeDays: readonly (PaceDay & { on: DateOnly })[],
@@ -104,6 +106,7 @@ export function getGoalCover(
 ): GoalCover {
   const isPlanned = isSavingFor(goal) && goal.funding.amount.kind !== 'rest';
   return {
+    goalId,
     heldCents,
     contributions: isPlanned
       ? planGoalContributions(

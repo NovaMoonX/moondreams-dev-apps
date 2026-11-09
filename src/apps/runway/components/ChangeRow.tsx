@@ -27,6 +27,7 @@ import {
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import {
   getOpensAgainNote,
+  getGoalClosedBlock,
   getTakeBackBlock,
 } from '@apps/runway/hooks/useCostPaid';
 import {
@@ -61,7 +62,16 @@ function ChangeRow({
   const canUndo = move !== null && !isUndone;
   const words = move?.bill || move?.cost ? PAID_HISTORY_WORDS : MOVE_WORDS;
   const [isOpen, setIsOpen] = useState(false);
-  const takeBackBlock = move?.cost ? getTakeBackBlock(move.cost.itemId) : null;
+  const takeBackBlock = move?.cost
+    ? (getTakeBackBlock(move.cost.itemId) ??
+      getGoalClosedBlock(
+        {
+          goalId: move.cost.goalId ?? null,
+          fromGoalCents: move.cost.fromGoalCents ?? 0,
+        },
+        move.cost.goalName ?? null,
+      ))
+    : null;
   const takeBack = async () => {
     if (move === null) return;
     const isConfirmed = await confirm({
@@ -80,7 +90,9 @@ function ChangeRow({
                   move.cost.mark,
                   move.cost.goalId != null && (move.cost.fromGoalCents ?? 0) > 0
                     ? {
-                        name: move.cost.goalName ?? '',
+                        name:
+                          move.cost.goalName ??
+                          COST_PAID_WORDS.goalFallbackName,
                         cents: move.cost.fromGoalCents ?? 0,
                       }
                     : null,
@@ -209,7 +221,9 @@ function ChangeRow({
                 />
               </ActionGroup>
             ) : (
-              <p className='text-muted-foreground text-sm'>{takeBackBlock}</p>
+              <p className='text-muted-foreground text-sm'>
+                {mask(takeBackBlock)}
+              </p>
             )}
           </div>
         </FormSheet>

@@ -1,17 +1,28 @@
 import { useState } from 'react';
 
+import { ReceiptText, Trash2 } from 'lucide-react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import BackLink from '@/components/BackLink';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import ActionGroup from '@/components/ActionGroup';
+import ActionRow from '@/components/ActionRow';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
+import { formatCents } from '@/utils/moneyUtils';
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { HORIZON_PLAN_WORDS } from '@apps/runway/constants';
+import { getGoalCostId } from '@apps/runway/engine/horizonGoal';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { unlinkGoalFromHorizon } from '@apps/runway/store/actions/horizonGoalActions';
-import type { ResolvedHorizon } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectCostPaid,
+  type ResolvedHorizon,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 interface HorizonUnlinkViewProps {
@@ -21,7 +32,7 @@ interface HorizonUnlinkViewProps {
   onBack: () => void;
 }
 
-/** Asks before a goal stops saving for its event; the event keeps the cost the link added. */
+/** Asks what happens to the goal's cost on the event when the goal stops saving for it; with the cost paid or already gone there is nothing to ask and the event keeps it. */
 function HorizonUnlinkView({
   goalName,
   event,
@@ -32,9 +43,16 @@ function HorizonUnlinkView({
   const { addToast } = useToast();
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const mask = useMaskedText();
   const eventName = event.version.payload.name;
+  const paidEntries = useAppSelector(selectCostPaid)[event.item.id];
+  const costId = getGoalCostId(event.version.payload.goalId ?? '');
+  const goalCost = event.version.payload.costs.find(({ id }) => id === costId);
+  const canRemoveCost =
+    goalCost !== undefined &&
+    !(paidEntries ?? []).some((entry) => entry.costId === costId);
 
-  const unlink = async () => {
+  const unlink = async (removeCost: boolean) => {
     if (!user) return;
     setError(null);
     setIsSaving(true);
@@ -45,6 +63,7 @@ function HorizonUnlinkView({
         baseVersionId: event.version.id,
         horizon: event.version.payload,
         goalName,
+        removeCost,
         today,
       });
       if (written === null) {
@@ -72,8 +91,38 @@ function HorizonUnlinkView({
       <BackLink onBack={onBack} />
       <ActionTitle>{HORIZON_PLAN_WORDS.unlinkTitle(eventName)}</ActionTitle>
       <p className='text-muted-foreground text-sm'>
-        {HORIZON_PLAN_WORDS.unlinkBody(eventName)}
+        {canRemoveCost
+          ? HORIZON_PLAN_WORDS.unlinkBody
+          : HORIZON_PLAN_WORDS.unlinkBodyKept(eventName)}
       </p>
+      {canRemoveCost && (
+        <ActionGroup>
+          <ActionRow
+            isGrouped
+            isRoomy
+            isDestructive
+            icon={<Trash2 />}
+            label={HORIZON_PLAN_WORDS.unlinkRemoveRow(goalName)}
+            subtitle={mask(
+              HORIZON_PLAN_WORDS.unlinkRemoveSub(
+                eventName,
+                formatCents(goalCost.amount.highCents),
+              ),
+            )}
+            isDisabled={isSaving}
+            onClick={() => void unlink(true)}
+          />
+          <ActionRow
+            isGrouped
+            isRoomy
+            icon={<ReceiptText />}
+            label={HORIZON_PLAN_WORDS.unlinkKeepRow(eventName)}
+            subtitle={HORIZON_PLAN_WORDS.unlinkKeepSub(eventName)}
+            isDisabled={isSaving}
+            onClick={() => void unlink(false)}
+          />
+        </ActionGroup>
+      )}
       <ModalFooterActions
         note={error}
         cancelAction={
@@ -87,15 +136,17 @@ function HorizonUnlinkView({
           </Button>
         }
         rightActions={
-          <Button
-            type='button'
-            className='whitespace-nowrap max-sm:px-3'
-            loading={isSaving}
-            disabled={isSaving}
-            onClick={() => void unlink()}
-          >
-            {HORIZON_PLAN_WORDS.unlinkAction}
-          </Button>
+          canRemoveCost ? undefined : (
+            <Button
+              type='button'
+              className='whitespace-nowrap max-sm:px-3'
+              loading={isSaving}
+              disabled={isSaving}
+              onClick={() => void unlink(false)}
+            >
+              {HORIZON_PLAN_WORDS.unlinkAction}
+            </Button>
+          )
         }
       />
     </div>

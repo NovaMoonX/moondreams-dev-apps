@@ -244,7 +244,10 @@ export type WrittenCostPaid = {
 
 const getGoalOf = (paid: WrittenCostPaid, names: CostPaidNames) =>
   paid.goalId !== null && paid.fromGoalCents > 0
-    ? { name: names.goal ?? '', cents: paid.fromGoalCents }
+    ? {
+        name: names.goal ?? COST_PAID_WORDS.goalFallbackName,
+        cents: paid.fromGoalCents,
+      }
     : null;
 
 /** How many earlier marks of one payment are looked past when a mark was undone, which the device may not have loaded. */

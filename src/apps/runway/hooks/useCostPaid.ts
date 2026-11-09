@@ -35,7 +35,9 @@ import { removePurchaseOfCost } from '@apps/runway/store/actions/purchaseActions
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAllHorizonItems,
+  isGoalCovering,
   selectGoals,
+  selectItemNames,
   selectIsMovesLoaded,
   selectIsRecordsReady,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -67,6 +69,26 @@ export const getTakeBackBlock = (itemId: string) => {
     : null;
 };
 
+/** Why a paid mark cannot be taken back when the goal that paid part of it is archived or ended, so it cannot take the money back; null when it can. The amount is for the caller to mask. */
+export const getGoalClosedBlock = (
+  paid: Pick<CostPaidEntry, 'goalId' | 'fromGoalCents'>,
+  storedName: string | null = null,
+) => {
+  if (paid.goalId === null || paid.fromGoalCents <= 0) return null;
+  const state = store.getState();
+  const today = todayAsUtcDate();
+  const goalId = paid.goalId;
+  const isOpen = selectGoals(state, today).some(
+    ({ item }) => item.id === goalId && isGoalCovering(item, today),
+  );
+  return isOpen
+    ? null
+    : COST_PAID_WORDS.goalClosedTakeBack(
+        getGoalNameOf(goalId, storedName),
+        formatCents(paid.fromGoalCents),
+      );
+};
+
 const getHeldNow = (itemId: string) =>
   selectBalances(store.getState()).assignedByItem[itemId] ?? 0;
 
@@ -84,7 +106,9 @@ const getGoalNow = (itemId: string) => {
   const goal =
     goalId === null
       ? undefined
-      : selectGoals(state, today).find(({ item }) => item.id === goalId);
+      : selectGoals(state, today).find(
+          ({ item }) => item.id === goalId && isGoalCovering(item, today),
+        );
   return goalId === null || !goal
     ? null
     : {
@@ -93,6 +117,15 @@ const getGoalNow = (itemId: string) => {
         heldCents: selectBalances(state).assignedByItem[goalId] ?? 0,
       };
 };
+
+/** The goal's name for a History line: its name on the plan today, else the one stored with the mark, else the newest name it ever had. */
+const getGoalNameOf = (goalId: string, storedName: string | null) =>
+  selectGoals(store.getState(), todayAsUtcDate()).find(
+    ({ item }) => item.id === goalId,
+  )?.version.payload.name ??
+  storedName ??
+  selectItemNames(store.getState()).find(({ id }) => id === goalId)?.name ??
+  COST_PAID_WORDS.goalFallbackName;
 
 /** Takes a cost payment's paid mark back, removing the purchase that made it; resolves false when it had already been taken back. */
 export async function undoCostPayment(
@@ -103,14 +136,12 @@ export async function undoCostPayment(
 ) {
   const encryption = await getRunwayEncryption(uid);
   const written: WrittenCostPaid = { ...paid, itemId };
+  const blocked = getGoalClosedBlock(paid, names.goal ?? null);
+  if (blocked !== null) throw new Error(blocked);
   const goalName =
     paid.goalId === null
       ? null
-      : (selectGoals(store.getState(), todayAsUtcDate()).find(
-          ({ item }) => item.id === paid.goalId,
-        )?.version.payload.name ??
-        names.goal ??
-        null);
+      : getGoalNameOf(paid.goalId, names.goal ?? null);
   const withGoal = { ...names, goal: goalName };
   return inTurn(() =>
     paid.mark === 'purchase'
@@ -197,6 +228,15 @@ export function useCostPaid({
   };
 
   const takeBack = async (paid: CostPaidEntry) => {
+    const closedBlock = getGoalClosedBlock(paid);
+    if (closedBlock !== null) {
+      addToast({
+        title: COST_PAID_WORDS.notChanged(cost.name),
+        description: mask(closedBlock),
+        type: 'error',
+      });
+      return false;
+    }
     const done = await run(
       (uid) =>
         undoCostPayment(uid, itemId, { item: itemName, cost: cost.name }, paid),
@@ -245,10 +285,11 @@ export function useCostPaid({
     isAsked: boolean,
     askedCents?: Cents,
   ): Promise<Cents | null> => {
+    const goalNow = getGoalNow(itemId);
     const { fromGoalCents, fromItemCents, fromFreeCents } =
       settleCostPaidWithGoal(
         total,
-        getGoalNow(itemId)?.heldCents ?? 0,
+        goalNow?.heldCents ?? 0,
         getHeldNow(itemId),
         mark,
       );
@@ -263,11 +304,12 @@ export function useCostPaid({
         COST_PAID_WORDS.confirmMark(
           cost.name,
           formatCents(total),
-          itemName,
+          fromGoalCents > 0 && fromItemCents === 0 ? '' : itemName,
           fromGoalCents + fromItemCents > 0 || isHidden
             ? formatCents(fromGoalCents + fromItemCents)
             : null,
           formatCents(fromFreeCents),
+          fromGoalCents > 0 ? (goalNow?.goalName ?? null) : null,
         ),
       ),
       confirmText: CHECKLIST_WORDS.markPaid,
