@@ -17,6 +17,7 @@ import {
   getCancelTarget,
   getChangesOnlyDoneOn,
   getEndChangeId,
+  getEndEntryId,
   getItemEnds,
   getItemStops,
   getLinkSpan,
@@ -15361,6 +15362,14 @@ const version = (
     kind: 'versions',
     versionIds: ['r1'],
     startsOn: t + 10 * D,
+    segments: [
+      {
+        kind: undefined,
+        payload: undefined,
+        effectiveFrom: t + 10 * D,
+        effectiveUntil: null,
+      },
+    ],
   });
   assert.equal(
     getCancelTarget(versions, rentItem, 'c1', t + 10 * D),
@@ -15376,7 +15385,7 @@ const version = (
   assert.deepEqual(
     getCancelTarget(versions, { id: 'env', endedAt: null }, 'cs', t)?.kind,
     'versions',
-    'a later start is cancelled by deleting its version',
+    'a later start is cancelled by restoring the idle version over its days',
   );
   assert.deepEqual(
     getCancelTarget(
@@ -15431,6 +15440,147 @@ const version = (
     null,
     'a link is the change and the item together',
   );
+
+  // Cancelling writes: new versions restore what held before the change, one ms after it.
+  const named = (n: string) => ({ n });
+  const history = [
+    v('a0', 'eat', t - 50 * D, 1, 'A0', 'envelope', named('base')),
+    v('a1', 'eat', t + 30 * D, 2, 'A1', 'envelope', named('jan')),
+    v('V', 'eat', t + 10 * D, 5, 'V', 'envelope', named('v')),
+  ];
+  const eat = { id: 'eat', endedAt: null };
+  const target = getCancelTarget(history, eat, 'V', t);
+  assert.equal(target?.kind, 'versions');
+  const segments = target?.kind === 'versions' ? target.segments : [];
+  assert.deepEqual(
+    segments.map(({ payload, effectiveFrom, effectiveUntil }) => [
+      payload,
+      effectiveFrom,
+      effectiveUntil,
+    ]),
+    [
+      [named('base'), t + 10 * D, t + 30 * D],
+      [named('jan'), t + 30 * D, null],
+    ],
+    'the older, later-dated change V had overridden comes back with the days before it',
+  );
+  const restored = [
+    ...history,
+    ...segments.map((segment, index) => ({
+      ...v(
+        `x${index}`,
+        'eat',
+        segment.effectiveFrom,
+        6,
+        'X',
+        'envelope',
+        segment.payload as object,
+      ),
+      effectiveUntil: segment.effectiveUntil,
+    })),
+  ];
+  const at = (on: number, all: typeof restored = restored) =>
+    (resolveVersion(all, 'eat', on)?.payload as { n: string }).n;
+  assert.deepEqual(
+    [at(t + 15 * D), at(t + 29 * D), at(t + 35 * D)],
+    ['base', 'base', 'jan'],
+    'as if V was never made',
+  );
+  assert.deepEqual(
+    listComingChanges(restored, 'eat', t).map(({ kind, changeId, on }) => [
+      kind,
+      changeId,
+      on,
+    ]),
+    [['change', 'X', t + 30 * D]],
+    'the change V hid shows again as the restored version; the restore on V first day is no change',
+  );
+  assert.equal(
+    getCancelTarget(restored, eat, 'V', t),
+    null,
+    'a change already cancelled is not offered again',
+  );
+  assert.equal(
+    getLinkSpan(restored, { changeId: 'V', itemId: 'eat' })?.isLive,
+    false,
+    'the cancelled change reads as not live',
+  );
+  const later = [
+    ...restored,
+    v('w', 'eat', t + 20 * D, 8, 'W', 'envelope', named('w')),
+  ];
+  assert.equal(at(t + 25 * D, later), 'w', 'a later-made change still wins');
+  const withLater = [
+    ...history,
+    v('w', 'eat', t + 20 * D, 8, 'W', 'envelope', named('w')),
+  ];
+  assert.equal(
+    at(t + 25 * D, [
+      ...withLater,
+      ...segments.map((segment, index) => ({
+        ...v(
+          `y${index}`,
+          'eat',
+          segment.effectiveFrom,
+          6,
+          'Y',
+          'envelope',
+          segment.payload as object,
+        ),
+        effectiveUntil: segment.effectiveUntil,
+      })),
+    ]),
+    'w',
+    'a change made after V survives V being cancelled',
+  );
+
+  // A stretch cancel restores the amount that was there, and leaves no break at its ends.
+  const stretch = [
+    ...restored,
+    {
+      ...v('S', 'eat', t + 40 * D, 9, 'S', 'envelope', named('s')),
+      effectiveUntil: t + 50 * D,
+    },
+  ];
+  assert.deepEqual(
+    listComingChanges(stretch, 'eat', t + 35 * D).map(({ kind, isReturn }) => [
+      kind,
+      isReturn,
+    ]),
+    [
+      ['change', false],
+      ['change', true],
+    ],
+    'a stretch shows its start and its return',
+  );
+  const stretchTarget = getCancelTarget(stretch, eat, 'S', t + 35 * D);
+  assert.deepEqual(
+    stretchTarget?.kind === 'versions' &&
+      stretchTarget.segments.map(
+        ({ payload, effectiveFrom, effectiveUntil }) => [
+          payload,
+          effectiveFrom,
+          effectiveUntil,
+        ],
+      ),
+    [[named('jan'), t + 40 * D, t + 50 * D]],
+  );
+  const afterStretch = [
+    ...stretch,
+    {
+      ...v('z0', 'eat', t + 40 * D, 10, 'Z', 'envelope', named('jan')),
+      effectiveUntil: t + 50 * D,
+    },
+  ];
+  assert.deepEqual(
+    listComingChanges(afterStretch, 'eat', t + 35 * D),
+    [],
+    'no phantom change where the restored payload equals the one before',
+  );
+
+  // Ending again after a cancelled end gets a fresh entry id.
+  assert.equal(getEndEntryId('rent', false, 5), 'ended_rent');
+  assert.equal(getEndEntryId('rent', true, 5), 'ended_rent_5');
 
   // The calendar lists a stop on the day the item is gone, beside the changes.
   const d = (day: number) => Date.UTC(2026, 10, day);

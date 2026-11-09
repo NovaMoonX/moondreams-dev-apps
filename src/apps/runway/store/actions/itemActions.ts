@@ -17,7 +17,9 @@ import { getNextVersionId } from '@apps/runway/engine/horizon';
 import {
   addLink,
   getEndChangeId,
+  getEndEntryId,
   removeLink,
+  type CancelTarget,
 } from '@apps/runway/engine/horizonLinks';
 import { applyMove, type PriorityMove } from '@apps/runway/engine/priorities';
 import { describeFunding } from '@apps/runway/utils/fundingText';
@@ -1066,7 +1068,7 @@ export interface EndItemInput {
 
 /**
  * Ends an item: its header's `endedAt` goes from null to a date once, with the entry that says why,
- * in one transaction. The entry's id is `ended_${itemId}`, so a second device ending it too, or the
+ * in one transaction. The entry's id is `ended_${itemId}` (with the time added once a cancelled ending took it), so a second device ending it too, or the
  * sweep reaching a natural ending, finds the header already ended and writes nothing. Versions are
  * untouched, so every earlier day still resolves.
  */
@@ -1089,8 +1091,9 @@ export async function endItem(
     : null;
   const headerRef = itemPath(uid, 'items', input.itemId);
   const written = await runTransaction(db, async (transaction) => {
-    const [snapshot, eventTaken] = await Promise.all([
+    const [snapshot, entryTaken, eventTaken] = await Promise.all([
       transaction.get(headerRef),
+      transaction.get(itemPath(uid, 'changes', changeId)),
       linked === null
         ? Promise.resolve(null)
         : transaction.get(itemPath(uid, 'versions', linked.version.id)),
@@ -1099,8 +1102,13 @@ export async function endItem(
     const header = snapshot.data() as Partial<PlanItemDoc>;
     if ((header.endedAt ?? null) !== null) return false;
     if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
+    const entryId = getEndEntryId(
+      input.itemId,
+      entryTaken.exists(),
+      Date.now(),
+    );
     const entry: ChangeDoc = {
-      id: changeId,
+      id: entryId,
       kind: 'ended',
       createdAt: Date.now(),
       effectiveFrom: input.endedOn,
@@ -1114,7 +1122,7 @@ export async function endItem(
           ? null
           : getHeldReleaseDay(input.heldChoice, input.endedOn + DAY_MS),
     });
-    transaction.set(itemPath(uid, 'changes', changeId), entry);
+    transaction.set(itemPath(uid, 'changes', entryId), entry);
     if (linked !== null) {
       transaction.set(
         itemPath(uid, 'versions', linked.version.id),
@@ -1131,53 +1139,77 @@ export interface CancelChangeInput {
   itemId: string;
   /** The change to cancel: a version change's `changeId`, or `ended_${itemId}` for a coming end. */
   changeId: string;
-  /** For a version change, the ids of every version of the item written with `changeId` (`getCancelTarget`); the write deletes exactly these. Empty for a coming end. */
-  versionIds: string[];
+  /** What to write, from `getCancelTarget` read just before the call. */
+  target: CancelTarget;
+  /** The change entry's words, such as "Cancelled: Eating out $80 → $40 from Dec 1st" or "Won't end after all". */
+  summary: string;
   today: DateOnly;
   /** The event that holds the link (`findLinkHolder`), as the device reads it, with the line its log gets; the link is removed in the same transaction. Null when no event holds it. */
   link: EventLink | null;
 }
 
 /**
- * Cancels a change that has not started, in one transaction: a version change deletes every version
- * written with its `changeId` and its change entry; a coming end sets `endedAt` back to null, clears
- * the release day the ending set (unless the item was archived, whose release it may be) and deletes
- * `ended_${itemId}`. The matching link leaves the event in the same transaction, which is refused when
- * the event changed on another device. Refuses a change whose first day has come. Returns false when
- * there is nothing left to cancel (another device already did).
+ * Cancels a change that has not started, in one transaction, by writing: history is append-only, so
+ * nothing is deleted. A version change gets new versions that restore what held before it over each of
+ * its days (`target.segments`), made one millisecond after the change so they win over it and still lose
+ * to anything made later, all under one new change entry. A coming end sets `endedAt` back to null and
+ * clears the release day the ending set (unless the item was archived, whose release it may be), with a
+ * new entry; `ended_${itemId}` stays. The matching link leaves the event in the same transaction, which
+ * is refused when the event changed on another device. Refuses a change whose first day has come.
+ * Returns false when there is nothing left to cancel (another device already did).
  */
 export async function cancelChange(
   uid: string,
   encryption: RunwayEncryption,
   input: CancelChangeInput,
 ): Promise<boolean> {
-  const { itemId, changeId } = input;
-  const isStop = changeId === getEndChangeId(itemId);
+  const { itemId, changeId, target } = input;
+  const now = Date.now();
+  const cancelId = generateUuid();
   const linked = input.link
     ? await sealEventVersion(
         encryption,
         input.link,
         removeLink(input.link.horizon, changeId),
-        Date.now(),
+        now,
       )
     : null;
+  const [entrySealed, ...segmentsSealed] = await Promise.all([
+    sealJson<ChangeSealed>({ summary: input.summary, note: null }, encryption),
+    ...(target.kind === 'versions'
+      ? target.segments.map(({ payload }) =>
+          sealJson(payload as ItemPayload, encryption),
+        )
+      : []),
+  ]);
   const headerRef = itemPath(uid, 'items', itemId);
   return runTransaction(db, async (transaction) => {
     const [header, versionDocs, eventTaken] = await Promise.all([
-      isStop ? transaction.get(headerRef) : Promise.resolve(null),
+      target.kind === 'stop'
+        ? transaction.get(headerRef)
+        : Promise.resolve(null),
       Promise.all(
-        isStop
-          ? []
-          : input.versionIds.map((id) =>
+        target.kind === 'versions'
+          ? target.versionIds.map((id) =>
               transaction.get(itemPath(uid, 'versions', id)),
-            ),
+            )
+          : [],
       ),
       linked === null
         ? Promise.resolve(null)
         : transaction.get(itemPath(uid, 'versions', linked.version.id)),
     ]);
     if (eventTaken?.exists()) throw new Error(PART_OF_WORDS.eventChanged);
-    const writeLink = () => {
+    const writeEntry = (effectiveFrom: DateOnly) => {
+      const entry: ChangeDoc = {
+        id: cancelId,
+        kind: 'planChange',
+        createdAt: now,
+        effectiveFrom,
+        itemIds: [itemId],
+        sealed: entrySealed,
+      };
+      transaction.set(itemPath(uid, 'changes', cancelId), entry);
       if (linked === null) return;
       transaction.set(
         itemPath(uid, 'versions', linked.version.id),
@@ -1185,7 +1217,7 @@ export async function cancelChange(
       );
       transaction.set(itemPath(uid, 'changes', linked.log.id), linked.log);
     };
-    if (isStop) {
+    if (target.kind === 'stop') {
       if (!header?.exists()) throw new Error('This item no longer exists.');
       const stored = header.data() as Partial<PlanItemDoc>;
       const endedAt = stored.endedAt ?? null;
@@ -1198,22 +1230,35 @@ export async function cancelChange(
           ? { heldReleasedOn: null }
           : {}),
       });
-      transaction.delete(itemPath(uid, 'changes', changeId));
-      writeLink();
+      writeEntry(endedAt + DAY_MS);
       return true;
     }
     const existing = versionDocs.filter((snapshot) => snapshot.exists());
     if (existing.length === 0) return false;
-    existing.forEach((snapshot) => {
-      const stored = snapshot.data() as Partial<PlanVersionDoc>;
-      if (stored.itemId !== itemId || stored.changeId !== changeId)
+    const stored = existing.map(
+      (snapshot) => snapshot.data() as Partial<PlanVersionDoc>,
+    );
+    stored.forEach((version) => {
+      if (version.itemId !== itemId || version.changeId !== changeId)
         throw new Error(HORIZON_END_WORDS.changedJustNow);
-      if ((stored.effectiveFrom ?? 0) <= input.today)
+      if ((version.effectiveFrom ?? 0) <= input.today)
         throw new Error(PART_OF_WORDS.alreadyStarted);
-      transaction.delete(snapshot.ref);
     });
-    transaction.delete(itemPath(uid, 'changes', changeId));
-    writeLink();
+    const madeAt = Math.max(...stored.map((version) => version.createdAt ?? 0));
+    target.segments.forEach((segment, index) => {
+      const version: PlanVersionDoc = {
+        id: generateUuid(),
+        itemId,
+        kind: segment.kind as PlanVersionDoc['kind'],
+        createdAt: madeAt + 1,
+        effectiveFrom: segment.effectiveFrom,
+        effectiveUntil: segment.effectiveUntil,
+        changeId: cancelId,
+        sealed: segmentsSealed[index],
+      };
+      transaction.set(itemPath(uid, 'versions', version.id), version);
+    });
+    writeEntry(target.startsOn);
     return true;
   });
 }

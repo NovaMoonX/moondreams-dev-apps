@@ -1,7 +1,7 @@
 import type { DateOnly, HorizonLink, HorizonSealed } from '@apps/runway/types';
 
 import { DAY_MS } from './dates';
-import { resolveVersion, type Versioned } from './resolve';
+import { isSameValue, resolveVersion, type Versioned } from './resolve';
 import { occurrences } from './schedule';
 
 type LinkVersion = Versioned & {
@@ -81,12 +81,29 @@ export const canCancelChange = (
   !('isReturn' in change && change.isReturn === true) &&
   ('on' in change ? change.on : change.startsOn) > today;
 
-/** What cancelling a coming change removes: every version of the change, or an ending. */
+/** One stretch of a cancelled change's days, with what was in force there before the change was made. */
+export interface CancelSegment {
+  kind: string | undefined;
+  payload: unknown;
+  effectiveFrom: DateOnly;
+  effectiveUntil: DateOnly | null;
+}
+
+/** What cancelling a coming change writes: history is append-only, so a version change is cancelled by new versions that restore, over each of its days, what held before it; `versionIds` are the versions being superseded, which the write re-reads. An end is cancelled by clearing the header's `endedAt`. */
 export type CancelTarget =
-  | { kind: 'versions'; versionIds: string[]; startsOn: DateOnly }
+  | {
+      kind: 'versions';
+      versionIds: string[];
+      startsOn: DateOnly;
+      segments: CancelSegment[];
+    }
   | { kind: 'stop'; startsOn: DateOnly };
 
-/** What cancelling `changeId` would remove, read from the versions loaded; null when it is not there, has started, or is all of the item's versions (an item is cancelled by archiving it). */
+/** The id of the change entry an ending writes: `ended_<itemId>`, or with `now` added once that id is taken (an ending that was cancelled, then made again), since an entry is never overwritten. */
+export const getEndEntryId = (itemId: string, isTaken: boolean, now: number) =>
+  isTaken ? `${getEndChangeId(itemId)}_${now}` : getEndChangeId(itemId);
+
+/** What cancelling `changeId` would write, read from the versions loaded; null when it is not there, has started, was already cancelled (another version now wins on its first day), or has no earlier version under part of its days (an item's own first version is cancelled by archiving it). A restored segment is made one millisecond after the change, so it wins over the change and still loses to anything made after it. */
 export function getCancelTarget<V extends LinkVersion>(
   versions: readonly V[],
   item: { id: string; endedAt: DateOnly | null },
@@ -100,11 +117,70 @@ export function getCancelTarget<V extends LinkVersion>(
   }
   const own = versions.filter(({ itemId }) => itemId === item.id);
   const made = own.filter((version) => version.changeId === changeId);
-  if (made.length === 0 || made.length === own.length) return null;
+  if (made.length === 0) return null;
   const startsOn = Math.min(...made.map(({ effectiveFrom }) => effectiveFrom));
-  return startsOn > today
-    ? { kind: 'versions', versionIds: made.map(({ id }) => id), startsOn }
-    : null;
+  const madeAt = Math.max(...made.map(({ createdAt }) => createdAt));
+  if (
+    startsOn <= today ||
+    resolveVersion(own, item.id, startsOn)?.changeId !== changeId
+  )
+    return null;
+  const before = own.filter(
+    (version) => version.changeId !== changeId && version.createdAt <= madeAt,
+  );
+  const pieces = made.flatMap((version) => {
+    const until = version.effectiveUntil;
+    const points = [
+      ...new Set([
+        version.effectiveFrom,
+        ...before.flatMap((other) =>
+          [other.effectiveFrom, other.effectiveUntil].filter(
+            (on): on is number =>
+              on !== null &&
+              on > version.effectiveFrom &&
+              (until === null || on < until),
+          ),
+        ),
+      ]),
+    ].sort((a, b) => a - b);
+    return points.map((from, index) => ({
+      from,
+      until: points[index + 1] ?? until,
+      held: resolveVersion(before, item.id, from),
+    }));
+  });
+  if (pieces.some(({ held }) => held === null)) return null;
+  const segments = pieces.reduce<
+    { id: string | undefined; segment: CancelSegment }[]
+  >((acc, { from, until, held }) => {
+    const last = acc[acc.length - 1];
+    return last && last.id === held?.id && last.segment.effectiveUntil === from
+      ? [
+          ...acc.slice(0, -1),
+          {
+            id: last.id,
+            segment: { ...last.segment, effectiveUntil: until },
+          },
+        ]
+      : [
+          ...acc,
+          {
+            id: held?.id,
+            segment: {
+              kind: held?.kind,
+              payload: held?.payload,
+              effectiveFrom: from,
+              effectiveUntil: until,
+            },
+          },
+        ];
+  }, []);
+  return {
+    kind: 'versions',
+    versionIds: made.map(({ id }) => id),
+    startsOn,
+    segments: segments.map(({ segment }) => segment),
+  };
 }
 
 /** The event that holds a link, from the events loaded (every state); null when none does. */
@@ -144,6 +220,11 @@ export function listComingChanges<V extends LinkVersion>(
       const version = resolveVersion(own, itemId, on);
       if (!version || version.id === walk.before?.id) return walk;
       if (walk.before === null) return { before: version, found: walk.found };
+      if (
+        version.payload !== undefined &&
+        isSameValue(version.payload, walk.before.payload)
+      )
+        return { before: version, found: walk.found };
       return {
         before: version,
         found: [
