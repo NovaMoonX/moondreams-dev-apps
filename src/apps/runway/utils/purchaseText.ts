@@ -5,6 +5,7 @@ import type {
   Level,
   OpenAccount,
   OpenPurchase,
+  OpenReleasedCharge,
   PurchaseLine,
   PurchasePairKind,
 } from '@apps/runway/types';
@@ -188,6 +189,17 @@ export function describePurchaseRemoval(
 ): string {
   const kind = isRefund(purchase) ? 'Refund' : 'Purchase';
   return `${kind} removed: ${getPurchaseTitle(purchase, nameOf)}, ${money(purchase.amountCents)} on ${formatDateOrdinalUTC(purchase.date)}.`;
+}
+
+/** The change-log sentence for a placed pending charge the bank dropped, and what it no longer counts against. */
+export function describeReleasedCharge(
+  charge: OpenReleasedCharge,
+  nameOf: (envelopeId: string) => string,
+): string {
+  const what = charge.title ?? 'A pending charge';
+  const where = describeEnvelopes(charge.lines, nameOf);
+  const tail = where ? ` It no longer counts against ${where}.` : '';
+  return `The bank dropped a pending charge: ${what}, ${money(charge.amountCents)} on ${formatDateOrdinalUTC(charge.date)}.${tail}`;
 }
 
 /** The change-log sentence for sending a waiting purchase to its envelopes, or leaving it out of spending. */

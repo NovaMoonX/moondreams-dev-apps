@@ -313,10 +313,110 @@ const gone = applyTransactions(
 );
 assert.equal(
   gone.writes.get(pendingId),
-  undefined,
-  'an assigned purchase is never removed',
+  null,
+  'a placed pending charge the bank drops stops counting',
 );
-assert.equal(gone.removed, 0);
+assert.equal(
+  gone.writes.has(purchaseIdFor(keyOf('t1'))),
+  false,
+  'a posted one is never removed',
+);
+assert.equal(gone.removed, 1);
+assert.deepEqual(
+  gone.released.map((charge) => [charge.docId, charge.title, charge.lines]),
+  [
+    [
+      pendingId,
+      'My coffee',
+      [{ envelopeId: 'env-1', cents: 675, via: 'chosen' }],
+    ],
+  ],
+  'and is reported with where its money went back',
+);
+
+const takenOver = applyTransactions(
+  keyOf,
+  targets,
+  [
+    tx('t4-new', 'card', 800, {
+      merchant: 'cafe',
+      date: Date.UTC(2026, 10, 3),
+    }),
+  ],
+  [],
+  ['t4-pending'],
+  new Map(
+    [...person].map(([id, state]) => [
+      id,
+      { ...state, payload: { ...state.payload, merchant: 'Cafe' } },
+    ]),
+  ),
+);
+const newId = purchaseIdFor(keyOf('t4-new'));
+const heir = takenOver.writes.get(newId);
+assert.equal(takenOver.writes.get(pendingId), null, 'the dropped one goes');
+assert.ok(heir, 'the posted one with no pending id takes its place');
+assert.equal(heir.needsHome, false, 'what the person decided is kept');
+assert.equal(heir.status, 'posted');
+assert.equal(
+  heir.dedupeKey,
+  keyOf('t4-new'),
+  'under its own key, so a later change finds it',
+);
+assert.deepEqual(heir.payload.lines, [
+  { envelopeId: 'env-1', cents: 800, via: 'chosen' },
+]);
+assert.deepEqual(takenOver.released, [], 'nothing to report');
+assert.deepEqual(takenOver.takeovers, [{ from: pendingId, to: newId }]);
+
+const farOff = applyTransactions(
+  keyOf,
+  targets,
+  [tx('t4-new', 'card', 5000, { merchant: 'Cafe' })],
+  [],
+  ['t4-pending'],
+  new Map(
+    [...person].map(([id, state]) => [
+      id,
+      { ...state, payload: { ...state.payload, merchant: 'Cafe' } },
+    ]),
+  ),
+);
+assert.equal(
+  farOff.writes.get(newId)?.needsHome,
+  true,
+  'a charge not close in amount waits in Needs a home',
+);
+assert.equal(farOff.released.length, 1, 'and the dropped one is reported');
+
+const twoDropped = new Map(person);
+const twin = person.get(pendingId) as PurchaseState;
+const otherId = purchaseIdFor(keyOf('t6-pending'));
+twoDropped.set(pendingId, {
+  ...twin,
+  payload: { ...twin.payload, merchant: 'Cafe' },
+});
+twoDropped.set(otherId, {
+  ...twin,
+  docId: otherId,
+  dedupeKey: keyOf('t6-pending'),
+  payload: { ...twin.payload, merchant: 'Cafe' },
+});
+const shared = applyTransactions(
+  keyOf,
+  targets,
+  [tx('t4-new', 'card', 700, { merchant: 'Cafe' })],
+  [],
+  ['t4-pending', 't6-pending'],
+  twoDropped,
+);
+assert.deepEqual(
+  shared.takeovers,
+  [],
+  'one posted charge two dropped ones could be is never guessed',
+);
+assert.equal(shared.released.length, 2);
+
 const cancelled = applyTransactions(
   keyOf,
   targets,

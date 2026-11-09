@@ -85,6 +85,7 @@ function toState(
       status: data.status === 'pending' ? 'pending' : 'posted',
       needsHome: data.needsHome === true,
       accountId: (data.accountId as string | null) ?? null,
+      expenseId: (data.expenseId as string | null) ?? null,
       payload: payload as PurchasePayload,
       isNew: false,
       isChanged: false,
@@ -169,9 +170,9 @@ function toWrites(
               date: state.date,
               source: 'link',
               status: state.status,
-              needsHome: true,
+              needsHome: state.needsHome,
               accountId: state.accountId,
-              expenseId: null,
+              expenseId: state.expenseId,
               dedupeKey: state.dedupeKey,
               createdAt: now,
               updatedAt: now,
@@ -193,6 +194,66 @@ function toWrites(
           },
         ];
   });
+}
+
+const releasedPath = (uid: string, docId: string) =>
+  planDocPath(uid, 'releasedCharges', docId);
+
+/** A note for each placed pending charge the bank dropped, so the app can say where its money went back; the app deletes it once read. */
+function toReleasedWrites(
+  firestore: Firestore,
+  uid: string,
+  outcome: SyncOutcome,
+  planKey: PlanKey,
+  unreadable: ReadonlySet<string>,
+  now: number,
+): Write[] {
+  return outcome.released
+    .filter((charge) => !unreadable.has(charge.docId))
+    .map((charge) => ({
+      kind: 'set',
+      ref: firestore.doc(releasedPath(uid, charge.docId)),
+      data: {
+        id: charge.docId,
+        date: charge.date,
+        createdAt: now,
+        sealed: sealWithKey(
+          planKey,
+          {
+            title: charge.title,
+            amountCents: charge.amountCents,
+            lines: charge.lines,
+          },
+          SEALED_SCHEMA_VERSION,
+        ),
+      },
+    }));
+}
+
+/** Receipt photos follow a dropped pending charge to the posted one that took its place; each keeps the purchase id its bytes sit under. */
+async function moveReceiptImages(
+  firestore: Firestore,
+  uid: string,
+  takeovers: SyncOutcome['takeovers'],
+) {
+  const moves = await Promise.all(
+    takeovers.map(async ({ from, to }) => {
+      const found = await firestore
+        .collection(`${planDocPath(uid, 'purchases', from)}/receiptImages`)
+        .get();
+      return found.docs.flatMap((entry): Write[] => [
+        {
+          kind: 'set',
+          ref: firestore.doc(
+            `${planDocPath(uid, 'purchases', to)}/receiptImages/${entry.id}`,
+          ),
+          data: entry.data(),
+        },
+        { kind: 'delete', ref: entry.ref },
+      ]);
+    }),
+  );
+  await commitWrites(firestore, moves.flat());
 }
 
 async function commitWrites(firestore: Firestore, writes: readonly Write[]) {
@@ -296,10 +357,25 @@ async function syncPurchases(
     );
     const now = Date.now();
     await markClosedMonths(firestore, uid, outcome.touchedDates, now);
-    await commitWrites(
+    await commitWrites(firestore, [
+      ...toWrites(
+        firestore,
+        uid,
+        outcome,
+        planKey,
+        unreadable,
+        updateTimes,
+        now,
+      ),
+      ...toReleasedWrites(firestore, uid, outcome, planKey, unreadable, now),
+    ]);
+    await moveReceiptImages(
       firestore,
-      toWrites(firestore, uid, outcome, planKey, unreadable, updateTimes, now),
-    );
+      uid,
+      outcome.takeovers.filter(({ from }) => !unreadable.has(from)),
+    ).catch(() => {
+      logger.warn('runway.sync.receiptsNotMoved', { linkId });
+    });
     /* The batch can't share a transaction with the mark, so it marks again once the batch has landed:
        a closing rebuilt in between is refused by the plan's new stamp and built again. */
     await markClosedMonths(firestore, uid, outcome.touchedDates, Date.now());

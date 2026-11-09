@@ -75,6 +75,7 @@ export interface PurchaseState {
   status: 'pending' | 'posted';
   needsHome: boolean;
   accountId: string | null;
+  expenseId: string | null;
   payload: PurchasePayload;
   isNew: boolean;
   isChanged: boolean;
@@ -118,9 +119,21 @@ export function neededDocIds(
   return [...new Set(ids)];
 }
 
+/** A placed pending charge the bank dropped: what it counted against, so the person can be told where the money went back. */
+export interface ReleasedCharge {
+  docId: string;
+  date: number;
+  title: string | null;
+  amountCents: number;
+  lines: PurchaseLine[];
+}
+
 export interface SyncOutcome {
   /** Every document the batch leaves changed (a state) or deleted (null). */
   writes: Map<string, PurchaseState | null>;
+  released: ReleasedCharge[];
+  /** A placed pending charge whose posted charge came under a new id: `to` took its place and `from` is deleted. */
+  takeovers: { from: string; to: string }[];
   created: number;
   updated: number;
   removed: number;
@@ -149,6 +162,7 @@ function upsert(
       status: tx.isPending ? 'pending' : 'posted',
       needsHome: true,
       accountId: target.accountId,
+      expenseId: null,
       payload: {
         amountCents: tx.amountCents,
         merchant: tx.merchant,
@@ -207,9 +221,63 @@ function upsert(
   };
 }
 
+const TAKEOVER_DAYS = 10;
+const TAKEOVER_SHARE = 0.25;
+const TAKEOVER_MIN_CENTS = 500;
+
+const sameName = (a: string | null, b: string | null) =>
+  a !== null &&
+  b !== null &&
+  a.trim().toLowerCase() !== '' &&
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** A posted charge that arrived with no pending id is the dropped one's only when it is the same account, merchant, a few days later and close in amount (a tip). */
+const isLikelyPosted = (dropped: PurchaseState, posted: PurchaseState) =>
+  posted.accountId === dropped.accountId &&
+  posted.payload.paidByCardId === dropped.payload.paidByCardId &&
+  sameName(posted.payload.merchant, dropped.payload.merchant) &&
+  posted.date >= dropped.date &&
+  posted.date <= dropped.date + TAKEOVER_DAYS * DAY_MS &&
+  posted.payload.amountCents > 0 &&
+  Math.abs(posted.payload.amountCents - dropped.payload.amountCents) <=
+    Math.max(
+      TAKEOVER_MIN_CENTS,
+      Math.round(dropped.payload.amountCents * TAKEOVER_SHARE),
+    );
+
+/** The posted charge takes the dropped one's place: what the person decided stays, and a changed amount goes to the last line. */
+const takeOver = (
+  dropped: PurchaseState,
+  posted: PurchaseState,
+): PurchaseState => ({
+  ...dropped,
+  docId: posted.docId,
+  dedupeKey: posted.dedupeKey,
+  date: posted.date,
+  status: 'posted',
+  accountId: posted.accountId,
+  payload: {
+    ...dropped.payload,
+    amountCents: posted.payload.amountCents,
+    merchantLogo:
+      posted.payload.merchantLogo ?? dropped.payload.merchantLogo ?? null,
+    bankName: posted.payload.bankName ?? dropped.payload.bankName ?? null,
+    category: posted.payload.category ?? dropped.payload.category ?? null,
+    lines: repriceLines(
+      dropped.payload.lines,
+      dropped.payload.amountCents,
+      posted.payload.amountCents,
+    ),
+  },
+  isNew: true,
+  isChanged: true,
+});
+
 /**
  * Applies one batch of the provider's changes to the purchases already stored (`existing`, keyed by document id).
  * A posted charge whose pending twin is stored updates that document, keeping what the person decided about it.
+ * A pending charge the bank drops stops counting: a waiting one is deleted, a placed one is deleted and reported, or
+ * taken over by the one posted charge in this batch that clearly replaces it.
  */
 export function applyTransactions(
   keyOf: (providerTransactionId: string) => string,
@@ -223,6 +291,7 @@ export function applyTransactions(
   const writes = new Map<string, PurchaseState | null>();
   const counts = { removed: 0, dropped: 0 };
   const touchedDates: number[] = [];
+  const arrivals = new Set<string>();
 
   [...added, ...modified].forEach((tx) => {
     const target = targets.get(tx.providerAccountId);
@@ -246,19 +315,59 @@ export function applyTransactions(
         ...(before && before.date !== state.date ? [before.date] : []),
       );
     }
+    if (state.isNew && pendingKey === null && !tx.isPending) {
+      arrivals.add(state.docId);
+    }
     states.set(state.docId, state);
     writes.set(state.docId, state);
   });
 
-  removed.forEach((providerTransactionId) => {
+  const gone = removed.flatMap((providerTransactionId) => {
     const docId = purchaseIdFor(keyOf(providerTransactionId));
     const state = states.get(docId);
-    if (!state || !state.needsHome || state.status !== 'pending') return;
+    if (!state || state.status !== 'pending') return [];
     counts.removed += 1;
     touchedDates.push(state.date);
     states.delete(docId);
     if (state.isNew) writes.delete(docId);
     else writes.set(docId, null);
+    return state.needsHome || state.isNew ? [] : [state];
+  });
+
+  const candidatesOf = (dropped: PurchaseState) =>
+    [...arrivals].flatMap((docId) => {
+      const posted = states.get(docId);
+      return posted && posted.needsHome && isLikelyPosted(dropped, posted)
+        ? [posted]
+        : [];
+    });
+  const claims = gone.reduce((tally, dropped) => {
+    const found = candidatesOf(dropped);
+    return found.length === 1
+      ? tally.set(found[0].docId, (tally.get(found[0].docId) ?? 0) + 1)
+      : tally;
+  }, new Map<string, number>());
+
+  const takeovers: SyncOutcome['takeovers'] = [];
+  const released: ReleasedCharge[] = [];
+  gone.forEach((dropped) => {
+    const found = candidatesOf(dropped);
+    const posted = found.length === 1 ? found[0] : null;
+    if (posted && claims.get(posted.docId) === 1) {
+      const state = takeOver(dropped, posted);
+      states.set(state.docId, state);
+      writes.set(state.docId, state);
+      takeovers.push({ from: dropped.docId, to: state.docId });
+      return;
+    }
+    const title = dropped.payload.label ?? dropped.payload.merchant;
+    released.push({
+      docId: dropped.docId,
+      date: dropped.date,
+      title: typeof title === 'string' && title.trim() !== '' ? title : null,
+      amountCents: dropped.payload.amountCents,
+      lines: dropped.payload.lines,
+    });
   });
 
   const kept = new Map(
@@ -269,6 +378,8 @@ export function applyTransactions(
   const present = [...kept.values()].flatMap((state) => (state ? [state] : []));
   const result: SyncOutcome = {
     writes: kept,
+    released,
+    takeovers,
     touchedDates,
     created: present.filter((state) => state.isNew).length,
     updated: present.filter((state) => !state.isNew).length,
