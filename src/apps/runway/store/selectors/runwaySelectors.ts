@@ -47,6 +47,10 @@ import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
 import {
+  getFundingRunsOf,
+  getStretchesOf,
+} from '@apps/runway/engine/billStretches';
+import {
   listHorizonPayments,
   type CostPaidEntry,
   type CostPayment,
@@ -947,6 +951,8 @@ export interface DraftViewOptions {
   coming?: readonly ComingDay[];
   /** False for a draft that is used once and not kept, such as one step of a lookahead. */
   isCached?: boolean;
+  /** The days before this one are already in `heldByItem` (a lookahead step), so the walk does not count them again. */
+  carriesEarlier?: boolean;
 }
 
 export function computeDraftView(
@@ -1046,6 +1052,11 @@ export function computeDraftView(
           ]),
           resolved.map(({ version }) => version.id),
           resolvedBills.map(({ version }) => version.id),
+          resolvedBills.map(({ item }) => getStretchesOf(versions, item)),
+          [...resolved, ...resolvedGoals].map(({ item }) =>
+            getFundingRunsOf(versions, item.id),
+          ),
+          options.carriesEarlier ?? false,
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
           resolvedHorizon.map(({ item, version }) => [
@@ -1093,6 +1104,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       maxCents: payload.maxCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1110,6 +1122,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
+    stretches: getStretchesOf(versions, item),
     fixed: fixedByBill.get(item.id),
     paired: pairedByBill.get(item.id),
     oneTimePayLineIds,
@@ -1151,6 +1164,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       targetCents: version.payload.targetCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1167,6 +1181,7 @@ export function computeDraftView(
       },
     ],
     plan: {
+      carriesEarlier: options.carriesEarlier ?? false,
       envelopes,
       bills,
       goals,
@@ -1351,6 +1366,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
+              stretches: getStretchesOf(versions, item),
               fixed: fixedByBill.get(item.id),
               paired: pairedByBill.get(item.id),
               oneTimePayLineIds,

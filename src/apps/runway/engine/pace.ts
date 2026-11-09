@@ -12,7 +12,12 @@ import { DAY_MS } from './dates';
 import { percentOf } from './money';
 import { getCalendarCents } from './calendar';
 import { selectRuleDays } from './schedule';
-import { getPartAsks, splitAcrossParts } from './parts';
+import {
+  getPartAsks,
+  getRunAsker,
+  splitAcrossParts,
+  type FundingRun,
+} from './parts';
 
 /** What one funded day asks of an exact or percentage goal; a `rest` goal's ask is not known ahead. */
 const getDayAsk = (funding: FundingRule, day: PaceDay) => {
@@ -53,6 +58,8 @@ export interface PaceGoal {
   priority?: Priority;
   orderIndex?: number;
   extras?: readonly PriorityExtra[] | null;
+  /** The goal's funding as each of its versions set it, so a day before the drafted one asks by its own. */
+  fundingRuns?: readonly FundingRun[];
 }
 
 export interface Pace {
@@ -86,12 +93,21 @@ export function planGoalContributions<D extends PaceDay>(
     | 'priority'
     | 'orderIndex'
     | 'extras'
+    | 'fundingRuns'
   >,
   incomeDays: readonly D[],
   priorDays: readonly PaceDay[] = [],
-  window: PaceWindow | null = null,
+  options: {
+    /** Only days inside it count: one version's stretch of the goal's plan. */
+    window?: PaceWindow;
+    /** Days before this are not counted: what they gave is already in `heldCents`. */
+    skipBefore?: number;
+    /** Days that ask by the goal's own funding whatever its runs say. */
+    ownDayKeys?: ReadonlySet<string>;
+  } = {},
 ): { day: D; cents: Cents; shares?: Cents[] }[] {
   const funded = selectRuleDays(goal.funding, incomeDays);
+  const runAsk = getRunAsker(goal.fundingRuns, incomeDays, priorDays);
   const calendar = getCalendarCents(goal.funding, funded, priorDays);
   const partAsks =
     goal.priority === undefined
@@ -111,15 +127,20 @@ export function planGoalContributions<D extends PaceDay>(
     parts: { day: D; cents: Cents; shares?: Cents[] }[];
   }>(
     (acc, day) => {
-      if (window !== null && !isInWindow(window, day.on)) return acc;
+      if (options.window && !isInWindow(options.window, day.on)) return acc;
       const isRest = goal.funding.amount.kind === 'rest';
       const asks = partAsks?.(day.dayKey) ?? null;
-      const ask = asks
-        ? asks.reduce((sum, part) => sum + part, 0)
-        : calendar
-          ? (calendar.get(day.dayKey) ?? 0)
-          : getDayAsk(goal.funding, day);
-      const cents = isRest ? acc.left : Math.min(ask, acc.left);
+      const ask =
+        runAsk && !options.ownDayKeys?.has(day.dayKey)
+          ? runAsk(day)
+          : asks
+            ? asks.reduce((sum, part) => sum + part, 0)
+            : calendar
+              ? (calendar.get(day.dayKey) ?? 0)
+              : getDayAsk(goal.funding, day);
+      const isSkipped =
+        options.skipBefore !== undefined && day.on < options.skipBefore;
+      const cents = isSkipped ? 0 : isRest ? acc.left : Math.min(ask, acc.left);
       const entry = asks
         ? { day, cents, shares: splitAcrossParts(asks, cents) }
         : { day, cents };
@@ -179,7 +200,7 @@ export function planGoalTimeline<D extends PaceDay>(
                 { ...stretch.goal, heldCents: acc.held },
                 incomeDays,
                 priorDays,
-                stretch,
+                { window: stretch },
               )
             : [];
         return {

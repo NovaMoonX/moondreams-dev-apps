@@ -232,8 +232,11 @@ import {
 import {
   computeDraftView,
   isGoalCovering,
+  selectBillPayments,
   selectReachedEndingsKey,
 } from '../../src/apps/runway/store/selectors/runwaySelectors.ts';
+import { runwayReducer } from '../../src/apps/runway/store/runwaySlice.ts';
+import { getStretchesOf } from '../../src/apps/runway/engine/billStretches.ts';
 import { getCreatedProblems } from '../../src/apps/runway/utils/lookaheadText.ts';
 import {
   describeChange,
@@ -20554,6 +20557,368 @@ console.log('runway engine: ok');
     ]).total.highCents,
     0,
     'an envelope ended before the month counts nothing in it',
+  );
+}
+
+// A bill is read as it stands on each payment's own due day, and a lookahead step counts each earlier pay once.
+{
+  const T = utc(2026, 11, 9);
+  const exactRange = (cents: number) => ({ lowCents: cents, highCents: cents });
+  const rule = (cents: number) => ({
+    amount: { kind: 'exact', cents },
+    cadence: { kind: 'everyIncomeDay' },
+  });
+  const monthlyOn = (anchor: number, day: number): Schedule => ({
+    kind: 'monthly',
+    anchor,
+    monthDays: [day],
+  });
+  const stored = (
+    id: string,
+    itemId: string,
+    kind: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    payload: object,
+  ) =>
+    ({
+      id,
+      itemId,
+      kind,
+      createdAt,
+      effectiveFrom: from,
+      effectiveUntil: until,
+      changeId: 'c',
+      payload,
+    }) as unknown as OpenVersion;
+  const payLine = (id: string, schedule: Schedule, cents: number) => [
+    stored('vsrc', 'src', 'source', 1, T, null, {
+      name: 'Acme',
+      pairings: [],
+    }),
+    stored(`v${id}`, id, 'payLine', 1, T, null, {
+      name: 'Paycheck',
+      accountId: null,
+      schedule,
+      amount: exactRange(cents),
+      ending: NEVER,
+      stanceOverride: null,
+      pairings: [],
+    }),
+  ];
+  const payItems = (id: string) => [
+    item('src', 1),
+    item(id, 1, { kind: 'payLine', parentId: 'src' }),
+  ];
+  const billVersion = (
+    id: string,
+    createdAt: number,
+    from: number,
+    until: number | null,
+    cents: number,
+    schedule: Schedule,
+    fundedBy: object = { kind: 'lastBefore' },
+  ) =>
+    stored(id, 'rent', 'bill', createdAt, from, until, {
+      name: 'Rent',
+      emoji: null,
+      priority: 'must',
+      orderIndex: 1,
+      amount: exactRange(cents),
+      timing: { kind: 'date', schedule },
+      ending: NEVER,
+      fundedBy,
+      groupId: null,
+      stanceOverride: null,
+    });
+  const rentItem = item('rent', 2, { kind: 'bill' });
+  const firstOfMonth = monthlyOn(utc(2026, 12, 1), 1);
+  const twiceMonthly: Schedule = {
+    kind: 'twiceMonthly',
+    anchor: utc(2026, 11, 14),
+    monthDays: [14, 28],
+  };
+  const pay = payLine('pay', twiceMonthly, 300_000);
+  const stateOf = (versions: OpenVersion[]) =>
+    ({
+      runway: {
+        ...runwayReducer(undefined, { type: 'init' }),
+        items: [...payItems('pay'), rentItem],
+        versions: [...pay, ...versions],
+      },
+    }) as unknown as Parameters<typeof selectBillPayments>[0];
+  const paymentsOn = (versions: OpenVersion[], today = T) =>
+    selectBillPayments(stateOf(versions), today).rent.map((payment) => [
+      payment.dueOn,
+      payment.totalCents,
+    ]);
+
+  // A raise from a later date applies to the payments due from it, not to every payment.
+  const raise = [
+    billVersion('r1', 1, T, null, 125_000, firstOfMonth),
+    billVersion('r2', 2, utc(2027, 1, 1), null, 130_000, firstOfMonth),
+  ];
+  assert.deepEqual(
+    paymentsOn(raise).slice(0, 3),
+    [
+      [utc(2026, 12, 1), 125_000],
+      [utc(2027, 1, 1), 130_000],
+      [utc(2027, 2, 1), 130_000],
+    ],
+    'a raise from Jan 1st leaves the Dec 1st payment at the old amount',
+  );
+  assert.deepEqual(
+    paymentsOn(raise, utc(2027, 2, 10)).slice(0, 2),
+    [
+      [utc(2026, 12, 1), 125_000],
+      [utc(2027, 1, 1), 130_000],
+    ],
+    'a past payment keeps its own due day’s amount once the raise is in force',
+  );
+
+  // A due day that changes from a later date moves only the payments from it.
+  const moved = [
+    billVersion('m1', 1, T, null, 125_000, firstOfMonth),
+    billVersion('m2', 2, utc(2027, 1, 1), null, 125_000, {
+      kind: 'monthly',
+      anchor: utc(2027, 1, 15),
+      monthDays: [15],
+    }),
+  ];
+  assert.deepEqual(
+    paymentsOn(moved)
+      .slice(0, 4)
+      .map(([dueOn]) => dueOn),
+    [utc(2026, 12, 1), utc(2027, 1, 15), utc(2027, 2, 15), utc(2027, 3, 15)],
+    'a due day moved from Jan 1st keeps Dec 1st and falls on the 15th after',
+  );
+
+  // A temporary amount covers its own stretch and the old one comes back after it.
+  const temporary = [
+    billVersion('t1', 1, T, null, 125_000, firstOfMonth),
+    billVersion(
+      't2',
+      2,
+      utc(2027, 1, 1),
+      utc(2027, 2, 1),
+      150_000,
+      firstOfMonth,
+    ),
+  ];
+  assert.deepEqual(
+    paymentsOn(temporary).slice(0, 4),
+    [
+      [utc(2026, 12, 1), 125_000],
+      [utc(2027, 1, 1), 150_000],
+      [utc(2027, 2, 1), 125_000],
+      [utc(2027, 3, 1), 125_000],
+    ],
+    'a temporary amount applies to the payments inside it only',
+  );
+
+  // The draft asks the pay right before a payment for that payment's amount, not the pay day's.
+  const payItemsAll = [...payItems('pay'), rentItem];
+  const dec28 = toDayKey('pay', utc(2026, 12, 28));
+  const straddle = computeDraftView(
+    payItemsAll,
+    [...pay, ...raise],
+    'conservative',
+    [],
+    dec28,
+    T,
+    {},
+    '',
+    {},
+  );
+  const rentLine = straddle?.draft.lines.find((line) => line.itemId === 'rent');
+  assert.equal(
+    rentLine?.cents,
+    130_000,
+    'the Dec 28th pay sets aside the $1,300 the Jan 1st payment will be',
+  );
+  assert.equal(rentLine?.bill?.totalCents, 130_000);
+  const share = previewBillShareView(
+    {
+      items: payItemsAll,
+      versions: [...pay, ...raise],
+      openDays: [],
+      stance: 'conservative',
+      today: T,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+    },
+    {
+      kind: 'dayBill',
+      day: buildComingDays(payItemsAll, [...pay, ...raise], T).find(
+        (day) => day.dayKey === dec28,
+      ) as ComingDay,
+      billId: 'rent',
+      cents: 999_999,
+    },
+  );
+  assert.equal(
+    share?.share.maxCents,
+    130_000,
+    'a pay’s most for the bill is the payment’s own amount',
+  );
+
+  // A lookahead step counts each earlier pay once: a goal and an envelope take ten pays of $100 to reach $1,000.
+  const weekly: Schedule = {
+    kind: 'weekly',
+    anchor: utc(2026, 11, 13),
+    monthDays: [],
+  };
+  const lookaheadItems = [
+    ...payItems('pay2'),
+    item('g', 3, { kind: 'goal' }),
+    item('e', 4, { kind: 'envelope' }),
+  ];
+  const lookaheadVersions = [
+    ...payLine('pay2', weekly, 500_000),
+    stored('vg', 'g', 'goal', 1, T, null, {
+      name: 'Trip',
+      emoji: null,
+      priority: 'should',
+      orderIndex: 2,
+      targetCents: 100_000,
+      targetDate: null,
+      funding: rule(10_000),
+      state: 'active',
+      groupId: null,
+    }),
+    stored('ve', 'e', 'envelope', 1, T, null, {
+      name: 'Fun',
+      emoji: null,
+      priority: 'should',
+      orderIndex: 3,
+      funding: rule(10_000),
+      maxCents: 100_000,
+    }),
+  ];
+  const walkOf = (
+    items: PlanItemDoc[],
+    versions: OpenVersion[],
+    heldByItem: Record<string, number> = {},
+  ) =>
+    computeLookahead(
+      { items, versions, openDays: [] },
+      {
+        stance: 'conservative',
+        today: T,
+        heldByItem,
+        settledKey: '',
+        billProgress: {},
+        startDate: null,
+        recentFrom: T - 180 * DAY_MS,
+        comingDays: buildComingDays(items, versions, T),
+        bills: [],
+        payments: {},
+      },
+    );
+  const stepsOf = (look: Lookahead, itemId: string) =>
+    look.steps.map(
+      (step) => step.lines.find((line) => line.itemId === itemId)?.cents ?? 0,
+    );
+  const walked = walkOf(lookaheadItems, lookaheadVersions);
+  [
+    ['g', 'a goal'],
+    ['e', 'an envelope with a max'],
+  ].forEach(([id, label]) => {
+    const steps = stepsOf(walked, id);
+    assert.deepEqual(
+      steps.slice(0, 11),
+      [...Array(10).fill(10_000), 0],
+      `${label} takes $100 on each of ten pays, then nothing`,
+    );
+  });
+
+  // A bill spread over three pays asks $400 of each in a lookahead, as its own payment plan does.
+  const rentWalkItems = [...payItems('pay2'), rentItem];
+  const rentWalkVersions = [
+    ...payLine('pay2', weekly, 500_000),
+    billVersion('rw', 1, T, null, 120_000, firstOfMonth, {
+      kind: 'suggested',
+    }),
+  ];
+  const rentWalkDays = buildComingDays(rentWalkItems, rentWalkVersions, T);
+  const rentWalk = computeLookahead(
+    { items: rentWalkItems, versions: rentWalkVersions, openDays: [] },
+    {
+      stance: 'conservative',
+      today: T,
+      heldByItem: {},
+      settledKey: '',
+      billProgress: {},
+      startDate: null,
+      recentFrom: null,
+      comingDays: rentWalkDays,
+      bills: [{ item: rentItem, version: rentWalkVersions[2] }] as never,
+      payments: {
+        rent: planBillPayments(
+          {
+            itemId: 'rent',
+            createdAt: 2,
+            priority: 'must',
+            orderIndex: 1,
+            amount: exactRange(120_000),
+            schedule: firstOfMonth,
+            ending: NEVER,
+            fundedBy: { kind: 'suggested' },
+            stretches: getStretchesOf(rentWalkVersions, rentItem),
+          },
+          rentWalkDays,
+          utc(2027, 11, 9),
+          'conservative',
+          { today: T },
+        ),
+      },
+    },
+  );
+  assert.deepEqual(
+    stepsOf(rentWalk, 'rent').slice(0, 3),
+    [40_000, 40_000, 40_000],
+    'a bill’s later pays are not asked for less because the earlier pays were counted twice',
+  );
+
+  // A walk over earlier days reads each one's own funding: $100 a pay, then $200 from Dec 1st, with $200 left to save.
+  const otherWeek: Schedule = {
+    kind: 'everyOtherWeek',
+    anchor: utc(2026, 11, 20),
+    monthDays: [],
+  };
+  const goalPayload = (cents: number) => ({
+    name: 'Trip',
+    emoji: null,
+    priority: 'should',
+    orderIndex: 2,
+    targetCents: 100_000,
+    targetDate: null,
+    funding: rule(cents),
+    state: 'active',
+    groupId: null,
+  });
+  const changing = [
+    ...payLine('pay3', otherWeek, 500_000),
+    stored('g1', 'g', 'goal', 1, T, utc(2026, 12, 1), goalPayload(10_000)),
+    stored('g2', 'g', 'goal', 2, utc(2026, 12, 1), null, goalPayload(20_000)),
+  ];
+  const dec4 = computeDraftView(
+    [...payItems('pay3'), item('g', 3, { kind: 'goal' })],
+    changing,
+    'conservative',
+    [],
+    toDayKey('pay3', utc(2026, 12, 4)),
+    T,
+    { g: 80_000 },
+    '',
+    {},
+  );
+  assert.equal(
+    dec4?.draft.lines.find((line) => line.itemId === 'g')?.cents,
+    10_000,
+    'the Nov 20th pay gave the $100 it was set to, so $100 of the $200 left is still to come',
   );
 }
 

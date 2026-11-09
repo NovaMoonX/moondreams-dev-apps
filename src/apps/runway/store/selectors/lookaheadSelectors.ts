@@ -142,7 +142,11 @@ export function computeLookahead(
         withAdded(heldByItem, carry.added),
         settledKey,
         withCarry(billProgress, carry),
-        { coming: inputs.comingDays, isCached: false },
+        {
+          coming: inputs.comingDays,
+          isCached: false,
+          carriesEarlier: true,
+        },
       );
       return view ? { draft: view.draft, names: view.items } : null;
     },
