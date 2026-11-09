@@ -39,5 +39,5 @@ export const HELM_COPY = {
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
-  turnsFailed: "Your turns didn't open. Close Helm and open it again.",
+  turnsFailed: "Your turns didn't open. Close this page and open it again.",
 } as const;
