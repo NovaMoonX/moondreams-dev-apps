@@ -31,12 +31,17 @@ Each **round**:
 3. **Reconcile.** You answer every cross-track "needs" yourself where the conventions, the existing apps or the idea decide it, and log the answer. Two tracks that disagree get one decision from you, logged with the reason; only a disagreement that turns on what the owner wants goes to the owner.
 4. **Round brief to the owner.** One screen, also saved as `planning/<id>/ROUND.md`:
    - **Settled this round**: one line each, at most eight; link the doc section for each.
-   - **Your decisions** (at most five, asked through `AskUserQuestion`, recommendation first): what the question is in plain words, what each answer changes.
+   - **Your decisions** (asked through `AskUserQuestion`, recommendation first; four per call, so several calls when there are more): what the question is in plain words, what each answer changes. There is no cap: the goal is a properly planned app, so raise every question that passes the test under "Which questions reach the owner", and none that doesn't (owner, Helm round 5: "rather than having a limit, the planners should know which questions should be raised").
    - **Where the team disagreed** and what you decided.
    - **Next round** covers: one line.
 
    The owner approves the round brief, never the full docs. They can open any doc when they want the detail, and the docs say which round last changed each section. Every link in the brief is one the owner can tap from the Claude app: a scratchpad path is not (owner, Going Once round 3: only the artifact opened), so the drafts go out as published pages beside the canvas, or through a document connector the host attaches.
 5. Repeat until no track has a question for the owner and the docs agree. Typical rounds: (1) vision, journeys, core entities; (2) screens and data in detail; (3) edge states, rules, backend surface; (4) roadmap. **The last round is always the owner's own review:** before approval, offer one round where the owner reads the canvas and docs and sends changes, and never commit the docs or create issues until they say approve (owner, Going Once).
+
+Which questions reach the owner (the test every planner and the lead apply, instead of a count):
+- **Raise it** when the answer turns on what the owner wants and changes what gets built or promised: scope (in the MVP or later), who sees or shares what (privacy, another person's data), a default the person lives with every day, a promise in copy, money or cost, anything hard to reverse (a data shape, deleting, a provider), or a disagreement between tracks that only the owner's taste settles.
+- **Don't raise it** when the conventions, the existing apps, the code, the logged decisions or a sensible default answer it; decide it, log it, and list it under "Decisions I made for you" with the other option, so the owner can still overturn it.
+- When in doubt between the two, prefer asking for anything privacy, scope or irreversible, and deciding for anything visual or technical that a later round can change.
 
 Keep the owner's load low in every round:
 - Never ask what the conventions, the code or a sensible default already answer; say the default in the round brief instead.

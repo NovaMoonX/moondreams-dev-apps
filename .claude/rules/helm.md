@@ -1,0 +1,21 @@
+---
+paths:
+  - 'src/apps/helm/**'
+  - 'functions/src/apps/helm/**'
+---
+
+# Helm rules
+
+Applies on top of `CLAUDE.md` and `docs/conventions/` to everything under `src/apps/helm/` and `functions/src/apps/helm/`. The full design is `src/apps/helm/UX.md` (section 1 is the source of these rules), the look and example world `canvas.md`, the data and server `TECHNICAL.md`.
+
+- **Built for one person's whole life, mostly by voice.** Helm is private to its person; nothing is shared with another member. Every change is walked as the person talking to the assistant (Nomos by default, renameable everywhere, `{Name}` in copy and the wake phrase), and is checked at a scale of a lifetime: 2,000 people, 20,000 key dates, hundreds of topics.
+- **Home is the conversation; content pages end in the ask bar.** Home is a voice-first surface: the assistant's name, at most two quiet lines and the dock (Browse · Talk · Type). The dock lives on home only. Every content page (a who, place, project, task, topic, note, procedure, Today, Needs you, the lists, Coming up) ends in one full-width **ask bar** ("Ask about Grandpa", mic and keyboard), drawn once by the shell, fixed at the page's foot, part of the layout and never floating; utility screens (Settings, Connected apps, Activity, Search, forms) have none. It opens the conversation over the page with a removable "About Grandpa" chip and closes with "Back to Grandpa" at the same scroll position. Content pages carry Back, Home (left out when Back says Home) and ⋯; there is no tab bar and no per-view add-a-task button.
+- **A reply is words first, then what it did.** The assistant's words beside its mark (its name's first letter in the title serif, in a pewter disc), then one compact card of what it did with one Undo ("Undo all of this" for more than one line). Messages sent while it is still thinking join that turn and get one reply. Spoken replies only answer spoken turns.
+- **Suggested looks suggested; guessed looks guessed.** A dashed verdigris edge means "suggested, not yours yet" and nothing else is dashed; verdigris means "your call" and nothing else. An inferred fact carries a hollow ring and "{Name} inferred", a said or confirmed one a filled ring. General knowledge sits below a "Not from your records" `SectionDivider` in its own card, never in the records card.
+- **Fixed is solid, flexible is Helm's.** A calendar event or another app's record is a plain card with its calendar mark or `AppLogo`, read-only; a planned task has a round tick; a suggestion is the dashed card.
+- **Your words stay yours.** The assistant adds to a topic, a procedure or a record on its own only as a new version with Undo, and never removes or rewrites the person's words, or deletes a record, unless asked; `reviseTopic` needs a verbatim quote of the request. Every part of a topic says where it came from.
+- **Ask, then file.** Knowledge without a fitting topic asks "Where should this go?" once; after that it files itself with "Undo · Change topic". A new parent topic is always proposed, never created unasked.
+- **No made-up numbers.** No percentages, progress bars, scores or health colours; a state is an evidence line, and only "overdue" takes the warning colour.
+- **Look: the household's private secretary.** Pewter page, white cards, ink navy for the one filled button and Talk, a pale pewter tint for the assistant, verdigris only for "your call", amber only for overdue. Titles in the serif at 600, everything else the site sans, tabular figures, sentence case. Cards 14px, fields 10px, pills and ticks round, hairlines with no card shadows. Tokens live in `helm.css` on `html.helm-theme` (table in `canvas.md` "Look and tokens").
+- **Tone: plain, short and assured**, an exception to "Playful by default": past-tense reports ("Made a task and linked it to Wedding"), no cheerleading, streaks or emoji in fixed copy; an emoji appears only where the person chose one. Copy never guesses a pronoun.
+- **Sealed by default.** Content is sealed on the device or the server under `HELM_MASTER_KEYS`; only what a query needs stays readable, and nothing sealed is indexed anywhere, key dates included (`TECHNICAL.md` sections 2 and 3). The model sees only what the server re-reads under the person's own account; a screen publishes record ids, never content.
