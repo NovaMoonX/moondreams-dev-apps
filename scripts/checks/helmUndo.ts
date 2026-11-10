@@ -68,6 +68,8 @@ const execution = (
   autonomyLevel: 2,
   state: 'succeeded',
   effectRefs: entries.map((entry) => entry.ref),
+  linkedWhoIds: [],
+  linkedPlaceIds: [],
   undoesExecutionId: null,
   undoneByExecutionId: null,
   questionRef: null,
@@ -549,6 +551,25 @@ test('a turn whose tasks are all gone leaves the people it made alone', () => {
     ]),
   );
   assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a person a kept task still links stays', () => {
+  const result = asWrite(
+    plan(execution([...WITH_JORDAN, create('t2', 'Buy candles')]), [
+      target(
+        't1',
+        { lastEditedAt: NOW, whoIds: ['w1'] },
+        sealedOf('Bring Jordan the book'),
+      ),
+      target('w1', { lastEditedAt: null, lastMentionedAt: EARLIER }, null),
+      target('t2', { lastEditedAt: null }, sealedOf('Buy candles')),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['t2'],
+  );
+  assert.deepEqual(result.kept, ['Bring Jordan the book']);
 });
 
 const failures = tests.flatMap(([name, run]) => {

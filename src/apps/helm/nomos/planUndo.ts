@@ -288,17 +288,49 @@ export function planUndo(input: {
     return refuse('unreadable');
   }
 
-  const outcomes = [...groupByDoc(original)].map(([docId, entries]) => ({
-    docId,
-    outcome: planRecord(
-      targets.get(docId) ?? { docId, data: null, opened: null },
-      entries,
-      now,
-      original.createdAt,
-      usedIds.has(docId),
-    ),
-  }));
   const collectionOf = toCollectionOf(original);
+  const groups = [...groupByDoc(original)];
+  const isEntityDoc = (docId: string) =>
+    isEntity(collectionOf.get(docId) ?? 'tasks');
+  const targetOf = (docId: string) =>
+    targets.get(docId) ?? { docId, data: null, opened: null };
+  const recordOutcomes = groups
+    .filter(([docId]) => !isEntityDoc(docId))
+    .map(([docId, entries]) => ({
+      docId,
+      outcome: planRecord(
+        targetOf(docId),
+        entries,
+        now,
+        original.createdAt,
+        false,
+      ),
+    }));
+  // A person or place stays while a record this undo keeps still links it.
+  const keptLinks = new Set(
+    recordOutcomes.flatMap(({ docId, outcome }) => {
+      if (outcome.kind !== 'kept' && outcome.kind !== 'skipped') return [];
+      const data = targetOf(docId).data;
+      const idsOf = (field: string) =>
+        Array.isArray(data?.[field]) ? (data[field] as string[]) : [];
+      return [...idsOf('whoIds'), ...idsOf('placeIds')];
+    }),
+  );
+  const outcomes = [
+    ...recordOutcomes,
+    ...groups
+      .filter(([docId]) => isEntityDoc(docId))
+      .map(([docId, entries]) => ({
+        docId,
+        outcome: planRecord(
+          targetOf(docId),
+          entries,
+          now,
+          original.createdAt,
+          usedIds.has(docId) || keptLinks.has(docId),
+        ),
+      })),
+  ];
   const kept = outcomes.flatMap(({ outcome }) =>
     outcome.kind === 'kept' ? [outcome.title] : [],
   );
@@ -355,6 +387,8 @@ export function planUndo(input: {
         collection: collectionOf.get(docId) ?? 'tasks',
         docId,
       })),
+      linkedWhoIds: [],
+      linkedPlaceIds: [],
       undoesExecutionId: original.id,
       undoneByExecutionId: null,
       questionRef: null,

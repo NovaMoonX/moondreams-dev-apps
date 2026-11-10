@@ -124,6 +124,8 @@ export async function generatePlan(
       autonomyLevel: 1,
       state: 'proposed',
       effectRefs: [],
+      linkedWhoIds: [],
+      linkedPlaceIds: [],
       undoesExecutionId: null,
       undoneByExecutionId: null,
       questionRef: null,

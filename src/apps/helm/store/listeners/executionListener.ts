@@ -41,6 +41,8 @@ export async function openExecution(
     autonomyLevel: data.autonomyLevel ?? 2,
     state: data.state ?? 'succeeded',
     effectRefs: data.effectRefs ?? [],
+    linkedWhoIds: data.linkedWhoIds ?? [],
+    linkedPlaceIds: data.linkedPlaceIds ?? [],
     undoesExecutionId: data.undoesExecutionId ?? null,
     undoneByExecutionId: data.undoneByExecutionId ?? null,
     questionRef: data.questionRef ?? null,

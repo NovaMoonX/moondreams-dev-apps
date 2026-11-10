@@ -392,6 +392,9 @@ export interface Execution {
   autonomyLevel: AutonomyLevel;
   state: ExecutionState;
   effectRefs: EffectRef[];
+  /** Who and places the execution linked, matched or made; ids only. */
+  linkedWhoIds: string[];
+  linkedPlaceIds: string[];
   undoesExecutionId: string | null;
   undoneByExecutionId: string | null;
   questionRef: { captureId: string; questionId: string } | null;

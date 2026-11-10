@@ -17,13 +17,11 @@ import { useResultLines } from '@apps/helm/hooks/useResultLines';
 import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
-import type { OpenCapture, OpenExecution } from '@apps/helm/types';
+import type { OpenExecution } from '@apps/helm/types';
 import { readMadeEntities } from '@apps/helm/utils/resultLines';
 
 interface ResultLinesProps {
   captureId: string;
-  /** Who and places the turn linked, so its card names them. */
-  linked: Pick<OpenCapture, 'whoIds' | 'placeIds'>;
   execution: OpenExecution;
   /** On home a turn is marked seen once its card is on screen, and the first one says that an AI service reads what is said. */
   isOnHome: boolean;
@@ -61,15 +59,12 @@ function AiNotice() {
   );
 }
 
-function PeopleRow({
-  execution,
-  linked,
-}: Pick<ResultLinesProps, 'execution' | 'linked'>) {
+function PeopleRow({ execution }: Pick<ResultLinesProps, 'execution'>) {
   const made = readMadeEntities(execution);
   const madeIds = new Set(made.map((entry) => entry.id));
   const others = useLinkedNames({
-    whoIds: linked.whoIds.filter((id) => !madeIds.has(id)),
-    placeIds: linked.placeIds.filter((id) => !madeIds.has(id)),
+    whoIds: execution.linkedWhoIds.filter((id) => !madeIds.has(id)),
+    placeIds: execution.linkedPlaceIds.filter((id) => !madeIds.has(id)),
   });
   const parts = [
     made.length > 0
@@ -90,7 +85,6 @@ function PeopleRow({
 /** What the assistant said about a turn and the compact card of what it did, one row per change. */
 function ResultLines({
   captureId,
-  linked,
   execution,
   isOnHome,
   isSeen,
@@ -125,7 +119,7 @@ function ResultLines({
           {lines.length > 0 && (
             <div className='helm-card ml-[30px] w-[calc(100%-30px)] overflow-hidden'>
               <ResultRows execution={execution} lines={lines} undo={undo} />
-              {!isUndone && <PeopleRow execution={execution} linked={linked} />}
+              {!isUndone && <PeopleRow execution={execution} />}
               {hasFoot && (
                 <div className='border-border flex items-baseline justify-between gap-3 border-t px-3.5 py-2'>
                   {isUndone ? (

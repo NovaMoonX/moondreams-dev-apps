@@ -184,7 +184,6 @@ function TurnCard({
             <ResultLines
               key={execution.id}
               captureId={capture.id}
-              linked={capture}
               execution={execution}
               isOnHome={isOnHome}
               isSeen={capture.seenAt !== null}

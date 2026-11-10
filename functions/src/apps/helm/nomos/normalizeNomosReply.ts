@@ -392,16 +392,10 @@ const readCommand = (
   if (!taskId) throw new NomosReplyError('unknownAlias');
   if (kind === 'completeTask') return { kind, taskId };
   const hasDue = item.dueSpanId !== null && item.dueSpanId !== undefined;
-  if (!title && !hasDue && isUrgent === null) return null;
-  return {
-    kind,
-    taskId,
-    title,
-    due,
-    hasDue,
-    isUrgent,
-    ...readLinks(item, title, reading, entities),
-  };
+  const links = readLinks(item, title, reading, entities);
+  const hasLinks = links.whoRefs.length > 0 || links.placeRefs.length > 0;
+  if (!title && !hasDue && isUrgent === null && !hasLinks) return null;
+  return { kind, taskId, title, due, hasDue, isUrgent, ...links };
 };
 
 const toKey = (title: string) => title.trim().toLowerCase();

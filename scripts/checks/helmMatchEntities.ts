@@ -229,6 +229,42 @@ test('a dropped mention or refs out of order never link another who', () => {
   assert.deepEqual(text.whoRefs, [refOf('Ana')]);
 });
 
+test('an update that only links a person still reaches the executor', () => {
+  const aliases = createAliasBook('t');
+  const alias = aliases.add('task-1');
+  const reply = normalizeNomosReply(
+    {
+      commands: [
+        {
+          kind: 'updateTask',
+          ref: null,
+          taskAlias: alias,
+          title: null,
+          dueSpanId: null,
+          isUrgent: null,
+          whoRefs: ['$w1'],
+        },
+      ],
+      mentions: [
+        {
+          ref: '$w1',
+          name: 'Sam',
+          kind: 'person',
+          relation: null,
+          species: null,
+          organizationKind: null,
+        },
+      ],
+      places: [],
+    },
+    { reading: { ...READING, people: [] }, aliases },
+  );
+  const [update] = reply.commands;
+  assert.ok(update?.kind === 'updateTask', 'the link-only update is kept');
+  assert.equal(update.taskId, 'task-1');
+  assert.deepEqual(update.whoRefs, [reply.mentions[0]?.ref]);
+});
+
 test('a reply names who and places; refs, caps and unknown refs are settled by code', () => {
   const reply = read({
     commands: [
