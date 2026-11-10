@@ -6,6 +6,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 
 import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapter.ts';
 import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
+import { createNineLivesAdapter } from '../../functions/src/apps/nine-lives/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
 import {
   applyCategoryChanges,
@@ -854,6 +855,299 @@ assert.equal(await goingOnceAdapter.status(goingOnceCtx(OTHER)), 'noAccess');
 assert.equal(
   goingOnceAdapter.deepLink('sales/fall', goingOnceCtx(OWNER)),
   '/going-once',
+);
+
+const HOUSEMATE = 'housemate-uid';
+const CARE_SECRET = 'SECRET CARE';
+const EXPENSE_AMOUNT = 6363;
+const WEIGHT_VALUE = 11.77;
+
+const careHousehold = firestore.doc('apps/nine-lives/households/home');
+const careDocs = (collection: string, id: string) =>
+  careHousehold.collection(collection).doc(id);
+const leftHousehold = firestore.doc('apps/nine-lives/households/left');
+
+const vetVisit = (catIds: string[], extra: Record<string, unknown> = {}) => ({
+  catIds,
+  clinicId: 'blue-bark',
+  status: 'upcoming',
+  reason: 'checkup',
+  customReasonLabel: null,
+  title: CARE_SECRET,
+  scheduledAt: TODAY + 3 * DAY + 9 * 3_600_000,
+  summary: CARE_SECRET,
+  lastEditedAt: NOW - 11,
+  ...extra,
+});
+
+await Promise.all([
+  careHousehold.set({
+    name: 'Home',
+    members: [OWNER, HOUSEMATE],
+    inviteCode: CARE_SECRET,
+    createdBy: OWNER,
+    lastEditedAt: NOW - 12,
+  }),
+  careDocs('cats', 'mochi').set({
+    name: 'Mochi',
+    notes: CARE_SECRET,
+    microchipNumber: CARE_SECRET,
+    lastEditedAt: NOW - 13,
+  }),
+  careDocs('cats', 'juniper').set({ name: 'Juniper', lastEditedAt: NOW - 14 }),
+  careDocs('vetClinics', 'blue-bark').set({
+    name: 'Blue Bark Vet',
+    phone: '555-0100',
+    address: '1 Cat Lane',
+    email: 'secret-clinic@example.test',
+    notes: CARE_SECRET,
+    lastEditedAt: NOW - 15,
+  }),
+  careDocs('visits', 'next').set(vetVisit(['mochi', 'juniper'])),
+  careDocs('visits', 'custom').set(
+    vetVisit(['juniper'], {
+      clinicId: null,
+      reason: 'custom',
+      customReasonLabel: 'Dental',
+      scheduledAt: TODAY - 2 * DAY,
+    }),
+  ),
+  careDocs('visits', 'old').set(
+    vetVisit(['mochi'], { scheduledAt: TODAY - 60 * DAY }),
+  ),
+  careDocs('visits', 'done').set(vetVisit(['mochi'], { status: 'completed' })),
+  careDocs('visits', 'nocat').set(vetVisit(['gone-cat'])),
+  careDocs('vaccinations', 'rabies').set({
+    catId: 'mochi',
+    name: 'Rabies',
+    history: [{ lotNumber: CARE_SECRET }],
+    expiresAt: TODAY + 20 * DAY,
+    lastEditedAt: NOW - 16,
+  }),
+  careDocs('vaccinations', 'lapsed').set({
+    catId: 'mochi',
+    name: 'Old shot',
+    expiresAt: TODAY - 90 * DAY,
+  }),
+  careDocs('vaccinations', 'nodue').set({
+    catId: 'mochi',
+    name: 'No next date',
+    expiresAt: null,
+  }),
+  careDocs('preventives', 'flea').set({
+    catIds: ['mochi', 'juniper'],
+    name: 'Flea and tick',
+    history: [{ dosage: CARE_SECRET }],
+    expiresAt: TODAY - 5 * DAY,
+    lastEditedAt: NOW - 17,
+  }),
+  careDocs('conditions', 'asthma').set({
+    catId: 'juniper',
+    name: 'Asthma',
+    status: 'ongoing',
+    description: CARE_SECRET,
+    lastEditedAt: NOW - 18,
+  }),
+  careDocs('expenses', 'food').set({
+    catIds: ['mochi'],
+    items: [
+      { id: 'i', category: 'food', label: CARE_SECRET, amount: EXPENSE_AMOUNT },
+    ],
+    label: CARE_SECRET,
+  }),
+  careDocs('weightEntries', 'w1').set({
+    catId: 'mochi',
+    weight: WEIGHT_VALUE,
+    unit: 'lb',
+  }),
+  careDocs('litterEntries', 'l1').set({
+    litterBoxId: 'box',
+    weightBefore: WEIGHT_VALUE,
+    notes: CARE_SECRET,
+  }),
+  careDocs('healthRecords', 'h1').set({
+    catIds: ['mochi'],
+    fileURL: 'https://storage.example.test/secret-record.pdf',
+    fileName: 'secret-record.pdf',
+    notes: CARE_SECRET,
+  }),
+  leftHousehold.set({
+    name: 'Left behind',
+    members: [HOUSEMATE],
+    createdBy: OWNER,
+    lastEditedAt: NOW - 19,
+  }),
+  leftHousehold.collection('cats').doc('ghost').set({ name: 'Ghost' }),
+  leftHousehold.collection('vetClinics').doc('c').set({ name: 'Ghost Clinic' }),
+  leftHousehold.collection('conditions').doc('c').set({
+    catId: 'ghost',
+    name: 'Ghost condition',
+    status: 'active',
+  }),
+  leftHousehold
+    .collection('visits')
+    .doc('v')
+    .set(vetVisit(['ghost'], { clinicId: null })),
+  leftHousehold
+    .collection('vaccinations')
+    .doc('v')
+    .set({
+      catId: 'ghost',
+      name: 'Ghost shot',
+      expiresAt: TODAY + DAY,
+    }),
+]);
+
+const nineLivesAdapter = createNineLivesAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+
+const nineLivesCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:nine-lives',
+      accountId: 'site',
+      categoryIds: ['cats', 'vetVisits', 'dueCare', 'clinics', 'conditions'],
+      options: null,
+    },
+    nineLivesAdapter.manifest,
+    NOW,
+  ),
+});
+
+const runNineLives = async (uid: string, category: string) => {
+  const page = await nineLivesAdapter.syncPage(nineLivesCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+const careCats = await runNineLives(OWNER, 'cats');
+assert.deepEqual(refs(careCats).sort(), [
+  'households/home/cats/juniper',
+  'households/home/cats/mochi',
+]);
+assert.ok(careCats.every((record) => record.kind === 'pet'));
+assert.equal(
+  careCats.find((record) => record.sourceRef.endsWith('mochi'))?.title,
+  'Mochi',
+);
+
+const careVisits = await runNineLives(OWNER, 'vetVisits');
+assert.deepEqual(refs(careVisits).sort(), [
+  'households/home/visits/custom',
+  'households/home/visits/next',
+]);
+const nextVisit = careVisits.find((record) =>
+  record.sourceRef.endsWith('next'),
+);
+assert.equal(nextVisit?.kind, 'event');
+assert.equal(nextVisit?.title, 'Mochi and Juniper: Checkup');
+assert.equal(nextVisit?.placeLabel, 'Blue Bark Vet');
+assert.equal(nextVisit?.startAt, TODAY + 3 * DAY + 9 * 3_600_000);
+assert.equal(nextVisit?.isAllDay, false);
+assert.equal(nextVisit?.sourceUpdatedAt, NOW - 11);
+const customVisit = careVisits.find((record) =>
+  record.sourceRef.endsWith('custom'),
+);
+assert.equal(customVisit?.title, 'Juniper: Dental');
+assert.equal(customVisit?.placeLabel, null);
+
+const careDue = await runNineLives(OWNER, 'dueCare');
+assert.deepEqual(refs(careDue).sort(), [
+  'households/home/preventives/flea',
+  'households/home/vaccinations/rabies',
+]);
+const rabies = careDue.find((record) => record.sourceRef.endsWith('rabies'));
+assert.equal(rabies?.kind, 'task');
+assert.equal(rabies?.title, 'Mochi: Rabies');
+assert.equal(rabies?.dueAt, TODAY + 20 * DAY);
+assert.equal(rabies?.isAllDay, true);
+assert.equal(
+  careDue.find((record) => record.sourceRef.endsWith('flea'))?.title,
+  'Mochi and Juniper: Flea and tick',
+);
+
+const careClinics = await runNineLives(OWNER, 'clinics');
+assert.deepEqual(refs(careClinics), ['households/home/vetClinics/blue-bark']);
+assert.equal(careClinics[0].kind, 'place');
+assert.equal(careClinics[0].title, 'Blue Bark Vet');
+assert.deepEqual(careClinics[0].extra, {
+  phone: '555-0100',
+  address: '1 Cat Lane',
+});
+
+const careConditions = await runNineLives(OWNER, 'conditions');
+assert.deepEqual(refs(careConditions), ['households/home/conditions/asthma']);
+assert.equal(careConditions[0].kind, 'knowledge');
+assert.equal(careConditions[0].title, 'Asthma');
+assert.equal(careConditions[0].subtitle, 'Juniper');
+assert.equal(careConditions[0].detail, 'Ongoing');
+
+const careCategories = [
+  'cats',
+  'vetVisits',
+  'dueCare',
+  'clinics',
+  'conditions',
+];
+assert.deepEqual(refs(await runNineLives(HOUSEMATE, 'cats')).sort(), [
+  'households/home/cats/juniper',
+  'households/home/cats/mochi',
+  'households/left/cats/ghost',
+]);
+await Promise.all(
+  careCategories.map(async (category) =>
+    assert.deepEqual(await runNineLives(OTHER, category), [], category),
+  ),
+);
+const ownerLeftRefs = (
+  await Promise.all(
+    careCategories.map((category) => runNineLives(OWNER, category)),
+  )
+)
+  .flat()
+  .map((record) => record.sourceRef);
+assert.ok(ownerLeftRefs.every((ref) => !ref.includes('households/left')));
+
+const careAll = [
+  ...careCats,
+  ...careVisits,
+  ...careDue,
+  ...careClinics,
+  ...careConditions,
+];
+assertShape(careAll);
+careAll.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    ![EXPENSE_AMOUNT, WEIGHT_VALUE].some((secret) => values.includes(secret)),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|secret|example\.test|\.pdf/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+await assert.rejects(() => runNineLives(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await nineLivesAdapter.status(nineLivesCtx(OWNER)), 'ok');
+assert.equal(await nineLivesAdapter.status(nineLivesCtx(OTHER)), 'noAccess');
+assert.equal(
+  nineLivesAdapter.deepLink('households/home/cats/mochi', nineLivesCtx(OWNER)),
+  '/nine-lives',
 );
 
 console.log('Adapter matrix passed.');

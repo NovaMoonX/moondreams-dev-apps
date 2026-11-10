@@ -10,6 +10,7 @@ import type {
 import { createHelmSink } from '../apps/helm/connections/sink.js';
 import { createAListAdapter } from '../apps/a-list/share/adapter.js';
 import { createGoingOnceAdapter } from '../apps/going-once/share/adapter.js';
+import { createNineLivesAdapter } from '../apps/nine-lives/share/adapter.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
 import type { ReaderSink } from './sink.js';
@@ -60,6 +61,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:pinch': createPinchAdapter(),
   'app:a-list': createAListAdapter(),
   'app:going-once': createGoingOnceAdapter(),
+  'app:nine-lives': createNineLivesAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
 };
 

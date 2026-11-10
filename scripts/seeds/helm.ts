@@ -42,6 +42,7 @@ import {
 } from '../../src/lib/connections/contract.ts';
 import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts';
 import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
+import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
@@ -1293,6 +1294,51 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: goingOnceGrantId,
   });
 
+  const nineLivesConnectorId = toAppConnectorId('nine-lives');
+  const nineLivesGrantId = toGrantId(
+    'helm',
+    nineLivesConnectorId,
+    SITE_ACCOUNT_ID,
+  );
+  const nineLivesGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: nineLivesConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      cats: { isOn: true, changedAt: connectedAt },
+      vetVisits: { isOn: true, changedAt: connectedAt },
+      dueCare: { isOn: true, changedAt: connectedAt },
+      clinics: { isOn: true, changedAt: connectedAt },
+      conditions: { isOn: false, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      NINE_LIVES_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          { lastOkAt: null, lastError: null, count: 0 },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: null,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(nineLivesGrantId),
+    nineLivesGrant,
+  );
+
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
     provider: 'google',
@@ -1406,7 +1452,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       keptDefinitions.length +
       1 +
       aListCopies.length +
-      goingOnceCopies.length,
+      goingOnceCopies.length +
+      2,
   };
   return result;
 }

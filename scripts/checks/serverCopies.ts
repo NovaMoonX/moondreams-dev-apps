@@ -42,6 +42,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/apps/nine-lives/share/manifest.ts',
+    dest: 'functions/src/apps/nine-lives/share/manifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/lib/connections/google/calendarManifest.ts',
     dest: 'functions/src/connections/google/calendarManifest.ts',
     importRewrites: {
