@@ -75,6 +75,13 @@ export interface TrackingPeriod {
   linkedFrom: DateOnly | null;
 }
 
+/** Whether bank charges wait in Needs a home. Readable on purpose (the push Function reads it) and holds no amount. */
+export interface SortingState {
+  isPaused: boolean;
+  /** Epoch ms: a charge created before it never waits. */
+  from: number;
+}
+
 export interface PlanDoc {
   uid: string;
   createdAt: number;
@@ -88,6 +95,8 @@ export interface PlanDoc {
   dirtyFrom: string | null;
   /** Null on a plan made before pushes existed. */
   notify: PlanNotify | null;
+  /** Null (or missing on an older plan) means every charge waits. */
+  sorting: SortingState | null;
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -101,6 +110,7 @@ export interface OpenPlan extends PlanSealedFields {
   trackingPeriods: TrackingPeriod[];
   dirtyFrom: string | null;
   notify: PlanNotify | null;
+  sorting: SortingState | null;
   keyId: string | null;
 }
 
@@ -727,6 +737,39 @@ export interface OpenRule extends RuleSealed {
   createdAt: number;
   updatedAt: number;
 }
+
+/** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */
+export interface MemoryDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** A move the person paired by hand: money out of one account into another account or a card (exactly one of the two is set). */
+export interface RouteMemorySealed {
+  kind: 'route';
+  fromAccountId: string;
+  toAccountId: string | null;
+  toCardId: string | null;
+}
+
+/** A payer the person linked a deposit from to a pay line by hand. */
+export interface PayerMemorySealed {
+  kind: 'payer';
+  /** The merchant in the one comparable form (`toMerchantKey`). */
+  merchantKey: string;
+  merchantName: string;
+  payLineId: string;
+}
+
+export type MemorySealed = RouteMemorySealed | PayerMemorySealed;
+
+export type OpenMemory = MemorySealed & {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+};
 
 /** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
 export interface ReceiptImageDoc {

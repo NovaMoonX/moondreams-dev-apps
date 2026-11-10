@@ -10702,11 +10702,13 @@ const version = (
     lowCents: number,
     highCents = lowCents,
     arrivedOffset: number | null = null,
+    payLineId = 'line_a',
   ): DepositDay => ({
     dayKey,
     expectedOn: base + expectedOffset * day,
     arrivedOn: arrivedOffset === null ? null : base + arrivedOffset * day,
     amount: { lowCents, highCents },
+    payLineId,
   });
 
   const one = findDepositDays(
@@ -10955,6 +10957,148 @@ const version = (
     [[...backward.clear].sort(), [...backward.offers].sort()],
     'the same deposits and days in any order give the same links and offers',
   );
+  const checkRememberedPayers = () => {
+    const payroll = [{ merchantKey: 'payroll', payLineId: 'line_a' }];
+    const raised = (payers: typeof payroll) =>
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payers,
+      );
+    assert.equal(raised([]).clear.size, 0, 'a raise past 15% asks by default');
+    assert.deepEqual(
+      [...raised(payroll).clear],
+      [['d1', 'pay_a']],
+      'a raise from a payer the person linked before is accepted',
+    );
+    assert.equal(
+      raised([{ merchantKey: 'acme', payLineId: 'line_a' }]).clear.size,
+      0,
+      'a different payer, or an unknown one, is not accepted',
+    );
+    assert.equal(
+      raised([{ merchantKey: 'payroll', payLineId: 'line_b' }]).clear.size,
+      0,
+      'a payer remembered for another pay line does not settle this line',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 160_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a remembered payer is still never matched more than half the pay away',
+    );
+    const sameDay = [
+      payDay('pay_a', 0, 100_000, 100_000, null, 'line_a'),
+      payDay('pay_b', 0, 100_000, 100_000, null, 'line_b'),
+    ];
+    assert.equal(
+      findDepositDays([deposit('d1', 100_000, 0)], sameDay, []).clear.size,
+      0,
+      'two days that fit equally ask',
+    );
+    assert.deepEqual(
+      [
+        ...findDepositDays([deposit('d1', 100_000, 0)], sameDay, [], payroll)
+          .clear,
+      ],
+      [['d1', 'pay_a']],
+      'a single day of the payer’s pay line breaks the tie',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 100_000, 0)],
+        [
+          payDay('pay_a', 0, 100_000, 100_000, null, 'line_a'),
+          payDay('pay_c', 0, 100_000, 100_000, null, 'line_a'),
+        ],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'two days of the payer’s own line still ask',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 4, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a remembered payer never widens the three-day window',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0, { assignedBy: 'person' })],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a deposit the person sent back is never linked on its own',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0), deposit('d2', 130_000, 1)],
+        [payDay('pay_a', 0, 100_000)],
+        [],
+        payroll,
+      ).clear.size,
+      0,
+      'a day two deposits pick by memory is clear for neither',
+    );
+    assert.equal(
+      findDepositDays(
+        [deposit('d1', 130_000, 0)],
+        [payDay('pay_a', 0, 100_000)],
+        [
+          deposit('held', 100_000, 0, {
+            incomeDayId: 'pay_a',
+            needsHome: false,
+          }),
+        ],
+        payroll,
+      ).clear.size,
+      0,
+      'a day with a deposit already linked is never matched by memory',
+    );
+    const tiedDeposits = [deposit('d1', 100_000, 0), deposit('d2', 130_000, 1)];
+    const tiedDays = [
+      ...sameDay,
+      payDay('pay_d', 2, 100_000, 100_000, null, 'line_a'),
+    ];
+    assert.deepEqual(
+      [
+        [...findDepositDays(tiedDeposits, tiedDays, [], payroll).clear].sort(),
+        [...findDepositDays(tiedDeposits, tiedDays, [], payroll).offers].sort(),
+      ],
+      [
+        [
+          ...findDepositDays(
+            [...tiedDeposits].reverse(),
+            [...tiedDays].reverse(),
+            [],
+            [...payroll].reverse(),
+          ).clear,
+        ].sort(),
+        [
+          ...findDepositDays(
+            [...tiedDeposits].reverse(),
+            [...tiedDays].reverse(),
+            [],
+            [...payroll].reverse(),
+          ).offers,
+        ].sort(),
+      ],
+      'with a remembered payer the result still does not depend on input order',
+    );
+  };
+  checkRememberedPayers();
 }
 
 // Money out of one linked account and the same money in to another account or a card: when it is a move between the person's own accounts, and when it asks.
@@ -11225,6 +11369,145 @@ const version = (
     'a clear pair is offered too when asked for offers',
   );
 
+  const checkRememberedRoutes = () => {
+    const toSavings = {
+      kind: 'route' as const,
+      fromAccountId: 'checking',
+      toAccountId: 'savings',
+      toCardId: null,
+    };
+    const toBrokerage = { ...toSavings, toAccountId: 'brokerage' };
+    const toVenture = { ...toSavings, toAccountId: null, toCardId: 'venture' };
+    const brokerageIn = side('inB', -25_000, 1, { accountId: 'brokerage' });
+    const twoIns = [
+      side('out', 25_000, 0),
+      side('inA', -25_000, 1),
+      brokerageIn,
+    ];
+    const oneRemembered = findAccountPairs(twoIns, false, [toSavings]);
+    assert.deepEqual(
+      [...oneRemembered.clear],
+      [['out', { inId: 'inA', kind: 'transfer' }]],
+      'of two candidates, the one on a remembered route is paired on its own',
+    );
+    assert.deepEqual(
+      [...findAccountPairs([...twoIns].reverse(), false, [toSavings]).clear],
+      [...oneRemembered.clear],
+      'the remembered route settles it in any input order',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, [toSavings, toBrokerage]).clear.size,
+      0,
+      'two remembered routes leave it asking',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, []).clear.size,
+      0,
+      'no remembered route leaves it asking',
+    );
+    assert.equal(
+      findAccountPairs(twoIns, false, [
+        { ...toSavings, fromAccountId: 'other' },
+      ]).clear.size,
+      0,
+      'a route from another account leaves it asking',
+    );
+    assert.deepEqual(
+      findAccountPairs(twoIns, false, [toSavings, toBrokerage]).offers.get(
+        'out',
+      ),
+      [
+        { otherId: 'inA', kind: 'transfer' },
+        { otherId: 'inB', kind: 'transfer' },
+      ],
+      'an unsettled pair is still offered both',
+    );
+    const twoOuts = [
+      side('outA', 25_000, 0),
+      side('outB', 25_000, 0, { accountId: 'brokerage' }),
+      side('in', -25_000, 0),
+    ];
+    assert.deepEqual(
+      [...findAccountPairs(twoOuts, false, [toSavings]).clear],
+      [['outA', { inId: 'in', kind: 'transfer' }]],
+      'of two moneys out, the one on a remembered route claims the money in',
+    );
+    assert.equal(
+      findAccountPairs(twoOuts, false, [
+        toSavings,
+        { ...toSavings, fromAccountId: 'brokerage' },
+      ]).clear.size,
+      0,
+      'two moneys out that both claim one money in by route get neither',
+    );
+    const cardOrAccount = [
+      side('out', 48_000, 0),
+      side('inCard', -48_000, 1, onCard),
+      side('inAccount', -48_000, 1),
+    ];
+    assert.deepEqual(
+      [...findAccountPairs(cardOrAccount, false, [toVenture]).clear],
+      [['out', { inId: 'inCard', kind: 'cardPayment' }]],
+      'a remembered card payment settles a card against an account',
+    );
+    assert.equal(
+      findAccountPairs(cardOrAccount, false, [toVenture, toSavings]).clear.size,
+      0,
+      'a remembered card and a remembered account leave it asking',
+    );
+    assert.equal(
+      none(
+        findAccountPairs(
+          [side('out', 25_000, 0), side('in', -24_900, 0)],
+          false,
+          [toSavings],
+        ),
+      ) +
+        none(
+          findAccountPairs(
+            [side('out', 25_000, 0), side('in', -25_000, 4)],
+            false,
+            [toSavings],
+          ),
+        ),
+      0,
+      'a remembered route never pairs a different amount or four days apart',
+    );
+    const cardOut = { accountId: null, paidByCardId: 'sapphire' };
+    assert.equal(
+      none(
+        findAccountPairs(
+          [
+            side('out', 25_000, 0, cardOut),
+            side('in', -25_000, 0, onCard),
+            side('in2', -25_000, 0),
+          ],
+          false,
+          [toVenture, toSavings, { ...toSavings, fromAccountId: 'sapphire' }],
+        ),
+      ),
+      0,
+      'money out of a card never pairs, to a card or an account, remembered or not',
+    );
+    assert.equal(
+      none(
+        findAccountPairs(
+          [
+            side('out', 25_000, 0, {
+              accountId: 'checking',
+              paidByCardId: 'sapphire',
+            }),
+            side('in', -25_000, 0, onCard),
+          ],
+          true,
+          [toVenture],
+        ),
+      ),
+      0,
+      'a card charge with an account still never pairs as an offer',
+    );
+  };
+  checkRememberedRoutes();
   const heldTo = (
     id: string,
     other: string,

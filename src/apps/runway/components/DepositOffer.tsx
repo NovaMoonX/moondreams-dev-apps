@@ -65,7 +65,15 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
     setBusyKey(dayKey);
     setError(null);
     try {
-      await link(user.uid, [{ deposit, dayKey, dayOn }], 'person', true);
+      const payLineId = days.find(
+        (entry) => entry.dayKey === dayKey,
+      )?.payLineId;
+      await link(
+        user.uid,
+        [{ deposit, dayKey, dayOn, payLineId }],
+        'person',
+        true,
+      );
       onDone();
     } catch (pickError) {
       setError(getErrorMessage(pickError, NEEDS_HOME_WORDS.failed));

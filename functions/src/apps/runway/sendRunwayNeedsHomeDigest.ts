@@ -9,8 +9,11 @@ import { sendPushReport, toAppUrl } from '../../notifications/sendPush.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   claimPath,
+  countWaiting,
   getDigestDay,
   readDigestSettings,
+  readSorting,
+  type SortingState,
 } from './needsHomeDigestPlan.js';
 import {
   NEEDS_HOME_PATH,
@@ -33,6 +36,17 @@ const BATCH_SIZE = 20;
 
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
+
+/** A purchase's amount, or 0 when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
+const readAmount = (key: Buffer, payload: unknown) => {
+  if (!isSealed(payload)) return 0;
+  try {
+    const { amountCents } = openWithKey(key, payload);
+    return typeof amountCents === 'number' ? amountCents : 0;
+  } catch {
+    return 0;
+  }
+};
 
 /** Creates the day's claim; false when it already exists, so a rerun never sends twice. */
 const claimDay = (
@@ -58,6 +72,7 @@ async function digestForPlan(
   keyring: Keyring,
   uid: string,
   sealed: unknown,
+  sorting: SortingState | null,
   now: number,
 ): Promise<Outcome> {
   const planKey = await unwrapPlanKey(firestore, keyring, uid);
@@ -68,13 +83,26 @@ async function digestForPlan(
   if (!date) return 'notHour';
   const claim = firestore.doc(claimPath(uid, date));
   if ((await claim.get()).exists) return 'claimed';
-  const waiting = (
-    await firestore
-      .collection(`apps/runway/plans/${uid}/purchases`)
-      .where('needsHome', '==', true)
-      .count()
-      .get()
-  ).data().count;
+  const waitingPurchases = firestore
+    .collection(`apps/runway/plans/${uid}/purchases`)
+    .where('needsHome', '==', true);
+  const waiting =
+    sorting === null
+      ? (await waitingPurchases.count().get()).data().count
+      : countWaiting(
+          (
+            await waitingPurchases.select('createdAt', 'date', 'sealed').get()
+          ).docs.map((purchase) => {
+            const { createdAt, date: day, sealed: payload } = purchase.data();
+            const created = typeof createdAt === 'number' ? createdAt : now;
+            return {
+              createdAt: created,
+              date: typeof day === 'number' ? day : created,
+              amountCents: readAmount(planKey.key, payload),
+            };
+          }),
+          sorting,
+        );
   if (waiting === 0) return 'empty';
   if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
     return 'closed';
@@ -113,7 +141,7 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
     const plans = await firestore
       .collection('apps/runway/plans')
       .where('notify.needsHome', '==', true)
-      .select('sealed')
+      .select('sealed', 'sorting')
       .get();
     const batches = Array.from(
       { length: Math.ceil(plans.size / BATCH_SIZE) },
@@ -130,6 +158,7 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
               keyring,
               plan.id,
               plan.data().sealed,
+              readSorting(plan.data().sorting),
               now,
             ).catch((error: { code?: unknown }): Outcome => {
               logger.warn('runway.needsHomeDigest.failed', {

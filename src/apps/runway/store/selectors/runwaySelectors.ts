@@ -83,6 +83,7 @@ import {
   toDayKey,
 } from '@apps/runway/engine/dates';
 import {
+  findAccountPairs,
   findLostPairs,
   isBankMove,
   type DepositDay,
@@ -1647,6 +1648,7 @@ export const selectDepositDays = createSelector(
       expectedOn: day.on,
       arrivedOn: day.arrivedOn,
       amount,
+      payLineId: day.payLineId,
     });
     return [
       ...listed.open.flatMap((day) =>
@@ -1830,6 +1832,12 @@ export const selectLostPairs = createSelector(
         ),
 );
 
+/** True while "I'm not sorting yet" is on. */
+export const selectIsSortingPaused = (state: RootState) =>
+  state.runway.plan?.sorting?.isPaused ?? false;
+
+const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
+
 /** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. A card payment or move the bank flagged waits under Account moves instead. */
 export const selectNeedsHome = createSelector(
   [
@@ -1838,8 +1846,16 @@ export const selectNeedsHome = createSelector(
     selectLostPairs,
     selectHistoryPurchases,
     selectHistoryDuplicates,
+    selectSorting,
   ],
-  (waitingList, lostDeposits, lostPairs, historyPurchases, duplicates) => {
+  (
+    waitingList,
+    lostDeposits,
+    lostPairs,
+    historyPurchases,
+    duplicates,
+    sorting,
+  ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
@@ -1856,7 +1872,17 @@ export const selectNeedsHome = createSelector(
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
     const sortable = sorted.filter((purchase) => !isBankMove(purchase));
-    const spending = sortable.filter((purchase) => purchase.amountCents >= 0);
+    const alwaysShown = new Set(lost.map((entry) => entry.id));
+    const pairs = sorting === null ? null : findAccountPairs(sorted, true);
+    const isQuiet = (purchase: OpenPurchase) =>
+      sorting !== null &&
+      purchase.amountCents > 0 &&
+      (sorting.isPaused || purchase.createdAt < sorting.from) &&
+      !alwaysShown.has(purchase.id) &&
+      !(pairs?.offers.has(purchase.id) || pairs?.clear.has(purchase.id));
+    const spending = sortable.filter(
+      (purchase) => purchase.amountCents >= 0 && !isQuiet(purchase),
+    );
     const moneyIn = sortable.filter((purchase) => purchase.amountCents < 0);
     const listed = new Set(sorted.map((purchase) => purchase.id));
     const maybeTwice = historyPurchases
@@ -1871,6 +1897,68 @@ export const selectNeedsHome = createSelector(
           (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
       );
     const result = { spending, moneyIn, maybeTwice };
+    return result;
+  },
+);
+
+export interface NeedsHomeMove {
+  /** The money out; the row opens it. */
+  purchase: OpenPurchase;
+  /** The money in each offered pairing would use, nearest day first. */
+  others: { purchase: OpenPurchase; kind: PurchasePairKind }[];
+  /** Whether either side has more than one candidate, so no account or card name tells the row apart. */
+  isAmbiguous: boolean;
+}
+
+/** `selectNeedsHome` split for the screen, quickest first: moves and card payments (one per money out that has an offer), the money in nothing offers, history that may be in twice, and the remaining charges. Nothing is in two sections. */
+export const selectNeedsHomeSections = createSelector(
+  [selectNeedsHome],
+  ({ spending, moneyIn, maybeTwice }) => {
+    const all = [...spending, ...moneyIn];
+    const { offers } = findAccountPairs(
+      all.map((purchase) => ({
+        ...purchase,
+        needsHome: true,
+        pairedWithId: null,
+        pairKind: null,
+      })),
+      true,
+    );
+    const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const moves = spending.flatMap((purchase): NeedsHomeMove[] => {
+      const others = (offers.get(purchase.id) ?? []).flatMap(
+        ({ otherId, kind }) => {
+          const other = byId.get(otherId);
+          return other ? [{ purchase: other, kind }] : [];
+        },
+      );
+      return others.length === 0
+        ? []
+        : [
+            {
+              purchase,
+              others,
+              isAmbiguous:
+                others.length > 1 ||
+                others.some(
+                  (entry) => (offers.get(entry.purchase.id) ?? []).length > 1,
+                ),
+            },
+          ];
+    });
+    const inMoves = new Set(
+      moves.flatMap(({ others }) => others.map((entry) => entry.purchase.id)),
+    );
+    const movedIds = new Set([
+      ...moves.map(({ purchase }) => purchase.id),
+      ...inMoves,
+    ]);
+    const result = {
+      moves,
+      moneyIn: moneyIn.filter((purchase) => !inMoves.has(purchase.id)),
+      maybeTwice,
+      charges: spending.filter((purchase) => !movedIds.has(purchase.id)),
+    };
     return result;
   },
 );
@@ -1910,6 +1998,23 @@ export const selectRules = createSelector([selectRuleList], (rules) =>
 
 export const selectIsRulesLoaded = (state: RootState) =>
   state.runway.isRulesLoaded;
+
+export const selectIsMemoriesLoaded = (state: RootState) =>
+  state.runway.isMemoriesLoaded;
+
+/** The moves between accounts the person paired by hand. */
+export const selectRouteMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'route' ? [memory] : [])),
+);
+
+/** The payers the person linked to a pay line by hand. */
+export const selectPayerMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'payer' ? [memory] : [])),
+);
 
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>

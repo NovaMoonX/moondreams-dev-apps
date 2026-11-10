@@ -14,6 +14,7 @@ import { usePairAccountsWithUndo } from '@apps/runway/hooks/useBankMatch';
 import {
   selectAllCards,
   selectLostPairs,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, PurchasePairKind } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -22,7 +23,7 @@ import { getPairSideName } from '@apps/runway/utils/purchaseText';
 interface PairOfferProps {
   purchase: OpenPurchase;
   onDone: () => void;
-  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind "Not a move between my accounts". */
+  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind the row that says it is not a move or card payment. */
   children: ReactNode;
   /** The row's subtitle: what the other question picks. */
   elseSubtitle: string;
@@ -38,6 +39,7 @@ function PairOffer({
   const { user } = useAuth();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector(selectLostPairs);
+  const routes = useAppSelector(selectRouteMemories);
   const accounts = useAppSelector((state) => state.runway.accounts);
   const cards = useAppSelector(selectAllCards);
   const pairAccounts = usePairAccountsWithUndo();
@@ -60,7 +62,7 @@ function PairOffer({
   const cardNameOf = getCardNamer(cards);
   const isOut = purchase.amountCents > 0;
   const offered = (
-    findAccountPairs(waiting, true).offers.get(purchase.id) ?? []
+    findAccountPairs(waiting, true, routes).offers.get(purchase.id) ?? []
   )
     .flatMap(({ otherId, kind }) => {
       const other = waiting.find((entry) => entry.id === otherId);
@@ -100,9 +102,22 @@ function PairOffer({
   };
 
   if (!self || offered.length === 0 || isElse) return <>{children}</>;
+  const isCardOffer = offered.every(({ kind }) => kind === 'cardPayment');
+  const selfName = getPairSideName(self, accounts, cardNameOf);
+  const otherNames = Array.from(
+    new Set(
+      offered.map(({ other }) => getPairSideName(other, accounts, cardNameOf)),
+    ),
+  );
+  const otherName = otherNames.length === 1 ? otherNames[0] : null;
+  const title = !isCardOffer
+    ? PAIR_WORDS.whichTitle
+    : isOut
+      ? PAIR_WORDS.cardWhichTitle(otherName, selfName)
+      : PAIR_WORDS.cardWhichTitle(selfName, otherName);
   return (
     <div className='space-y-2'>
-      <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
+      <p className='text-sm font-medium'>{title}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map(({ other, kind, name }) => {
           const detail = `${PAIR_WORDS.pairVerb} · ${formatDateOrdinalUTC(other.date)}`;
@@ -126,7 +141,7 @@ function PairOffer({
       )}
       <ActionRow
         icon={<X />}
-        label={PAIR_WORDS.unpair}
+        label={isCardOffer ? PAIR_WORDS.notCardPayment : PAIR_WORDS.unpair}
         subtitle={elseSubtitle}
         onClick={() => setIsElse(true)}
       />

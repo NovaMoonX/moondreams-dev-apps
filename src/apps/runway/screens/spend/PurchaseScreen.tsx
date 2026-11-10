@@ -138,6 +138,8 @@ interface PurchaseScreenProps {
   hasGroupLink?: boolean;
   /** Needs a home keeps the sheet open on a purchase just sent for the third time in a row, to offer a rule; it hands over the purchase as sent. */
   onSuggestRule?: (placed: OpenPurchase) => void;
+  /** The caption over the amount when the opener knows more than "Purchase" (a move, a card payment). */
+  kindLabel?: string;
 }
 
 /** One purchase: what it was, where it came from, and the ways to change or remove it. */
@@ -148,6 +150,7 @@ function PurchaseScreen({
   fallback = null,
   hasGroupLink = true,
   onSuggestRule,
+  kindLabel,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -675,9 +678,10 @@ function PurchaseScreen({
         <div ref={sheetBody} className='space-y-4 pb-4'>
           <SheetHead
             label={
-              refund && !isHidden
+              kindLabel ??
+              (refund && !isHidden
                 ? SPEND_WORDS.refundTitle
-                : SPEND_WORDS.detailTitle
+                : SPEND_WORDS.detailTitle)
             }
             figure={refund ? `+${amount}` : amount}
             fact={fact}

@@ -86,10 +86,19 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       trackingPeriods: [],
       dirtyFrom: null,
       notify: { needsHome: false },
+      sorting: null,
       keyId: encryption.keyId,
       sealed,
     };
     transaction.set(planRef, plan);
+  });
+}
+
+/** Turns "I'm not sorting yet" on or off, stamping now so a charge from before never comes back when it is turned off. */
+export async function setSortingPaused(uid: string, isPaused: boolean) {
+  await updateDoc(doc(db, 'apps', 'runway', 'plans', uid), {
+    sorting: { isPaused, from: Date.now() },
+    updatedAt: Date.now(),
   });
 }
 

@@ -209,6 +209,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     trackingPeriods: [],
     dirtyFrom: null,
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed,
   });
@@ -3557,6 +3558,7 @@ async function seedTrackingPlan(
     ],
     dirtyFrom: null,
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });
@@ -3715,6 +3717,7 @@ async function seedUnlinkedPlan(
     startDate,
     trackingPeriods: [{ from: startDate, to: null, linkedFrom: null }],
     notify: { needsHome: false },
+    sorting: null,
     keyId: data.keyId,
     sealed: await sealJson({ currencyCode: DEFAULT_CURRENCY_CODE }, encryption),
   });

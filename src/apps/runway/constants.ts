@@ -4649,6 +4649,22 @@ export const RELEASED_WORDS = {
   manySub: 'They no longer count. History says where each one was.',
 };
 
+export const SORTING_WORDS = {
+  caption: 'Needs a home',
+  label: "I'm not sorting yet",
+  helpOn:
+    "New charges stay in Free to Spend and in Spend, and don't wait here. Money in and moves between accounts still ask",
+  helpOff: 'Charges from the bank wait here for a home',
+  saveFailed: 'That did not save. Nothing was changed.',
+} as const;
+
+const getBulkCount = (written: number, total: number) => {
+  const noun = (count: number) => (count === 1 ? 'purchase' : 'purchases');
+  return written === total
+    ? `${written} ${noun(written)}`
+    : `${written} of ${total} ${noun(total)}`;
+};
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',
@@ -4702,6 +4718,58 @@ export const NEEDS_HOME_WORDS = {
   matchedOneSub: 'Counted once, at the bank’s amount.',
   matchedManySub: 'Each is counted once, at the bank’s amount.',
   matchUndone: 'Match undone',
+  movesHeading: 'Moves and card payments',
+  movesHelp:
+    'Money that left one of your accounts and arrived in another account or on a card. Open one to say if that is what it was.',
+  chargesHeading: 'Charges',
+  moveKind: 'Move',
+  cardPaymentKind: 'Card payment',
+  refundRow: 'This is a refund',
+  refundRowSub: 'It goes back where the purchase came from',
+  unseenRow: 'A payment from an account Runway doesn’t see',
+  unseenRowSub: 'It will not count as income',
+  select: 'Select',
+  selectRow: (name: string) => `Select ${name}`,
+  selectedCount: (count: number) => `${count} selected`,
+  selectAll: 'Select all',
+  clearAll: 'Clear all',
+  cancelSelect: 'Cancel',
+  nothingTicked: 'Tick the charges you want to sort together.',
+  bulkKeepFree: 'Keep in Free to Spend',
+  bulkKeepFreeShort: 'Keep',
+  bulkPut: 'Put in an envelope',
+  bulkPutShort: 'Envelope',
+  bulkLeaveOut: 'Leave out of spending',
+  bulkLeaveOutShort: 'Leave out',
+  bulkPickTitle: 'Which envelope?',
+  bulkPickSub: (count: number) =>
+    count === 1
+      ? 'For the 1 charge you ticked'
+      : `For the ${count} charges you ticked`,
+  bulkSearch: 'Search your envelopes',
+  bulkNoMatch: 'Nothing matches that.',
+  bulkNoEnvelopes: 'You have no envelopes yet.',
+  bulkLeaveOutTitle: (count: number) =>
+    count === 1 ? 'Leave out 1 charge?' : `Leave out ${count} charges?`,
+  bulkLeaveOutMessage: (count: number) =>
+    count === 1
+      ? "It won't count as spending, so Free to Spend gets the money back. You can undo it right after."
+      : "They won't count as spending, so Free to Spend gets the money back. You can undo it right after.",
+  bulkLeaveOutConfirm: (count: number) =>
+    count === 1 ? 'Leave it out' : 'Leave them out',
+  bulkKept: (written: number, total: number) =>
+    `Kept ${getBulkCount(written, total)} in Free to Spend`,
+  bulkPlaced: (written: number, total: number, envelope: string) =>
+    `Put ${getBulkCount(written, total)} in ${envelope}`,
+  bulkLeft: (written: number, total: number) =>
+    `Left ${getBulkCount(written, total)} out of spending`,
+  bulkPartlyFailed: 'The rest did not save. Nothing else was changed.',
+  bulkUndone: (count: number) =>
+    count === 1
+      ? '1 purchase is back in Needs a home'
+      : `${count} purchases are back in Needs a home`,
+  bulkUndoPartly: (count: number, total: number) =>
+    `${count} of ${total} purchases were put back. The rest changed elsewhere and were left alone.`,
 } as const;
 
 export const DEPOSIT_WORDS = {
@@ -4739,13 +4807,17 @@ export const DEPOSIT_WORDS = {
 
 export const PAIR_WORDS = {
   whichTitle: 'Is this a move between your accounts?',
+  cardWhichTitle: (card: string | null, from: string | null) =>
+    `Did you pay ${card ?? 'a card'} from ${from ?? 'one of your accounts'}?`,
+  notCardPayment: 'Not a card payment',
+  pickRefund: 'Say if it is a refund',
   pairVerb: 'Pair them',
   pickEnvelope: 'Then choose where it goes',
   pickPay: 'Pick the pay it is',
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
   cardPaymentFrom: (account: string) => `Payment from ${account}`,
   transferred: (amount: string, from: string, to: string) =>
-    `Paired ${amount} from ${from} to ${to} as a move between your accounts`,
+    `Moved ${amount} from ${from} to ${to}`,
   paidCard: (amount: string, card: string, from: string) =>
     `Recorded a ${amount} payment to ${card} from ${from}`,
   pairedMany: (count: number) => `Paired ${count} moves between your accounts`,
@@ -4764,7 +4836,7 @@ export const PAIR_WORDS = {
   notPaired: 'These are not paired with each other anymore.',
   tooManyPayments: 'Too many payments were saved to this card that day.',
   lost: 'Its other side changed or is gone, so it is waiting again. Pair it, file it or leave it out.',
-  doorTitle: 'Moves between your accounts',
+  doorTitle: 'Moves and card payments',
   screenTitle: 'Account moves',
   doorShort: 'Account moves',
   doorNarrow: 'Moves',
@@ -4789,6 +4861,25 @@ export const PAIR_WORDS = {
   waitingIntro: 'Your bank calls these card payments or moves.',
   isSpending: 'This is spending',
   isSpendingSub: 'Back on Purchases, from Free to Spend',
+} as const;
+
+export const MEMORY_WORDS = {
+  movesRow: 'Remembered moves',
+  movesRowSub: 'Moves you paired by hand',
+  payersRow: 'Remembered payers',
+  payersRowSub: 'Deposits you linked to this pay by hand',
+  movesTitle: 'Remembered moves',
+  payersTitle: 'Remembered payers',
+  rowDetail: 'Tap to forget it',
+  moveTo: (account: string) => `To ${account}`,
+  paymentTo: (card: string) => `Payment to ${card}`,
+  payerRow: (name: string) => `Deposits from ${name}`,
+  forgetTitle: 'Forget this?',
+  forgetMessage:
+    'Runway will ask you each time instead. Anything already paired or linked stays as it is.',
+  forgetConfirm: 'Forget it',
+  forgotten: 'Forgotten',
+  failed: 'That was not forgotten.',
 } as const;
 
 export const LINK_WORDS = {

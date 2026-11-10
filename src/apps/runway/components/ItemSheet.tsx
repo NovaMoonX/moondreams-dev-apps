@@ -19,6 +19,7 @@ import {
   PinOff,
   Play,
   ReceiptText,
+  Route,
   Ruler,
   ShoppingBag,
   Undo2,
@@ -78,6 +79,7 @@ import GoalBalanceView, {
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
 import SetHeldView from '@apps/runway/components/SetHeldView';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
+import MemoriesSheet from '@apps/runway/components/MemoriesSheet';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import ItemPurchasesView from '@apps/runway/components/ItemPurchasesView';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
@@ -110,6 +112,7 @@ import {
   MAX_CHANGE_DAYS_AHEAD,
   MAX_NAME_LENGTH,
   MAX_NOTE_LENGTH,
+  MEMORY_WORDS,
   MOVE_WORDS,
   SET_HELD_WORDS,
   SPEND_WORDS,
@@ -169,6 +172,7 @@ import {
   selectAllCards,
   selectGroups,
   selectPairedBy,
+  selectPayerMemories,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
@@ -435,6 +439,8 @@ function ItemSheet({
   const toastHoldsSaved = useHoldsUndo();
   const groups = useAppSelector((state) => selectGroups(state, today));
   const [isReleasing, setIsReleasing] = useState(false);
+  const [isShowingPayers, setIsShowingPayers] = useState(false);
+  const payers = useAppSelector(selectPayerMemories);
   const { addToast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -1144,6 +1150,15 @@ function ItemSheet({
     paid.isReady &&
     payment !== null &&
     !(isSelfPaying && !paid.isPaid);
+  const payerRows =
+    version.kind === 'payLine'
+      ? payers
+          .filter((payer) => payer.payLineId === itemId)
+          .map((payer) => ({
+            id: payer.id,
+            name: MEMORY_WORDS.payerRow(payer.merchantName),
+          }))
+      : [];
   const canForget =
     itemKind === 'bill' && isTrackingLevel(level) && learnedCount > 0;
 
@@ -1555,6 +1570,16 @@ function ItemSheet({
             label={GROUP_WORDS.inGroup}
             subtitle={currentGroupName}
             onClick={openGroup}
+          />
+        )}
+        {payerRows.length > 0 && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<Route />}
+            label={MEMORY_WORDS.payersRow}
+            subtitle={MEMORY_WORDS.payersRowSub}
+            onClick={() => setIsShowingPayers(true)}
           />
         )}
         {canRelease && (
@@ -2310,6 +2335,13 @@ function ItemSheet({
       >
         {menu}
       </ChangeSteps>
+      {isShowingPayers && payerRows.length > 0 && (
+        <MemoriesSheet
+          title={MEMORY_WORDS.payersTitle}
+          rows={payerRows}
+          onClose={() => setIsShowingPayers(false)}
+        />
+      )}
       {horizonSeed !== null && (
         <HorizonForm
           isOpen
