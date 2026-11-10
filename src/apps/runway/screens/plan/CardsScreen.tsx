@@ -22,7 +22,9 @@ import {
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { useNow } from '@/hooks/useNow';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getListedCards } from '@apps/runway/utils/cardText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { describeCardsOwed, getListedCards } from '@apps/runway/utils/cardText';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 
 function CardsScreen() {
@@ -41,10 +43,19 @@ function CardsScreen() {
 
   // An archived card that still waits to be paid stays listed, so it can be paid off.
   const cards = getListedCards(allCards, balances.reserveByCard);
+  const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
 
   return (
     <div className='space-y-4'>
-      <SectionHeader title={CARD_WORDS.sectionTitle} />
+      <SectionHeader
+        title={CARD_WORDS.sectionTitle}
+        subtitle={
+          isLedgerReady && cards.length > 0
+            ? mask(describeCardsOwed(cards, balances.reserveByCard, isHidden))
+            : undefined
+        }
+      />
       {!isLedgerReady ? (
         <p className='text-muted-foreground text-sm' role='status'>
           {CARD_WORDS.loading}

@@ -83,6 +83,7 @@ import {
   toDayKey,
 } from '@apps/runway/engine/dates';
 import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
+import { readHomePins } from '@apps/runway/utils/homePins';
 import type {
   BillFundedBy,
   BillVersion,
@@ -582,6 +583,19 @@ export const selectEnvelopes = createSelector(
       );
     return result;
   },
+);
+
+const selectSavedHomePins = (state: RootState) =>
+  state.runway.plan?.homePins ?? null;
+
+/** The envelopes pinned to Home that are still listed on the date, in the person's order. */
+export const selectHomePins = createSelector(
+  [selectSavedHomePins, selectEnvelopes],
+  (saved, envelopes) =>
+    readHomePins(
+      saved,
+      envelopes.map(({ item }) => item.id),
+    ),
 );
 
 export interface ResolvedBill {

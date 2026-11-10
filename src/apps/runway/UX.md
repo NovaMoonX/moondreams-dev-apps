@@ -391,3 +391,11 @@ The success toast carries one Undo that puts every written bill back as it was (
 - **Card sheet:** "Bills on this card" lists the bills it pays (Show N more past five); a row opens the bill on Plan.
 - **Purchase screen:** a matched charge says "Paid Netflix's Nov 1st bill", has no Edit row, and offers "Not this bill's charge" right under the facts tile, which sends it back to waiting.
 - **Undo, unmatch and Take back:** undoing a match or choosing "Not this bill's charge" sends the payment back to "Which charge was this?", never to To pay now; taking back a mark that a charge settled (History, or Not paid on the bill) sends the charge back to Needs a home with it.
+
+## Pinned envelopes and the card total
+
+- **Home's four envelope tiles** are the pinned envelopes first, in the person's order, then the rest as before: money before empty, each in plan order (priority, then the Priorities rank, then oldest). Up to four can be pinned (`HOME_TILE_COUNT`), so what is pinned is what Home shows; a pinned tile wears a small pin beside its name.
+- **Pinning lives on the envelope's sheet** at every level: "Pin to Home" pins at once with a toast, and "Unpin from Home" takes it off. With four pinned, the row says so ("4 already pinned. Make room first") and opens "Pinned on Home" in the sheet, where unpinning one shows "Pin Groceries" as the one primary. Nothing is pinned or unpinned on the person's behalf, except that an archived or ended envelope drops out of the pins.
+- **Arranging:** with two or more pinned, a quiet "Arrange pinned ›" row under Home's tiles opens the same list in a sheet (Move up, Move down, Unpin on each row). A list of four needs no pick-and-place.
+- **Pins are kept on the plan** (sealed with its other fields), so they follow the person to every device.
+- **The Cards header** on Home and on Plan's Cards view says what the listed cards owe together ("$357.99 owed across your cards"), the sum of the figures their rows show, so a card paid ahead counts as nothing. While amounts are hidden it is always the masked figure, never "Nothing owed", which would give the total away.
