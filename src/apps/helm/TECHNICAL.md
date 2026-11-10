@@ -567,6 +567,8 @@ A voice note's transcript becomes its capture's `text`, so it outlives the audio
 
 Bytes are sealed on the device with `encryptBytes` (`@lib/security`, Runway's receipt path), so Storage only ever holds opaque bytes. Section 23 has the flows, caps and deletion.
 
+**As built (issue 37).** Photos only, so `Media` carries just the fields photos use: `kind` (`'photo'`), `role`, `status`, `mimeType`, `hasThumb`, `attachedTo` (`{ kind: 'who' | 'place'; id }[]`, not the screen context's `RecordRef`), `decidedBy`, `createdAt`, `decidedAt`, `deleteAfter`, and `sealed` holding `bytesNonce`, `thumbNonce` and `keyId` (a photo sealed under another key is refused, not shown). `byteSize`, `width`, `height`, `durationMs`, `pageCount`, `takenAt`, `sourceCaptureId`, `executionId` and the sealed `fileName`, `caption` and `text` arrive with the issue that reads them. A who's `mediaIds` holds every photo it keeps (at most 12) and `photoMediaId` names the main one among them; a place's `photoMediaIds` is the ordered list and its first is the cover. The rule for `…/media/{mediaId}` is its own match (owner-only, with the readable shape checked), not the wildcard's list.
+
 ### `StyleProfile` [MVP]
 
 ```ts
@@ -1108,6 +1110,7 @@ One `isHelmOwner(uid)` helper (`request.auth != null && request.auth.uid == uid`
 | `voiceUsage/**`, `voiceBudget/**` (site) | no rule | | | | The voice service's counters; Admin SDK only |
 | `connections/{uid}/{document=**}` (site: `accounts`, `grants`) | yes | no | no | no | The site's grants, read by any app the person opens (Helm's Connected apps, the account page's index); changed only through the platform's callables (section 19) |
 | `connectionsServer/**` | no rule | | | | Sealed tokens, sync cursors and the expiry queue; Admin SDK only |
+| `…/{uid}/media/{mediaId}` (issue 37) | yes | yes, the readable shape (a photo, an `image/*` type, `attachedTo` a list, `sealed` a map) | yes, same | yes | A medium's document; its own match, apart from the wildcard |
 | Storage `apps/helm/media/{uid}/{file}` | yes | yes, `application/octet-stream`, ≤ 10 MiB + 1 KiB | yes, same | yes | Sealed bytes only (Runway's receipt rule's shape); the size covers a 10 MB PDF or voice note after sealing |
 
 Every row is proven in `check:helm-rules` (the site rows in `check:connections-rules`) (a Python emulator matrix in the shape of `check:runway-rules`) as the owner, another signed-in user and signed out, plus a create on each special collection and a delete on the profile and on an execution. The size estimate goes in each rules PR's Regression check (about 1,400 characters, ~2,500 bytes).
@@ -1190,6 +1193,7 @@ src/apps/helm/
     useCaptureSweep.ts  useCaptureOutbox.ts  useHelmKey.ts
     useSession.ts                # current sessionId and turnIndex from the last capture's time
     useMediaUpload.ts            # cap, shrink, thumbnail, seal, upload, media doc
+    useMediaUrl.ts               # a photo's opened thumbnail or picture, through useSealedObjectUrl
   queries/
     helmKeyQueries.ts  nomosMutations.ts  contactsQueries.ts  styleMutations.ts
   store/
@@ -1225,7 +1229,7 @@ src/apps/helm/
     who/          WhoView (Close · Regular · Others), WhoDetail, WhoPhoto, KeyDatesList, MomentsPreview (newest 3, See all N), MomentsScreen (by decade, then year, under LazyMount), KeyDateSheet, PlaceDetail, FactSheet, SourceRing
     contacts/     ContactsPicker
     comingUp/     ComingUpView (round 6e: 12 months from the yearly index, ≤20 then "Show N more in March", Show everyone)
-    media/        MediaThumb, MediaViewer (ImageViewer, PDF and Markdown readers)
+    media/        MediaThumb, PhotosSection (a who's or place's photos and Add a photo), MediaViewer (the photo's sheet, ImageViewer; PDF and Markdown readers follow)
     knowledge/    KnowledgeView (topic tree, Loose notes), TopicScreen (the document, overview and subtopic links),
                   SectionSourcesSheet, SectionEditSheet, NoteRow, NoteSheet, NoteForm, TopicPicker, VersionsSheet
     procedures/   ProceduresView, ProcedureScreen, RunScreen
@@ -1662,7 +1666,9 @@ interface ScreenContext {              // stored on the capture as `screen`; bui
 
 ### Photos
 
-A who or place photo is a `media` record with `role: 'photo'`, sealed like any media (section 23). It comes from the person picking one on the page (`PhotoPicker`, shrunk to `avatar` size 512 px), from a photo in a turn the assistant attaches ("this is Miso"), or from a Contacts import. A who shows one photo (`photoMediaId`) and keeps up to 12 in `mediaIds`; a place up to 12. **No face recognition:** a photo is never matched to a who by what is in it, only by what the person or the turn's words say.
+A who or place photo is a `media` record with `role: 'photo'`, sealed like any media (section 23). It comes from the person picking one on the page (`PhotoPicker` with the camera offered, shrunk to `avatar` size 512 px for a who's first photo and `photo` size 1280 px otherwise), from a photo in a turn the assistant attaches ("this is Miso"), or from a Contacts import. A who shows one photo (`photoMediaId`) and keeps up to 12 in `mediaIds`; a place up to 12. **No face recognition:** a photo is never matched to a who by what is in it, only by what the person or the turn's words say.
+
+**As built (issue 37):** `addPhoto` seals the photo and a 512 px thumbnail, writes the document `uploading` (with `deleteAfter` a day out), uploads both objects, then one transaction marks it `kept` with `attachedTo` and puts it on the who or place (refused past 12; the first photo of a who becomes its main one), and a failure deletes what was uploaded and the document, or leaves the document marked so a sweep deletes it. `makeMainPhoto` sets `photoMediaId` or moves a place's photo to the front. `removePhoto` holds the sealed bytes in memory, takes the photo off its record and marks the document `discarded` in one transaction, deletes both objects, then the document; the toast's Undo uploads the held bytes again and restores the document and its place in the list, so it lasts as long as the toast. Forgetting a who or place deletes its photos with it (every id it lists and any medium whose `attachedTo` names it): the sealed bytes are held in memory, each document is marked `discarded`, then objects and documents are deleted; Undo of the Forget puts the record back and then re-uploads the photos and restores their documents. The confirm says how many photos go. A failure deleting a photo puts the record back. Make main photo has its own Undo. The page shows the main photo large with the rest in a row (`PhotosSection`), each opening in `MediaViewer` (the picture, which opens full screen in `ImageViewer`, then Make main photo and Remove photo); people rows and the page's header use the main photo as the avatar through `WhoPhoto`, falling back to the mark. The seed gives Miso and Home one sealed photo each, uploaded to the Storage emulator.
 
 ### Key dates
 
@@ -1718,7 +1724,7 @@ A discarded medium stays 24 hours with "Didn't keep it · Keep it" on its line i
 
 ### Showing sealed media
 
-`useSealedObjectUrl(path, nonce, key)` (`src/hooks/`, general): downloads the sealed bytes, opens them, returns an object URL and revokes it on unmount; cached by path for the session. Runway's receipt image hook moves onto it in the same PR (CLAUDE.md "When a UI primitive is promoted"). Thumbnails load in lists, full images in `ImageViewer`.
+`useSealedObjectUrl({ id, path, nonce, contentType, open, isEnabled })` (`src/hooks/`, general; `open(bytes, nonce)` is the caller's, so the key stays in the app): downloads the sealed bytes, opens them, returns an object URL and revokes it when it changes and on unmount; the last 24 opened objects are remembered for the signed-in person, `forgetSealedObject(id)` drops one (and its `{id}.…` variants) and the memory clears on a user change. Helm's `useMediaUrl` calls it for a thumbnail (`{mediaId}.thumb`) or the full picture. Runway's receipt image hook moves onto it in the same PR (CLAUDE.md "When a UI primitive is promoted"). Thumbnails load in lists, full images in `ImageViewer`.
 
 ## 24. Topics as living documents
 

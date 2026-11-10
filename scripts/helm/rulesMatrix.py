@@ -3,14 +3,15 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a photo's readable shape. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
 """
-import argparse, json, os, sys, time, urllib.request, urllib.error
+import argparse, json, os, sys, time, urllib.parse, urllib.request, urllib.error
 
 FS_HOST = os.environ['FIRESTORE_EMULATOR_HOST']
+STORAGE_HOST = os.environ.get('FIREBASE_STORAGE_EMULATOR_HOST') or os.environ.get('STORAGE_EMULATOR_HOST')
 AUTH_HOST = os.environ['FIREBASE_AUTH_EMULATOR_HOST']
 PROJECT = os.environ.get('GCLOUD_PROJECT', 'demo-rules-matrix')
 ROOT = f'projects/{PROJECT}/databases/(default)/documents/'
@@ -85,6 +86,48 @@ def check(label, code, allowed):
     results[label] = code
     if (code == 200) != allowed:
         mismatches.append(f'{label}: got {code}, expected {"allow" if allowed else "deny"}')
+
+
+BUCKET = f'{PROJECT}.appspot.com'
+LIMIT = 10 * 1024 * 1024 + 1024
+
+
+def object_url(name, query=''):
+    return f'http://{STORAGE_HOST}/v0/b/{BUCKET}/o/' + urllib.parse.quote(name, safe='') + query
+
+
+def send(method, url, tok, body=None, content_type=None):
+    h = {}
+    if tok == 'owner': h['Authorization'] = 'Bearer owner'
+    elif tok: h['Authorization'] = 'Firebase ' + tok
+    if content_type: h['Content-Type'] = content_type
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, data=body, headers=h, method=method)); return 200
+    except urllib.error.HTTPError as e: return e.code
+
+
+def upload(name, tok, size=64, content_type='application/octet-stream'):
+    url = f'http://{STORAGE_HOST}/v0/b/{BUCKET}/o?name=' + urllib.parse.quote(name, safe='')
+    return send('POST', url, tok, b'\0' * size, content_type)
+
+
+def storage_cases(o_tok, x_tok, uid, x_uid, actors):
+    for suffix in ('', '.thumb'):
+        name = f'apps/helm/media/{uid}/media-1{suffix}'
+        tag = 'thumb' if suffix else 'bytes'
+        for a, tok in actors.items():
+            send('DELETE', object_url(name), 'owner')
+            check(f'storage {tag} create [{a}]', upload(name, tok), a == 'o')
+            send('DELETE', object_url(name), 'owner'); upload(name, 'owner')
+            check(f'storage {tag} read [{a}]', send('GET', object_url(name, '?alt=media'), tok), a == 'o')
+            check(f'storage {tag} overwrite [{a}]', upload(name, tok), False)
+            check(f'storage {tag} delete [{a}]', send('DELETE', object_url(name), tok), a == 'o')
+    name = f'apps/helm/media/{uid}/media-2'
+    check('storage create at another uid [o]', upload(f'apps/helm/media/{x_uid}/media-2', o_tok), False)
+    check('storage create with another content type [o]', upload(name, o_tok, content_type='image/png'), False)
+    check('storage create at the size limit [o]', upload(name, o_tok, size=LIMIT), False)
+    check('storage create just under the size limit [o]', upload(name, o_tok, size=LIMIT - 1), True)
+    send('DELETE', object_url(name), 'owner')
 
 
 def main():
@@ -174,6 +217,22 @@ def main():
             admin([rm(dk + '-new-' + a)])
         check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
 
+    # A medium's document is the owner's alone, and the owner may only write a photo's shape.
+    photo = dict(kind='photo', role='photo', status='kept', mimeType='image/webp', hasThumb=True, attachedTo=[dict(kind='who', id='who-1')], decidedBy='person', createdAt=NOW, decidedAt=NOW, deleteAfter=None, sealed=SEAL)
+    mk = f'{path}/media/media-1'
+    for a, tok in actors.items():
+        admin([put(mk, photo)])
+        check(f'media read [{a}]', get(mk, tok), a == 'o')
+        check(f'media list [{a}]', get(f'{path}/media', tok), a == 'o')
+        check(f'media create [{a}]', commit(tok, [put_new(mk + '-new-' + a, photo)]), a == 'o')
+        check(f'media update [{a}]', commit(tok, [put(mk, dict(photo, status='discarded'))]), a == 'o')
+        check(f'media delete [{a}]', commit(tok, [rm(mk)]), a == 'o')
+        admin([rm(mk + '-new-' + a)])
+    check('media create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/media/m', photo)]), False)
+    check('media create with another kind [o]', commit(o_tok, [put_new(mk + '-video', dict(photo, kind='video'))]), False)
+    check('media create with a non-image type [o]', commit(o_tok, [put_new(mk + '-pdf', dict(photo, mimeType='application/pdf'))]), False)
+    check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
+
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
     ex = f'{path}/executions/exec-1'
@@ -210,6 +269,9 @@ def main():
             check(f'{label} read [{a}]', get(p, tok), False)
             check(f'{label} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)
             check(f'{label} write [{a}]', commit(tok, [put(p, {'x': 2})]), False)
+
+    if STORAGE_HOST:
+        storage_cases(o_tok, x_tok, uid, x_uid, actors)
 
     if args.out:
         with open(args.out, 'w') as f: json.dump(dict(sorted(results.items())), f, indent=1)

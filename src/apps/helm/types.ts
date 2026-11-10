@@ -423,6 +423,45 @@ export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
   isUnreadable: boolean;
 }
 
+export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
+
+/** A record a medium shows on, by id. */
+export interface MediaAttachment {
+  kind: 'who' | 'place';
+  id: string;
+}
+
+/** `apps/helm/users/{uid}/media/{mediaId}`: a photo whose sealed bytes are in Storage. Only the fields photos use so far; the rest of the shape arrives with the media a turn attaches. */
+export interface Media {
+  kind: 'photo';
+  /** A who's or place's picture, as opposed to a file a turn brought in. */
+  role: 'attachment' | 'photo';
+  status: MediaStatus;
+  /** Of the original, before sealing. */
+  mimeType: string;
+  hasThumb: boolean;
+  attachedTo: MediaAttachment[];
+  decidedBy: 'nomos' | 'person' | null;
+  createdAt: number;
+  decidedAt: number | null;
+  /** A discarded medium is deleted after this; an upload that never finished too. */
+  deleteAfter: number | null;
+  sealed: Sealed;
+}
+
+export interface MediaSealed {
+  bytesNonce: string;
+  thumbNonce: string | null;
+  /** The data key that sealed the bytes. */
+  keyId: string;
+}
+
+/** A medium after its nonces are opened; one that would not open keeps `isUnreadable` and cannot be shown. */
+export interface OpenMedia extends Omit<Media, 'sealed'>, MediaSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
 export interface TaskSealed {
   title: string;
   notes: string | null;

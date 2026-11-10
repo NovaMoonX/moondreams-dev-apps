@@ -11,7 +11,8 @@ import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
-import WhoMark from '@apps/helm/components/who/WhoMark';
+import PhotosSection from '@apps/helm/components/media/PhotosSection';
+import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -93,7 +94,11 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
     }
     const isConfirmed = await confirm({
       title: HELM_COPY.whoForgetMenu(who.name),
-      message: HELM_COPY.forgetConfirmWho(who.name, linkedCount),
+      message: HELM_COPY.forgetConfirmWho(
+        who.name,
+        linkedCount,
+        who.mediaIds.length,
+      ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
     });
@@ -184,7 +189,12 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         {who && !who.isUnreadable && (
           <>
             <div className='flex items-start gap-4'>
-              <WhoMark kind={who.kind} name={who.name} isLarge />
+              <WhoPhoto
+                kind={who.kind}
+                name={who.name}
+                mediaId={who.photoMediaId}
+                isLarge
+              />
               <div className='min-w-0'>
                 <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
                   {who.name}
@@ -196,6 +206,12 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
+            <PhotosSection
+              owner={{ kind: 'who', id: who.id }}
+              name={who.name}
+              photoIds={who.mediaIds}
+              mainId={who.photoMediaId}
+            />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoFactsTitle} />
               <p className='text-muted-foreground text-[15px] text-pretty'>

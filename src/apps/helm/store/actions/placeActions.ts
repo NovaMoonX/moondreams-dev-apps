@@ -12,7 +12,7 @@ import { db } from '@lib/firebase/config';
 import { openJson, sealJson } from '@apps/helm/security';
 import {
   type EditResult,
-  forgetLinked,
+  forgetWithPhotos,
 } from '@apps/helm/store/actions/whoActions';
 import type {
   HelmEncryption,
@@ -87,4 +87,4 @@ export async function updatePlace(
 }
 
 export const forgetPlace = (uid: string, placeId: string) =>
-  forgetLinked(uid, 'places', placeId);
+  forgetWithPhotos(uid, 'places', placeId);

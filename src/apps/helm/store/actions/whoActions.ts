@@ -16,6 +16,10 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { openJson, sealJson } from '@apps/helm/security';
+import {
+  getPhotoIdsOf,
+  removeMediaOf,
+} from '@apps/helm/store/actions/mediaActions';
 import type {
   HelmEncryption,
   HelmProfile,
@@ -299,8 +303,38 @@ export async function forgetLinked(
   };
 }
 
+/** Forgets a who or place and deletes its photos with it; Undo puts the record and its photos back. A photo that cannot be deleted puts the record back and fails. */
+export async function forgetWithPhotos(
+  uid: string,
+  target: 'who' | 'places',
+  id: string,
+): Promise<Forgotten> {
+  const photoIds = await getPhotoIdsOf(uid, {
+    kind: target === 'who' ? 'who' : 'place',
+    id,
+  });
+  const forgotten = await forgetLinked(uid, target, id);
+  if (photoIds.length === 0) return forgotten;
+  const photos = await removeMediaOf(uid, photoIds).catch(
+    async (error: unknown) => {
+      await forgotten.restore().catch((restoreError: unknown) => {
+        console.error('Helm forgotten record was not put back', restoreError);
+      });
+      throw error;
+    },
+  );
+  return {
+    ...forgotten,
+    restore: async () => {
+      const outcome = await forgotten.restore();
+      if (outcome === 'restored') await photos.restore();
+      return outcome;
+    },
+  };
+}
+
 export const forgetWho = (uid: string, whoId: string) =>
-  forgetLinked(uid, 'who', whoId);
+  forgetWithPhotos(uid, 'who', whoId);
 
 /** Makes the person's own who once; the transaction keeps two tabs from making two. */
 export async function ensureSelfWho(

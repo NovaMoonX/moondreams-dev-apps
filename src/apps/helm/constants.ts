@@ -70,6 +70,10 @@ export const FACTS_LIMIT = 300;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
+/** The most media documents the app keeps listening to. */
+export const MEDIA_LIMIT = 2_000;
+/** Photos one who or place keeps. */
+export const PHOTOS_PER_RECORD = 12;
 /** Mentions a who's page lists before "Show all". */
 export const MENTIONS_SHOWN = 10;
 
@@ -115,6 +119,11 @@ const goneLine = (count: number) =>
     : `${count} tasks were deleted since.`;
 
 /** Every line that names the assistant is a template over its chosen name, so a renamed assistant is renamed everywhere. */
+const forgetPhotosLine = (photos: number) =>
+  photos === 0
+    ? ''
+    : ` ${photos === 1 ? 'Its photo is' : `Its ${photos} photos are`} deleted too.`;
+
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
@@ -856,14 +865,18 @@ export const HELM_COPY = {
   tierSetToast: (name: string, tier: string) => `Set ${name} to ${tier}`,
   forgetNeedsConnection: 'Forgetting needs a connection.',
   forgetFailed: "That didn't work. Nothing was forgotten.",
-  forgetConfirmWho: (name: string, tasks: number) =>
-    tasks === 0
-      ? `Forget ${name}? No tasks are linked to them.`
-      : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`,
-  forgetConfirmPlace: (name: string, tasks: number) =>
-    tasks === 0
-      ? `Forget ${name}? No tasks are linked to it.`
-      : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no place.`,
+  forgetConfirmWho: (name: string, tasks: number, photos: number) =>
+    `${
+      tasks === 0
+        ? `Forget ${name}? No tasks are linked to them.`
+        : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
+    }${forgetPhotosLine(photos)}`,
+  forgetConfirmPlace: (name: string, tasks: number, photos: number) =>
+    `${
+      tasks === 0
+        ? `Forget ${name}? No tasks are linked to it.`
+        : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no place.`
+    }${forgetPhotosLine(photos)}`,
   forgetPartial: (name: string) =>
     `Some links may already be gone. Open ${name} to check.`,
   forgetAction: 'Forget',
@@ -882,6 +895,34 @@ export const HELM_COPY = {
   linkedPet: 'Pet',
   linkedOrganization: 'Organization',
   linkedPlace: 'Place',
+  photosTitle: 'Photos',
+  photosEmpty: (name: string) =>
+    `Add a photo of ${name}. It shows here and in your lists, and it's sealed on your phone before it's saved.`,
+  photoAdd: 'Add a photo',
+  photoFull: `This page holds up to ${PHOTOS_PER_RECORD} photos. Remove one to add another.`,
+  photoAdded: 'Photo added',
+  photoFailed: "That photo didn't save. Try again.",
+  photoNeedsConnection: 'Adding a photo needs a connection.',
+  photoGone: 'This page is gone, so the photo was not kept.',
+  photoLabel: (name: string, position: number) => `${name}, photo ${position}`,
+  photoMainBadge: 'Main',
+  photoSheetTitle: 'Photo',
+  photoOpenFull: 'Open full screen',
+  photoMakeMain: 'Make main photo',
+  photoMakeMainSubtitle: (name: string) =>
+    `Shown first, and beside ${name} in your lists`,
+  photoMadeMain: 'Made the main photo',
+  photoMainBack: 'Main photo put back',
+  photoMakeMainFailed: "That didn't change. Try again.",
+  photoRemove: 'Remove photo',
+  photoRemoveSubtitle:
+    'Deletes it from your account. You can undo it right after.',
+  photoRemoved: 'Photo removed',
+  photoRemoveFailed: "That photo wasn't removed. Try again.",
+  photoRestored: 'Photo put back',
+  photoRestoreFailed: "That photo couldn't be put back.",
+  photoUnreadable: "This photo can't be opened here.",
+  photoViewerLabel: 'Photos',
 } as const;
 
 export const PLANNER_COPY = {

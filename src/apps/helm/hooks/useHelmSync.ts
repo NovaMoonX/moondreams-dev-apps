@@ -24,6 +24,8 @@ import {
   setKeyStatus,
   setPlaces,
   setPlacesFailed,
+  setMedia,
+  setMediaFailed,
   setWho,
   setWhoFailed,
   setOpenTasks,
@@ -49,6 +51,7 @@ import {
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
+import { startMediaListener } from '@apps/helm/store/listeners/mediaListener';
 import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
@@ -277,6 +280,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm places listener failed', error);
               dispatch(setPlacesFailed());
+            },
+          ),
+          startMediaListener(
+            uid,
+            read,
+            (media) => dispatch(setMedia(media)),
+            (error) => {
+              console.error('Helm photos listener failed', error);
+              dispatch(setMediaFailed());
             },
           ),
           startSyncedListener(

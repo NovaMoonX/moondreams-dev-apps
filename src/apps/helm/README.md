@@ -36,6 +36,7 @@ Built:
 - One event on your calendar and in A-List or Waypoint (or on two Google accounts) shows once with both marks; the calendar's time is shown, and when the app's differs one line says so ("A-List Tracker says 7:00 PM").
 - Name a friend, a pet or a shop in a turn ("call @Dana", "buy Miso's food at Acme Bakery") and it links to the one you meant, or is added as new; People (in Browse) lists them Close, Regular and Others, each with a page of the tasks and turns that name them, and a task row shows who and where it is about.
 - When a name could be one of several people or places (two Sams), the task is made at once and the turn asks "Which Sam?" under its card, by tap or by voice: each candidate with what tells it apart, then "Someone new" and "Don't link anyone", or Skip, which leaves it in Needs you. A person's or place's page has a ⋯ to change its name, kind and details, how close they are, or forget them, with an Undo that puts them back on the tasks they were taken from.
+- Give a person, pet, organization or place a photo from the library or the camera, with one main photo that shows beside their name in People and several more under it (up to 12), each opening full screen; the main one can change and a photo can be removed with an Undo. Every photo is sealed on your phone before it is stored.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

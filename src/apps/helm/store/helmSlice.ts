@@ -7,6 +7,7 @@ import type {
   OpenCapture,
   OpenExecution,
   OpenFact,
+  OpenMedia,
   OpenPlace,
   OpenTask,
   OpenWho,
@@ -66,6 +67,8 @@ export interface HelmState {
   who: LoadedSet<OpenWho>;
   /** The places the person has named. */
   places: LoadedSet<OpenPlace>;
+  /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
+  media: LoadedSet<OpenMedia>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -111,6 +114,7 @@ const initialState: HelmState = {
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
   places: emptyLoadedSet,
+  media: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -224,6 +228,12 @@ const helmSlice = createSlice({
     setPlacesFailed: (state) => {
       state.places.isFailed = true;
     },
+    setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
+      state.media = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setMediaFailed: (state) => {
+      state.media.isFailed = true;
+    },
     setSynced: (state, action: PayloadAction<SyncedRecord[]>) => {
       state.synced = {
         items: action.payload,
@@ -332,6 +342,8 @@ export const {
   setWhoFailed,
   setPlaces,
   setPlacesFailed,
+  setMedia,
+  setMediaFailed,
   setSynced,
   setSyncedFailed,
   setRecentExecutions,

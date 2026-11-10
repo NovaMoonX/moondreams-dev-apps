@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { deflateSync } from 'node:zlib';
 
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
@@ -16,7 +17,8 @@ import {
   DEFAULT_PLAN_FILL_PERCENT,
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
-import { openJson, sealJson } from '../../src/apps/helm/security.ts';
+import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
+import { getMediaObjectPath } from '../../src/apps/helm/utils/mediaPath.ts';
 import {
   getDueDay,
   readCapture,
@@ -29,6 +31,8 @@ import type {
   CaptureAnswer,
   Fact,
   FactSealed,
+  Media,
+  MediaSealed,
   Place,
   PlaceSealed,
   Who,
@@ -1247,16 +1251,145 @@ const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
   ...extra,
 });
 
+function makeSquarePng(
+  size: number,
+  [red, green, blue]: [number, number, number],
+) {
+  const row = Buffer.concat([
+    Buffer.from([0]),
+    Buffer.from(Array.from({ length: size }, () => [red, green, blue]).flat()),
+  ]);
+  const raw = Buffer.concat(Array.from({ length: size }, () => row));
+  const crcTable = Array.from({ length: 256 }, (_, n) =>
+    Array.from({ length: 8 }).reduce<number>(
+      (c) => (c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1),
+      n,
+    ),
+  );
+  const crc = (buffer: Buffer) =>
+    (buffer.reduce(
+      (c, byte) => crcTable[(c ^ byte) & 0xff] ^ (c >>> 8),
+      0xffffffff,
+    ) ^
+      0xffffffff) >>>
+    0;
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const length = Buffer.alloc(4);
+    length.writeUInt32BE(data.length);
+    const checksum = Buffer.alloc(4);
+    checksum.writeUInt32BE(crc(body));
+    return Buffer.concat([length, body, checksum]);
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(size, 0);
+  header.writeUInt32BE(size, 4);
+  header.set([8, 2, 0, 0, 0], 8);
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk('IHDR', header),
+    chunk('IDAT', deflateSync(raw)),
+    chunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+/** One kept photo of a who or place: a flat-colour PNG sealed with the person's key, its document and the two sealed objects to upload. */
+async function buildSeedPhoto(input: {
+  uid: string;
+  id: string;
+  attachedTo: Media['attachedTo'][number];
+  color: [number, number, number];
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { uid, id, attachedTo, color, now, encryption } = input;
+  const png = new Uint8Array(makeSquarePng(96, color));
+  const [bytes, thumb] = await Promise.all([
+    sealBytes(png, encryption),
+    sealBytes(png, encryption),
+  ]);
+  const media: Media = {
+    kind: 'photo',
+    role: 'photo',
+    status: 'kept',
+    mimeType: 'image/png',
+    hasThumb: true,
+    attachedTo: [attachedTo],
+    decidedBy: 'person',
+    createdAt: now - 5 * DAY_MS,
+    decidedAt: now - 5 * DAY_MS,
+    deleteAfter: null,
+    sealed: await sealJson<MediaSealed>(
+      {
+        bytesNonce: bytes.nonce,
+        thumbNonce: thumb.nonce,
+        keyId: encryption.keyId,
+      },
+      encryption,
+    ),
+  };
+  return {
+    id,
+    media,
+    uploads: [
+      { path: getMediaObjectPath(uid, id, false), bytes: bytes.bytes },
+      { path: getMediaObjectPath(uid, id, true), bytes: thumb.bytes },
+    ],
+  };
+}
+
+/** Uploads a seeded sealed object to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
+async function uploadSealedSeed(path: string, bytes: Uint8Array) {
+  const bucket =
+    process.env.STORAGE_BUCKET ??
+    process.env.VITE_FIREBASE_STORAGE_BUCKET ??
+    'moondreams-dev-apps.firebasestorage.app';
+  const host = process.env.FIREBASE_STORAGE_EMULATOR_HOST ?? '127.0.0.1:9199';
+  const response = await fetch(
+    `http://${host}/v0/b/${bucket}/o?name=${encodeURIComponent(path)}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        Authorization: 'Bearer owner',
+      },
+      body: Buffer.from(bytes),
+    },
+  ).catch(() => null);
+  if (!response?.ok) {
+    console.warn(
+      'Helm seed: could not upload a photo to the Storage emulator, so Miso and Home show their marks.',
+    );
+  }
+}
+
 /** Alex's people: themself, two Sams, a cat and a bakery, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
 async function buildPeople(input: {
+  uid: string;
   displayName: string;
   now: number;
   timeZone: string;
   encryption: HelmEncryption;
 }) {
-  const { displayName, now, timeZone, encryption } = input;
+  const { uid, displayName, now, timeZone, encryption } = input;
   const madeAt = now - 6 * DAY_MS;
   const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const misoPhoto = await buildSeedPhoto({
+    uid,
+    id: 'seed-media-miso',
+    attachedTo: { kind: 'who', id: 'seed-who-miso' },
+    color: [226, 148, 72],
+    now,
+    encryption,
+  });
+  const homePhoto = await buildSeedPhoto({
+    uid,
+    id: 'seed-media-home',
+    attachedTo: { kind: 'place', id: 'seed-place-home' },
+    color: [96, 130, 170],
+    now,
+    encryption,
+  });
   const names = {
     self: displayName.includes('@') || !displayName ? 'Me' : displayName,
   };
@@ -1619,8 +1752,25 @@ async function buildPeople(input: {
     }),
   };
   return {
-    who,
-    places: [{ id: 'seed-place-home', place: home }],
+    who: who.map((entry) =>
+      entry.id === 'seed-who-miso'
+        ? {
+            ...entry,
+            who: {
+              ...entry.who,
+              photoMediaId: misoPhoto.id,
+              mediaIds: [misoPhoto.id],
+            },
+          }
+        : entry,
+    ),
+    places: [
+      {
+        id: 'seed-place-home',
+        place: { ...home, photoMediaIds: [homePhoto.id] },
+      },
+    ],
+    media: [misoPhoto, homePhoto],
     tasks,
     capture: { id: 'seed-turn-who', capture },
     questionCapture: { id: 'seed-turn-question', capture: questionCapture },
@@ -2046,6 +2196,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       const people =
         user.uid === FIXTURE_USERS.partnerOne.uid
           ? await buildPeople({
+              uid: user.uid,
               displayName: user.displayName,
               now: context.now,
               timeZone,
@@ -2058,6 +2209,16 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         );
         people.places.forEach((entry) =>
           batch.set(person.collection('places').doc(entry.id), entry.place),
+        );
+        people.media.forEach((entry) =>
+          batch.set(person.collection('media').doc(entry.id), entry.media),
+        );
+        await Promise.all(
+          people.media.flatMap((entry) =>
+            entry.uploads.map((upload) =>
+              uploadSealedSeed(upload.path, upload.bytes),
+            ),
+          ),
         );
         people.tasks.forEach((entry) =>
           batch.set(person.collection('tasks').doc(entry.id), entry.task),
@@ -2076,7 +2237,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         );
       }
       const peopleCount = people
-        ? people.who.length + people.places.length + people.tasks.length + 3
+        ? people.who.length +
+          people.places.length +
+          people.media.length +
+          people.tasks.length +
+          3
         : 0;
       const backToBackCount =
         peopleCount +
