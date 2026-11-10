@@ -1,25 +1,58 @@
 import { HELM_COPY } from '@apps/helm/constants';
-import type { KeyDateKind } from '@apps/helm/types';
-import { formatYearlyDate, yearsOn } from '@/utils/yearlyDateUtils';
+import type { KeyDateKind, MomentPrecision } from '@apps/helm/types';
+import {
+  formatMoment,
+  formatYearlyDate,
+  yearsOn,
+} from '@/utils/yearlyDateUtils';
 
 const lowerFirst = (text: string) =>
   /^[A-Z][a-z]/.test(text)
     ? text.charAt(0).toLowerCase() + text.slice(1)
     : text;
 
-/** "birthday", "anniversary", or the person's own label ("gotcha day"). */
+const MOMENT_WORDS: Record<string, string> = {
+  met: HELM_COPY.momentKindMet,
+  moved: HELM_COPY.momentKindMoved,
+  startedJob: HELM_COPY.momentKindStartedJob,
+  leftJob: HELM_COPY.momentKindLeftJob,
+  graduated: HELM_COPY.momentKindGraduated,
+  adopted: HELM_COPY.momentKindAdopted,
+  passedAway: HELM_COPY.momentKindPassedAway,
+};
+
+/** "birthday", "anniversary", a moment's words ("met"), or the person's own label ("gotcha day"). */
 export const toKeyDateWord = (kind: KeyDateKind, label: string | null) =>
   kind === 'birthday' || kind === 'anniversary'
     ? kind
-    : lowerFirst(label?.trim() || 'date');
+    : lowerFirst(MOMENT_WORDS[kind] ?? (label?.trim() || 'date'));
 
-/** The row's lead word: "Birthday", "Anniversary" or the label as the person wrote it. */
+/** The row's lead word: "Birthday", "Anniversary", "Met" or the label as the person wrote it. */
 export const toKeyDateTitleWord = (kind: KeyDateKind, label: string | null) =>
   kind === 'birthday'
     ? HELM_COPY.keyDateKindBirthday
     : kind === 'anniversary'
       ? HELM_COPY.keyDateKindAnniversary
-      : label?.trim() || HELM_COPY.keyDateKindCustom;
+      : (MOMENT_WORDS[kind] ?? (label?.trim() || HELM_COPY.keyDateKindCustom));
+
+/** A moment's row: "Met · Mar 2015", "Lived in Lisbon · the 1980s". */
+export const formatMomentRow = (entry: {
+  kind: KeyDateKind;
+  label: string | null;
+  precision: MomentPrecision;
+  month: number | null;
+  day: number | null;
+  year: number;
+}) => `${toKeyDateTitleWord(entry.kind, entry.label)} · ${formatMoment(entry)}`;
+
+/** A moment's title: "Dana · Met", "You · Moved". */
+export const describeMoment = (input: {
+  kind: KeyDateKind;
+  label: string | null;
+  whoName: string;
+  isSelf: boolean;
+}) =>
+  `${input.isSelf ? HELM_COPY.youLabel : input.whoName} · ${toKeyDateTitleWord(input.kind, input.label)}`;
 
 /** Whose date it is, in words: "Maya's birthday", "Your birthday", "Your anniversary with Maya", "Miso's gotcha day". */
 export function describeKeyDate(input: {

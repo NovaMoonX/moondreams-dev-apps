@@ -714,7 +714,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Turns kept when the AI, the connection or the day's limit is away, and sorted once it is back (N, C)
 - [ ] Tasks with importance, urgency, deadline, length, energy, context, place, who, steps, what they wait on and "not until" (O, N)
 - [x] Dates that come back for people, pets, organizations and you (birthdays with or without a year, anniversaries, custom yearly dates) on each page, on Today a few days ahead for close and regular people, and in a Coming up view by month; from conversation and Contacts, with Undo (O, C)
-- [ ] Moments for people, pets, organizations and you (moves, jobs, graduations, adoptions, meeting, passing away) on each page and in a list by decade and year; from conversation and Contacts, used in answers (O, C)
+- [x] Moments for people, pets, organizations and you (moves, jobs, graduations, adoptions, meeting, passing away) on each page and in a list by decade and year; from conversation and Contacts, used in answers (O, C)
 - [ ] "Ask about this" on every content page, the same control in the same place, opening the conversation about that page and returning to it (O, C)
 - [x] People, pets and organizations, each with a page, a photo and a level (close, regular, passing); passing ones out of the way until they matter (O, C)
 - [ ] Projects with an objective, milestones, tasks, people in roles (key, involved, mentioned) and health from evidence (O, C)

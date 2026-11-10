@@ -16,6 +16,7 @@ import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactsSection from '@apps/helm/components/who/FactsSection';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
+import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
@@ -133,6 +134,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         who.mediaIds.length,
         factCount,
         who.yearlyDateCount,
+        who.momentCount,
       ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
@@ -287,6 +289,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
               name={who.name}
             />
             <KeyDatesList who={who} />
+            <MomentsPreview who={who} />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoTasksTitle} />
               <LinkedTasks

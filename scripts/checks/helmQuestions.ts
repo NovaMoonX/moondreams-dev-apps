@@ -65,6 +65,7 @@ const who = (
   mentionDayKeys: [],
   taskLinkCount: 0,
   yearlyDateCount: 0,
+  momentCount: 0,
   hasRole: false,
   ...extra,
 });
@@ -330,6 +331,7 @@ const resolveInput = (
   by: 'tap',
   now: 9000,
   timeZone: 'UTC',
+  keyDate: null,
   executionId: 'e9',
   capture: {
     status: 'needsYou',

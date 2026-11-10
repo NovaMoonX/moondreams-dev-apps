@@ -37,6 +37,11 @@ import {
   readIndexIn,
   writeIndexIn,
 } from './keyDateStore.js';
+import {
+  KEY_DATE_KINDS,
+  KEY_DATE_PRECISIONS,
+  MAX_MOMENTS_PER_WHO,
+} from './nomos/commands.js';
 import type { KeyDateRecord } from './nomos/planKeyDates.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
@@ -541,6 +546,9 @@ async function readPeople(
         yearlyDateCount: Number.isFinite(doc.get('yearlyDateCount'))
           ? Number(doc.get('yearlyDateCount'))
           : 0,
+        momentCount: Number.isFinite(doc.get('momentCount'))
+          ? Number(doc.get('momentCount'))
+          : 0,
       },
     ];
   });
@@ -610,71 +618,135 @@ async function readPeople(
   };
 }
 
-/** The yearly index, the key date documents the commands name and the counters of the people they belong to, read in the turn's transaction. */
+const MAX_KEPT_READS = 20;
+
+export const openKeyDate = (
+  key: HelmKey,
+  snap: { id: string; get: (field: string) => unknown },
+): [string, KeyDateRecord] | null => {
+  try {
+    const words = openForHelm(key, snap.get('sealed') as SealedPayload);
+    const kind = KEY_DATE_KINDS.find((entry) => entry === words.kind);
+    const month = typeof words.month === 'number' ? words.month : null;
+    const shape = snap.get('shape') === 'moment' ? 'moment' : 'yearly';
+    if (
+      typeof snap.get('whoId') !== 'string' ||
+      !kind ||
+      (shape === 'yearly' && month === null)
+    ) {
+      return null;
+    }
+    const precision = KEY_DATE_PRECISIONS.find(
+      (entry) => entry === words.precision,
+    );
+    return [
+      snap.id,
+      {
+        whoId: snap.get('whoId') as string,
+        shape,
+        source: snap.get('source') as KeyDateRecord['source'],
+        createdAt: Number(snap.get('createdAt') ?? 0),
+        sealed: {
+          kind,
+          label: typeof words.label === 'string' ? words.label : null,
+          month,
+          day: typeof words.day === 'number' ? words.day : null,
+          year: typeof words.year === 'number' ? words.year : null,
+          precision: precision ?? null,
+          captureId:
+            typeof words.captureId === 'string' ? words.captureId : null,
+        },
+      },
+    ];
+  } catch {
+    return null;
+  }
+};
+
+/** The yearly index, the key date documents the commands name, the birthday and passed-away date each person the turn may mean keeps, and the counters of the people they belong to, read in the turn's transaction. */
 async function readKeyDateState(
   transaction: Transaction,
   firestore: Firestore,
   base: string,
   key: HelmKey,
-  input: { keyDates: KeyDateCommand[]; selfWhoId: string | null },
+  input: {
+    keyDates: KeyDateCommand[];
+    selfWhoId: string | null;
+    candidateWhoIds: string[];
+  },
 ) {
   const index = await readIndexIn(transaction, firestore, base, key);
+  const candidates = [
+    ...new Set([
+      ...input.candidateWhoIds,
+      ...(input.selfWhoId ? [input.selfWhoId] : []),
+    ]),
+  ].slice(0, MAX_KEPT_READS);
+  const setKinds = input.keyDates.flatMap((command) =>
+    command.kind === 'setKeyDate' ? [command.keyKind] : [],
+  );
+  const birthdayIds = setKinds.includes('birthday')
+    ? candidates.flatMap((whoId) =>
+        (index.byWho[whoId] ?? [])
+          .filter((entry) => entry[1] === 'birthday')
+          .map((entry) => entry[0]),
+      )
+    : [];
   const ids = [
-    ...new Set(
-      input.keyDates.flatMap((command) =>
+    ...new Set([
+      ...input.keyDates.flatMap((command) =>
         command.kind === 'removeKeyDate'
           ? [command.keyDateId]
           : command.keyDateId
             ? [command.keyDateId]
             : [],
       ),
-    ),
+      ...birthdayIds,
+    ]),
   ];
-  const snaps =
+  const [snaps, momentSnaps] = await Promise.all([
     ids.length > 0
-      ? await transaction.getAll(
+      ? transaction.getAll(
           ...ids.map((id) => firestore.doc(`${base}/keyDates/${id}`)),
         )
-      : [];
+      : [],
+    setKinds.includes('passedAway')
+      ? Promise.all(
+          candidates.map((whoId) =>
+            transaction.get(
+              firestore
+                .collection(`${base}/keyDates`)
+                .where('whoId', '==', whoId)
+                .where('shape', '==', 'moment')
+                .limit(MAX_MOMENTS_PER_WHO),
+            ),
+          ),
+        )
+      : [],
+  ]);
   const existing = new Map(
     snaps.flatMap((snap): [string, KeyDateRecord][] => {
-      if (!snap.exists) return [];
-      try {
-        const words = openForHelm(key, snap.get('sealed') as SealedPayload);
-        const kind = words.kind;
-        if (
-          typeof snap.get('whoId') !== 'string' ||
-          (kind !== 'birthday' &&
-            kind !== 'anniversary' &&
-            kind !== 'custom') ||
-          typeof words.month !== 'number'
-        ) {
-          return [];
-        }
-        return [
-          [
-            snap.id,
-            {
-              whoId: snap.get('whoId') as string,
-              shape: snap.get('shape') === 'moment' ? 'moment' : 'yearly',
-              source: snap.get('source'),
-              createdAt: Number(snap.get('createdAt') ?? 0),
-              sealed: {
-                kind,
-                label: typeof words.label === 'string' ? words.label : null,
-                month: words.month,
-                day: typeof words.day === 'number' ? words.day : null,
-                year: typeof words.year === 'number' ? words.year : null,
-                captureId:
-                  typeof words.captureId === 'string' ? words.captureId : null,
-              },
-            },
-          ],
-        ];
-      } catch {
-        return [];
-      }
+      const opened = snap.exists ? openKeyDate(key, snap) : null;
+      return opened ? [opened] : [];
     }),
+  );
+  const kept = new Map(
+    [
+      ...[...existing.entries()].filter(
+        ([, record]) => record.sealed.kind === 'birthday',
+      ),
+      ...momentSnaps
+        .flatMap((result) => result.docs)
+        .flatMap((snap) => {
+          const opened = openKeyDate(key, snap);
+          return opened && opened[1].sealed.kind === 'passedAway'
+            ? [opened]
+            : [];
+        }),
+    ].map(([id, record]): [string, { id: string; record: KeyDateRecord }] => [
+      `${record.whoId}:${record.sealed.kind}`,
+      { id, record },
+    ]),
   );
   const whoIds = [
     ...new Set([
@@ -688,21 +760,26 @@ async function readKeyDateState(
           ...whoIds.map((id) => firestore.doc(`${base}/who/${id}`)),
         )
       : [];
-  const whoCounts = new Map(
-    whoSnaps.flatMap((snap): [string, number][] =>
-      snap.exists
-        ? [
-            [
-              snap.id,
-              Number.isFinite(snap.get('yearlyDateCount'))
-                ? Number(snap.get('yearlyDateCount'))
-                : 0,
-            ],
-          ]
-        : [],
-    ),
-  );
-  return { index, existing, whoCounts };
+  const countsOf = (field: string) =>
+    new Map(
+      whoSnaps.flatMap((snap): [string, number][] =>
+        snap.exists
+          ? [
+              [
+                snap.id,
+                Number.isFinite(snap.get(field)) ? Number(snap.get(field)) : 0,
+              ],
+            ]
+          : [],
+      ),
+    );
+  return {
+    index,
+    existing,
+    kept,
+    whoCounts: countsOf('yearlyDateCount'),
+    momentCounts: countsOf('momentCount'),
+  };
 }
 
 const MAX_CONTEXT_FACTS = 20;
@@ -1683,6 +1760,7 @@ async function writeResult(
         ? await readKeyDateState(transaction, firestore, base, key, {
             keyDates,
             selfWhoId,
+            candidateWhoIds: (people?.known ?? []).map((who) => who.id),
           })
         : null;
     const joinedRefs = (ids: string[]) =>
@@ -1771,6 +1849,8 @@ async function writeResult(
       keyDateIndex: keyDateRead?.index,
       existingKeyDates: keyDateRead?.existing,
       whoCounts: keyDateRead?.whoCounts,
+      momentCounts: keyDateRead?.momentCounts,
+      keptKeyDates: keyDateRead?.kept,
     });
     const plan = home
       ? {
@@ -1799,10 +1879,7 @@ async function writeResult(
       now,
       newId: () => crypto.randomUUID(),
     });
-    const questions = [
-      ...(isFiling ? plan.questions : []),
-      ...askPlan.questions,
-    ];
+    const questions = [...plan.questions, ...askPlan.questions];
     const firstQuestion = isSpoken ? (questions[0]?.spoken ?? null) : null;
 
     if (isFiling) {

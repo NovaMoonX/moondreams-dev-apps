@@ -107,11 +107,26 @@ export const ACTIVITY_PAGE = 30;
 export const HELM_CAPS = {
   keyDates: 20_000,
   yearlyPerWho: 20,
+  momentsPerWho: 500,
   indexSplit: 6_000,
 } as const;
 
 /** The kinds of date that come back each year, in the order the add sheet offers them. */
 export const KEY_DATE_KINDS = ['birthday', 'anniversary', 'custom'] as const;
+
+/** The kinds of one-time event, in the order the add sheet offers them; a custom one with "Comes back each year" off is a moment too. */
+export const MOMENT_KINDS = [
+  'met',
+  'moved',
+  'startedJob',
+  'leftJob',
+  'graduated',
+  'adopted',
+  'passedAway',
+] as const;
+
+/** How many moments a who page shows before "See all". */
+export const MOMENTS_PREVIEW = 3;
 
 /** Today's dates look this many days ahead, today included. */
 export const TODAY_WINDOW_DAYS = 7;
@@ -163,6 +178,11 @@ const forgetDatesLine = (dates: number) =>
   dates === 0
     ? ''
     : ` ${dates === 1 ? 'Its date is' : `Its ${dates} dates are`} deleted too.`;
+
+const forgetMomentsLine = (moments: number) =>
+  moments === 0
+    ? ''
+    : ` ${moments === 1 ? 'Its moment is' : `Its ${moments} moments are`} deleted too.`;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -1084,12 +1104,13 @@ export const HELM_COPY = {
     photos: number,
     facts: number,
     dates: number,
+    moments: number,
   ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to them.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
-    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetPhotosLine(photos)}`,
+    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetMomentsLine(moments)}${forgetPhotosLine(photos)}`,
   forgetConfirmPlace: (
     name: string,
     tasks: number,
@@ -1162,6 +1183,37 @@ export const HELM_COPY = {
   keyDateKindBirthday: 'Birthday',
   keyDateKindAnniversary: 'Anniversary',
   keyDateKindCustom: 'Something else',
+  momentKindMet: 'Met',
+  momentKindMoved: 'Moved',
+  momentKindStartedJob: 'Started a job',
+  momentKindLeftJob: 'Left a job',
+  momentKindGraduated: 'Graduated',
+  momentKindAdopted: 'Adopted',
+  momentKindPassedAway: 'Passed away',
+  momentsHeading: 'Moments',
+  momentAdd: 'Add a moment',
+  momentSeeAll: (count: number) => `See all ${count}`,
+  momentsScreenTitle: (name: string) => `${name}'s moments`,
+  momentsEmpty: (name: string) =>
+    `No moments yet. Tell ${name} when something happened, or add one.`,
+  momentsLoading: 'Opening moments',
+  momentsFailed: "The moments didn't open. Close this page and open it again.",
+  momentDecade: (decade: string) => `Sometime in ${decade}`,
+  momentNewTitle: 'Add a moment',
+  momentEditTitle: 'Edit this moment',
+  momentAdded: (title: string) => `Added ${title}`,
+  momentRemoved: (title: string) => `Removed ${title}`,
+  momentPrecisionLabel: 'How well do you know when?',
+  momentPrecisionDay: 'Day',
+  momentPrecisionMonth: 'Month',
+  momentPrecisionYear: 'Year',
+  momentPrecisionDecade: 'Decade',
+  momentDecadeLabel: 'Decade',
+  momentYearNeeded: 'Add the year.',
+  momentMonthNeeded: 'Pick the month.',
+  momentFull: (name: string) =>
+    `${name} has ${HELM_CAPS.momentsPerWho} moments, the most that are kept.`,
+  momentOneTime: 'One time',
   keyDateYearUnknown: 'Year not known',
   keyDateAddYear: 'Add year',
   keyDateDayUnknown: 'Day not known, so not on Today',

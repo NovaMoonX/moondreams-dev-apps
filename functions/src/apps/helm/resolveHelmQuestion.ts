@@ -7,6 +7,9 @@ import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import { loadKeyringOrFail } from './sortHelmCapture.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
+import { openKeyDate } from './sortHelmCapture.js';
+import { readIndexIn, writeIndexIn } from './keyDateStore.js';
+import { applyChanges } from './keyDateIndex.js';
 import {
   FACT_TEXT_MAX,
   planResolve,
@@ -38,7 +41,7 @@ interface CaptureDoc {
 
 const toRefusal = (
   refusal: ResolveRefusal,
-  subject: 'person' | 'place' | 'fact',
+  subject: 'person' | 'place' | 'fact' | 'date',
 ) =>
   refusal === 'answered'
     ? new HttpsError('already-exists', 'This was already answered.')
@@ -48,9 +51,11 @@ const toRefusal = (
           'failed-precondition',
           subject === 'fact'
             ? 'That fact changed since.'
-            : subject === 'place'
-              ? 'That place was removed.'
-              : 'That person was removed.',
+            : subject === 'date'
+              ? 'That date was removed.'
+              : subject === 'place'
+                ? 'That place was removed.'
+                : 'That person was removed.',
           { reason: 'gone' },
         );
 
@@ -181,6 +186,7 @@ export const resolveHelmQuestion = onCall(
           heldCommands?: {
             taskIds?: unknown[];
             factIds?: unknown[];
+            keyDateId?: unknown;
             kind?: string;
           }[];
         }
@@ -191,10 +197,28 @@ export const resolveHelmQuestion = onCall(
       );
       const isPlace = held?.kind === 'linkPlace';
       const isSettle = held?.kind === 'settleFact';
+      const isDateSettle = held?.kind === 'settleKeyDate';
+      const keyDateId =
+        isDateSettle &&
+        typeof held?.keyDateId === 'string' &&
+        ID_RE.test(held.keyDateId)
+          ? held.keyDateId
+          : null;
       const factIds = (held?.factIds ?? [])
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
-      const isPick = !isSettle && optionId !== 'new' && optionId !== 'none';
+      const isPick =
+        !isSettle && !isDateSettle && optionId !== 'new' && optionId !== 'none';
+      const keyDateSnap = keyDateId
+        ? await transaction.get(firestore.doc(`${base}/keyDates/${keyDateId}`))
+        : null;
+      const openedDate =
+        keyDateSnap?.exists === true ? openKeyDate(key, keyDateSnap) : null;
+      const isYearlySettle =
+        optionId === 'new' && openedDate?.[1].shape === 'yearly';
+      const dateIndex = isYearlySettle
+        ? await readIndexIn(transaction, firestore, base, key)
+        : null;
       const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
         Promise.all(
           factIds.map((id) =>
@@ -276,6 +300,17 @@ export const resolveHelmQuestion = onCall(
         opened,
         tasks,
         facts,
+        keyDate: openedDate
+          ? {
+              id: openedDate[0],
+              record: {
+                ...openedDate[1],
+                lastEditedAt: Number.isFinite(keyDateSnap?.get('lastEditedAt'))
+                  ? Number(keyDateSnap?.get('lastEditedAt'))
+                  : null,
+              },
+            }
+          : null,
         text,
         chosen:
           chosenSnap?.exists === true
@@ -297,7 +332,13 @@ export const resolveHelmQuestion = onCall(
       if (result.refused !== null) {
         throw toRefusal(
           result.refused,
-          isSettle ? 'fact' : isPlace ? 'place' : 'person',
+          isSettle
+            ? 'fact'
+            : isDateSettle
+              ? 'date'
+              : isPlace
+                ? 'place'
+                : 'person',
         );
       }
       const { plan } = result;
@@ -324,6 +365,24 @@ export const resolveHelmQuestion = onCall(
           firestore.doc(`${base}/facts/${plan.factCreate.id}`),
           plan.factCreate.data,
         );
+      }
+      if (plan.keyDateUpdate) {
+        transaction.update(
+          firestore.doc(`${base}/keyDates/${plan.keyDateUpdate.id}`),
+          plan.keyDateUpdate.data,
+        );
+        if (plan.keyDateUpdate.indexChange && dateIndex) {
+          const next = applyChanges(dateIndex.byWho, [
+            plan.keyDateUpdate.indexChange,
+          ]);
+          writeIndexIn(transaction, firestore, base, {
+            byWho: next.byWho,
+            rebuiltAt: dateIndex.rebuiltAt,
+            existingIds: dateIndex.existingIds,
+            now: Date.now(),
+            seal,
+          });
+        }
       }
       if (plan.whoUpdate) {
         transaction.update(

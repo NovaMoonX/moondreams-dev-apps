@@ -65,7 +65,7 @@ const FRIDAY = Date.UTC(2026, 10, 13);
 const TOMORROW = Date.UTC(2026, 10, 10);
 const span = (id: string, text: string) => {
   const start = TEXT.indexOf(text);
-  return { id, text, start, end: start + text.length };
+  return { id, text, start, end: start + text.length, precision: null };
 };
 const READING: CaptureReading = {
   people: [span('people:5', 'Dana')],
@@ -739,6 +739,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const mention = {
@@ -946,6 +947,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const older: ExistingFact = {

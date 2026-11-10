@@ -26,8 +26,10 @@ import type {
   KeyDate,
   KeyDateKind,
   KeyDateSealed,
+  MomentPrecision,
   Sealed,
 } from '@apps/helm/types';
+import { ALL_KEY_KINDS, MOMENT_PRECISIONS } from '@apps/helm/utils/moments';
 import {
   applyChanges,
   buildByWho,
@@ -35,20 +37,21 @@ import {
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
 
-/** What the person types for a date. */
+/** What the person types for a date; a precision makes it a moment, which has no index entry. */
 export interface KeyDateInput {
   kind: KeyDateKind;
   label: string | null;
-  month: number;
+  month: number | null;
   day: number | null;
   year: number | null;
+  precision: MomentPrecision | null;
 }
 
 /** A change that went through, with the way to take it back; `undo` says false when the date changed since and was left alone. */
 export type KeyDateChange =
   | { kind: 'done'; id: string; undo: () => Promise<boolean> }
   | { kind: 'changed' }
-  | { kind: 'full'; reason: 'who' | 'all' }
+  | { kind: 'full'; reason: 'who' | 'all' | 'moments' }
   | { kind: 'offline' };
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
@@ -76,8 +79,10 @@ interface OpenedDate extends KeyDateInput {
 
 const toEntry = (id: string, parts: KeyDateInput): IndexEntry => [
   id,
-  parts.kind,
-  parts.month,
+  parts.kind === 'anniversary' || parts.kind === 'custom'
+    ? parts.kind
+    : 'birthday',
+  parts.month ?? 1,
   parts.day,
   parts.year,
   parts.kind === 'custom' ? parts.label : null,
@@ -92,24 +97,24 @@ const toSealed = (
   month: parts.month,
   day: parts.day,
   year: parts.year,
+  precision: parts.precision,
   captureId,
 });
 
-const toOpened = (opened: Partial<KeyDateSealed>): OpenedDate | null =>
-  typeof opened.month === 'number'
-    ? {
-        captureId:
-          typeof opened.captureId === 'string' ? opened.captureId : null,
-        kind:
-          opened.kind === 'anniversary' || opened.kind === 'custom'
-            ? opened.kind
-            : 'birthday',
-        label: typeof opened.label === 'string' ? opened.label : null,
-        month: opened.month,
-        day: typeof opened.day === 'number' ? opened.day : null,
-        year: typeof opened.year === 'number' ? opened.year : null,
-      }
-    : null;
+const toOpened = (opened: Partial<KeyDateSealed>): OpenedDate | null => {
+  const precision =
+    MOMENT_PRECISIONS.find((entry) => entry === opened.precision) ?? null;
+  if (precision === null && typeof opened.month !== 'number') return null;
+  return {
+    captureId: typeof opened.captureId === 'string' ? opened.captureId : null,
+    kind: ALL_KEY_KINDS.find((entry) => entry === opened.kind) ?? 'birthday',
+    label: typeof opened.label === 'string' ? opened.label : null,
+    month: typeof opened.month === 'number' ? opened.month : null,
+    day: typeof opened.day === 'number' ? opened.day : null,
+    year: typeof opened.year === 'number' ? opened.year : null,
+    precision,
+  };
+};
 
 interface Step {
   id: string;
@@ -120,14 +125,16 @@ interface Step {
     | { type: 'update'; lastEditedAt: number | null; parts: OpenedDate }
     | { type: 'delete' };
   delta: number;
+  /** A moment moves `momentCount` and never touches the index. */
+  isMoment: boolean;
 }
 
-/** Writes the date, the person's counter and the index in the one transaction that has already read them. */
+/** Writes the date, the person's counter and, for a date that comes back, the index in the one transaction that has already read them. */
 async function applyStep(
   transaction: Transaction,
   uid: string,
   encryption: HelmEncryption,
-  index: IndexState,
+  index: IndexState | null,
   isWhoHere: boolean,
   step: Step,
   now: number,
@@ -143,9 +150,12 @@ async function applyStep(
   }
   if (isWhoHere && step.delta !== 0) {
     transaction.update(doc(userOf(uid), 'who', step.whoId), {
-      yearlyDateCount: increment(step.delta),
+      [step.isMoment ? 'momentCount' : 'yearlyDateCount']: increment(
+        step.delta,
+      ),
     });
   }
+  if (step.isMoment || !index) return;
   const change: IndexChange =
     write.type === 'delete'
       ? { op: 'remove', whoId: step.whoId, keyDateId: step.id }
@@ -194,12 +204,20 @@ export const addKeyDate = (
       async (transaction): Promise<KeyDateChange | null> => {
         const who = await transaction.get(whoRef);
         if (!who.exists()) return { kind: 'changed' };
-        const counted = Number(who.data().yearlyDateCount ?? 0);
-        if (counted >= HELM_CAPS.yearlyPerWho) {
-          return { kind: 'full', reason: 'who' };
+        const isMoment = input.precision !== null;
+        const counted = Number(
+          who.data()[isMoment ? 'momentCount' : 'yearlyDateCount'] ?? 0,
+        );
+        if (
+          counted >=
+          (isMoment ? HELM_CAPS.momentsPerWho : HELM_CAPS.yearlyPerWho)
+        ) {
+          return { kind: 'full', reason: isMoment ? 'moments' : 'who' };
         }
-        const index = await readIndexIn(transaction, uid, encryption);
-        if (index.entryCount >= HELM_CAPS.keyDates) {
+        const index = isMoment
+          ? null
+          : await readIndexIn(transaction, uid, encryption);
+        if (index && index.entryCount >= HELM_CAPS.keyDates) {
           return { kind: 'full', reason: 'all' };
         }
         await applyStep(
@@ -215,7 +233,7 @@ export const addKeyDate = (
               type: 'set',
               fields: {
                 whoId,
-                shape: 'yearly',
+                shape: isMoment ? 'moment' : 'yearly',
                 source: 'person',
                 createdBy: 'person',
                 executionId: null,
@@ -225,6 +243,7 @@ export const addKeyDate = (
               parts,
             },
             delta: 1,
+            isMoment,
           },
           now,
         );
@@ -235,7 +254,8 @@ export const addKeyDate = (
     return {
       kind: 'done',
       id: ref.id,
-      undo: () => takeBack(uid, encryption, ref.id, whoId, now),
+      undo: () =>
+        takeBack(uid, encryption, ref.id, whoId, now, input.precision !== null),
     };
   });
 
@@ -246,6 +266,7 @@ async function takeBack(
   id: string,
   whoId: string,
   madeAt: number,
+  isMoment: boolean,
 ) {
   const ref = doc(datesOf(uid), id);
   const whoRef = doc(userOf(uid), 'who', whoId);
@@ -256,14 +277,16 @@ async function takeBack(
     ]);
     const data = snapshot.data() as Partial<KeyDate> | undefined;
     if (!data || (data.lastEditedAt ?? data.createdAt) !== madeAt) return false;
-    const index = await readIndexIn(transaction, uid, encryption);
+    const index = isMoment
+      ? null
+      : await readIndexIn(transaction, uid, encryption);
     await applyStep(
       transaction,
       uid,
       encryption,
       index,
       who.exists(),
-      { id, whoId, write: { type: 'delete' }, delta: -1 },
+      { id, whoId, write: { type: 'delete' }, delta: -1, isMoment },
       Date.now(),
     );
     return true;
@@ -283,11 +306,18 @@ export const editKeyDate = (
     const outcome = await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(ref);
       const data = snapshot.data() as Partial<KeyDate> | undefined;
-      if (!data || typeof data.whoId !== 'string' || data.shape !== 'yearly') {
+      if (
+        !data ||
+        typeof data.whoId !== 'string' ||
+        (data.shape === 'moment') !== (input.precision !== null)
+      ) {
         return null;
       }
+      const isMoment = data.shape === 'moment';
       const before = await openDate(data, encryption);
-      const index = await readIndexIn(transaction, uid, encryption);
+      const index = isMoment
+        ? null
+        : await readIndexIn(transaction, uid, encryption);
       const whoId = data.whoId;
       await applyStep(
         transaction,
@@ -304,13 +334,19 @@ export const editKeyDate = (
             parts: toSealed(input, before?.captureId ?? null),
           },
           delta: 0,
+          isMoment,
         },
         now,
       );
-      return { whoId, before, lastEditedAt: data.lastEditedAt ?? null };
+      return {
+        whoId,
+        before,
+        isMoment,
+        lastEditedAt: data.lastEditedAt ?? null,
+      };
     });
     if (!outcome) return { kind: 'changed' };
-    const { whoId, before, lastEditedAt } = outcome;
+    const { whoId, before, lastEditedAt, isMoment } = outcome;
     return {
       kind: 'done',
       id,
@@ -319,7 +355,9 @@ export const editKeyDate = (
           const snapshot = await transaction.get(ref);
           const data = snapshot.data() as Partial<KeyDate> | undefined;
           if (!data || data.lastEditedAt !== now || !before) return false;
-          const index = await readIndexIn(transaction, uid, encryption);
+          const index = isMoment
+            ? null
+            : await readIndexIn(transaction, uid, encryption);
           await applyStep(
             transaction,
             uid,
@@ -335,6 +373,7 @@ export const editKeyDate = (
                 parts: toSealed(before, before.captureId),
               },
               delta: 0,
+              isMoment,
             },
             Date.now(),
           );
@@ -357,7 +396,10 @@ export const removeKeyDate = (
       if (!data || typeof data.whoId !== 'string') return null;
       const whoId = data.whoId;
       const who = await transaction.get(doc(userOf(uid), 'who', whoId));
-      const index = await readIndexIn(transaction, uid, encryption);
+      const isMoment = data.shape === 'moment';
+      const index = isMoment
+        ? null
+        : await readIndexIn(transaction, uid, encryption);
       const parts = await openDate(data, encryption);
       await applyStep(
         transaction,
@@ -365,13 +407,13 @@ export const removeKeyDate = (
         encryption,
         index,
         who.exists(),
-        { id, whoId, write: { type: 'delete' }, delta: -1 },
+        { id, whoId, write: { type: 'delete' }, delta: -1, isMoment },
         Date.now(),
       );
-      return { data, whoId, parts };
+      return { data, whoId, parts, isMoment };
     });
     if (!taken) return { kind: 'changed' };
-    const { data, whoId, parts } = taken;
+    const { data, whoId, parts, isMoment } = taken;
     return {
       kind: 'done',
       id,
@@ -382,13 +424,18 @@ export const removeKeyDate = (
             transaction.get(doc(userOf(uid), 'who', whoId)),
           ]);
           if (snapshot.exists() || !who.exists() || !parts) return false;
-          const index = await readIndexIn(transaction, uid, encryption);
           const sealed = await sealJson<KeyDateSealed>(
             toSealed(parts, parts.captureId),
             encryption,
           );
+          const index = isMoment
+            ? null
+            : await readIndexIn(transaction, uid, encryption);
           transaction.set(ref, { ...data, sealed });
-          transaction.update(who.ref, { yearlyDateCount: increment(1) });
+          transaction.update(who.ref, {
+            [isMoment ? 'momentCount' : 'yearlyDateCount']: increment(1),
+          });
+          if (!index) return true;
           const next = applyChanges(index.byWho, [
             { op: 'upsert', whoId, entry: toEntry(id, parts) },
           ]);
@@ -403,7 +450,7 @@ export const removeKeyDate = (
     };
   });
 
-/** The sealed words of one date, for its sheet's source line. */
+/** One date as its sheet needs it: where it came from, whose it is and its words. */
 export async function readKeyDate(
   uid: string,
   encryption: HelmEncryption,
@@ -420,6 +467,9 @@ export async function readKeyDate(
   return {
     source: data.source ?? 'person',
     createdAt: data.createdAt ?? 0,
+    whoId: data.whoId ?? null,
+    shape: data.shape ?? 'yearly',
+    parts: sealed ? toOpened(sealed) : null,
     captureId: typeof sealed?.captureId === 'string' ? sealed.captureId : null,
   };
 }

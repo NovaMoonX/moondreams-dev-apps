@@ -98,6 +98,7 @@ export interface QuestionOption {
   ref:
     | { collection: 'who' | 'places'; id: string }
     | { collection: 'facts'; id: string }
+    | { collection: 'keyDates'; id: string }
     | null;
 }
 
@@ -161,6 +162,8 @@ export interface Token {
 
 export interface DateSpan extends Token {
   due: TaskDue;
+  /** How much of the date the words give when it is a month, a year or a decade ("March 2015", "in 1998", "in the 80s"); null for a day or a time. A coarse span's `due` is the first day of it. */
+  precision: 'month' | 'year' | 'decade' | null;
 }
 
 /** What Helm read in a turn for certain. A reader of an older turn defaults every field, so none is optional. */
@@ -408,10 +411,23 @@ export interface OpenWho extends Omit<Who, 'sealed'>, WhoSealed {
   isUnreadable: boolean;
 }
 
-export type KeyDateKind = 'birthday' | 'anniversary' | 'custom';
+/** `birthday`, `anniversary` and `custom` (when it comes back) are yearly; every other kind, and a custom one that does not come back, is a moment. */
+export type KeyDateKind =
+  | 'birthday'
+  | 'anniversary'
+  | 'custom'
+  | 'passedAway'
+  | 'met'
+  | 'adopted'
+  | 'startedJob'
+  | 'leftJob'
+  | 'moved'
+  | 'graduated';
 
-/** `moment` is kept in the type for a later issue; nothing writes it yet. */
 export type KeyDateShape = 'yearly' | 'moment';
+
+/** How exactly a moment is known: its day, month, year, or only its decade (stored as the decade's first year). */
+export type MomentPrecision = 'day' | 'month' | 'year' | 'decade';
 
 /** `apps/helm/users/{uid}/keyDates/{id}`: only `whoId` and `shape` are readable; the date itself is sealed. */
 export interface KeyDate {
@@ -431,8 +447,10 @@ export interface KeyDateSealed {
   label: string | null;
   month: number | null;
   day: number | null;
-  /** The first year; null when unknown. */
+  /** The first year; null when unknown. A moment always has one. */
   year: number | null;
+  /** Moments only; a date that comes back reads null. */
+  precision: MomentPrecision | null;
   captureId: string | null;
 }
 
@@ -443,7 +461,7 @@ export interface OpenKeyDate extends Omit<KeyDate, 'sealed'>, KeyDateSealed {
 /** `[keyDateId, kind, month, day, year, label]`: a tuple keeps the document small; label for custom only. */
 export type KeyDateIndexEntry = [
   keyDateId: string,
-  kind: KeyDateKind,
+  kind: 'birthday' | 'anniversary' | 'custom',
   month: number,
   day: number | null,
   year: number | null,

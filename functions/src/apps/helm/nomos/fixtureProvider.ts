@@ -838,6 +838,103 @@ const KEY_DATE_LABELS: Record<string, string> = {
   'gotcha day': 'Gotcha day',
 };
 
+const NAME_PATTERN = "@?[A-Z][\\p{L}'’.-]*(?: [A-Z][\\p{L}'’.-]*)*";
+const MOMENT_PATTERNS: {
+  re: RegExp;
+  kind: (match: RegExpExecArray) => string;
+}[] = [
+  {
+    re: new RegExp(
+      `^\\s*(?:I|we)\\s+met\\s+(${NAME_PATTERN})\\s+(?:in|on)\\s+(.+?)\\s*[.!]?\\s*$`,
+      'u',
+    ),
+    kind: () => 'met',
+  },
+  {
+    re: new RegExp(
+      `^\\s*(${NAME_PATTERN})\\s+and\\s+(?:I|me)\\s+met\\s+(?:in|on)\\s+(.+?)\\s*[.!]?\\s*$`,
+      'u',
+    ),
+    kind: () => 'met',
+  },
+  {
+    re: new RegExp(
+      `^\\s*(${NAME_PATTERN})\\s+(?:passed away|graduated|moved|started a job|left a job|was adopted)\\s+(?:in|on)\\s+(.+?)\\s*[.!]?\\s*$`,
+      'u',
+    ),
+    kind: (match) =>
+      match[0].includes('passed away')
+        ? 'passedAway'
+        : match[0].includes('graduated')
+          ? 'graduated'
+          : match[0].includes('started a job')
+            ? 'startedJob'
+            : match[0].includes('left a job')
+              ? 'leftJob'
+              : match[0].includes('was adopted')
+                ? 'adopted'
+                : 'moved',
+  },
+  {
+    re: new RegExp(
+      `^\\s*(${NAME_PATTERN})\\s+was born\\s+(?:on\\s+)?(.+?)\\s*[.!]?\\s*$`,
+      'u',
+    ),
+    kind: () => 'birthday',
+  },
+  {
+    re: new RegExp(
+      `^\\s*(${NAME_PATTERN})\\s+lived in\\s+([A-Z]\\p{L}+(?: [A-Z]\\p{L}+)*)\\s+(?:in|during)\\s+(.+?)\\s*[.!]?\\s*$`,
+      'u',
+    ),
+    kind: () => 'custom',
+  },
+];
+
+/** The emulator's stand-in for "I met Dana in March 2015", "Grandpa lived in Lisbon in the 80s", "Dana passed away in 2019" or "Mum was born June 3, 1958": one setKeyDate on the date span the words end with. Null for any other words. */
+const readMoment = (text: string, reading: CaptureReading) => {
+  const found = MOMENT_PATTERNS.flatMap(({ re, kind }) => {
+    const match = re.exec(text);
+    return match ? [{ match, kind: kind(match) }] : [];
+  })[0];
+  if (!found) return null;
+  const { match, kind } = found;
+  const name = match[1].replace(/^@/, '');
+  const place = kind === 'custom' ? match[2] : null;
+  const said = match[match.length - 1];
+  const span = reading.dates.find(
+    (entry) => entry.start >= text.lastIndexOf(said),
+  );
+  if (!span || NOT_NAMES.has(name)) return null;
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === name);
+  return {
+    commands: [
+      toAnswer({
+        kind: 'setKeyDate',
+        isHealth: null,
+        whoRefs: ['$w1'],
+        isAboutMe: false,
+        keyDateKind: kind,
+        keyDateLabel: place ? `Lived in ${place}` : null,
+        dateSpanId: span.id,
+        comesBack: kind === 'custom' ? false : null,
+        quote: text.trim().replace(/[.!]$/, ''),
+      }),
+    ],
+    mentions: [
+      {
+        ref: '$w1',
+        name,
+        kind: known?.kind ?? 'person',
+        relation: null,
+        species: known?.species ?? null,
+        organizationKind: known?.organizationKind ?? null,
+      },
+    ],
+    places: [],
+  };
+};
+
 /** The emulator's stand-in for "Dana's birthday is June 3", "our anniversary is June 20" or "Miso's gotcha day is Dec 3": one setKeyDate on the date span the words end with, about the name that starts them or the person. "Remove Dana's birthday" removes the one in context. Null for any other words. */
 const readKeyDate = (
   text: string,
@@ -869,7 +966,7 @@ const readKeyDate = (
       : null;
   }
   const match = KEY_DATE_RE.exec(text);
-  if (!match) return null;
+  if (!match) return readMoment(text, reading);
   const [, handle, owner, word, said] = match;
   const name = handle?.replace(/^@/, '');
   if (name && NOT_NAMES.has(name)) return null;

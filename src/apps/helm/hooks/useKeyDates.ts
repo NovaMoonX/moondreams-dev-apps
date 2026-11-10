@@ -1,13 +1,18 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { createSealedReader } from '@lib/security';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { nextYearlyOccurrence } from '@/utils/yearlyDateUtils';
 import { useTodayKey } from '@apps/helm/hooks/useTodayKey';
-import type { KeyDateKind } from '@apps/helm/types';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { openJson } from '@apps/helm/security';
+import { startMomentsListener } from '@apps/helm/store/listeners/momentListener';
+import { sortMoments, type WhoMoment } from '@apps/helm/utils/moments';
 
 export interface WhoKeyDate {
   id: string;
-  kind: KeyDateKind;
+  kind: 'birthday' | 'anniversary' | 'custom';
   label: string | null;
   month: number;
   day: number | null;
@@ -50,4 +55,55 @@ export function useKeyDates(whoId: string) {
     [entries, todayKey],
   );
   return { dates, isLoaded };
+}
+
+/** A who's moments, read while a page that needs them is open: one listener for the who, opened and sorted newest first on the device. Nothing is read while `isEnabled` is false. */
+export function useMoments(whoId: string, isEnabled = true) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const [state, setState] = useState<{
+    whoId: string;
+    moments: WhoMoment[] | null;
+    hasFailed: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!uid || !isEnabled) return;
+    let stop: (() => void) | null = null;
+    let isCurrent = true;
+    getHelmEncryption(uid)
+      .then((encryption) => {
+        if (!isCurrent) return;
+        stop = startMomentsListener(
+          uid,
+          whoId,
+          createSealedReader(encryption, openJson),
+          (moments) =>
+            setState({
+              whoId,
+              moments: sortMoments(moments),
+              hasFailed: false,
+            }),
+          (error) => {
+            console.error('Helm moments did not open', error);
+            setState({ whoId, moments: null, hasFailed: true });
+          },
+        );
+      })
+      .catch((error: unknown) => {
+        console.error('Helm moments did not open', error);
+        if (isCurrent) setState({ whoId, moments: null, hasFailed: true });
+      });
+    return () => {
+      isCurrent = false;
+      stop?.();
+    };
+  }, [uid, whoId, isEnabled]);
+
+  const current = state?.whoId === whoId ? state : null;
+  return {
+    moments: current?.moments ?? [],
+    isLoaded: current?.moments != null,
+    hasFailed: current?.hasFailed ?? false,
+  };
 }

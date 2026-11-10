@@ -71,6 +71,7 @@ export interface KnownWhoState extends KnownWho {
   taskLinkCount: number;
   hasRole: boolean;
   yearlyDateCount: number;
+  momentCount: number;
 }
 
 /** The people and places a turn names, with what the person already has to match them against. */
@@ -170,6 +171,10 @@ interface PlanInput {
   existingKeyDates?: Map<string, KeyDateRecord>;
   /** `yearlyDateCount` of each who a date is changed for, when it is not one the turn names. */
   whoCounts?: Map<string, number>;
+  /** `momentCount` of each who a date is changed for, when it is not one the turn names. */
+  momentCounts?: Map<string, number>;
+  /** The birthday or passed-away date each who keeps, by `whoId:kind`. */
+  keptKeyDates?: Map<string, { id: string; record: KeyDateRecord }>;
 }
 
 interface Draft {
@@ -838,7 +843,17 @@ export function planWrites(input: PlanInput): WritePlan {
       ]),
       ...(input.whoCounts ?? []),
     ]),
+    momentCounts: new Map([
+      ...(input.people?.known ?? []).map((who): [string, number] => [
+        who.id,
+        who.momentCount,
+      ]),
+      ...(input.momentCounts ?? []),
+    ]),
     existing: input.existingKeyDates ?? new Map(),
+    kept: input.keptKeyDates ?? new Map(),
+    timeZone: zone,
+    questionRoom: Math.max(0, MAX_PICK_QUESTIONS - factSteps.disputes.length),
     index: input.keyDateIndex?.byWho ?? {},
     entryCount: input.keyDateIndex?.entryCount ?? 0,
     captureId: input.captureId,
@@ -992,52 +1007,54 @@ export function planWrites(input: PlanInput): WritePlan {
           ];
         });
 
-  const counterOf = (id: string, base: number) =>
-    base + (keyDatePlan.deltas.get(id) ?? 0);
+  const counterFields = (id: string, known: KnownWhoState | undefined) => ({
+    ...(keyDatePlan.deltas.has(id) && {
+      yearlyDateCount:
+        (known?.yearlyDateCount ?? input.whoCounts?.get(id) ?? 0) +
+        (keyDatePlan.deltas.get(id) ?? 0),
+    }),
+    ...(keyDatePlan.momentDeltas.has(id) && {
+      momentCount:
+        (known?.momentCount ?? input.momentCounts?.get(id) ?? 0) +
+        (keyDatePlan.momentDeltas.get(id) ?? 0),
+    }),
+  });
+  const hasCounter = (id: string) =>
+    keyDatePlan.deltas.has(id) || keyDatePlan.momentDeltas.has(id);
   const countedCreates = whoCreates.map((entry) =>
-    keyDatePlan.deltas.has(entry.id)
+    hasCounter(entry.id)
       ? {
           ...entry,
-          data: {
-            ...entry.data,
-            yearlyDateCount: counterOf(entry.id, 0),
-          },
+          data: { ...entry.data, ...counterFields(entry.id, undefined) },
         }
       : entry,
   );
   const countedIds = new Set(whoUpdates.map((entry) => entry.id));
+  const known = (id: string) => people?.known.find((who) => who.id === id);
   const countedUpdates = [
     ...whoUpdates.map((entry) =>
-      keyDatePlan.deltas.has(entry.id)
+      hasCounter(entry.id)
         ? {
             ...entry,
             data: {
               ...entry.data,
-              yearlyDateCount: counterOf(
-                entry.id,
-                people?.known.find((who) => who.id === entry.id)
-                  ?.yearlyDateCount ??
-                  input.whoCounts?.get(entry.id) ??
-                  0,
-              ),
+              ...counterFields(entry.id, known(entry.id)),
             },
           }
         : entry,
     ),
     ...(!isFiling
       ? []
-      : [...keyDatePlan.deltas.keys()]
+      : [
+          ...new Set([
+            ...keyDatePlan.deltas.keys(),
+            ...keyDatePlan.momentDeltas.keys(),
+          ]),
+        ]
           .filter((id) => !newWhoIds.has(id) && !countedIds.has(id))
           .map((id) => ({
             id,
-            data: {
-              yearlyDateCount: counterOf(
-                id,
-                people?.known.find((who) => who.id === id)?.yearlyDateCount ??
-                  input.whoCounts?.get(id) ??
-                  0,
-              ),
-            },
+            data: counterFields(id, known(id)),
           }))),
   ];
 
@@ -1081,19 +1098,39 @@ export function planWrites(input: PlanInput): WritePlan {
           };
         },
       );
-  const questions = !isFiling
-    ? []
-    : [
-        ...disputeQuestions,
-        ...buildPickQuestions({
-          entities,
-          unsureTasks,
-          people,
-          newId: input.newId,
-          now,
-          room: MAX_PICK_QUESTIONS - disputeQuestions.length,
-        }),
-      ];
+  const clashQuestions = keyDatePlan.questions.map(
+    ({ id, sealed, spoken }): PlannedQuestion => ({
+      id,
+      state: {
+        kind: 'whichIsTrue',
+        shape: 'pickOne',
+        askedAt: now,
+        answeredAt: null,
+        skippedAt: null,
+      },
+      sealed,
+      spoken,
+    }),
+  );
+  const questions = [
+    ...clashQuestions,
+    ...(!isFiling
+      ? []
+      : [
+          ...disputeQuestions,
+          ...buildPickQuestions({
+            entities,
+            unsureTasks,
+            people,
+            newId: input.newId,
+            now,
+            room:
+              MAX_PICK_QUESTIONS -
+              disputeQuestions.length -
+              clashQuestions.length,
+          }),
+        ]),
+  ];
 
   return {
     creates,

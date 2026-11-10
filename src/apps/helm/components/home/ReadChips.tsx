@@ -11,6 +11,7 @@ import { X } from 'lucide-react';
 import Drawer from '@/components/Drawer';
 import { useSheetHistory } from '@/hooks/useBackHistory';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatMoment } from '@/utils/yearlyDateUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { CaptureReading, TaskDue } from '@apps/helm/types';
 import {
@@ -66,6 +67,17 @@ const formatDue = (due: TaskDue, timeZone: string) => {
   });
 };
 
+/** A date read only to its month, year or decade ("Mar 2015", "the 1980s"); there is no day to fix. */
+const formatCoarse = (due: TaskDue, precision: 'month' | 'year' | 'decade') => {
+  const date = new Date(due.kind === 'day' ? due.date : due.at);
+  return formatMoment({
+    precision,
+    month: precision === 'month' ? date.getUTCMonth() + 1 : null,
+    day: null,
+    year: date.getUTCFullYear(),
+  });
+};
+
 const toChips = (reading: CaptureReading, timeZone: string): Chip[] => [
   ...reading.people.map((token) => ({
     key: getReadingKey('people', token.text),
@@ -87,8 +99,10 @@ const toChips = (reading: CaptureReading, timeZone: string): Chip[] => [
     : []),
   ...reading.dates.map((span) => ({
     key: getReadingKey('dates', span.text),
-    label: formatDue(span.due, timeZone),
-    due: span.due,
+    label: span.precision
+      ? formatCoarse(span.due, span.precision)
+      : formatDue(span.due, timeZone),
+    due: span.precision ? null : span.due,
   })),
 ];
 

@@ -761,6 +761,7 @@ const dateWords = {
   month: 6,
   day: 3,
   year: null,
+  precision: null,
   captureId: 'turn-1',
 };
 
@@ -876,6 +877,112 @@ test('a removed date is written back under its id, with its words', () => {
 test('a removed date is not brought back for a person who is gone', () => {
   const result = plan(removal, [dateTarget('k1', null, false)]);
   assert.equal(result.kind === 'write' ? result.creates.length : 0, 0);
+});
+
+const momentWords = {
+  kind: 'met' as const,
+  label: null,
+  month: 3,
+  day: null,
+  year: 2015,
+  precision: 'month' as const,
+  captureId: 'turn-1',
+};
+
+test("a moment the turn made is deleted by its undo and says dates; the target's shape tells the device to move the moment count", () => {
+  const result = asWrite(
+    plan(
+      execution([
+        {
+          ref: dateRef('create', 'k1'),
+          effect: {
+            written: { 'sealed.title': 'Moment · Dana · Met · Mar 2015' },
+            previous: null,
+          },
+        },
+      ]),
+      [
+        [
+          'k1',
+          {
+            docId: 'k1',
+            data: { lastEditedAt: null, shape: 'moment' },
+            opened: momentWords,
+            isOwnerHere: true,
+          },
+        ],
+      ],
+    ),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => [entry.docId, entry.collection]),
+    [['k1', 'keyDates']],
+  );
+});
+
+test('a settled date goes back to the kept parts, and stays when the person edited it since', () => {
+  const settle = execution([
+    {
+      ref: dateRef('update', 'k1'),
+      effect: {
+        written: { 'sealed.title': 'Kept', 'sealed.day': 4 },
+        previous: { 'sealed.title': 'Kept', 'sealed.day': 3 },
+      },
+    },
+  ]);
+  const restored = asWrite(
+    plan(settle, [
+      [
+        'k1',
+        {
+          docId: 'k1',
+          data: { lastEditedAt: null },
+          opened: { ...dateWords, day: 4 },
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual({ ...restored.updates[0].reseal }, { ...dateWords, day: 3 });
+  const kept = plan(settle, [
+    [
+      'k1',
+      {
+        docId: 'k1',
+        data: { lastEditedAt: null },
+        opened: { ...dateWords, day: 9 },
+      },
+    ],
+  ]);
+  assert.equal(kept.kind === 'write' ? kept.updates.length : 0, 0);
+});
+
+test('a removed moment is written back as a moment with its precision', () => {
+  const removed = execution([
+    {
+      ref: dateRef('delete', 'k1'),
+      effect: {
+        written: { 'sealed.title': 'Removed' },
+        previous: {
+          'sealed.title': 'Removed',
+          whoId: 'w1',
+          shape: 'moment',
+          source: 'person',
+          createdAt: 7,
+          'sealed.kind': 'met',
+          'sealed.label': null,
+          'sealed.month': 3,
+          'sealed.day': null,
+          'sealed.year': 2015,
+          'sealed.precision': 'month',
+          'sealed.captureId': null,
+        },
+      },
+    },
+  ]);
+  const result = asWrite(plan(removed, [dateTarget('k1', null)]));
+  assert.equal(result.creates[0].fields.shape, 'moment');
+  assert.equal(result.creates[0].seal.precision, 'month');
+  assert.equal(result.creates[0].seal.year, 2015);
 });
 
 const failures = tests.flatMap(([name, run]) => {

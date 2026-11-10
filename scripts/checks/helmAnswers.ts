@@ -1308,6 +1308,7 @@ const tests: [string, () => void | Promise<void>][] = [
         start: 0,
         end: 1,
         due: { kind: 'day' as const, date: todayUtc + offset * DAY },
+        precision: null,
       });
       const reading = {
         ...READING,
@@ -1366,6 +1367,7 @@ const tests: [string, () => void | Promise<void>][] = [
             start: 0,
             end: 1,
             due: { kind: 'moment' as const, at: NOW + DAY },
+            precision: null,
           },
         ],
       };
@@ -1434,6 +1436,7 @@ const tests: [string, () => void | Promise<void>][] = [
             start: 0,
             end: 1,
             due: { kind: 'day' as const, date: Date.UTC(2026, 10, 11) },
+            precision: null,
           })),
         };
         const loop = await createFixtureProvider(text, reading).runToolLoop({

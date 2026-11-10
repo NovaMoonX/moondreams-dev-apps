@@ -1,5 +1,6 @@
 import { HELM_COPY } from '@apps/helm/constants';
 import { CURRENT_PLACE_MS } from '@apps/helm/engine/currentPlace';
+import { ALL_KEY_KINDS, MOMENT_PRECISIONS } from '@apps/helm/utils/moments';
 import type {
   EffectRef,
   Execution,
@@ -226,7 +227,10 @@ const isEntity = (name: EffectRef['collection']) =>
 const toNumber = (value: unknown) => (typeof value === 'number' ? value : null);
 
 const toKeyKind = (value: unknown): KeyDateSealed['kind'] =>
-  value === 'anniversary' || value === 'custom' ? value : 'birthday';
+  ALL_KEY_KINDS.find((entry) => entry === value) ?? 'birthday';
+
+const toPrecision = (value: unknown): KeyDateSealed['precision'] =>
+  MOMENT_PRECISIONS.find((entry) => entry === value) ?? null;
 
 /** A removed date comes back under its id from what the removal sealed; it is not brought back for a person who is gone. */
 const planRecreate = (
@@ -246,6 +250,7 @@ const planRecreate = (
     month: toNumber(previous['sealed.month']),
     day: toNumber(previous['sealed.day']),
     year: toNumber(previous['sealed.year']),
+    precision: toPrecision(previous['sealed.precision']),
     captureId: toText(previous['sealed.captureId']),
   };
   return {
@@ -254,7 +259,7 @@ const planRecreate = (
     seal,
     fields: {
       whoId: previous.whoId,
-      shape: 'yearly',
+      shape: previous.shape === 'moment' ? 'moment' : 'yearly',
       source: toText(previous.source) ?? 'person',
       createdBy: previous.source === 'nomos' ? 'nomos' : 'person',
       executionId: null,

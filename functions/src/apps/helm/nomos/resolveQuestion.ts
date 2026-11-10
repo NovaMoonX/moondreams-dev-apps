@@ -1,5 +1,5 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import type { MentionRead } from './commands.js';
+import { KEY_DATE_PRECISIONS, type MentionRead } from './commands.js';
 import {
   buildPlaceDoc,
   buildWhoDoc,
@@ -10,10 +10,21 @@ import {
 } from './executeCommands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import {
+  buildSettledDateLine,
   buildSettledLine,
   buildSettledNoneLine,
   SETTLE_LINES,
 } from './summaries.js';
+import {
+  checkKeyDateParts,
+  checkMomentParts,
+  partsPaths,
+  toIndexEntry,
+  type KeyDateParts,
+  type KeyDateRecord,
+  type MomentParts,
+} from './planKeyDates.js';
+import type { IndexChange } from '../keyDateIndex.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
 
@@ -66,6 +77,11 @@ export interface ResolveInput {
   tasks: Map<string, ResolveTask>;
   /** The facts a held settleFact names that still exist, by id. */
   facts: Map<string, ResolveFact>;
+  /** The key date a held settleKeyDate names, opened, or null when it is gone. */
+  keyDate: {
+    id: string;
+    record: KeyDateRecord & { lastEditedAt: number | null };
+  } | null;
   /** The corrected statement, with the answer "none" to a "which is true now?" question. */
   text: string | null;
   /** The who or place the option names, or null when it is gone; its tier and last mention are read. */
@@ -86,6 +102,12 @@ export interface ResolvePlan {
   placeCreate: { id: string; data: Record<string, unknown> } | null;
   factCreate: { id: string; data: Record<string, unknown> } | null;
   factUpdates: { id: string; data: Record<string, unknown> }[];
+  /** The key date a settled date rewrote, and the index change that goes with it when it is a yearly one. */
+  keyDateUpdate: {
+    id: string;
+    data: Record<string, unknown>;
+    indexChange: IndexChange | null;
+  } | null;
   whoUpdate: { id: string; data: Record<string, unknown> } | null;
   execution: Record<string, unknown> | null;
   capture: Record<string, unknown>;
@@ -103,7 +125,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isHeld = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) &&
-  (Array.isArray(value.taskIds) || Array.isArray(value.factIds));
+  (Array.isArray(value.taskIds) ||
+    Array.isArray(value.factIds) ||
+    typeof value.keyDateId === 'string');
 
 const isOption = (value: unknown): value is PickOption =>
   isRecord(value) &&
@@ -157,6 +181,7 @@ function closeStale(
     placeCreate: null,
     factCreate: null,
     factUpdates: freed,
+    keyDateUpdate: null,
     whoUpdate: null,
     execution: null,
     isStale: true,
@@ -402,6 +427,7 @@ function planSettle(
       factUpdates: [...(confirm ? [confirm] : []), ...links].map(
         ({ id, data }) => ({ id, data }),
       ),
+      keyDateUpdate: null,
       whoUpdate: null,
       execution,
       isStale: false,
@@ -432,6 +458,157 @@ function planSettle(
   };
 }
 
+/** What answering "which is true now?" about a birthday or passed-away date writes: the kept date and "Neither" write nothing, the new date rewrites the kept one's parts (and its index entry when it comes back each year). A date that is gone is refused. */
+function planSettleKeyDate(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  held: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+  options: PickOption[],
+): { refused: ResolveRefusal } | { refused: null; plan: ResolvePlan } {
+  const { questionId, optionId, now, capture } = input;
+  const state = capture.questionState[questionId];
+  const target = input.keyDate;
+  if (!target) return { refused: 'gone' };
+  const { record } = target;
+  const heldParts = isRecord(held.parts) ? held.parts : null;
+  const num = (value: unknown) => (typeof value === 'number' ? value : null);
+  const precision =
+    KEY_DATE_PRECISIONS.find((entry) => entry === heldParts?.precision) ?? null;
+  const next = {
+    ...record.sealed,
+    month: num(heldParts?.month),
+    day: num(heldParts?.day),
+    year: num(heldParts?.year),
+    precision: record.shape === 'moment' ? precision : null,
+  };
+  const thisYear = new Date(now).getUTCFullYear();
+  const isValid =
+    heldParts !== null &&
+    (record.shape === 'moment'
+      ? next.year !== null &&
+        next.precision !== null &&
+        checkMomentParts(
+          {
+            ...next,
+            year: next.year,
+            precision: next.precision,
+          } as Omit<MomentParts, 'captureId'>,
+          thisYear,
+        ) === null
+      : next.month !== null &&
+        checkKeyDateParts(
+          { ...next, month: next.month } as Omit<KeyDateParts, 'captureId'>,
+          thisYear,
+        ) === null);
+  if (!isValid) return { refused: 'unknown' };
+  const isNew = optionId === 'new';
+  const label = options.find((option) => option.id === optionId)?.label ?? '';
+  const effect: Effect = {
+    written: { 'sealed.title': label, ...partsPaths(next) },
+    previous: { 'sealed.title': label, ...partsPaths(record.sealed) },
+  };
+  const ref = {
+    op: 'update',
+    collection: 'keyDates',
+    docId: target.id,
+  } as EffectRef;
+  const keyDateUpdate = isNew
+    ? {
+        id: target.id,
+        data: {
+          sealed: input.seal({ ...next }),
+          lastEditedAt: now,
+        },
+        indexChange:
+          record.shape === 'yearly'
+            ? ({
+                op: 'upsert',
+                whoId: record.whoId,
+                entry: toIndexEntry(target.id, {
+                  ...next,
+                  kind: next.kind as KeyDateParts['kind'],
+                  month: next.month ?? 1,
+                }),
+              } as IndexChange)
+            : null,
+      }
+    : null;
+  const execution = !isNew
+    ? null
+    : {
+        captureId: input.captureId,
+        actor: 'nomos',
+        category: 'remember',
+        autonomyLevel: AUTOMATIC_LEVEL,
+        state: 'succeeded',
+        effectRefs: [ref],
+        linkedWhoIds: [record.whoId],
+        linkedPlaceIds: [],
+        undoesExecutionId: null,
+        undoneByExecutionId: null,
+        questionRef: { captureId: input.captureId, questionId },
+        errorCode: null,
+        createdAt: now,
+        decidedAt: now,
+        finishedAt: now,
+        sealed: input.seal({
+          summary: buildSettledDateLine(label),
+          commands: [],
+          effects: [effect],
+          undoReport: null,
+          goneIds: null,
+          spoken: null,
+        }),
+      };
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...state, answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    refused: null,
+    plan: {
+      taskUpdates: [],
+      whoCreate: null,
+      placeCreate: null,
+      factCreate: null,
+      factUpdates: [],
+      keyDateUpdate,
+      whoUpdate: null,
+      execution,
+      isStale: false,
+      capture: {
+        questionState,
+        sealed: {
+          ...input.opened,
+          questions: {
+            ...oldQuestions,
+            [questionId]: {
+              ...question,
+              answer: {
+                by: input.by,
+                at: now,
+                turnCaptureId: null,
+                shape: 'pickOne',
+                optionId,
+                otherText: null,
+              },
+            },
+          },
+        },
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+        executionIds: execution
+          ? [...capture.executionIds, input.executionId]
+          : capture.executionIds,
+      },
+    },
+  };
+}
+
 /** Decides what answering a "which one?" question writes, without touching a database: a pick links the held tasks, "new" makes the person or place first, "none" links nothing, and an answered or unknown question is refused. */
 export function planResolve(
   input: ResolveInput,
@@ -455,6 +632,9 @@ export function planResolve(
   }
   if (held.kind === 'settleFact') {
     return planSettle(input, question, held, oldQuestions);
+  }
+  if (held.kind === 'settleKeyDate') {
+    return planSettleKeyDate(input, question, held, oldQuestions, options);
   }
   const isPlace = held.kind === 'linkPlace';
   if (optionId === 'new' && !hasNewDetails(held, isPlace)) {
@@ -651,6 +831,7 @@ export function planResolve(
       placeCreate,
       factCreate: null,
       factUpdates: [],
+      keyDateUpdate: null,
       whoUpdate,
       execution,
       isStale: false,

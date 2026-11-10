@@ -102,81 +102,114 @@ type WritePlan = Extract<UndoPlan, { kind: 'write' }>;
 
 const toKeyEntry = (id: string, sealed: KeyDateSealed): IndexEntry => [
   id,
-  sealed.kind,
+  sealed.kind === 'anniversary' || sealed.kind === 'custom'
+    ? sealed.kind
+    : 'birthday',
   sealed.month ?? 1,
   sealed.day,
   sealed.year,
   sealed.kind === 'custom' ? sealed.label : null,
 ];
 
-/** What an undo does to dates, as the index's changes and each person's counter. */
+interface DateStep {
+  whoId: string;
+  isMoment: boolean;
+  /** A moment is never in the index. */
+  change: IndexChange | null;
+  delta: number;
+}
+
+/** What an undo does to dates: the index's changes (yearly dates only) and each person's counters, `yearlyDateCount` and `momentCount` apart. */
 const toDateChanges = (
   plan: WritePlan,
   targets: Map<string, UndoTarget>,
-): { changes: IndexChange[]; deltas: Map<string, number> } => {
+): {
+  changes: IndexChange[];
+  deltas: Map<string, number>;
+  momentDeltas: Map<string, number>;
+} => {
   const whoOf = (docId: string) => {
     const whoId = targets.get(docId)?.data?.whoId;
     return typeof whoId === 'string' ? whoId : null;
   };
-  const removed = plan.deletes.flatMap(({ docId, collection: from }) => {
-    const whoId = from === 'keyDates' ? whoOf(docId) : null;
-    return whoId
-      ? [
-          {
-            whoId,
-            change: { op: 'remove', whoId, keyDateId: docId } as IndexChange,
-            delta: -1,
-          },
-        ]
-      : [];
-  });
-  const restored = plan.updates.flatMap((update) => {
+  const isMomentDoc = (docId: string) =>
+    targets.get(docId)?.data?.shape === 'moment';
+  const removed = plan.deletes.flatMap(
+    ({ docId, collection: from }): DateStep[] => {
+      const whoId = from === 'keyDates' ? whoOf(docId) : null;
+      const isMoment = isMomentDoc(docId);
+      return whoId
+        ? [
+            {
+              whoId,
+              isMoment,
+              change: isMoment
+                ? null
+                : { op: 'remove', whoId, keyDateId: docId },
+              delta: -1,
+            },
+          ]
+        : [];
+    },
+  );
+  const restored = plan.updates.flatMap((update): DateStep[] => {
     const whoId = update.collection === 'keyDates' ? whoOf(update.docId) : null;
     const sealed = update.reseal as KeyDateSealed | null;
-    return whoId && sealed
+    return whoId && sealed && !isMomentDoc(update.docId)
       ? [
           {
             whoId,
+            isMoment: false,
             change: {
               op: 'upsert',
               whoId,
               entry: toKeyEntry(update.docId, sealed),
-            } as IndexChange,
+            },
             delta: 0,
           },
         ]
       : [];
   });
-  const recreated = plan.creates.flatMap((entry) => {
+  const recreated = plan.creates.flatMap((entry): DateStep[] => {
     const whoId = entry.fields.whoId;
+    const isMoment = entry.fields.shape === 'moment';
     return typeof whoId === 'string'
       ? [
           {
             whoId,
-            change: {
-              op: 'upsert',
-              whoId,
-              entry: toKeyEntry(entry.docId, entry.seal),
-            } as IndexChange,
+            isMoment,
+            change: isMoment
+              ? null
+              : {
+                  op: 'upsert',
+                  whoId,
+                  entry: toKeyEntry(entry.docId, entry.seal),
+                },
             delta: 1,
           },
         ]
       : [];
   });
   const all = [...removed, ...restored, ...recreated];
+  const sumOf = (isMoment: boolean) =>
+    all
+      .filter((step) => step.isMoment === isMoment)
+      .reduce(
+        (sums, { whoId, delta }) =>
+          sums.set(whoId, (sums.get(whoId) ?? 0) + delta),
+        new Map<string, number>(),
+      );
   return {
-    changes: all.map(({ change }) => change),
-    deltas: all.reduce(
-      (sums, { whoId, delta }) =>
-        sums.set(whoId, (sums.get(whoId) ?? 0) + delta),
-      new Map<string, number>(),
-    ),
+    changes: all.flatMap(({ change }) => (change ? [change] : [])),
+    deltas: sumOf(false),
+    momentDeltas: sumOf(true),
   };
 };
 
 interface DatesRead {
   changes: IndexChange[];
   deltas: Map<string, number>;
+  momentDeltas: Map<string, number>;
   index: Awaited<ReturnType<typeof readIndexIn>> | null;
   whoHere: Set<string>;
 }
@@ -189,25 +222,35 @@ async function readDatesIn(
   plan: UndoPlan,
   targets: Map<string, UndoTarget>,
 ): Promise<DatesRead> {
-  if (plan.kind !== 'write') {
-    return { changes: [], deltas: new Map(), index: null, whoHere: new Set() };
-  }
-  const { changes, deltas } = toDateChanges(plan, targets);
-  if (changes.length === 0) {
-    return { changes, deltas, index: null, whoHere: new Set() };
-  }
-  const index = await readIndexIn(transaction, uid, encryption);
+  const none = {
+    changes: [],
+    deltas: new Map<string, number>(),
+    momentDeltas: new Map<string, number>(),
+    index: null,
+    whoHere: new Set<string>(),
+  };
+  if (plan.kind !== 'write') return none;
+  const { changes, deltas, momentDeltas } = toDateChanges(plan, targets);
+  const moving = [
+    ...new Set(
+      [...deltas.entries(), ...momentDeltas.entries()]
+        .filter(([, delta]) => delta !== 0)
+        .map(([whoId]) => whoId),
+    ),
+  ];
+  if (changes.length === 0 && moving.length === 0) return none;
+  const index =
+    changes.length > 0 ? await readIndexIn(transaction, uid, encryption) : null;
   const owners = await Promise.all(
-    [...deltas.entries()]
-      .filter(([, delta]) => delta !== 0)
-      .map(async ([whoId]) => ({
-        whoId,
-        snapshot: await transaction.get(doc(userOf(uid), 'who', whoId)),
-      })),
+    moving.map(async (whoId) => ({
+      whoId,
+      snapshot: await transaction.get(doc(userOf(uid), 'who', whoId)),
+    })),
   );
   return {
     changes,
     deltas,
+    momentDeltas,
     index,
     whoHere: new Set(
       owners.flatMap(({ whoId, snapshot }) =>
@@ -225,7 +268,7 @@ async function writeDatesIn(
   plan: UndoPlan,
   dates: DatesRead,
 ) {
-  if (plan.kind !== 'write' || !dates.index) return;
+  if (plan.kind !== 'write') return;
   const deletedWho = new Set(
     plan.deletes
       .filter(({ collection: from }) => from === 'who')
@@ -239,16 +282,23 @@ async function writeDatesIn(
       }),
     ),
   );
-  [...dates.deltas.entries()]
-    .filter(
-      ([whoId, delta]) =>
-        delta !== 0 && dates.whoHere.has(whoId) && !deletedWho.has(whoId),
-    )
-    .forEach(([whoId, delta]) =>
-      transaction.update(doc(userOf(uid), 'who', whoId), {
-        yearlyDateCount: increment(delta),
-      }),
-    );
+  const counters = [
+    ...new Set([...dates.deltas.keys(), ...dates.momentDeltas.keys()]),
+  ]
+    .filter((whoId) => dates.whoHere.has(whoId) && !deletedWho.has(whoId))
+    .map((whoId) => ({
+      whoId,
+      yearly: dates.deltas.get(whoId) ?? 0,
+      moments: dates.momentDeltas.get(whoId) ?? 0,
+    }))
+    .filter(({ yearly, moments }) => yearly !== 0 || moments !== 0);
+  counters.forEach(({ whoId, yearly, moments }) =>
+    transaction.update(doc(userOf(uid), 'who', whoId), {
+      ...(yearly !== 0 && { yearlyDateCount: increment(yearly) }),
+      ...(moments !== 0 && { momentCount: increment(moments) }),
+    }),
+  );
+  if (!dates.index) return;
   const next = applyChanges(dates.index.byWho, dates.changes);
   await writeIndexIn(transaction, uid, encryption, {
     byWho: next.byWho,

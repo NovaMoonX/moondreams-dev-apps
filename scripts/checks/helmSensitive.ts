@@ -27,6 +27,7 @@ const dana = {
   mentionDayKeys: [],
   taskLinkCount: 0,
   yearlyDateCount: 0,
+  momentCount: 0,
   hasRole: false,
 };
 const mention = {

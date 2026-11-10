@@ -2,6 +2,7 @@ import type { TerminalTool } from '../../../ai/modelProvider.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
+import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -15,6 +16,8 @@ export interface Token {
 
 export interface DateSpan extends Token {
   due: TaskDue;
+  /** How exactly the words said it: a bare year, a decade or a month with no day; null for a day or a time. */
+  precision: Exclude<MomentPrecision, 'day'> | null;
 }
 
 export interface CaptureReading {
@@ -71,9 +74,26 @@ export const MAX_NOTED_FACTS = 5;
 export const TOPIC_CAP = 40;
 export const MAX_KEY_DATES = 5;
 export const KEY_DATE_LABEL_CAP = 60;
-export const KEY_DATE_KINDS = ['birthday', 'anniversary', 'custom'] as const;
+export const MAX_MOMENTS_PER_WHO = 500;
+export const KEY_DATE_PRECISIONS = ['day', 'month', 'year', 'decade'] as const;
+export const KEY_DATE_KINDS = [
+  'birthday',
+  'anniversary',
+  'custom',
+  'passedAway',
+  'met',
+  'adopted',
+  'startedJob',
+  'leftJob',
+  'moved',
+  'graduated',
+] as const;
 
 export type KeyDateKind = (typeof KEY_DATE_KINDS)[number];
+
+/** Whether a kind is a one-time event; a custom date is one only when it does not come back. */
+export const isMomentKind = (kind: KeyDateKind) =>
+  kind !== 'birthday' && kind !== 'anniversary' && kind !== 'custom';
 export const FACT_KINDS = [
   'world',
   'preference',
@@ -215,7 +235,7 @@ export interface NoteFactCommand {
   contradicts: string | null;
 }
 
-/** A date that comes back each year for someone or the person, its month, day and year settled from a resolved date span by code. */
+/** A date for someone or the person, its month, day, year and precision settled from a resolved date span by code. */
 export interface SetKeyDateCommand {
   kind: 'setKeyDate';
   whoRefs: string[];
@@ -224,7 +244,14 @@ export interface SetKeyDateCommand {
   keyDateId: string | null;
   keyKind: KeyDateKind;
   label: string | null;
-  date: { month: number; day: number; year: number | null } | null;
+  /** A year or a decade has no month or day; a decade's year is its first. */
+  date: {
+    month: number | null;
+    day: number | null;
+    year: number | null;
+  } | null;
+  /** How exactly the span said the date; null when it gave none. */
+  precision: MomentPrecision | null;
   comesBack: boolean | null;
   quote: string | null;
 }
@@ -529,7 +556,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               type: ['string', 'null'],
               enum: [...KEY_DATE_KINDS, null],
               description:
-                'setKeyDate: birthday, anniversary, or custom for any other date that comes back each year ("gotcha day"); null for every other kind.',
+                'setKeyDate: birthday or anniversary; met, moved, startedJob, leftJob, graduated, adopted or passedAway for one-time events; custom for any other date ("gotcha day", "lived in Lisbon"); null for every other kind.',
             },
             keyDateLabel: nullable(
               'string',
@@ -541,7 +568,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             comesBack: nullable(
               'boolean',
-              'setKeyDate custom only: true when the date comes back each year; false for a one-time date.',
+              'setKeyDate custom only: true when the date comes back each year; false for a one-time event.',
             ),
             contradicts: nullable(
               'string',
@@ -621,6 +648,9 @@ const isDue = (value: unknown): value is TaskDue =>
   ((value.kind === 'day' && typeof value.date === 'number') ||
     (value.kind === 'moment' && typeof value.at === 'number'));
 
+const toSpanPrecision = (value: unknown): DateSpan['precision'] =>
+  value === 'month' || value === 'year' || value === 'decade' ? value : null;
+
 const toTokens = (value: unknown) =>
   Array.isArray(value) ? value.filter(isToken) : [];
 
@@ -634,10 +664,17 @@ export function toReading(value: unknown): CaptureReading {
     commands: toTokens(source.commands),
     isUrgent: source.isUrgent === true,
     dates: Array.isArray(source.dates)
-      ? source.dates.filter(
-          (entry): entry is DateSpan =>
-            isToken(entry) && isDue((entry as DateSpan).due),
-        )
+      ? source.dates
+          .filter(
+            (entry): entry is DateSpan =>
+              isToken(entry) && isDue((entry as DateSpan).due),
+          )
+          .map((entry) => ({
+            ...entry,
+            precision: toSpanPrecision(
+              (entry as { precision?: unknown }).precision,
+            ),
+          }))
       : [],
     addressedAs: isToken(source.addressedAs) ? source.addressedAs : null,
   };

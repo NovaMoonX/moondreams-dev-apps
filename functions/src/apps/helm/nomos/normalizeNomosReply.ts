@@ -132,7 +132,7 @@ const toDue = (value: unknown, reading: CaptureReading): TaskDue | null => {
       ? reading.dates.find((entry) => entry.id === value)
       : undefined;
   if (!span) throw new NomosReplyError('badDate');
-  return span.due;
+  return span.precision ? null : span.due;
 };
 
 const assertNoDateKeys = (item: Record<string, unknown>) => {
@@ -261,7 +261,7 @@ const MONTH_WORD_RE =
   /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
 const YEAR_WORD_RE = /(?<!\d)(?:19|20)\d{2}(?!\d)/;
 
-/** A key date's month, day and year come only from a span that names a month; the year only when the words said one. */
+/** A key date's month, day, year and precision come only from a span; a day needs a month word, and a year or a decade needs the span itself to be coarse. */
 const readKeyDateSpan = (
   value: unknown,
   reading: CaptureReading,
@@ -273,17 +273,40 @@ const readKeyDateSpan = (
       ? reading.dates.find((entry) => entry.id === value)
       : undefined;
   if (!span) throw new NomosReplyError('badDate');
-  if (!MONTH_WORD_RE.test(span.text)) return null;
-  const day =
+  const first = new Date(
     span.due.kind === 'day'
       ? span.due.date
-      : getDayIn(span.due.at, toKnownZone(timeZone));
-  const at = new Date(day);
+      : getDayIn(span.due.at, toKnownZone(timeZone)),
+  );
+  if (span.precision === 'year' || span.precision === 'decade') {
+    return {
+      precision: span.precision,
+      date: {
+        month: null,
+        day: null,
+        year: first.getUTCFullYear(),
+      },
+    };
+  }
+  if (span.precision === 'month') {
+    return {
+      precision: span.precision,
+      date: {
+        month: first.getUTCMonth() + 1,
+        day: null,
+        year: first.getUTCFullYear(),
+      },
+    };
+  }
+  if (!MONTH_WORD_RE.test(span.text)) return null;
   const year = YEAR_WORD_RE.exec(span.text);
   return {
-    month: at.getUTCMonth() + 1,
-    day: at.getUTCDate(),
-    year: year ? Number(year[0]) : null,
+    precision: 'day' as const,
+    date: {
+      month: first.getUTCMonth() + 1,
+      day: first.getUTCDate(),
+      year: year ? Number(year[0]) : null,
+    },
   };
 };
 
@@ -303,6 +326,7 @@ const readKeyDate = (
   }
   const keyKind = KEY_DATE_KINDS.find((entry) => entry === item.keyDateKind);
   if (!keyKind) return null;
+  const read = readKeyDateSpan(item.dateSpanId, reading, timeZone);
   return {
     kind: 'setKeyDate',
     whoRefs: toRefs(item.whoRefs, entities.whoRefs).slice(0, 1),
@@ -310,7 +334,8 @@ const readKeyDate = (
     keyDateId,
     keyKind,
     label: toText(item.keyDateLabel, KEY_DATE_LABEL_CAP),
-    date: readKeyDateSpan(item.dateSpanId, reading, timeZone),
+    date: read?.date ?? null,
+    precision: read?.precision ?? null,
     comesBack: typeof item.comesBack === 'boolean' ? item.comesBack : null,
     quote: toText(item.quote, FACT_QUOTE_CAP),
   };

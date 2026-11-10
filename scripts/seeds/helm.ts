@@ -2114,8 +2114,9 @@ async function buildPeople(input: {
   const dateOf = (
     id: string,
     whoId: string,
-    words: Pick<KeyDateSealed, 'kind' | 'label' | 'year'> &
-      ({ daysAhead: number } | { month: number; day: number | null }),
+    words: Pick<KeyDateSealed, 'label' | 'year'> & {
+      kind: KeyDateIndexEntry[1];
+    } & ({ daysAhead: number } | { month: number; day: number | null }),
     source: KeyDate['source'] = 'person',
   ) => ({
     id,
@@ -2125,6 +2126,7 @@ async function buildPeople(input: {
       kind: words.kind,
       label: words.label,
       year: words.year,
+      precision: null,
       captureId: null,
       ...('daysAhead' in words
         ? dayParts(words.daysAhead)
@@ -2195,6 +2197,89 @@ async function buildPeople(input: {
       day: null,
     }),
   ];
+  const momentOf = (
+    id: string,
+    whoId: string,
+    words: Pick<KeyDateSealed, 'kind' | 'label' | 'precision' | 'year'> & {
+      month?: number | null;
+      day?: number | null;
+    },
+  ) => ({
+    id,
+    whoId,
+    words: {
+      ...words,
+      month: words.month ?? null,
+      day: words.day ?? null,
+      captureId: null,
+    },
+  });
+  const today = dayParts(0);
+  const momentSeeds = [
+    momentOf('seed-moment-dana-met', 'seed-who-dana', {
+      kind: 'met',
+      label: null,
+      precision: 'month',
+      month: 3,
+      year: 2015,
+    }),
+    momentOf('seed-moment-bakery-opened', 'seed-who-acme-bakery', {
+      kind: 'custom',
+      label: 'Opened',
+      precision: 'year',
+      year: 2019,
+    }),
+    momentOf('seed-moment-patel-lisbon', 'seed-who-sam-patel', {
+      kind: 'custom',
+      label: 'Lived in Lisbon',
+      precision: 'decade',
+      year: 1980,
+    }),
+    ...[
+      ['met', null, 'day', 5, 14, 2004],
+      ['graduated', null, 'month', 6, null, 2006],
+      ['moved', null, 'year', null, null, 2008],
+      ['startedJob', null, 'month', 9, null, 2009],
+      ['leftJob', null, 'day', 3, 30, 2012],
+      ['moved', null, 'month', 7, null, 2013],
+      ['startedJob', null, 'year', null, null, 2013],
+      ['custom', 'Ran a marathon', 'day', 10, 9, 2016],
+      ['adopted', null, 'month', 2, null, 2018],
+      ['leftJob', null, 'year', null, null, 2019],
+      ['moved', null, 'day', 8, 1, 2021],
+      ['custom', 'Learned to sail', 'decade', null, null, 2010],
+      ['startedJob', null, 'day', 1, 15, 2023],
+      ['custom', 'Moved in together', 'day', today.month, today.day, 2022],
+    ].map(([kind, label, precision, month, day, year], index) =>
+      momentOf(`seed-moment-sam-rivera-${index + 1}`, 'seed-who-sam-rivera', {
+        kind: kind as KeyDateSealed['kind'],
+        label: label as string | null,
+        precision: precision as KeyDateSealed['precision'],
+        month: month as number | null,
+        day: day as number | null,
+        year: year as number,
+      }),
+    ),
+  ];
+  const momentCounts = momentSeeds.reduce<Record<string, number>>(
+    (all, entry) => ({ ...all, [entry.whoId]: (all[entry.whoId] ?? 0) + 1 }),
+    {},
+  );
+  const moments: { id: string; keyDate: KeyDate }[] = await Promise.all(
+    momentSeeds.map(async (entry) => ({
+      id: entry.id,
+      keyDate: {
+        whoId: entry.whoId,
+        shape: 'moment' as const,
+        source: 'person' as const,
+        createdBy: 'person' as const,
+        executionId: null,
+        createdAt: now - 2 * DAY_MS,
+        lastEditedAt: null,
+        sealed: await seal<KeyDateSealed>(entry.words),
+      },
+    })),
+  );
   const keyDates: { id: string; keyDate: KeyDate }[] = await Promise.all(
     dateSeeds.map(async (entry) => ({
       id: entry.id,
@@ -2235,7 +2320,11 @@ async function buildPeople(input: {
   };
   const withDates = (entry: { id: string; who: Who }) => ({
     ...entry,
-    who: { ...entry.who, yearlyDateCount: byWho[entry.id]?.length ?? 0 },
+    who: {
+      ...entry.who,
+      yearlyDateCount: byWho[entry.id]?.length ?? 0,
+      momentCount: momentCounts[entry.id] ?? 0,
+    },
   });
   const withPriyaBirthday = (entry: { id: string; who: Who }) =>
     entry.id === 'seed-who-priya-raman'
@@ -2251,7 +2340,7 @@ async function buildPeople(input: {
         }
       : entry;
   return {
-    keyDates,
+    keyDates: [...keyDates, ...moments],
     keyDateIndex,
     who: who
       .map(withPriyaBirthday)

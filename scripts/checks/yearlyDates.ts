@@ -7,6 +7,7 @@ import {
 import { toDayKey } from '../../src/apps/helm/utils/planDays.ts';
 import {
   daysUntil,
+  formatMoment,
   formatYearlyDate,
   nextYearlyOccurrence,
   yearsOn,
@@ -69,6 +70,27 @@ assert.equal(daysUntil('2026-11-10', '2026-11-09'), -1);
 
 assert.equal(formatYearlyDate({ month: 6, day: 3, year: null }), 'June 3');
 assert.equal(formatYearlyDate({ month: 6, day: null, year: 2020 }), 'Jun 2020');
+assert.equal(
+  formatMoment({ precision: 'day', month: 8, day: 3, year: 2024 }),
+  'Aug 3, 2024',
+);
+assert.equal(
+  formatMoment({ precision: 'month', month: 3, day: null, year: 2015 }),
+  'Mar 2015',
+);
+assert.equal(
+  formatMoment({ precision: 'year', month: null, day: null, year: 1998 }),
+  '1998',
+);
+assert.equal(
+  formatMoment({ precision: 'decade', month: null, day: null, year: 1980 }),
+  'the 1980s',
+);
+assert.equal(
+  formatMoment({ precision: 'decade', month: null, day: null, year: 1987 }),
+  'the 1980s',
+  'a decade names its decade from any year in it',
+);
 assert.equal(formatYearlyDate({ month: 8, day: null, year: 1984 }), 'Aug 1984');
 assert.equal(
   formatYearlyDate({ month: 6, day: 3, year: 1984 }),

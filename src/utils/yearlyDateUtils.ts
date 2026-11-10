@@ -77,3 +77,24 @@ export function yearsOn(
   if (year == null) return null;
   return Number(key.slice(0, 4)) - year;
 }
+
+export type MomentPrecision = 'day' | 'month' | 'year' | 'decade';
+
+/** A one-time date at the precision it is known: "Aug 3, 2024", "Aug 2024", "1998" or "the 1980s". */
+export function formatMoment({
+  precision,
+  month,
+  day,
+  year,
+}: {
+  precision: MomentPrecision;
+  month: number | null;
+  day: number | null;
+  year: number;
+}): string {
+  if (precision === 'decade') return `the ${Math.floor(year / 10) * 10}s`;
+  if (precision === 'year' || month == null) return String(year);
+  const name = (MONTH_NAMES[month - 1] ?? '').slice(0, 3);
+  if (precision === 'month' || day == null) return `${name} ${year}`;
+  return `${name} ${day}, ${year}`;
+}

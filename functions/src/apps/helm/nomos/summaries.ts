@@ -396,11 +396,98 @@ const lowerFirst = (text: string) =>
     ? text.charAt(0).toLowerCase() + text.slice(1)
     : text;
 
-/** What a date that comes back is called: "birthday", "anniversary", or the person's own label ("gotcha day"). */
+const MOMENT_WORDS: Record<string, string> = {
+  passedAway: 'Passed away',
+  met: 'Met',
+  adopted: 'Adopted',
+  startedJob: 'Started a job',
+  leftJob: 'Left a job',
+  moved: 'Moved',
+  graduated: 'Graduated',
+};
+
+/** What a moment is called: "Met", "Passed away", or the person's own label ("Lived in Lisbon"). */
+export const toMomentWord = (kind: string, label: string | null) =>
+  MOMENT_WORDS[kind] ?? (label?.trim() || 'Moment');
+
+/** What a date is called: "birthday", "anniversary", a moment's words ("met"), or the person's own label ("gotcha day"). */
 export const toKeyDateName = (kind: string, label: string | null) =>
   kind === 'birthday' || kind === 'anniversary'
     ? kind
-    : lowerFirst(label ?? 'date');
+    : kind === 'custom'
+      ? lowerFirst(label ?? 'date')
+      : lowerFirst(toMomentWord(kind, label));
+
+/** The result line of a moment: "Moment · Dana · Met · Mar 2015". */
+export const buildMomentLine = (input: {
+  owner: string | null;
+  kind: string;
+  label: string | null;
+  when: string;
+}) =>
+  `Moment · ${input.owner ?? 'You'} · ${toMomentWord(input.kind, input.label)} · ${input.when}`;
+
+export interface KeyDateClashSide {
+  label: string;
+  detail: string;
+}
+
+/** The sealed half of the question asked when a different birthday or passed-away date comes for a kept one: the kept date, the new one and "Neither", with the new date held until one is picked. */
+export const buildKeyDateClashQuestion = (input: {
+  whoId: string;
+  keyDateId: string;
+  kept: KeyDateClashSide;
+  next: KeyDateClashSide;
+  parts: {
+    month: number | null;
+    day: number | null;
+    year: number | null;
+    precision: string | null;
+  };
+}) => ({
+  kind: 'whichIsTrue' as const,
+  builtBy: 'code' as const,
+  shape: 'pickOne' as const,
+  prompt: WHICH_IS_TRUE_WORDS.prompt,
+  options: [
+    {
+      id: input.keyDateId,
+      label: input.kept.label,
+      detail: input.kept.detail,
+      ref: { collection: 'keyDates', id: input.keyDateId },
+    },
+    {
+      id: 'new',
+      label: input.next.label,
+      detail: `${input.next.detail} · ${WHICH_IS_TRUE_WORDS.newest}`,
+      ref: null,
+    },
+    {
+      id: 'none',
+      label: WHICH_IS_TRUE_WORDS.noneLabel,
+      detail: null,
+      ref: null,
+    },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  heldCommands: [
+    {
+      kind: 'settleKeyDate',
+      keyDateId: input.keyDateId,
+      whoId: input.whoId,
+      parts: input.parts,
+    },
+  ],
+  aboutRef: { collection: 'who', id: input.whoId },
+  answer: null,
+});
+
+/** The execution line of a settled date: "Kept Mum's birthday · June 3". */
+export const buildSettledDateLine = (label: string) => `Kept ${label}`;
 
 /** The result line of a date: "Added Mum's birthday: June 3", "Added your birthday: June 3". */
 export const buildKeyDateLine = (input: {
