@@ -1,6 +1,7 @@
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import {
+  MAX_ACCOUNT_LABEL_LENGTH,
   MAX_GRANT_ERRORS,
   type CategoryState,
   type ConnectionGrant,
@@ -9,6 +10,7 @@ import {
   type EndConnectionRequest,
   type GrantCategory,
   type GrantConnectionRequest,
+  type GrantOptions,
   type GrantStatus,
   type UpdateConnectionRequest,
 } from '../vendor/connectionsContract.js';
@@ -36,6 +38,30 @@ const isNumber = (value: unknown): value is number =>
 const badRequest = () =>
   new HttpsError('invalid-argument', "That request wasn't understood.");
 
+/** Null or one to fifty non-empty ids; anything else is a bad request. */
+const readOptionsInput = (value: unknown): GrantOptions | null => {
+  if (value === undefined || value === null) return null;
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.calendarIds) ||
+    value.calendarIds.length === 0 ||
+    value.calendarIds.length > MAX_CATEGORIES ||
+    !value.calendarIds.every(isText)
+  ) {
+    throw badRequest();
+  }
+  return { calendarIds: value.calendarIds as string[] };
+};
+
+/** Trimmed; empty reads as no label. */
+const readAccountLabelInput = (value: unknown): string | null => {
+  if (value === null) return null;
+  if (typeof value !== 'string') throw badRequest();
+  const label = value.trim();
+  if (label.length > MAX_ACCOUNT_LABEL_LENGTH) throw badRequest();
+  return label.length === 0 ? null : label;
+};
+
 export function readGrantConnectionRequest(
   data: unknown,
 ): GrantConnectionRequest {
@@ -56,22 +82,43 @@ export function readGrantConnectionRequest(
     connectorId: connectorId as ConnectorId,
     accountId,
     categoryIds,
+    options: readOptionsInput(data.options),
   };
 }
 
-export function readUpdateConnectionRequest(
-  data: unknown,
-): UpdateConnectionRequest {
-  if (!isRecord(data) || !isGrantId(data.grantId) || !isRecord(data.categories))
-    throw badRequest();
-  const entries = Object.entries(data.categories);
+const requireOptions = (value: unknown): GrantOptions => {
+  const options = readOptionsInput(value);
+  if (!options) throw badRequest();
+  return options;
+};
+
+const readCategoryChanges = (value: unknown): Record<string, boolean> => {
+  if (!isRecord(value)) throw badRequest();
+  const entries = Object.entries(value);
   if (entries.length === 0 || entries.length > MAX_CATEGORIES)
     throw badRequest();
   if (!entries.every(([id, isOn]) => isText(id) && typeof isOn === 'boolean'))
     throw badRequest();
+  return value as Record<string, boolean>;
+};
+
+export function readUpdateConnectionRequest(
+  data: unknown,
+): UpdateConnectionRequest {
+  if (!isRecord(data) || !isGrantId(data.grantId)) throw badRequest();
+  const hasCategories = data.categories !== undefined;
+  const hasOptions = data.options !== undefined;
+  const hasLabel = data.accountLabel !== undefined;
+  if (!hasCategories && !hasOptions && !hasLabel) throw badRequest();
   return {
     grantId: data.grantId,
-    categories: data.categories as Record<string, boolean>,
+    ...(hasCategories
+      ? { categories: readCategoryChanges(data.categories) }
+      : {}),
+    ...(hasOptions ? { options: requireOptions(data.options) } : {}),
+    ...(hasLabel
+      ? { accountLabel: readAccountLabelInput(data.accountLabel) }
+      : {}),
   };
 }
 
@@ -112,6 +159,22 @@ export function assertDeclaredCategories(
   }
 }
 
+/** The scopes an outside connector asks for the given categories (all of them when none are named). */
+export function requestedScopes(
+  manifest: ConnectorManifest,
+  categoryIds?: string[],
+): string[] {
+  if (manifest.connect.kind !== 'oauth') return [];
+  const { scopesByCategory } = manifest.connect;
+  return Array.from(
+    new Set(
+      Object.entries(scopesByCategory)
+        .filter(([id]) => !categoryIds || categoryIds.includes(id))
+        .flatMap(([, scopes]) => scopes),
+    ),
+  );
+}
+
 export function buildNewGrant(
   req: GrantConnectionRequest,
   manifest: ConnectorManifest,
@@ -128,7 +191,7 @@ export function buildNewGrant(
         { isOn: req.categoryIds.includes(category.id), changedAt: now },
       ]),
     ),
-    options: null,
+    options: req.options,
     status: 'live',
     categoryState: Object.fromEntries(
       manifest.categories.map((category) => [

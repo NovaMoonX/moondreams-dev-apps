@@ -116,7 +116,11 @@
     "runway:plaid-secrets": "bash scripts/runway/plaidSecrets.sh",
     "ai:anthropic-secret": "bash scripts/ai/anthropicSecret.sh",
     "helm:keyring": "bash scripts/helm/keyring.sh",
-    "helm:alerts": "bash scripts/helm/alerts.sh"
+    "helm:alerts": "bash scripts/helm/alerts.sh",
+    "connections:keyring": "bash scripts/connections/keyring.sh",
+    "connections:alerts": "bash scripts/connections/alerts.sh",
+    "connections:google-secrets": "bash scripts/connections/googleSecrets.sh",
+    "connections:google-setup": "bash scripts/connections/googleSetup.sh"
   },
   "dependencies": {
     "@diffusionstudio/piper-wasm": "1.0.0",
