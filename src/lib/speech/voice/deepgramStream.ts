@@ -19,7 +19,7 @@ interface DeepgramSttOptions {
   tokenWaitMs?: number;
   /** The cloud could not take this listen; `reason` is the limit that held it, null for any other cause. Nothing was delivered. */
   onUnavailable: (reason: CloudHeldReason | null) => void;
-  /** A stream that opened has ended, after `ms` open. */
+  /** A minted stream has ended, after `ms` open (0 when it never opened). */
   onClosed: (mintId: string, ms: number) => void;
 }
 
@@ -151,6 +151,7 @@ export const createDeepgramStt = ({
         if (state.isDone) return;
         state.isDone = true;
         teardown();
+        if (state.mintId) onClosed(state.mintId, 0);
         onUnavailable(reason);
       };
       const deliver = () => {
@@ -158,7 +159,12 @@ export const createDeepgramStt = ({
         state.isDone = true;
         const text = read();
         teardown();
-        if (state.isOpen) onClosed(state.mintId, Date.now() - state.openedAt);
+        if (state.mintId) {
+          onClosed(
+            state.mintId,
+            state.isOpen ? Date.now() - state.openedAt : 0,
+          );
+        }
         options.onFinal(text);
       };
       function stop() {

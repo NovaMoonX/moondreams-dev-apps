@@ -1,4 +1,6 @@
 export const PCM_SAMPLE_RATE = 16_000;
+// A context made after an await can stay suspended on some browsers; listening then falls back instead of waiting.
+const RESUME_WAIT_MS = 1000;
 const FRAME_SAMPLES = 320;
 
 const PROCESSOR_NAME = 'pcm-downsampler';
@@ -57,7 +59,15 @@ export const startPcmCapture = async ({
   };
   try {
     await context.audioWorklet.addModule(url);
-    await context.resume();
+    await Promise.race([
+      context.resume(),
+      new Promise((_, reject) =>
+        window.setTimeout(
+          () => reject(new Error('Audio did not start')),
+          RESUME_WAIT_MS,
+        ),
+      ),
+    ]);
     const source = context.createMediaStreamSource(stream);
     const node = new AudioWorkletNode(context, PROCESSOR_NAME, {
       numberOfInputs: 1,

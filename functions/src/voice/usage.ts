@@ -39,6 +39,8 @@ export function getLocalDayKey(now: number, timeZone: string) {
   }
 }
 
+const REPORT_GRACE_MS = 60_000;
+
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
 
@@ -59,7 +61,7 @@ export function planListen({
   mintId: string;
   worstCaseMicros: number;
 }): { usage: ListenUsage; budgetDeltaMicros: number; held: ListenHeld | null } {
-  const settled = closed.reduce<ListenUsage>(
+  const reported = closed.reduce<ListenUsage>(
     (acc, report) =>
       Object.hasOwn(acc.openMints, report.mintId)
         ? {
@@ -74,6 +76,19 @@ export function planListen({
         : acc,
     usage,
   );
+  // A stream that never reported (a closed tab, a lost request) counts as a full one once its report is overdue.
+  const overdue = Object.entries(reported.openMints).filter(
+    ([, openedAt]) => now - openedAt > VOICE_UTTERANCE_MS + REPORT_GRACE_MS,
+  );
+  const settled: ListenUsage = {
+    ...reported,
+    listenMs: reported.listenMs + overdue.length * VOICE_UTTERANCE_MS,
+    openMints: Object.fromEntries(
+      Object.entries(reported.openMints).filter(
+        ([id]) => !overdue.some(([overdueId]) => overdueId === id),
+      ),
+    ),
+  };
 
   const getHeld = (): ListenHeld | null => {
     if (budgetMicros + worstCaseMicros > VOICE_DAILY_BUDGET_CENTS * 10_000) {
@@ -144,7 +159,7 @@ export async function reserveListen(
       mintId,
       worstCaseMicros: listenCostMicros(VOICE_UTTERANCE_MS),
     });
-    transaction.set(usageRef, result.usage, { merge: true });
+    transaction.set(usageRef, result.usage);
     if (result.held === null) {
       transaction.set(
         budgetRef,
@@ -178,16 +193,13 @@ export async function releaseListen(
     await firestore.runTransaction(async (transaction) => {
       const usage = readUsage((await transaction.get(usageRef)).data());
       if (!Object.hasOwn(usage.openMints, mintId)) return;
-      transaction.set(
-        usageRef,
-        {
-          mints: Math.max(0, usage.mints - 1),
-          openMints: Object.fromEntries(
-            Object.entries(usage.openMints).filter(([id]) => id !== mintId),
-          ),
-        },
-        { merge: true },
-      );
+      transaction.set(usageRef, {
+        ...usage,
+        mints: Math.max(0, usage.mints - 1),
+        openMints: Object.fromEntries(
+          Object.entries(usage.openMints).filter(([id]) => id !== mintId),
+        ),
+      });
       transaction.set(
         budgetRef,
         {

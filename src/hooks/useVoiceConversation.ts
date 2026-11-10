@@ -254,8 +254,10 @@ export function useVoiceConversation({
         handleError('unavailable');
       });
     };
-    const startBrowser = () =>
+    const startBrowser = () => {
+      armQuiet();
       startAdapter(createBrowserStt({ lang: latest.current.lang }));
+    };
     const cloud = latest.current.cloudListening;
     const today = toLocalDateInputValue(Date.now());
     if (held !== null && held.day !== today) setHeld(null);

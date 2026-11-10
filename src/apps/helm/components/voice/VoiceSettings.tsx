@@ -5,6 +5,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -42,9 +43,15 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
       onClose={onClose}
       title={HELM_COPY.settingsVoiceRowTitle}
       footer={
-        <Button type='button' variant='primary' onClick={onClose}>
-          {HELM_COPY.voiceDone}
-        </Button>
+        <div className='px-6 pt-2 pb-3'>
+          <ModalFooterActions
+            rightActions={
+              <Button type='button' variant='primary' onClick={onClose}>
+                {HELM_COPY.voiceDone}
+              </Button>
+            }
+          />
+        </div>
       }
     >
       <div className='flex items-start gap-3'>
@@ -53,7 +60,9 @@ function VoiceSettings({ isOpen, onClose }: VoiceSettingsProps) {
             {HELM_COPY.voiceDeviceOnlyTitle}
           </p>
           <p className='text-muted-foreground text-[15px] leading-[21px]'>
-            {HELM_COPY.voiceDeviceOnlyHint}
+            {isDeviceOnly
+              ? HELM_COPY.voiceDeviceOnlyOn
+              : HELM_COPY.voiceDeviceOnlyOff}
           </p>
         </div>
         <AppToggle

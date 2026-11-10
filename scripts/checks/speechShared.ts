@@ -1213,6 +1213,22 @@ assert.deepEqual(
   ['new'],
   'a settled mint is closed and the new one is open',
 );
+const overdue = plan({ usage: openUsage, now: 1 + 3 * VOICE_UTTERANCE_MS });
+assert.equal(
+  overdue.usage.listenMs,
+  VOICE_UTTERANCE_MS,
+  'a stream that never reported counts as a full one once overdue',
+);
+assert.deepEqual(
+  Object.keys(overdue.usage.openMints),
+  ['new'],
+  'an overdue mint is closed',
+);
+assert.equal(
+  plan({ usage: openUsage, now: 1 + VOICE_UTTERANCE_MS }).usage.listenMs,
+  0,
+  'a stream still inside its report window is not charged',
+);
 const burst = Array.from({ length: 300 }).reduce<{
   usage: ListenUsage;
   failures: number;

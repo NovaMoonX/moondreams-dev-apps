@@ -105,7 +105,7 @@ export function useHelmVoice() {
     onCloudHeld: () => setShowsPhoneLine(true),
     cloudListening: {
       tokenSource,
-      isAllowed: voiceMode !== 'deviceOnly',
+      isAllowed: voiceMode === 'cloudWhenOnline',
     },
   });
 

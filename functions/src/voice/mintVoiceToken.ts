@@ -34,6 +34,7 @@ const MAX_CLOSED = 10;
 const MINT_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 const secretReader = createOptionalSecretReader({ fetch: globalThis.fetch });
+const keyState = { isMissingLogged: false };
 
 const unavailable = (): MintVoiceTokenResult => ({
   status: 'held',
@@ -96,7 +97,14 @@ export const mintVoiceToken = onCall(
     const apiKey = await secretReader(KEY_NAME, AbortSignal.timeout(4_000));
     const isEmulatorStub =
       apiKey === null && process.env.FUNCTIONS_EMULATOR === 'true';
-    if (apiKey === null && !isEmulatorStub) return unavailable();
+    if (apiKey === null && !isEmulatorStub) {
+      if (!keyState.isMissingLogged) {
+        keyState.isMissingLogged = true;
+        logger.error('voice.keyMissing', { event: 'voice.keyMissing' });
+      }
+      return unavailable();
+    }
+    keyState.isMissingLogged = false;
 
     const firestore = getFirestore();
     const now = Date.now();
