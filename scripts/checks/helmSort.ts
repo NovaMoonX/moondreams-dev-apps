@@ -45,6 +45,7 @@ import {
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import {
+  HOME_TOO_LATE_LINE,
   NO_HOME_LINE,
   planSetCurrentPlace,
 } from '../../functions/src/apps/helm/nomos/currentPlace.ts';
@@ -597,6 +598,7 @@ test('"I\'m home" files the home place on the profile with its previous value, a
   const ask = async (words: string) => {
     const run = await createFixtureProvider(words, reading).runToolLoop({
       role: 'quick',
+      system: '',
       messages: [{ role: 'user', content: '' }],
       mcpClient: {} as never,
       terminalTool: FILE_RESULTS_TOOL,
@@ -622,13 +624,14 @@ test('"I\'m home" files the home place on the profile with its previous value, a
     profileId: UID,
     home: { id: 'place-home', name: 'Home' },
     previous,
+    saidAt: NOW - 3_600_000,
     now: NOW,
     timeZone: 'America/Los_Angeles',
   });
-  assert.ok(home);
+  assert.ok(typeof home !== 'string');
   assert.deepEqual(home.data.currentPlace, {
     placeId: 'place-home',
-    saidAt: NOW,
+    saidAt: NOW - 3_600_000,
   });
   assert.deepEqual(home.ref, {
     op: 'update',
@@ -636,16 +639,28 @@ test('"I\'m home" files the home place on the profile with its previous value, a
     docId: UID,
   });
   assert.deepEqual(home.effect.previous?.currentPlace, previous);
-  assert.equal(home.line, "You're home until 5:00 PM");
+  assert.equal(home.line, "You're home until 4:00 PM");
   assert.equal(
     planSetCurrentPlace({
       profileId: UID,
       home: null,
       previous: null,
+      saidAt: NOW,
       now: NOW,
       timeZone: 'America/Los_Angeles',
     }),
-    null,
+    NO_HOME_LINE,
+  );
+  assert.equal(
+    planSetCurrentPlace({
+      profileId: UID,
+      home: { id: 'place-home', name: 'Home' },
+      previous: null,
+      saidAt: NOW - 4 * 3_600_000,
+      now: NOW,
+      timeZone: 'America/Los_Angeles',
+    }),
+    HOME_TOO_LATE_LINE,
   );
   assert.equal(NO_HOME_LINE, 'No place is set as home yet.');
 
@@ -674,8 +689,8 @@ test('"I\'m home" files the home place on the profile with its previous value, a
     },
   );
   const opened = openForHelm(KEY, execution.sealed as SealedPayload);
-  assert.equal(opened.summary, "You're home until 5:00 PM");
-  assert.equal(opened.spoken, "You're home until 5:00 PM.");
+  assert.equal(opened.summary, "You're home until 4:00 PM");
+  assert.equal(opened.spoken, "You're home until 4:00 PM.");
   assert.deepEqual(execution.effectRefs, [home.ref]);
 });
 

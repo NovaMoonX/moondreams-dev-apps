@@ -33,7 +33,10 @@ export function buildResultLines(
           key: `${ref.docId}:${index}`,
           docId: ref.docId,
           title: toText(effect?.written['sealed.title']) ?? HELM_COPY.homeTitle,
-          detail: HELM_COPY.homeRowDetail,
+          detail:
+            effect?.written.currentPlace === null
+              ? HELM_COPY.homeLeft
+              : HELM_COPY.homeRowDetail,
         },
       ];
     }

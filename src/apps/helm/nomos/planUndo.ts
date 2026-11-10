@@ -1,4 +1,5 @@
 import { HELM_COPY } from '@apps/helm/constants';
+import { CURRENT_PLACE_MS } from '@apps/helm/engine/currentPlace';
 import type {
   EffectRef,
   Execution,
@@ -127,6 +128,13 @@ const toCollectionOf = (original: OpenExecution) =>
   new Map(original.effectRefs.map((ref) => [ref.docId, ref.collection]));
 
 /** Applies one update effect to the working copy; a path it didn't change (written equals previous) is a label and is neither compared nor restored. */
+const isStillHome = (value: unknown, now: number) =>
+  typeof value === 'object' &&
+  value !== null &&
+  'saidAt' in value &&
+  typeof value.saidAt === 'number' &&
+  now - value.saidAt < CURRENT_PLACE_MS;
+
 const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   if (step.isKept) return step;
   const { written, previous } = effect;
@@ -408,19 +416,26 @@ export function planUndo(input: {
     );
   }
 
-  const isHomeOnly =
-    records.length > 0 &&
-    records.every(({ docId }) => collectionOf.get(docId) === 'profile');
+  const counted = records.filter(
+    ({ docId }) => collectionOf.get(docId) !== 'profile',
+  );
+  const homeEffect =
+    done.find(({ docId }) => collectionOf.get(docId) === 'profile')?.outcome
+      .effect ?? null;
+  const isHomeRestored = isStillHome(homeEffect?.written.currentPlace, now);
+  const wasLeaving = homeEffect?.previous?.currentPlace === null;
   const factCount = factsDone.length;
   const report =
     records.length === 0
       ? HELM_COPY.undoReportFacts(factCount, kept.length, gone)
       : [
-          isHomeOnly
-            ? HELM_COPY.undoReportHome
+          counted.length === 0
+            ? isHomeRestored
+              ? HELM_COPY.undoReportHomeAgain
+              : HELM_COPY.undoReportHome
             : isImport
-              ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
-              : HELM_COPY.undoReport(records.length, kept.length, gone),
+              ? HELM_COPY.undoReportPeople(counted.length, kept.length, gone)
+              : HELM_COPY.undoReport(counted.length, kept.length, gone),
           factCount > 0 ? HELM_COPY.undoReportFactsToo(factCount) : '',
         ]
           .filter(Boolean)
@@ -471,15 +486,17 @@ export function planUndo(input: {
       summary:
         records.length === 0
           ? HELM_COPY.tookBackFacts(factCount)
-          : isHomeOnly
-            ? HELM_COPY.tookBackHome
+          : counted.length === 0
+            ? wasLeaving
+              ? HELM_COPY.tookBackNotHome
+              : HELM_COPY.tookBackHome
             : isImport
               ? kept.length > 0
-                ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
-                : HELM_COPY.tookBackPeople(records.length)
+                ? HELM_COPY.tookBackPeopleKept(counted.length, kept.length)
+                : HELM_COPY.tookBackPeople(counted.length)
               : kept.length > 0
-                ? HELM_COPY.tookBackKept(records.length, kept.length)
-                : HELM_COPY.tookBack(records.length),
+                ? HELM_COPY.tookBackKept(counted.length, kept.length)
+                : HELM_COPY.tookBack(counted.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,

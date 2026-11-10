@@ -432,6 +432,17 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     ['due', 'plain', 'home'],
     'a place nothing links to changes nothing',
   );
+  const soon = [
+    task('soon', { due: { kind: 'day', date: dayMs(DAY) + 2 * 86_400_000 } }),
+    task('home', { importance: 'could', placeIds: ['home'] }),
+  ];
+  assert.deepEqual(
+    order(
+      run(base({ hasCalendar: false, currentPlaceId: 'home', tasks: soon })),
+    ),
+    ['home', 'soon'],
+    'while home, a task linked to home leads one due in a few days',
+  );
   const timed = run(base({ currentPlaceId: 'home', tasks }));
   assert.equal(
     Object.values(timed.slots).find((entry) => entry.taskId === 'home')

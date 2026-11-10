@@ -49,7 +49,7 @@ export interface HelmProfile {
   hasSeenVoiceNotice: boolean;
   /** The person's own who, made on first open; null on a profile from before people. */
   selfWhoId: string | null;
-  /** Where the person said they are, for a few hours; read through `readCurrentPlace`, never from the device's location. */
+  /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
   currentPlace: { placeId: string; saidAt: number } | null;
   createdAt: number;
   lastEditedAt: number | null;

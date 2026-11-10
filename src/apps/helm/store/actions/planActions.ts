@@ -23,7 +23,8 @@ import type {
   PlanDaySealed,
   PlanSlot,
 } from '@apps/helm/types';
-import { isDecided } from '@apps/helm/utils/planDays';
+import { formatClock, isDecided } from '@apps/helm/utils/planDays';
+import { getCurrentPlaceEndsAt } from '@apps/helm/engine/currentPlace';
 import type { buildPlanInput } from '@apps/helm/utils/planInput';
 
 const planDaysOf = (uid: string) =>
@@ -263,14 +264,16 @@ export const bringToToday = (uid: string, todayKey: string, taskId: string) =>
     source: 'person',
   });
 
-/** "I'm home": the profile's `currentPlace` and one succeeded execution holding the previous value, so Undo can put it back, in one batch. Handed back unawaited so it queues offline. */
+/** "I'm home" (or, with `isThere` false, "No longer home"): the profile's `currentPlace` and one succeeded execution holding the previous value, so Undo can put it back, in one batch. Handed back unawaited so it queues offline. */
 export async function setCurrentPlace(
   uid: string,
   encryption: HelmEncryption,
   place: { id: string; name: string },
+  timeZone: string,
+  isThere = true,
 ) {
   const now = Date.now();
-  const currentPlace = { placeId: place.id, saidAt: now };
+  const currentPlace = isThere ? { placeId: place.id, saidAt: now } : null;
   const previous = store.getState().helm.profile?.currentPlace ?? null;
   const executionRef = doc(executionsOf(uid));
   const title = { 'sealed.title': place.name };
@@ -292,7 +295,11 @@ export async function setCurrentPlace(
     finishedAt: now,
     sealed: await sealJson<ExecutionSealed>(
       {
-        summary: HELM_COPY.homeToast,
+        summary: isThere
+          ? HELM_COPY.homeUntil(
+              formatClock(getCurrentPlaceEndsAt(now), timeZone),
+            )
+          : HELM_COPY.notHomeToast,
         commands: [],
         effects: [
           {
