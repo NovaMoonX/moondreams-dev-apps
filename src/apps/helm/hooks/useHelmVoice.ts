@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
+import { getToken } from 'firebase/app-check';
 import { httpsCallable } from 'firebase/functions';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
+import { createSpeechSource } from '@/lib/speech/voice/speechSource';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
 import {
   createVoiceTokenSource,
@@ -25,7 +27,13 @@ import {
   getNextTurn,
   recordSentTurn,
 } from '@apps/helm/hooks/useSession';
-import { functions } from '@lib/firebase/config';
+import {
+  app,
+  appCheck,
+  auth,
+  functions,
+  isUsingFirebaseEmulators,
+} from '@lib/firebase/config';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
@@ -54,6 +62,26 @@ const mintVoiceToken = httpsCallable<
   MintVoiceTokenRequest,
   MintVoiceTokenResult
 >(functions, 'mintVoiceToken');
+
+const getSpeechUrl = () => {
+  const { projectId } = app.options;
+  return isUsingFirebaseEmulators
+    ? `http://${window.location.hostname}:5001/${projectId}/us-central1/streamSpeech`
+    : `https://us-central1-${projectId}.cloudfunctions.net/streamSpeech`;
+};
+
+const getSpeechHeaders = async () => {
+  const { currentUser } = auth;
+  if (!currentUser || !appCheck) return null;
+  const [idToken, appCheckToken] = await Promise.all([
+    currentUser.getIdToken(),
+    getToken(appCheck),
+  ]);
+  return {
+    Authorization: `Bearer ${idToken}`,
+    'X-Firebase-AppCheck': appCheckToken.token,
+  };
+};
 
 const HELM_VOICE_IDENTITY: VoiceIdentity = {
   id: 'helm-assistant',
@@ -91,6 +119,13 @@ export function useHelmVoice() {
       mint: async (request) => (await mintVoiceToken(request)).data,
     }),
   );
+  const [speechSource] = useState(() =>
+    createSpeechSource({
+      appId: 'helm',
+      url: getSpeechUrl(),
+      getHeaders: getSpeechHeaders,
+    }),
+  );
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
 
@@ -105,6 +140,10 @@ export function useHelmVoice() {
     onCloudHeld: () => setShowsPhoneLine(true),
     cloudListening: {
       tokenSource,
+      isAllowed: voiceMode === 'cloudWhenOnline',
+    },
+    cloudSpeaking: {
+      source: speechSource,
       isAllowed: voiceMode === 'cloudWhenOnline',
     },
   });

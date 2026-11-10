@@ -72,4 +72,5 @@ export interface VoiceAppLimits {
   listenMsPerDay: number;
   mintsPerDay: number;
   spokenCharsPerDay: number;
+  voices: Record<TtsProviderId, string>;
 }

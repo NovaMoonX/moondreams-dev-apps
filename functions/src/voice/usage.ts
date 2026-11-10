@@ -14,6 +14,8 @@ export interface ListenUsage {
   openMints: Record<string, number>;
 }
 
+export type SpeechHeld = 'speechLimit' | 'budgetReached';
+
 export type ListenHeld = 'listenLimit' | 'mintLimit' | 'budgetReached';
 
 export interface ClosedListen {
@@ -214,5 +216,143 @@ export async function releaseListen(
     });
   } catch {
     logger.error('voice.releaseFailed', { event: 'voice.releaseFailed' });
+  }
+}
+
+export function planSpeech({
+  usage,
+  budgetMicros,
+  limits,
+  characters,
+  costMicros,
+}: {
+  usage: { spokenChars?: number };
+  budgetMicros: number;
+  limits: VoiceAppLimits;
+  characters: number;
+  costMicros: number;
+}): {
+  spokenChars: number;
+  budgetDeltaMicros: number;
+  held: SpeechHeld | null;
+} {
+  const spoken = usage.spokenChars ?? 0;
+  const getHeld = (): SpeechHeld | null => {
+    if (budgetMicros + costMicros > VOICE_DAILY_BUDGET_CENTS * 10_000) {
+      return 'budgetReached';
+    }
+    if (spoken + characters > limits.spokenCharsPerDay) return 'speechLimit';
+    return null;
+  };
+  const held = getHeld();
+  return held === null
+    ? {
+        spokenChars: spoken + characters,
+        budgetDeltaMicros: costMicros,
+        held,
+      }
+    : { spokenChars: spoken, budgetDeltaMicros: 0, held };
+}
+
+/** Counts one spoken line against the person's day and the site's day in one transaction; returns why it was held, or null. */
+export async function reserveSpeech(
+  firestore: Firestore,
+  {
+    uid,
+    limits,
+    now,
+    timeZone,
+    characters,
+    costMicros,
+  }: {
+    uid: string;
+    limits: VoiceAppLimits;
+    now: number;
+    timeZone: string;
+    characters: number;
+    costMicros: number;
+  },
+): Promise<SpeechHeld | null> {
+  const usageRef = firestore.doc(usagePath(uid, getLocalDayKey(now, timeZone)));
+  const budgetRef = firestore.doc(budgetPath(getUtcDayKey(now)));
+
+  const plan = await firestore.runTransaction(async (transaction) => {
+    const [usageSnapshot, budgetSnapshot] = await Promise.all([
+      transaction.get(usageRef),
+      transaction.get(budgetRef),
+    ]);
+    const spokenChars = usageSnapshot.data()?.spokenChars;
+    const budgetCost = budgetSnapshot.data()?.costMicros;
+    const result = planSpeech({
+      usage: { spokenChars: typeof spokenChars === 'number' ? spokenChars : 0 },
+      budgetMicros: typeof budgetCost === 'number' ? budgetCost : 0,
+      limits,
+      characters,
+      costMicros,
+    });
+    transaction.set(
+      usageRef,
+      { spokenChars: result.spokenChars },
+      { merge: true },
+    );
+    if (result.held === null) {
+      transaction.set(
+        budgetRef,
+        { costMicros: FieldValue.increment(result.budgetDeltaMicros) },
+        { merge: true },
+      );
+    }
+    return result;
+  });
+
+  if (plan.held === 'budgetReached')
+    logger.warn('voice.budgetReached', { event: 'voice.budgetReached' });
+  else if (plan.held !== null)
+    logger.info(`voice.${plan.held}`, { event: `voice.${plan.held}` });
+  return plan.held;
+}
+
+/** Best effort: undoes one spoken-line reservation after the provider failed before any byte was sent. */
+export async function releaseSpeech(
+  firestore: Firestore,
+  {
+    uid,
+    now,
+    timeZone,
+    characters,
+    costMicros,
+  }: {
+    uid: string;
+    now: number;
+    timeZone: string;
+    characters: number;
+    costMicros: number;
+  },
+) {
+  const usageRef = firestore.doc(usagePath(uid, getLocalDayKey(now, timeZone)));
+  const budgetRef = firestore.doc(budgetPath(getUtcDayKey(now)));
+  try {
+    await firestore.runTransaction(async (transaction) => {
+      const spokenChars = (await transaction.get(usageRef)).data()?.spokenChars;
+      transaction.set(
+        usageRef,
+        {
+          spokenChars: Math.max(
+            0,
+            (typeof spokenChars === 'number' ? spokenChars : 0) - characters,
+          ),
+        },
+        { merge: true },
+      );
+      transaction.set(
+        budgetRef,
+        { costMicros: FieldValue.increment(-costMicros) },
+        { merge: true },
+      );
+    });
+  } catch {
+    logger.error('voice.speechReleaseFailed', {
+      event: 'voice.speechReleaseFailed',
+    });
   }
 }

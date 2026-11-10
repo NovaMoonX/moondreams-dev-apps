@@ -278,7 +278,7 @@ export const HELM_COPY = {
   settingsVoiceDevice: 'In this browser only',
   voiceDeviceOnlyTitle: "Use only this browser's listening",
   voiceDeviceOnlyOn:
-    "Your speech isn't sent to Deepgram. In Chrome, the browser's listening goes through Google.",
+    "Your speech isn't sent to the voice service (Deepgram), and answers are read by this phone's voice. In Chrome, the browser's own listening uses Google's speech service.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceDone: 'Done',

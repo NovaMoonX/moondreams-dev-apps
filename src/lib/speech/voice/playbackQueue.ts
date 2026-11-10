@@ -47,10 +47,11 @@ export const createPlaybackQueue = ({
     playing: Playing,
     status: SpeakResult['status'],
     isResuming: boolean,
+    playedBy: string | void = undefined,
   ) => {
     if (state.playing !== playing) return;
     state.playing = null;
-    playing.line.resolve({ status, adapterId: playing.adapter.id });
+    playing.line.resolve({ status, adapterId: playedBy ?? playing.adapter.id });
     if (isResuming) play();
   };
 
@@ -84,7 +85,7 @@ export const createPlaybackQueue = ({
         onEnd: () => undefined,
       })
       .then(
-        () => finish(playing, 'spoken', true),
+        (playedBy) => finish(playing, 'spoken', true, playedBy),
         () => finish(playing, 'failed', true),
       );
   }

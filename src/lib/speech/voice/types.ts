@@ -2,6 +2,8 @@ export type VoiceRoute = 'cloud' | 'device';
 
 export type CloudHeldReason = 'listenLimit' | 'mintLimit' | 'budgetReached';
 
+export type SpeechHeldReason = 'speechLimit' | 'budgetReached';
+
 /** ack: a code-built confirmation of what was done · reply: an answer · summary: a long read. */
 export type SpeechPriority = 'ack' | 'reply' | 'summary';
 
@@ -38,7 +40,8 @@ export interface TtsSpeakOptions {
 export interface TtsAdapter {
   id: string;
   route: VoiceRoute;
-  speak: (text: string, options: TtsSpeakOptions) => Promise<void>;
+  /** Resolves with the id of the adapter that actually played, when it isn't this one. */
+  speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
   /** True when the audio goes through the page's audio graph, so the browser's echo cancellation hears it. */
   isPlayingThroughWebAudio: boolean;
 }

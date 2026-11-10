@@ -31,6 +31,7 @@ import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
 import {
   getLocalDayKey,
   planListen,
+  planSpeech,
   type ListenUsage,
 } from '../../functions/src/voice/usage.ts';
 import {
@@ -41,7 +42,10 @@ import {
   VOICE_UTTERANCE_MS,
   type TtsProviderId,
 } from '../../functions/src/voice/voiceConfig.ts';
+import { readSpeechRequest } from '../../functions/src/voice/streamSpeech.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
+import { createCloudTts } from '../../src/lib/speech/voice/cloudTts.ts';
+import type { SpeechSource } from '../../src/lib/speech/voice/speechSource.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
 import {
   createVoiceTokenSource,
@@ -583,35 +587,54 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     'a report the server could not count (held unavailable) is sent again',
   );
 }
+const SPEAKER_ON = {
+  isOnline: true,
+  priority: 'reply',
+  isNaturalVoiceReady: false,
+  isCloudAllowed: true,
+  isCloudHeld: false,
+  hasCloud: true,
+} as const;
+assert.equal(
+  pickSpeaker(SPEAKER_ON),
+  'cloud',
+  'a reply with all on is spoken in the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'summary' }),
+  'cloud',
+  'a summary is spoken in the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'ack', isNaturalVoiceReady: true }),
+  'natural',
+  'an ack never goes to the cloud',
+);
+assert.equal(
+  pickSpeaker({ ...SPEAKER_ON, priority: 'ack' }),
+  'system',
+  'an ack goes to the system voice when the natural one is not ready',
+);
 (
   [
-    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: true }, 'natural'],
-    [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: false }, 'system'],
-    [
-      { isOnline: false, priority: 'reply', isNaturalVoiceReady: true },
-      'natural',
-    ],
-    [
-      { isOnline: true, priority: 'summary', isNaturalVoiceReady: false },
-      'system',
-    ],
-    [
-      {
-        isOnline: true,
-        priority: 'reply',
-        isNaturalVoiceReady: false,
-        isCloudAvailable: true,
-      },
-      'system',
-    ],
+    { isOnline: false },
+    { isCloudAllowed: false },
+    { isCloudHeld: true },
+    { hasCloud: false },
   ] as const
-).forEach(([input, expected]) =>
+).forEach((off) => {
+  const key = Object.keys(off)[0];
   assert.equal(
-    pickSpeaker(input),
-    expected,
-    `${JSON.stringify(input)} speaks with ${expected}`,
-  ),
-);
+    pickSpeaker({ ...SPEAKER_ON, ...off }),
+    'system',
+    `${key} off speaks with the system voice`,
+  );
+  assert.equal(
+    pickSpeaker({ ...SPEAKER_ON, ...off, isNaturalVoiceReady: true }),
+    'natural',
+    `${key} off speaks with the natural voice when it is ready`,
+  );
+});
 
 const played: string[] = [];
 const finishers = new Map<string, () => void>();
@@ -710,6 +733,89 @@ assert.deepEqual(
   'clear stops what plays and drops what waits',
 );
 console.log('speechShared: voice router and playback queue checks passed');
+
+{
+  const calls: string[] = [];
+  const held: string[] = [];
+  const fallback: TtsAdapter = {
+    id: 'system',
+    route: 'device',
+    isPlayingThroughWebAudio: false,
+    speak: async (text) => {
+      calls.push(text);
+      return 'system';
+    },
+  };
+  const controller = new AbortController();
+  const options = {
+    priority: 'reply' as const,
+    signal: controller.signal,
+    onStart: () => undefined,
+    onEnd: () => undefined,
+  };
+  const fetched: string[] = [];
+  const cloudWith = (
+    fetchSpeech: SpeechSource['fetchSpeech'],
+    firstByteMs = 20,
+  ) =>
+    createCloudTts({
+      source: {
+        fetchSpeech: (text, priority, signal) => {
+          fetched.push(text);
+          return fetchSpeech(text, priority, signal);
+        },
+      },
+      fallback,
+      firstByteMs,
+      onHeld: (reason) => held.push(reason),
+    });
+  const heldResult = await cloudWith(async () => ({
+    status: 'held',
+    reason: 'speechLimit',
+  })).speak('Hello there', options);
+  assert.equal(heldResult, 'system', 'a held answer is spoken by the fallback');
+  assert.deepEqual(held, ['speechLimit'], 'a held answer reports its reason');
+  assert.equal(
+    await cloudWith(async () => ({ status: 'unavailable' })).speak(
+      'Two',
+      options,
+    ),
+    'system',
+    'an unavailable answer is spoken by the fallback',
+  );
+  assert.equal(
+    await cloudWith(() => new Promise<never>(() => undefined)).speak(
+      'Three',
+      options,
+    ),
+    'system',
+    'a source that never answers falls back after the first-byte clock',
+  );
+  const fetchedBefore = fetched.length;
+  assert.equal(
+    await cloudWith(async () => ({ status: 'unavailable' })).speak(
+      'word '.repeat(130),
+      options,
+    ),
+    'system',
+    'a long text goes straight to the fallback',
+  );
+  assert.equal(fetched.length, fetchedBefore, 'a long text is never fetched');
+  const callsBefore = calls.length;
+  const aborting = new AbortController();
+  const pending = cloudWith(
+    () => new Promise<never>(() => undefined),
+    200,
+  ).speak('Four', { ...options, signal: aborting.signal });
+  aborting.abort();
+  await pending;
+  assert.equal(
+    calls.length,
+    callsBefore,
+    'an abort before the first byte plays nothing',
+  );
+}
+console.log('speechShared: cloud voice checks passed');
 
 const apiKey = 'sk-test-key-123';
 interface Call {
@@ -1175,6 +1281,7 @@ const listenLimits = {
   listenMsPerDay: 3_600_000,
   mintsPerDay: 300,
   spokenCharsPerDay: 30_000,
+  voices: { googleTts: 'g', deepgramAura: 'd', geminiTts: 'm' },
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
 const emptyUsage: ListenUsage = { listenMs: 0, mints: 0, openMints: {} };
@@ -1286,5 +1393,102 @@ assert.deepEqual(
   [heldPlan.held, heldPlan.usage.listenMs, heldPlan.budgetDeltaMicros],
   ['budgetReached', 7_000, 0],
   'a held plan saves the closed reports and charges nothing',
+);
+// speaking server
+const speechLimits = listenLimits;
+const speak = (over: Partial<Parameters<typeof planSpeech>[0]> = {}) =>
+  planSpeech({
+    usage: { spokenChars: 0 },
+    budgetMicros: 0,
+    limits: speechLimits,
+    characters: 100,
+    costMicros: 3_000,
+    ...over,
+  });
+const speakOk = speak({ usage: { spokenChars: 500 } });
+assert.deepEqual(
+  [speakOk.held, speakOk.spokenChars, speakOk.budgetDeltaMicros],
+  [null, 600, 3_000],
+  'a line under the limit adds its characters and charges its cost',
+);
+assert.equal(
+  speak({ usage: { spokenChars: 29_900 } }).held,
+  null,
+  'exactly reaching the daily characters is allowed',
+);
+assert.equal(
+  speak({ usage: { spokenChars: 29_901 } }).held,
+  'speechLimit',
+  'one character over is held at the speech limit',
+);
+assert.equal(
+  speak({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000 - 3_000 + 1,
+  }).held,
+  'budgetReached',
+  'a budget one cost short is held',
+);
+const speakHeld = speak({ usage: { spokenChars: 29_901 } });
+assert.deepEqual(
+  [speakHeld.spokenChars, speakHeld.budgetDeltaMicros],
+  [29_901, 0],
+  'a held line charges nothing',
+);
+const speechOrigin = 'https://apps.moondreams.dev';
+const speechBody = {
+  appId: 'helm',
+  text: 'Hello there',
+  priority: 'reply',
+  timeZone: 'Not/AZone',
+};
+const read = (over: Partial<Parameters<typeof readSpeechRequest>[0]> = {}) =>
+  readSpeechRequest({
+    method: 'POST',
+    origin: speechOrigin,
+    body: speechBody,
+    allowedOrigins: [speechOrigin],
+    ...over,
+  });
+const readFailure = (result: ReturnType<typeof read>) =>
+  result.ok ? null : [result.status, result.error];
+assert.deepEqual(
+  readFailure(read({ method: 'GET' })),
+  [405, 'method'],
+  'GET is refused',
+);
+assert.deepEqual(
+  readFailure(read({ origin: 'https://evil.example' })),
+  [403, 'origin'],
+  'another origin is refused',
+);
+assert.deepEqual(
+  readFailure(read({ origin: undefined })),
+  [403, 'origin'],
+  'no origin is refused',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, text: 'a'.repeat(601) } })),
+  [413, 'too-long'],
+  '601 characters are too long',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, text: '   ' } })),
+  [400, 'text'],
+  'empty text is refused',
+);
+assert.deepEqual(
+  readFailure(read({ body: { ...speechBody, appId: 'nope' } })),
+  [400, 'app'],
+  'an unknown app is refused',
+);
+const goodRead = read();
+assert.ok(
+  goodRead.ok && goodRead.text === 'Hello there' && goodRead.appId === 'helm',
+  'a good request passes',
+);
+const longZone = read({ body: { ...speechBody, timeZone: 'x'.repeat(65) } });
+assert.ok(
+  longZone.ok && longZone.timeZone === 'UTC',
+  'a bad time zone is read as UTC',
 );
 console.log('speechShared: voice provider checks passed');

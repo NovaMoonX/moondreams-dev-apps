@@ -14,8 +14,10 @@ import {
   createBrowserStt,
 } from '@/lib/speech/voice/browserStt';
 import { createDeepgramStt } from '@/lib/speech/voice/deepgramStream';
+import { createCloudTts } from '@/lib/speech/voice/cloudTts';
 import { createDeviceTts } from '@/lib/speech/voice/deviceTts';
 import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
+import type { SpeechSource } from '@/lib/speech/voice/speechSource';
 import type {
   CloudHeldReason,
   SpeechPriority,
@@ -32,7 +34,7 @@ export type VoiceUnavailableReason = 'no-recognition' | 'no-permission';
 
 export interface VoiceSpoken {
   status: 'spoken' | 'cancelled' | 'failed';
-  /** Which adapter said it ('natural' or 'system'); null when none did. */
+  /** Which adapter said it ('cloud', 'natural' or 'system'); null when none did. */
   adapterId: string | null;
 }
 
@@ -53,6 +55,8 @@ interface VoiceConversationOptions {
   onCloudHeld?: (reason: CloudHeldReason) => void;
   /** Listens in the cloud while `isAllowed`, online and not held for the day; the browser's recognition takes over whenever it can't. Null listens with the browser only. */
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
+  /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over whenever it can't. An `ack` always stays on the device. Null speaks on the device only. */
+  cloudSpeaking?: { source: SpeechSource; isAllowed: boolean } | null;
 }
 
 export type VoiceListeningRoute = 'cloud' | 'device';
@@ -81,7 +85,7 @@ const toEndPattern = (phrases: string[]) =>
  * person taps again, says an end phrase or is quiet for `quietMs`. Replies are spoken through a queue (an `ack` first,
  * a newer turn cutting the older turn's audio) by the voice `pickSpeaker` chooses, and muting silences every line until
  * the screen closes (never stored). Listening is the cloud's when the app allows it and `pickListener` agrees, the
- * browser's otherwise; speaking is on the device. The app supplies its phrases and what an utterance becomes.
+ * browser's otherwise; a `reply` or `summary` is spoken in the cloud when the app allows it, the device otherwise. The app supplies its phrases and what an utterance becomes.
  */
 export function useVoiceConversation({
   lang,
@@ -92,6 +96,7 @@ export function useVoiceConversation({
   isNaturalVoiceReady = false,
   quietMs = QUIET_MS,
   cloudListening = null,
+  cloudSpeaking = null,
   onCloudHeld,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
@@ -119,10 +124,12 @@ export function useVoiceConversation({
     quietMs,
     isMuted,
     cloudListening,
+    cloudSpeaking,
     onCloudHeld,
   });
   const run = useRef({
     heldDay: null as string | null,
+    speechHeldDay: null as string | null,
     heardBy: 'browser',
     mode: createListeningState('TAP'),
     isCancelled: false,
@@ -143,6 +150,7 @@ export function useVoiceConversation({
       quietMs,
       isMuted,
       cloudListening,
+      cloudSpeaking,
       onCloudHeld,
     };
   });
@@ -155,14 +163,32 @@ export function useVoiceConversation({
     queueRef.current ??= createPlaybackQueue({
       pick: (priority) => {
         const { lang: speechLang, identity: voice } = latest.current;
-        const isNatural =
-          pickSpeaker({
-            isOnline: navigator.onLine,
-            priority,
-            isNaturalVoiceReady:
-              latest.current.isNaturalVoiceReady && voice.device.naturalVoice,
-          }) === 'natural';
-        return createDeviceTts({ isNatural, lang: speechLang });
+        const cloud = latest.current.cloudSpeaking;
+        const today = toLocalDateInputValue(Date.now());
+        const isNaturalReady =
+          latest.current.isNaturalVoiceReady && voice.device.naturalVoice;
+        const choice = pickSpeaker({
+          isOnline: navigator.onLine,
+          priority,
+          isNaturalVoiceReady: isNaturalReady,
+          isCloudAllowed: cloud?.isAllowed ?? false,
+          isCloudHeld: run.current.speechHeldDay === today,
+          hasCloud: cloud !== null,
+        });
+        const device = createDeviceTts({
+          isNatural:
+            choice === 'natural' || (choice === 'cloud' && isNaturalReady),
+          lang: speechLang,
+        });
+        return choice === 'cloud' && cloud
+          ? createCloudTts({
+              source: cloud.source,
+              fallback: device,
+              onHeld: () => {
+                run.current.speechHeldDay = today;
+              },
+            })
+          : device;
       },
       onActiveChange: (isActive) =>
         queueMicrotask(() => setIsSpeaking(isActive)),
