@@ -2,7 +2,6 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
-import { HELM_COPY } from '@apps/helm/constants';
 
 interface SuggestedCardProps {
   title: string;
@@ -31,11 +30,11 @@ function SuggestedCard({
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {title}
         </span>
-        <span className='text-muted-foreground block text-[13px] break-words'>
-          {[detail, HELM_COPY.planSuggestedMark]
-            .filter((part): part is string => !!part)
-            .join(' · ')}
-        </span>
+        {detail && (
+          <span className='text-muted-foreground block text-[13px] break-words'>
+            {detail}
+          </span>
+        )}
       </span>
       <ChevronRight
         className='text-muted-foreground size-4 shrink-0'

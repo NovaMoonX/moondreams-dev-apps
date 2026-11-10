@@ -117,12 +117,17 @@ const getGaps = (window: Span, blocks: Span[]): Span[] => {
     : gaps;
 };
 
-const getObstacles = (input: PlannerInput, ignoredTaskId: string | null) =>
+const getObstacles = (
+  input: PlannerInput,
+  ignoredTaskId: string | null,
+  includeSuggested: boolean,
+) =>
   [
     ...input.busy,
     ...Object.values(input.slots).filter(
       (slot) =>
-        slot.status === 'kept' &&
+        (slot.status === 'kept' ||
+          (includeSuggested && slot.status === 'suggested')) &&
         slot.startAt !== null &&
         slot.endAt !== null &&
         slot.taskId !== ignoredTaskId,
@@ -274,7 +279,7 @@ const getCandidates = (input: PlannerInput) => {
 /** Suggests a few tasks for a day's gaps; kept and Not today slots come back untouched. */
 export function planDay(
   input: PlannerInput,
-  makeId: () => string,
+  makeId: (taskId: string) => string,
 ): PlannerResult {
   const decidedSlots = Object.fromEntries(
     Object.entries(input.slots).filter(
@@ -293,7 +298,7 @@ export function planDay(
   if (!input.hasCalendar) {
     const picks = candidates.slice(0, MAX_SUGGESTIONS);
     const entries = picks.map((task) => [
-      makeId(),
+      makeId(task.id),
       {
         slot: {
           taskId: task.id,
@@ -318,7 +323,7 @@ export function planDay(
     };
   }
 
-  const gaps = getGaps(window, getObstacles(input, null));
+  const gaps = getGaps(window, getObstacles(input, null, false));
   const freeMinutes = getMinutes(gaps);
   if (freeMinutes < MIN_USEFUL_MINUTES) return unchanged('full');
   const budget = (freeMinutes * input.fillPercent) / 100;
@@ -341,7 +346,7 @@ export function planDay(
     (first, second) => first.span.startAt - second.span.startAt,
   );
   const entries = placed.map(({ pick, span }) => ({
-    id: makeId(),
+    id: makeId(pick.task.id),
     slot: {
       taskId: pick.task.id,
       startAt: span.startAt,
@@ -372,7 +377,7 @@ export function findOpenings(
   if (window.state !== 'open') return [];
   const length = (task.durationMinutes ?? DEFAULT_MINUTES) * MINUTE_MS;
   const step = Math.max(length, DEFAULT_MINUTES * MINUTE_MS);
-  return getGaps(window, getObstacles(input, task.id))
+  return getGaps(window, getObstacles(input, task.id, true))
     .flatMap((gap) =>
       Array.from(
         {

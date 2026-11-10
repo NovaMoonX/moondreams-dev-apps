@@ -888,10 +888,14 @@ async function writeResult(
         searched.entries(),
       )
     : null;
-  const { commands, refused: liveRefused } = settleLiveTurn(
+  const { commands, refused: settledRefused } = settleLiveTurn(
     input.commands,
     searched.entries().length,
   );
+  const liveRefused =
+    searched.entries().length > 0 && requestedPlanDay
+      ? [...settledRefused, 'live-turn-command']
+      : settledRefused;
   const planDayKey =
     searched.entries().length === 0 && requestedPlanDay
       ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)

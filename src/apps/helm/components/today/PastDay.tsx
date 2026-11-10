@@ -1,3 +1,5 @@
+import { useRef } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { CalendarDays } from 'lucide-react';
@@ -32,6 +34,7 @@ function PastDay({ dayKey, sources }: PastDayProps) {
   const uid = user?.uid ?? null;
   const { addToast } = useToast();
   const { timeZone, todayKey, planDays } = sources;
+  const isBringing = useRef(false);
   const day = planDays[dayKey];
   const open = useAppSelector(selectOpenTasksById);
   const keptIds = Object.values(day?.slots ?? {})
@@ -59,22 +62,31 @@ function PastDay({ dayKey, sources }: PastDayProps) {
       task.completedAt < dayEnd,
   );
   const notDone = kept.filter((task) => task.status === 'open');
-  const keptToday = new Set(
+  const onToday = new Set(
     Object.values(planDays[todayKey]?.slots ?? {})
-      .filter((slot) => slot.status === 'kept')
+      .filter((slot) => slot.status !== 'notToday')
       .map((slot) => slot.taskId),
   );
-  const bringable = notDone.filter((task) => !keptToday.has(task.id));
+  const bringable = notDone.filter((task) => !onToday.has(task.id));
   const events = day?.calendarSnapshot ?? [];
 
   const bring = () => {
-    if (!uid) return;
-    bringable.forEach((task) =>
-      bringToToday(uid, todayKey, task.id).catch((error: unknown) => {
+    if (!uid || isBringing.current) return;
+    isBringing.current = true;
+    Promise.all(bringable.map((task) => bringToToday(uid, todayKey, task.id)))
+      .then(() =>
+        addToast({
+          title: HELM_COPY.planBroughtToToday(bringable.length),
+          type: 'info',
+        }),
+      )
+      .catch((error: unknown) => {
         console.error('Helm task was not brought to today', error);
         addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
-      }),
-    );
+      })
+      .finally(() => {
+        isBringing.current = false;
+      });
   };
 
   return (
@@ -142,6 +154,11 @@ function PastDay({ dayKey, sources }: PastDayProps) {
                 <span className='min-w-0 flex-1 text-[15px] leading-[21px] break-words'>
                   {titleOf(task)}
                 </span>
+                {onToday.has(task.id) && (
+                  <span className='text-muted-foreground shrink-0 text-[13px]'>
+                    {HELM_COPY.planOnToday}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

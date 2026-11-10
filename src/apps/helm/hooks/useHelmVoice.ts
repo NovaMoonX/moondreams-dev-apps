@@ -43,6 +43,7 @@ import {
   sendCapture,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
+import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import {
@@ -369,12 +370,23 @@ export function useHelmVoice() {
           return;
         }
         waiting.current.delete(leadId);
-        const line =
+        const zone =
+          store.getState().helm.profile?.timeZone ??
+          getDeviceTimeZone() ??
+          'UTC';
+        const spoken =
           capture.status === 'sorted'
             ? (capture.executionIds
                 .flatMap((id) => executionsById.get(id) ?? [])
                 .find((execution) => execution.spoken !== null)?.spoken ?? null)
             : null;
+        const line =
+          spoken ??
+          (capture.status === 'sorted' && capture.planDayKey
+            ? HELM_COPY.planningDaySpoken(
+                formatDayName(capture.planDayKey, toDayKey(Date.now(), zone)),
+              )
+            : null);
         if (line === null) voice.settle();
         else void deliver(capture, line);
       });

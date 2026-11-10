@@ -173,13 +173,27 @@ const readRemember = (
   value: toText(item.value, VALUE_CAP),
 });
 
+/** An unknown span drops only the plan request, never the rest of the reply. */
+const readPlanDue = (value: unknown, reading: CaptureReading) => {
+  try {
+    return { due: toDue(value, reading) };
+  } catch (error) {
+    if (error instanceof NomosReplyError && error.code === 'badDate') {
+      return null;
+    }
+    throw error;
+  }
+};
+
 const readPlanDay = (
   item: Record<string, unknown>,
   reading: CaptureReading,
   now: number,
   timeZone: string,
 ): PlanDayCommand | null => {
-  const due = toDue(item.dueSpanId, reading);
+  const read = readPlanDue(item.dueSpanId, reading);
+  if (!read) return null;
+  const { due } = read;
   const today = getDayIn(now, toKnownZone(timeZone));
   const date = due
     ? due.kind === 'day'

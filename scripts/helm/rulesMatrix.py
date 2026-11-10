@@ -147,7 +147,7 @@ def main():
     check('facts create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/facts/f', fact)]), False)
 
     # A day's plan is the owner's alone, like a task.
-    plan = dict(date='2030-01-01', slots={}, isRestDay=False, restDayOverriddenAt=None, generatedAt=NOW, calendarReadAt=None, sealed=SEAL)
+    plan = dict(date=1893456000000, slots={}, isRestDay=False, restDayOverriddenAt=None, generatedAt=NOW, calendarReadAt=None, sealed=SEAL)
     pk = f'{path}/planDays/2030-01-01'
     for a, tok in actors.items():
         admin([put(pk, plan)])

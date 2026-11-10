@@ -77,7 +77,7 @@ export async function generatePlan(
   dayLabel: string,
 ): Promise<PlannerResult> {
   const { input, calendarSnapshot, calendarReadAt } = plan;
-  const result = planDay(input, makeSlotId);
+  const result = planDay(input, (taskId) => taskId);
   const now = Date.now();
   const removed = Object.keys(input.slots).filter(
     (id) => !(id in result.slots),
@@ -142,6 +142,13 @@ export async function generatePlan(
     batch.set(doc(executionsOf(uid), getExecutionId(input.dayKey)), execution);
   }
   await batch.commit();
+  if (suggested === 0 && removed.length > 0) {
+    void settleExecution(
+      uid,
+      input.dayKey,
+      Object.fromEntries(removed.map((id) => [id, null])),
+    );
+  }
   return result;
 }
 
@@ -231,9 +238,12 @@ export function addKeptSlot(
     status: 'kept',
     decidedAt: Date.now(),
   };
+  const existingId = Object.entries(
+    store.getState().helm.planDays.byId[dayKey]?.slots ?? {},
+  ).find(([, held]) => held.taskId === input.taskId)?.[0];
   return setDoc(
     doc(planDaysOf(uid), dayKey),
-    { date: toDate(dayKey), slots: { [makeSlotId()]: slot } },
+    { date: toDate(dayKey), slots: { [existingId ?? makeSlotId()]: slot } },
     { merge: true },
   );
 }

@@ -71,6 +71,17 @@ const taskIdsOf = (result: ReturnType<typeof planDay>) =>
 const run = (input: PlannerInput) => planDay(input, makeIds());
 
 {
+  const input = base({
+    tasks: [task('a')],
+    busy: [busy('08:00', '09:00')],
+    slots: { s1: slot('b', 'suggested', '09:15') },
+  });
+  const [first] = findOpenings(input, task('a'), 1);
+  assert.ok(first.startAt >= at('09:30') + 15 * MIN);
+  assert.equal(taskIdsOf(run(input)).includes('a'), true);
+}
+
+{
   const result = run(base({ tasks: [task('a')] }));
   assert.equal(result.outcome, 'planned');
   const [entry] = Object.entries(result.slots);

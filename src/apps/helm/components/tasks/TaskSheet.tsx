@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { Hourglass } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
@@ -198,11 +199,21 @@ function TaskSheet({
   const assistantName = useAssistantName();
   const [planMode, setPlanMode] = usePlacementMode();
   const sources = usePlanSources(nowMinute);
-  const isKeptToday = useAppSelector((state) => {
+  const plannedKey = useAppSelector((state) => {
     const zone = state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
-    const day = state.helm.planDays.byId[toDayKey(Date.now(), zone)];
-    return Object.values(day?.slots ?? {}).some(
-      (slot) => slot.taskId === task?.id && slot.status === 'kept',
+    const todayKey = toDayKey(Date.now(), zone);
+    return (
+      Object.entries(state.helm.planDays.byId)
+        .filter(
+          ([key, day]) =>
+            key >= todayKey &&
+            Object.values(day.slots).some(
+              (slot) => slot.taskId === task?.id && slot.status !== 'notToday',
+            ),
+        )
+        .map(([key]) => key)
+        .sort()
+        .at(0) ?? null
     );
   });
 
@@ -359,7 +370,7 @@ function TaskSheet({
     doneAt === null &&
     !task.isUnreadable &&
     activity?.kind === 'active' &&
-    !isKeptToday;
+    plannedKey === null;
   const getFound = () => {
     if (!sources || shownView !== 'plan') return null;
     const { todayKey } = sources;
@@ -392,11 +403,6 @@ function TaskSheet({
     setPlanMode('main');
     go('main');
   };
-  const backToMain = (
-    <Button type='button' variant='tertiary' onClick={() => go('main')}>
-      {HELM_COPY.planBack}
-    </Button>
-  );
 
   const getPlanBody = () => {
     if (!sources) return null;
@@ -408,6 +414,7 @@ function TaskSheet({
         sources={sources}
         task={plannerTask}
         slotId={null}
+        currentStartAt={null}
         headline={headline}
         chip={
           mode === 'main'
@@ -418,26 +425,53 @@ function TaskSheet({
         }
         assistantName={assistantName}
         onModeChange={setPlanMode}
+        onBack={
+          mode === 'main'
+            ? null
+            : () => setPlanMode(mode === 'days' ? 'times' : 'main')
+        }
         onPlace={(dayKey, opening) => place(dayKey, opening, 'person')}
       />
     );
     if (!found) {
       return (
         <div className='space-y-3'>
+          <BackLink onBack={() => go('main')} />
           <p className='text-[15px] text-pretty'>{HELM_COPY.planNoRoom}</p>
-          {body('days', null)}
+          <PlacementBody
+            mode='days'
+            sources={sources}
+            task={plannerTask}
+            slotId={null}
+            currentStartAt={null}
+            headline={null}
+            chip={null}
+            assistantName={assistantName}
+            onModeChange={setPlanMode}
+            onBack={null}
+            onPlace={(dayKey, opening) => place(dayKey, opening, 'person')}
+          />
         </div>
       );
     }
     const dayWord = formatDayWord(found.dayKey, todayKey);
-    return body(
-      planMode,
-      found.opening
-        ? HELM_COPY.planFoundSlot(
-            dayWord,
-            formatSlotRange(found.opening.startAt, found.opening.endAt, zone),
-          )
-        : HELM_COPY.planFoundNoTime(dayWord),
+    return (
+      <div className='space-y-3'>
+        {planMode === 'main' && <BackLink onBack={() => go('main')} />}
+        {body(
+          planMode,
+          found.opening
+            ? HELM_COPY.planFoundSlot(
+                dayWord,
+                formatSlotRange(
+                  found.opening.startAt,
+                  found.opening.endAt,
+                  zone,
+                ),
+              )
+            : HELM_COPY.planFoundNoTime(dayWord),
+        )}
+      </div>
     );
   };
 
@@ -446,15 +480,11 @@ function TaskSheet({
       return found ? (
         <PlacementFooter
           mode={planMode}
-          leftAction={backToMain}
+          leftAction={null}
           onModeChange={setPlanMode}
           onKeep={() => place(found.dayKey, found.opening, 'nomos')}
         />
-      ) : (
-        <div className={FOOT}>
-          <ModalFooterActions cancelAction={backToMain} rightActions={null} />
-        </div>
-      );
+      ) : null;
     }
     if (shownView !== 'main') return null;
     return (
@@ -468,7 +498,13 @@ function TaskSheet({
               />
             }
             rightActions={
-              canPlan ? (
+              plannedKey !== null && doneAt === null && sources ? (
+                <p className='text-muted-foreground text-sm'>
+                  {HELM_COPY.planPlannedOn(
+                    formatDayWord(plannedKey, sources.todayKey),
+                  )}
+                </p>
+              ) : canPlan ? (
                 <Button
                   type='button'
                   variant='primary'

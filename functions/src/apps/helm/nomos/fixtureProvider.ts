@@ -416,7 +416,7 @@ function readQuestion(text: string, message: string) {
 }
 
 const PLAN_DAY_RE =
-  /^\s*(?:please\s+)?plan\s+(?:my\s+day|today|tomorrow|(?:my\s+)?(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
+  /^\s*(?:please\s+)?plan\s+(?:my\s+day|today|tomorrow|(?:my\s+)?(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b(?!['’]s)/i;
 
 /** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
 const readPlanDay = (text: string, reading: CaptureReading) =>

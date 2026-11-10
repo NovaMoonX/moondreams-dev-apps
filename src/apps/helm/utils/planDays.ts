@@ -79,6 +79,14 @@ export function formatDayWord(key: string, todayKey: string) {
   return dayLabel(key, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+/** "today", "tomorrow", "yesterday", else the weekday, for the middle of a sentence. */
+export function formatDayName(key: string, todayKey: string) {
+  if (key === todayKey) return 'today';
+  if (key === shiftDayKey(todayKey, 1)) return 'tomorrow';
+  if (key === shiftDayKey(todayKey, -1)) return 'yesterday';
+  return dayLabel(key, { weekday: 'long' });
+}
+
 /** A day with no plan yet, or only slots a move put there. */
 export const needsPlan = (day: PlanDay | undefined) =>
   !day || day.generatedAt === null;

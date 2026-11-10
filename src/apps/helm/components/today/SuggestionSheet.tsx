@@ -118,8 +118,9 @@ function SuggestionSheet({
               variant='tertiary'
               onClick={() => {
                 run(skipSlot(uid, dayKey, slotId));
-                onSkipped(task.title, () =>
-                  run(restoreSlot(uid, dayKey, slotId)),
+                onSkipped(
+                  task.isUnreadable ? HELM_COPY.unreadable : task.title,
+                  () => run(restoreSlot(uid, dayKey, slotId)),
                 );
                 close();
               }}
@@ -135,10 +136,12 @@ function SuggestionSheet({
         sources={sources}
         task={toPlannerTask(task)}
         slotId={slotId}
+        currentStartAt={slot.startAt}
         headline={null}
         chip={chip}
         assistantName={assistantName}
         onModeChange={setMode}
+        onBack={() => setMode(mode === 'days' ? 'times' : 'main')}
         onPlace={place}
       />
     </DetailSheet>

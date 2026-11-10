@@ -162,10 +162,10 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
             keys={getStripKeys(todayKey)}
             todayKey={todayKey}
             selectedKey={selectedKey}
-            onSelect={setPickedKey}
+            onSelect={(key) => setPickedKey(key === todayKey ? null : key)}
           />
         )}
-        <ConnectCalendarRow />
+        {isToday && <ConnectCalendarRow />}
         {sources &&
           (selectedKey < todayKey ? (
             <PastDay dayKey={selectedKey} sources={sources} />

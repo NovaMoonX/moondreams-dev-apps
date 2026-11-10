@@ -64,6 +64,8 @@ export function startPlanDaysListener(
       where('date', '<=', window.toDate),
     ),
     async (snapshot) => {
+      // An empty cache read says nothing yet about the server's days.
+      if (snapshot.empty && snapshot.metadata.fromCache) return;
       sequence.latest += 1;
       const current = sequence.latest;
       const opened = await Promise.all(

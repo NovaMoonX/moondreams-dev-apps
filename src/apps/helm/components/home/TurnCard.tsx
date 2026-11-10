@@ -2,6 +2,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -19,6 +20,7 @@ import {
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 import { getHomeHeldLine } from '@apps/helm/utils/heldCaptures';
+import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 
 interface TurnCardProps {
   capture: OpenCapture;
@@ -67,6 +69,12 @@ function TurnCard({
   showsNotice,
 }: TurnCardProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const planDay = useAppSelector((state) =>
+    capture.planDayKey
+      ? state.helm.planDays.byId[capture.planDayKey]
+      : undefined,
+  );
+  const now = useNow(60_000);
   const executionsById = useAppSelector(selectExecutionsById);
   const failedIds = useAppSelector((state) => state.helm.failedExecutionIds);
   const { user } = useAuth();
@@ -92,10 +100,28 @@ function TurnCard({
   useEffect(() => {
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
+  const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
   const hasLost =
     hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
+  function getPlanLine() {
+    if (!isSorted || capture.isUnreadable || !capture.planDayKey) return null;
+    if (hasResults || capture.answer) return null;
+    const dayName = formatDayName(
+      capture.planDayKey,
+      toDayKey(now, profileZone ?? getDeviceTimeZone() ?? 'UTC'),
+    );
+    if (!planDay || (planDay.generatedAt ?? 0) < (capture.sortedAt ?? 0)) {
+      return HELM_COPY.planningDay(dayName);
+    }
+    const count = Object.values(planDay.slots).filter(
+      (slot) => slot.status === 'suggested',
+    ).length;
+    return count === 0
+      ? HELM_COPY.planNothingFits
+      : HELM_COPY.plannedDay(dayName, count);
+  }
   return (
     <article className='flex flex-col items-end gap-1'>
       <div className='flex w-full flex-col items-end gap-1'>
@@ -164,6 +190,11 @@ function TurnCard({
               showsNotice={showsNotice}
             />
           ))}
+        </div>
+      )}
+      {planLine !== null && (
+        <div className='flex w-full flex-col items-start gap-2' role='status'>
+          <AssistantLine>{planLine}</AssistantLine>
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (

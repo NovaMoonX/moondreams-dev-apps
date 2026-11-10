@@ -2,8 +2,8 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
+import BackLink from '@/components/BackLink';
 import { PillRow } from '@/components/PillGroup';
-import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import type { PlannerTask } from '@apps/helm/engine/planner';
@@ -31,11 +31,15 @@ interface PlacementBodyProps {
   task: PlannerTask;
   /** The slot being moved, which doesn't count as taken while looking. */
   slotId: string | null;
+  /** Where the slot being moved starts now, so it isn't offered as another time. */
+  currentStartAt: number | null;
   /** The slot found, on its own line; null when its time is in the chip. */
   headline: string | null;
   chip: string | null;
   assistantName: string;
   onModeChange: (mode: PlacementMode) => void;
+  /** Leaves the times or days view; null when the host draws its own Back. */
+  onBack: (() => void) | null;
   /** A day with no opening gets the task with no time. */
   onPlace: (dayKey: string, opening: Opening | null) => void;
 }
@@ -46,19 +50,23 @@ export function PlacementBody({
   sources,
   task,
   slotId,
+  currentStartAt,
   headline,
   chip,
   assistantName,
   onModeChange,
+  onBack,
   onPlace,
 }: PlacementBodyProps) {
   const { todayKey, timeZone } = sources;
   const days = getStripKeys(todayKey).slice(2);
   const times = [todayKey, shiftDayKey(todayKey, 1)].flatMap((dayKey) =>
-    getOpenings(sources, dayKey, task, slotId, OPENINGS_PER_DAY).map(
-      (opening) => ({ dayKey, opening }),
-    ),
+    getOpenings(sources, dayKey, task, slotId, OPENINGS_PER_DAY + 1)
+      .filter((opening) => opening.startAt !== currentStartAt)
+      .slice(0, OPENINGS_PER_DAY)
+      .map((opening) => ({ dayKey, opening })),
   );
+  const backLink = onBack && <BackLink onBack={onBack} />;
   const dayPills = (
     <PillRow label={HELM_COPY.planPickDay}>
       {days.map((dayKey) => (
@@ -78,10 +86,18 @@ export function PlacementBody({
     </PillRow>
   );
 
-  if (mode === 'days') return dayPills;
+  if (mode === 'days') {
+    return (
+      <div className='space-y-3'>
+        {backLink}
+        {dayPills}
+      </div>
+    );
+  }
   if (mode === 'times') {
     return (
       <div className='space-y-3'>
+        {backLink}
         {times.length === 0 && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
             {HELM_COPY.planNoOpenings}
@@ -129,52 +145,45 @@ export function PlacementBody({
 
 interface PlacementFooterProps {
   mode: PlacementMode;
-  /** What leaves the sheet from its first view: Not today on a suggestion, Back from Plan it. */
+  /** What leaves the sheet from its first view: Not today on a suggestion. */
   leftAction: ReactNode;
   onModeChange: (mode: PlacementMode) => void;
   onKeep: () => void;
 }
 
+/** The first view's actions; the times and days views leave through their Back link. */
 export function PlacementFooter({
   mode,
   leftAction,
   onModeChange,
   onKeep,
 }: PlacementFooterProps) {
+  if (mode !== 'main') return null;
   return (
     <div className='px-6 pt-2 pb-3'>
-      {mode === 'main' ? (
-        <ModalFooterActions
-          leftActions={leftAction}
-          rightActions={
-            <>
-              <Button
-                type='button'
-                variant='outline'
-                onClick={() => onModeChange('times')}
-              >
-                {HELM_COPY.planAnotherTime}
-              </Button>
-              <Button type='button' variant='primary' onClick={onKeep}>
-                {HELM_COPY.planKeep}
-              </Button>
-            </>
-          }
-        />
-      ) : (
-        <ModalFooterActions
-          cancelAction={
-            <Button
-              type='button'
-              variant='tertiary'
-              onClick={() => onModeChange(mode === 'days' ? 'times' : 'main')}
-            >
-              {HELM_COPY.planBack}
-            </Button>
-          }
-          rightActions={null}
-        />
-      )}
+      <div className='flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between'>
+        {leftAction && (
+          <div className='max-sm:[&>button]:w-full'>{leftAction}</div>
+        )}
+        <div className='flex gap-2 sm:justify-end'>
+          <Button
+            type='button'
+            variant='outline'
+            className='max-sm:flex-1'
+            onClick={() => onModeChange('times')}
+          >
+            {HELM_COPY.planAnotherTime}
+          </Button>
+          <Button
+            type='button'
+            variant='primary'
+            className='max-sm:flex-1'
+            onClick={onKeep}
+          >
+            {HELM_COPY.planKeep}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

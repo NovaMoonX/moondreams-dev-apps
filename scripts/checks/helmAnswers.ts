@@ -15,7 +15,10 @@ import {
   settleRemember,
   type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/remember.ts';
-import { buildAnswerExecution } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import {
+  buildAnswerExecution,
+  settleCapture,
+} from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import {
   buildAnswer,
   GENERAL_LABEL,
@@ -1345,6 +1348,78 @@ const tests: [string, () => void | Promise<void>][] = [
       ['d7', 'dPast'].forEach((id) =>
         assert.equal(read([plan(id)]).planDay, null),
       );
+    },
+  ],
+  [
+    "a planDay on a moment span lands on that moment's day, and an unknown span drops only the plan",
+    () => {
+      const NOW = Date.UTC(2026, 10, 10, 22);
+      const ZONE = 'Pacific/Auckland';
+      const DAY = 86_400_000;
+      const todayUtc = Date.UTC(2026, 10, 11);
+      const reading = {
+        ...READING,
+        dates: [
+          {
+            id: 'm1',
+            text: 'm1',
+            start: 0,
+            end: 1,
+            due: { kind: 'moment' as const, at: NOW + DAY },
+          },
+        ],
+      };
+      const read = (commands: Record<string, unknown>[]) =>
+        normalizeNomosReply(
+          { commands },
+          { reading, aliases: createAliasBook('t'), now: NOW, timeZone: ZONE },
+        );
+      assert.equal(
+        read([{ kind: 'planDay', dueSpanId: 'm1' }]).planDay?.date.date,
+        todayUtc + DAY,
+      );
+      const mixed = read([
+        { kind: 'planDay', dueSpanId: 'nope' },
+        { kind: 'createTask', title: 'Buy milk' },
+      ]);
+      assert.equal(mixed.planDay, null);
+      assert.equal(mixed.commands.length, 1);
+      assert.equal(mixed.commands[0].kind, 'createTask');
+    },
+  ],
+  [
+    'a capture that only asked to plan a day settles as sorted',
+    () => {
+      const settled = settleCapture({
+        mode: 'full',
+        filed: 0,
+        hasPlanDay: true,
+        hasMore: false,
+        executionId: null,
+        now: 9000,
+        newId: () => 'q-1',
+        opened: { text: 'plan my day', reading: READING },
+        questionState: {},
+        executionIds: [],
+      });
+      assert.equal(settled.status, 'sorted');
+    },
+  ],
+  [
+    'the emulator leaves "plan today\'s dinner" to the task reading',
+    async () => {
+      const loop = await createFixtureProvider(
+        "Plan today's dinner",
+        READING,
+      ).runToolLoop({
+        role: 'quick',
+        messages: [{ role: 'user', content: '' }],
+        limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 5_000 },
+      } as never);
+      const commands = (
+        loop.terminalInput as { commands: Record<string, unknown>[] }
+      ).commands;
+      assert.ok(commands.every((command) => command.kind !== 'planDay'));
     },
   ],
   [
