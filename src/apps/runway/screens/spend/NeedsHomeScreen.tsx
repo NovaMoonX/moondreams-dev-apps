@@ -11,6 +11,7 @@ import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SelectionBar from '@/components/SelectionBar';
+import SortingPausedRow from '@apps/runway/components/SortingPausedRow';
 import Subview from '@/components/Subview';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
@@ -47,6 +48,7 @@ import {
   selectEnvelopes,
   selectItemLooks,
   selectIsNeedsHomeLoaded,
+  selectIsSortingPaused,
   selectNeedsHomeSections,
   type NeedsHomeMove,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -294,6 +296,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
     selectNeedsHomeSections(state, today),
   );
   const isLoaded = useAppSelector(selectIsNeedsHomeLoaded);
+  const isPaused = useAppSelector(selectIsSortingPaused);
   const sourceNameOf = useSourceName();
   const looks = useAppSelector(selectItemLooks);
   const accounts = useAppSelector((state) => state.runway.accounts);
@@ -537,6 +540,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
       headerAction={<ValuesEyeButton />}
     >
       <div className='space-y-4'>
+        {isLoaded && isPaused && !selection.isActive && <SortingPausedRow />}
         {!isLoaded ? (
           <p className='text-muted-foreground text-sm'>
             {NEEDS_HOME_WORDS.loading}
@@ -643,6 +647,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
             )}
           </>
         )}
+        {isLoaded && !isPaused && !selection.isActive && <SortingPausedRow />}
       </div>
       {selection.isActive && charges.length > 0 && (
         <SelectionBar

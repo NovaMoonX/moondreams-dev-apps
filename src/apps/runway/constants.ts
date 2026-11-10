@@ -4626,7 +4626,8 @@ export const RELEASED_WORDS = {
 export const SORTING_WORDS = {
   caption: 'Needs a home',
   label: "I'm not sorting yet",
-  helpOn: "New charges stay in Free to Spend and don't wait here",
+  helpOn:
+    "New charges stay in Free to Spend and in Spend, and don't wait here. Money in and moves between accounts still ask",
   helpOff: 'Charges from the bank wait here for a home',
   saveFailed: 'That did not save. Nothing was changed.',
 } as const;
