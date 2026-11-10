@@ -149,6 +149,7 @@ export function buildFactWrite(input: {
         stated: 'nomosInferred',
         aboutField: fact.aboutField,
         syncedIds,
+        'sealed.title': `Noted the ${fact.value} on ${fact.about.title}`,
         'sealed.statement': fact.statement,
         'sealed.value': fact.value,
       },

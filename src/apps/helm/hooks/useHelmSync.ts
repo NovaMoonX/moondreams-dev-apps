@@ -18,6 +18,8 @@ import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
 import {
   clearHelm,
   retryKey,
+  setFacts,
+  setFactsFailed,
   setKeyStatus,
   setOpenTasks,
   setOpenTasksFailed,
@@ -39,6 +41,7 @@ import {
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
+import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
@@ -189,6 +192,15 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm tasks listener failed', error);
               dispatch(setOpenTasksFailed());
+            },
+          ),
+          startFactsListener(
+            uid,
+            read,
+            (facts) => dispatch(setFacts(facts)),
+            (error) => {
+              console.error('Helm facts listener failed', error);
+              dispatch(setFactsFailed());
             },
           ),
           startSyncedListener(

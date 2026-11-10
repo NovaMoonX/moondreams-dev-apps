@@ -32,6 +32,8 @@ interface DisconnectSheetProps {
   countKind?: string | null;
   /** A small explanation beside the sentence, when the connection has more to say. */
   note?: { title: string; text: string } | null;
+  /** One more plain line under the sentence, for what this connection's end does to what was kept from it. */
+  extraLine?: string | null;
 }
 
 function DisconnectForm({
@@ -42,6 +44,7 @@ function DisconnectForm({
   failureLine,
   countKind = null,
   note = null,
+  extraLine = null,
 }: Omit<DisconnectSheetProps, 'isOpen'>) {
   const name = useAssistantName();
   const now = useNow(60_000);
@@ -61,6 +64,7 @@ function DisconnectForm({
         grantId,
         deleteCopies: deletesCopies,
       });
+      onClose();
     } catch (error) {
       console.error('Helm connection did not end', error);
       setFailure(failureLine(error));
@@ -81,6 +85,11 @@ function DisconnectForm({
           </>
         )}
       </p>
+      {extraLine && (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {extraLine}
+        </p>
+      )}
       {count > 0 && (
         <div className='flex flex-col gap-1'>
           <label className='flex min-h-12 items-start gap-3 py-2'>

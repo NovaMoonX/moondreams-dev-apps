@@ -76,8 +76,47 @@ const toSource = (value: unknown): SourceRef[] => {
   return [];
 };
 
-const toRecords = <T>(value: unknown) =>
-  Array.isArray(value) ? (value.filter(isRecord) as unknown as T[]) : [];
+const toQuote = (value: unknown): AnswerQuote[] => {
+  if (!isRecord(value)) return [];
+  const id = toText(value.id);
+  const connectorId = toText(value.connectorId);
+  const accountId = toText(value.accountId);
+  const sourceLabel = toText(value.sourceLabel);
+  return id && connectorId && accountId && sourceLabel
+    ? [
+        {
+          id,
+          connectorId,
+          accountId,
+          sourceLabel,
+          at: toNumber(value.at),
+          text: toText(value.text),
+          deepLink: toText(value.deepLink),
+          deletedAt: toNumber(value.deletedAt),
+        },
+      ]
+    : [];
+};
+
+const toSearched = (value: unknown): SearchedSource[] => {
+  if (!isRecord(value)) return [];
+  const connectorId = toText(value.connectorId);
+  const accountId = toText(value.accountId);
+  const label = toText(value.label);
+  const at = toNumber(value.at);
+  return connectorId && accountId && label && at !== null
+    ? [
+        {
+          connectorId,
+          accountId,
+          label,
+          at,
+          found: toNumber(value.found) ?? 0,
+          failed: toText(value.failed),
+        },
+      ]
+    : [];
+};
 
 /** Opens a stored answer; an older turn's missing key, and anything not shaped like the contract, opens as none. */
 export function normalizeAnswer(value: unknown): CaptureAnswer | null {
@@ -101,7 +140,9 @@ export function normalizeAnswer(value: unknown): CaptureAnswer | null {
         ? { noteId: differsNoteId, says: differsSays }
         : null,
     suggestedTopicId: toText(value.suggestedTopicId),
-    quotes: toRecords<AnswerQuote>(value.quotes),
-    searched: toRecords<SearchedSource>(value.searched),
+    quotes: Array.isArray(value.quotes) ? value.quotes.flatMap(toQuote) : [],
+    searched: Array.isArray(value.searched)
+      ? value.searched.flatMap(toSearched)
+      : [],
   };
 }

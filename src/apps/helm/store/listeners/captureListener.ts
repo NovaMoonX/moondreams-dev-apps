@@ -100,6 +100,7 @@ async function openCapture(
     turnLeadId: toLeadId(data.turnLeadId),
     joinedCaptureIds: toIds(data.joinedCaptureIds),
     seenAt: data.seenAt ?? null,
+    quotedSourceKeys: toIds(data.quotedSourceKeys),
     createdAt: data.createdAt ?? 0,
     sortedAt: data.sortedAt ?? null,
     screen: toScreen(data.screen ?? null),

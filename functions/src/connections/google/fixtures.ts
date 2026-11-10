@@ -192,6 +192,13 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
         iCalUID: 'fx-dentist@example.com',
         ...timed(3, '10:00', '11:00'),
       },
+      {
+        ...base,
+        id: 'fx-cake-tasting',
+        summary: 'Cake tasting at Sweet Layer Bakery',
+        iCalUID: 'fx-cake-tasting@example.com',
+        ...timed(3, '15:00', '16:00'),
+      },
     ],
     'shifts-personal@group.calendar.google.com': [
       {

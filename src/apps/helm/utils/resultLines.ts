@@ -26,6 +26,16 @@ export function buildResultLines(
       toText(effect?.previous?.['sealed.title']) ??
       toText(task?.title) ??
       HELM_COPY.resultTaskFallback;
+    if (ref.collection === 'facts') {
+      return {
+        key: `${ref.docId}:${index}`,
+        title:
+          toText(effect?.written['sealed.title']) ??
+          toText(effect?.written['sealed.statement']) ??
+          HELM_COPY.resultFactFallback,
+        detail: null,
+      };
+    }
     const isDone = effect?.written.status === 'done';
     const due =
       effect && 'due' in effect.written

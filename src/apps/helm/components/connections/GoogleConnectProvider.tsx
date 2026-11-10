@@ -10,6 +10,7 @@ import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   finishGoogleConnection,
+  grantConnection,
   startGoogleConnection,
 } from '@/lib/connections/connectionCalls';
 import type { FinishGoogleConnectionResult } from '@/lib/connections/contract';
@@ -34,7 +35,10 @@ import {
 } from '@apps/helm/hooks/useGoogleConnect';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
+type GoogleConnectorId = NonNullable<GoogleConnectOptions['connectorId']>;
+
 interface Intro {
+  connectorId: GoogleConnectorId;
   accountId: string | null;
   isAnotherAccount: boolean;
   /** A line already known when the sheet opens, such as a refusal on the way back from Google. */
@@ -51,12 +55,13 @@ const toFailureLine = (error: unknown, name: string) =>
 
 /** The whole trip to Google and back: where to go, the person's answer, and what the server made of it. */
 const connectGoogle = async ({
+  connectorId,
   accountId,
   isAnotherAccount,
-}: Pick<Intro, 'accountId' | 'isAnotherAccount'>) => {
+}: Pick<Intro, 'connectorId' | 'accountId' | 'isAnotherAccount'>) => {
   const { authUrl, state } = await startGoogleConnection({
     readerAppId: 'helm',
-    connectorId: 'google:calendar',
+    connectorId,
     redirectUri: `${window.location.origin}/helm`,
     accountId,
     isAnotherAccount,
@@ -113,7 +118,9 @@ function IntroForm({
         </p>
       )}
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.googleConnectReadOnly(name)}
+        {intro.connectorId === 'google:gmail'
+          ? HELM_COPY.googleGmailReadOnly(name)
+          : HELM_COPY.googleConnectReadOnly(name)}
       </p>
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.googleConnectTesting(name)}
@@ -170,6 +177,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const [intro, setIntro] = useState<Intro | null>(() =>
     returned && 'error' in returned && !isPopupPage()
       ? {
+          connectorId: 'google:calendar',
           accountId: null,
           isAnotherAccount: false,
           failure:
@@ -188,6 +196,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     () => ({
       begin: (options: GoogleConnectOptions = {}) =>
         setIntro({
+          connectorId: options.connectorId ?? 'google:calendar',
           accountId: options.accountId ?? null,
           isAnotherAccount: options.isAnotherAccount ?? false,
           failure: null,
@@ -201,12 +210,25 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     setIntro(null);
     const hasGrant = grants.some(
       (grant) =>
-        grant.connectorId === 'google:calendar' &&
+        grant.connectorId === finished.connectorId &&
         grant.accountId === finished.accountId &&
         grant.status !== 'ended',
     );
     if (finished.hasLiveGrant || hasGrant) {
       addToast({ title: HELM_COPY.googleReconnected, type: 'success' });
+      return;
+    }
+    if (finished.connectorId === 'google:gmail') {
+      grantConnection({
+        readerAppId: 'helm',
+        connectorId: 'google:gmail',
+        accountId: finished.accountId,
+        categoryIds: ['mail'],
+        options: null,
+      }).catch((error: unknown) => {
+        console.error('Helm Gmail was not connected', error);
+        addToast({ title: HELM_COPY.gmailFailed, type: 'error' });
+      });
       return;
     }
     setPicker({ accountId: finished.accountId, mode: 'connect' });
@@ -215,6 +237,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const onReturnFailed = (error: unknown) => {
     console.error('Helm Google connection did not finish', error);
     setIntro({
+      connectorId: 'google:calendar',
       accountId: null,
       isAnotherAccount: false,
       failure: toFailureLine(error, name),
@@ -260,9 +283,13 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         isOpen={intro !== null}
         onClose={() => setIntro(null)}
         title={
-          intro?.accountId
-            ? HELM_COPY.googleReconnectTitle
-            : HELM_COPY.googleConnectTitle
+          intro?.connectorId === 'google:gmail'
+            ? intro.accountId
+              ? HELM_COPY.googleGmailReconnectTitle
+              : HELM_COPY.googleGmailTitle
+            : intro?.accountId
+              ? HELM_COPY.googleReconnectTitle
+              : HELM_COPY.googleConnectTitle
         }
       >
         {intro && (

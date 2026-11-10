@@ -117,6 +117,7 @@ export async function sendCapture(
     turnLeadId: turn.leadId,
     joinedCaptureIds: [],
     seenAt: createdAt,
+    quotedSourceKeys: [],
     createdAt,
     sortedAt: null,
     screen: turn.screen,

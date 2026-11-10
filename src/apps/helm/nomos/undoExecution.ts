@@ -38,6 +38,7 @@ export async function undoExecution(
   if (!navigator.onLine) return { kind: 'offline' };
   const executions = collection(userOf(uid), 'executions');
   const tasks = collection(userOf(uid), 'tasks');
+  const facts = collection(userOf(uid), 'facts');
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
@@ -51,16 +52,23 @@ export async function undoExecution(
           return { kind: 'refused', reason: 'missing', report: null };
         }
         const original = await openExecution(snapshot, read);
-        const docIds = [
-          ...new Set(original.effectRefs.map((ref) => ref.docId)),
+        const refs = [
+          ...new Map(
+            original.effectRefs.map((ref) => [ref.docId, ref]),
+          ).values(),
         ];
         const targets = new Map<string, UndoTarget>(
           await Promise.all(
-            docIds.map(async (docId): Promise<[string, UndoTarget]> => {
-              const entry = await transaction.get(doc(tasks, docId));
+            refs.map(async (ref): Promise<[string, UndoTarget]> => {
+              const { docId } = ref;
+              const isFact = ref.collection === 'facts';
+              const entry = await transaction.get(
+                doc(isFact ? facts : tasks, docId),
+              );
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
+              if (isFact) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
                   ? openJson<TaskSealed>(data.sealed as Sealed, encryption)
@@ -92,7 +100,9 @@ export async function undoExecution(
           plan.undoSealed,
           encryption,
         );
-        plan.deletes.forEach((docId) => transaction.delete(doc(tasks, docId)));
+        plan.deletes.forEach(({ docId, collection: from }) =>
+          transaction.delete(doc(from === 'facts' ? facts : tasks, docId)),
+        );
         plan.updates.forEach((update, index) =>
           transaction.update(doc(tasks, update.docId), {
             ...update.fields,

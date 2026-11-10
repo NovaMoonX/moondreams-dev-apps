@@ -5,6 +5,8 @@ export interface GoogleConnectOptions {
   accountId?: string | null;
   /** Adding another account: Google asks which one. */
   isAnotherAccount?: boolean;
+  /** What is being connected; Calendar when left out. */
+  connectorId?: 'google:calendar' | 'google:gmail';
 }
 
 export interface GoogleConnectValue {

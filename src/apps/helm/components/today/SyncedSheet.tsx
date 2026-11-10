@@ -1,4 +1,5 @@
 import DetailSheet from '@/components/DetailSheet';
+import { DiscrepancyBlock } from '@apps/helm/components/today/DiscrepancyLine';
 import SyncedSourceBlock from '@apps/helm/components/connections/SyncedSourceBlock';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import type { SyncedRecord } from '@apps/helm/types';
@@ -32,6 +33,7 @@ function SyncedSheet({ record, now, onClose }: SyncedSheetProps) {
               {record.sealed.detail}
             </p>
           )}
+          <DiscrepancyBlock record={record} />
           <SyncedSourceBlock
             record={record}
             appName={nameOf(record.connectorId)}

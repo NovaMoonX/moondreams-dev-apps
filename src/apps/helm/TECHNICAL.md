@@ -190,7 +190,7 @@ interface CaptureAnswer {
   quotes: AnswerQuote[];               // ≤5, copied by code from tool results
   searched: SearchedSource[];
 }
-interface AnswerQuote { id: string; connectorId: string; accountId: string; sourceLabel: string;
+interface AnswerQuote { id: string; connectorId: string; accountId: string; sourceLabel: string; at: number | null;
   text: string | null; deepLink: string | null; deletedAt: number | null; }
 interface SearchedSource { connectorId: string; accountId: string; label: string; at: number; found: number; failed: string | null; }
 interface CaptureReading { people: Token[]; places: Token[]; documents: Token[]; commands: Token[];

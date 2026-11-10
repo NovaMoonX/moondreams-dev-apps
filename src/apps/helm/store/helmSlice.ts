@@ -6,6 +6,7 @@ import type {
   HelmProfile,
   OpenCapture,
   OpenExecution,
+  OpenFact,
   OpenTask,
   SyncedRecord,
 } from '@apps/helm/types';
@@ -47,6 +48,8 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
+  /** The person's confirmed and inferred facts. */
+  facts: LoadedSet<OpenFact>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -82,6 +85,7 @@ const initialState: HelmState = {
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   openTasks: emptyLoadedSet,
+  facts: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -160,6 +164,12 @@ const helmSlice = createSlice({
     },
     setOpenTasksFailed: (state) => {
       state.openTasks.isFailed = true;
+    },
+    setFacts: (state, action: PayloadAction<OpenFact[]>) => {
+      state.facts = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setFactsFailed: (state) => {
+      state.facts.isFailed = true;
     },
     setSynced: (state, action: PayloadAction<SyncedRecord[]>) => {
       state.synced = {
@@ -261,6 +271,8 @@ export const {
   setWaitingCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
+  setFacts,
+  setFactsFailed,
   setSynced,
   setSyncedFailed,
   setRecentExecutions,

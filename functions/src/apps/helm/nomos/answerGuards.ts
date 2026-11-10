@@ -19,6 +19,7 @@ export interface AnswerQuote {
   connectorId: string;
   accountId: string;
   sourceLabel: string;
+  at: number | null;
   text: string | null;
   deepLink: string | null;
   deletedAt: number | null;
@@ -147,6 +148,7 @@ export function buildAnswer(
     connectorId: quote.connectorId,
     accountId: quote.accountId,
     sourceLabel: `Email from ${toSenderName(quote.from)}`,
+    at: quote.at,
     text: quote.snippet.slice(0, QUOTE_CAP),
     deepLink: quote.deepLink,
     deletedAt: null,

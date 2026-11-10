@@ -27,6 +27,8 @@ import type {
   Execution,
   ExecutionSealed,
   CaptureAnswer,
+  Fact,
+  FactSealed,
   ScreenContext,
   HelmEncryption,
   Task,
@@ -89,6 +91,20 @@ const GOOGLE_ACCOUNT_ID = `${GOOGLE_ACCOUNT_PREFIX}${createHash('sha256').update
 const GOOGLE_PRIMARY_CALENDAR = 'personal@example.com';
 const GOOGLE_SHIFTS_CALENDAR = 'shifts-personal@group.calendar.google.com';
 const CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const GOOGLE_CALENDAR_GRANT_ID = toGrantId(
+  'helm',
+  'google:calendar',
+  GOOGLE_ACCOUNT_ID,
+);
+const CAKE_SOURCE_REF = `${GOOGLE_PRIMARY_CALENDAR}|fx-cake-tasting`;
+const CAKE_COPY_ID = createHash('sha256')
+  .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${CAKE_SOURCE_REF}`)
+  .digest('hex')
+  .slice(0, 40);
+const CAKE_TITLE = 'Cake tasting at Sweet Layer Bakery';
+const CAKE_ZONE = 'America/Los_Angeles';
+const GMAIL_GATE_ID = 'google-mail-and-drive';
 
 type HandTask = {
   title: string;
@@ -380,7 +396,9 @@ async function buildUndone(input: {
   if (result.kind !== 'write')
     throw new Error('The seeded undo has no writes.');
   return {
-    tasks: tasks.filter(({ id }) => !result.deletes.includes(id)),
+    tasks: tasks.filter(
+      ({ id }) => !result.deletes.some((entry) => entry.docId === id),
+    ),
     original: { ...execution, undoneByExecutionId: undoId },
     undo: {
       id: undoId,
@@ -498,6 +516,7 @@ async function buildBackToBack(input: {
         turnLeadId: order === 0 ? null : leadId,
         joinedCaptureIds: order === 0 ? joinedIds : [],
         seenAt: createdAt,
+        quotedSourceKeys: [],
         createdAt,
         sortedAt,
         screen: null,
@@ -717,6 +736,178 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
   ];
 };
 
+const toCakeTimes = (now: number) => {
+  const date = new Date(getSeedToday(now) + 3 * DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  return {
+    startAt: zonedDateTimeToEpoch(date, '15:00', CAKE_ZONE),
+    endAt: zonedDateTimeToEpoch(date, '16:00', CAKE_ZONE),
+  };
+};
+
+/** A question the assistant answered by looking in Gmail: the quote, the search line, the fact it noted about the calendar copy of the tasting. */
+async function buildGmailTurn(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const { startAt } = toCakeTimes(now);
+  const createdAt = now - 24 * MINUTE_MS;
+  const sortedAt = createdAt + SORT_DELAY_MS;
+  const question = 'What time is the tasting?';
+  const factId = 'seed-fact-cake-time';
+  const executionId = 'seed-execution-answer-gmail';
+  const note = 'Noted the 2:00 PM on Cake tasting';
+  const answer: CaptureAnswer = {
+    ...EMPTY_ANSWER,
+    question,
+    scope: 'yourThings',
+    fromRecords:
+      "Your calendar has the cake tasting at 3:00 PM. An email from Sweet Layer Bakery says 2:00 PM, so it's worth checking with them.",
+    sources: [
+      {
+        kind: 'synced',
+        id: CAKE_COPY_ID,
+        connectorId: 'google:calendar',
+        title: CAKE_TITLE,
+        startAt,
+      },
+    ],
+    quotes: [
+      {
+        id: 'seed-quote-cake',
+        connectorId: 'google:gmail',
+        accountId: GOOGLE_ACCOUNT_ID,
+        sourceLabel: 'Email from Sweet Layer Bakery',
+        at: now - 2 * DAY_MS,
+        text: 'Your cake tasting is at 2:00 PM. See you then!',
+        deepLink:
+          'https://mail.google.com/mail/?authuser=personal@example.com#all/18f0c0de00000001',
+        deletedAt: null,
+      },
+    ],
+    searched: [
+      {
+        connectorId: 'google:gmail',
+        accountId: GOOGLE_ACCOUNT_ID,
+        label: `Gmail (${GOOGLE_PRIMARY_CALENDAR})`,
+        at: sortedAt,
+        found: 1,
+        failed: null,
+      },
+    ],
+  };
+  const capture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    ttsProvider: null,
+    medium: 'web',
+    sessionId: `seed-${uid}-answers`,
+    turnIndex: 6,
+    route: 'quick',
+    status: 'sorted',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {},
+    executionIds: [executionId],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    seenAt: createdAt + MINUTE_MS,
+    quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
+    createdAt,
+    sortedAt,
+    screen: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: question,
+        reading: readCapture(question, {
+          now: createdAt,
+          timeZone,
+          assistantName: DEFAULT_ASSISTANT_NAME,
+        }),
+        answer,
+      },
+      encryption,
+    ),
+  };
+  const execution: Execution = {
+    captureId: 'seed-turn-answer-gmail',
+    actor: 'nomos',
+    category: 'remember',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [{ op: 'create', collection: 'facts', docId: factId }],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: sortedAt,
+    decidedAt: sortedAt,
+    finishedAt: sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: toAnswerSummary(answer),
+        commands: [],
+        effects: [
+          {
+            written: {
+              'sealed.title': note,
+              status: 'inferred',
+              aboutField: 'startAt',
+            },
+            previous: null,
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+      },
+      encryption,
+    ),
+  };
+  const fact: Fact = {
+    status: 'inferred',
+    stated: 'nomosInferred',
+    sourceCaptureId: 'seed-turn-answer-gmail',
+    sourceExecutionId: executionId,
+    sourceConnection: {
+      connectorId: 'google:gmail',
+      accountId: GOOGLE_ACCOUNT_ID,
+      quoteId: 'seed-quote-cake',
+    },
+    aboutField: 'startAt',
+    whoIds: [],
+    placeIds: [],
+    projectIds: [],
+    syncedIds: [CAKE_COPY_ID],
+    subjectIds: [],
+    keptOverSource: null,
+    supersedesId: null,
+    supersededById: null,
+    supersededAt: null,
+    disputedWithId: null,
+    createdAt: sortedAt,
+    confirmedAt: null,
+    lastEditedAt: null,
+    sealed: await sealJson<FactSealed>(
+      {
+        statement: "Sweet Layer Bakery's email says the tasting is at 2:00 PM",
+        quote: 'Your cake tasting is at 2:00 PM.',
+        value: '2:00 PM',
+      },
+      encryption,
+    ),
+  };
+  return { capture, execution, executionId, fact, factId };
+}
+
 async function buildAnswerTurns(input: {
   uid: string;
   now: number;
@@ -752,6 +943,7 @@ async function buildAnswerTurns(input: {
         turnLeadId: null,
         joinedCaptureIds: [],
         seenAt: createdAt + MINUTE_MS,
+        quotedSourceKeys: [],
         createdAt,
         sortedAt,
         screen: null,
@@ -932,6 +1124,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             turnLeadId: null,
             joinedCaptureIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
+            quotedSourceKeys: [],
             createdAt: turnTime,
             sortedAt: isSorted ? sortedAt : null,
             screen: isMove ? MOVE_SCREEN : null,
@@ -1201,12 +1394,36 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       answerTurns.tasks.forEach((entry) =>
         batch.set(person.collection('tasks').doc(entry.id), entry.task),
       );
+      const gmailTurn =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildGmailTurn({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+      if (gmailTurn) {
+        batch.set(
+          person.collection('captures').doc('seed-turn-answer-gmail'),
+          gmailTurn.capture,
+        );
+        batch.set(
+          person.collection('executions').doc(gmailTurn.executionId),
+          gmailTurn.execution,
+        );
+        batch.set(
+          person.collection('facts').doc(gmailTurn.factId),
+          gmailTurn.fact,
+        );
+      }
       const backToBackCount =
         backToBack.captures.length +
         backToBack.tasks.length +
         1 +
         answerTurns.turns.length * 2 +
-        answerTurns.tasks.length;
+        answerTurns.tasks.length +
+        (gmailTurn ? 3 : 0);
       return (
         backToBackCount +
         turns.reduce(
@@ -1810,7 +2027,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     provider: 'google',
     email: GOOGLE_PRIMARY_CALENDAR,
     label: null,
-    grantedScopes: [CALENDAR_READ_SCOPE],
+    grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE],
     status: 'live',
     connectedAt,
     lastError: null,
@@ -1822,7 +2039,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     categories: { events: { isOn: true, changedAt: connectedAt } },
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
-    categoryState: { events: { lastOkAt: null, lastError: null, count: 0 } },
+    categoryState: {
+      events: { lastOkAt: syncedAt, lastError: null, count: 1 },
+    },
     errors: [],
     newCategoryIds: [],
     lastSyncAt: null,
@@ -1846,6 +2065,80 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     googleGrant,
   );
   batch.set(
+    alexConnections
+      .collection('grants')
+      .doc(toGrantId('helm', 'google:gmail', GOOGLE_ACCOUNT_ID)),
+    {
+      ...googleGrant,
+      connectorId: 'google:gmail',
+      categories: { mail: { isOn: true, changedAt: connectedAt } },
+      options: null,
+      categoryState: { mail: { lastOkAt: null, lastError: null, count: 0 } },
+      lastSyncAt: null,
+    } satisfies ConnectionGrant,
+  );
+  const cakeTimes = toCakeTimes(context.now);
+  const alexKey = deriveSeedDataKey(keyring, FIXTURE_USERS.partnerOne.uid);
+  batch.set(
+    users
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('synced')
+      .doc(CAKE_COPY_ID),
+    {
+      connectorId: googleConnectorId,
+      accountId: GOOGLE_ACCOUNT_ID,
+      grantId: GOOGLE_CALENDAR_GRANT_ID,
+      category: 'events',
+      kind: 'event',
+      sourceRef: CAKE_SOURCE_REF,
+      startAt: cakeTimes.startAt,
+      endAt: cakeTimes.endAt,
+      isAllDay: false,
+      dueAt: null,
+      calendarKey: `${GOOGLE_ACCOUNT_ID}/${GOOGLE_PRIMARY_CALENDAR}`,
+      isBusy: true,
+      sourceUpdatedAt: syncedAt - DAY_MS,
+      contentHash: `seed-${CAKE_COPY_ID}`,
+      syncedAt,
+      transformVersion: 1,
+      connectionEndedAt: null,
+      deleteAfter: null,
+      sealed: sealForHelm(
+        { ...alexKey, keyVersion: 1 },
+        {
+          title: CAKE_TITLE,
+          subtitle: null,
+          detail: null,
+          placeLabel: null,
+          amountCents: null,
+          currency: null,
+          deepLink: null,
+          extra: {
+            calendarId: GOOGLE_PRIMARY_CALENDAR,
+            isTentative: false,
+            isFree: false,
+          },
+        },
+      ),
+    },
+  );
+  batch.set(
+    context.firestore.doc('featureGates/helm'),
+    {
+      appId: 'helm',
+      gates: {
+        [GMAIL_GATE_ID]: {
+          rollout: 'testing',
+          alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
+          alwaysOffUids: [],
+          reason: 'Seeded: Alex tests Gmail',
+          updatedAt: context.now,
+        },
+      },
+    },
+    { merge: true },
+  );
+  batch.set(
     context.firestore
       .collection('connectionsServer')
       .doc(FIXTURE_USERS.partnerOne.uid)
@@ -1853,7 +2146,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       .doc(GOOGLE_ACCOUNT_ID),
     {
       isFixture: true,
-      grantedScopes: [CALENDAR_READ_SCOPE],
+      grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE],
       createdAt: connectedAt,
       lastRefreshedAt: null,
     },
@@ -1924,7 +2217,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
-      1,
+      1 +
+      3,
   };
   return result;
 }

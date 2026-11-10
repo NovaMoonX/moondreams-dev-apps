@@ -64,6 +64,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 /** How many earlier sessions each scroll up brings in. */
 /** The most open tasks the app keeps listening to. */
 export const OPEN_TASKS_LIMIT = 150;
+export const FACTS_LIMIT = 300;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
@@ -163,6 +164,7 @@ export const HELM_COPY = {
   resultTaskDue: (due: string) => `Task · ${due}`,
   resultDone: 'Marked done',
   resultTaskFallback: 'A task',
+  resultFactFallback: 'Something noted',
   aiNotice: (name: string) =>
     `${name} uses AI services to hear and read what you say.`,
   todayDueSoon: 'Due soon',
@@ -378,6 +380,15 @@ export const HELM_COPY = {
   googleStoppedTitle: 'Google stopped sharing',
   googleStoppedBody: (lastUpdated: string | null) =>
     `Google stopped sharing this account. While the app is private this can happen about once a week.${lastUpdated ? ` Last updated ${lastUpdated}.` : ''}`,
+  googleGmailName: 'Gmail',
+  googleGmailTitle: 'Connect Gmail',
+  googleGmailReconnectTitle: 'Reconnect Gmail',
+  googleGmailReadOnly: (name: string) =>
+    `${name} searches your Gmail only when a question needs it, and keeps only what an answer quotes. It can't send, label, archive or delete mail.`,
+  gmailRowTitle: 'Gmail',
+  gmailDisconnectNote:
+    'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
+  gmailFailed: "Gmail didn't turn on. Try again.",
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
@@ -487,6 +498,24 @@ export const HELM_COPY = {
   answerTaskGone: 'A task that is done or removed',
   answerSyncedGone: 'Something from a connected app that is no longer there',
   answerOpenSource: (title: string) => `Open ${title}`,
+  quoteFrom: (label: string, day: string | null) =>
+    day === null ? label : `${label} · ${day}`,
+  quoteOpen: 'Open in Gmail',
+  quoteDisconnected: 'This email was disconnected',
+  searchedLine: (where: string, when: string) =>
+    `Looked in ${where} ${when}. Only what this answer quotes is kept.`,
+  searchedJustNow: 'just now',
+  searchedFailed: (account: string, why: string) =>
+    `Couldn't look in ${account}: ${why}`,
+  searchedStopped: 'Google stopped sharing it',
+  discrepancyTwo: (isPlace: boolean, value: string) =>
+    `${isPlace ? 'Two places' : 'Two times'}: an email says ${value}`,
+  calendarIsRight: 'The calendar is right',
+  calendarRightStatement: (title: string) =>
+    `The calendar is right about ${title}`,
+  calendarRightDone: (value: string) => `You confirmed ${value}.`,
+  calendarRightFailed: "That didn't save. Try again.",
+  calendarRightChanged: 'That changed in the meantime.',
   sheetDayTime: (day: string, time: string) => `${day} ${time}`,
   whatTheAiSees: 'What the AI sees',
   whatTheAiSeesRowHint: 'What is sent and kept',

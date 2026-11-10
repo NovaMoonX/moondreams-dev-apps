@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Mail, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
@@ -11,6 +11,7 @@ import SectionHeader from '@/components/SectionHeader';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import {
+  grantConnection,
   syncConnections,
   updateConnection,
 } from '@/lib/connections/connectionCalls';
@@ -18,10 +19,12 @@ import {
   isOutsideAccount,
   readConnectorAppId,
 } from '@/lib/connections/contract';
+import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
@@ -43,6 +46,8 @@ interface ConnectionPageProps {
   /** Back to the list; also where a grant that is missing or has ended lands. */
   onBack: () => void;
 }
+
+const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 
 const without = <T,>(record: Record<string, T>, key: string) =>
   Object.fromEntries(Object.entries(record).filter(([id]) => id !== key));
@@ -81,6 +86,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
+  const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
+  const [isGmailWorking, setIsGmailWorking] = useState(false);
+  const [gmailFailure, setGmailFailure] = useState<string | null>(null);
+  const isGmailOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFailure, setSyncFailure] = useState<string | null>(null);
   const copyCount = grant ? getGrantCopyCount(grant) : 0;
@@ -99,8 +108,18 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const isGoogle = isOutsideAccount(grant.accountId);
   const account =
     accounts.find((entry) => entry.id === grant.accountId) ?? null;
+  const isGmailGrant = grant.connectorId === 'google:gmail';
+  const gmailGrant =
+    grants.find(
+      (entry) =>
+        entry.connectorId === 'google:gmail' &&
+        entry.accountId === grant.accountId,
+    ) ?? null;
+  const gmailCategory = GOOGLE_GMAIL_MANIFEST.categories[0];
   const appName = isGoogle
-    ? HELM_COPY.googleCalendarName
+    ? isGmailGrant
+      ? HELM_COPY.googleGmailName
+      : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
   const kinds = new Set(
@@ -142,6 +161,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         ),
       }));
     }
+  };
+
+  const turnGmailOn = async () => {
+    setGmailFailure(null);
+    if (!account?.grantedScopes.includes(GMAIL_SCOPE)) {
+      begin({ accountId: grant.accountId, connectorId: 'google:gmail' });
+      return;
+    }
+    setIsGmailWorking(true);
+    try {
+      await grantConnection({
+        readerAppId: 'helm',
+        connectorId: 'google:gmail',
+        accountId: grant.accountId,
+        categoryIds: ['mail'],
+        options: null,
+      });
+    } catch (error) {
+      console.error('Helm Gmail was not connected', error);
+      setGmailFailure(HELM_COPY.gmailFailed);
+    }
+    setIsGmailWorking(false);
   };
 
   const syncNow = async () => {
@@ -254,7 +295,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             onClick={() => setIsLabelOpen(true)}
             hasChevron
           />
-          {!hasStopped && (
+          {!hasStopped && !isGmailGrant && (
             <SettingsRow
               icon={<CalendarCheck className='size-5' aria-hidden='true' />}
               title={HELM_COPY.googleWhichCalendars}
@@ -266,6 +307,41 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             />
           )}
         </SettingsGroup>
+      )}
+      {isGoogle && !isGmailGrant && isGmailOpen && !hasStopped && (
+        <section className='flex flex-col gap-2'>
+          <label className='helm-card flex min-h-14 items-center gap-3 px-4 py-3'>
+            <Mail
+              className='text-muted-foreground size-5 shrink-0'
+              aria-hidden='true'
+            />
+            <span className='min-w-0 flex-1'>
+              <span className='text-foreground block text-[15px]'>
+                {HELM_COPY.gmailRowTitle}
+              </span>
+              <span className='text-muted-foreground block text-[13px] text-pretty'>
+                {gmailCategory?.detail}
+              </span>
+            </span>
+            {isOffline ? (
+              locked
+            ) : (
+              <AppToggle
+                aria-label={HELM_COPY.gmailRowTitle}
+                checked={gmailGrant !== null}
+                disabled={isGmailWorking}
+                onCheckedChange={(next) =>
+                  next ? void turnGmailOn() : setIsGmailDisconnectOpen(true)
+                }
+              />
+            )}
+          </label>
+          {gmailFailure && (
+            <p className='text-destructive text-[13px]' role='alert'>
+              {gmailFailure}
+            </p>
+          )}
+        </section>
       )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
@@ -404,10 +480,29 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               }
             : null
         }
+        extraLine={isGmailGrant ? HELM_COPY.gmailDisconnectNote : null}
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }
       />
+      {gmailGrant && (
+        <DisconnectSheet
+          isOpen={isGmailDisconnectOpen}
+          onClose={() => setIsGmailDisconnectOpen(false)}
+          grantId={gmailGrant.id}
+          appName={HELM_COPY.googleGmailName}
+          count={0}
+          accountName={account?.email ?? null}
+          extraLine={HELM_COPY.gmailDisconnectNote}
+          failureLine={(error) =>
+            failureLine(
+              error,
+              HELM_COPY.googleGmailName,
+              HELM_COPY.disconnectFailed,
+            )
+          }
+        />
+      )}
       {isGoogle && (
         <AccountLabelSheet
           isOpen={isLabelOpen}

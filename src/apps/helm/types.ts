@@ -134,6 +134,8 @@ export interface Capture {
   /** On a lead, the messages that joined it in order, at most 9. */
   joinedCaptureIds: string[];
   seenAt: number | null;
+  /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
+  quotedSourceKeys: string[];
   createdAt: number;
   sortedAt: number | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
@@ -176,6 +178,8 @@ export interface AnswerQuote {
   connectorId: string;
   accountId: string;
   sourceLabel: string;
+  /** When the quoted message was sent; null on quotes kept before it was recorded. */
+  at: number | null;
   text: string | null;
   deepLink: string | null;
   deletedAt: number | null;
@@ -287,7 +291,7 @@ export type AutonomyLevel = 1 | 2 | 3 | 4;
 export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
-  collection: string;
+  collection: 'tasks' | 'facts';
   docId: string;
 }
 
@@ -393,8 +397,58 @@ export interface SyncedRecord {
   sourceUpdatedAt: number | null;
   syncedAt: number;
   transformVersion: number;
+  /** What the copy said when it was last written; null on a copy made before it was kept. */
+  contentHash: string | null;
   /** Set when the connection ended and the copy was kept. */
   connectionEndedAt: number | null;
   deleteAfter: number | null;
   sealed: SyncedContent;
+}
+
+export type FactStatus = 'inferred' | 'confirmed' | 'superseded';
+export type FactStated = 'nomosInferred' | 'personCorrected';
+export type FactField = 'startAt' | 'endAt' | 'place';
+
+export interface Fact {
+  status: FactStatus;
+  stated: FactStated;
+  sourceCaptureId: string | null;
+  sourceExecutionId: string | null;
+  sourceConnection: {
+    connectorId: string;
+    accountId: string;
+    quoteId: string;
+  } | null;
+  aboutField: FactField | null;
+  whoIds: string[];
+  placeIds: string[];
+  projectIds: string[];
+  /** The synced copies the fact is about. */
+  syncedIds: string[];
+  subjectIds: string[];
+  /** Set when the person said the source is right, so the disagreement stops showing for that copy as it was. */
+  keptOverSource: { syncedId: string; contentHash: string } | null;
+  supersedesId: string | null;
+  supersededById: string | null;
+  supersededAt: number | null;
+  disputedWithId: null;
+  createdAt: number;
+  confirmedAt: number | null;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface FactSealed {
+  statement: string;
+  quote: string | null;
+  /** The shown text of what the fact says about its field, such as "2:00 PM". */
+  value: string | null;
+}
+
+/** A fact after its words are opened; one that would not open is left out. */
+export interface OpenFact extends Omit<Fact, 'sealed'> {
+  id: string;
+  statement: string;
+  quote: string | null;
+  value: string | null;
 }

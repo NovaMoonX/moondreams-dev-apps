@@ -4,6 +4,7 @@ import { CalendarDays, ChevronRight } from 'lucide-react';
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
+import DiscrepancyLine from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { SyncedRecord } from '@apps/helm/types';
 
@@ -58,6 +59,7 @@ export function SyncedCard({ record, onOpen }: SyncedCardProps) {
         <span className='text-muted-foreground block text-[13px] break-words'>
           {detail}
         </span>
+        <DiscrepancyLine record={record} />
       </span>
       <ChevronRight
         className='text-muted-foreground size-4 shrink-0'

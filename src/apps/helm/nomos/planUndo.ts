@@ -30,7 +30,7 @@ export type UndoRefusal =
 export type UndoPlan =
   | {
       kind: 'write';
-      deletes: string[];
+      deletes: { docId: string; collection: EffectRef['collection'] }[];
       updates: {
         docId: string;
         fields: Record<string, unknown>;
@@ -113,6 +113,9 @@ const toTitle = (target: UndoTarget, effects: ExecutionEffect[]) =>
     .map((effect) => effect.written['sealed.title'])
     .find((title): title is string => typeof title === 'string' && !!title) ||
   HELM_COPY.resultTaskFallback;
+
+const toCollectionOf = (original: OpenExecution) =>
+  new Map(original.effectRefs.map((ref) => [ref.docId, ref.collection]));
 
 /** Applies one update effect to the working copy; a path it didn't change (written equals previous) is a label and is neither compared nor restored. */
 const stepBack = (step: Step, effect: ExecutionEffect): Step => {
@@ -259,8 +262,7 @@ export function planUndo(input: {
   if (
     original.isUnreadable ||
     original.effectRefs.length > MAX_EFFECTS ||
-    original.effects.length !== original.effectRefs.length ||
-    original.effectRefs.some((ref) => ref.collection !== 'tasks')
+    original.effects.length !== original.effectRefs.length
   ) {
     return refuse('unreadable');
   }
@@ -295,8 +297,11 @@ export function planUndo(input: {
   }
 
   const report = HELM_COPY.undoReport(done.length, kept.length, gone);
+  const collectionOf = toCollectionOf(original);
   const deletes = done.flatMap(({ docId, outcome }) =>
-    outcome.kind === 'deleted' ? [docId] : [],
+    outcome.kind === 'deleted'
+      ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
+      : [],
   );
   const updates = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'restored'
@@ -315,7 +320,7 @@ export function planUndo(input: {
       state: 'succeeded',
       effectRefs: done.map(({ docId, outcome }) => ({
         op: outcome.kind === 'deleted' ? 'delete' : 'update',
-        collection: 'tasks',
+        collection: collectionOf.get(docId) ?? 'tasks',
         docId,
       })),
       undoesExecutionId: original.id,

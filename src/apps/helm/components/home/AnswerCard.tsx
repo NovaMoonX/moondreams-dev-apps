@@ -1,4 +1,6 @@
 import AnswerSources from '@apps/helm/components/home/AnswerSources';
+import QuoteLine from '@apps/helm/components/home/QuoteLine';
+import SearchedLine from '@apps/helm/components/home/SearchedLine';
 import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { CaptureAnswer } from '@apps/helm/types';
@@ -36,6 +38,21 @@ function AnswerCard({ answer, isInset = false }: AnswerCardProps) {
           {fromRecords !== null && (
             <AnswerSources sources={answer.sources} canOpen={isInset} />
           )}
+          {fromRecords !== null &&
+            (answer.quotes.length > 0 || answer.searched.length > 0) && (
+              <div className='divide-border border-border flex flex-col divide-y border-t'>
+                {answer.quotes.map((quote) => (
+                  <QuoteLine key={quote.id} quote={quote} />
+                ))}
+                {answer.searched.map((searched) => (
+                  <SearchedLine
+                    key={`${searched.connectorId}|${searched.accountId}`}
+                    searched={searched}
+                    canReconnect={isInset}
+                  />
+                ))}
+              </div>
+            )}
         </section>
       )}
       {general !== null && (
