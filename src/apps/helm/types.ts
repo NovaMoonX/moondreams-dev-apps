@@ -44,6 +44,8 @@ export interface HelmProfile {
   isHandsFreeOn: boolean;
   /** The line saying who hears what was shown. */
   hasSeenVoiceNotice: boolean;
+  /** The person's own who, made on first open; null on a profile from before people. */
+  selfWhoId: string | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -261,6 +263,81 @@ export interface Task {
   sealed: Sealed;
 }
 
+export type WhoKind = 'person' | 'pet' | 'organization';
+
+export type WhoTier = 'close' | 'regular' | 'passing';
+
+/** `apps/helm/users/{uid}/who/{whoId}`: a person, pet or organization, made on first mention. */
+export interface Who {
+  kind: WhoKind;
+  tier: WhoTier;
+  /** The assistant never changes a tier the person set. */
+  tierSetBy: 'person' | 'nomos';
+  isSelf: boolean;
+  placeIds: string[];
+  photoMediaId: string | null;
+  mediaIds: string[];
+  importedFrom: {
+    connectorId: 'google:contacts';
+    accountId: string;
+    resourceName: string;
+    importedAt: number;
+  } | null;
+  importedFields: Record<string, string>;
+  /** The newest capture that named it. */
+  lastMentionedAt: number | null;
+  yearlyDateCount: number;
+  momentCount: number;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface WhoSealed {
+  name: string;
+  aliases: string[];
+  /** "my sister", "our vet clinic". */
+  relation: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  /** Pets only ("Cat"). */
+  species: string | null;
+  /** Organizations only ("Bakery"). */
+  organizationKind: string | null;
+}
+
+/** A who after its words are opened; one that would not open keeps `isUnreadable` and an empty name. */
+export interface OpenWho extends Omit<Who, 'sealed'>, WhoSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+/** `apps/helm/users/{uid}/places/{placeId}`: a place named in a turn; never coordinates. */
+export interface Place {
+  isHome: boolean;
+  photoMediaIds: string[];
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface PlaceSealed {
+  name: string;
+  aliases: string[];
+  address: string | null;
+  notes: string | null;
+}
+
+export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
 export interface TaskSealed {
   title: string;
   notes: string | null;
@@ -293,7 +370,7 @@ export type AutonomyLevel = 1 | 2 | 3 | 4;
 export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
-  collection: 'tasks' | 'facts';
+  collection: 'tasks' | 'facts' | 'who' | 'places';
   docId: string;
 }
 
