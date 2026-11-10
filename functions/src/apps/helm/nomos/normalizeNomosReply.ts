@@ -225,16 +225,19 @@ const readNoteFact = (
 ): NoteFactCommand | null => {
   const statement = toText(item.statement, STATEMENT_CAP);
   if (!statement) return null;
+  const kind = FACT_KINDS.find((entry) => entry === item.factKind) ?? 'world';
   return {
     statement,
     quote: toText(item.quote, FACT_QUOTE_CAP),
     isStated: item.isStated === true,
     whoRefs: toRefs(item.whoRefs, entities.whoRefs),
     placeRefs: toRefs(item.placeRefs, entities.placeRefs),
-    kind: FACT_KINDS.find((entry) => entry === item.factKind) ?? 'world',
+    kind,
     topic: toText(item.topic, TOPIC_CAP),
     value: toText(item.value, VALUE_CAP),
-    isSensitive: item.isSensitive === true,
+    isSensitive:
+      item.isSensitive === true ||
+      (item.isSensitive == null && kind === 'identity'),
     isAboutMe: item.isAboutMe === true,
   };
 };

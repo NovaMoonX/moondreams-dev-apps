@@ -481,8 +481,10 @@ interface ListedSelfFact {
 /** "Where should I get gas?" answered from the person's own preference on that topic, or plainly not known yet; null for any other question. */
 function readSelfAnswer(question: string, words: string[], message: string) {
   const asked = /^where should i get (\p{L}+)/iu.exec(question);
+  if (!asked) return null;
   const own = (readBlock<ListedSelfFact[]>(message, 'about_you') ?? []).find(
     (fact) =>
+      fact.kind === 'preference' &&
       fact.value !== null &&
       (fact.topic ?? '')
         .split(' ')
@@ -499,13 +501,11 @@ function readSelfAnswer(question: string, words: string[], message: string) {
       sourceAliases: [own.alias],
     });
   }
-  return asked
-    ? toAnswer({
-        scope: 'theWorld',
-        question,
-        generalText: `I don't know where you like to get ${asked[1].toLowerCase()} yet.`,
-      })
-    : null;
+  return toAnswer({
+    scope: 'theWorld',
+    question,
+    generalText: `I don't know where you like to get ${asked[1].toLowerCase()} yet.`,
+  });
 }
 
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */

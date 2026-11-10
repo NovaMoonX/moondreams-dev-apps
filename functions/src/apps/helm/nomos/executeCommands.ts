@@ -544,10 +544,7 @@ export function planWrites(input: PlanInput): WritePlan {
       const isSure =
         fact.whoRefs.every((ref) => entities.whoIdOf.has(ref)) &&
         fact.placeRefs.every((ref) => entities.placeIdOf.has(ref));
-      const isAboutSelf =
-        fact.isAboutMe ||
-        (fact.kind !== 'world' &&
-          fact.whoRefs.length + fact.placeRefs.length === 0);
+      const isAboutSelf = fact.isAboutMe;
       if (isAboutSelf && !selfWhoId) return acc;
       const whoIds = union(
         idsOf(fact.whoRefs, entities.whoIdOf),
@@ -711,7 +708,7 @@ export function planWrites(input: PlanInput): WritePlan {
   );
   const factCreates = factSteps.creates;
   const factConfirms = factSteps.confirms;
-  const notKept = factSteps.notKept;
+  const notKept = [...new Set(factSteps.notKept)];
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';

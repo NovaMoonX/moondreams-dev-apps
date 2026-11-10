@@ -103,12 +103,15 @@ function SelfFactAddForm({
 
   return (
     <div className='space-y-4'>
-      <PillGroup
-        label={HELM_COPY.seesYouKindField}
-        options={KINDS}
-        value={kind}
-        onChange={setKind}
-      />
+      <div className='space-y-1.5'>
+        <p className='text-sm font-medium'>{HELM_COPY.seesYouKindField}</p>
+        <PillGroup
+          label={HELM_COPY.seesYouKindField}
+          options={KINDS}
+          value={kind}
+          onChange={setKind}
+        />
+      </div>
       <div className='space-y-1.5'>
         <label htmlFor={`${fieldId}-statement`} className='text-sm font-medium'>
           {HELM_COPY.seesYouStatementField}
@@ -121,7 +124,9 @@ function SelfFactAddForm({
           autoFocus={canFocusFieldOnOpen()}
           onChange={(event) => {
             setStatement(event.target.value);
-            onDirtyChange(event.target.value.trim() !== '');
+            onDirtyChange(
+              event.target.value.trim() !== '' || topic.trim() !== '',
+            );
           }}
         />
         <p className='text-muted-foreground text-[13px] text-pretty'>
@@ -138,7 +143,12 @@ function SelfFactAddForm({
             value={topic}
             maxLength={TOPIC_MAX}
             placeholder={HELM_COPY.seesYouTopicPlaceholder}
-            onChange={(event) => setTopic(event.target.value)}
+            onChange={(event) => {
+              setTopic(event.target.value);
+              onDirtyChange(
+                statement.trim() !== '' || event.target.value.trim() !== '',
+              );
+            }}
           />
           {suggestions.length > 0 && (
             <SuggestionChips

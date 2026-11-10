@@ -30,7 +30,9 @@ function InferredFacts({ onClose }: InferredFactsProps) {
       )
       .sort((a, b) => b.createdAt - a.createdAt);
   }, [facts, who, places]);
+  const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
   const subjectOf = (subjectIds: string[]) => {
+    if (selfWhoId && subjectIds.includes(selfWhoId)) return HELM_COPY.youLabel;
     const found = [...who, ...places].find(
       (entry) => subjectIds.includes(entry.id) && !entry.isUnreadable,
     );

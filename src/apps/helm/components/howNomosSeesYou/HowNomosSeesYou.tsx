@@ -66,7 +66,7 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
               type='button'
               variant='secondary'
               size='sm'
-              className="relative mt-1 shrink-0 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              className="relative mt-1 shrink-0 whitespace-nowrap after:absolute after:-inset-y-1.5 after:content-['']"
               onClick={() => setIsAdding(true)}
             >
               {HELM_COPY.seesYouAdd}

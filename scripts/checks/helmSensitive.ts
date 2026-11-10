@@ -7,6 +7,8 @@ import {
 } from '../../functions/src/apps/helm/helmKey.ts';
 import type { NoteFactCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { planWrites } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { shouldKeepSensitive } from '../../functions/src/apps/helm/nomos/sensitive.ts';
 
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
@@ -154,7 +156,7 @@ test('a fact about the person with no self who is dropped without a line', () =>
   assert.equal(made.notKept.length, 0);
 });
 
-test('a preference with no one named is about the person, and its topic files under the one already used', () => {
+test('a preference the person states about themself, and its topic files under the one already used', () => {
   const made = plan(
     [
       fact({
@@ -163,7 +165,7 @@ test('a preference with no one named is about the person, and its topic files un
         kind: 'preference',
         topic: 'gas stations',
         value: 'Shell',
-        isAboutMe: false,
+        isAboutMe: true,
       }),
     ],
     {
@@ -177,6 +179,48 @@ test('a preference with no one named is about the person, and its topic files un
   const words = openForHelm(KEY, data.sealed as SealedPayload);
   assert.equal(words.topic, 'gas station');
   assert.equal(words.value, 'Shell');
+});
+
+test('an identity fact with no one named and not about the person is dropped without a line', () => {
+  const made = plan([fact({ isAboutMe: false })]);
+  assert.equal(made.factCreates.length, 0);
+  assert.equal(made.notKept.length, 0);
+});
+
+test('an identity fact with sensitivity missing reads as sensitive; other kinds and an explicit false do not', () => {
+  const read = (extra: Record<string, unknown>) =>
+    normalizeNomosReply(
+      {
+        commands: [
+          {
+            kind: 'noteFact',
+            statement: 'Is vegan',
+            quote: 'I am vegan',
+            isStated: true,
+            whoRefs: [],
+            placeRefs: [],
+            isAboutMe: true,
+            ...extra,
+          },
+        ],
+      },
+      {
+        reading: {
+          people: [],
+          places: [],
+          documents: [],
+          commands: [],
+          isUrgent: false,
+          dates: [],
+          addressedAs: null,
+        },
+        aliases: createAliasBook('t'),
+      },
+    ).noteFacts[0].isSensitive;
+  assert.equal(read({ factKind: 'identity' }), true);
+  assert.equal(read({ factKind: 'identity', isSensitive: null }), true);
+  assert.equal(read({ factKind: 'identity', isSensitive: false }), false);
+  assert.equal(read({ factKind: 'preference' }), false);
 });
 
 test('a new topic is written in lowercase', () => {

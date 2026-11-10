@@ -38,6 +38,9 @@ const toTopicGroups = (facts: OpenFact[]) => {
     );
 };
 
+const toCapitalized = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
 /** One kind of fact about the person under its divider, each row opening the fact. */
 function FactKindGroup({
   label,
@@ -58,8 +61,8 @@ function FactKindGroup({
       {groups.map((group) => (
         <div key={group.topic} className='space-y-1.5'>
           {group.topic !== '' && (
-            <p className='text-muted-foreground px-1 text-[13px] break-words'>
-              {group.topic}
+            <p className='text-muted-foreground px-4 text-[13px] break-words'>
+              {toCapitalized(group.topic)}
             </p>
           )}
           <ul className='helm-card divide-border divide-y overflow-hidden'>
