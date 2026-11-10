@@ -1709,6 +1709,23 @@ assert.equal(
   'below the range is not placed',
 );
 assert.equal(readNumberOf(count, 'a few'), null, 'no number is not placed');
+assert.equal(readNumberOf(count, '4'), 4, 'bare digits');
+assert.equal(readNumberOf(count, 'four nights'), 4, 'a number word and a unit');
+assert.equal(
+  readNumberOf(count, 'I think we need 4 of them'),
+  null,
+  'a number inside a sentence is not an answer',
+);
+assert.equal(
+  readNumberOf(count, 'remind me at 5 to call Dana'),
+  null,
+  'a number in another request is not placed',
+);
+assert.equal(
+  readNumberOf(count, 'two fifty'),
+  null,
+  'spoken hundreds are refused, not misread as 52',
+);
 const money = asking({
   shape: 'number',
   number: { min: 0, max: 1_000_000, isMoney: true },
@@ -1724,6 +1741,13 @@ assert.equal(
   'dollars and cents',
 );
 assert.equal(readNumberOf(money, '$12.50'), 1250, 'a typed amount');
+assert.equal(readNumberOf(money, '$20'), 2000, 'a dollar sign');
+assert.equal(readNumberOf(money, 'twenty dollars'), 2000, 'twenty dollars');
+assert.equal(
+  readNumberOf(money, 'I paid about 20 dollars for the taxi'),
+  null,
+  'an amount inside a sentence is not placed',
+);
 assert.equal(
   readNumberOf(money, 'a hundred dollars'),
   10000,

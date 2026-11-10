@@ -47,7 +47,10 @@ import {
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
-import { sendQuestionAnswer } from '@apps/helm/store/actions/questionActions';
+import {
+  isAnswerInFlight,
+  sendQuestionAnswer,
+} from '@apps/helm/store/actions/questionActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import {
   selectAllCaptures,
@@ -75,6 +78,7 @@ import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 const NOTE_MS = 6000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
 const OFFLINE_WAIT_MS = 20_000;
+const ASK_AGAIN_MAX_WORDS = 3;
 
 const mintVoiceToken = httpsCallable<
   MintVoiceTokenRequest,
@@ -270,19 +274,20 @@ export function useHelmVoice() {
     const state = store.getState();
     const all = selectAllCaptures(state);
     const sessionId = getOpenSessionId(all, now);
-    const asked = all
-      .filter(
-        (capture) =>
-          capture.sessionId === sessionId &&
-          capture.inputMode === 'voice' &&
-          capture.status === 'needsYou',
-      )
+    const latest = all
+      .filter((capture) => capture.sessionId === sessionId)
       .reverse()
-      .flatMap((capture) =>
-        getOpenQuestions(capture)
-          .filter((entry) => entry.skippedAt === null)
-          .map((entry) => ({ captureId: capture.id, ...entry })),
-      )[0];
+      .find((capture) => capture.answersQuestion === null);
+    const asked =
+      latest?.inputMode === 'voice' && latest.status === 'needsYou'
+        ? getOpenQuestions(latest)
+            .filter(
+              (entry) =>
+                entry.skippedAt === null &&
+                !isAnswerInFlight(latest.id, entry.id),
+            )
+            .map((entry) => ({ captureId: latest.id, ...entry }))[0]
+        : undefined;
     if (!uid || !asked) return false;
     const { question } = asked;
     const askedKey = `${asked.captureId}:${asked.id}`;
@@ -307,18 +312,29 @@ export function useHelmVoice() {
       }
       return true;
     }
-    if (question.builtBy === 'model') {
-      return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
-    }
-    if (answer?.value.shape !== 'pickOne') {
-      if (askedAgain.current.has(askedKey)) return false;
+    const isModel = question.builtBy === 'model';
+    const optionId =
+      answer?.value.shape === 'pickOne' ? answer.value.optionId : null;
+    if (isModel ? answer === null : optionId === null) {
+      const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
+      if (!isShort || askedAgain.current.has(askedKey)) return false;
       askedAgain.current.add(askedKey);
-      say(buildAskAgainLine(question));
+      say(
+        question.options.some(
+          (option) => option.id !== 'none' && option.id !== 'new',
+        )
+          ? buildAskAgainLine(question)
+          : buildSpokenQuestion(question),
+      );
       return true;
     }
+    if (isModel) {
+      return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
+    }
+    if (optionId === null) return false;
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: 'voice',
-      optionId: answer.value.optionId,
+      optionId,
     });
     if (result.kind === 'done') {
       say(
@@ -519,7 +535,9 @@ export function useHelmVoice() {
         const missing = capture.executionIds.filter(
           (id) => !executionsById.has(id) && !failedIds.includes(id),
         );
-        if (capture.status === 'sorted' && missing.length > 0) {
+        const isSettledWithLines =
+          capture.status === 'sorted' || capture.status === 'needsYou';
+        if (isSettledWithLines && missing.length > 0) {
           void loadExecutionsById(uid, missing);
           return;
         }
@@ -528,12 +546,12 @@ export function useHelmVoice() {
           store.getState().helm.profile?.timeZone ??
           getDeviceTimeZone() ??
           'UTC';
-        const spoken =
-          capture.status === 'sorted'
-            ? (capture.executionIds
-                .flatMap((id) => executionsById.get(id) ?? [])
-                .find((execution) => execution.spoken !== null)?.spoken ?? null)
-            : null;
+        const spoken = isSettledWithLines
+          ? (capture.executionIds
+              .flatMap((id) => executionsById.get(id) ?? [])
+              .find((execution) => execution.spoken !== null)?.spoken ??
+            capture.line)
+          : null;
         const answered = afterAnswer.current.get(leadId);
         afterAnswer.current.delete(leadId);
         const reply =

@@ -42,7 +42,7 @@ export type SpokenAnswer =
   { kind: 'skip' } | { kind: 'answer'; value: SpokenAnswerValue };
 
 export interface ReadSpokenAnswerOptions {
-  /** Reads a date and a time out of words; the caller owns how a day is meant ("Friday"). `date` is UTC midnight, `time` a floating "HH:mm". */
+  /** Reads a date and a time out of words; how a day is meant ("Friday") is up to the reader. `date` is UTC midnight, `time` a floating "HH:mm". */
   readDate?: (
     text: string,
   ) => { date: number | null; time: string | null } | null;
@@ -259,22 +259,41 @@ const readFraction = (
   return { value, end };
 };
 
-/** The first number in what was said, in digits or words ("twenty five", "a hundred and two", "two and a half", "3.5"). */
+/** Number words that read as one number: "two fifty" and "twenty twenty" are not. */
+const isSpokenRun = (run: string[]) => {
+  const words = run.filter((word) => word !== 'a' && word !== 'and');
+  return words.every((word, index) => {
+    const previous = words[index - 1];
+    if (previous === undefined || previous in SCALES || word in SCALES) {
+      return true;
+    }
+    return previous in TENS && word in UNITS && UNITS[word] < 10;
+  });
+};
+
+const readLeadingNumber = (tokens: string[]) => {
+  const [first] = tokens;
+  if (isDigits(first)) return readFraction(tokens, Number(first), 1);
+  const startsNumber =
+    isNumberWord(first) || (first === 'a' && tokens[1] in SCALES);
+  if (!startsNumber) return null;
+  const end = getRunEnd(tokens, 0);
+  const run = tokens.slice(0, end);
+  return isSpokenRun(run)
+    ? readFraction(tokens, foldNumberWords(run), end)
+    : null;
+};
+
+/** The number that is the whole answer, in digits or words ("twenty five", "a hundred and two", "two and a half", "3.5"), after filler words and with at most one word after it for its unit ("four nights"). A sentence that only contains a number is `null`. */
 const readNumber = (text: string): number | null => {
-  const tokens = toWords(text).split(' ');
-  const start = tokens.findIndex(
-    (token, index) =>
-      isDigits(token) ||
-      isNumberWord(token) ||
-      (token === 'a' && tokens[index + 1] in SCALES),
-  );
-  if (start === -1) return null;
-  const run = tokens.slice(start);
-  if (isDigits(run[0])) {
-    return readFraction(run, Number(run[0]), 1).value;
-  }
-  const end = getRunEnd(run, 0);
-  return readFraction(run, foldNumberWords(run.slice(0, end)), end).value;
+  const tokens = stripFiller(toWords(text)).split(' ');
+  const read = readLeadingNumber(tokens);
+  if (!read) return null;
+  const rest = tokens.slice(read.end);
+  const isUnitOnly =
+    rest.length === 0 ||
+    (rest.length === 1 && /^[a-z]+$/.test(rest[0]) && !isNumberWord(rest[0]));
+  return isUnitOnly ? read.value : null;
 };
 
 const readMoneyCents = (text: string): number | null => {

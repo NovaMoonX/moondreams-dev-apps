@@ -36,10 +36,22 @@ const toSpokenQuestion = (question: HelmQuestion): SpokenQuestion => ({
   dateMode: question.dateMode,
 });
 
+const DATE_LEAD_WORDS = new Set(
+  'on at by for the its it s is please maybe um uh around about till until'.split(
+    ' ',
+  ),
+);
+
 const toDateReader =
   (context: { now: number; timeZone: string }) => (text: string) => {
     const [first] = parseNaturalDate(text, context);
     if (!first) return null;
+    const leftover = `${text.slice(0, first.start)} ${text.slice(first.end)}`
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter((word) => word !== '' && !DATE_LEAD_WORDS.has(word));
+    if (leftover.length > 0) return null;
     return first.due.kind === 'day'
       ? { date: first.due.date, time: null }
       : {
