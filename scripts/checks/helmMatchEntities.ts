@@ -29,7 +29,7 @@ const who = (
   kind: KnownWho['kind'],
   name: string,
   aliases: string[] = [],
-): KnownWho => ({ id, kind, name, aliases });
+): KnownWho => ({ id, kind, name, aliases, lastMentionedAt: null });
 
 const person = (name: string) => ({ name, kind: 'person' as const });
 const kindsOf = (results: { kind: string }[]) =>

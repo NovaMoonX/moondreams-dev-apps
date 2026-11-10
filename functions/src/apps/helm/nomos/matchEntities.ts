@@ -6,6 +6,7 @@ export interface KnownWho {
   kind: MentionKind;
   name: string;
   aliases: string[];
+  lastMentionedAt: number | null;
 }
 
 export interface KnownPlace {
@@ -25,6 +26,7 @@ interface Named {
   id: string;
   name: string;
   aliases: string[];
+  lastMentionedAt?: number | null;
 }
 
 type Matcher = ReturnType<typeof createOptionMatcher<Named>>;
@@ -66,12 +68,18 @@ const rankCandidates = (
             id: option.id,
             index,
             rank: option.id === sureId ? Infinity : shared,
+            recency: option.lastMentionedAt ?? -Infinity,
           },
         ]
       : [];
   });
   return scored
-    .sort((left, right) => right.rank - left.rank || left.index - right.index)
+    .sort(
+      (left, right) =>
+        right.rank - left.rank ||
+        right.recency - left.recency ||
+        left.index - right.index,
+    )
     .slice(0, MAX_CANDIDATES)
     .map(({ id }) => id);
 };

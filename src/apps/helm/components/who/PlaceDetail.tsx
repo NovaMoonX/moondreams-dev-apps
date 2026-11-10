@@ -13,6 +13,10 @@ import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { forgetPlace } from '@apps/helm/store/actions/placeActions';
+import {
+  countLinkedTasks,
+  ForgetPartialError,
+} from '@apps/helm/store/actions/whoActions';
 
 const { option } = DropdownMenuFactories;
 
@@ -58,9 +62,21 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
       addToast({ title: HELM_COPY.forgetNeedsConnection, type: 'info' });
       return;
     }
+    const linkedCount = await countLinkedTasks(
+      user.uid,
+      'places',
+      place.id,
+    ).catch((error: unknown) => {
+      console.error('Helm links were not counted', error);
+      return null;
+    });
+    if (linkedCount === null) {
+      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+      return;
+    }
     const isConfirmed = await confirm({
       title: HELM_COPY.whoForgetMenu(place.name),
-      message: HELM_COPY.forgetConfirmPlace(place.name, tasks.length),
+      message: HELM_COPY.forgetConfirmPlace(place.name, linkedCount),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
     });
@@ -89,7 +105,13 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
       });
     } catch (error) {
       console.error('Helm place was not forgotten', error);
-      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+      addToast({
+        title:
+          error instanceof ForgetPartialError
+            ? HELM_COPY.forgetPartial(place.name)
+            : HELM_COPY.forgetFailed,
+        type: 'error',
+      });
     }
   };
 

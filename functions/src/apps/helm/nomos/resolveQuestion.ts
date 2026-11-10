@@ -9,7 +9,7 @@ import {
   type QuestionStateEntry,
 } from './executeCommands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
-import { getDayIn } from './spoken.js';
+import { getDayIn, toKnownZone } from './spoken.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
 
 export interface ResolveTask {
@@ -24,6 +24,7 @@ export interface ResolveInput {
   optionId: string;
   by: 'tap' | 'voice';
   now: number;
+  timeZone: string;
   executionId: string;
   capture: {
     status: string;
@@ -74,6 +75,15 @@ const isOption = (value: unknown): value is PickOption =>
 const isRecordOption = (optionId: string) =>
   optionId !== 'new' && optionId !== 'none';
 
+const hasNewDetails = (held: Record<string, unknown>, isPlace: boolean) =>
+  isPlace
+    ? isRecord(held.place) &&
+      typeof held.place.name === 'string' &&
+      held.place.name.trim() !== ''
+    : isRecord(held.mention) &&
+      typeof held.mention.name === 'string' &&
+      held.mention.name.trim() !== '';
+
 /** Decides what answering a "which one?" question writes, without touching a database: a pick links the held tasks, "new" makes the person or place first, "none" links nothing, and an answered or unknown question is refused. */
 export function planResolve(
   input: ResolveInput,
@@ -96,6 +106,9 @@ export function planResolve(
     return { refused: 'unknown' };
   }
   const isPlace = held.kind === 'linkPlace';
+  if (optionId === 'new' && !hasNewDetails(held, isPlace)) {
+    return { refused: 'unknown' };
+  }
   if (isRecordOption(optionId) && !input.chosen) return { refused: 'gone' };
 
   const field = isPlace ? 'placeIds' : 'whoIds';
@@ -137,7 +150,9 @@ export function planResolve(
   }));
 
   const isNew = isLinking && optionId === 'new';
-  const dayKey = String(getDayIn(capture.createdAt, 'UTC'));
+  const dayKey = String(
+    getDayIn(capture.createdAt, toKnownZone(input.timeZone)),
+  );
   const newTier = readWhoTier({
     tier: 'passing',
     tierSetBy: 'nomos',
@@ -304,7 +319,8 @@ export function planResolve(
             },
           },
         },
-        status: isOpen ? capture.status : 'sorted',
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
         ...(targetId &&
           !isPlace && { whoIds: union(capture.whoIds, [targetId]) }),
         ...(targetId &&

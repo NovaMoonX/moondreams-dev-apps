@@ -40,9 +40,7 @@ const toRefusal = (refusal: ResolveRefusal, isPlace: boolean) =>
       ? new HttpsError('invalid-argument', 'That answer is not valid.')
       : new HttpsError(
           'failed-precondition',
-          isPlace
-            ? 'That place was removed.'
-            : 'That person was removed.',
+          isPlace ? 'That place was removed.' : 'That person was removed.',
         );
 
 const openOrRefuse = (
@@ -108,7 +106,10 @@ export const resolveHelmQuestion = onCall(
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
 
     return firestore.runTransaction(async (transaction) => {
-      const captureSnap = await transaction.get(captureRef);
+      const [captureSnap, profileSnap] = await Promise.all([
+        transaction.get(captureRef),
+        transaction.get(firestore.doc(base)),
+      ]);
       const capture = captureSnap.data() as CaptureDoc | undefined;
       if (!capture) throw new HttpsError('not-found', 'This capture is gone.');
       const opened = openOrRefuse(key, capture.sealed);
@@ -168,6 +169,7 @@ export const resolveHelmQuestion = onCall(
         optionId,
         by,
         now: Date.now(),
+        timeZone: (profileSnap.data()?.timeZone as string | undefined) ?? 'UTC',
         executionId: executionRef.id,
         capture: {
           status: capture.status,

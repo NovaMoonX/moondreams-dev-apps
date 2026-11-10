@@ -47,6 +47,7 @@ const who = (
   kind,
   name,
   aliases: [],
+  lastMentionedAt: null,
   tier: 'passing',
   tierSetBy: 'nomos',
   mentionDayKeys: [],
@@ -315,6 +316,7 @@ const resolveInput = (
   optionId,
   by: 'tap',
   now: 9000,
+  timeZone: 'UTC',
   executionId: 'e9',
   capture: {
     status: 'needsYou',
@@ -479,6 +481,48 @@ test('answering one of two questions leaves the capture needing you', () => {
     skippedAt: null,
   };
   assert.equal(planned(input).capture.status, 'needsYou');
+});
+
+test('the last answer on a capture another device re-sorted keeps its status', () => {
+  const input = resolveInput('w1');
+  input.capture.status = 'interpreting';
+  assert.equal(planned(input).capture.status, 'interpreting');
+  assert.equal(planned(resolveInput('w1')).capture.status, 'sorted');
+});
+
+test('"new" with no held name is refused as unknown', () => {
+  const noMention = resolveInput('new');
+  const question = heldQuestion();
+  question.heldCommands = [{ kind: 'linkWho', taskIds: ['t1'] } as never];
+  noMention.opened = { text: 'x', questions: { q1: question } };
+  assert.equal(planResolve(noMention).refused, 'unknown');
+  const noPlace = resolveInput('new');
+  const placeQuestion = heldQuestion('whichPlace');
+  placeQuestion.heldCommands = [
+    { kind: 'linkPlace', taskIds: ['t1'], place: {} } as never,
+  ];
+  noPlace.opened = { text: 'x', questions: { q1: placeQuestion } };
+  assert.equal(planResolve(noPlace).refused, 'unknown');
+});
+
+test('equally close candidates rank the most recently mentioned first', () => {
+  const result = plan(
+    {
+      mentions: [mention('$w1', 'Sam')],
+      known: [
+        who('w1', 'person', 'Sam Rivera', { lastMentionedAt: 100 }),
+        who('w2', 'person', 'Sam Patel', { lastMentionedAt: 900 }),
+        who('w3', 'person', 'Sam Lee', { lastMentionedAt: null }),
+      ],
+    },
+    [task('Call Sam', { whoRefs: ['$w1'] })],
+  );
+  const options = (result.questions[0].sealed as { options: { id: string }[] })
+    .options;
+  assert.deepEqual(
+    options.slice(0, 3).map((option) => option.id),
+    ['w2', 'w1', 'w3'],
+  );
 });
 
 const failures: string[] = [];

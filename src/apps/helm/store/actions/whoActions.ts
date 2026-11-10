@@ -5,6 +5,7 @@ import {
   doc,
   type DocumentData,
   getDoc,
+  getCountFromServer,
   getDocs,
   query,
   runTransaction,
@@ -83,11 +84,16 @@ export async function updateWho(
   }
 }
 
-/** A level the person picks is theirs: the assistant never changes it after. */
-export const setWhoTier = (uid: string, whoId: string, tier: WhoTier) =>
+/** A level the person picks is theirs: the assistant never changes it after. Undo writes the earlier level back with whoever set it. */
+export const setWhoTier = (
+  uid: string,
+  whoId: string,
+  tier: WhoTier,
+  tierSetBy: Who['tierSetBy'] = 'person',
+) =>
   updateDoc(doc(userOf(uid), 'who', whoId), {
     tier,
-    tierSetBy: 'person',
+    tierSetBy,
     lastEditedAt: Date.now(),
   });
 
@@ -115,6 +121,13 @@ export interface ForgetCounts {
   who: number;
 }
 
+/** The links already taken could not all be put back after a failure, so some may be gone. */
+export class ForgetPartialError extends Error {
+  constructor() {
+    super('Some links may already be gone.');
+  }
+}
+
 export type RestoreOutcome = 'restored' | 'exists';
 
 export interface Forgotten {
@@ -133,6 +146,19 @@ const inSequence = <T>(items: T[], run: (item: T) => Promise<unknown>) =>
     (chain, item) => chain.then(() => run(item)),
     Promise.resolve<unknown>(undefined),
   );
+
+/** How many tasks, open or done, link a who or place; needs a connection. */
+export async function countLinkedTasks(
+  uid: string,
+  target: 'who' | 'places',
+  id: string,
+) {
+  const field = target === 'who' ? 'whoIds' : 'placeIds';
+  const snapshot = await getCountFromServer(
+    query(collection(userOf(uid), 'tasks'), where(field, 'array-contains', id)),
+  );
+  return snapshot.data().count;
+}
 
 /** Takes a who or place off every record linking it, then deletes it. Each chunk re-reads its records in a transaction, so one edited meanwhile keeps its other changes; a connection is needed. The person's own who is refused. */
 export async function forgetLinked(
@@ -161,49 +187,36 @@ export async function forgetLinked(
       ).docs.map((entry) => entry.id),
     })),
   );
-  const taken = await Promise.all(
-    found.map(async ({ source, field, ids }) => {
-      const chunks = await Promise.all(
-        toChunks(ids).map((chunk) =>
-          runTransaction(db, async (transaction) => {
-            const snapshots = await Promise.all(
-              chunk.map((entryId) =>
-                transaction.get(doc(collection(userOf(uid), source), entryId)),
-              ),
-            );
-            return snapshots.flatMap((snapshot) => {
-              const list = (snapshot.data() as DocumentData | undefined)?.[
-                field
-              ] as unknown;
-              if (!Array.isArray(list) || !list.includes(id)) return [];
-              transaction.update(snapshot.ref, { [field]: arrayRemove(id) });
-              return [snapshot.id];
-            });
-          }),
-        ),
-      );
-      return { source, field, ids: chunks.flat() };
-    }),
+  const jobs = found.flatMap(({ source, field, ids }) =>
+    toChunks(ids).map((chunk) => ({ source, field, chunk })),
   );
-  const raw = await runTransaction(db, async (transaction) => {
-    const snapshot = await transaction.get(ref);
-    const data = snapshot.data() as DocumentData | undefined;
-    if (!data) return null;
-    if (data.isSelf === true) throw new Error('This is you.');
-    transaction.delete(ref);
-    return data;
+  const outcomes = await Promise.allSettled(
+    jobs.map(({ source, field, chunk }) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((entryId) =>
+            transaction.get(doc(collection(userOf(uid), source), entryId)),
+          ),
+        );
+        return snapshots.flatMap((snapshot) => {
+          const list = (snapshot.data() as DocumentData | undefined)?.[
+            field
+          ] as unknown;
+          if (!Array.isArray(list) || !list.includes(id)) return [];
+          transaction.update(snapshot.ref, { [field]: arrayRemove(id) });
+          return [snapshot.id];
+        });
+      }),
+    ),
+  );
+  const taken = jobs.flatMap(({ source, field }, index) => {
+    const outcome = outcomes[index];
+    return outcome.status === 'fulfilled'
+      ? [{ source, field, ids: outcome.value }]
+      : [];
   });
-  if (!raw) throw new Error('This is already gone.');
-  const countOf = (source: LinkSource) =>
-    taken.find((entry) => entry.source === source)?.ids.length ?? 0;
-  const restore = async (): Promise<RestoreOutcome> => {
-    const isBack = await runTransaction(db, async (transaction) => {
-      if ((await transaction.get(ref)).exists()) return false;
-      transaction.set(ref, { ...raw, lastEditedAt: Date.now() });
-      return true;
-    });
-    if (!isBack) return 'exists';
-    await inSequence(taken, ({ source, field, ids }) =>
+  const putBack = () =>
+    inSequence(taken, ({ source, field, ids }) =>
       inSequence(toChunks(ids), (chunk) =>
         runTransaction(db, async (transaction) => {
           const snapshots = await Promise.all(
@@ -219,6 +232,61 @@ export async function forgetLinked(
         }),
       ),
     );
+  const failedOutcome = outcomes.find(
+    (outcome) => outcome.status === 'rejected',
+  );
+  const abandon = async (reason: unknown): Promise<never> => {
+    await putBack().catch((error: unknown) => {
+      console.error('Helm links were not put back', error);
+      throw new ForgetPartialError();
+    });
+    throw reason;
+  };
+  if (failedOutcome) await abandon(failedOutcome.reason);
+  const raw = await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const data = snapshot.data() as DocumentData | undefined;
+    if (!data) return null;
+    if (data.isSelf === true) throw new Error('This is you.');
+    transaction.delete(ref);
+    return data;
+  }).catch(abandon);
+  if (!raw) throw new Error('This is already gone.');
+  const countOf = (source: LinkSource) =>
+    taken
+      .filter((entry) => entry.source === source)
+      .reduce((sum, entry) => sum + entry.ids.length, 0);
+  const restore = async (): Promise<RestoreOutcome> => {
+    const homeIds =
+      target === 'places' && raw.isHome === true
+        ? (
+            await getDocs(
+              query(
+                collection(userOf(uid), 'places'),
+                where('isHome', '==', true),
+              ),
+            )
+          ).docs.map((entry) => entry.id)
+        : [];
+    const isBack = await runTransaction(db, async (transaction) => {
+      if ((await transaction.get(ref)).exists()) return false;
+      const homes = await Promise.all(
+        homeIds.map((homeId) =>
+          transaction.get(doc(collection(userOf(uid), 'places'), homeId)),
+        ),
+      );
+      const hasOtherHome = homes.some(
+        (home) => home.exists() && home.data()?.isHome === true,
+      );
+      transaction.set(ref, {
+        ...raw,
+        ...(hasOtherHome ? { isHome: false } : {}),
+        lastEditedAt: Date.now(),
+      });
+      return true;
+    });
+    if (!isBack) return 'exists';
+    await putBack();
     return 'restored';
   };
   return {

@@ -1,13 +1,13 @@
 import { useId, useState } from 'react';
 
-import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import AppToggle from '@/components/AppToggle';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { updatePlace } from '@apps/helm/store/actions/placeActions';
@@ -95,7 +95,7 @@ function PlaceEditForm({
         <Input
           id={`${fieldId}-name`}
           value={name}
-          autoFocus
+          autoFocus={canFocusFieldOnOpen()}
           onChange={(event) => {
             setName(event.target.value);
             onDirtyChange(true);
@@ -131,22 +131,24 @@ function PlaceEditForm({
           }}
         />
       </div>
-      <div className='flex items-start justify-between gap-3'>
-        <div className='min-w-0'>
-          <p className='text-sm font-medium'>{HELM_COPY.placeIsHome}</p>
-          <p className='text-muted-foreground text-[13px] text-pretty'>
-            {HELM_COPY.placeIsHomeHelp}
-          </p>
-        </div>
-        <AppToggle
+      <label className='flex min-h-12 items-start gap-3 py-1'>
+        <Checkbox
           checked={isHome}
-          aria-label={HELM_COPY.placeIsHome}
+          className='mt-0.5'
           onCheckedChange={(checked) => {
             setIsHome(checked);
             onDirtyChange(true);
           }}
         />
-      </div>
+        <span className='min-w-0 flex-1'>
+          <span className='block text-sm font-medium'>
+            {HELM_COPY.placeIsHome}
+          </span>
+          <span className='text-muted-foreground block text-[13px] text-pretty'>
+            {HELM_COPY.placeIsHomeHelp}
+          </span>
+        </span>
+      </label>
       <ModalFooterActions
         note={isTouched && isMissing ? HELM_COPY.whoNameMissing : null}
         cancelAction={

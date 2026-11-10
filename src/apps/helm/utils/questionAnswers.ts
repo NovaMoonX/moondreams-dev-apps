@@ -33,11 +33,22 @@ export function matchSpokenAnswer(
   question: HelmQuestion,
 ): SpokenAnswer | null {
   const candidates = question.options.filter((option) => option.ref !== null);
+  const tokensOf = (label: string) => normalizeSaid(label).split(' ');
+  const uniqueTokens = (label: string) =>
+    tokensOf(label).filter(
+      (token) =>
+        token !== '' &&
+        candidates.every(
+          (other) =>
+            other.label === label || !tokensOf(other.label).includes(token),
+        ),
+    );
   const choices: Choice[] = [
     ...candidates.map((option, index) => ({
       answer: { kind: 'option' as const, optionId: option.id },
       names: [
         option.label,
+        ...uniqueTokens(option.label),
         ...(option.detail ? [option.detail] : []),
         ORDINALS[index],
         `${ORDINALS[index]} one`,

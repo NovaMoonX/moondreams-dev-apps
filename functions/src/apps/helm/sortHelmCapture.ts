@@ -474,6 +474,9 @@ async function readPeople(
         kind,
         name: words.name,
         aliases: aliasesOf(words),
+        lastMentionedAt: Number.isFinite(doc.get('lastMentionedAt'))
+          ? Number(doc.get('lastMentionedAt'))
+          : null,
         relation: typeof words.relation === 'string' ? words.relation : null,
         species: typeof words.species === 'string' ? words.species : null,
         organizationKind:

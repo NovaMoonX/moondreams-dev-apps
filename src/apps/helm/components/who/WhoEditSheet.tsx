@@ -8,6 +8,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup } from '@/components/PillGroup';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { updateWho } from '@apps/helm/store/actions/whoActions';
@@ -84,7 +85,7 @@ function WhoEditForm({
           name: name.trim(),
           aliases: toAliases(aliases),
           kind,
-          relation: toNullable(relation),
+          relation: kind === 'organization' ? null : toNullable(relation),
           species: kind === 'pet' ? toNullable(species) : null,
           organizationKind:
             kind === 'organization' ? toNullable(organizationKind) : null,
@@ -121,7 +122,7 @@ function WhoEditForm({
         <Input
           id={`${fieldId}-name`}
           value={name}
-          autoFocus
+          autoFocus={canFocusFieldOnOpen()}
           onChange={(event) => edit(setName)(event.target.value)}
         />
       </div>

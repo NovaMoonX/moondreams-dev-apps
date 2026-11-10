@@ -1,7 +1,11 @@
 import DetailSheet from '@/components/DetailSheet';
 import QuestionBlock from '@apps/helm/components/home/QuestionBlock';
 import { HELM_COPY } from '@apps/helm/constants';
-import { getOpenQuestions, type HeldItem } from '@apps/helm/utils/heldCaptures';
+import {
+  getOpenQuestions,
+  hasOpenChoice,
+  type HeldItem,
+} from '@apps/helm/utils/heldCaptures';
 
 interface QuestionSheetProps {
   item: HeldItem | null;
@@ -11,26 +15,33 @@ interface QuestionSheetProps {
 /** A turn's open which-person and which-place questions from Needs you, read from the live turn so it closes by itself once they are answered. */
 function QuestionSheet({ item, onClose }: QuestionSheetProps) {
   const questions = item ? getOpenQuestions(item.capture) : [];
+  const title = questions[0]?.question.prompt ?? HELM_COPY.questionSheetTitle;
 
   return (
     <DetailSheet
-      isOpen={item !== null && questions.length > 0}
+      isOpen={item !== null && hasOpenChoice(item.capture)}
       onClose={onClose}
-      title={HELM_COPY.questionSheetTitle}
+      title={title}
     >
       {item && (
         <div className='space-y-4'>
-          <p className='bg-muted/60 rounded-[10px] px-3.5 py-2.5 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
+          <p className='text-muted-foreground border-border border-l-2 pl-3 text-[13px] leading-[19px] break-words whitespace-pre-wrap'>
             {item.capture.isUnreadable
               ? HELM_COPY.unreadable
               : item.capture.text}
           </p>
-          {questions.map((entry) => (
+          {questions.length === 0 && (
+            <p className='text-muted-foreground text-[15px] text-pretty'>
+              {HELM_COPY.unreadable}
+            </p>
+          )}
+          {questions.map((entry, index) => (
             <QuestionBlock
               key={entry.id}
               captureId={item.capture.id}
               item={entry}
               isInSheet
+              isPromptHidden={index === 0}
             />
           ))}
         </div>

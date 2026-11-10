@@ -33,7 +33,8 @@ const getLine = (
   }
   if (kind === 'question') {
     return {
-      reason: getOpenQuestions(capture)[0]?.question.prompt ?? '',
+      reason:
+        getOpenQuestions(capture)[0]?.question.prompt ?? HELM_COPY.unreadable,
       trailing: time,
     };
   }

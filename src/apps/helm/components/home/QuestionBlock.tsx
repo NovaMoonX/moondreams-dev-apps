@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -15,10 +16,21 @@ interface QuestionBlockProps {
   item: OpenQuestion;
   /** On a turn's card a skipped question says where it waits; in its own sheet it can still be answered, so it shows its choices. */
   isInSheet: boolean;
+  /** The sheet that holds the question already shows its prompt as its title. */
+  isPromptHidden?: boolean;
 }
 
+// A 28px button reaches 40px tall through its pseudo-element, which the 12px gaps leave clear.
+const QUIET_CLASS =
+  "relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']";
+
 /** One open which-person or which-place question: the candidates as tall choices, then new and none quieter, and Skip. */
-function QuestionBlock({ captureId, item, isInSheet }: QuestionBlockProps) {
+function QuestionBlock({
+  captureId,
+  item,
+  isInSheet,
+  isPromptHidden = false,
+}: QuestionBlockProps) {
   const { user } = useAuth();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
@@ -62,8 +74,18 @@ function QuestionBlock({ captureId, item, isInSheet }: QuestionBlockProps) {
 
   return (
     <div className='flex w-full flex-col items-start gap-2'>
-      <AssistantLine>{question.prompt}</AssistantLine>
-      <div className='ml-[30px] flex w-[calc(100%-30px)] flex-col gap-2'>
+      {!isPromptHidden && <AssistantLine>{question.prompt}</AssistantLine>}
+      <div
+        className={join(
+          'flex flex-col gap-2',
+          isInSheet ? 'w-full' : 'ml-[30px] w-[calc(100%-30px)]',
+        )}
+      >
+        {isSkipped && isInSheet && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.questionSkippedNote}
+          </p>
+        )}
         {candidates.map((option) => (
           <Button
             key={option.id}
@@ -87,13 +109,14 @@ function QuestionBlock({ captureId, item, isInSheet }: QuestionBlockProps) {
             )}
           </Button>
         ))}
-        <div className='flex flex-wrap items-center gap-2'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
           {others.map((option) => (
             <Button
               key={option.id}
               type='button'
               variant='tertiary'
               size='sm'
+              className={QUIET_CLASS}
               disabled={isWorking}
               onClick={() => void answer(option.id)}
             >
@@ -105,7 +128,7 @@ function QuestionBlock({ captureId, item, isInSheet }: QuestionBlockProps) {
               type='button'
               variant='tertiary'
               size='sm'
-              className='text-muted-foreground!'
+              className={join(QUIET_CLASS, 'text-muted-foreground!')}
               disabled={isWorking}
               onClick={skip}
             >

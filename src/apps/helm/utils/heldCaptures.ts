@@ -17,10 +17,14 @@ export interface HeldItem {
   capture: OpenCapture;
 }
 
-const hasOpenQuestion = (capture: OpenCapture, kind: string) =>
+const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>
   Object.values(capture.questionState).some(
-    (question) => question.kind === kind && question.answeredAt === null,
+    (question) => kinds.includes(question.kind) && question.answeredAt === null,
   );
+
+/** Whether the turn still waits on a which-person or which-place answer, read from what is readable so a turn whose words won't open still shows. */
+export const hasOpenChoice = (capture: OpenCapture) =>
+  hasOpenQuestion(capture, ['whichPerson', 'whichPlace']);
 
 export interface OpenQuestion {
   id: string;
@@ -49,9 +53,9 @@ export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
 export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
   if (capture.status === 'failed') return 'failed';
   if (capture.status === 'needsYou') {
-    if (hasOpenQuestion(capture, 'couldNotRead')) return 'couldNotRead';
-    if (hasOpenQuestion(capture, 'moreToSort')) return 'moreToSort';
-    return getOpenQuestions(capture).length > 0 ? 'question' : null;
+    if (hasOpenQuestion(capture, ['couldNotRead'])) return 'couldNotRead';
+    if (hasOpenQuestion(capture, ['moreToSort'])) return 'moreToSort';
+    return hasOpenChoice(capture) ? 'question' : null;
   }
   return capture.status === 'received' ? 'waiting' : null;
 };

@@ -755,9 +755,10 @@ export const HELM_COPY = {
   questionSkipped: "Skipped. It's waiting in Needs you.",
   questionAnswered: 'Done.',
   questionSheetTitle: 'Which one?',
+  questionSkippedNote: "You skipped this. It's still waiting.",
   questionOptionAria: (label: string, detail: string | null) =>
     detail ? `${label}, ${detail}` : label,
-  whoEditMenu: 'Change name, kind or how they relate',
+  whoEditMenu: 'Change details',
   whoTierMenu: 'Change how close',
   whoForgetMenu: (name: string) => `Forget ${name}`,
   whoEditTitle: 'Change details',
@@ -787,16 +788,19 @@ export const HELM_COPY = {
   whoTierHelp: (assistant: string) =>
     `${assistant} won't change this once you set it.`,
   tierPassing: 'Passing',
+  tierSetToast: (name: string, tier: string) => `Set ${name} to ${tier}`,
   forgetNeedsConnection: 'Forgetting needs a connection.',
   forgetFailed: "That didn't work. Nothing was forgotten.",
   forgetConfirmWho: (name: string, tasks: number) =>
     tasks === 0
-      ? `Forget ${name}? No open tasks are linked to them.`
+      ? `Forget ${name}? No tasks are linked to them.`
       : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`,
   forgetConfirmPlace: (name: string, tasks: number) =>
     tasks === 0
-      ? `Forget ${name}? No open tasks are linked to it.`
+      ? `Forget ${name}? No tasks are linked to it.`
       : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no place.`,
+  forgetPartial: (name: string) =>
+    `Some links may already be gone. Open ${name} to check.`,
   forgetAction: 'Forget',
   forgotToast: (name: string, tasks: number) =>
     tasks === 0
@@ -804,7 +808,7 @@ export const HELM_COPY = {
       : `Forgot ${name}, taken off ${tasks === 1 ? '1 task' : `${tasks} tasks`}`,
   forgotUndone: (name: string) => `Brought back ${name}`,
   forgotUndoFailed: "That couldn't be brought back.",
-  placeEditMenu: 'Change name or address',
+  placeEditMenu: 'Change details',
   placeEditTitle: 'Change place',
   placeAddressField: 'Address',
   placeIsHome: 'This is home',

@@ -16,7 +16,11 @@ import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
-import { forgetWho } from '@apps/helm/store/actions/whoActions';
+import {
+  countLinkedTasks,
+  ForgetPartialError,
+  forgetWho,
+} from '@apps/helm/store/actions/whoActions';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 
@@ -77,9 +81,19 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
       addToast({ title: HELM_COPY.forgetNeedsConnection, type: 'info' });
       return;
     }
+    const linkedCount = await countLinkedTasks(user.uid, 'who', who.id).catch(
+      (error: unknown) => {
+        console.error('Helm links were not counted', error);
+        return null;
+      },
+    );
+    if (linkedCount === null) {
+      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+      return;
+    }
     const isConfirmed = await confirm({
       title: HELM_COPY.whoForgetMenu(who.name),
-      message: HELM_COPY.forgetConfirmWho(who.name, tasks.length),
+      message: HELM_COPY.forgetConfirmWho(who.name, linkedCount),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
     });
@@ -108,7 +122,13 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
       });
     } catch (error) {
       console.error('Helm person was not forgotten', error);
-      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+      addToast({
+        title:
+          error instanceof ForgetPartialError
+            ? HELM_COPY.forgetPartial(who.name)
+            : HELM_COPY.forgetFailed,
+        type: 'error',
+      });
     }
   };
 
