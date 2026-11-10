@@ -1,0 +1,339 @@
+import assert from 'node:assert/strict';
+
+import { sealForHelm } from '../../functions/src/apps/helm/helmKey.ts';
+import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
+import type { CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
+import {
+  planWrites,
+  type KnownWhoState,
+  type PeopleInput,
+  type WritePlan,
+} from '../../functions/src/apps/helm/nomos/executeCommands.ts';
+import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import type { ExistingProject } from '../../functions/src/apps/helm/nomos/planProjects.ts';
+
+const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
+const seal = (fields: Record<string, unknown>) => sealForHelm(KEY, fields);
+
+const tests: [string, () => void | Promise<void>][] = [];
+const test = (name: string, run: () => void | Promise<void>) =>
+  tests.push([name, run]);
+
+const READING: CaptureReading = {
+  people: [],
+  places: [],
+  documents: [],
+  commands: [],
+  isUrgent: false,
+  dates: [],
+  addressedAs: null,
+};
+const read = (raw: Record<string, unknown>) =>
+  normalizeNomosReply(raw, { reading: READING, aliases: createAliasBook('t') });
+
+const task = (title: string, extra: Record<string, unknown> = {}) => ({
+  kind: 'createTask',
+  ref: null,
+  taskAlias: null,
+  title,
+  dueSpanId: null,
+  isUrgent: null,
+  ...extra,
+});
+const project = (name: string, extra: Record<string, unknown> = {}) => ({
+  kind: 'createProject',
+  title: name,
+  projectEmoji: '💍',
+  objective: null,
+  dueSpanId: null,
+  ...extra,
+});
+const role = (
+  projectRef: string,
+  whoRefs: string[],
+  roleName: 'key' | 'involved',
+  roleNote: string | null = null,
+) => ({
+  kind: 'setProjectRole',
+  projectRef,
+  whoRefs,
+  role: roleName,
+  roleNote,
+});
+const mention = (ref: string, name: string) => ({
+  ref,
+  name,
+  kind: 'person',
+  relation: null,
+  species: null,
+  organizationKind: null,
+});
+const known = (
+  id: string,
+  name: string,
+  extra: Partial<KnownWhoState> = {},
+): KnownWhoState => ({
+  id,
+  kind: 'person',
+  name,
+  aliases: [],
+  lastMentionedAt: null,
+  tier: 'passing',
+  tierSetBy: 'nomos',
+  mentionDayKeys: [],
+  taskLinkCount: 0,
+  yearlyDateCount: 0,
+  momentCount: 0,
+  hasRole: false,
+  ...extra,
+});
+const existingProject = (
+  id: string,
+  name: string,
+  whoRoles: ExistingProject['whoRoles'] = {},
+  roleNotes: Record<string, string> = {},
+): ExistingProject => ({
+  id,
+  name,
+  emoji: '💍',
+  whoRoles,
+  roleNotes,
+  sealed: { name, emoji: '💍', objective: null, milestones: {}, roleNotes },
+});
+
+const counter = () => {
+  const count = { n: 0 };
+  return () => {
+    count.n += 1;
+    return `new-${count.n}`;
+  };
+};
+
+const plan = (
+  raw: { commands: unknown[]; mentions?: unknown[] },
+  options: {
+    projects?: ExistingProject[];
+    who?: KnownWhoState[];
+  } = {},
+): WritePlan => {
+  const reply = read({ mentions: [], places: [], ...raw });
+  const people: PeopleInput = {
+    mentions: reply.mentions,
+    places: reply.places,
+    known: options.who ?? [],
+    knownPlaces: [],
+    assistantName: null,
+    dayKey: '2026-11-10',
+    capturedAt: 4000,
+  };
+  return planWrites({
+    commands: reply.commands,
+    projectCommands: reply.projects,
+    existingProjects: options.projects ?? [],
+    existing: new Map(),
+    captureId: 'c1',
+    executionId: 'e1',
+    now: 5000,
+    seal,
+    newId: counter(),
+    people,
+  });
+};
+
+const dana = mention('$w1', 'Dana');
+const sam = mention('$w2', 'Sam');
+const refsOf = (result: WritePlan) =>
+  result.effectRefs.map((ref) => `${ref.op}:${ref.collection}`);
+
+test('createProject makes one project, and Undo can delete it', () => {
+  const result = plan({
+    commands: [project('Wedding'), project('Move')],
+  });
+  assert.equal(result.projectCreates.length, 1);
+  assert.deepEqual(refsOf(result), ['create:projects']);
+  const [created] = result.projectCreates;
+  assert.equal(created.data.status, 'active');
+  assert.deepEqual(created.data.milestoneState, {});
+  assert.equal(created.data.createdBy, 'nomos');
+  assert.equal(result.effects[0].previous, null);
+  assert.equal(result.projectsMade, 1);
+});
+
+test('a project with the same name as an active one links instead of making a second', () => {
+  const result = plan(
+    {
+      commands: [
+        project('wedding'),
+        task('Call the florist', { projectRef: 'Wedding' }),
+      ],
+    },
+    { projects: [existingProject('pr1', 'Wedding')] },
+  );
+  assert.equal(result.projectCreates.length, 0);
+  assert.equal(result.creates[0].data.projectId, 'pr1');
+});
+
+test('a task points at the project this turn starts', () => {
+  const result = plan({
+    commands: [
+      project('Wedding'),
+      task('Book the venue', { projectRef: 'Wedding' }),
+    ],
+  });
+  assert.equal(result.creates[0].data.projectId, result.projectCreates[0].id);
+});
+
+test('a sure projectRef links the task, and the who it names becomes involved with an Undo that keeps the earlier roles', () => {
+  const result = plan(
+    {
+      commands: [
+        task('Call Dana about flowers', {
+          projectRef: 'The wedding',
+          whoRefs: ['$w1'],
+        }),
+      ],
+      mentions: [dana],
+    },
+    {
+      projects: [existingProject('pr1', 'Wedding', { other: 'key' })],
+      who: [known('w1', 'Dana')],
+    },
+  );
+  assert.equal(result.creates[0].data.projectId, 'pr1');
+  const [update] = result.projectUpdates;
+  assert.equal(update.id, 'pr1');
+  assert.deepEqual(update.data.whoRoles, { other: 'key', w1: 'involved' });
+  const effect = result.effects.find((entry) => entry.previous?.whoRoles);
+  assert.deepEqual(effect?.previous?.whoRoles, { other: 'key' });
+  assert.deepEqual(refsOf(result).sort(), ['create:tasks', 'update:projects']);
+});
+
+test('setProjectRole key raises a role and never lowers one', () => {
+  const raised = plan(
+    {
+      commands: [role('Wedding', ['$w1'], 'key', 'florist')],
+      mentions: [dana],
+    },
+    {
+      projects: [existingProject('pr1', 'Wedding', { w1: 'involved' })],
+      who: [known('w1', 'Dana')],
+    },
+  );
+  assert.deepEqual(raised.projectUpdates[0].data.whoRoles, { w1: 'key' });
+  assert.equal(raised.rolesSet, 1);
+  const lowered = plan(
+    {
+      commands: [role('Wedding', ['$w1'], 'involved')],
+      mentions: [dana],
+    },
+    {
+      projects: [existingProject('pr1', 'Wedding', { w1: 'key' })],
+      who: [known('w1', 'Dana')],
+    },
+  );
+  assert.equal(lowered.projectUpdates.length, 0);
+  assert.equal(lowered.rolesSet, 0);
+});
+
+test('a passing who given a key role becomes regular, and one the person set stays', () => {
+  const commands = [role('Wedding', ['$w1'], 'key')];
+  const pool = { projects: [existingProject('pr1', 'Wedding')] };
+  const raised = plan(
+    { commands, mentions: [dana] },
+    { ...pool, who: [known('w1', 'Dana')] },
+  );
+  assert.equal(
+    raised.whoUpdates.find((entry) => entry.id === 'w1')?.data.tier,
+    'regular',
+  );
+  const kept = plan(
+    { commands, mentions: [dana] },
+    { ...pool, who: [known('w1', 'Dana', { tierSetBy: 'person' })] },
+  );
+  assert.equal(
+    kept.whoUpdates.find((entry) => entry.id === 'w1')?.data.tier,
+    undefined,
+  );
+});
+
+test('an unsure or unknown projectRef links nothing and asks nothing', () => {
+  const projects = [
+    existingProject('pr1', 'Move to Austin'),
+    existingProject('pr2', 'Move to Denver'),
+  ];
+  const unsure = plan(
+    { commands: [task('Pack books', { projectRef: 'Move' })] },
+    { projects },
+  );
+  assert.equal(unsure.creates[0].data.projectId, null);
+  assert.equal(unsure.projectUpdates.length, 0);
+  assert.equal(unsure.questions.length, 0);
+  const none = plan(
+    { commands: [task('Pack books', { projectRef: 'Garden' })] },
+    { projects },
+  );
+  assert.equal(none.creates[0].data.projectId, null);
+});
+
+test('a who named beside a project, with no other role, is mentioned', () => {
+  const result = plan(
+    {
+      commands: [
+        task('Call Dana', { projectRef: 'Wedding', whoRefs: ['$w1'] }),
+      ],
+      mentions: [dana, sam],
+    },
+    {
+      projects: [existingProject('pr1', 'Wedding')],
+      who: [known('w1', 'Dana'), known('w2', 'Sam')],
+    },
+  );
+  assert.deepEqual(result.projectUpdates[0].data.whoRoles, {
+    w1: 'involved',
+    w2: 'mentioned',
+  });
+});
+
+test('a project started with its people carries the roles in its own document', () => {
+  const result = plan(
+    {
+      commands: [
+        project('Wedding'),
+        role('Wedding', ['$w1'], 'key', 'florist'),
+      ],
+      mentions: [dana],
+    },
+    { who: [known('w1', 'Dana')] },
+  );
+  assert.equal(result.projectCreates.length, 1);
+  assert.equal(result.projectUpdates.length, 0);
+  assert.deepEqual(refsOf(result), ['create:projects']);
+  assert.deepEqual(result.projectCreates[0].data.whoRoles, { w1: 'key' });
+});
+
+test('the reply keeps one project and the roles are capped', () => {
+  const reply = read({
+    commands: [project('Wedding'), project('Move')],
+    mentions: [],
+    places: [],
+  });
+  assert.equal(
+    reply.projects.filter((entry) => entry.kind === 'createProject').length,
+    1,
+  );
+});
+
+const failures: string[] = [];
+for (const [name, run] of tests) {
+  try {
+    await run();
+    console.log(`ok   ${name}`);
+  } catch (error) {
+    failures.push(name);
+    console.error(
+      `FAIL ${name}\n${error instanceof Error ? error.stack : error}`,
+    );
+  }
+}
+console.log(`${tests.length - failures.length}/${tests.length} passed`);
+process.exit(failures.length ? 1 : 0);

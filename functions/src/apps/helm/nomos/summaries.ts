@@ -103,6 +103,39 @@ export const buildNotKeptLine = (input: {
 export const describeFacts = (count: number) =>
   count === 0 ? null : plural(count, 'Noted a fact', `Noted ${count} facts`);
 
+/** The result line of a role given: "Dana · key person · 💍 Wedding". */
+export const buildRoleLine = (input: {
+  names: string[];
+  role: 'key' | 'involved' | 'mentioned';
+  project: string;
+}) =>
+  [
+    input.names.join(', '),
+    input.role === 'key'
+      ? 'key person'
+      : input.role === 'involved'
+        ? 'involved'
+        : 'mentioned',
+    input.project,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+/** "Started a project" and "added 2 people to projects", for the summary of a turn that did either. */
+export const describeProjects = (made: number, roles: number) =>
+  [
+    made > 0 ? 'Started a project' : null,
+    roles > 0
+      ? plural(
+          roles,
+          'Added a person to a project',
+          `Added ${roles} people to projects`,
+        )
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' and ') || null;
+
 export type CodeQuestionKind = 'couldNotRead' | 'moreToSort';
 
 /** Fixed wording for the two questions code asks when a capture is not fully sorted. */

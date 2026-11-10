@@ -2,6 +2,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
   CalendarDays,
   CalendarHeart,
+  FolderKanban,
   History,
   Inbox,
   Link2,
@@ -36,6 +37,8 @@ const VIEW_ENTRIES: Record<
   people: { label: HELM_COPY.peopleTitle, icon: Users },
   who: { label: HELM_COPY.peopleTitle, icon: Users },
   place: { label: HELM_COPY.linkedPlace, icon: MapPin },
+  projects: { label: HELM_COPY.projectsTitle, icon: FolderKanban },
+  project: { label: HELM_COPY.projectsTitle, icon: FolderKanban },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
 };
 

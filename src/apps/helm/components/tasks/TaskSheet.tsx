@@ -57,6 +57,7 @@ import {
   updateTaskWords,
   type RestoreResult,
 } from '@apps/helm/store/actions/taskActions';
+import { selectProjectById } from '@apps/helm/store/selectors/projectSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type {
   OpenTask,
@@ -214,6 +215,9 @@ function TaskSheet({
   const assistantName = useAssistantName();
   const { showView } = useHelmUrlState();
   const linked = useLinkedNames(task ?? { whoIds: [], placeIds: [] });
+  const taskProject = useAppSelector(selectProjectById).get(
+    task?.projectId ?? '',
+  );
   const [planMode, setPlanMode] = usePlacementMode();
   const sources = usePlanSources(nowMinute);
   const plannedKey = useAppSelector((state) => {
@@ -677,6 +681,20 @@ function TaskSheet({
               {entry.name}
             </SummaryRow>
           ))}
+          {taskProject && !taskProject.isUnreadable && (
+            <SummaryRow
+              label={HELM_COPY.taskProjectRow}
+              onClick={() =>
+                afterBackLayersClose(
+                  () => void showView('project', taskProject.id),
+                )
+              }
+            >
+              {taskProject.emoji
+                ? `${taskProject.emoji} ${taskProject.name}`
+                : taskProject.name}
+            </SummaryRow>
+          )}
           {!task.isUnreadable && (
             <SummaryRow
               label={HELM_COPY.stepsLabel}

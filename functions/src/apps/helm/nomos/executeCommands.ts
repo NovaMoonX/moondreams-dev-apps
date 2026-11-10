@@ -14,8 +14,15 @@ import {
   type NoteFactCommand,
   type NoteFactKind,
   type PlaceRead,
+  type ProjectCommand,
   type TaskDue,
 } from './commands.js';
+import {
+  matchProject,
+  planProjectRoles,
+  settleProjectStart,
+  type ExistingProject,
+} from './planProjects.js';
 import {
   matchPlaces,
   matchWho,
@@ -42,6 +49,7 @@ import {
   buildWhichIsTrueQuestion,
   describeFacts,
   describeKeyDates,
+  describeProjects,
   summarize,
   type CodeQuestionKind,
   type EffectCounts,
@@ -103,7 +111,14 @@ export interface ExistingFact {
 export interface EffectRef {
   op: 'create' | 'update' | 'delete';
   collection:
-    'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile' | 'keyDates';
+    | 'tasks'
+    | 'facts'
+    | 'who'
+    | 'places'
+    | 'media'
+    | 'profile'
+    | 'keyDates'
+    | 'projects';
   docId: string;
 }
 
@@ -125,6 +140,11 @@ export interface WritePlan {
   keyDateCreates: { id: string; data: Record<string, unknown> }[];
   keyDateUpdates: { id: string; data: Record<string, unknown> }[];
   keyDateDeletes: string[];
+  projectCreates: { id: string; data: Record<string, unknown> }[];
+  projectUpdates: { id: string; data: Record<string, unknown> }[];
+  /** Projects started and people given a key or involved role, for the summary. */
+  projectsMade: number;
+  rolesSet: number;
   /** The yearly index after the turn's dates, null when it did not change. */
   keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
@@ -150,6 +170,10 @@ export const MAX_PICK_QUESTIONS = 3;
 
 interface PlanInput {
   commands: NomosCommand[];
+  /** The project the turn starts and the roles it gives, each at most as the reply read them. */
+  projectCommands?: ProjectCommand[];
+  /** The person's active projects, opened. */
+  existingProjects?: ExistingProject[];
   existing: Map<string, ExistingTask>;
   captureId: string;
   executionId: string;
@@ -191,6 +215,7 @@ interface Draft {
   due: TaskDue | null;
   isUrgent: boolean;
   status: 'open' | 'done';
+  projectId: string | null;
 }
 
 const union = (left: string[], right: string[]) => [
@@ -390,6 +415,14 @@ export function planWrites(input: PlanInput): WritePlan {
   const counts: EffectCounts = { made: 0, updated: 0, completed: 0 };
 
   const entities = settleEntities(input);
+  const projectCommands = input.projectCommands ?? [];
+  const projectStart = settleProjectStart({
+    command:
+      projectCommands.find((command) => command.kind === 'createProject') ??
+      null,
+    existing: input.existingProjects ?? [],
+    newId: input.newId,
+  });
   const unsureTasks = new Map<string, string[]>();
   const noteUnsure = (taskId: string, refs: string[]) =>
     refs
@@ -427,6 +460,9 @@ export function planWrites(input: PlanInput): WritePlan {
         due: command.due,
         isUrgent: command.isUrgent,
         status: 'open',
+        projectId: command.projectRef
+          ? matchProject(command.projectRef, projectStart.pool)
+          : null,
       });
       return;
     }
@@ -567,6 +603,35 @@ export function planWrites(input: PlanInput): WritePlan {
     ]),
   );
   const selfWhoId = input.selfWhoId ?? null;
+  const projectPlan = planProjectRoles({
+    created: projectStart.created,
+    existing: input.existingProjects ?? [],
+    pool: projectStart.pool,
+    commands: projectCommands.flatMap((command) =>
+      command.kind === 'setProjectRole' ? [command] : [],
+    ),
+    taskWho: [...drafts.values()].flatMap((draft) =>
+      draft.projectId
+        ? [
+            {
+              projectId: draft.projectId,
+              whoIds: draft.whoIds.filter((id) => id !== selfWhoId),
+            },
+          ]
+        : [],
+    ),
+    namedWhoIds: [...entities.whoIdOf.values()].filter(
+      (id) => id !== selfWhoId,
+    ),
+    whoIdOf: entities.whoIdOf,
+    nameOf,
+    executionId: input.executionId,
+    now,
+    seal,
+  });
+  projectPlan.effects.forEach(({ ref, effect }) =>
+    record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
+  );
   const captureWords = toLooseText(input.captureText ?? '');
   const capturedAt = input.people?.capturedAt ?? now;
   const assistantName = input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME;
@@ -910,7 +975,7 @@ export function planWrites(input: PlanInput): WritePlan {
         durationMinutes: null,
         energy: null,
         context: null,
-        projectId: null,
+        projectId: draft.projectId,
         milestoneId: null,
         whoIds: draft.whoIds,
         placeIds: draft.placeIds,
@@ -955,7 +1020,7 @@ export function planWrites(input: PlanInput): WritePlan {
           tierSetBy: 'nomos',
           mentionDayKeys: [people?.dayKey ?? ''],
           taskLinkCount: taskLinks.get(id) ?? 0,
-          hasRole: false,
+          hasRole: projectPlan.roleWhoIds.has(id),
           hasKeyDate: hasNewDate(id),
         });
         record(
@@ -1005,7 +1070,7 @@ export function planWrites(input: PlanInput): WritePlan {
             tierSetBy: state.tierSetBy,
             mentionDayKeys: [...state.mentionDayKeys, people.dayKey],
             taskLinkCount: state.taskLinkCount + (taskLinks.get(id) ?? 0),
-            hasRole: state.hasRole,
+            hasRole: state.hasRole || projectPlan.roleWhoIds.has(id),
             hasKeyDate: hasNewDate(id),
           });
           return [
@@ -1076,7 +1141,7 @@ export function planWrites(input: PlanInput): WritePlan {
                   tierSetBy: state.tierSetBy,
                   mentionDayKeys: state.mentionDayKeys,
                   taskLinkCount: state.taskLinkCount,
-                  hasRole: state.hasRole,
+                  hasRole: state.hasRole || projectPlan.roleWhoIds.has(id),
                   hasKeyDate: hasNewDate(id),
                 })
               : null;
@@ -1176,6 +1241,10 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateCreates: keyDatePlan.creates,
     keyDateUpdates: keyDatePlan.updates,
     keyDateDeletes: keyDatePlan.deletes,
+    projectCreates: projectPlan.creates,
+    projectUpdates: projectPlan.updates,
+    projectsMade: projectPlan.creates.length,
+    rolesSet: projectPlan.rolesSet,
     keyDateIndex:
       isFiling && keyDatePlan.changes.length > 0
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
@@ -1409,6 +1478,9 @@ export function buildExecution(
   });
   const spokenHome =
     homeLine && input.inputMode === 'voice' ? `${homeLine}.` : null;
+  const projectLine = describeProjects(plan.projectsMade, plan.rolesSet);
+  const spokenProject =
+    projectLine && input.inputMode === 'voice' ? `${projectLine}.` : null;
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -1445,6 +1517,7 @@ export function buildExecution(
               : [],
           ),
         ),
+        describeProjects(plan.projectsMade, plan.rolesSet),
         ...plan.notKept,
         homeLine,
       ]
@@ -1455,7 +1528,7 @@ export function buildExecution(
       undoReport: null,
       goneIds: null,
       spoken: withQuestion(
-        [ack, spokenHome].filter(Boolean).join(' ') || null,
+        [ack, spokenProject, spokenHome].filter(Boolean).join(' ') || null,
         plan.questions[0]?.spoken ?? null,
       ),
     }),

@@ -985,6 +985,94 @@ test('a removed moment is written back as a moment with its precision', () => {
   assert.equal(result.creates[0].seal.year, 2015);
 });
 
+const projectSealed = (roleNotes: Record<string, string> = {}) => ({
+  name: 'Wedding',
+  emoji: '💍',
+  objective: null,
+  milestones: {},
+  roleNotes,
+});
+
+test('a project the turn made is deleted by its undo, and says projects', () => {
+  const made: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'create', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        'sealed.name': 'Wedding',
+        'sealed.emoji': '💍',
+        status: 'active',
+        whoRoles: {},
+        'sealed.roleNotes': {},
+      },
+      previous: null,
+    },
+  };
+  const result = asWrite(
+    plan(execution([made]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: { status: 'active', whoRoles: {}, lastEditedAt: null },
+          opened: projectSealed(),
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => `${entry.collection}:${entry.docId}`),
+    ['projects:p1'],
+  );
+  assert.equal(result.report, 'Took back 1 project.');
+});
+
+test('a role the turn gave is stepped back with the earlier roles and notes, and a role changed since is kept', () => {
+  const label = 'Dana is key for 💍 Wedding';
+  const given: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'update', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        whoRoles: { w1: 'key' },
+        'sealed.roleNotes': { w1: 'florist' },
+        'sealed.title': label,
+      },
+      previous: {
+        whoRoles: { w1: 'involved' },
+        'sealed.roleNotes': {},
+        'sealed.title': label,
+      },
+    },
+  };
+  const result = asWrite(
+    plan(execution([given]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: { whoRoles: { w1: 'key' }, lastEditedAt: NOW },
+          opened: projectSealed({ w1: 'florist' }),
+        },
+      ],
+    ]),
+  );
+  assert.deepEqual(result.updates[0].fields.whoRoles, { w1: 'involved' });
+  assert.deepEqual(
+    (result.updates[0].reseal as { roleNotes: unknown }).roleNotes,
+    {},
+  );
+  const kept = plan(execution([given]), [
+    [
+      'p1',
+      {
+        docId: 'p1',
+        data: { whoRoles: { w1: 'key', w2: 'involved' }, lastEditedAt: NOW },
+        opened: projectSealed({ w1: 'florist' }),
+      },
+    ],
+  ]);
+  assert.equal(kept.kind, 'refused');
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

@@ -218,6 +218,7 @@ test('a sound reply resolves its alias and its day', () => {
     isUrgent: false,
     whoRefs: ['$w1'],
     placeRefs: [],
+    projectRef: null,
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });

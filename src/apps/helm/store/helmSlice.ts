@@ -10,6 +10,7 @@ import type {
   OpenFact,
   OpenMedia,
   OpenPlace,
+  OpenProject,
   OpenTask,
   OpenWho,
   PlanDay,
@@ -65,6 +66,8 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
+  /** Every task that belongs to a project, open or done. */
+  projectTasks: LoadedSet<OpenTask>;
   /** The plan days from yesterday to six days ahead. */
   planDays: PlanDaySet;
   /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
@@ -75,6 +78,8 @@ export interface HelmState {
   keyDateIndex: KeyDateIndexSet;
   /** The places the person has named. */
   places: LoadedSet<OpenPlace>;
+  /** The projects the person has started, active and finished. */
+  projects: LoadedSet<OpenProject>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
   /** Copies of other apps' records, opened. */
@@ -126,11 +131,13 @@ const initialState: HelmState = {
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   openTasks: emptyLoadedSet,
+  projectTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
   keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
+  projects: emptyLoadedSet,
   media: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
@@ -211,6 +218,16 @@ const helmSlice = createSlice({
     setOpenTasksFailed: (state) => {
       state.openTasks.isFailed = true;
     },
+    setProjectTasks: (state, action: PayloadAction<OpenTask[]>) => {
+      state.projectTasks = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setProjectTasksFailed: (state) => {
+      state.projectTasks.isFailed = true;
+    },
     setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
       state.planDays = {
         byId: Object.fromEntries(
@@ -254,6 +271,16 @@ const helmSlice = createSlice({
     },
     setPlacesFailed: (state) => {
       state.places.isFailed = true;
+    },
+    setProjects: (state, action: PayloadAction<OpenProject[]>) => {
+      state.projects = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setProjectsFailed: (state) => {
+      state.projects.isFailed = true;
     },
     setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
       state.media = { items: action.payload, isLoaded: true, isFailed: false };
@@ -361,6 +388,8 @@ export const {
   setWaitingCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
+  setProjectTasks,
+  setProjectTasksFailed,
   setPlanDays,
   setPlanDaysFailed,
   setFacts,
@@ -371,6 +400,8 @@ export const {
   setKeyDateIndexFailed,
   setPlaces,
   setPlacesFailed,
+  setProjects,
+  setProjectsFailed,
   setMedia,
   setMediaFailed,
   setSynced,

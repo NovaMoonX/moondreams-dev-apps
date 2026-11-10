@@ -23,6 +23,8 @@ import PhotosSection from '@apps/helm/components/media/PhotosSection';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
 import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -56,6 +58,8 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
+  const activeProjects = useAppSelector(selectActiveProjects);
+  const { showView } = useHelmUrlState();
   const [isAllMentions, setIsAllMentions] = useState(false);
   const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
   const who = items.find((entry) => entry.id === whoId) ?? null;
@@ -74,6 +78,18 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
           type: 'error',
         });
     },
+  });
+
+  const projectLines = activeProjects.flatMap((project) => {
+    const role = whoId === null ? undefined : project.whoRoles[whoId];
+    return role === 'key' || role === 'involved'
+      ? [
+          {
+            id: project.id,
+            text: HELM_COPY.whoProjectLine(project.emoji, project.name, role),
+          },
+        ]
+      : [];
   });
 
   const tasks = useMemo(
@@ -254,6 +270,23 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
+            {projectLines.length > 0 && (
+              <ul className='space-y-1'>
+                {projectLines.map((line) => (
+                  <li key={line.id}>
+                    <Button
+                      type='button'
+                      variant='tertiary'
+                      size='sm'
+                      className='h-auto min-h-0 px-0! py-1 text-[15px] font-normal'
+                      onClick={() => void showView('project', line.id)}
+                    >
+                      {line.text}
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
             {who.importedFrom && (
               <section className='helm-card space-y-2 p-4'>
                 <p className='text-[15px]'>{HELM_COPY.contactsFromGoogle}</p>

@@ -40,6 +40,25 @@ export function buildResultLines(
         },
       ];
     }
+    if (ref.collection === 'projects') {
+      const label = toText(effect?.written['sealed.title']);
+      const name = toText(effect?.written['sealed.name']);
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            label ??
+            (name
+              ? HELM_COPY.resultProjectLine(
+                  toText(effect?.written['sealed.emoji']),
+                  name,
+                )
+              : HELM_COPY.projectUntitled),
+          detail: null,
+        },
+      ];
+    }
     if (ref.collection === 'keyDates') {
       return [
         {

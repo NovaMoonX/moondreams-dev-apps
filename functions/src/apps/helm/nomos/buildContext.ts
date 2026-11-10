@@ -5,7 +5,12 @@ import {
   type SyncedBook,
 } from './aliases.js';
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
-import type { CaptureReading, TaskDue, Token } from './commands.js';
+import {
+  MAX_CONTEXT_PROJECTS,
+  type CaptureReading,
+  type TaskDue,
+  type Token,
+} from './commands.js';
 import { withoutAddress } from './joinedTurn.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
@@ -58,6 +63,8 @@ export interface ContextInput {
   keyDates?: ContextKeyDate[];
   /** The next dates that come back, when the turn asks what is coming up. */
   upcoming?: ContextUpcoming[];
+  /** The names of the active projects, newest first. */
+  projects?: string[];
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -198,6 +205,13 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.upcoming?.length
       ? [`<upcoming_dates>${toDataJson(input.upcoming)}</upcoming_dates>`]
+      : []),
+    ...(input.projects?.length
+      ? [
+          `<open_projects>${toDataJson(
+            input.projects.slice(0, MAX_CONTEXT_PROJECTS),
+          )}</open_projects>`,
+        ]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

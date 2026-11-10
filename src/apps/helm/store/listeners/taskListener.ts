@@ -15,7 +15,7 @@ import {
 import { db } from '@lib/firebase/config';
 import type { SealedReader } from '@lib/security';
 
-import { OPEN_TASKS_LIMIT } from '@apps/helm/constants';
+import { OPEN_TASKS_LIMIT, PROJECT_TASKS_LIMIT } from '@apps/helm/constants';
 import type { OpenTask, Task, TaskSealed } from '@apps/helm/types';
 
 const toError = (error: unknown) =>
@@ -83,6 +83,40 @@ export function startOpenTasksListener(
       where('status', '==', 'open'),
       orderBy('createdAt', 'desc'),
       limit(OPEN_TASKS_LIMIT),
+    ),
+    async (snapshot) => {
+      sequence.latest += 1;
+      const current = sequence.latest;
+      const opened = await Promise.all(
+        snapshot.docs.map((entry) => openTask(entry, read)),
+      );
+      if (current !== sequence.latest || run.isStopped) return;
+      onChange(opened);
+    },
+    (error) => onError(toError(error)),
+  );
+
+  return () => {
+    run.isStopped = true;
+    stop();
+  };
+}
+
+/** Every task that belongs to a project, open or done, so a project can say what is finished and how long it has been quiet. */
+export function startProjectTasksListener(
+  uid: string,
+  read: SealedReader,
+  onChange: (tasks: OpenTask[]) => void,
+  onError: (error: Error) => void,
+): Unsubscribe {
+  const sequence = { latest: 0 };
+  const run = { isStopped: false };
+
+  const stop = onSnapshot(
+    query(
+      collection(db, 'apps', 'helm', 'users', uid, 'tasks'),
+      where('projectId', '!=', null),
+      limit(PROJECT_TASKS_LIMIT),
     ),
     async (snapshot) => {
       sequence.latest += 1;

@@ -47,6 +47,8 @@ import type {
   MediaSealed,
   Place,
   PlaceSealed,
+  Project,
+  ProjectSealed,
   Who,
   WhoSealed,
   ScreenContext,
@@ -1377,6 +1379,142 @@ async function uploadSealedSeed(path: string, bytes: Uint8Array) {
       'Helm seed: could not upload a photo to the Storage emulator, so Miso and Home show their marks.',
     );
   }
+}
+
+/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago, so its line reads "1 overdue · Dana (florist) has 1 open") and the 🏠 Move finished a month ago with its one done task. */
+async function buildProjects(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const today = getSeedToday(now);
+  const projectOf = async (
+    id: string,
+    fields: Omit<
+      Project,
+      | 'sealed'
+      | 'milestoneState'
+      | 'mediaIds'
+      | 'createdBy'
+      | 'executionId'
+      | 'lastEditedAt'
+    >,
+    words: ProjectSealed,
+  ): Promise<{ id: string; project: Project }> => ({
+    id,
+    project: {
+      ...fields,
+      milestoneState: {},
+      mediaIds: [],
+      createdBy: 'person',
+      executionId: null,
+      lastEditedAt: null,
+      sealed: await seal<ProjectSealed>(words),
+    },
+  });
+  const taskOf = async (
+    id: string,
+    title: string,
+    fields: Partial<Task> & Pick<Task, 'projectId' | 'createdAt'>,
+  ): Promise<{ id: string; task: Task }> => ({
+    id,
+    task: {
+      status: 'open',
+      importance: null,
+      isUrgent: false,
+      due: null,
+      durationMinutes: null,
+      energy: null,
+      context: null,
+      milestoneId: null,
+      whoIds: [],
+      placeIds: [],
+      notUntil: null,
+      waitsOnTaskIds: [],
+      waitsOnWhoId: null,
+      stepState: {},
+      mediaIds: [],
+      createdBy: 'person',
+      sourceCaptureId: null,
+      executionId: null,
+      lastEditedAt: null,
+      completedAt: null,
+      ...fields,
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+    },
+  });
+  const projects = await Promise.all([
+    projectOf(
+      'seed-project-wedding',
+      {
+        targetDate: today + 100 * DAY_MS,
+        status: 'active',
+        whoRoles: {
+          'seed-who-dana': 'key',
+          'seed-who-priya-raman': 'involved',
+          'seed-who-sam-rivera': 'mentioned',
+        },
+        createdAt: now - 45 * DAY_MS,
+        finishedAt: null,
+      },
+      {
+        name: 'Wedding',
+        emoji: '💍',
+        objective: 'Married on June 20 with everyone there',
+        milestones: {},
+        roleNotes: { 'seed-who-dana': 'florist' },
+      },
+    ),
+    projectOf(
+      'seed-project-move',
+      {
+        targetDate: today - 35 * DAY_MS,
+        status: 'finished',
+        whoRoles: {},
+        createdAt: now - 90 * DAY_MS,
+        finishedAt: now - 30 * DAY_MS,
+      },
+      {
+        name: 'Move',
+        emoji: '🏠',
+        objective: null,
+        milestones: {},
+        roleNotes: {},
+      },
+    ),
+  ]);
+  const tasks = await Promise.all([
+    taskOf('seed-task-wedding-1', 'Book the string quartet', {
+      projectId: 'seed-project-wedding',
+      due: { kind: 'day', date: today - 3 * DAY_MS },
+      createdAt: now - 20 * DAY_MS,
+    }),
+    taskOf('seed-task-wedding-2', 'Pick the ceremony readings', {
+      projectId: 'seed-project-wedding',
+      due: { kind: 'day', date: today + 20 * DAY_MS },
+      whoIds: ['seed-who-priya-raman'],
+      createdAt: now - 15 * DAY_MS,
+    }),
+    taskOf('seed-task-wedding-3', 'Confirm the flowers with Dana', {
+      projectId: 'seed-project-wedding',
+      whoIds: ['seed-who-dana'],
+      createdAt: now - 10 * DAY_MS,
+    }),
+    taskOf('seed-task-wedding-4', 'Order the invitations', {
+      projectId: 'seed-project-wedding',
+      status: 'done',
+      createdAt: now - 44 * DAY_MS,
+      completedAt: now - 30 * DAY_MS,
+    }),
+    taskOf('seed-task-move-1', 'Change the address', {
+      projectId: 'seed-project-move',
+      status: 'done',
+      createdAt: now - 85 * DAY_MS,
+      completedAt: now - 32 * DAY_MS,
+    }),
+  ]);
+  return { projects, tasks };
 }
 
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
@@ -2946,6 +3084,17 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.clashCapture.capture,
         );
       }
+      const projects = people
+        ? await buildProjects({ now: context.now, encryption })
+        : null;
+      if (projects) {
+        projects.projects.forEach((entry) =>
+          batch.set(person.collection('projects').doc(entry.id), entry.project),
+        );
+        projects.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+      }
       const peopleCount = people
         ? people.who.length +
           people.places.length +
@@ -2954,7 +3103,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.facts.length +
           people.keyDates.length +
           1 +
-          7
+          7 +
+          (projects ? projects.projects.length + projects.tasks.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +

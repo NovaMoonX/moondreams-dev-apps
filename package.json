@@ -85,6 +85,8 @@
     "check:helm-joined": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmJoined.ts",
     "check:helm-screen": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmScreen.ts",
     "check:helm-sensitive": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSensitive.ts",
+    "check:helm-projects": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProjects.ts",
+    "check:helm-evidence": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmEvidence.ts",
     "check:helm-key-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmKeyDates.ts",
     "check:helm-undo": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmUndo.ts",
     "check:helm-activation": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActivation.ts",

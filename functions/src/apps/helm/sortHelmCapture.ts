@@ -43,6 +43,7 @@ import {
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
+import { readActiveProjectsIn, readContextProjects } from './projectStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   createQuoteBook,
@@ -67,6 +68,8 @@ import {
   type MentionRead,
   type NoteFactCommand,
   type KeyDateCommand,
+  type ProjectCommand,
+  MAX_CONTEXT_PROJECTS,
   type NomosCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -1246,6 +1249,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       remember: [],
       noteFacts: [],
       keyDates: [],
+      projects: [],
       captureText: '',
       planDay: null,
       setCurrentPlace: null,
@@ -1403,6 +1407,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               .toISOString()
               .slice(0, 10),
           });
+    const projects =
+      mode === 'rest'
+        ? []
+        : await readContextProjects(
+            firestore,
+            base,
+            key,
+            MAX_CONTEXT_PROJECTS,
+          ).catch(() => []);
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -1419,6 +1432,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       selfFacts,
       keyDates: contextKeyDates,
       upcoming,
+      projects,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1589,6 +1603,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     remember: mode === 'full' ? reply.remember : [],
     noteFacts: mode === 'full' ? reply.noteFacts : [],
     keyDates: mode === 'full' ? reply.keyDates : [],
+    projects: mode === 'full' ? reply.projects : [],
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
@@ -1616,6 +1631,7 @@ async function writeResult(
     remember: RememberCommand[];
     noteFacts: NoteFactCommand[];
     keyDates: KeyDateCommand[];
+    projects: ProjectCommand[];
     captureText: string;
     planDay: PlanDayCommand | null;
     setCurrentPlace: SetCurrentPlaceCommand | null;
@@ -1644,6 +1660,7 @@ async function writeResult(
     remember,
     noteFacts,
     keyDates,
+    projects: projectCommands,
     captureText,
     planDay: requestedPlanDay,
     setCurrentPlace: requestedHome,
@@ -1793,7 +1810,10 @@ async function writeResult(
     const reply = isStale ? null : built;
     const asksNow = isStale ? [] : asks;
     const people =
-      (commands.length > 0 || noteFacts.length > 0 || keyDates.length > 0) &&
+      (commands.length > 0 ||
+        noteFacts.length > 0 ||
+        keyDates.length > 0 ||
+        projectCommands.length > 0) &&
       !isStale
         ? await readPeople(transaction, {
             firestore,
@@ -1807,6 +1827,14 @@ async function writeResult(
             capturedAt: capture.createdAt,
           })
         : undefined;
+    const existingProjects =
+      (projectCommands.length > 0 ||
+        commands.some(
+          (command) => command.kind === 'createTask' && command.projectRef,
+        )) &&
+      !isStale
+        ? await readActiveProjectsIn(transaction, firestore, base, key)
+        : [];
     const existingFacts =
       noteFacts.length > 0 && !isStale
         ? await readSubjectFacts(transaction, firestore, base, key)
@@ -1907,6 +1935,8 @@ async function writeResult(
     const homeRefusal = typeof homeWords === 'string' ? homeWords : null;
     const written = planWrites({
       commands: isStale ? [] : commands,
+      projectCommands: isStale ? [] : projectCommands,
+      existingProjects,
       existing,
       captureId: captureRef.id,
       executionId: executionRef.id,
@@ -1985,6 +2015,12 @@ async function writeResult(
       );
       [...plan.factConfirms, ...plan.factDisputes].forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/facts/${id}`), data),
+      );
+      plan.projectCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/projects/${id}`), data),
+      );
+      plan.projectUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/projects/${id}`), data),
       );
       plan.keyDateCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/keyDates/${id}`), data),
@@ -2079,7 +2115,9 @@ async function writeResult(
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
       hasHome: requestedHome !== null,
-      hasFacts: noteFacts.length + keyDates.length > 0 && !isStale,
+      hasFacts:
+        noteFacts.length + keyDates.length + projectCommands.length > 0 &&
+        !isStale,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

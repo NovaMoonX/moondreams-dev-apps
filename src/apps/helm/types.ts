@@ -17,6 +17,8 @@ export type HelmView =
   | 'people'
   | 'who'
   | 'place'
+  | 'projects'
+  | 'project'
   | 'howNomosSeesYou'
   | 'comingUp';
 
@@ -504,6 +506,41 @@ export interface OpenPlace extends Omit<Place, 'sealed'>, PlaceSealed {
   isUnreadable: boolean;
 }
 
+export type ProjectRole = 'key' | 'involved' | 'mentioned';
+
+/** `apps/helm/users/{uid}/projects/{projectId}`: something with several steps. Its words are sealed; the roles are ids and an enum only. */
+export interface Project {
+  /** Date-only, UTC midnight. */
+  targetDate: number | null;
+  status: 'active' | 'finished';
+  milestoneState: Record<
+    string,
+    { date: number | null; order: number; doneAt: number | null }
+  >;
+  whoRoles: Record<string, ProjectRole>;
+  mediaIds: string[];
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  finishedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface ProjectSealed {
+  name: string;
+  emoji: string | null;
+  objective: string | null;
+  milestones: Record<string, { title: string }>;
+  /** whoId to a short note ("florist"). */
+  roleNotes: Record<string, string>;
+}
+
+export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
 export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
@@ -583,7 +620,14 @@ export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
   collection:
-    'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile' | 'keyDates';
+    | 'tasks'
+    | 'facts'
+    | 'who'
+    | 'places'
+    | 'media'
+    | 'profile'
+    | 'keyDates'
+    | 'projects';
   docId: string;
 }
 

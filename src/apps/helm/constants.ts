@@ -72,6 +72,16 @@ export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
+export const PROJECTS_LIMIT = 500;
+/** The most tasks in projects (open and done) the app keeps listening to. */
+export const PROJECT_TASKS_LIMIT = 1_000;
+export const PROJECT_NAME_MAX = 80;
+export const PROJECT_OBJECTIVE_MAX = 200;
+export const PROJECT_ROLE_NOTE_MAX = 40;
+/** Tasks a project's page lists before "Show all". */
+export const PROJECT_TASKS_SHOWN = 6;
+/** Days without a finished task before a project says it has gone quiet. */
+export const PROJECT_QUIET_DAYS = 10;
 /** The most media documents the app keeps listening to. */
 export const MEDIA_LIMIT = 2_000;
 /** Photos one who or place keeps. */
@@ -1326,6 +1336,143 @@ export const HELM_COPY = {
       .join(' '),
   undoReportKeyDatesToo: (count: number) =>
     `${count === 1 ? '1 date' : `${count} dates`} too.`,
+  undoReportProjects: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'project' : 'projects'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportProjectsToo: (count: number) =>
+    `${count === 1 ? '1 project' : `${count} projects`} too.`,
+  askProject: (name: string) => `Ask about ${name}`,
+  askProjects: 'Ask about your projects',
+  chipProjects: 'About your projects',
+  projectsTitle: 'Projects',
+  projectsFailed: "Your projects couldn't be opened.",
+  projectsEmpty:
+    'Nothing started yet. Say "start a project for the move" or tap New project.',
+  projectsNew: 'New project',
+  projectsFinishedRow: (count: number) => `Finished · ${count}`,
+  projectsFinishedHide: 'Hide finished',
+  backToProjects: 'Back to Projects',
+  backToProject: (name: string) => `Back to ${name}`,
+  projectGone: 'This project is gone.',
+  projectUnreadable: "This project couldn't be opened.",
+  projectUntitled: 'A project',
+  projectAllDone: 'Everything is done. Finish this project?',
+  projectFinishButton: 'Finish',
+  projectOnTrack: 'On track: nothing overdue',
+  projectOverdue: (count: number) => `${count} overdue`,
+  projectKeyOpen: (name: string, note: string | null, count: number) =>
+    `${name}${note ? ` (${note})` : ''} has ${count} open`,
+  projectQuiet: (days: number, open: number) =>
+    `Nothing done in ${days} days · ${open} open`,
+  projectTargetLine: (dateLabel: string, daysAway: number) =>
+    daysAway === 0
+      ? `${dateLabel} · today`
+      : daysAway > 0
+        ? `${dateLabel} · in ${daysAway} ${daysAway === 1 ? 'day' : 'days'}`
+        : `${dateLabel} · ${-daysAway} ${daysAway === -1 ? 'day' : 'days'} ago`,
+  projectTabTasks: 'Tasks',
+  projectTabPeople: 'People',
+  projectTabsLabel: 'Project sections',
+  projectTasksEmpty:
+    'No tasks yet. Say "add a task for the wedding" to put one here.',
+  projectTasksShowAll: (count: number) => `Show all ${count}`,
+  projectTasksShowFewer: 'Show fewer',
+  projectPeopleEmpty: 'No one is on this project yet.',
+  projectKeyPerson: 'key person',
+  projectInvolvedPerson: 'involved',
+  projectKeyHeading: 'Key people',
+  projectInvolvedHeading: 'Involved',
+  projectMentionedFold: (count: number) => `Also mentioned · ${count}`,
+  projectMentionedHide: 'Hide mentioned',
+  projectAddSomeone: 'Add someone',
+  projectAddTitle: 'Add someone',
+  projectAddPick: 'Who',
+  projectAddNew: 'Someone new',
+  projectAddNewPlaceholder: 'Their name',
+  projectAddRole: 'Their part',
+  projectAddAction: 'Add',
+  projectAddNeedsPerson: 'Pick someone or type a name.',
+  projectAddNoOne: 'Everyone you know is already here.',
+  projectRoleKey: 'Key',
+  projectRoleInvolved: 'Involved',
+  projectRoleMentioned: 'Mentioned',
+  projectRoleTitle: (name: string) => name,
+  projectRoleField: 'Their part',
+  projectRoleNoteField: 'A note',
+  projectRoleNotePlaceholder: 'florist',
+  projectRoleSave: 'Save',
+  projectRoleOffMenu: 'Take off this project',
+  projectRoleOpenPage: 'Open their page',
+  projectRoleSet: (name: string, role: string) => `${name} is ${role}`,
+  projectRoleAdded: (name: string, project: string) =>
+    `Added ${name} to ${project}`,
+  projectRoleOff: (name: string, project: string) =>
+    `Took ${name} off ${project}`,
+  projectRoleNoteSaved: (name: string) => `Saved the note for ${name}`,
+  projectRoleFailed: "That didn't save. Try again.",
+  projectMenuEdit: 'Change name, objective or date',
+  projectMenuEditHint: 'What it is called, what done looks like, when',
+  projectMenuFinish: 'Mark finished',
+  projectMenuDelete: 'Delete project',
+  projectEditTitle: 'Change project',
+  projectNameField: 'Name',
+  projectEmojiField: 'Emoji',
+  projectObjectiveField: 'What does done look like?',
+  projectDateField: 'Target date',
+  projectNameMissing: 'A name is needed.',
+  projectFinishedToast: (name: string, open: number) =>
+    open === 0
+      ? `Finished ${name}`
+      : `Finished ${name} · ${open} ${open === 1 ? 'task' : 'tasks'} still open`,
+  projectReopenedToast: (name: string) => `Reopened ${name}`,
+  projectFinishedBar: (dateLabel: string) => `Finished ${dateLabel}`,
+  projectReopen: 'Reopen',
+  projectDeleteConfirm: (name: string, tasks: number) =>
+    `Delete ${name}? ${
+      tasks === 0
+        ? 'It has no tasks.'
+        : `Its ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no project;`
+    } its people keep their pages.`,
+  projectDeleteAction: 'Delete',
+  projectDeletedToast: (name: string) => `Deleted ${name}`,
+  projectDeletedBack: (name: string) => `Brought back ${name}`,
+  projectDeleteNeedsConnection: 'Deleting a project needs a connection.',
+  projectDeleteFailed: "That couldn't be deleted. Try again.",
+  projectDeletePartial: (name: string) =>
+    `Some of ${name}'s tasks may still be linked. Check and try again.`,
+  projectUndoFailed: "That couldn't be taken back. Try again.",
+  projectFlowTitle: 'New project',
+  projectFlowNameQuestion: 'What is it called?',
+  projectFlowNamePlaceholder: 'The wedding',
+  projectFlowNameLabel: 'Name',
+  projectFlowEmojiLabel: 'Emoji',
+  projectFlowObjectiveQuestion: 'What does done look like?',
+  projectFlowObjectivePlaceholder: 'Married on June 20 with everyone there',
+  projectFlowObjectiveLabel: 'Done looks like',
+  projectFlowDateQuestion: 'Is there a date?',
+  projectFlowDateLabel: 'Date',
+  projectFlowSkip: 'Skip',
+  projectFlowNone: 'None',
+  projectFlowNext: 'Next',
+  projectFlowCreate: 'Start project',
+  projectFlowDuplicate: (name: string) => `You already have ${name} going.`,
+  projectCreatedToast: (name: string) => `Started ${name}`,
+  projectCreateFailed: "That didn't start. Try again.",
+  projectRemoved: (name: string) => `Took back ${name}`,
+  whoProjectLine: (
+    emoji: string | null,
+    name: string,
+    role: 'key' | 'involved',
+  ) =>
+    `${emoji ? `${emoji} ` : ''}${name} · ${role === 'key' ? 'key person' : 'involved'}`,
+  taskProjectRow: 'Project',
+  resultProjectLine: (emoji: string | null, name: string) =>
+    `Project · ${emoji ? `${emoji} ` : ''}${name}`,
 } as const;
 
 export const PLANNER_COPY = {

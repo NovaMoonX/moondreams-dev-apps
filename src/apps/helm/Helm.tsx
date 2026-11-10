@@ -17,6 +17,8 @@ import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedApps
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
+import ProjectsView from '@apps/helm/components/projects/ProjectsView';
 import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
 import WhoDetail from '@apps/helm/components/who/WhoDetail';
 import WhoView from '@apps/helm/components/who/WhoView';
@@ -37,6 +39,7 @@ const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
   today: HELM_COPY.backToday,
   comingUp: HELM_COPY.comingUpTitle,
   people: HELM_COPY.peopleTitle,
+  projects: HELM_COPY.projectsTitle,
 };
 
 function HelmApp() {
@@ -170,6 +173,22 @@ function HelmApp() {
             backLabel={toBackLabel(HELM_COPY.peopleTitle)}
             onBack={goBackToOrigin}
             onHome={goHome}
+          />
+        )}
+        {!isLocked && view === 'projects' && (
+          <ProjectsView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenProject={(projectId) => showView('project', projectId)}
+          />
+        )}
+        {!isLocked && view === 'project' && (
+          <ProjectDetail
+            projectId={item}
+            backLabel={toBackLabel(HELM_COPY.projectsTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenWho={(whoId) => showView('who', whoId)}
           />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (

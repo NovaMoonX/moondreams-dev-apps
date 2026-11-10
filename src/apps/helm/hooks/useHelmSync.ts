@@ -26,6 +26,10 @@ import {
   setKeyStatus,
   setPlaces,
   setPlacesFailed,
+  setProjectTasks,
+  setProjectTasksFailed,
+  setProjects,
+  setProjectsFailed,
   setMedia,
   setMediaFailed,
   setWho,
@@ -56,11 +60,15 @@ import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
 import { startMediaListener } from '@apps/helm/store/listeners/mediaListener';
 import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
+import { startProjectsListener } from '@apps/helm/store/listeners/projectListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
-import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
+import {
+  startOpenTasksListener,
+  startProjectTasksListener,
+} from '@apps/helm/store/listeners/taskListener';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { useKeyDateRepair } from '@apps/helm/hooks/useKeyDateRepair';
 import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
@@ -250,6 +258,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
               dispatch(setOpenTasksFailed());
             },
           ),
+          startProjectTasksListener(
+            uid,
+            read,
+            (tasks) => dispatch(setProjectTasks(tasks)),
+            (error) => {
+              console.error('Helm project tasks listener failed', error);
+              dispatch(setProjectTasksFailed());
+            },
+          ),
           startPlanDaysListener(
             uid,
             read,
@@ -294,6 +311,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm places listener failed', error);
               dispatch(setPlacesFailed());
+            },
+          ),
+          startProjectsListener(
+            uid,
+            read,
+            (projects) => dispatch(setProjects(projects)),
+            (error) => {
+              console.error('Helm projects listener failed', error);
+              dispatch(setProjectsFailed());
             },
           ),
           startMediaListener(

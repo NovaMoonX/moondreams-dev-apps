@@ -8,6 +8,7 @@ import type {
   ExecutionSealed,
   KeyDateSealed,
   OpenExecution,
+  ProjectSealed,
   TaskSealed,
   WhoSealed,
 } from '@apps/helm/types';
@@ -25,7 +26,7 @@ export interface UndoTarget {
   /** The document as it is now; null when it is gone. */
   data: Record<string, unknown> | null;
   /** Its sealed words; null when they won't open. */
-  opened: TaskSealed | WhoSealed | KeyDateSealed | null;
+  opened: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
   /** For a date that was removed: whether the person it belonged to is still there. */
   isOwnerHere?: boolean;
 }
@@ -41,7 +42,7 @@ export type UndoPlan =
         docId: string;
         fields: Record<string, unknown>;
         collection: EffectRef['collection'];
-        reseal: TaskSealed | WhoSealed | KeyDateSealed | null;
+        reseal: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
       }[];
       /** Dates the assistant removed, written back under the same ids. */
       creates: {
@@ -101,7 +102,7 @@ const refuse = (
 
 interface Step {
   data: Values | null;
-  opened: TaskSealed | WhoSealed | KeyDateSealed | null;
+  opened: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
   fields: Values;
   sealedFields: Values;
   restored: Values;
@@ -118,7 +119,7 @@ type RecordOutcome =
       kind: 'restored';
       title: string;
       fields: Values;
-      reseal: TaskSealed | WhoSealed | KeyDateSealed | null;
+      reseal: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
       effect: ExecutionEffect;
     }
   | {
@@ -483,6 +484,9 @@ export function planUndo(input: {
   const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
   const isKeyDateDoc = (docId: string) =>
     collectionOf.get(docId) === 'keyDates';
+  const isProjectDoc = (docId: string) =>
+    collectionOf.get(docId) === 'projects';
+  const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
   const factsDone = done.filter(({ docId }) => isFactDoc(docId));
   const datesDone = done.filter(({ docId }) => isKeyDateDoc(docId));
   const records = done.filter(({ docId }) =>
@@ -491,12 +495,14 @@ export function planUndo(input: {
       : !isEntity(collectionOf.get(docId) ?? 'tasks') &&
         !isMediaDoc(docId) &&
         !isFactDoc(docId) &&
-        !isKeyDateDoc(docId),
+        !isKeyDateDoc(docId) &&
+        !isProjectDoc(docId),
   );
   if (
     records.length === 0 &&
     factsDone.length === 0 &&
-    datesDone.length === 0
+    datesDone.length === 0 &&
+    projectsDone.length === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -517,26 +523,41 @@ export function planUndo(input: {
   const dateCount = datesDone.length;
   const datesToo =
     dateCount > 0 ? HELM_COPY.undoReportKeyDatesToo(dateCount) : '';
+  const projectCount = projectsDone.length;
+  const projectsToo =
+    projectCount > 0 ? HELM_COPY.undoReportProjectsToo(projectCount) : '';
   const report =
-    records.length === 0
-      ? factCount === 0
-        ? HELM_COPY.undoReportKeyDates(dateCount, kept.length, gone)
-        : [HELM_COPY.undoReportFacts(factCount, kept.length, gone), datesToo]
+    records.length === 0 && factCount === 0 && dateCount === 0
+      ? HELM_COPY.undoReportProjects(projectCount, kept.length, gone)
+      : records.length === 0
+        ? factCount === 0
+          ? [
+              HELM_COPY.undoReportKeyDates(dateCount, kept.length, gone),
+              projectsToo,
+            ]
+              .filter(Boolean)
+              .join(' ')
+          : [
+              HELM_COPY.undoReportFacts(factCount, kept.length, gone),
+              datesToo,
+              projectsToo,
+            ]
+              .filter(Boolean)
+              .join(' ')
+        : [
+            counted.length === 0
+              ? isHomeRestored
+                ? HELM_COPY.undoReportHomeAgain
+                : HELM_COPY.undoReportHome
+              : isImport
+                ? HELM_COPY.undoReportPeople(counted.length, kept.length, gone)
+                : HELM_COPY.undoReport(counted.length, kept.length, gone),
+            factCount > 0 ? HELM_COPY.undoReportFactsToo(factCount) : '',
+            datesToo,
+            projectsToo,
+          ]
             .filter(Boolean)
-            .join(' ')
-      : [
-          counted.length === 0
-            ? isHomeRestored
-              ? HELM_COPY.undoReportHomeAgain
-              : HELM_COPY.undoReportHome
-            : isImport
-              ? HELM_COPY.undoReportPeople(counted.length, kept.length, gone)
-              : HELM_COPY.undoReport(counted.length, kept.length, gone),
-          factCount > 0 ? HELM_COPY.undoReportFactsToo(factCount) : '',
-          datesToo,
-        ]
-          .filter(Boolean)
-          .join(' ');
+            .join(' ');
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]

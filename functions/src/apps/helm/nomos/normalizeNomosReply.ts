@@ -20,6 +20,12 @@ import {
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
   MAX_KEY_DATES,
+  MAX_PROJECT_ROLES,
+  PROJECT_NAME_CAP,
+  PROJECT_OBJECTIVE_CAP,
+  PROJECT_ROLE_NOTE_CAP,
+  PROJECT_ROLES,
+  type ProjectCommand,
   KEY_DATE_KINDS,
   KEY_DATE_LABEL_CAP,
   type KeyDateCommand,
@@ -95,6 +101,11 @@ const KNOWN_KEYS = new Set([
   'keyDateLabel',
   'dateSpanId',
   'comesBack',
+  'projectRef',
+  'projectEmoji',
+  'objective',
+  'role',
+  'roleNote',
   'shape',
   'prompt',
   'options',
@@ -339,6 +350,77 @@ const readKeyDate = (
     comesBack: typeof item.comesBack === 'boolean' ? item.comesBack : null,
     quote: toText(item.quote, FACT_QUOTE_CAP),
   };
+};
+
+const EMOJI_RE = /\p{Extended_Pictographic}/u;
+
+/** The first character the person would see as one emoji, or null. */
+const toEmoji = (value: unknown) => {
+  if (typeof value !== 'string') return null;
+  const first = [...new Intl.Segmenter().segment(value.trim())][0]?.segment;
+  return first && EMOJI_RE.test(first) ? first : null;
+};
+
+/** A project's date is a day, never a moment or a coarse span; an unknown span drops only the date. */
+const readProjectDate = (
+  value: unknown,
+  reading: CaptureReading,
+  timeZone: string,
+) => {
+  const span =
+    typeof value === 'string'
+      ? reading.dates.find((entry) => entry.id === value)
+      : undefined;
+  if (!span || span.precision) return null;
+  return span.due.kind === 'day'
+    ? span.due.date
+    : getDayIn(span.due.at, toKnownZone(timeZone));
+};
+
+/** A project to start, or a role to give; null when its words are missing. At most one project and `MAX_PROJECT_ROLES` roles. */
+const readProjects = (
+  items: Record<string, unknown>[],
+  entities: Entities,
+  reading: CaptureReading,
+  timeZone: string,
+): ProjectCommand[] => {
+  const read = items.flatMap((item): ProjectCommand[] => {
+    if (item.kind === 'createProject') {
+      const name = toText(item.title, PROJECT_NAME_CAP);
+      return name
+        ? [
+            {
+              kind: 'createProject',
+              name,
+              emoji: toEmoji(item.projectEmoji),
+              objective: toText(item.objective, PROJECT_OBJECTIVE_CAP),
+              targetDate: readProjectDate(item.dueSpanId, reading, timeZone),
+            },
+          ]
+        : [];
+    }
+    if (item.kind !== 'setProjectRole') return [];
+    const projectRef = toText(item.projectRef, PROJECT_NAME_CAP);
+    const role = PROJECT_ROLES.find((entry) => entry === item.role);
+    const whoRefs = toRefs(item.whoRefs, entities.whoRefs);
+    return projectRef && role && whoRefs.length > 0
+      ? [
+          {
+            kind: 'setProjectRole',
+            projectRef,
+            whoRefs,
+            role,
+            note: toText(item.roleNote, PROJECT_ROLE_NOTE_CAP),
+          },
+        ]
+      : [];
+  });
+  return [
+    ...read.filter((command) => command.kind === 'createProject').slice(0, 1),
+    ...read
+      .filter((command) => command.kind === 'setProjectRole')
+      .slice(0, MAX_PROJECT_ROLES),
+  ];
 };
 
 /** An unknown span drops only the plan request, never the rest of the reply. */
@@ -717,7 +799,9 @@ const readCommand = (
     kind === 'setCurrentPlace' ||
     kind === 'noteFact' ||
     kind === 'setKeyDate' ||
-    kind === 'removeKeyDate'
+    kind === 'removeKeyDate' ||
+    kind === 'createProject' ||
+    kind === 'setProjectRole'
   ) {
     return null;
   }
@@ -740,6 +824,7 @@ const readCommand = (
       due,
       isUrgent: isUrgent ?? reading.isUrgent,
       ...readLinks(item, title, reading, entities),
+      projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
     };
   }
 
@@ -798,6 +883,7 @@ export function normalizeNomosReply(
   remember: RememberCommand[];
   noteFacts: NoteFactCommand[];
   keyDates: KeyDateCommand[];
+  projects: ProjectCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -851,6 +937,12 @@ export function normalizeNomosReply(
       return read ? [read] : [];
     })
     .slice(0, MAX_KEY_DATES);
+  const projects = readProjects(
+    items,
+    entities,
+    context.reading,
+    context.timeZone ?? 'UTC',
+  );
   const { asks, dropped: askDropped } = readAsks(
     items,
     context.aliases,
@@ -889,6 +981,7 @@ export function normalizeNomosReply(
     remember,
     noteFacts,
     keyDates,
+    projects,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

@@ -40,6 +40,8 @@ export const COMMAND_KINDS = [
   'noteFact',
   'setKeyDate',
   'removeKeyDate',
+  'createProject',
+  'setProjectRole',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -73,6 +75,12 @@ export const FACT_QUOTE_CAP = 280;
 export const MAX_NOTED_FACTS = 5;
 export const TOPIC_CAP = 40;
 export const MAX_KEY_DATES = 5;
+export const PROJECT_NAME_CAP = 80;
+export const PROJECT_OBJECTIVE_CAP = 200;
+export const PROJECT_ROLE_NOTE_CAP = 40;
+export const MAX_PROJECT_ROLES = 5;
+export const MAX_CONTEXT_PROJECTS = 20;
+export const PROJECT_ROLES = ['key', 'involved'] as const;
 export const KEY_DATE_LABEL_CAP = 60;
 export const MAX_MOMENTS_PER_WHO = 500;
 export const KEY_DATE_PRECISIONS = ['day', 'month', 'year', 'decade'] as const;
@@ -163,6 +171,8 @@ export type NomosCommand =
       isUrgent: boolean;
       whoRefs: string[];
       placeRefs: string[];
+      /** A project's name as the person said it; code matches it. */
+      projectRef: string | null;
     }
   | {
       kind: 'updateTask';
@@ -263,6 +273,26 @@ export interface RemoveKeyDateCommand {
 
 export type KeyDateCommand = SetKeyDateCommand | RemoveKeyDateCommand;
 
+/** The person starts something with several steps; its date is date-only (UTC midnight). */
+export interface CreateProjectCommand {
+  kind: 'createProject';
+  name: string;
+  emoji: string | null;
+  objective: string | null;
+  targetDate: number | null;
+}
+
+/** A person is key to or involved in a project, named by words code matches; it only raises a role. */
+export interface SetProjectRoleCommand {
+  kind: 'setProjectRole';
+  projectRef: string;
+  whoRefs: string[];
+  role: (typeof PROJECT_ROLES)[number];
+  note: string | null;
+}
+
+export type ProjectCommand = CreateProjectCommand | SetProjectRoleCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -360,6 +390,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'keyDateLabel',
             'dateSpanId',
             'comesBack',
+            'projectRef',
+            'projectEmoji',
+            'objective',
+            'role',
+            'roleNote',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -373,11 +408,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              'createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it.',
+              'createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters.',
             ),
             dueSpanId: nullable(
               'string',
-              'The id of a date span from the reading that gives this task its day, or the day to plan for planDay (null means today). Never write a date yourself.',
+              "The id of a date span from the reading that gives this task its day, the day to plan for planDay (null means today), or the project's target date for createProject. Never write a date yourself.",
             ),
             isUrgent: nullable(
               'boolean',
@@ -441,7 +476,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters. noteFact: the preferred or favorite thing ("Shell", "Arrival"), at most ${VALUE_CAP} characters; null otherwise.`,
             ),
             whoRefs: NAMED_BY_REF(
-              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; null or empty when none.',
+              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; setProjectRole: the people given the role; null or empty when none.',
             ),
             placeRefs: NAMED_BY_REF(
               'createTask, updateTask and noteFact: the ref ($p1, …) of each entry in places this task or fact is about; null or empty when none.',
@@ -569,6 +604,28 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             comesBack: nullable(
               'boolean',
               'setKeyDate custom only: true when the date comes back each year; false for a one-time event.',
+            ),
+            projectRef: nullable(
+              'string',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole: the name of the project. null otherwise.',
+            ),
+            projectEmoji: nullable(
+              'string',
+              'createProject: one emoji that fits it; null when none does.',
+            ),
+            objective: nullable(
+              'string',
+              `createProject: what done looks like in one plain sentence, only when said, at most ${PROJECT_OBJECTIVE_CAP} characters; null otherwise.`,
+            ),
+            role: {
+              type: ['string', 'null'],
+              enum: [...PROJECT_ROLES, null],
+              description:
+                'setProjectRole: key for someone the project depends on ("Dana is key for the wedding", "Dana is doing the flowers"); involved for someone who is part of it ("add Maya to the move"); null for every other kind.',
+            },
+            roleNote: nullable(
+              'string',
+              `setProjectRole: what the person does in it, in a word or two ("florist"), only when said, at most ${PROJECT_ROLE_NOTE_CAP} characters; null otherwise.`,
             ),
             contradicts: nullable(
               'string',

@@ -935,6 +935,61 @@ const readMoment = (text: string, reading: CaptureReading) => {
   };
 };
 
+const START_PROJECT_RE =
+  /^\s*start a project for (?:the |my |our )?(.+?)[.!]?\s*$/i;
+const PROJECT_KEY_RE =
+  /^\s*@?(\p{Lu}\p{L}+) is key for (?:the |my |our )?(.+?)[.!]?\s*$/iu;
+
+const toProjectName = (words: string) =>
+  words.charAt(0).toUpperCase() + words.slice(1);
+
+/** The emulator's stand-in for "Start a project for the move" (one createProject) and "Dana is key for the wedding" (one setProjectRole). Null for any other words. */
+const readProject = (text: string) => {
+  const start = START_PROJECT_RE.exec(text);
+  if (start) {
+    return {
+      commands: [
+        toAnswer({
+          kind: 'createProject',
+          isHealth: null,
+          title: toProjectName(start[1]),
+          dueSpanId: null,
+          projectEmoji: null,
+          objective: null,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const key = PROJECT_KEY_RE.exec(text);
+  if (!key || NOT_NAMES.has(key[1])) return null;
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === key[1]);
+  return {
+    commands: [
+      toAnswer({
+        kind: 'setProjectRole',
+        isHealth: null,
+        projectRef: toProjectName(key[2]),
+        whoRefs: ['$w1'],
+        role: 'key',
+        roleNote: null,
+      }),
+    ],
+    mentions: [
+      {
+        ref: '$w1',
+        name: key[1],
+        kind: known?.kind ?? 'person',
+        relation: null,
+        species: known?.species ?? null,
+        organizationKind: known?.organizationKind ?? null,
+      },
+    ],
+    places: [],
+  };
+};
+
 /** The emulator's stand-in for "Dana's birthday is June 3", "our anniversary is June 20" or "Miso's gotcha day is Dec 3": one setKeyDate on the date span the words end with, about the name that starts them or the person. "Remove Dana's birthday" removes the one in context. Null for any other words. */
 const readKeyDate = (
   text: string,
@@ -1070,6 +1125,17 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
+      const project = readProject(text);
+      if (project) {
+        return {
+          terminalInput: project,
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
       const keyDate = readKeyDate(text, reading, messages[0]?.content ?? '');
       if (keyDate) {
         return {
@@ -1156,6 +1222,8 @@ export function createFixtureProvider(
         ]),
       ];
       const entities = readEntities(text, reading);
+      const openProjects =
+        readBlock<string[]>(messages[0]?.content ?? '', 'open_projects') ?? [];
       const commands = bounds.flatMap(([start, end], index) => {
         const spans = reading.dates.filter(
           (span) => span.start >= start && span.end <= end,
@@ -1178,6 +1246,12 @@ export function createFixtureProvider(
               ? [entry.ref]
               : [],
           );
+        const forProject = /\bfor the ([a-z]+)\b/i.exec(piece)?.[1] ?? null;
+        const projectRef = forProject
+          ? (openProjects.find(
+              (name) => name.toLowerCase() === forProject.toLowerCase(),
+            ) ?? toProjectName(forProject))
+          : null;
         return hasMeaning(title)
           ? [
               {
@@ -1189,6 +1263,7 @@ export function createFixtureProvider(
                 isUrgent: null,
                 whoRefs: refsIn(entities.mentions),
                 placeRefs: refsIn(entities.places),
+                projectRef,
               },
             ]
           : [];
