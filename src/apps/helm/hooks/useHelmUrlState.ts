@@ -18,6 +18,9 @@ const URL_VIEWS = [
   'activity',
   'connectedApps',
   'connection',
+  'people',
+  'who',
+  'place',
 ] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';
@@ -42,12 +45,14 @@ const clearStep = () => {
 /** The open view, its Browse sheet and the conversation over a page, kept in the URL so a reload and Back land where the person was. */
 export function useHelmUrlState() {
   const navigate = useNavigate();
-  const [{ view: requestedView, browse, ask, grant }, setUrl] = useQueryStates({
-    view: parseAsStringLiteral(URL_VIEWS),
-    browse: parseAsBoolean,
-    ask: parseAsStringLiteral(['page'] as const),
-    grant: parseAsString,
-  });
+  const [{ view: requestedView, browse, ask, grant, item }, setUrl] =
+    useQueryStates({
+      view: parseAsStringLiteral(URL_VIEWS),
+      browse: parseAsBoolean,
+      ask: parseAsStringLiteral(['page'] as const),
+      grant: parseAsString,
+      item: parseAsString,
+    });
 
   const view: HelmView = requestedView ?? 'home';
   const isBrowseOpen = browse === true && view === 'home';
@@ -71,28 +76,28 @@ export function useHelmUrlState() {
     return setUrl({ browse: null }, { history: 'replace' });
   };
 
-  /** Replaces the Browse entry when the sheet is open, so Back from the view lands on home. */
-  const showView = async (next: HelmView, nextGrant: string | null = null) => {
+  /** Replaces the Browse entry when the sheet is open, so Back from the view lands on home. `id` is the connection, who or place the view opens on. */
+  const showView = async (next: HelmView, id: string | null = null) => {
     if (next === 'home') {
       await setUrl(
-        { view: null, browse: null, grant: null },
+        { view: null, browse: null, grant: null, item: null },
         { history: 'replace' },
       );
       clearStep();
       return;
     }
+    const target = {
+      view: next,
+      browse: null,
+      grant: next === 'connection' ? id : null,
+      item: next === 'who' || next === 'place' ? id : null,
+    };
     if (isBrowseOpen) {
-      await setUrl(
-        { view: next, browse: null, grant: nextGrant },
-        { history: 'replace' },
-      );
+      await setUrl(target, { history: 'replace' });
       markStep('home');
       return;
     }
-    await setUrl(
-      { view: next, browse: null, grant: nextGrant },
-      { history: 'push' },
-    );
+    await setUrl(target, { history: 'push' });
     markStep(view);
   };
 
@@ -102,7 +107,7 @@ export function useHelmUrlState() {
       return;
     }
     return setUrl(
-      { view: null, browse: null, grant: null },
+      { view: null, browse: null, grant: null, item: null },
       { history: 'replace' },
     );
   };
@@ -116,7 +121,12 @@ export function useHelmUrlState() {
     }
     const wasStep = isStep();
     await setUrl(
-      { view: parent === 'home' ? null : parent, browse: null, grant: null },
+      {
+        view: parent === 'home' ? null : parent,
+        browse: null,
+        grant: null,
+        item: null,
+      },
       { history: 'replace' },
     );
     if (parent === 'home') clearStep();
@@ -126,6 +136,7 @@ export function useHelmUrlState() {
   return {
     view,
     grant,
+    item,
     isBrowseOpen,
     isAskRequested,
     openAsk,

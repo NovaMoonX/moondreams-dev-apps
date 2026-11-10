@@ -7,7 +7,9 @@ import type {
   OpenCapture,
   OpenExecution,
   OpenFact,
+  OpenPlace,
   OpenTask,
+  OpenWho,
   PlanDay,
   SyncedRecord,
 } from '@apps/helm/types';
@@ -60,6 +62,10 @@ export interface HelmState {
   planDays: PlanDaySet;
   /** The person's confirmed and inferred facts. */
   facts: LoadedSet<OpenFact>;
+  /** The people, pets and organizations the person knows. */
+  who: LoadedSet<OpenWho>;
+  /** The places the person has named. */
+  places: LoadedSet<OpenPlace>;
   /** Copies of other apps' records, opened. */
   synced: LoadedSet<SyncedRecord>;
   /** What the assistant did for the turns in the eager window. */
@@ -103,6 +109,8 @@ const initialState: HelmState = {
   openTasks: emptyLoadedSet,
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
+  who: emptyLoadedSet,
+  places: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
   earlierExecutions: [],
@@ -199,6 +207,22 @@ const helmSlice = createSlice({
     },
     setFactsFailed: (state) => {
       state.facts.isFailed = true;
+    },
+    setWho: (state, action: PayloadAction<OpenWho[]>) => {
+      state.who = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setWhoFailed: (state) => {
+      state.who.isFailed = true;
+    },
+    setPlaces: (state, action: PayloadAction<OpenPlace[]>) => {
+      state.places = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setPlacesFailed: (state) => {
+      state.places.isFailed = true;
     },
     setSynced: (state, action: PayloadAction<SyncedRecord[]>) => {
       state.synced = {
@@ -304,6 +328,10 @@ export const {
   setPlanDaysFailed,
   setFacts,
   setFactsFailed,
+  setWho,
+  setWhoFailed,
+  setPlaces,
+  setPlacesFailed,
   setSynced,
   setSyncedFailed,
   setRecentExecutions,

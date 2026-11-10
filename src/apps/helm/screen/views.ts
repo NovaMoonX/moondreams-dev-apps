@@ -34,6 +34,7 @@ const TILES = [
   { view: 'today', importance: 'lead', grows: null },
   { view: 'inbox', importance: 'major', grows: 'openQuestions' },
   { view: 'tasks', importance: 'minor', grows: null },
+  { view: 'people', importance: 'minor', grows: null },
 ] as const satisfies readonly BrowseTile[];
 
 // More than one lead or three major tiles fails to typecheck here.
@@ -54,6 +55,9 @@ export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   activity: 'settings',
   connectedApps: 'settings',
   connection: 'connectedApps',
+  people: 'home',
+  who: 'people',
+  place: 'home',
 };
 
 export const VIEW_KINDS = {
@@ -65,4 +69,7 @@ export const VIEW_KINDS = {
   activity: 'utility',
   connectedApps: 'utility',
   connection: 'utility',
+  people: 'content',
+  who: 'content',
+  place: 'content',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;

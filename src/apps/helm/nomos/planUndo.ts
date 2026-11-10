@@ -110,7 +110,10 @@ type RecordOutcome =
 const toTitle = (target: UndoTarget, effects: ExecutionEffect[]) =>
   target.opened?.title ||
   effects
-    .map((effect) => effect.written['sealed.title'])
+    .map(
+      (effect) =>
+        effect.written['sealed.title'] ?? effect.written['sealed.name'],
+    )
     .find((title): title is string => typeof title === 'string' && !!title) ||
   HELM_COPY.resultTaskFallback;
 

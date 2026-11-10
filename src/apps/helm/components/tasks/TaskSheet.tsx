@@ -10,6 +10,7 @@ import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryRow from '@/components/SummaryRow';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -37,6 +38,11 @@ import {
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import {
+  useLinkedNames,
+  type LinkedName,
+} from '@apps/helm/hooks/useLinkedNames';
 import { usePlacementMode } from '@apps/helm/hooks/usePlacementMode';
 import { usePlanSources } from '@apps/helm/hooks/usePlanDays';
 import {
@@ -108,6 +114,15 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const FOOT = 'px-6 pt-2 pb-3';
 const SMALL_ACTION =
   "text-foreground! relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']";
+
+const getLinkedLabel = (kind: LinkedName['kind']) =>
+  kind === 'person'
+    ? HELM_COPY.linkedPerson
+    : kind === 'pet'
+      ? HELM_COPY.linkedPet
+      : kind === 'organization'
+        ? HELM_COPY.linkedOrganization
+        : HELM_COPY.linkedPlace;
 
 const readHeld = <T,>(held: Held<T> | null, taskId: string, current: T) =>
   held && held.taskId === taskId && held.from === current ? held.text : current;
@@ -197,6 +212,8 @@ function TaskSheet({
   const [isWordsDirty, setIsWordsDirty] = useState(false);
   const isDeleting = useRef(false);
   const assistantName = useAssistantName();
+  const { showView } = useHelmUrlState();
+  const linked = useLinkedNames(task ?? { whoIds: [], placeIds: [] });
   const [planMode, setPlanMode] = usePlacementMode();
   const sources = usePlanSources(nowMinute);
   const plannedKey = useAppSelector((state) => {
@@ -643,6 +660,23 @@ function TaskSheet({
             </SummaryRow>
           )}
           <WhenRow editing={editing} now={nowMinute} />
+          {linked.map((entry) => (
+            <SummaryRow
+              key={`${entry.kind}:${entry.id}`}
+              label={getLinkedLabel(entry.kind)}
+              onClick={() =>
+                afterBackLayersClose(
+                  () =>
+                    void showView(
+                      entry.kind === 'place' ? 'place' : 'who',
+                      entry.id,
+                    ),
+                )
+              }
+            >
+              {entry.name}
+            </SummaryRow>
+          ))}
           {!task.isUnreadable && (
             <SummaryRow
               label={HELM_COPY.stepsLabel}

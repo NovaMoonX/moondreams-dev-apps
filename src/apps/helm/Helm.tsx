@@ -16,6 +16,9 @@ import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedApps
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
+import WhoDetail from '@apps/helm/components/who/WhoDetail';
+import WhoView from '@apps/helm/components/who/WhoView';
 import TasksView from '@apps/helm/components/tasks/TasksView';
 import TodayView from '@apps/helm/components/today/TodayView';
 import { HelmVoiceContext, useHelmVoice } from '@apps/helm/hooks/useHelmVoice';
@@ -32,6 +35,7 @@ function HelmApp() {
   const {
     view,
     grant,
+    item,
     isBrowseOpen,
     isAskRequested,
     closeAsk,
@@ -45,7 +49,7 @@ function HelmApp() {
   useHelmTheme();
   useTrackAppUsage('helm', user?.uid ?? null);
   useLoadFeatureGates('helm', user?.uid ?? null);
-  useHelmSync(user?.uid ?? null);
+  useHelmSync(user?.uid ?? null, user?.displayName ?? null);
   const voice = useHelmVoice();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const screen = useAppSelector(selectTopScreen);
@@ -124,6 +128,19 @@ function HelmApp() {
         )}
         {!isLocked && view === 'connection' && (
           <ConnectionPage grantId={grant} onBack={goBack} />
+        )}
+        {!isLocked && view === 'people' && (
+          <WhoView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenWho={(whoId) => showView('who', whoId)}
+          />
+        )}
+        {!isLocked && view === 'who' && (
+          <WhoDetail whoId={item} onBack={goBack} onHome={goHome} />
+        )}
+        {!isLocked && view === 'place' && (
+          <PlaceDetail placeId={item} onBack={goBack} onHome={goHome} />
         )}
         {isAskRequested && !isLocked && screen && (
           <AskConversation entry={screen} onClose={() => void closeAsk()} />

@@ -35,6 +35,7 @@ export async function ensureHelmProfile(uid: string) {
       isWakeWordOn: false,
       isHandsFreeOn: true,
       hasSeenVoiceNotice: false,
+      selfWhoId: null,
       createdAt: Date.now(),
       lastEditedAt: null,
     };

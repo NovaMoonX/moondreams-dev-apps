@@ -34,6 +34,7 @@ Built:
 - Today plans the day: a strip of days, your events and up to three suggested tasks in real gaps ("40 min · fits before Standup"), each kept, moved to another time or set aside for today; "Plan my day" or "plan tomorrow" asks for it, a past day reads as it was with Bring to today, and Settings sets your day's hours and how full to plan it.
 - The day after a night shift or a late night stays empty with "Plan my day anyway"; a kept task that now overlaps a new event says so and offers another time; a calendar that stopped sharing or couldn't load says so with Reconnect or Try again; an event's sheet gives its day and time and, for an all-day one, "Keeps me busy all day".
 - One event on your calendar and in A-List or Waypoint (or on two Google accounts) shows once with both marks; the calendar's time is shown, and when the app's differs one line says so ("A-List Tracker says 7:00 PM").
+- Name a friend, a pet or a shop in a turn ("call @Dana", "buy Miso's food at Acme Bakery") and it links to the one you meant, or is added as new; People (in Browse) lists them Close, Regular and Others, each with a page of the tasks and turns that name them, and a task row shows who and where it is about.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

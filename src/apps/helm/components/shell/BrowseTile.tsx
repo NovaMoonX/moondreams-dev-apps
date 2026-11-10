@@ -5,7 +5,9 @@ import {
   Inbox,
   Link2,
   ListChecks,
+  MapPin,
   Settings2,
+  Users,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -24,6 +26,9 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   activity: { label: HELM_COPY.activityTitle, icon: History },
   connectedApps: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
   connection: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
+  people: { label: HELM_COPY.peopleTitle, icon: Users },
+  who: { label: HELM_COPY.peopleTitle, icon: Users },
+  place: { label: HELM_COPY.linkedPlace, icon: MapPin },
 };
 
 interface BrowseTileProps {

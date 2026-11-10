@@ -49,7 +49,11 @@ const toTitle = (execution: OpenExecution) =>
   null;
 
 const countRecords = (execution: OpenExecution) =>
-  new Set(execution.effectRefs.map((ref) => ref.docId)).size;
+  new Set(
+    execution.effectRefs
+      .filter((ref) => ref.collection !== 'who' && ref.collection !== 'places')
+      .map((ref) => ref.docId),
+  ).size;
 
 /** The first task an execution touched, with how many more it touched; null when its payload names none. */
 export function getActivitySubject(execution: OpenExecution) {

@@ -18,7 +18,8 @@ export function buildResultLines(
   timeZone: string,
   now: number,
 ): ResultLine[] {
-  return execution.effectRefs.map((ref, index) => {
+  return execution.effectRefs.flatMap((ref, index): ResultLine[] => {
+    if (ref.collection === 'who' || ref.collection === 'places') return [];
     const effect = execution.effects[index];
     const task = tasksById.get(ref.docId);
     const title =
@@ -27,14 +28,16 @@ export function buildResultLines(
       toText(task?.title) ??
       HELM_COPY.resultTaskFallback;
     if (ref.collection === 'facts') {
-      return {
-        key: `${ref.docId}:${index}`,
-        title:
-          toText(effect?.written['sealed.title']) ??
-          toText(effect?.written['sealed.statement']) ??
-          HELM_COPY.resultFactFallback,
-        detail: null,
-      };
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            toText(effect?.written['sealed.statement']) ??
+            HELM_COPY.resultFactFallback,
+          detail: null,
+        },
+      ];
     }
     const isDone = effect?.written.status === 'done';
     const due =
@@ -46,6 +49,6 @@ export function buildResultLines(
       : due
         ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
         : null;
-    return { key: `${ref.docId}:${index}`, title, detail };
+    return [{ key: `${ref.docId}:${index}`, title, detail }];
   });
 }

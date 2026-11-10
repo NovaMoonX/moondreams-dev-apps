@@ -4,6 +4,7 @@ import { ChevronRight } from 'lucide-react';
 
 import TickMark from '@/components/TickMark';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenTask } from '@apps/helm/types';
 import { formatTaskDue, isOverdue } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
@@ -16,6 +17,8 @@ interface TaskRowProps {
   isDone: boolean;
   /** Why the task is not awake yet ("Not until Fri, Nov 13"), shown in place of its day. */
   condition?: string | null;
+  /** The who or place whose page lists the row, left out of its names. */
+  omitLinkedId?: string | null;
   onOpen: (task: OpenTask) => void;
   onTick: (task: OpenTask) => void;
   onUndoTick: (taskId: string) => void;
@@ -28,12 +31,17 @@ function TaskRow({
   now,
   isDone,
   condition = null,
+  omitLinkedId = null,
   onOpen,
   onTick,
   onUndoTick,
 }: TaskRowProps) {
   const title = task.isUnreadable ? HELM_COPY.unreadable : task.title;
   const steps = getOrderedSteps(task);
+  const linkedLine = useLinkedNames(task)
+    .filter((entry) => entry.id !== omitLinkedId)
+    .map((entry) => entry.name)
+    .join(', ');
   const dueLine = task.due && formatTaskDue(task.due, timeZone, now);
   const isLate =
     !isDone &&
@@ -47,6 +55,7 @@ function TaskRow({
   const otherParts = isDone
     ? []
     : [
+        ...(linkedLine ? [linkedLine] : []),
         ...(steps.length > 0
           ? [
               HELM_COPY.stepsCount(

@@ -15,12 +15,17 @@ import {
   openJson,
 } from '@apps/helm/security';
 import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
+import { ensureSelfWho } from '@apps/helm/store/actions/whoActions';
 import {
   clearHelm,
   retryKey,
   setFacts,
   setFactsFailed,
   setKeyStatus,
+  setPlaces,
+  setPlacesFailed,
+  setWho,
+  setWhoFailed,
   setOpenTasks,
   setOpenTasksFailed,
   setPlanDays,
@@ -44,13 +49,15 @@ import {
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
+import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
+import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
-import { SYNC_REFRESH_MS } from '@apps/helm/constants';
+import { HELM_COPY, SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import { getPlanDaysWindow } from '@apps/helm/utils/planDays';
 import { isDueForRefresh } from '@apps/helm/utils/synced';
@@ -103,8 +110,43 @@ function useConnectionsRefresh(uid: string | null) {
   }, [uid, isKnown, grants]);
 }
 
+/** Makes the person's own who once the key is here and the profile has loaded without one; offline it is tried again when the device is back. */
+function useSelfWho(uid: string | null, displayName: string | null) {
+  const keyStatus = useAppSelector((state) => state.helm.keyStatus);
+  const hasNoSelf = useAppSelector(
+    (state) =>
+      state.helm.uid === uid &&
+      state.helm.profile !== null &&
+      state.helm.profile.selfWhoId === null,
+  );
+  const isMaking = useRef(false);
+  const name =
+    displayName && !displayName.includes('@')
+      ? displayName.trim()
+      : HELM_COPY.selfFallbackName;
+
+  useEffect(() => {
+    if (!uid || keyStatus !== 'ready' || !hasNoSelf) return;
+    const make = () => {
+      if (isMaking.current) return;
+      isMaking.current = true;
+      getHelmEncryption(uid)
+        .then((encryption) => ensureSelfWho(uid, encryption, name))
+        .catch((error: unknown) =>
+          console.error('Helm could not make the person', error),
+        )
+        .finally(() => {
+          isMaking.current = false;
+        });
+    };
+    make();
+    window.addEventListener('online', make);
+    return () => window.removeEventListener('online', make);
+  }, [uid, keyStatus, hasNoSelf, name]);
+}
+
 /** Keeps the signed-in person's Helm profile in the store and makes it the first time they open Helm; once the data key is here, keeps their turns there too. */
-export function useHelmSync(uid: string | null) {
+export function useHelmSync(uid: string | null, displayName: string | null) {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
@@ -140,6 +182,7 @@ export function useHelmSync(uid: string | null) {
   useCaptureSweep(uid);
   usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
+  useSelfWho(uid, displayName);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
 
@@ -217,6 +260,24 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm facts listener failed', error);
               dispatch(setFactsFailed());
+            },
+          ),
+          startWhoListener(
+            uid,
+            read,
+            (who) => dispatch(setWho(who)),
+            (error) => {
+              console.error('Helm people listener failed', error);
+              dispatch(setWhoFailed());
+            },
+          ),
+          startPlacesListener(
+            uid,
+            read,
+            (places) => dispatch(setPlaces(places)),
+            (error) => {
+              console.error('Helm places listener failed', error);
+              dispatch(setPlacesFailed());
             },
           ),
           startSyncedListener(

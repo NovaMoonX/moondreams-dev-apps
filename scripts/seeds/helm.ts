@@ -29,6 +29,10 @@ import type {
   CaptureAnswer,
   Fact,
   FactSealed,
+  Place,
+  PlaceSealed,
+  Who,
+  WhoSealed,
   ScreenContext,
   HelmEncryption,
   PlanDaySealed,
@@ -525,6 +529,8 @@ async function buildBackToBack(input: {
         joinedCaptureIds: order === 0 ? joinedIds : [],
         seenAt: createdAt,
         quotedSourceKeys: [],
+        whoIds: [],
+        placeIds: [],
         planDayKey: null,
         createdAt,
         sortedAt,
@@ -841,6 +847,8 @@ async function buildGmailTurn(input: {
     joinedCaptureIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
+    whoIds: [],
+    placeIds: [],
     planDayKey: null,
     createdAt,
     sortedAt,
@@ -965,6 +973,8 @@ async function buildAnswerTurns(input: {
         joinedCaptureIds: [],
         seenAt: createdAt + MINUTE_MS,
         quotedSourceKeys: [],
+        whoIds: [],
+        placeIds: [],
         planDayKey: null,
         createdAt,
         sortedAt,
@@ -1189,6 +1199,233 @@ async function buildPlanDays(input: {
   return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
 }
 
+const toWho = (
+  fields: Pick<Who, 'kind' | 'tier' | 'tierSetBy' | 'isSelf' | 'createdBy'> &
+    Partial<Pick<Who, 'lastMentionedAt'>>,
+  createdAt: number,
+  sealed: Who['sealed'],
+): Who => ({
+  placeIds: [],
+  photoMediaId: null,
+  mediaIds: [],
+  importedFrom: null,
+  importedFields: {},
+  lastMentionedAt: null,
+  yearlyDateCount: 0,
+  momentCount: 0,
+  executionId: null,
+  createdAt,
+  lastEditedAt: null,
+  ...fields,
+  sealed,
+});
+
+const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+  name,
+  aliases: [],
+  relation: null,
+  phone: null,
+  email: null,
+  notes: null,
+  species: null,
+  organizationKind: null,
+  ...extra,
+});
+
+/** Alex's people: themself, two Sams, a cat and a bakery, a home, three tasks that link them and a turn that names the second Sam. */
+async function buildPeople(input: {
+  displayName: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { displayName, now, timeZone, encryption } = input;
+  const madeAt = now - 6 * DAY_MS;
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const names = {
+    self: displayName.includes('@') || !displayName ? 'Me' : displayName,
+  };
+  const who: { id: string; who: Who }[] = [
+    {
+      id: 'self',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'close',
+          tierSetBy: 'person',
+          isSelf: true,
+          createdBy: 'person',
+        },
+        madeAt,
+        await seal(wordsOf(names.self)),
+      ),
+    },
+    {
+      id: 'seed-who-sam-rivera',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'regular',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 3 * DAY_MS,
+        },
+        madeAt,
+        await seal(wordsOf('Sam Rivera', { relation: 'work friend' })),
+      ),
+    },
+    {
+      id: 'seed-who-sam-patel',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'passing',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 2 * DAY_MS,
+        },
+        now - 2 * DAY_MS,
+        await seal(wordsOf('Sam Patel')),
+      ),
+    },
+    {
+      id: 'seed-who-miso',
+      who: toWho(
+        {
+          kind: 'pet',
+          tier: 'regular',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 4 * DAY_MS,
+        },
+        madeAt,
+        await seal(wordsOf('Miso', { species: 'Cat' })),
+      ),
+    },
+    {
+      id: 'seed-who-acme-bakery',
+      who: toWho(
+        {
+          kind: 'organization',
+          tier: 'passing',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 5 * DAY_MS,
+        },
+        madeAt,
+        await seal(wordsOf('Acme Bakery', { organizationKind: 'Bakery' })),
+      ),
+    },
+  ];
+  const home: Place = {
+    isHome: true,
+    photoMediaIds: [],
+    createdBy: 'person',
+    executionId: null,
+    createdAt: madeAt,
+    lastEditedAt: null,
+    sealed: await seal<PlaceSealed>({
+      name: 'Home',
+      aliases: [],
+      address: null,
+      notes: null,
+    }),
+  };
+  const taskOf = async (
+    title: string,
+    links: Pick<Task, 'whoIds' | 'placeIds'>,
+    order: number,
+  ): Promise<{ id: string; task: Task }> => ({
+    id: `seed-task-who-${order}`,
+    task: {
+      status: 'open',
+      importance: null,
+      isUrgent: false,
+      due: null,
+      durationMinutes: null,
+      energy: null,
+      context: null,
+      projectId: null,
+      milestoneId: null,
+      ...links,
+      notUntil: null,
+      waitsOnTaskIds: [],
+      waitsOnWhoId: null,
+      stepState: {},
+      mediaIds: [],
+      createdBy: 'person',
+      sourceCaptureId: null,
+      executionId: null,
+      createdAt: now - (order + 3) * DAY_MS,
+      lastEditedAt: null,
+      completedAt: null,
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+    },
+  });
+  const tasks = await Promise.all([
+    taskOf("Buy Miso's food", { whoIds: ['seed-who-miso'], placeIds: [] }, 1),
+    taskOf(
+      'Send Sam the slides',
+      { whoIds: ['seed-who-sam-rivera'], placeIds: [] },
+      2,
+    ),
+    taskOf(
+      'Water the plants',
+      { whoIds: [], placeIds: ['seed-place-home'] },
+      3,
+    ),
+  ]);
+  const text = 'Sam Patel might join us for lunch on Saturday';
+  const turnAt = now - 2 * DAY_MS;
+  const capture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    ttsProvider: null,
+    medium: 'web',
+    sessionId: 'seed-alex-who',
+    turnIndex: 0,
+    route: 'quick',
+    status: 'sorted',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {},
+    executionIds: [],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    seenAt: turnAt + MINUTE_MS,
+    quotedSourceKeys: [],
+    whoIds: ['seed-who-sam-patel'],
+    placeIds: [],
+    createdAt: turnAt,
+    sortedAt: turnAt + SORT_DELAY_MS,
+    planDayKey: null,
+    screen: null,
+    sealed: await seal<CaptureSealed>({
+      text,
+      reading: readCapture(text, {
+        now: turnAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+    }),
+  };
+  return {
+    who,
+    places: [{ id: 'seed-place-home', place: home }],
+    tasks,
+    capture: { id: 'seed-turn-who', capture },
+  };
+}
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -1216,6 +1453,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         isWakeWordOn: false,
         isHandsFreeOn: true,
         hasSeenVoiceNotice: false,
+        selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
         createdAt,
         lastEditedAt: null,
       });
@@ -1288,6 +1526,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             joinedCaptureIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             quotedSourceKeys: [],
+            whoIds: [],
+            placeIds: [],
             planDayKey: null,
             createdAt: turnTime,
             sortedAt: isSorted ? sortedAt : null,
@@ -1598,7 +1838,35 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           planDays.task.task,
         );
       }
+      const people =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildPeople({
+              displayName: user.displayName,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+      if (people) {
+        people.who.forEach((entry) =>
+          batch.set(person.collection('who').doc(entry.id), entry.who),
+        );
+        people.places.forEach((entry) =>
+          batch.set(person.collection('places').doc(entry.id), entry.place),
+        );
+        people.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        batch.set(
+          person.collection('captures').doc(people.capture.id),
+          people.capture.capture,
+        );
+      }
+      const peopleCount = people
+        ? people.who.length + people.places.length + people.tasks.length + 1
+        : 0;
       const backToBackCount =
+        peopleCount +
         backToBack.captures.length +
         backToBack.tasks.length +
         1 +

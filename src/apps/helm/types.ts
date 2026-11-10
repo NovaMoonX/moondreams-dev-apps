@@ -12,7 +12,10 @@ export type HelmView =
   | 'settings'
   | 'activity'
   | 'connectedApps'
-  | 'connection';
+  | 'connection'
+  | 'people'
+  | 'who'
+  | 'place';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -138,6 +141,9 @@ export interface Capture {
   seenAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
+  /** The who and places this turn named, once the assistant has read it. */
+  whoIds: string[];
+  placeIds: string[];
   createdAt: number;
   sortedAt: number | null;
   /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */

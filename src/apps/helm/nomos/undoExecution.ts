@@ -11,6 +11,7 @@ import {
   type UndoTarget,
 } from '@apps/helm/nomos/planUndo';
 import type {
+  EffectRef,
   ExecutionSealed,
   HelmEncryption,
   Sealed,
@@ -39,6 +40,12 @@ export async function undoExecution(
   const executions = collection(userOf(uid), 'executions');
   const tasks = collection(userOf(uid), 'tasks');
   const facts = collection(userOf(uid), 'facts');
+  const collectionOf = (name: EffectRef['collection']) =>
+    name === 'tasks'
+      ? tasks
+      : name === 'facts'
+        ? facts
+        : collection(userOf(uid), name);
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
@@ -61,14 +68,14 @@ export async function undoExecution(
           await Promise.all(
             refs.map(async (ref): Promise<[string, UndoTarget]> => {
               const { docId } = ref;
-              const isFact = ref.collection === 'facts';
+              const isTask = ref.collection === 'tasks';
               const entry = await transaction.get(
-                doc(isFact ? facts : tasks, docId),
+                doc(collectionOf(ref.collection), docId),
               );
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
-              if (isFact) return [docId, { docId, data, opened: null }];
+              if (!isTask) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
                   ? openJson<TaskSealed>(data.sealed as Sealed, encryption)
@@ -101,7 +108,7 @@ export async function undoExecution(
           encryption,
         );
         plan.deletes.forEach(({ docId, collection: from }) =>
-          transaction.delete(doc(from === 'facts' ? facts : tasks, docId)),
+          transaction.delete(doc(collectionOf(from), docId)),
         );
         plan.updates.forEach((update, index) =>
           transaction.update(doc(tasks, update.docId), {

@@ -65,6 +65,11 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 /** The most open tasks the app keeps listening to. */
 export const OPEN_TASKS_LIMIT = 150;
 export const FACTS_LIMIT = 300;
+/** The most who and places the app keeps listening to. */
+export const WHO_LIMIT = 2_500;
+export const PLACES_LIMIT = 500;
+/** Mentions a who's page lists before "Show all". */
+export const MENTIONS_SHOWN = 10;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
@@ -696,6 +701,54 @@ export const HELM_COPY = {
     'Suggestions stay inside these hours, leaving room around your events.',
   yourDayEndError: 'The day has to end after it starts.',
   yourDaySave: 'Save',
+  peopleTitle: 'People',
+  peopleSearch: 'Search people',
+  peopleEmpty: (assistant: string) =>
+    `Nobody yet. Tell ${assistant} about someone, a pet or a business and they show up here.`,
+  peopleFailed: 'People did not open. Try again in a moment.',
+  peopleNoMatch: 'Nobody by that name.',
+  tierClose: 'Close',
+  tierRegular: 'Regular',
+  othersDivider: 'Others',
+  showOthers: (count: number) => `Show others · ${count}`,
+  hideOthers: 'Hide others',
+  youLabel: 'You',
+  selfFallbackName: 'Me',
+  petKindFallback: 'Pet',
+  organizationKindFallback: 'Organization',
+  askPeople: (count: number) =>
+    count === 0
+      ? 'Ask about your people'
+      : count === 1
+        ? 'Ask about this person'
+        : `Ask about these ${count} people`,
+  chipPeople: (count: number) =>
+    count === 0
+      ? 'About your people'
+      : count === 1
+        ? 'About 1 person'
+        : `About ${count} people`,
+  backToPeople: 'Back to People',
+  askWho: (name: string) => `Ask about ${name}`,
+  backToWho: (name: string) => `Back to ${name}`,
+  askPlace: (name: string) => `Ask about ${name}`,
+  whoGone: 'This page is gone.',
+  whoUnreadable: "This page couldn't be opened.",
+  whoFactsTitle: 'Facts',
+  whoFactsEmpty: (assistant: string) =>
+    `Nothing noted yet. What you tell ${assistant} about them lands here.`,
+  whoTasksTitle: 'Tasks',
+  whoTasksEmpty: 'No open tasks.',
+  whoMentionsTitle: 'Mentions',
+  whoMentionsEmpty: 'Not mentioned yet.',
+  showAllMentions: (count: number) => `Show all ${count}`,
+  showFewerMentions: 'Show fewer',
+  placeHomeLine: 'Your home',
+  placeTasksEmpty: 'No open tasks here.',
+  linkedPerson: 'Person',
+  linkedPet: 'Pet',
+  linkedOrganization: 'Organization',
+  linkedPlace: 'Place',
 } as const;
 
 export const PLANNER_COPY = {
