@@ -22,15 +22,26 @@ export function createAliasBook(prefix: string): AliasBook {
   };
 }
 
+export interface ConnectionRef {
+  connectorId: string;
+  accountId: string;
+  name: string;
+  label: string | null;
+}
+
 export interface SyncedBook {
   add: (copy: SyncedCopy) => string;
   get: (alias: string) => SyncedCopy | null;
+  addConnection: (connection: ConnectionRef) => string;
+  getConnection: (alias: string) => ConnectionRef | null;
 }
 
-/** Aliases for synced copies: e1, e2, … for events and s1, s2, … for everything else a source shares. */
+/** Aliases for synced copies: e1, e2, … for events and s1, s2, … for everything else a source shares; c1, c2, … for the connections themselves. */
 export function createSyncedBook(): SyncedBook {
   const byAlias = new Map<string, SyncedCopy>();
   const byId = new Map<string, string>();
+  const connections = new Map<string, ConnectionRef>();
+  const connectionAliases = new Map<string, string>();
   return {
     add: (copy) => {
       const known = byId.get(copy.id);
@@ -42,5 +53,15 @@ export function createSyncedBook(): SyncedBook {
       return alias;
     },
     get: (alias) => byAlias.get(alias) ?? null,
+    addConnection: (connection) => {
+      const id = `${connection.connectorId}__${connection.accountId}`;
+      const known = connectionAliases.get(id);
+      if (known) return known;
+      const alias = `c${connections.size + 1}`;
+      connectionAliases.set(id, alias);
+      connections.set(alias, connection);
+      return alias;
+    },
+    getConnection: (alias) => connections.get(alias) ?? null,
   };
 }

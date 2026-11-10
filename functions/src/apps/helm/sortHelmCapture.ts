@@ -556,15 +556,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
       readEarlierTurns(firestore, base, key, capture),
       profileRead.then((snapshot) =>
-        readContextSynced(
-          firestore,
-          uid,
-          key,
-          capture.createdAt,
-          toKnownZone(
-            (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
-          ),
-        ),
+        mode === 'rest'
+          ? []
+          : readContextSynced(
+              firestore,
+              uid,
+              key,
+              capture.createdAt,
+              toKnownZone(
+                (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+              ),
+            ),
       ),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {

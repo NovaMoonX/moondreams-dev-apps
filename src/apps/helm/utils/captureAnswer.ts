@@ -57,6 +57,22 @@ const toSource = (value: unknown): SourceRef[] => {
         ]
       : [];
   }
+  if (value.kind === 'connection') {
+    const connectorId = toText(value.connectorId);
+    const accountId = toText(value.accountId);
+    const name = toText(value.name);
+    return connectorId && accountId && name
+      ? [
+          {
+            kind: 'connection',
+            connectorId,
+            accountId,
+            name,
+            label: toText(value.label),
+          },
+        ]
+      : [];
+  }
   return [];
 };
 

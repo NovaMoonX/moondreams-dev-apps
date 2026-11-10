@@ -22,6 +22,8 @@ export const CONTEXT_TASK_DAYS = 7;
 const DAY_MS = 86_400_000;
 const MAX_ZONE_OFFSET_MS = 14 * 3_600_000;
 const MAX_SCANNED_EVENTS = 100;
+const LOOKBACK_MS = 14 * DAY_MS;
+const MAX_LOOKBACK_EVENTS = 40;
 const MAX_SCANNED_COPIES = 300;
 const SUBTITLE_CHARS = 120;
 
@@ -142,7 +144,10 @@ const openAll = (
     return copy ? [copy] : [];
   });
 
-/** Events that start in `days` calendar days from `firstDay` (UTC midnight of a day in the person's zone), still connected, soonest first. */
+const toDay = (at: number, isAllDay: boolean, timeZone: string) =>
+  isAllDay ? at : getLocalDay(at, timeZone);
+
+/** Events on any of `days` calendar days from `firstDay` (UTC midnight of a day in the person's zone), one that began up to two weeks earlier and runs into them included; still connected, soonest first. */
 export async function readSyncedEvents(
   firestore: Firestore,
   uid: string,
@@ -150,21 +155,38 @@ export async function readSyncedEvents(
   input: { firstDay: number; days: number; timeZone: string; limit: number },
 ) {
   const end = input.firstDay + input.days * DAY_MS;
-  const snapshot = await firestore
-    .collection(syncedPath(uid))
-    .where('kind', '==', 'event')
-    .where('startAt', '>=', input.firstDay - MAX_ZONE_OFFSET_MS)
-    .where('startAt', '<', end + MAX_ZONE_OFFSET_MS)
-    .orderBy('startAt')
-    .limit(MAX_SCANNED_EVENTS)
-    .get();
-  return openAll(key, snapshot.docs)
+  const [inside, before] = await Promise.all([
+    firestore
+      .collection(syncedPath(uid))
+      .where('kind', '==', 'event')
+      .where('startAt', '>=', input.firstDay - MAX_ZONE_OFFSET_MS)
+      .where('startAt', '<', end + MAX_ZONE_OFFSET_MS)
+      .orderBy('startAt')
+      .limit(Math.min(MAX_SCANNED_EVENTS, input.limit * 2))
+      .get(),
+    firestore
+      .collection(syncedPath(uid))
+      .where('kind', '==', 'event')
+      .where('startAt', '>=', input.firstDay - LOOKBACK_MS)
+      .where('startAt', '<', input.firstDay + MAX_ZONE_OFFSET_MS)
+      .orderBy('startAt', 'desc')
+      .limit(Math.min(MAX_LOOKBACK_EVENTS, Math.ceil(input.limit / 4)))
+      .get(),
+  ]);
+  const seen = new Set<string>();
+  return openAll(key, [...before.docs.reverse(), ...inside.docs])
     .filter((copy) => {
-      if (copy.isEnded || copy.startAt === null) return false;
-      const day = copy.isAllDay
-        ? copy.startAt
-        : getLocalDay(copy.startAt, input.timeZone);
-      return day >= input.firstDay && day < end;
+      if (seen.has(copy.id) || copy.isEnded || copy.startAt === null) {
+        return false;
+      }
+      seen.add(copy.id);
+      const firstOn = toDay(copy.startAt, copy.isAllDay, input.timeZone);
+      const lastAt =
+        copy.endAt !== null && copy.endAt > copy.startAt
+          ? copy.endAt - (copy.isAllDay ? DAY_MS : 1)
+          : copy.startAt;
+      const lastOn = toDay(lastAt, copy.isAllDay, input.timeZone);
+      return firstOn < end && lastOn >= input.firstDay;
     })
     .slice(0, input.limit);
 }

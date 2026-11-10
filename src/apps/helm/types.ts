@@ -162,6 +162,13 @@ export type SourceRef =
       connectorId: string;
       title: string | null;
       startAt: number | null;
+    }
+  | {
+      kind: 'connection';
+      connectorId: string;
+      accountId: string;
+      name: string;
+      label: string | null;
     };
 
 export interface AnswerQuote {

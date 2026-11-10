@@ -638,7 +638,14 @@ const EMPTY_ANSWER = {
   searched: [],
 } satisfies Partial<CaptureAnswer>;
 
-/** One turn of each kind of answer, asked in a session of their own: records from a task, from a synced copy, both parts, nothing in the records (the person's own things, then the world's), and a health question. */
+const toAnswerSummary = (answer: CaptureAnswer) => {
+  if (answer.fromRecords !== null) return `Answered: ${answer.question}`;
+  return answer.general !== null
+    ? `Answered from general knowledge: ${answer.question}`
+    : `No answer in your records: ${answer.question}`;
+};
+
+/** One turn of each kind of answer, in a session of their own. */
 const buildAnswers = (now: number): CaptureAnswer[] => {
   const today = getSeedToday(now);
   const cakeDay = new Date(
@@ -677,7 +684,7 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
       question: 'Who pays for the rehearsal dinner?',
       scope: 'both',
       fromRecords:
-        "Nobody has settled it yet: there's a task to ask Dana's parents about the rehearsal dinner.",
+        "There's a task to ask Dana's parents about the rehearsal dinner.",
       sources: [{ kind: 'task', id: ANSWER_TASKS[1].id }],
       general:
         "Traditionally the groom's family hosts it, but many couples now share it between both families or host it themselves.",
@@ -777,11 +784,8 @@ async function buildAnswerTurns(input: {
         finishedAt: sortedAt,
         sealed: await sealJson<ExecutionSealed>(
           {
-            summary:
-              answer.fromRecords === null && answer.general !== null
-                ? `Answered from general knowledge: ${answer.question}`
-                : `Answered: ${answer.question}`,
-            commands: [{ kind: 'answer', question: answer.question }],
+            summary: toAnswerSummary(answer),
+            commands: [],
             effects: [],
             undoReport: null,
             spoken: null,

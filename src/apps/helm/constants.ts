@@ -485,6 +485,7 @@ export const HELM_COPY = {
     'General information, not medical advice. Check with a doctor or pharmacist before acting on it.',
   answerSourcesLabel: 'Where it came from',
   answerTaskGone: 'A task that is done or removed',
+  answerSyncedGone: 'Something from a connected app that is no longer there',
   answerOpenSource: (title: string) => `Open ${title}`,
   sheetDayTime: (day: string, time: string) => `${day} ${time}`,
   whatTheAiSees: 'What the AI sees',

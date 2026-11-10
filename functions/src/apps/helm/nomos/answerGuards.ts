@@ -29,10 +29,17 @@ const oneLine = (text: string) => text.replace(/\s+/g, ' ').trim();
 /** Said whatever the question's grammar, so the line never has to be bent around it. */
 export const NOTHING_LINE = 'Nothing in your records answers that.';
 
+const toSourceKey = (source: SourceRef) =>
+  source.kind === 'connection'
+    ? `connection:${source.connectorId}:${source.accountId}`
+    : `${source.kind}:${source.id}`;
+
 const dedupe = (sources: SourceRef[]) =>
   sources.filter(
     (source, index) =>
-      sources.findIndex((other) => other.id === source.id) === index,
+      sources.findIndex(
+        (other) => toSourceKey(other) === toSourceKey(source),
+      ) === index,
   );
 
 const toSpoken = (input: {
@@ -62,7 +69,7 @@ const toSpoken = (input: {
   return `${[records, general].filter(Boolean).join(' ')}${caution}`;
 };
 
-/** Applies section 6's guards to the model's answer and builds what is stored and what is said: records first, the general part only where its scope and the records allow it, and its label always written by code. */
+/** What is stored and said of the model's answer: records only with a source, general knowledge only where its scope allows, its label always written by code. */
 export function buildAnswer(
   command: AnswerCommand,
   onDrop: (code: AnswerDrop) => void = () => undefined,
@@ -81,9 +88,7 @@ export function buildAnswer(
     command.generalText && mayAddGeneral ? oneLine(command.generalText) : null;
   if (command.generalText && !general) onDrop('answer-general-refused');
 
-  const recordsSpoken = fromRecords
-    ? oneLine(command.recordsSpoken || fromRecords)
-    : NOTHING_LINE;
+  const recordsSpoken = fromRecords ?? NOTHING_LINE;
   const generalSpoken = general
     ? oneLine(command.generalSpoken || general)
     : null;
@@ -110,5 +115,9 @@ export function buildAnswer(
 }
 
 /** The Activity line for an answer: from general knowledge only when no record part was kept. */
-export const summarizeAnswer = (answer: CaptureAnswer) =>
-  `${answer.fromRecords === null && answer.general !== null ? 'Answered from general knowledge' : 'Answered'}: ${answer.question}`;
+export const summarizeAnswer = (answer: CaptureAnswer) => {
+  if (answer.fromRecords !== null) return `Answered: ${answer.question}`;
+  return answer.general !== null
+    ? `Answered from general knowledge: ${answer.question}`
+    : `No answer in your records: ${answer.question}`;
+};

@@ -176,7 +176,7 @@ export function buildHelmTools(scope: HelmToolScope) {
   const searchSynced: HelmTool<typeof searchSyncedShape> = {
     name: 'search_synced',
     description:
-      "Finds records the person's connected apps and calendars share, by words in their title: events, tasks, plans and more. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended.",
+      "Finds records the person's connected apps and calendars share, by words in their title: events, tasks, plans and more. It looks through the 300 most recently updated, so finding nothing does not prove a record is absent. Upcoming ones come first; a record marked noLongerUpdated is a kept copy from a connection that has ended.",
     shape: searchSyncedShape,
     run: async ({ query }) => {
       const words = toWords(query);
@@ -225,7 +225,7 @@ export function buildHelmTools(scope: HelmToolScope) {
       .filter((doc) => doc.get('status') !== 'ended')
       .sort((a, b) => (a.id < b.id ? -1 : 1));
     return Promise.all(
-      grants.map(async (doc, index) => {
+      grants.map(async (doc) => {
         const grant = doc.data() as ConnectionGrant;
         const labels = new Map(
           (SOURCE_ADAPTERS[grant.connectorId]?.manifest.categories ?? []).map(
@@ -239,11 +239,17 @@ export function buildHelmTools(scope: HelmToolScope) {
                 await scope.firestore
                   .doc(`connections/${scope.uid}/accounts/${grant.accountId}`)
                   .get()
-              ).data() as { label: string | null; email: string } | undefined);
+              ).data() as { label: string | null } | undefined);
+        const accountLabel = account ? (account.label ?? 'An account') : null;
         return {
-          alias: `c${index + 1}`,
+          alias: synced.addConnection({
+            connectorId: grant.connectorId,
+            accountId: grant.accountId,
+            name: connectorLabel(grant.connectorId),
+            label: accountLabel,
+          }),
           app: connectorLabel(grant.connectorId),
-          account: account ? (account.label ?? account.email) : null,
+          account: accountLabel,
           status: grant.status,
           lastSyncAt: toIso(grant.lastSyncAt),
           categories: Object.entries(grant.categories).map(([id, entry]) => ({

@@ -184,11 +184,10 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   sourceAliases: [],
   generalText: null,
   generalSpoken: null,
-  recordsSpoken: null,
   ...fields,
 });
 
-/** The answers the emulator can give to a question, read from the records in the context: a match on a title is a source, a "when is" with no match has no records part, a "how long" is general only, "who pays" and "should I" with a match are both, and health words are a general health answer. Null when the text is not a question this knows. */
+/** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
   const question = text.trim();
   if (!question.endsWith('?')) return null;
@@ -218,7 +217,6 @@ function readQuestion(text: string, message: string) {
   const fromRecords = match ? describeRecord(match, timeZone) : null;
   const sourced = {
     fromRecordsText: fromRecords,
-    recordsSpoken: fromRecords,
     sourceAliases: match ? matches.map((record) => record.alias) : [],
   };
   const general = {

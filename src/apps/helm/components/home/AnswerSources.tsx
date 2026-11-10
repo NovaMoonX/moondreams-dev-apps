@@ -28,9 +28,10 @@ import type { SourceRef, SyncedRecord } from '@apps/helm/types';
 import { formatTaskDue } from '@apps/helm/utils/taskDue';
 
 type SyncedSource = Extract<SourceRef, { kind: 'synced' }>;
+type ConnectionSource = Extract<SourceRef, { kind: 'connection' }>;
 
 const ROW =
-  'flex h-auto min-h-12 w-full items-center justify-start gap-3 rounded-none border-0 px-0 py-2.5 text-left';
+  'flex h-auto min-h-12 w-full items-center justify-start gap-3 rounded-none border-0 px-0! py-2.5! text-left';
 
 interface RowBodyProps {
   mark: React.ReactNode;
@@ -63,7 +64,32 @@ function RowBody({ mark, title, detail, hasDoor }: RowBodyProps) {
   );
 }
 
-function TaskSourceRow({ taskId }: { taskId: string }) {
+function SourceMark({ connectorId }: { connectorId: string }) {
+  return connectorId === 'google:calendar' ? (
+    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+      <CalendarDays className='size-5' aria-hidden='true' />
+    </span>
+  ) : (
+    <AppLogo
+      appId={readConnectorAppId(connectorId) ?? ''}
+      className='size-9 rounded-lg'
+    />
+  );
+}
+
+function PlainRow({ mark, title, detail }: Omit<RowBodyProps, 'hasDoor'>) {
+  return (
+    <div className={ROW}>
+      <RowBody mark={mark} title={title} detail={detail} hasDoor={false} />
+    </div>
+  );
+}
+
+interface RowProps {
+  canOpen: boolean;
+}
+
+function TaskSourceRow({ taskId, canOpen }: RowProps & { taskId: string }) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const now = useNow(60_000);
@@ -107,6 +133,8 @@ function TaskSourceRow({ taskId }: { taskId: string }) {
     );
   }
   const title = task.isUnreadable ? HELM_COPY.unreadable : task.title;
+  const detail = task.due ? formatTaskDue(task.due, timeZone, now) : null;
+  if (!canOpen) return <PlainRow mark={null} title={title} detail={detail} />;
   return (
     <>
       <Button
@@ -116,12 +144,7 @@ function TaskSourceRow({ taskId }: { taskId: string }) {
         aria-label={HELM_COPY.answerOpenSource(title)}
         onClick={() => setIsOpen(true)}
       >
-        <RowBody
-          mark={null}
-          title={title}
-          detail={task.due ? formatTaskDue(task.due, timeZone, now) : null}
-          hasDoor
-        />
+        <RowBody mark={null} title={title} detail={detail} hasDoor />
       </Button>
       <TaskSheet
         task={isOpen ? task : null}
@@ -155,32 +178,23 @@ const toSyncedDay = (
     : `${formatDateShort(startAt)}, ${formatTime(startAt)}`;
 };
 
-function SyncedSourceRow({ source }: { source: SyncedSource }) {
+function SyncedSourceRow({
+  source,
+  canOpen,
+}: RowProps & { source: SyncedSource }) {
   const now = useNow(60_000);
   const record = useAppSelector(
     (state) =>
       state.helm.synced.items.find((entry) => entry.id === source.id) ?? null,
   );
   const [isOpen, setIsOpen] = useState(false);
-  const isCalendar = source.connectorId === 'google:calendar';
-  const mark = isCalendar ? (
-    <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
-      <CalendarDays className='size-5' aria-hidden='true' />
-    </span>
-  ) : (
-    <AppLogo
-      appId={readConnectorAppId(source.connectorId) ?? ''}
-      className='size-9 rounded-lg'
-    />
-  );
-  const title = record?.sealed.title ?? source.title ?? HELM_COPY.unreadable;
+  const mark = <SourceMark connectorId={source.connectorId} />;
+  const title = record
+    ? (record.sealed.title ?? HELM_COPY.unreadable)
+    : (source.title ?? HELM_COPY.answerSyncedGone);
   const detail = toSyncedDay(source, record);
-  if (!record) {
-    return (
-      <div className={`${ROW} text-left`}>
-        <RowBody mark={mark} title={title} detail={detail} hasDoor={false} />
-      </div>
-    );
+  if (!record || !canOpen) {
+    return <PlainRow mark={mark} title={title} detail={detail} />;
   }
   return (
     <>
@@ -202,19 +216,53 @@ function SyncedSourceRow({ source }: { source: SyncedSource }) {
   );
 }
 
-interface AnswerSourcesProps {
-  sources: SourceRef[];
+function ConnectionSourceRow({ source }: { source: ConnectionSource }) {
+  return (
+    <PlainRow
+      mark={<SourceMark connectorId={source.connectorId} />}
+      title={source.name}
+      detail={source.label}
+    />
+  );
 }
 
-/** Where a records answer came from, one row per source that can be opened; a kind not built yet draws nothing. */
-function AnswerSources({ sources }: AnswerSourcesProps) {
-  const rows = sources.flatMap((source) =>
-    source.kind === 'task'
-      ? [<TaskSourceRow key={`task:${source.id}`} taskId={source.id} />]
-      : source.kind === 'synced'
-        ? [<SyncedSourceRow key={`synced:${source.id}`} source={source} />]
-        : [],
-  );
+interface AnswerSourcesProps {
+  sources: SourceRef[];
+  /** Inside a sheet a source can't open a sheet of its own, so its row only names it. */
+  canOpen: boolean;
+}
+
+/** Where a records answer came from, one row per source; a kind not built yet draws nothing. */
+function AnswerSources({ sources, canOpen }: AnswerSourcesProps) {
+  const rows = sources.flatMap((source) => {
+    if (source.kind === 'task') {
+      return [
+        <TaskSourceRow
+          key={`task:${source.id}`}
+          taskId={source.id}
+          canOpen={canOpen}
+        />,
+      ];
+    }
+    if (source.kind === 'synced') {
+      return [
+        <SyncedSourceRow
+          key={`synced:${source.id}`}
+          source={source}
+          canOpen={canOpen}
+        />,
+      ];
+    }
+    if (source.kind === 'connection') {
+      return [
+        <ConnectionSourceRow
+          key={`connection:${source.connectorId}:${source.accountId}`}
+          source={source}
+        />,
+      ];
+    }
+    return [];
+  });
   if (rows.length === 0) return null;
   return (
     <div

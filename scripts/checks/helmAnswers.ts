@@ -52,7 +52,6 @@ const answer = (fields: Partial<AnswerCommand> = {}): AnswerCommand => ({
   sources: [TASK],
   generalText: null,
   generalSpoken: null,
-  recordsSpoken: 'Friday at 2.',
   ...fields,
 });
 
@@ -104,7 +103,6 @@ const tests: [string, () => void | Promise<void>][] = [
           question: 'How long does cake keep?',
           fromRecordsText: null,
           sources: [],
-          recordsSpoken: null,
           generalText: 'Cake keeps a few days.',
           generalSpoken: 'Cake keeps a few days.',
         }),
@@ -123,7 +121,6 @@ const tests: [string, () => void | Promise<void>][] = [
         answer({
           scope: 'both',
           fromRecordsText: 'Maya said her parents offered.',
-          recordsSpoken: 'Maya said her parents offered.',
           generalText: 'Often the couple or their families share it.',
           generalSpoken: 'Often families share it.',
         }),
@@ -181,13 +178,62 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
+    'an answer with nothing in the records and no general part says so in its summary',
+    () => {
+      const built = buildAnswer(
+        answer({ scope: 'yourThings', fromRecordsText: null, sources: [] }),
+      );
+      assert.equal(
+        summarizeAnswer(built.answer),
+        `No answer in your records: ${answer().question}`,
+      );
+    },
+  ],
+  [
+    'the records part is spoken from the stored records text, never a separate model line',
+    () => {
+      const built = buildAnswer(answer({ fromRecordsText: 'Friday at 2.' }));
+      assert.ok(built.spoken.startsWith('Friday at 2.'));
+    },
+  ],
+  [
+    'a connection is a source an answer can rest on',
+    () => {
+      const built = buildAnswer(
+        answer({
+          fromRecordsText: 'Google Calendar last updated at 9:30.',
+          sources: [
+            {
+              kind: 'connection',
+              connectorId: 'google:calendar',
+              accountId: 'a1',
+              name: 'Google Calendar',
+              label: 'Work',
+            },
+            {
+              kind: 'connection',
+              connectorId: 'google:calendar',
+              accountId: 'a1',
+              name: 'Google Calendar',
+              label: 'Work',
+            },
+          ],
+        }),
+      );
+      assert.equal(
+        built.answer.fromRecords,
+        'Google Calendar last updated at 9:30.',
+      );
+      assert.equal(built.answer.sources.length, 1);
+    },
+  ],
+  [
     'the spoken line stays within its cap and keeps the label',
     () => {
       const built = buildAnswer(
         answer({
           scope: 'both',
           fromRecordsText: 'a '.repeat(100),
-          recordsSpoken: 'record '.repeat(40),
           generalText: 'b',
           generalSpoken: 'general '.repeat(30),
         }),
@@ -227,12 +273,19 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
-    'aliases resolve to tasks and synced copies, unknown ones are dropped, texts are cut',
+    'aliases resolve to tasks, synced copies and connections, unknown ones are dropped, texts are cut',
     () => {
       const aliases = createAliasBook('t');
       const synced = createSyncedBook();
       const taskAlias = aliases.add('task-1');
       const copyAlias = synced.add(COPY);
+      const connection = {
+        connectorId: 'google:calendar',
+        accountId: 'a1',
+        name: 'Google Calendar',
+        label: 'Work',
+      };
+      const connectionAlias = synced.addConnection(connection);
       const { answer: read, commands } = normalizeNomosReply(
         {
           commands: [
@@ -242,10 +295,16 @@ const tests: [string, () => void | Promise<void>][] = [
               question: 'q'.repeat(400),
               isHealth: null,
               fromRecordsText: 'w '.repeat(900),
-              sourceAliases: [taskAlias, copyAlias, 'e99', 'zz'],
+              sourceAliases: [
+                taskAlias,
+                copyAlias,
+                connectionAlias,
+                'e99',
+                'c9',
+                'zz',
+              ],
               generalText: null,
               generalSpoken: null,
-              recordsSpoken: null,
             },
             { kind: 'answer', scope: 'theWorld', question: 'second?' },
           ],
@@ -265,6 +324,7 @@ const tests: [string, () => void | Promise<void>][] = [
           title: 'Cake tasting',
           startAt: COPY.startAt,
         },
+        { kind: 'connection', ...connection },
       ]);
     },
   ],

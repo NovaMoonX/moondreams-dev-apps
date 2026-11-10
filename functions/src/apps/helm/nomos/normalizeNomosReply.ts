@@ -38,7 +38,6 @@ const KNOWN_KEYS = new Set([
   'sourceAliases',
   'generalText',
   'generalSpoken',
-  'recordsSpoken',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -92,15 +91,16 @@ const toSource = (
   const taskId = aliases.idOf(alias);
   if (taskId) return { kind: 'task', id: taskId };
   const copy = synced?.get(alias);
-  return copy
-    ? {
-        kind: 'synced',
-        id: copy.id,
-        connectorId: copy.connectorId,
-        title: copy.title,
-        startAt: copy.startAt,
-      }
-    : null;
+  if (copy)
+    return {
+      kind: 'synced',
+      id: copy.id,
+      connectorId: copy.connectorId,
+      title: copy.title,
+      startAt: copy.startAt,
+    };
+  const connection = synced?.getConnection(alias);
+  return connection ? { kind: 'connection', ...connection } : null;
 };
 
 const readAnswer = (
@@ -123,7 +123,6 @@ const readAnswer = (
     }),
     generalText: toText(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
-    recordsSpoken: toText(item.recordsSpoken, ANSWER_SPOKEN_CAP),
   };
 };
 
@@ -187,7 +186,7 @@ const hasEveryToken = (
     );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. An answer's text is cut at a word and each source alias resolved to a task or a synced copy (an unknown one is dropped); only the first answer is kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source alias resolved or dropped. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {

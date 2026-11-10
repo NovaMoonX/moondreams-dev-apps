@@ -5,7 +5,7 @@ import type { CaptureAnswer } from '@apps/helm/types';
 
 interface AnswerCardProps {
   answer: CaptureAnswer;
-  /** Home draws it under the assistant's line, so it lines up with the words; a sheet has no inset. */
+  /** Set under a line of words it lines up with; only then do its sources open, since a sheet can't open a sheet. */
   isInset?: boolean;
 }
 
@@ -33,7 +33,9 @@ function AnswerCard({ answer, isInset = false }: AnswerCardProps) {
           >
             {recordsText}
           </p>
-          {fromRecords !== null && <AnswerSources sources={answer.sources} />}
+          {fromRecords !== null && (
+            <AnswerSources sources={answer.sources} canOpen={isInset} />
+          )}
         </section>
       )}
       {general !== null && (

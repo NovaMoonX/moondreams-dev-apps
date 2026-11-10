@@ -27,7 +27,7 @@ interface ExecutionSheetProps {
   onClose: () => void;
 }
 
-/** The words the execution was made from (every message of a joined turn) and the answer it gave, from the store or fetched; empty when they are gone or won't open. */
+/** The words an execution was made from and the answer it gave; empty when they are gone or won't open. */
 function useCaptureTexts(captureId: string | null) {
   const { user } = useAuth();
   const captures = useAppSelector(selectAllCaptures);

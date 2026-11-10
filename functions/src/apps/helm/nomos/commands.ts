@@ -69,6 +69,13 @@ export type SourceRef =
       connectorId: string;
       title: string | null;
       startAt: number | null;
+    }
+  | {
+      kind: 'connection';
+      connectorId: string;
+      accountId: string;
+      name: string;
+      label: string | null;
     };
 
 /** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
@@ -80,7 +87,6 @@ export interface AnswerCommand {
   sources: SourceRef[];
   generalText: string | null;
   generalSpoken: string | null;
-  recordsSpoken: string | null;
 }
 
 const nullable = (type: string, description: string) => ({
@@ -117,7 +123,6 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'sourceAliases',
             'generalText',
             'generalSpoken',
-            'recordsSpoken',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer'] },
@@ -170,10 +175,6 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             generalSpoken: nullable(
               'string',
               `answer: generalText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
-            ),
-            recordsSpoken: nullable(
-              'string',
-              `answer: fromRecordsText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
             ),
           },
         },
