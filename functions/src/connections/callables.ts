@@ -360,6 +360,7 @@ const endAndClean = async (uid: string, req: EndConnectionRequest) => {
   if (!ended.sink) return { grantId: req.grantId };
 
   const session = ended.sink.openSession(firestore, uid);
+  await session.blankQuoted?.(req.grantId, ended.endedAt);
   if (ended.keptCopies === null) {
     await session.deleteGrant(req.grantId);
     return { grantId: req.grantId };

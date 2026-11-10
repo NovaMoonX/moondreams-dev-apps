@@ -4,6 +4,7 @@ import {
   type SourceShares,
 } from '@/lib/connections/contract';
 import { GOOGLE_CALENDAR_MANIFEST } from '@/lib/connections/google/calendarManifest';
+import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import { A_LIST_SHARES } from '@apps/a-list/share/manifest';
 import { GOING_ONCE_SHARES } from '@apps/going-once/share/manifest';
 import { HELM_SHARES } from '@apps/helm/share/manifest';
@@ -31,6 +32,6 @@ export const getSourceManifest = (appId: string) =>
 export const getConnectorManifest = (
   connectorId: string,
 ): ConnectorManifest | null =>
-  connectorId === GOOGLE_CALENDAR_MANIFEST.id
-    ? GOOGLE_CALENDAR_MANIFEST
-    : getSourceManifest(readConnectorAppId(connectorId) ?? '');
+  [GOOGLE_CALENDAR_MANIFEST, GOOGLE_GMAIL_MANIFEST].find(
+    (manifest) => manifest.id === connectorId,
+  ) ?? getSourceManifest(readConnectorAppId(connectorId) ?? '');

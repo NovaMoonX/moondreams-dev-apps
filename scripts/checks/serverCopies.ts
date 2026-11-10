@@ -69,6 +69,13 @@ const COPIES: Copy[] = [
       '@/lib/connections/contract': '../../vendor/connectionsContract.js',
     },
   },
+  {
+    src: 'src/lib/connections/google/gmailManifest.ts',
+    dest: 'functions/src/connections/google/gmailManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
 ];
 
 interface Generated {

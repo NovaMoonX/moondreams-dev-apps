@@ -15,6 +15,7 @@ import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
 import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
+import { createGoogleMailAdapter } from './google/gmail.js';
 import type { ReaderSink } from './sink.js';
 
 export interface SourceCtx {
@@ -67,6 +68,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:waypoint': createWaypointAdapter(),
   'app:worth-the-wait': createWorthTheWaitAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
+  'google:gmail': createGoogleMailAdapter(),
 };
 
 export const SOURCE_SECRETS: SecretParam[] = Array.from(
@@ -79,9 +81,22 @@ export const SOURCE_SECRETS: SecretParam[] = Array.from(
 
 export const READER_APPS: Record<
   string,
-  { grantPagePath: (grantId: string) => string }
+  {
+    grantPagePath: (grantId: string) => string;
+    /** The feature switch a restricted connector needs open, by connector. */
+    restrictedGates: Record<
+      string,
+      { gateId: string; defaultRollout: 'off' | 'testing' | 'everyone' }
+    >;
+  }
 > = {
   helm: {
+    restrictedGates: {
+      'google:gmail': {
+        gateId: 'google-mail-and-drive',
+        defaultRollout: 'testing',
+      },
+    },
     grantPagePath: (grantId) =>
       `/helm?view=connection&grant=${encodeURIComponent(grantId)}`,
   },

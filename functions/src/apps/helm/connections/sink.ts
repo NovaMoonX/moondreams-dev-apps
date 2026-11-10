@@ -6,7 +6,9 @@ import type {
   QueryDocumentSnapshot,
   WriteBatch,
 } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
+import type { SealedPayload } from '../../../appKeys/seal.js';
 import type {
   ExpiredGrant,
   ReaderSink,
@@ -18,7 +20,12 @@ import {
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
-import { sealForHelm, unwrapHelmKey, type HelmKey } from '../helmKey.js';
+import {
+  openForHelm,
+  sealForHelm,
+  unwrapHelmKey,
+  type HelmKey,
+} from '../helmKey.js';
 
 export const KEPT_COPY_DAYS = 90;
 export const TRANSFORM_VERSION = 1;
@@ -28,6 +35,9 @@ const BATCH_SIZE = 400;
 const READ_CHUNK = 300;
 const HASH_INFO = 'helm-sync-content';
 const DETAIL_LIMIT = 500;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
 
 const syncedPath = (uid: string) => `apps/helm/users/${uid}/synced`;
 
@@ -318,6 +328,62 @@ class HelmSinkSession implements SinkSession {
       null,
       (doc) => doc.get('deleteAfter') !== null,
     );
+  }
+
+  async blankQuoted(grantId: string, now: number) {
+    const [, connectorId, accountId] = grantId.split('__');
+    if (!connectorId || !accountId) return;
+    const snapshot = await this.firestore
+      .collection(`apps/helm/users/${this.uid}/captures`)
+      .where(
+        'quotedSourceKeys',
+        'array-contains',
+        `${connectorId}|${accountId}`,
+      )
+      .get();
+    if (snapshot.empty) return;
+    const key = await this.openKey();
+    const isQuoteOfIt = (quote: unknown) =>
+      isRecord(quote) &&
+      quote.connectorId === connectorId &&
+      quote.accountId === accountId;
+    const blanked = snapshot.docs.flatMap((doc) => {
+      try {
+        const opened = openForHelm(key, doc.get('sealed') as SealedPayload);
+        const answer = opened.answer;
+        if (!isRecord(answer) || !Array.isArray(answer.quotes)) return [];
+        const quotes = answer.quotes.map((quote: unknown) =>
+          isQuoteOfIt(quote)
+            ? {
+                ...(quote as Record<string, unknown>),
+                text: null,
+                deepLink: null,
+                deletedAt: (quote as Record<string, unknown>).deletedAt ?? now,
+              }
+            : quote,
+        );
+        return [
+          {
+            ref: doc.ref,
+            sealed: sealForHelm(key, {
+              ...opened,
+              answer: { ...answer, quotes },
+            }),
+          },
+        ];
+      } catch {
+        logger.warn('helm.connections.blankUnreadable');
+        return [];
+      }
+    });
+    await chunk(blanked, BATCH_SIZE).reduce(async (done, group) => {
+      await done;
+      const batch = this.firestore.batch();
+      group.forEach((entry) =>
+        batch.update(entry.ref, { sealed: entry.sealed }),
+      );
+      await batch.commit();
+    }, Promise.resolve());
   }
 
   async countKept(grantId: string) {
