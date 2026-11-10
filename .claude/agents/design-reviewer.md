@@ -95,6 +95,7 @@ The app runs at http://127.0.0.1:5173/<route> against local emulators that are a
 - Walk **every user flow listed in UX.md**, including empty, loading, error and legacy-data states where reachable.
 - **Phone first:** walk each flow at 390px, then at 1280px.
 - For each flow, record "verified" or what broke.
+- **Mockups and modern feel (owner, Helm polish notes):** put each screen beside its board in the app's UX canvas artifact (linked from `UX.md`; read it with the Artifact tool) and report where it drifted without a reason in `UX.md`; judge whether it reads as a clean, current app of its kind (a chat composer floats above the nav or reads as part of the conversation, never a flat box pinned on the page); and compare the app's palette with every other app's `<app>.css`, since no two apps share one.
 
 **Don't change any repo file.** Delete your scripts when you're done, but keep the screenshots you cite.
 
