@@ -284,7 +284,12 @@ export function getPaidWithName(
   const card = purchase.paidByCardId
     ? cards.find((entry) => entry.id === purchase.paidByCardId)
     : undefined;
-  if (card) return card.name?.trim() || getCardName(card, cards);
+  if (card) {
+    const name = card.name?.trim() ?? '';
+    // A short product name ("it", "Gold") only reads with its issuer.
+    const isOwnName = name.length > 4 || name.includes(' ');
+    return isOwnName ? name : getCardName(card, cards);
+  }
   const account = purchase.accountId
     ? accounts.find((entry) => entry.id === purchase.accountId)
     : undefined;

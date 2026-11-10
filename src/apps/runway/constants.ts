@@ -4767,7 +4767,7 @@ export const PAIR_WORDS = {
   waitingIntro:
     'Your bank calls these card payments or moves. They stay off Purchases.',
   isSpending: 'This is spending',
-  isSpendingSub: 'Counts in Free to Spend, with no envelope',
+  isSpendingSub: 'Back on Purchases, from Free to Spend',
 } as const;
 
 export const LINK_WORDS = {
