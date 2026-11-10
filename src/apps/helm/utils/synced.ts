@@ -7,7 +7,7 @@ import type { SyncedRecord } from '@apps/helm/types';
 const getDay = (at: number, timeZone: string) =>
   getDueDay({ kind: 'moment', at }, timeZone);
 
-/** Whether a copy falls on the person's today: a timed event on the days from its start to its end in their zone, an all-day one by its UTC dates. */
+/** Whether a copy falls on the person's today: a timed event on its first and last day in their zone (a stay's check-in and check-out), an all-day one by its UTC dates. */
 export const isEventToday = (
   record: SyncedRecord,
   now: number,
@@ -18,8 +18,8 @@ export const isEventToday = (
   if (!record.isAllDay) {
     const lastAt = Math.max(record.startAt, (record.endAt ?? 0) - 1);
     return (
-      getDay(record.startAt, timeZone) <= today &&
-      today <= getDay(lastAt, timeZone)
+      getDay(record.startAt, timeZone) === today ||
+      getDay(lastAt, timeZone) === today
     );
   }
   return (
