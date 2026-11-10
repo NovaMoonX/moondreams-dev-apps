@@ -13,13 +13,16 @@ import type {
   SinkSession,
   WritePageArgs,
 } from '../../../connections/sink.js';
-import type { SharedRecord } from '../../../vendor/connectionsContract.js';
+import {
+  MAX_RECORDS_PER_CATEGORY,
+  type SharedRecord,
+} from '../../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS, loadHelmKeyring } from '../getHelmKey.js';
 import { sealForHelm, unwrapHelmKey, type HelmKey } from '../helmKey.js';
 
 export const KEPT_COPY_DAYS = 90;
 export const TRANSFORM_VERSION = 1;
-export const MAX_COPIES_PER_CATEGORY = 1000;
+export const MAX_COPIES_PER_CATEGORY = MAX_RECORDS_PER_CATEGORY;
 const DAY_MS = 86_400_000;
 const BATCH_SIZE = 400;
 const READ_CHUNK = 300;
@@ -150,10 +153,17 @@ class HelmSinkSession implements SinkSession {
     } = args;
     const seen = this.seenIds(grantId, category);
     const room = Math.max(0, MAX_COPIES_PER_CATEGORY - seen.size);
-    const kept = [...records]
-      .filter((record) => !hasEndedBefore(record, windowStart))
-      .sort((a, b) => toAnchor(b) - toAnchor(a))
-      .slice(0, room);
+    const inWindow = records.filter(
+      (record) => !hasEndedBefore(record, windowStart),
+    );
+    const kept = [
+      ...inWindow
+        .filter((record) => record.kind === 'event')
+        .sort((a, b) => toAnchor(a) - toAnchor(b)),
+      ...inWindow
+        .filter((record) => record.kind !== 'event')
+        .sort((a, b) => toAnchor(b) - toAnchor(a)),
+    ].slice(0, room);
     if (kept.length === 0) return;
 
     const key = await this.openKey();

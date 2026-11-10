@@ -344,6 +344,11 @@ async function settle(
   await Promise.all(
     categoryIds
       .filter((id) => fresh.categories[id]?.isOn !== true)
-      .map((id) => session.deleteCategory(grantId, id)),
+      .map((id) =>
+        Promise.all([
+          session.deleteCategory(grantId, id),
+          clearSyncCursors(deps.firestore, uid, grantId, id),
+        ]),
+      ),
   );
 }

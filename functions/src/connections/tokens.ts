@@ -39,16 +39,18 @@ export interface GoogleClient {
   clientSecret: string;
 }
 
+const readClientSecret = () => {
+  try {
+    return GOOGLE_OAUTH_CLIENT.value();
+  } catch (error) {
+    if (!isEmulator()) throw error;
+    return '';
+  }
+};
+
 /** The OAuth client from its secret; null only in the emulator when it is unset. */
 export function readGoogleClient(): GoogleClient | null {
-  const raw = (() => {
-    try {
-      return GOOGLE_OAUTH_CLIENT.value();
-    } catch (error) {
-      if (!isEmulator()) throw error;
-      return '';
-    }
-  })();
+  const raw = readClientSecret();
   if (!raw && isEmulator()) return null;
   const parsed: unknown = JSON.parse(raw);
   const record =
@@ -95,17 +97,30 @@ const readTokenDoc = (data: Record<string, unknown>): TokenDoc => ({
   isFixture: data.isFixture === true,
 });
 
-const sealRefreshToken = (keyring: Keyring, uid: string, token: string) => {
+const toAad = (uid: string, accountId: string) =>
+  Buffer.from(`${uid}|${accountId}`);
+
+const sealRefreshToken = (
+  keyring: Keyring,
+  uid: string,
+  accountId: string,
+  token: string,
+) => {
   const masterKeyId = keyring.current;
   const { ciphertext, nonce } = gcmEncrypt(
     deriveSubkey(keyring, masterKeyId, PURPOSE),
     Buffer.from(token),
-    Buffer.from(uid),
+    toAad(uid, accountId),
   );
   return { masterKeyId, ciphertext, nonce };
 };
 
-const openRefreshToken = (keyring: Keyring, uid: string, doc: TokenDoc) => {
+const openRefreshToken = (
+  keyring: Keyring,
+  uid: string,
+  accountId: string,
+  doc: TokenDoc,
+) => {
   if (!doc.masterKeyId || !doc.ciphertext || !doc.nonce) {
     throw new Error('The stored token is incomplete.');
   }
@@ -113,7 +128,7 @@ const openRefreshToken = (keyring: Keyring, uid: string, doc: TokenDoc) => {
     deriveSubkey(keyring, doc.masterKeyId, PURPOSE),
     doc.ciphertext,
     doc.nonce,
-    Buffer.from(uid),
+    toAad(uid, accountId),
   ).toString('utf8');
 };
 
@@ -140,7 +155,7 @@ export async function storeRefreshToken(
       throw new Error('No refresh token to keep.');
     }
     const sealed = input.refreshToken
-      ? sealRefreshToken(keyring, uid, input.refreshToken)
+      ? sealRefreshToken(keyring, uid, accountId, input.refreshToken)
       : {
           masterKeyId: keeps?.masterKeyId ?? null,
           ciphertext: keeps?.ciphertext ?? null,
@@ -173,21 +188,34 @@ export async function storeFixtureToken(
   });
 }
 
-/** The account and every live grant on it read as needing Reconnect, together. */
+const isSameToken = (current: TokenDoc | null, opened: TokenDoc | null) =>
+  current === null || opened === null
+    ? current === opened
+    : current.ciphertext === opened.ciphertext &&
+      current.lastRefreshedAt === opened.lastRefreshedAt;
+
+/** The account and every live grant on it read as needing Reconnect, together; skipped when the token has been replaced since `opened` was read. */
 async function markNeedsReconnect(
   firestore: Firestore,
   uid: string,
   accountId: string,
+  opened: TokenDoc | null,
 ) {
   const account = accountRef(firestore, uid, accountId);
+  const token = tokenRef(firestore, uid, accountId);
   const grants = firestore
     .collection(`connections/${uid}/grants`)
     .where('accountId', '==', accountId);
   await firestore.runTransaction(async (transaction) => {
-    const [accountSnapshot, grantSnapshots] = await Promise.all([
+    const [accountSnapshot, grantSnapshots, tokenSnapshot] = await Promise.all([
       transaction.get(account),
       transaction.get(grants),
+      transaction.get(token),
     ]);
+    const current = tokenSnapshot.exists
+      ? readTokenDoc(tokenSnapshot.data() ?? {})
+      : null;
+    if (!isSameToken(current, opened)) return;
     const now = Date.now();
     if (accountSnapshot.exists) {
       transaction.update(account, {
@@ -235,6 +263,17 @@ async function refreshAccessToken(refreshToken: string) {
   return { code: toErrorCode(body.error), status: response.status };
 }
 
+const unsealRefreshToken = (uid: string, accountId: string, doc: TokenDoc) => {
+  try {
+    return openRefreshToken(loadConnectionsKeyring(), uid, accountId, doc);
+  } catch {
+    logger.error('connections.token.unsealFailed', {
+      masterKeyId: doc.masterKeyId,
+    });
+    throw new Error('token-unseal-failed');
+  }
+};
+
 /** A fresh access token for the account, opened and refreshed only inside this module. */
 export const getGoogleAccessToken = async (
   firestore: Firestore,
@@ -248,27 +287,18 @@ export const getGoogleAccessToken = async (
 
   const snapshot = await tokenRef(firestore, uid, accountId).get();
   if (!snapshot.exists) {
-    await markNeedsReconnect(firestore, uid, accountId);
+    await markNeedsReconnect(firestore, uid, accountId, null);
     throw new ReconnectNeeded();
   }
   const doc = readTokenDoc(snapshot.data() ?? {});
   if (isEmulator() && doc.isFixture) return 'fixture';
 
-  const refreshToken = (() => {
-    try {
-      return openRefreshToken(loadConnectionsKeyring(), uid, doc);
-    } catch {
-      logger.error('connections.token.unsealFailed', {
-        masterKeyId: doc.masterKeyId,
-      });
-      throw new Error('token-unseal-failed');
-    }
-  })();
+  const refreshToken = unsealRefreshToken(uid, accountId, doc);
 
   const result = await refreshAccessToken(refreshToken);
   if ('code' in result) {
     if (result.code === 'invalid_grant') {
-      await markNeedsReconnect(firestore, uid, accountId);
+      await markNeedsReconnect(firestore, uid, accountId, doc);
       throw new ReconnectNeeded();
     }
     logger.warn('connections.token.refreshFailed', {
@@ -284,36 +314,59 @@ export const getGoogleAccessToken = async (
   return result.token;
 };
 
-/** Best effort: asks Google to cancel the sign-in, then removes the sealed token and the account; a failed cancel never keeps either. */
-export async function revokeGoogleAccount(
+/** Best effort: asks Google to cancel a refresh token; a failure is logged and never thrown. */
+export async function revokeRefreshTokenAtGoogle(refreshToken: string) {
+  try {
+    const response = await fetch(GOOGLE_REVOKE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: refreshToken }),
+    });
+    if (!response.ok) {
+      logger.warn('connections.token.revokeFailed', {
+        code: 'status',
+        status: response.status,
+      });
+    }
+  } catch {
+    logger.warn('connections.token.revokeFailed', { code: 'error' });
+  }
+}
+
+const readUnsealedToken = (uid: string, accountId: string, doc: TokenDoc) => {
+  if (doc.isFixture) return null;
+  try {
+    return openRefreshToken(loadConnectionsKeyring(), uid, accountId, doc);
+  } catch {
+    logger.warn('connections.token.revokeFailed', { code: 'unseal' });
+    return null;
+  }
+};
+
+/** Removes the sealed token and the account only when no grant on it is still live, in one transaction, and only then asks Google to cancel the sign-in; a failed cancel never keeps either. */
+export async function revokeUnusedGoogleAccount(
   firestore: Firestore,
   uid: string,
   accountId: string,
 ) {
   const ref = tokenRef(firestore, uid, accountId);
-  const snapshot = await ref.get();
-  const doc = snapshot.exists ? readTokenDoc(snapshot.data() ?? {}) : null;
-  if (doc && !doc.isFixture) {
-    try {
-      const refreshToken = openRefreshToken(loadConnectionsKeyring(), uid, doc);
-      const response = await fetch(GOOGLE_REVOKE_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ token: refreshToken }),
-      });
-      if (!response.ok) {
-        logger.warn('connections.token.revokeFailed', {
-          code: 'status',
-          status: response.status,
-        });
-      }
-    } catch {
-      logger.warn('connections.token.revokeFailed', { code: 'error' });
-    }
-  }
+  const grants = firestore
+    .collection(`connections/${uid}/grants`)
+    .where('accountId', '==', accountId);
+  const refreshToken = await firestore.runTransaction(async (transaction) => {
+    const [snapshot, grantSnapshots] = await Promise.all([
+      transaction.get(ref),
+      transaction.get(grants),
+    ]);
+    if (grantSnapshots.docs.some((doc) => doc.data().status !== 'ended'))
+      return undefined;
+    transaction.delete(ref);
+    transaction.delete(accountRef(firestore, uid, accountId));
+    return snapshot.exists
+      ? readUnsealedToken(uid, accountId, readTokenDoc(snapshot.data() ?? {}))
+      : null;
+  });
+  if (refreshToken === undefined) return;
   cache.delete(`${uid}/${accountId}`);
-  const batch = firestore.batch();
-  batch.delete(ref);
-  batch.delete(accountRef(firestore, uid, accountId));
-  await batch.commit();
+  if (refreshToken !== null) await revokeRefreshTokenAtGoogle(refreshToken);
 }

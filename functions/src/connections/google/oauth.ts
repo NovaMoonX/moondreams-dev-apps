@@ -26,6 +26,7 @@ import {
   GOOGLE_SECRETS,
   GOOGLE_TOKEN_URL,
   readGoogleClient,
+  revokeRefreshTokenAtGoogle,
   storeFixtureToken,
   storeRefreshToken,
 } from '../tokens.js';
@@ -48,6 +49,7 @@ const OPTIONS: CallableOptions = {
 
 const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const STATE_TTL_MS = 10 * 60_000;
+const MAX_OPEN_STATES = 10;
 const MAX_TEXT_LENGTH = 2000;
 const FIXTURE_CODE = 'fixture';
 const IDENTITY_SCOPES = ['openid', 'email'];
@@ -143,6 +145,21 @@ const requireOutsideConnector = (readerAppId: string, connectorId: string) => {
   return manifest;
 };
 
+const readLoginHint = async (
+  firestore: Firestore,
+  uid: string,
+  accountId: string | null,
+) => {
+  if (accountId === null) return null;
+  if (!isOutsideAccount(accountId)) throw badRequest();
+  const snapshot = await accountRef(firestore, uid, accountId).get();
+  const email = snapshot.data()?.email;
+  if (!snapshot.exists || typeof email !== 'string') {
+    throw new HttpsError('not-found', "That account doesn't exist.");
+  }
+  return email;
+};
+
 export const startGoogleConnection = onCall(OPTIONS, async (request) => {
   const auth = request.auth;
   if (!auth) throw new HttpsError('unauthenticated', 'Sign in to connect.');
@@ -161,20 +178,22 @@ export const startGoogleConnection = onCall(OPTIONS, async (request) => {
     throw badRequest();
   }
 
-  const loginHint = await (async () => {
-    if (req.accountId === null) return null;
-    if (!isOutsideAccount(req.accountId)) throw badRequest();
-    const snapshot = await accountRef(firestore, auth.uid, req.accountId).get();
-    const email = snapshot.data()?.email;
-    if (!snapshot.exists || typeof email !== 'string') {
-      throw new HttpsError('not-found', "That account doesn't exist.");
-    }
-    return email;
-  })();
+  const loginHint = await readLoginHint(firestore, auth.uid, req.accountId);
 
+  const now = Date.now();
+  const open = await firestore
+    .collection(`connectionsServer/${auth.uid}/oauthStates`)
+    .where('expiresAt', '>', now)
+    .limit(MAX_OPEN_STATES)
+    .get();
+  if (open.size >= MAX_OPEN_STATES) {
+    throw new HttpsError(
+      'resource-exhausted',
+      'Too many sign-ins are open. Wait a few minutes and try again.',
+    );
+  }
   const state = randomBytes(32).toString('hex');
   const codeVerifier = toBase64Url(randomBytes(32));
-  const now = Date.now();
   await stateRef(firestore, auth.uid, state).create({
     readerAppId: req.readerAppId,
     connectorId: req.connectorId,
@@ -260,7 +279,8 @@ const toErrorCode = (value: unknown) =>
 
 interface Identity {
   sub: string;
-  email: string;
+  /** Null when Google doesn't vouch for the address. */
+  email: string | null;
   refreshToken: string | null;
   grantedScopes: string[];
 }
@@ -307,7 +327,7 @@ async function exchangeCode(
       );
     });
   const payload = ticket.getPayload();
-  if (!payload?.sub || !payload.email) {
+  if (!payload?.sub) {
     throw new HttpsError(
       'failed-precondition',
       "Google didn't share which account that is.",
@@ -315,7 +335,8 @@ async function exchangeCode(
   }
   return {
     sub: payload.sub,
-    email: payload.email,
+    email:
+      payload.email && payload.email_verified === true ? payload.email : null,
     refreshToken:
       typeof body.refresh_token === 'string' ? body.refresh_token : null,
     grantedScopes:
@@ -379,16 +400,41 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
     : await exchangeCode(req.code, state);
 
   const accountId = toAccountId(identity.sub);
+  const refuse = async (error: HttpsError) => {
+    if (identity.refreshToken !== null && !isFixture) {
+      const known = await accountRef(firestore, auth.uid, accountId).get();
+      if (!known.exists)
+        await revokeRefreshTokenAtGoogle(identity.refreshToken);
+    }
+    throw error;
+  };
   if (state.accountId !== null && state.accountId !== accountId) {
-    throw new HttpsError(
-      'failed-precondition',
-      'That is a different Google account. Sign in with the one you are reconnecting.',
+    return refuse(
+      new HttpsError(
+        'failed-precondition',
+        'That is a different Google account. Sign in with the one you are reconnecting.',
+      ),
     );
   }
   if (!scopes.every((scope) => identity.grantedScopes.includes(scope))) {
-    throw new HttpsError(
-      'permission-denied',
-      "Nothing was connected: the permission it needs wasn't granted.",
+    return refuse(
+      new HttpsError(
+        'permission-denied',
+        "Nothing was connected: the permission it needs wasn't granted.",
+      ),
+    );
+  }
+  const knownEmail = (
+    await accountRef(firestore, auth.uid, accountId).get()
+  ).get('email');
+  const email =
+    identity.email ?? (typeof knownEmail === 'string' ? knownEmail : null);
+  if (email === null) {
+    return refuse(
+      new HttpsError(
+        'failed-precondition',
+        "Google didn't confirm that account's email address.",
+      ),
     );
   }
 
@@ -417,7 +463,7 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
     const existing = (await transaction.get(account)).data();
     const next: ConnectionAccount = {
       provider: 'google',
-      email: identity.email,
+      email,
       label: typeof existing?.label === 'string' ? existing.label : null,
       grantedScopes: identity.grantedScopes,
       status: 'live',
@@ -433,7 +479,7 @@ export const finishGoogleConnection = onCall(OPTIONS, async (request) => {
   });
   const result: FinishGoogleConnectionResult = {
     accountId,
-    email: identity.email,
+    email,
     readerAppId: state.readerAppId,
     connectorId: state.connectorId,
     hasLiveGrant,

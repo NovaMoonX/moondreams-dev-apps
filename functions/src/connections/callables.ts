@@ -41,7 +41,7 @@ import {
   syncGrant,
   type SyncDeps,
 } from './syncRunner.js';
-import { GOOGLE_SECRETS, revokeGoogleAccount } from './tokens.js';
+import { GOOGLE_SECRETS, revokeUnusedGoogleAccount } from './tokens.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -303,14 +303,7 @@ const revokeUnusedAccount = async (uid: string, grantId: string) => {
     if (!snapshot.exists) return;
     const { accountId } = readGrant(snapshot.data());
     if (!isOutsideAccount(accountId)) return;
-    const sharing = await firestore
-      .collection(`connections/${uid}/grants`)
-      .where('accountId', '==', accountId)
-      .get();
-    const isInUse = sharing.docs.some(
-      (doc) => readGrant(doc.data()).status !== 'ended',
-    );
-    if (!isInUse) await revokeGoogleAccount(firestore, uid, accountId);
+    await revokeUnusedGoogleAccount(firestore, uid, accountId);
   } catch (error) {
     logger.warn('connections.end.revokeFailed', { cause: errorCause(error) });
   }

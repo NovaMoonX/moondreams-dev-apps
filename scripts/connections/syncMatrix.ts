@@ -24,8 +24,13 @@ import {
 } from '../../functions/src/connections/grants.ts';
 import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
 import {
+  BULK_CALENDAR,
   FIXTURE_CANCELLED_REF,
+  FIXTURE_DUP_TOKEN,
+  FIXTURE_GONE_LATER_TOKEN,
   FIXTURE_GONE_TOKEN,
+  FIXTURE_WINNER_CANCEL_TOKEN,
+  TZ_CALENDARS,
 } from '../../functions/src/connections/google/fixtures.ts';
 import {
   READER_SINKS,
@@ -240,7 +245,7 @@ const setupCalendar = async (account: typeof PERSONAL) => {
     ctx: async () => ({
       uid,
       accountId: account.accountId,
-      grant: await (async () => readGrant((await grantRef.get()).data()))(),
+      grant: readGrant((await grantRef.get()).data()),
     }),
   };
 };
@@ -822,6 +827,156 @@ const main = async () => {
       adapter.deepLink(`${work}|fx-standup`, ctx),
       `https://www.google.com/calendar/event?eid=${Buffer.from(`fx-standup ${work}`).toString('base64url')}`,
     );
+  }
+
+  {
+    const zones = {
+      accountId: 'g_0000000000000003',
+      email: 'personal@example.com',
+      calendars: TZ_CALENDARS,
+    };
+    const t = await setupCalendar(zones);
+    await t.run();
+    assert.deepEqual(
+      refs(await t.copies()),
+      [`${TZ_CALENDARS[0]}|fx-offsite-a`],
+      'the same event on calendars in different UTC offsets is kept once',
+    );
+  }
+
+  {
+    const bulk = {
+      accountId: 'g_0000000000000004',
+      email: 'personal@example.com',
+      calendars: [BULK_CALENDAR],
+    };
+    const t = await setupCalendar(bulk);
+    await t.run();
+    const kept = refs(await t.copies());
+    assert.equal(kept.length, 1000, 'a category keeps at most 1,000 events');
+    assert.ok(kept.includes(`${BULK_CALENDAR}|bulk-0000`));
+    assert.ok(kept.includes(`${BULK_CALENDAR}|bulk-0999`));
+    assert.equal(
+      kept.includes(`${BULK_CALENDAR}|bulk-1000`),
+      false,
+      'the earliest are kept',
+    );
+    assert.equal(
+      (await t.cursorRef.get()).exists,
+      false,
+      'a capped read saves nothing, so the next one is a full read',
+    );
+    await t.run();
+    assert.deepEqual(refs(await t.copies()), kept);
+  }
+
+  {
+    const [personal] = PERSONAL.calendars;
+    const t = await setupCalendar({ ...PERSONAL, calendars: [personal] });
+    await t.run();
+    const state = JSON.parse((await t.cursorRef.get()).get('state') as string);
+    await t.cursorRef.set({
+      state: JSON.stringify({
+        ...state,
+        tokens: { [personal]: FIXTURE_GONE_LATER_TOKEN },
+      }),
+      updatedAt: NOW,
+    });
+    await t.run();
+    const after = JSON.parse((await t.cursorRef.get()).get('state') as string);
+    assert.equal(
+      after.tokens[personal],
+      'fixture-sync',
+      'a gone token on a later page restarts the read in full',
+    );
+    assert.deepEqual((await t.grant()).errors, []);
+    assert.equal((await t.copies()).length, 3);
+  }
+
+  {
+    const t = await setupCalendar(WORK);
+    const team = WORK.calendars[1];
+    await t.run();
+    const state = JSON.parse((await t.cursorRef.get()).get('state') as string);
+    const [lunch] = (await t.copies()).filter(
+      (doc) => doc.get('sourceRef') === `${team}|fx-team-lunch`,
+    );
+    await firestore
+      .doc(`apps/helm/users/${t.uid}/synced/stray`)
+      .set({ ...lunch.data(), sourceRef: 'stray' });
+    await lunch.ref.delete();
+    await t.run();
+    assert.equal(
+      (await t.copies()).some(
+        (doc) => doc.get('sourceRef') === lunch.get('sourceRef'),
+      ),
+      false,
+      'a read by update time sees only what changed since the last one',
+    );
+    await t.cursorRef.set({
+      state: JSON.stringify({ ...state, syncedAt: Date.now() - 8 * DAY }),
+      updatedAt: NOW,
+    });
+    await t.run();
+    const copies = await t.copies();
+    assert.ok(
+      copies.some((doc) => doc.get('sourceRef') === lunch.get('sourceRef')),
+      'a calendar with no sync token is read from the last read time minus a margin',
+    );
+    assert.ok(
+      copies.some((doc) => doc.get('sourceRef') === 'stray'),
+      'and it stays an incremental read',
+    );
+  }
+
+  {
+    const [personal, shifts] = PERSONAL.calendars;
+    const t = await setupCalendar(PERSONAL);
+    const readState = async () =>
+      JSON.parse((await t.cursorRef.get()).get('state') as string);
+    const pottery = `${personal}|fx-pottery`;
+    await t.run();
+    const first = await readState();
+    assert.deepEqual(
+      Object.values(first.dupes),
+      [pottery],
+      'the winner of a dropped duplicate is remembered',
+    );
+    const before = refs(await t.copies());
+    await t.cursorRef.set({
+      state: JSON.stringify({
+        ...first,
+        tokens: { [personal]: 'fixture-sync', [shifts]: FIXTURE_DUP_TOKEN },
+      }),
+      updatedAt: NOW,
+    });
+    await t.run();
+    assert.deepEqual(
+      refs(await t.copies()),
+      before,
+      'an incremental read of a dropped duplicate leaves it dropped',
+    );
+    assert.deepEqual(Object.values((await readState()).dupes), [pottery]);
+
+    await t.cursorRef.set({
+      state: JSON.stringify({
+        ...first,
+        tokens: {
+          [personal]: FIXTURE_WINNER_CANCEL_TOKEN,
+          [shifts]: 'fixture-sync',
+        },
+      }),
+      updatedAt: NOW,
+    });
+    await t.run();
+    assert.equal(refs(await t.copies()).includes(pottery), false);
+    assert.equal(
+      (await t.cursorRef.get()).exists,
+      false,
+      'a cancelled winner forces the next read to be full',
+    );
+    await t.run();
+    assert.deepEqual(refs(await t.copies()), before);
   }
 
   {

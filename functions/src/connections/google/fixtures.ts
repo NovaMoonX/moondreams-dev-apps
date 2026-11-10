@@ -33,6 +33,16 @@ const PAGE_SIZE = 2;
 export const FIXTURE_SYNC_TOKEN = 'fixture-sync';
 export const FIXTURE_CHANGES_TOKEN = 'fixture-changes';
 export const FIXTURE_GONE_TOKEN = 'fixture-gone';
+export const FIXTURE_DUP_TOKEN = 'fixture-dup';
+export const FIXTURE_WINNER_CANCEL_TOKEN = 'fixture-winner-cancel';
+export const FIXTURE_GONE_LATER_TOKEN = 'fixture-gone-later';
+export const TZ_CALENDARS = [
+  'tz-a@group.calendar.google.com',
+  'tz-b@group.calendar.google.com',
+];
+export const BULK_CALENDAR = 'bulk@group.calendar.google.com';
+export const BULK_EVENT_COUNT = 1100;
+const BULK_PAGE_SIZE = 300;
 export const FIXTURE_CANCELLED_REF = 'work@example.com|fx-old-meeting';
 const NO_TOKEN_CALENDAR = 'team-work@group.calendar.google.com';
 
@@ -113,8 +123,26 @@ const timed = (offset: number, from: string, to: string) => ({
 
 const updatedLongAgo = () => new Date(Date.now() - 7 * DAY_MS).toISOString();
 
+const bulkEvents = (): FixtureEvent[] =>
+  Array.from({ length: BULK_EVENT_COUNT }, (_, index) => {
+    const startAt = Date.parse(`${dayAt(1)}T00:00:00Z`) + index * 60_000;
+    return {
+      id: `bulk-${String(index).padStart(4, '0')}`,
+      summary: `Bulk ${index}`,
+      iCalUID: `bulk-${index}@example.com`,
+      updated: updatedLongAgo(),
+      start: { dateTime: new Date(startAt).toISOString() },
+      end: { dateTime: new Date(startAt + 30_000).toISOString() },
+    };
+  });
+
 const eventsFor = (calendarId: string): FixtureEvent[] | null => {
   const base = { updated: updatedLongAgo() };
+  const sharedInvite = {
+    ...base,
+    summary: 'Planning offsite',
+    iCalUID: 'fixture-offsite@example.com',
+  };
   const pottery = {
     ...base,
     summary: 'Pottery class',
@@ -184,6 +212,23 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
         ...allDay(5),
       },
     ],
+    [TZ_CALENDARS[0]]: [
+      {
+        ...sharedInvite,
+        id: 'fx-offsite-a',
+        start: { dateTime: `${dayAt(4)}T10:00:00-08:00` },
+        end: { dateTime: `${dayAt(4)}T11:00:00-08:00` },
+      },
+    ],
+    [TZ_CALENDARS[1]]: [
+      {
+        ...sharedInvite,
+        id: 'fx-offsite-b',
+        start: { dateTime: `${dayAt(4)}T13:00:00-05:00` },
+        end: { dateTime: `${dayAt(4)}T14:00:00-05:00` },
+      },
+    ],
+    [BULK_CALENDAR]: bulkEvents(),
     [NO_TOKEN_CALENDAR]: [
       {
         ...base,
@@ -212,14 +257,55 @@ const answerEvents = (calendarId: string, params: URLSearchParams) => {
       body: { items: changed, nextSyncToken: FIXTURE_SYNC_TOKEN },
     };
   }
-  if (syncToken || params.get('updatedMin')) {
+  if (syncToken === FIXTURE_DUP_TOKEN) {
+    return {
+      status: 200,
+      body: {
+        items: events.filter((event) => event.id === 'fx-pottery-shifts'),
+        nextSyncToken: FIXTURE_SYNC_TOKEN,
+      },
+    };
+  }
+  if (syncToken === FIXTURE_WINNER_CANCEL_TOKEN) {
+    return {
+      status: 200,
+      body: {
+        items:
+          calendarId === 'personal@example.com'
+            ? [{ id: 'fx-pottery', status: 'cancelled' }]
+            : [],
+        nextSyncToken: FIXTURE_SYNC_TOKEN,
+      },
+    };
+  }
+  if (syncToken === FIXTURE_GONE_LATER_TOKEN) {
+    return params.get('pageToken')
+      ? { status: 410, body: {} }
+      : { status: 200, body: { items: [], nextPageToken: 'g2' } };
+  }
+  if (syncToken) {
     return {
       status: 200,
       body: { items: [], nextSyncToken: FIXTURE_SYNC_TOKEN },
     };
   }
+  const updatedMin = params.get('updatedMin');
+  if (updatedMin) {
+    return {
+      status: 200,
+      body: {
+        items: events.filter(
+          (event) => Date.parse(event.updated ?? '') >= Date.parse(updatedMin),
+        ),
+        ...(calendarId === NO_TOKEN_CALENDAR
+          ? {}
+          : { nextSyncToken: FIXTURE_SYNC_TOKEN }),
+      },
+    };
+  }
+  const pageSize = calendarId === BULK_CALENDAR ? BULK_PAGE_SIZE : PAGE_SIZE;
   const offset = Number(params.get('pageToken')?.slice(1) ?? 0);
-  const next = offset + PAGE_SIZE;
+  const next = offset + pageSize;
   const isLast = next >= events.length;
   return {
     status: 200,

@@ -2,9 +2,10 @@ import { createHash } from 'node:crypto';
 
 import { getFirestore } from 'firebase-admin/firestore';
 
-import type {
-  ConnectorOption,
-  SharedRecord,
+import {
+  MAX_RECORDS_PER_CATEGORY,
+  type ConnectorOption,
+  type SharedRecord,
 } from '../../vendor/connectionsContract.js';
 import type {
   SourceAdapter,
@@ -23,7 +24,7 @@ const EVENT_FIELDS =
 const LIST_FIELDS =
   'items(id,summary,summaryOverride,backgroundColor,primary,accessRole)';
 const PAGE_SIZE = 250;
-const UPCOMING_CAP = 2500;
+const UPCOMING_CAP = MAX_RECORDS_PER_CATEGORY;
 const OPTION_LIMIT = 250;
 const CLOCK_SKEW_MS = 60_000;
 const DAY_MS = 86_400_000;
@@ -62,11 +63,12 @@ interface CalendarListEntry {
   accessRole?: string;
 }
 
-/** What a finished read keeps for the next one: a sync token per calendar, or null where Google gave none. */
+/** What a finished read keeps for the next one: a sync token per calendar, or null where Google gave none, and the winning ref of each event key that had a copy dropped. */
 interface Saved {
   calendarIds: string[];
   syncedAt: number;
   tokens: Record<string, string | null>;
+  dupes: Record<string, string>;
 }
 
 interface Progress {
@@ -81,8 +83,11 @@ interface Cursor {
   isIncremental: boolean;
   prior: Saved | null;
   progress: Record<string, Progress>;
-  seen: string[];
+  seen: Record<string, string>;
+  dupes: Record<string, string>;
   emitted: number;
+  isCapped: boolean;
+  isWinnerGone: boolean;
 }
 
 interface Round {
@@ -105,7 +110,15 @@ const parseSaved = (text: string | null): Saved | null => {
       typeof value.syncedAt === 'number' &&
       typeof value.tokens === 'object' &&
       value.tokens !== null
-      ? (value as Saved)
+      ? {
+          calendarIds: value.calendarIds,
+          syncedAt: value.syncedAt,
+          tokens: value.tokens,
+          dupes:
+            typeof value.dupes === 'object' && value.dupes !== null
+              ? value.dupes
+              : {},
+        }
       : null;
   } catch {
     return null;
@@ -130,8 +143,11 @@ const startCursor = (
       { pageToken: null, isDone: false, token: null },
     ]),
   ),
-  seen: [],
+  seen: {},
+  dupes: prior?.dupes ?? {},
   emitted: 0,
+  isCapped: false,
+  isWinnerGone: false,
 });
 
 const readParams = (
@@ -165,12 +181,14 @@ const toEventsUrl = (
   return `${API}/calendars/${encodeURIComponent(calendarId)}/events?${params}`;
 };
 
-const toStart = (time: EventTime | undefined) =>
-  time?.date ?? time?.dateTime ?? '';
+const toKeyStart = (time: EventTime | undefined) => {
+  if (time?.date) return time.date;
+  return time?.dateTime ? String(Date.parse(time.dateTime)) : '';
+};
 
 const toSameEventKey = (event: CalendarEvent) =>
   createHash('sha256')
-    .update(`${event.iCalUID ?? event.id}|${toStart(event.start)}`)
+    .update(`${event.iCalUID ?? event.id}|${toKeyStart(event.start)}`)
     .digest('hex')
     .slice(0, 16);
 
@@ -235,6 +253,27 @@ const toOutcome = (
   };
 };
 
+interface Dedupe {
+  seen: Record<string, string>;
+  dupes: Record<string, string>;
+  fresh: SharedRecord[];
+}
+
+/** The first copy of an event wins; a later copy under another ref is dropped and its winner remembered. */
+const dedupe = (state: Dedupe, outcome: Outcome): Dedupe => {
+  if (outcome.kind !== 'record') return state;
+  const { key, record } = outcome;
+  const winner = state.seen[key] ?? state.dupes[key];
+  if (winner !== undefined && winner !== record.sourceRef)
+    return { ...state, dupes: { ...state.dupes, [key]: winner } };
+  if (state.seen[key] !== undefined) return state;
+  return {
+    ...state,
+    seen: { ...state.seen, [key]: record.sourceRef },
+    fresh: [...state.fresh, record],
+  };
+};
+
 const readCalendar = async (
   token: string,
   req: SyncPageRequest,
@@ -252,19 +291,31 @@ const readCalendar = async (
     const outcome = toOutcome(calendarId, event);
     return outcome ? [outcome] : [];
   });
-  const seen = new Set([
-    ...cursor.seen,
-    ...acc.records.map((record) => String(record.extra.sameEventKey)),
-  ]);
-  const fresh = outcomes.flatMap((outcome) => {
-    if (outcome.kind !== 'record' || seen.has(outcome.key)) return [];
-    seen.add(outcome.key);
-    return [outcome.record];
-  });
+  const start: Dedupe = {
+    seen: {
+      ...cursor.seen,
+      ...Object.fromEntries(
+        acc.records.map((record) => [
+          String(record.extra.sameEventKey),
+          record.sourceRef,
+        ]),
+      ),
+    },
+    dupes: cursor.dupes,
+    fresh: [],
+  };
+  const deduped = outcomes.reduce(dedupe, start);
+  const deletedRefs = outcomes.flatMap((outcome) =>
+    outcome.kind === 'gone' ? [outcome.ref] : [],
+  );
+  const winners = Object.values(deduped.dupes);
   const isLast = !page.nextPageToken;
   return {
     cursor: {
       ...cursor,
+      dupes: deduped.dupes,
+      isWinnerGone:
+        cursor.isWinnerGone || deletedRefs.some((ref) => winners.includes(ref)),
       progress: {
         ...cursor.progress,
         [calendarId]: {
@@ -274,13 +325,8 @@ const readCalendar = async (
         },
       },
     },
-    records: [...acc.records, ...fresh],
-    deletedRefs: [
-      ...acc.deletedRefs,
-      ...outcomes.flatMap((outcome) =>
-        outcome.kind === 'gone' ? [outcome.ref] : [],
-      ),
-    ],
+    records: [...acc.records, ...deduped.fresh],
+    deletedRefs: [...acc.deletedRefs, ...deletedRefs],
   };
 };
 
@@ -304,10 +350,16 @@ const readRound = async (
     cursor: {
       ...round.cursor,
       emitted,
-      seen: [
+      isCapped: round.cursor.isCapped || isCapped,
+      seen: {
         ...cursor.seen,
-        ...round.records.map((record) => String(record.extra.sameEventKey)),
-      ],
+        ...Object.fromEntries(
+          round.records.map((record) => [
+            String(record.extra.sameEventKey),
+            record.sourceRef,
+          ]),
+        ),
+      },
       progress: isCapped
         ? Object.fromEntries(
             Object.entries(round.cursor.progress).map(([id, progress]) => [
@@ -322,25 +374,32 @@ const readRound = async (
   };
 };
 
-const firstRound = async (
+const readOrRestart = async (
+  token: string,
+  req: SyncPageRequest,
+  cursor: Cursor,
+) => {
+  try {
+    return await readRound(token, req, cursor);
+  } catch (error) {
+    if (!(error instanceof SyncTokenGone) || !cursor.prior) throw error;
+    return readRound(
+      token,
+      req,
+      startCursor(cursor.calendarIds, null, cursor.startedAt),
+    );
+  }
+};
+
+const firstRound = (
   token: string,
   req: SyncPageRequest,
   calendarIds: string[],
 ) => {
-  const startedAt = Date.now();
   const saved = parseSaved(req.resumeState);
   const prior =
     saved && isSameSet(saved.calendarIds, calendarIds) ? saved : null;
-  try {
-    return await readRound(
-      token,
-      req,
-      startCursor(calendarIds, prior, startedAt),
-    );
-  } catch (error) {
-    if (!(error instanceof SyncTokenGone) || !prior) throw error;
-    return readRound(token, req, startCursor(calendarIds, null, startedAt));
-  }
+  return readOrRestart(token, req, startCursor(calendarIds, prior, Date.now()));
 };
 
 const toResult = ({ cursor, records, deletedRefs }: Round): SyncPageResult => {
@@ -356,14 +415,17 @@ const toResult = ({ cursor, records, deletedRefs }: Round): SyncPageResult => {
         progress.token,
       ]),
     ),
+    dupes: cursor.dupes,
   };
+  // Nothing saved means the next read is a full one.
+  const isForcedFull = cursor.isCapped || cursor.isWinnerGone;
   return {
     records,
     deletedRefs,
     cursor: isDone ? null : JSON.stringify(cursor),
     isFull: !cursor.isIncremental,
     isDone,
-    resumeState: isDone ? JSON.stringify(saved) : null,
+    resumeState: isDone && !isForcedFull ? JSON.stringify(saved) : null,
   };
 };
 
@@ -415,7 +477,7 @@ export function createGoogleCalendarAdapter(): SourceAdapter {
       );
       return toResult(
         req.cursor
-          ? await readRound(token, req, JSON.parse(req.cursor) as Cursor)
+          ? await readOrRestart(token, req, JSON.parse(req.cursor) as Cursor)
           : await firstRound(token, req, calendarIds),
       );
     },

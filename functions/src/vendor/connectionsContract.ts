@@ -156,6 +156,9 @@ export interface ConnectionGrant {
 
 export const MAX_GRANT_ERRORS = 10;
 
+/** The most records a source hands over, and a reader keeps, for one category. */
+export const MAX_RECORDS_PER_CATEGORY = 1000;
+
 export const toGrantId = (
   readerAppId: string,
   connectorId: ConnectorId,
