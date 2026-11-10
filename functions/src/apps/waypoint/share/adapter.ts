@@ -1,9 +1,5 @@
 import { getAuth } from 'firebase-admin/auth';
-import {
-  FieldPath,
-  getFirestore,
-  type Firestore,
-} from 'firebase-admin/firestore';
+import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
@@ -135,7 +131,7 @@ async function readTrips(
 ) {
   const snapshot = await firestore
     .collection('apps/waypoint/trips')
-    .where(new FieldPath('members', uid, 'uid'), '==', uid)
+    .where(`members.${uid}.uid`, '==', uid)
     .select(...TRIP_FIELDS, ...extraFields)
     .limit(TRIP_LIMIT)
     .get();
