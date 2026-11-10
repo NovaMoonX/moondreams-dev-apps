@@ -4601,6 +4601,14 @@ export const RELEASED_WORDS = {
   manySub: 'They no longer count. History says where each one was.',
 };
 
+export const SORTING_WORDS = {
+  caption: 'Needs a home',
+  label: "I'm not sorting yet",
+  helpOn: "New charges stay in Free to Spend and don't wait here",
+  helpOff: 'Charges from the bank wait here for a home',
+  saveFailed: 'That did not save. Nothing was changed.',
+} as const;
+
 export const NEEDS_HOME_WORDS = {
   title: 'Needs a home',
   homeSub: 'From your bank',

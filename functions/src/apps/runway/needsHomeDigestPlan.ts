@@ -33,3 +33,28 @@ export function getDigestDay(now: number, settings: DigestSettings) {
 
 export const claimPath = (uid: string, date: string) =>
   `apps/runway/server/${uid}/notified/needsHome_${date}`;
+
+export interface SortingState {
+  isPaused: boolean;
+  from: number;
+}
+
+/** Reads the plan's readable sorting switch; anything malformed is null, so every charge waits. */
+export function readSorting(value: unknown): SortingState | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const { isPaused, from } = value as Record<string, unknown>;
+  return typeof isPaused === 'boolean' && typeof from === 'number'
+    ? { isPaused, from }
+    : null;
+}
+
+/** Counts what waits: money in always, a charge only when "I'm not sorting yet" has not quieted it. */
+export function countWaiting(
+  purchases: { createdAt: number; amountCents: number }[],
+  sorting: SortingState,
+) {
+  return purchases.filter(
+    ({ createdAt, amountCents }) =>
+      amountCents <= 0 || (!sorting.isPaused && createdAt >= sorting.from),
+  ).length;
+}

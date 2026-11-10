@@ -9,8 +9,11 @@ import { sendPushReport, toAppUrl } from '../../notifications/sendPush.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from './getRunwayKey.js';
 import {
   claimPath,
+  countWaiting,
   getDigestDay,
   readDigestSettings,
+  readSorting,
+  type SortingState,
 } from './needsHomeDigestPlan.js';
 import {
   NEEDS_HOME_PATH,
@@ -58,6 +61,7 @@ async function digestForPlan(
   keyring: Keyring,
   uid: string,
   sealed: unknown,
+  sorting: SortingState | null,
   now: number,
 ): Promise<Outcome> {
   const planKey = await unwrapPlanKey(firestore, keyring, uid);
@@ -68,13 +72,25 @@ async function digestForPlan(
   if (!date) return 'notHour';
   const claim = firestore.doc(claimPath(uid, date));
   if ((await claim.get()).exists) return 'claimed';
-  const waiting = (
-    await firestore
-      .collection(`apps/runway/plans/${uid}/purchases`)
-      .where('needsHome', '==', true)
-      .count()
-      .get()
-  ).data().count;
+  const waitingPurchases = firestore
+    .collection(`apps/runway/plans/${uid}/purchases`)
+    .where('needsHome', '==', true);
+  const waiting =
+    sorting === null
+      ? (await waitingPurchases.count().get()).data().count
+      : countWaiting(
+          (
+            await waitingPurchases.select('createdAt', 'sealed').get()
+          ).docs.flatMap((purchase) => {
+            const { createdAt, sealed: payload } = purchase.data();
+            if (typeof createdAt !== 'number' || !isSealed(payload)) return [];
+            const { amountCents } = openWithKey(planKey.key, payload);
+            return typeof amountCents === 'number'
+              ? [{ createdAt, amountCents }]
+              : [];
+          }),
+          sorting,
+        );
   if (waiting === 0) return 'empty';
   if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
     return 'closed';
@@ -113,7 +129,7 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
     const plans = await firestore
       .collection('apps/runway/plans')
       .where('notify.needsHome', '==', true)
-      .select('sealed')
+      .select('sealed', 'sorting')
       .get();
     const batches = Array.from(
       { length: Math.ceil(plans.size / BATCH_SIZE) },
@@ -130,6 +146,7 @@ export const sendRunwayNeedsHomeDigest = onSchedule(
               keyring,
               plan.id,
               plan.data().sealed,
+              readSorting(plan.data().sorting),
               now,
             ).catch((error: { code?: unknown }): Outcome => {
               logger.warn('runway.needsHomeDigest.failed', {

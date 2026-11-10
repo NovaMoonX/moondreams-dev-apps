@@ -73,6 +73,13 @@ export interface TrackingPeriod {
   linkedFrom: DateOnly | null;
 }
 
+/** Whether bank charges wait in Needs a home. Readable on purpose (the push Function reads it) and holds no amount. */
+export interface SortingState {
+  isPaused: boolean;
+  /** Epoch ms: a charge created before it never waits. */
+  from: number;
+}
+
 export interface PlanDoc {
   uid: string;
   createdAt: number;
@@ -86,6 +93,8 @@ export interface PlanDoc {
   dirtyFrom: string | null;
   /** Null on a plan made before pushes existed. */
   notify: PlanNotify | null;
+  /** Null (or missing on an older plan) means every charge waits. */
+  sorting: SortingState | null;
   keyId: string | null;
   sealed: Sealed | null;
 }
@@ -99,6 +108,7 @@ export interface OpenPlan extends PlanSealedFields {
   trackingPeriods: TrackingPeriod[];
   dirtyFrom: string | null;
   notify: PlanNotify | null;
+  sorting: SortingState | null;
   keyId: string | null;
 }
 

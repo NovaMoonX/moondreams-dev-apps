@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs';
 
 import {
   claimPath,
+  countWaiting,
   DEFAULT_NOTIFY_HOUR,
   getDigestDay,
   readDigestSettings,
+  readSorting,
 } from '../../functions/src/apps/runway/needsHomeDigestPlan.ts';
 import { needsHomeBody } from '../../functions/src/apps/runway/notificationText.ts';
 
@@ -64,5 +66,16 @@ assert.equal(
   claimPath('u1', '2026-03-10'),
   'apps/runway/server/u1/notified/needsHome_2026-03-10',
 );
+
+// Sorting switch: money in always counts, a charge only after the switch's moment and while it is off.
+const rows = [
+  { createdAt: 100, amountCents: 500 },
+  { createdAt: 300, amountCents: 700 },
+  { createdAt: 100, amountCents: -900 },
+];
+assert.equal(readSorting(undefined), null);
+assert.equal(readSorting({ isPaused: 'yes', from: 1 }), null);
+assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 1);
+assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 2);
 
 console.log('runwayNotifyText: ok');

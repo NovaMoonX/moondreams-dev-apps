@@ -82,7 +82,11 @@ import {
   DAY_MS,
   toDayKey,
 } from '@apps/runway/engine/dates';
-import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
+import {
+  findAccountPairs,
+  findLostPairs,
+  type DepositDay,
+} from '@apps/runway/engine/matching';
 import type {
   BillFundedBy,
   BillVersion,
@@ -1789,6 +1793,12 @@ export const selectLostPairs = createSelector(
         ),
 );
 
+/** True while "I'm not sorting yet" is on. */
+export const selectIsSortingPaused = (state: RootState) =>
+  state.runway.plan?.sorting?.isPaused ?? false;
+
+const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
+
 /** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. */
 export const selectNeedsHome = createSelector(
   [
@@ -1797,8 +1807,16 @@ export const selectNeedsHome = createSelector(
     selectLostPairs,
     selectHistoryPurchases,
     selectHistoryDuplicates,
+    selectSorting,
   ],
-  (waitingList, lostDeposits, lostPairs, historyPurchases, duplicates) => {
+  (
+    waitingList,
+    lostDeposits,
+    lostPairs,
+    historyPurchases,
+    duplicates,
+    sorting,
+  ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
       ...waitingList,
@@ -1814,7 +1832,17 @@ export const selectNeedsHome = createSelector(
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const spending = sorted.filter((purchase) => purchase.amountCents >= 0);
+    const alwaysShown = new Set(lost.map((entry) => entry.id));
+    const pairs = sorting === null ? null : findAccountPairs(sorted, true);
+    const isQuiet = (purchase: OpenPurchase) =>
+      sorting !== null &&
+      purchase.amountCents > 0 &&
+      (sorting.isPaused || purchase.createdAt < sorting.from) &&
+      !alwaysShown.has(purchase.id) &&
+      !(pairs?.offers.has(purchase.id) || pairs?.clear.has(purchase.id));
+    const spending = sorted.filter(
+      (purchase) => purchase.amountCents >= 0 && !isQuiet(purchase),
+    );
     const moneyIn = sorted.filter((purchase) => purchase.amountCents < 0);
     const listed = new Set(sorted.map((purchase) => purchase.id));
     const maybeTwice = historyPurchases
