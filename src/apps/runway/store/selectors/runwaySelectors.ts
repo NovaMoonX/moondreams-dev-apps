@@ -86,6 +86,7 @@ import {
   findAccountPairs,
   findDepositDays,
   findLostPairs,
+  findPendingMoveHolds,
   isBankMove,
   type DepositDay,
 } from '@apps/runway/engine/matching';
@@ -1610,16 +1611,50 @@ export const selectSpendPurchases = createSelector(
   },
 );
 
-/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts, paired or likely (a waiting side with a pair offer). Spend's Money in and Free to Spend's "Money in this month" both read it. */
-export const selectMoneyIn = createSelector(
+/** Posted money in held by a pending money out that may be its other side, by the money in's id → the pending purchase. */
+const selectPendingHolds = createSelector(
   [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
   (purchases, waiting) => {
+    const known = new Set(purchases.map((purchase) => purchase.id));
+    const all = [
+      ...purchases,
+      ...waiting.filter((purchase) => !known.has(purchase.id)),
+    ];
+    const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const result = new Map(
+      [...findPendingMoveHolds(all)].flatMap(
+        ([inId, outId]): [string, OpenPurchase][] => {
+          const out = byId.get(outId);
+          return out === undefined ? [] : [[inId, out]];
+        },
+      ),
+    );
+    return result;
+  },
+);
+
+const isPendingMoneyIn = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  purchase.amountCents < 0 &&
+  purchase.status === 'pending' &&
+  purchase.pairedWithId === null;
+
+/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts, paired or likely (a waiting side with a pair offer), and never money still on its way (`selectOnItsWay`). Spend's Money in and Free to Spend's "Money in this month" both read it. */
+export const selectMoneyIn = createSelector(
+  [
+    selectKnownPurchases,
+    (state: RootState) => state.runway.needsHome,
+    selectPendingHolds,
+  ],
+  (purchases, waiting, holds) => {
     const { offers } = findAccountPairs(waiting, true);
     const result = purchases
       .filter(
         (purchase) =>
           purchase.amountCents < 0 &&
           purchase.pairedWithId === null &&
+          purchase.status !== 'pending' &&
+          !holds.has(purchase.id) &&
           !isBankMove(purchase) &&
           !(purchase.needsHome && (offers.get(purchase.id)?.length ?? 0) > 0),
       )
@@ -1628,16 +1663,50 @@ export const selectMoneyIn = createSelector(
   },
 );
 
-/** Card payments and moves the bank flagged that are not paired yet, newest first: they wait under Account moves rather than in spending. */
+export interface OnItsWayEntry {
+  purchase: OpenPurchase;
+  /** The pending money out a posted money in waits for; null for money in that is itself pending. */
+  heldBy: OpenPurchase | null;
+}
+
+/** Money in the bank has not settled, newest first: pending money in, and posted money in held by a pending money out that may be its other side. Never counted and never asked about until it clears. */
+export const selectOnItsWay = createSelector(
+  [selectKnownPurchases, selectPendingHolds],
+  (purchases, holds) => {
+    const result = purchases
+      .filter(
+        (purchase) =>
+          isPendingMoneyIn(purchase) ||
+          (holds.has(purchase.id) && purchase.pairedWithId === null),
+      )
+      .sort(byNewest)
+      .map((purchase): OnItsWayEntry => ({
+        purchase,
+        heldBy: holds.get(purchase.id) ?? null,
+      }));
+    return result;
+  },
+);
+
+/** Card payments and moves the bank flagged that are not paired yet, newest first: they wait under Account moves rather than in spending. Money in on its way waits there instead. */
 export const selectWaitingBankMoves = createSelector(
-  [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
-  (purchases, waiting) => {
+  [
+    selectKnownPurchases,
+    (state: RootState) => state.runway.needsHome,
+    selectPendingHolds,
+  ],
+  (purchases, waiting, holds) => {
     const known = new Set(purchases.map((purchase) => purchase.id));
     const result = [
       ...purchases,
       ...waiting.filter((purchase) => !known.has(purchase.id)),
     ]
-      .filter(isBankMove)
+      .filter(
+        (purchase) =>
+          isBankMove(purchase) &&
+          !isPendingMoneyIn(purchase) &&
+          !holds.has(purchase.id),
+      )
       .sort(byNewest);
     return result;
   },
@@ -1857,7 +1926,7 @@ export const selectIsSortingPaused = (state: RootState) =>
 
 const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
 
-/** The money in Needs a home has a question for: a pairing or pay link it lost, on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. */
+/** The money in Needs a home has a question for: a pairing or pay link it lost, on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. Money in still pending, and a posted side held by a pending money out, never asks: it is on its way. */
 export const selectMoneyInAsks = createSelector(
   [
     selectWaitingList,
@@ -1865,8 +1934,9 @@ export const selectMoneyInAsks = createSelector(
     selectLostPairs,
     selectDepositDays,
     selectPurchases,
+    selectPendingHolds,
   ],
-  (waitingList, lostDeposits, lostPairs, days, purchases) => {
+  (waitingList, lostDeposits, lostPairs, days, purchases, holds) => {
     const lost = [
       ...lostDeposits.map((entry) => ({
         ...entry,
@@ -1903,10 +1973,12 @@ export const selectMoneyInAsks = createSelector(
           (purchase) =>
             purchase.amountCents < 0 &&
             (lost.some((entry) => entry.id === purchase.id) ||
-              (purchase.paidByCardId ?? null) !== null ||
-              mayPair(purchase.id) ||
-              deposits.offers.has(purchase.id) ||
-              deposits.clear.has(purchase.id)),
+              (purchase.status !== 'pending' &&
+                !holds.has(purchase.id) &&
+                ((purchase.paidByCardId ?? null) !== null ||
+                  mayPair(purchase.id) ||
+                  deposits.offers.has(purchase.id) ||
+                  deposits.clear.has(purchase.id)))),
         )
         .map((purchase) => purchase.id),
     );

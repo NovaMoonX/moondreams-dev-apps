@@ -25,6 +25,7 @@ import {
   selectLostDeposits,
   selectLostPairs,
   selectMoneyInAsks,
+  selectOnItsWay,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -46,6 +47,9 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
   );
   const isLostPair = useAppSelector((state) =>
     selectLostPairs(state).some((entry) => entry.id === purchase.id),
+  );
+  const isOnItsWay = useAppSelector((state) =>
+    selectOnItsWay(state).some((entry) => entry.purchase.id === purchase.id),
   );
   const linkedDay = useAppSelector((state) => {
     if (purchase.incomeDayId === null) return null;
@@ -143,6 +147,13 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
   );
 
   const getBody = () => {
+    if (isOnItsWay) {
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {NEEDS_HOME_WORDS.onItsWaySheet}
+        </p>
+      );
+    }
     if (isWaiting && isOnCard) {
       return isPosted ? (
         <PairOffer purchase={purchase} onDone={onClose}>

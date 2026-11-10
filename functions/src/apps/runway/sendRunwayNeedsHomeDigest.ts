@@ -90,17 +90,20 @@ async function digestForPlan(
     .collection(`apps/runway/plans/${uid}/purchases`)
     .where('needsHome', '==', true);
   const waiting = countWaiting(
-    (await waitingPurchases.select('createdAt', 'date', 'sealed').get()).docs.map(
-      (purchase) => {
-        const { createdAt, date: day, sealed: payload } = purchase.data();
-        const created = typeof createdAt === 'number' ? createdAt : now;
-        return {
-          createdAt: created,
-          date: typeof day === 'number' ? day : created,
-          ...readPurchase(planKey.key, payload),
-        };
-      },
-    ),
+    (
+      await waitingPurchases
+        .select('createdAt', 'date', 'status', 'sealed')
+        .get()
+    ).docs.map((purchase) => {
+      const { createdAt, date: day, status, sealed: payload } = purchase.data();
+      const created = typeof createdAt === 'number' ? createdAt : now;
+      return {
+        createdAt: created,
+        date: typeof day === 'number' ? day : created,
+        isPending: status === 'pending',
+        ...readPurchase(planKey.key, payload),
+      };
+    }),
     sorting,
   );
   if (waiting === 0) return 'empty';

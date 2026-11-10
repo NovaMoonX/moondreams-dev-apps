@@ -73,6 +73,7 @@ const row = (createdAt: number, date: number, amountCents: number) => ({
   date,
   amountCents,
   isOnCard: false,
+  isPending: false,
 });
 const rows = [row(100, 0, 500), row(300, 0, 700)];
 const DAY = 24 * 60 * 60 * 1000;
@@ -85,10 +86,7 @@ const paused = { isPaused: true, from: 200 };
 // Money in with nothing to pair and not on a card is counted already and never waits.
 assert.equal(countWaiting([row(100, 0, -900)], null), 0);
 // Money in on a card still asks (card payment, refund or unseen account).
-assert.equal(
-  countWaiting([{ ...row(100, 0, -900), isOnCard: true }], null),
-  1,
-);
+assert.equal(countWaiting([{ ...row(100, 0, -900), isOnCard: true }], null), 1);
 // A quiet charge and money in of its amount within three days are a possible move: both count, as the screen keeps them.
 assert.equal(
   countWaiting([row(100, 0, -900), row(100, 2 * DAY, 900)], paused),
@@ -98,6 +96,21 @@ assert.equal(
 assert.equal(
   countWaiting([row(100, 0, -900), row(100, 40 * DAY, 900)], paused),
   0,
+);
+// Pending money in is on its way: it never counts, even on a card, and a pending charge is never the other side of a move.
+assert.equal(
+  countWaiting(
+    [{ ...row(100, 0, -900), isOnCard: true, isPending: true }],
+    null,
+  ),
+  0,
+);
+assert.equal(
+  countWaiting(
+    [row(100, 0, -900), { ...row(100, 2 * DAY, 900), isPending: true }],
+    paused,
+  ),
+  1,
 );
 // An unreadable document reads as 0 cents and counts.
 assert.equal(countWaiting([row(100, 0, 0)], paused), 1);

@@ -3502,10 +3502,17 @@ export const SPEND_FILTER_WORDS = {
   minLabel: 'Lowest amount',
   maxLabel: 'Highest amount',
   notCountedHelp: 'Left out of spending, or from before you linked.',
-  moneyInHelp: 'Deposits and refunds. Moves between your own accounts are left out.',
+  moneyInHelp:
+    'Deposits and refunds. Moves between your own accounts are left out.',
   inFree: 'In Free to Spend',
   toPay: 'Your pay',
   cameIn: 'Came in',
+  onItsWay: 'On its way',
+  onItsWayIntro:
+    'The bank has not settled these yet. They are not in Free to Spend until they clear.',
+  onItsWayPending: 'Not counted until it clears',
+  waitingFor: (account: string) => `Waiting for ${account} to clear`,
+  otherAccount: 'the other account',
   show: (count: number) =>
     `Show ${count} ${count === 1 ? 'purchase' : 'purchases'}`,
   showShort: (count: number) => `Show ${count}`,
@@ -3853,6 +3860,8 @@ export const FREE_SUM_WORDS = {
       .filter(Boolean)
       .join(' · '),
   moneyInNone: 'Nothing has come in since the 1st',
+  onItsWay: 'On its way',
+  onItsWaySub: (total: string) => `${total} · not counted yet`,
   total: 'Everything you have',
   cards: 'Set aside for cards',
   bills: 'Held for bills',
@@ -4708,6 +4717,8 @@ export const NEEDS_HOME_WORDS = {
   unlistedPay: 'A pay that isn’t listed',
   thisWasPaySub: 'Plan it as a one-time pay so it can fill envelopes',
   alreadyIn: 'It’s already in Free to Spend through your balance.',
+  onItsWaySheet:
+    'If it’s a move between your accounts, it pairs once it clears. If not, it counts then.',
   linkedTo: (day: string) => `Linked to your pay on ${day}.`,
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',

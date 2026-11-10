@@ -4,6 +4,7 @@ import {
   ArrowDownLeft,
   Calculator,
   ChevronRight,
+  Clock,
   Landmark,
   Wallet,
   WalletCards,
@@ -41,7 +42,10 @@ import LevelGate from '@apps/runway/components/LevelGate';
 import { DEFAULT_SPEND_PERIOD } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
-import { selectMoneyIn } from '@apps/runway/store/selectors/runwaySelectors';
+import {
+  selectMoneyIn,
+  selectOnItsWay,
+} from '@apps/runway/store/selectors/runwaySelectors';
 import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
@@ -100,6 +104,12 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     (purchase) =>
       purchase.date >= monthRange.from && purchase.date < monthRange.to,
   );
+  const onItsWayCents = useAppSelector(selectOnItsWay)
+    .filter(
+      ({ purchase }) =>
+        purchase.date >= monthRange.from && purchase.date < monthRange.to,
+    )
+    .reduce((sum, { purchase }) => sum - purchase.amountCents, 0);
   // Money with no envelopes and no pay raised Free to Spend itself; a pay or a refund to envelopes went to the plan.
   const sumIn = (straight: boolean) => {
     const cents = monthMoneyIn
@@ -420,6 +430,19 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 }
                 onClick={() => void openMoneyIn()}
               />
+              {onItsWayCents > 0 && (
+                <ActionRow
+                  isGrouped
+                  isRoomy
+                  hasChevron
+                  icon={<Clock />}
+                  label={FREE_SUM_WORDS.onItsWay}
+                  subtitle={mask(
+                    FREE_SUM_WORDS.onItsWaySub(formatCents(onItsWayCents)),
+                  )}
+                  onClick={() => void openMoneyIn()}
+                />
+              )}
             </LevelGate>
           </ActionGroup>
           {!isStartOpen && !isBankBacked && (

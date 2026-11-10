@@ -60,6 +60,7 @@ import {
   selectAllCards,
   selectRules,
   selectMoneyIn,
+  selectOnItsWay,
   selectSpendPurchases,
   selectWaitingBankMoves,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -172,6 +173,7 @@ function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const allSpendPurchases = useAppSelector(selectSpendPurchases);
   const allMoneyIn = useAppSelector(selectMoneyIn);
+  const allOnItsWay = useAppSelector(selectOnItsWay);
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -220,13 +222,16 @@ function SpendScreen() {
     purchase.date >= range.from && purchase.date < range.to;
   const purchases = allSpendPurchases.filter(isInRange);
   const moneyIn = allMoneyIn.filter(isInRange);
-  // A deposit waiting or linked to a pay is not in the purchase list, so its own sheet opens it.
+  const onItsWay = allOnItsWay.filter(({ purchase }) => isInRange(purchase));
+  // A deposit waiting, on its way or linked to a pay is not in the purchase list, so its own sheet opens it.
   const openedDeposit =
     allMoneyIn.find(
       (purchase) =>
         purchase.id === purchaseId &&
         (purchase.needsHome || purchase.incomeDayId !== null),
-    ) ?? null;
+    ) ??
+    allOnItsWay.find(({ purchase }) => purchase.id === purchaseId)?.purchase ??
+    null;
   const isPeriodReady =
     periodFor === range.key ||
     (recentFrom !== null && range.from >= recentFrom);
@@ -314,7 +319,8 @@ function SpendScreen() {
   );
   const kindId: SpendKind | null =
     spendKind !== null &&
-    kindCounts[spendKind] > 0 &&
+    (kindCounts[spendKind] > 0 ||
+      (spendKind === 'moneyIn' && onItsWay.length > 0)) &&
     shownKinds.includes(spendKind)
       ? spendKind
       : null;
@@ -403,6 +409,13 @@ function SpendScreen() {
           .toLowerCase()
           .includes(needle)),
   );
+  const showOnItsWay =
+    kindId === 'moneyIn' &&
+    onItsWay.length > 0 &&
+    needle === '' &&
+    sourceIds.length === 0 &&
+    filterId === null &&
+    !isAmountOn;
   const visible = matches.slice(0, shown);
   const groups = groupByMonth(visible);
   const isRecent = spendPeriod === DEFAULT_SPEND_PERIOD;
@@ -690,7 +703,33 @@ function SpendScreen() {
             ))}
           </div>
         )}
-        {matches.length === 0 ? (
+        {showOnItsWay && (
+          <div className='space-y-2'>
+            <SectionDivider label={SPEND_FILTER_WORDS.onItsWay} />
+            <p className='text-muted-foreground text-sm'>
+              {SPEND_FILTER_WORDS.onItsWayIntro}
+            </p>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {onItsWay.map(({ purchase, heldBy }) => (
+                <PurchaseRow
+                  key={purchase.id}
+                  purchase={purchase}
+                  looks={looks}
+                  paidWith={paidWithOf(purchase)}
+                  emptyWhere={
+                    heldBy === null
+                      ? SPEND_FILTER_WORDS.onItsWayPending
+                      : SPEND_FILTER_WORDS.waitingFor(
+                          paidWithOf(heldBy) ?? SPEND_FILTER_WORDS.otherAccount,
+                        )
+                  }
+                  onOpen={() => openPurchase(purchase.id)}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+        {matches.length === 0 && showOnItsWay ? null : matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {ofKind.length === 0 && kindId === null
               ? SPEND_PERIOD_WORDS.emptyPeriod
