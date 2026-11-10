@@ -42,7 +42,17 @@ export const ANSWER_SCOPES = ['yourThings', 'theWorld', 'both'] as const;
 
 export type AnswerScope = (typeof ANSWER_SCOPES)[number];
 
+export const MENTION_KINDS = ['person', 'pet', 'organization'] as const;
+
+export type MentionKind = (typeof MENTION_KINDS)[number];
+
+/** The assistant's name until the person can rename it; a who never takes it. */
+export const DEFAULT_ASSISTANT_NAME = 'Nomos';
+
 export const MAX_COMMANDS = 20;
+export const MAX_MENTIONS = 10;
+export const MAX_PLACES = 5;
+export const NAME_CAP = 80;
 export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
 export const TITLE_CAP = 200;
@@ -62,6 +72,8 @@ export type NomosCommand =
       title: string;
       due: TaskDue | null;
       isUrgent: boolean;
+      whoRefs: string[];
+      placeRefs: string[];
     }
   | {
       kind: 'updateTask';
@@ -70,8 +82,26 @@ export type NomosCommand =
       due: TaskDue | null;
       hasDue: boolean;
       isUrgent: boolean | null;
+      whoRefs: string[];
+      placeRefs: string[];
     }
   | { kind: 'completeTask'; taskId: string };
+
+/** A person, pet or organization the reply names, its ref settled to one `$w1`, `$w2`, … used by the commands that involve it. */
+export interface MentionRead {
+  ref: string;
+  name: string;
+  kind: MentionKind;
+  relation: string | null;
+  species: string | null;
+  organizationKind: string | null;
+}
+
+/** A location the reply names, its ref `$p1`, `$p2`, …. */
+export interface PlaceRead {
+  ref: string;
+  name: string;
+}
 
 /** A record an answer rests on, as stored with the answer. */
 export type SourceRef =
@@ -119,6 +149,12 @@ export interface AnswerCommand {
   generalSpoken: string | null;
 }
 
+const NAMED_BY_REF = (name: string) => ({
+  type: ['array', 'null'],
+  items: { type: 'string' },
+  description: name,
+});
+
 const nullable = (type: string, description: string) => ({
   type: [type, 'null'],
   description,
@@ -159,6 +195,8 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'aboutAlias',
             'aboutField',
             'value',
+            'whoRefs',
+            'placeRefs',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer'] },
@@ -239,6 +277,64 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters.`,
             ),
+            whoRefs: NAMED_BY_REF(
+              'createTask and updateTask: the ref ($w1, …) of each entry in mentions this task is about or involves; null or empty when none.',
+            ),
+            placeRefs: NAMED_BY_REF(
+              'createTask and updateTask: the ref ($p1, …) of each entry in places this task happens at or involves; null or empty when none.',
+            ),
+          },
+        },
+      },
+      mentions: {
+        type: 'array',
+        description: `Every person, pet or organization the capture names, at most ${MAX_MENTIONS}, each once. A @handle is a person. Never the assistant itself, never "me" or "I".`,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: [
+            'ref',
+            'name',
+            'kind',
+            'relation',
+            'species',
+            'organizationKind',
+          ],
+          properties: {
+            ref: { type: 'string', description: 'A name such as $w1.' },
+            name: {
+              type: 'string',
+              description: `The name as written, without "'s", at most ${NAME_CAP} characters.`,
+            },
+            kind: { type: 'string', enum: [...MENTION_KINDS] },
+            relation: nullable(
+              'string',
+              'How the person puts it when they say it ("my sister", "our vet"); null otherwise.',
+            ),
+            species: nullable(
+              'string',
+              'A pet only: the kind of animal when said ("cat"); null otherwise.',
+            ),
+            organizationKind: nullable(
+              'string',
+              'An organization only: what it is when said ("bakery", "clinic"); null otherwise.',
+            ),
+          },
+        },
+      },
+      places: {
+        type: 'array',
+        description: `Every location the capture names ("the Ferry Building", "home"), at most ${MAX_PLACES}, each once. A business or a person is a mention, never a place.`,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['ref', 'name'],
+          properties: {
+            ref: { type: 'string', description: 'A name such as $p1.' },
+            name: {
+              type: 'string',
+              description: `The place as written, at most ${NAME_CAP} characters.`,
+            },
           },
         },
       },

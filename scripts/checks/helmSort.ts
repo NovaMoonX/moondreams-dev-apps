@@ -155,16 +155,13 @@ test('every tool answers with aliases only, through the in-process server', asyn
     firestore: fakeFirestore as never,
   });
   const listed = await server.client.listTools();
-  assert.deepEqual(
-    listed.tools.map((tool) => tool.name).sort(),
-    [
-      'connection_status',
-      'get_calendar',
-      'list_connections',
-      'search_synced',
-      'search_tasks',
-    ],
-  );
+  assert.deepEqual(listed.tools.map((tool) => tool.name).sort(), [
+    'connection_status',
+    'get_calendar',
+    'list_connections',
+    'search_synced',
+    'search_tasks',
+  ]);
   const reply = await server.client.callTool({
     name: 'search_tasks',
     arguments: { query: 'rings', includeDone: true },
@@ -213,6 +210,8 @@ test('a sound reply resolves its alias and its day', () => {
     title: 'Call Dana',
     due: { kind: 'day', date: FRIDAY },
     isUrgent: false,
+    whoRefs: ['$w1'],
+    placeRefs: [],
   });
   assert.deepEqual(commands[1], { kind: 'completeTask', taskId: TASK_IDS[0] });
 });
@@ -557,6 +556,8 @@ test('the fixture reading goes through the same checks and the same plan', async
           due: null,
           isUrgent: false,
           title: 'Order the rings',
+          whoIds: [],
+          placeIds: [],
           sealed: { title: 'Order the rings', notes: null, steps: {} },
         },
       ],
@@ -782,6 +783,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         due: null,
         isUrgent: false,
         title: 'Order the rings',
+        whoIds: [],
+        placeIds: [],
         sealed: {
           title: 'Order the rings',
           notes: 'gold',
@@ -801,6 +804,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         hasDue: true,
         due: { kind: 'day', date: FRIDAY },
         isUrgent: null,
+        whoRefs: [],
+        placeRefs: [],
       },
     ],
     existing,
@@ -824,6 +829,8 @@ test('every task effect carries the title, so a card can name the task', () => {
         hasDue: false,
         due: null,
         isUrgent: null,
+        whoRefs: [],
+        placeRefs: [],
       },
     ],
     existing,

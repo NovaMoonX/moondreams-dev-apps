@@ -1,5 +1,19 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { MAX_EFFECTS, type NomosCommand, type TaskDue } from './commands.js';
+import { toDisplayCase } from '../../../vendor/optionMatchUtils.js';
+import {
+  MAX_EFFECTS,
+  type MentionRead,
+  type NomosCommand,
+  type PlaceRead,
+  type TaskDue,
+} from './commands.js';
+import {
+  matchPlaces,
+  matchWho,
+  type KnownPlace,
+  type KnownWho,
+} from './matchEntities.js';
+import { readWhoTier, type WhoTierValue } from './whoTier.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { buildSpokenAck } from './spoken.js';
@@ -15,12 +29,35 @@ export interface ExistingTask {
   due: TaskDue | null;
   isUrgent: boolean;
   title: string;
+  whoIds: string[];
+  placeIds: string[];
   sealed: Record<string, unknown>;
+}
+
+/** A who the person already has, with what the tier rule reads about it. */
+export interface KnownWhoState extends KnownWho {
+  tier: WhoTierValue;
+  tierSetBy: 'person' | 'nomos';
+  mentionDayKeys: string[];
+  taskLinkCount: number;
+  hasRole: boolean;
+}
+
+/** The people and places a turn names, with what the person already has to match them against. */
+export interface PeopleInput {
+  mentions: MentionRead[];
+  places: PlaceRead[];
+  known: KnownWhoState[];
+  knownPlaces: KnownPlace[];
+  assistantName: string | null;
+  /** The day the capture was made, in the person's zone. */
+  dayKey: string;
+  capturedAt: number;
 }
 
 export interface EffectRef {
   op: 'create' | 'update';
-  collection: 'tasks' | 'facts';
+  collection: 'tasks' | 'facts' | 'who' | 'places';
   docId: string;
 }
 
@@ -32,6 +69,12 @@ export interface Effect {
 export interface WritePlan {
   creates: { id: string; data: Record<string, unknown> }[];
   updates: { id: string; data: Record<string, unknown> }[];
+  whoCreates: { id: string; data: Record<string, unknown> }[];
+  whoUpdates: { id: string; data: Record<string, unknown> }[];
+  placeCreates: { id: string; data: Record<string, unknown> }[];
+  /** Every person, pet or organization and place the turn linked, matched or made. */
+  linkedWhoIds: string[];
+  linkedPlaceIds: string[];
   effectRefs: EffectRef[];
   effects: Effect[];
   counts: EffectCounts;
@@ -45,15 +88,82 @@ interface PlanInput {
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
   newId: () => string;
+  people?: PeopleInput;
 }
 
 interface Draft {
   id: string;
   title: string;
+  whoIds: string[];
+  placeIds: string[];
   due: TaskDue | null;
   isUrgent: boolean;
   status: 'open' | 'done';
 }
+
+const union = (left: string[], right: string[]) => [
+  ...new Set([...left, ...right]),
+];
+
+const NAME_CASE = {
+  style: 'title',
+  keepAcronyms: true,
+  keepMixedCase: true,
+} as const;
+
+/** Each mention's and place's ref to the id it links: a sure match keeps its id, a new one gets a fresh id, an unsure one or the assistant's own name links nothing. */
+function settleEntities(input: PlanInput) {
+  const people = input.people;
+  const empty = {
+    whoIdOf: new Map<string, string>(),
+    placeIdOf: new Map<string, string>(),
+    newWho: [] as { id: string; mention: MentionRead }[],
+    newPlaces: [] as { id: string; place: PlaceRead }[],
+  };
+  if (!people) return empty;
+  const whoMatches = matchWho({
+    mentions: people.mentions,
+    known: people.known,
+    assistantName: people.assistantName,
+  });
+  const placeMatches = matchPlaces({
+    names: people.places.map((place) => place.name),
+    known: people.knownPlaces,
+    assistantName: people.assistantName,
+  });
+  const whoSettled = people.mentions.flatMap((mention, index) => {
+    const match = whoMatches[index];
+    return match.kind === 'match'
+      ? [{ mention, id: match.id, isNew: false }]
+      : match.kind === 'new'
+        ? [{ mention, id: input.newId(), isNew: true }]
+        : [];
+  });
+  const placeSettled = people.places.flatMap((place, index) => {
+    const match = placeMatches[index];
+    return match.kind === 'match'
+      ? [{ place, id: match.id, isNew: false }]
+      : match.kind === 'new'
+        ? [{ place, id: input.newId(), isNew: true }]
+        : [];
+  });
+  return {
+    whoIdOf: new Map(whoSettled.map((entry) => [entry.mention.ref, entry.id])),
+    placeIdOf: new Map(
+      placeSettled.map((entry) => [entry.place.ref, entry.id]),
+    ),
+    newWho: whoSettled
+      .filter((entry) => entry.isNew)
+      .map(({ id, mention }) => ({ id, mention })),
+    newPlaces: placeSettled
+      .filter((entry) => entry.isNew)
+      .map(({ id, place }) => ({ id, place })),
+  };
+}
+
+const idsOf = (refs: string[], idOf: Map<string, string>) => [
+  ...new Set(refs.flatMap((ref) => idOf.get(ref) ?? [])),
+];
 
 const isSameDue = (a: TaskDue | null, b: TaskDue | null) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -68,13 +178,16 @@ export function planWrites(input: PlanInput): WritePlan {
   const effects: Effect[] = [];
   const counts: EffectCounts = { made: 0, updated: 0, completed: 0 };
 
+  const entities = settleEntities(input);
+
   const record = (
     docId: string,
     op: EffectRef['op'],
     written: Record<string, unknown>,
     previous: Record<string, unknown> | null,
+    collection: EffectRef['collection'] = 'tasks',
   ) => {
-    effectRefs.push({ op, collection: 'tasks', docId });
+    effectRefs.push({ op, collection, docId });
     effects.push({ written, previous });
   };
 
@@ -88,6 +201,8 @@ export function planWrites(input: PlanInput): WritePlan {
       drafts.set(command.ref, {
         id,
         title: command.title,
+        whoIds: idsOf(command.whoRefs, entities.whoIdOf),
+        placeIds: idsOf(command.placeRefs, entities.placeIdOf),
         due: command.due,
         isUrgent: command.isUrgent,
         status: 'open',
@@ -101,6 +216,14 @@ export function planWrites(input: PlanInput): WritePlan {
         draft.title = command.title ?? draft.title;
         if (command.hasDue) draft.due = command.due;
         draft.isUrgent = command.isUrgent ?? draft.isUrgent;
+        draft.whoIds = union(
+          draft.whoIds,
+          idsOf(command.whoRefs, entities.whoIdOf),
+        );
+        draft.placeIds = union(
+          draft.placeIds,
+          idsOf(command.placeRefs, entities.placeIdOf),
+        );
       }
       return;
     }
@@ -132,16 +255,38 @@ export function planWrites(input: PlanInput): WritePlan {
       command.isUrgent !== null && command.isUrgent !== current.isUrgent
         ? command.isUrgent
         : null;
-    if (title === null && due === undefined && isUrgent === null) return;
+    const whoIds = union(
+      current.whoIds,
+      idsOf(command.whoRefs, entities.whoIdOf),
+    );
+    const placeIds = union(
+      current.placeIds,
+      idsOf(command.placeRefs, entities.placeIdOf),
+    );
+    const hasNewWho = whoIds.length > current.whoIds.length;
+    const hasNewPlace = placeIds.length > current.placeIds.length;
+    if (
+      title === null &&
+      due === undefined &&
+      isUrgent === null &&
+      !hasNewWho &&
+      !hasNewPlace
+    ) {
+      return;
+    }
     const written: Record<string, unknown> = {
       'sealed.title': title ?? current.title,
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
+      ...(hasNewWho && { whoIds }),
+      ...(hasNewPlace && { placeIds }),
     };
     const previous: Record<string, unknown> = {
       'sealed.title': current.title,
       ...(due !== undefined && { due: current.due }),
       ...(isUrgent !== null && { isUrgent: current.isUrgent }),
+      ...(hasNewWho && { whoIds: current.whoIds }),
+      ...(hasNewPlace && { placeIds: current.placeIds }),
     };
     record(id, 'update', written, previous);
     patch(id, {
@@ -150,10 +295,14 @@ export function planWrites(input: PlanInput): WritePlan {
       }),
       ...(due !== undefined && { due }),
       ...(isUrgent !== null && { isUrgent }),
+      ...(hasNewWho && { whoIds }),
+      ...(hasNewPlace && { placeIds }),
       lastEditedAt: now,
     });
     working.set(id, {
       ...current,
+      whoIds,
+      placeIds,
       title: title ?? current.title,
       due: due === undefined ? current.due : due,
       isUrgent: isUrgent ?? current.isUrgent,
@@ -188,8 +337,8 @@ export function planWrites(input: PlanInput): WritePlan {
         context: null,
         projectId: null,
         milestoneId: null,
-        whoIds: [],
-        placeIds: [],
+        whoIds: draft.whoIds,
+        placeIds: draft.placeIds,
         notUntil: null,
         waitsOnTaskIds: [],
         waitsOnWhoId: null,
@@ -206,9 +355,129 @@ export function planWrites(input: PlanInput): WritePlan {
     };
   });
 
+  const isFiling = effects.length > 0;
+  const people = input.people;
+  const links = (field: 'whoIds' | 'placeIds') =>
+    [
+      ...creates.map(({ data }) => data[field] as string[]),
+      ...[...patches.values()].flatMap((data) => {
+        const ids = data[field];
+        return Array.isArray(ids) ? [ids as string[]] : [];
+      }),
+    ].flat();
+  const taskLinks = links('whoIds').reduce(
+    (counts, id) => counts.set(id, (counts.get(id) ?? 0) + 1),
+    new Map<string, number>(),
+  );
+  const newWhoIds = new Set(entities.newWho.map((entry) => entry.id));
+  const whoCreates = !isFiling
+    ? []
+    : entities.newWho.map(({ id, mention }) => {
+        const name = toDisplayCase(mention.name, NAME_CASE);
+        const tier = readWhoTier({
+          tier: 'passing',
+          tierSetBy: 'nomos',
+          mentionDayKeys: [people?.dayKey ?? ''],
+          taskLinkCount: taskLinks.get(id) ?? 0,
+          hasRole: false,
+        });
+        record(
+          id,
+          'create',
+          { 'sealed.name': name, kind: mention.kind, tier },
+          null,
+          'who',
+        );
+        return {
+          id,
+          data: {
+            kind: mention.kind,
+            tier,
+            tierSetBy: 'nomos',
+            isSelf: false,
+            placeIds: [],
+            photoMediaId: null,
+            mediaIds: [],
+            importedFrom: null,
+            importedFields: {},
+            lastMentionedAt: people?.capturedAt ?? now,
+            yearlyDateCount: 0,
+            momentCount: 0,
+            createdBy: 'nomos',
+            executionId: input.executionId,
+            createdAt: now,
+            lastEditedAt: null,
+            sealed: seal({
+              name,
+              aliases: [],
+              relation: mention.relation,
+              phone: null,
+              email: null,
+              notes: null,
+              species: mention.species ? toDisplayCase(mention.species) : null,
+              organizationKind: mention.organizationKind
+                ? toDisplayCase(mention.organizationKind)
+                : null,
+            }),
+          },
+        };
+      });
+  const placeCreates = !isFiling
+    ? []
+    : entities.newPlaces.map(({ id, place }) => {
+        const name = toDisplayCase(place.name, NAME_CASE);
+        record(id, 'create', { 'sealed.name': name }, null, 'places');
+        return {
+          id,
+          data: {
+            isHome: false,
+            photoMediaIds: [],
+            createdBy: 'nomos',
+            executionId: input.executionId,
+            createdAt: now,
+            lastEditedAt: null,
+            sealed: seal({
+              name,
+              aliases: [],
+              address: null,
+              notes: null,
+            }),
+          },
+        };
+      });
+  const whoUpdates = !isFiling
+    ? []
+    : [...entities.whoIdOf.values()]
+        .filter((id) => !newWhoIds.has(id))
+        .flatMap((id) => {
+          const state = people?.known.find((entry) => entry.id === id);
+          if (!state || !people) return [];
+          const tier = readWhoTier({
+            tier: state.tier,
+            tierSetBy: state.tierSetBy,
+            mentionDayKeys: [...state.mentionDayKeys, people.dayKey],
+            taskLinkCount: state.taskLinkCount + (taskLinks.get(id) ?? 0),
+            hasRole: state.hasRole,
+          });
+          return [
+            {
+              id,
+              data: {
+                lastMentionedAt: people.capturedAt,
+                ...(tier !== state.tier && { tier }),
+              },
+            },
+          ];
+        });
+
   return {
     creates,
     updates: [...patches.entries()].map(([id, data]) => ({ id, data })),
+    whoCreates,
+    whoUpdates,
+    placeCreates,
+    linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
+    linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
     effectRefs,
     effects,
     counts,
@@ -226,7 +495,7 @@ export function buildExecution(
 ): Record<string, unknown> {
   const created = plan.effectRefs.flatMap((ref, index) => {
     const { written } = plan.effects[index];
-    return ref.op === 'create'
+    return ref.op === 'create' && ref.collection === 'tasks'
       ? [
           {
             title: String(written['sealed.title'] ?? ''),

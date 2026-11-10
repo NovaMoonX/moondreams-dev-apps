@@ -5,7 +5,11 @@ import {
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
   MAX_COMMANDS,
+  MAX_MENTIONS,
+  MAX_PLACES,
   MAX_QUOTES,
+  MENTION_KINDS,
+  NAME_CAP,
   PLAN_DAY_AHEAD,
   QUESTION_CAP,
   REMEMBER_FIELDS,
@@ -14,6 +18,8 @@ import {
   VALUE_CAP,
   type AnswerCommand,
   type CaptureReading,
+  type MentionRead,
+  type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
   type SourceRef,
@@ -54,6 +60,8 @@ const KNOWN_KEYS = new Set([
   'aboutAlias',
   'aboutField',
   'value',
+  'whoRefs',
+  'placeRefs',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -205,11 +213,158 @@ const readPlanDay = (
     : { kind: 'planDay', date: { kind: 'day', date } };
 };
 
+const toKeyName = (name: string) => name.toLowerCase();
+
+const toName = (value: unknown) => {
+  const text = toText(value, NAME_CAP);
+  return text ? text.replace(/['\u2019]s$/i, '').trim() || null : null;
+};
+
+const toNextRef = (prefix: string, used: Set<string>) =>
+  `${prefix}${used.size + 1}`;
+
+interface Entities {
+  mentions: MentionRead[];
+  places: PlaceRead[];
+  /** The model's own ref (or a handle's text) to the settled ref it stands for. */
+  whoRefs: Map<string, string>;
+  placeRefs: Map<string, string>;
+}
+
+/** Reads the people, pets, organizations and places the reply names; a repeat of one name folds into the first, and every @ person and # place of the reading is there whether the model listed it or not. */
+const readEntities = (
+  raw: Record<string, unknown>,
+  reading: CaptureReading,
+): Entities => {
+  const mentions: MentionRead[] = [];
+  const places: PlaceRead[] = [];
+  const whoRefs = new Map<string, string>();
+  const placeRefs = new Map<string, string>();
+  const addMention = (
+    wanted: string | null,
+    draft: Omit<MentionRead, 'ref'>,
+  ) => {
+    const same = mentions.find(
+      (entry) =>
+        entry.kind === draft.kind &&
+        toKeyName(entry.name) === toKeyName(draft.name),
+    );
+    if (same) {
+      if (wanted) whoRefs.set(wanted, same.ref);
+      return;
+    }
+    if (mentions.length >= MAX_MENTIONS) return;
+    const ref = toNextRef('$w', new Set(mentions.map((entry) => entry.ref)));
+    mentions.push({ ref, ...draft });
+    whoRefs.set(ref, ref);
+    if (wanted) whoRefs.set(wanted, ref);
+  };
+  const addPlace = (wanted: string | null, name: string) => {
+    const same = places.find(
+      (entry) => toKeyName(entry.name) === toKeyName(name),
+    );
+    if (same) {
+      if (wanted) placeRefs.set(wanted, same.ref);
+      return;
+    }
+    if (places.length >= MAX_PLACES) return;
+    const ref = toNextRef('$p', new Set(places.map((entry) => entry.ref)));
+    places.push({ ref, name });
+    placeRefs.set(ref, ref);
+    if (wanted) placeRefs.set(wanted, ref);
+  };
+  (Array.isArray(raw.mentions) ? raw.mentions.filter(isRecord) : []).forEach(
+    (item) => {
+      const kind = MENTION_KINDS.find((entry) => entry === item.kind);
+      const name = toName(item.name);
+      if (!kind || !name) return;
+      addMention(typeof item.ref === 'string' ? item.ref : null, {
+        name,
+        kind,
+        relation: toText(item.relation, NAME_CAP),
+        species: kind === 'pet' ? toText(item.species, NAME_CAP) : null,
+        organizationKind:
+          kind === 'organization'
+            ? toText(item.organizationKind, NAME_CAP)
+            : null,
+      });
+    },
+  );
+  (Array.isArray(raw.places) ? raw.places.filter(isRecord) : []).forEach(
+    (item) => {
+      const name = toName(item.name);
+      if (name) addPlace(typeof item.ref === 'string' ? item.ref : null, name);
+    },
+  );
+  reading.people.forEach((token) => {
+    const name = toName(token.text.replace(/^@/, ''));
+    if (!name) return;
+    addMention(null, {
+      name,
+      kind: 'person',
+      relation: null,
+      species: null,
+      organizationKind: null,
+    });
+  });
+  reading.places.forEach((token) => {
+    const name = toName(token.text.replace(/^#/, ''));
+    if (name) addPlace(null, name);
+  });
+  return { mentions, places, whoRefs, placeRefs };
+};
+
+const toRefs = (value: unknown, known: Map<string, string>) => [
+  ...new Set(
+    (Array.isArray(value) ? value : []).flatMap((ref: unknown) => {
+      const settled = typeof ref === 'string' ? known.get(ref) : undefined;
+      return settled ? [settled] : [];
+    }),
+  ),
+];
+
+const readLinks = (
+  item: Record<string, unknown>,
+  title: string | null,
+  reading: CaptureReading,
+  entities: Entities,
+) => {
+  const inTitle = (text: string) =>
+    title !== null && title.toLowerCase().includes(text.toLowerCase());
+  const named = <T extends { ref: string; name: string }>(
+    tokens: { text: string }[],
+    entries: T[],
+  ) =>
+    tokens.flatMap((token) => {
+      const entry = entries.find(
+        (candidate) =>
+          toKeyName(candidate.name) ===
+          toKeyName(toName(token.text.replace(/^[@#]/, '')) ?? ''),
+      );
+      return entry && inTitle(token.text) ? [entry.ref] : [];
+    });
+  return {
+    whoRefs: [
+      ...new Set([
+        ...toRefs(item.whoRefs, entities.whoRefs),
+        ...named(reading.people, entities.mentions),
+      ]),
+    ],
+    placeRefs: [
+      ...new Set([
+        ...toRefs(item.placeRefs, entities.placeRefs),
+        ...named(reading.places, entities.places),
+      ]),
+    ],
+  };
+};
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
   reading: CaptureReading,
   aliases: AliasBook,
+  entities: Entities,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (!kind || kind === 'remember' || kind === 'planDay') return null;
@@ -231,6 +386,7 @@ const readCommand = (
       title,
       due,
       isUrgent: isUrgent ?? reading.isUrgent,
+      ...readLinks(item, title, reading, entities),
     };
   }
 
@@ -240,7 +396,15 @@ const readCommand = (
   if (kind === 'completeTask') return { kind, taskId };
   const hasDue = item.dueSpanId !== null && item.dueSpanId !== undefined;
   if (!title && !hasDue && isUrgent === null) return null;
-  return { kind, taskId, title, due, hasDue, isUrgent };
+  return {
+    kind,
+    taskId,
+    title,
+    due,
+    hasDue,
+    isUrgent,
+    ...readLinks(item, title, reading, entities),
+  };
 };
 
 const toKey = (title: string) => title.trim().toLowerCase();
@@ -283,11 +447,14 @@ export function normalizeNomosReply(
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   planDay: PlanDayCommand | null;
+  mentions: MentionRead[];
+  places: PlaceRead[];
 } {
   if (!isRecord(raw) || !Array.isArray(raw.commands)) {
     throw new NomosReplyError('badShape');
   }
   const state = { refs: new Set<string>() };
+  const entities = readEntities(raw, context.reading);
   const made = new Set((context.alreadyMade ?? []).map(toKey));
   const items = raw.commands.filter(isRecord);
   items.forEach(assertNoDateKeys);
@@ -316,7 +483,13 @@ export function normalizeNomosReply(
       )
     : null;
   const read = items.flatMap((item) => {
-    const command = readCommand(item, state, context.reading, context.aliases);
+    const command = readCommand(
+      item,
+      state,
+      context.reading,
+      context.aliases,
+      entities,
+    );
     return command ? [command] : [];
   });
   const fresh = read.filter(
@@ -332,5 +505,7 @@ export function normalizeNomosReply(
     answer,
     remember,
     planDay,
+    mentions: entities.mentions,
+    places: entities.places,
   };
 }

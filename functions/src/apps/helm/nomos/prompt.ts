@@ -3,6 +3,8 @@ import {
   ANSWER_TEXT_CAP,
   MAX_COMMANDS,
   MAX_EFFECTS,
+  MAX_MENTIONS,
+  MAX_PLACES,
   MAX_QUOTES,
   QUESTION_CAP,
 } from './commands.js';
@@ -25,6 +27,11 @@ How to file:
 - <earlier_turns> are what was already said and done in this conversation, oldest first. Use them to follow a follow-up: "and make it urgent" means the record the last turn made or changed. Never file them again.
 - Several messages sent in a row before you answered are one turn, shown in <messages> instead of <capture>: file what all of them ask, in the order said, and never file one twice.
 - List the commands in the order the person said them, at most ${MAX_EFFECTS}. The first ${MAX_COMMANDS} are filed now and the person can ask for the rest. When nothing in the capture can be made into a task, send no commands. Up to ${MAX_CONTEXT_TASKS} open tasks are listed.
+
+People, pets, organizations and places:
+- List in mentions every person, pet and organization the capture names, once each, at most ${MAX_MENTIONS}: a name like Dana or a handle like @Dana is a person; "my cat Miso" is a pet with species "cat"; "Acme Bakery" is an organization with organizationKind "bakery". Write the name as the person wrote it, without "'s". Put relation in the person's words when they say how they are connected ("my sister"), and null otherwise. Never list the assistant itself, "me", "I", or a word that is not a name.
+- List in places every location the capture names ("the Ferry Building", "home"), at most ${MAX_PLACES}. A business is an organization, never a place; a person is never a place.
+- Give each createTask and updateTask whoRefs and placeRefs: the refs of the mentions and places that task is about. Leave them empty when the capture names nobody for it. Never guess a person the capture does not name.
 
 How to answer a question:
 - When the person asks a question, send one answer command, at most one per reply, and never turn the question itself into a task. A reply may hold tasks and an answer together.

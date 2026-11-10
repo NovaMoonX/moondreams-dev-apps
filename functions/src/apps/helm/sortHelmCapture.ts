@@ -45,13 +45,17 @@ import {
 } from './nomos/buildContext.js';
 import {
   FILE_RESULTS_TOOL,
+  MENTION_KINDS,
   toReading,
   type AnswerCommand,
   type CaptureReading,
+  type MentionRead,
   type NomosCommand,
+  type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
   type TaskDue,
+  DEFAULT_ASSISTANT_NAME,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import { buildAnswer, settleLiveTurn } from './nomos/answerGuards.js';
@@ -62,9 +66,13 @@ import {
   planWrites,
   settleCapture,
   type ExistingTask,
+  type KnownWhoState,
+  type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
 import { readContextSynced, toKnownZone } from './syncedCopies.js';
+import { getDayIn } from './nomos/spoken.js';
+import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
 import {
   combineMessages,
@@ -157,6 +165,8 @@ interface CaptureDoc {
   claimId?: string | null;
   claimedAt?: number | null;
   executionIds?: string[];
+  whoIds?: string[];
+  placeIds?: string[];
   questionState?: Record<string, QuestionStateEntry>;
   sessionId?: string;
   turnIndex?: number;
@@ -174,6 +184,8 @@ interface TaskDoc {
   status: 'open' | 'done';
   due: TaskDue | null;
   isUrgent: boolean;
+  whoIds?: string[];
+  placeIds?: string[];
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -407,6 +419,126 @@ async function readAlreadyMade(
     });
   }
   return readable.flat();
+}
+
+const MAX_PEOPLE_READ = 5_000;
+const MAX_MENTION_DAYS_READ = 10;
+
+const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+
+/** The person's who and places, opened, with the mention history the tier rule reads for each who a mention matches that is still passing. Undefined when the turn names none. */
+async function readPeople(
+  transaction: Transaction,
+  input: {
+    firestore: Firestore;
+    base: string;
+    key: HelmKey;
+    captureRef: DocumentReference;
+    mentions: MentionRead[];
+    places: PlaceRead[];
+    assistantName: string | null;
+    timeZone: string;
+    capturedAt: number;
+  },
+): Promise<PeopleInput | undefined> {
+  const { firestore, base, key, captureRef, mentions, places } = input;
+  if (mentions.length === 0 && places.length === 0) return undefined;
+  const [whoSnap, placeSnap] = await Promise.all(
+    ['who', 'places'].map((name) =>
+      transaction.get(
+        firestore.collection(`${base}/${name}`).limit(MAX_PEOPLE_READ),
+      ),
+    ),
+  );
+  const open = (sealed: unknown) => {
+    try {
+      return openForHelm(key, sealed as SealedPayload);
+    } catch {
+      return null;
+    }
+  };
+  const aliasesOf = (words: Record<string, unknown>) =>
+    isStringList(words.aliases) ? words.aliases : [];
+  const unreadable = { who: 0, places: 0 };
+  const known = whoSnap.docs.flatMap((doc): KnownWhoState[] => {
+    const words = open(doc.get('sealed'));
+    const kind = MENTION_KINDS.find((entry) => entry === doc.get('kind'));
+    if (!words || typeof words.name !== 'string' || !kind) {
+      unreadable.who += 1;
+      return [];
+    }
+    return [
+      {
+        id: doc.id,
+        kind,
+        name: words.name,
+        aliases: aliasesOf(words),
+        tier: doc.get('tier'),
+        tierSetBy: doc.get('tierSetBy'),
+        mentionDayKeys: [],
+        taskLinkCount: 0,
+        hasRole: false,
+      },
+    ];
+  });
+  const knownPlaces = placeSnap.docs.flatMap((doc) => {
+    const words = open(doc.get('sealed'));
+    if (!words || typeof words.name !== 'string') {
+      unreadable.places += 1;
+      return [];
+    }
+    return [{ id: doc.id, name: words.name, aliases: aliasesOf(words) }];
+  });
+  if (unreadable.who + unreadable.places > 0) {
+    logger.warn('helm.sort.peopleUnreadable', unreadable);
+  }
+  const matched = new Set(
+    matchWho({ mentions, known, assistantName: input.assistantName }).flatMap(
+      (match) => (match.kind === 'match' ? [match.id] : []),
+    ),
+  );
+  const zone = toKnownZone(input.timeZone);
+  const withHistory = await Promise.all(
+    known.map(async (who) => {
+      if (
+        !matched.has(who.id) ||
+        who.tier !== 'passing' ||
+        who.tierSetBy !== 'nomos'
+      ) {
+        return who;
+      }
+      const [captures, tasks] = await Promise.all([
+        transaction.get(
+          captureRef.parent
+            .where('whoIds', 'array-contains', who.id)
+            .limit(MAX_MENTION_DAYS_READ),
+        ),
+        transaction.get(
+          firestore
+            .collection(`${base}/tasks`)
+            .where('whoIds', 'array-contains', who.id)
+            .limit(1),
+        ),
+      ]);
+      return {
+        ...who,
+        mentionDayKeys: captures.docs
+          .filter((doc) => doc.id !== captureRef.id)
+          .map((doc) => String(getDayIn(Number(doc.get('createdAt')), zone))),
+        taskLinkCount: tasks.size,
+      };
+    }),
+  );
+  return {
+    mentions,
+    places,
+    known: withHistory,
+    knownPlaces,
+    assistantName: input.assistantName,
+    dayKey: String(getDayIn(input.capturedAt, zone)),
+    capturedAt: input.capturedAt,
+  };
 }
 
 /** The tasks a page showed, read again under the capture's own account: a missing one or one that won't open is left out. */
@@ -833,6 +965,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answer,
     remember: mode === 'full' ? reply.remember : [],
     planDay: mode === 'full' ? reply.planDay : null,
+    mentions: reply.mentions,
+    places: reply.places,
+    assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -851,6 +986,9 @@ async function writeResult(
     answer: AnswerCommand | null;
     remember: RememberCommand[];
     planDay: PlanDayCommand | null;
+    mentions: MentionRead[];
+    places: PlaceRead[];
+    assistantName: string | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -870,6 +1008,9 @@ async function writeResult(
     answer,
     remember,
     planDay: requestedPlanDay,
+    mentions,
+    places,
+    assistantName,
     searched,
     hasMore,
     base,
@@ -957,6 +1098,20 @@ async function writeResult(
     ) {
       return null;
     }
+    const people =
+      commands.length > 0
+        ? await readPeople(transaction, {
+            firestore,
+            base,
+            key,
+            captureRef,
+            mentions,
+            places,
+            assistantName,
+            timeZone,
+            capturedAt: capture.createdAt,
+          })
+        : undefined;
     const joinedRefs = (ids: string[]) =>
       ids.map((id) => captureRef.parent.doc(id));
     const listedNow = [
@@ -996,6 +1151,8 @@ async function writeResult(
               due: task.due,
               isUrgent: task.isUrgent,
               title: words.title,
+              whoIds: task.whoIds ?? [],
+              placeIds: task.placeIds ?? [],
               sealed: words.sealed,
             },
           ],
@@ -1013,6 +1170,7 @@ async function writeResult(
       now,
       seal,
       newId: () => firestore.collection(tasksPath).doc().id,
+      people,
     });
     const isFiling = plan.effects.length > 0;
     if (!isFiling && commands.length > 0 && mode === 'full' && !built) {
@@ -1025,6 +1183,15 @@ async function writeResult(
       );
       plan.updates.forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${tasksPath}/${id}`), data),
+      );
+      plan.whoCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/who/${id}`), data),
+      );
+      plan.whoUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/who/${id}`), data),
+      );
+      plan.placeCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/places/${id}`), data),
       );
       transaction.create(
         executionRef,
@@ -1112,6 +1279,14 @@ async function writeResult(
             planDayKey,
           }
         : {}),
+      ...(plan.linkedWhoIds.length > 0 && {
+        whoIds: [...new Set([...(capture.whoIds ?? []), ...plan.linkedWhoIds])],
+      }),
+      ...(plan.linkedPlaceIds.length > 0 && {
+        placeIds: [
+          ...new Set([...(capture.placeIds ?? []), ...plan.linkedPlaceIds]),
+        ],
+      }),
       status: settled.status,
       sortedAt: now,
       executionIds: settled.executionIds,

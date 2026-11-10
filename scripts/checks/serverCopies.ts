@@ -83,6 +83,21 @@ const COPIES: Copy[] = [
       '@/lib/connections/contract': '../../vendor/connectionsContract.js',
     },
   },
+  {
+    src: 'src/utils/stringUtils.ts',
+    dest: 'functions/src/vendor/stringUtils.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/optionMatchUtils.ts',
+    dest: 'functions/src/vendor/optionMatchUtils.ts',
+    importRewrites: { '@/utils/stringUtils': './stringUtils.js' },
+  },
+  {
+    src: 'src/apps/helm/engine/whoTier.ts',
+    dest: 'functions/src/apps/helm/nomos/whoTier.ts',
+    importRewrites: {},
+  },
 ];
 
 interface Generated {

@@ -46,6 +46,46 @@ const hasMeaning = (title: string) =>
     .split(/\s+/)
     .some((word) => !FILLER.has(word.replace(/[^\p{L}\p{N}]/gu, '')));
 
+const KNOWN_MENTIONS = [
+  { name: 'Dana', kind: 'person', species: null, organizationKind: null },
+  { name: 'Miso', kind: 'pet', species: 'cat', organizationKind: null },
+  {
+    name: 'Acme Bakery',
+    kind: 'organization',
+    species: null,
+    organizationKind: 'bakery',
+  },
+] as const;
+
+const PLACE_RE = /\bat the ((?:[A-Z]\p{L}+)(?: [A-Z]\p{L}+)*)/gu;
+
+/** The people, pets, organizations and places the emulator can tell from words alone: the reading's @ people and # places, three known names (Dana, Miso, Acme Bakery) and "at the Capitalized Name". */
+const readEntities = (text: string, reading: CaptureReading) => {
+  const mentions = [
+    ...KNOWN_MENTIONS.filter((entry) => text.includes(entry.name)),
+    ...reading.people.map((token) => ({
+      name: token.text.replace(/^@/, ''),
+      kind: 'person',
+      species: null,
+      organizationKind: null,
+    })),
+  ].map((entry, index) => ({
+    ref: `$w${index + 1}`,
+    relation: null,
+    ...entry,
+  }));
+  const names = [
+    ...[...text.matchAll(PLACE_RE)].map((match) => match[1]),
+    ...reading.places.map((token) => token.text.replace(/^#/, '')),
+  ].filter(
+    (name, index, all) =>
+      all.indexOf(name) === index &&
+      !mentions.some((mention) => mention.name === name),
+  );
+  const places = names.map((name, index) => ({ ref: `$p${index + 1}`, name }));
+  return { mentions, places };
+};
+
 const ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'];
 
 interface ScreenBlock {
@@ -520,6 +560,7 @@ export function createFixtureProvider(
           cuts[index + 1]?.[0] ?? text.length,
         ]),
       ];
+      const entities = readEntities(text, reading);
       const commands = bounds.flatMap(([start, end], index) => {
         const spans = reading.dates.filter(
           (span) => span.start >= start && span.end <= end,
@@ -531,7 +572,17 @@ export function createFixtureProvider(
           )
           .replace(/[@#^!]/g, '')
           .replace(/\s+/g, ' ')
-          .trim();
+          .trim()
+          .replace(/\s+(about|on|at|by|for)$/i, '');
+        const piece = text.slice(start, end);
+        const refsIn = <T extends { ref: string; name: string }>(
+          entries: T[],
+        ) =>
+          entries.flatMap((entry) =>
+            piece.toLowerCase().includes(entry.name.toLowerCase())
+              ? [entry.ref]
+              : [],
+          );
         return hasMeaning(title)
           ? [
               {
@@ -541,6 +592,8 @@ export function createFixtureProvider(
                 title: title.charAt(0).toUpperCase() + title.slice(1),
                 dueSpanId: spans[0]?.id ?? null,
                 isUrgent: null,
+                whoRefs: refsIn(entities.mentions),
+                placeRefs: refsIn(entities.places),
               },
             ]
           : [];
@@ -549,7 +602,7 @@ export function createFixtureProvider(
       return {
         terminalInput: isHandOver
           ? { reason: 'More than a few changes' }
-          : { commands },
+          : { commands, ...entities },
         terminalName: isHandOver ? 'hand_over' : 'file_results',
         endedBy: 'terminal',
         errorCode: null,

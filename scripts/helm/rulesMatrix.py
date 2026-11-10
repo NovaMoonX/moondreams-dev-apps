@@ -159,6 +159,21 @@ def main():
         admin([rm(f'{path}/planDays/new-' + a)])
     check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
 
+    # A who and a place are the owner's alone, like a task.
+    whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
+    placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True)):
+        dk = f'{path}/{name}/{name}-1'
+        for a, tok in actors.items():
+            admin([put(dk, doc)])
+            check(f'{name} read [{a}]', get(dk, tok), a == 'o')
+            check(f'{name} list [{a}]', get(f'{path}/{name}', tok), a == 'o')
+            check(f'{name} create [{a}]', commit(tok, [put_new(dk + '-new-' + a, doc)]), a == 'o')
+            check(f'{name} update [{a}]', commit(tok, [put(dk, dict(doc, **{field: changed}))]), a == 'o')
+            check(f'{name} delete [{a}]', commit(tok, [rm(dk)]), a == 'o')
+            admin([rm(dk + '-new-' + a)])
+        check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
+
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
     ex = f'{path}/executions/exec-1'

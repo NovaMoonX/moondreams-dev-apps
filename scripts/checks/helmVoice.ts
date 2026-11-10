@@ -141,6 +141,8 @@ const commands: NomosCommand[] = [
     title: 'Call the florist',
     due: { kind: 'day', date: Date.UTC(2026, 10, 13) },
     isUrgent: false,
+    whoRefs: [],
+    placeRefs: [],
   },
 ];
 const sealedFor = (inputMode: string) => {
