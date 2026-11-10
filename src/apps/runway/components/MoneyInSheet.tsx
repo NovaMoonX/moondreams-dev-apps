@@ -115,6 +115,15 @@ function MoneyInSheet({ purchase, onClose }: MoneyInSheetProps) {
     <>
       <DepositOffer deposit={purchase} onDone={onClose} />
       <ActionGroup isRoomy>
+        <ActionRow
+          isGrouped
+          isRoomy
+          hasChevron
+          icon={<CalendarPlus />}
+          label={NEEDS_HOME_WORDS.unlistedPay}
+          subtitle={NEEDS_HOME_WORDS.thisWasPaySub}
+          onClick={() => setForm('pay')}
+        />
         <LeaveOutRow purchase={purchase} onDone={onClose} />
       </ActionGroup>
     </>

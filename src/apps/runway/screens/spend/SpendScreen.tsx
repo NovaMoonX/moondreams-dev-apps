@@ -277,6 +277,10 @@ function SpendScreen() {
   const total = purchases
     .filter(isCounted)
     .reduce((sum, purchase) => sum + purchase.amountCents, 0);
+  const moneyInTotal = moneyIn.reduce(
+    (sum, purchase) => sum - purchase.amountCents,
+    0,
+  );
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -566,10 +570,16 @@ function SpendScreen() {
         <div className='space-y-3'>
           <div>
             <p className='text-muted-foreground text-xs'>
-              {SPEND_PERIOD_WORDS.total}
+              {kindId === 'moneyIn'
+                ? SPEND_FILTER_WORDS.cameIn
+                : SPEND_PERIOD_WORDS.total}
             </p>
             <p className='text-3xl font-semibold tracking-tight tabular-nums'>
-              <SensitiveValue>{formatCents(total)}</SensitiveValue>
+              <SensitiveValue>
+                {kindId === 'moneyIn'
+                  ? `+${formatCents(moneyInTotal)}`
+                  : formatCents(total)}
+              </SensitiveValue>
             </p>
           </div>
         </div>

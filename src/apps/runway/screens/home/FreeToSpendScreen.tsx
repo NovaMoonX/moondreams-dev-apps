@@ -20,6 +20,7 @@ import SensitiveValue from '@/components/SensitiveValue';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import Subview from '@/components/Subview';
 import { useNow } from '@/hooks/useNow';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import { useAppSelector } from '@/store';
@@ -92,18 +93,27 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     showSpendPeriod,
   } = useRunwayUrlState();
   const mask = useMaskedText();
+  const { isHidden, toggle: toggleHidden } = useValuesHidden();
   const now = useNow(60_000);
   const monthRange = getSpendRange(DEFAULT_SPEND_PERIOD, todayAsUtcDate(now));
   const monthMoneyIn = useAppSelector(selectMoneyIn).filter(
     (purchase) =>
       purchase.date >= monthRange.from && purchase.date < monthRange.to,
   );
-  const monthMoneyInCents = monthMoneyIn.reduce(
-    (sum, purchase) => sum - purchase.amountCents,
-    0,
-  );
-  // The tab's own history entry is written first, so the filter lands on it rather than on Home's.
+  // Money with no envelopes and no pay raised Free to Spend itself; a pay or a refund to envelopes went to the plan.
+  const sumIn = (straight: boolean) => {
+    const cents = monthMoneyIn
+      .filter(
+        (purchase) =>
+          (purchase.lines.length === 0 && purchase.incomeDayId === null) ===
+          straight,
+      )
+      .reduce((sum, purchase) => sum - purchase.amountCents, 0);
+    return cents === 0 ? null : formatCents(cents);
+  };
+  // The tab's own history entry is written first, so the filter lands on it rather than on Home's; Money in splits by sign, so amounts show first.
   const openMoneyIn = async () => {
+    if (isHidden) toggleHidden();
     await leaveViewForTab('spend');
     showSpendKind('moneyIn');
     showSpendPeriod(DEFAULT_SPEND_PERIOD);
@@ -406,12 +416,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 subtitle={
                   monthMoneyIn.length === 0
                     ? FREE_SUM_WORDS.moneyInNone
-                    : mask(
-                        FREE_SUM_WORDS.moneyInSub(
-                          formatCents(monthMoneyInCents),
-                          monthMoneyIn.length,
-                        ),
-                      )
+                    : mask(FREE_SUM_WORDS.moneyInSub(sumIn(true), sumIn(false)))
                 }
                 onClick={() => void openMoneyIn()}
               />

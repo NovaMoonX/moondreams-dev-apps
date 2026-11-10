@@ -3505,6 +3505,7 @@ export const SPEND_FILTER_WORDS = {
   moneyInHelp: 'Deposits and refunds. Moves between your own accounts are left out.',
   inFree: 'In Free to Spend',
   toPay: 'Your pay',
+  cameIn: 'Came in',
   show: (count: number) =>
     `Show ${count} ${count === 1 ? 'purchase' : 'purchases'}`,
   showShort: (count: number) => `Show ${count}`,
@@ -3844,8 +3845,13 @@ const countMembers = (bills: number, envelopes: number, goals: number) =>
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
   moneyIn: 'Money in this month',
-  moneyInSub: (amount: string, count: number) =>
-    `${amount} from ${count} ${count === 1 ? 'deposit or refund' : 'deposits and refunds'}`,
+  moneyInSub: (straight: string | null, plan: string | null) =>
+    [
+      straight === null ? null : `${straight} to Free to Spend`,
+      plan === null ? null : `${plan} through pay and envelopes`,
+    ]
+      .filter(Boolean)
+      .join(' · '),
   moneyInNone: 'Nothing has come in since the 1st',
   total: 'Everything you have',
   cards: 'Set aside for cards',
@@ -4699,6 +4705,7 @@ export const NEEDS_HOME_WORDS = {
   unseenIn: 'From an account Runway doesn’t see',
   savedMove: 'Saved as a move to another account',
   thisWasPay: 'This was a pay',
+  unlistedPay: 'A pay that isn’t listed',
   thisWasPaySub: 'Plan it as a one-time pay so it can fill envelopes',
   alreadyIn: 'It’s already in Free to Spend through your balance.',
   linkedTo: (day: string) => `Linked to your pay on ${day}.`,
