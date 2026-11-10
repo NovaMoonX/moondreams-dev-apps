@@ -922,7 +922,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const syncedAt = context.now - 2 * 60 * MINUTE_MS;
   const pinchConnectorId = toAppConnectorId('pinch');
   const pinchGrantId = toGrantId('helm', pinchConnectorId, SITE_ACCOUNT_ID);
-  const today = Math.floor(context.now / DAY_MS) * DAY_MS;
+  // Date-only meals land on the person's own day, which can differ from the UTC day.
+  const today = Date.parse(
+    `${new Date(context.now).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })}T00:00:00Z`,
+  );
 
   const copyDefinitions = [
     {
