@@ -22,6 +22,10 @@ export interface HelmProfile {
   hasSeenAiNotice: boolean;
   /** Whether listening may use the cloud voice service while online. */
   voiceMode: VoiceMode;
+  /** This browser listens for "Hey {name}" while Helm is open on screen. */
+  isWakeWordOn: boolean;
+  /** After a spoken reply, listening stays open for a few seconds so the person can answer without a tap. */
+  isHandsFreeOn: boolean;
   /** The line saying who hears what was shown. */
   hasSeenVoiceNotice: boolean;
   createdAt: number;
@@ -93,6 +97,8 @@ export interface Capture {
   inputMode: 'typed' | 'voice' | 'attachment';
   /** Which listener wrote a spoken turn ('browser'); null on every other turn. */
   sttProvider: string | null;
+  /** The capture whose spoken reply the person talked over to say this; null on every other turn. */
+  interruptedCaptureId: string | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
   medium: 'web';

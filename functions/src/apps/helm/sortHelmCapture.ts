@@ -72,6 +72,7 @@ import {
 } from './nomos/route.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
+  INTERRUPTED_PROMPT,
   MAX_CONTEXT_TASKS,
   REST_PROMPT,
   SYSTEM_PROMPT,
@@ -137,6 +138,7 @@ interface CaptureDoc {
   route?: Route | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
+  interruptedCaptureId?: string | null;
   createdAt: number;
   sealed: SealedPayload;
 }
@@ -619,8 +621,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
     });
     const provider = pickProvider(combined.text, combined.reading);
-    const system =
-      mode === 'rest' ? `${SYSTEM_PROMPT}\n\n${REST_PROMPT}` : SYSTEM_PROMPT;
+    const system = [
+      SYSTEM_PROMPT,
+      mode === 'rest' ? REST_PROMPT : null,
+      typeof capture.interruptedCaptureId === 'string' &&
+      capture.interruptedCaptureId !== ''
+        ? INTERRUPTED_PROMPT
+        : null,
+    ]
+      .filter((part) => part !== null)
+      .join('\n\n');
     const runOn = async (role: 'quick' | 'interpret', canHandOver: boolean) => {
       const mcp = await createHelmMcpServer({
         uid,

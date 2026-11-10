@@ -84,7 +84,7 @@ export async function sendCapture(
     reading: CaptureReading;
     screen: ScreenContext | null;
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
-    voice?: { sttProvider: string };
+    voice?: { sttProvider: string; interruptedCaptureId: string | null };
   },
 ) {
   const text = turn.text.trim();
@@ -100,6 +100,7 @@ export async function sendCapture(
   const capture: Capture = {
     inputMode: turn.voice ? 'voice' : 'typed',
     sttProvider: turn.voice?.sttProvider ?? null,
+    interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
     ttsProvider: null,
     medium: 'web',
     sessionId: turn.sessionId,

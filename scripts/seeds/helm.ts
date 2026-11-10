@@ -439,6 +439,7 @@ async function buildBackToBack(input: {
       const capture: Capture = {
         inputMode: 'typed',
         sttProvider: null,
+        interruptedCaptureId: null,
         ttsProvider: null,
         medium: 'web',
         sessionId: `seed-${uid}-today`,
@@ -569,6 +570,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
         hasSeenAiNotice: false,
         voiceMode: 'cloudWhenOnline',
+        isWakeWordOn: false,
+        isHandsFreeOn: true,
         hasSeenVoiceNotice: false,
         createdAt,
         lastEditedAt: null,
@@ -622,6 +625,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           const capture: Capture = {
             inputMode: spoken === undefined ? 'typed' : 'voice',
             sttProvider: spoken === undefined ? null : 'browser',
+            interruptedCaptureId: null,
             ttsProvider: spoken === undefined ? null : 'natural',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,

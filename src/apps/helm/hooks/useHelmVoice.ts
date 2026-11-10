@@ -22,6 +22,7 @@ import {
   HELM_COPY,
 } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
   clearSentTurn,
   getNextTurn,
@@ -41,6 +42,8 @@ import {
   markCaptureSpoken,
   sendCapture,
 } from '@apps/helm/store/actions/captureActions';
+import { VIEW_KINDS } from '@apps/helm/screen/views';
+import { selectTopScreen } from '@apps/helm/store/screenSlice';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import {
   selectAllCaptures,
@@ -52,7 +55,7 @@ import {
   readCapture,
 } from '@apps/helm/utils/captureReading';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
-import { isUndoPhrase } from '@apps/helm/utils/voicePhrases';
+import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
 const NOTE_MS = 6000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
@@ -113,6 +116,9 @@ export function useHelmVoice() {
   const isSurfaceShown = useRef(true);
   // Rises on each Stop, so a turn still being sent when Stop was tapped is never waited on.
   const stopCount = useRef(0);
+  const speakingCaptureId = useRef<string | null>(null);
+  // The line the person talked over, kept for the turn that follows it.
+  const interruptedCaptureId = useRef<string | null>(null);
   const [tokenSource] = useState(() =>
     createVoiceTokenSource({
       appId: 'helm',
@@ -127,7 +133,17 @@ export function useHelmVoice() {
     }),
   );
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
+  const isWakeWordOn = useAppSelector(
+    (state) => state.helm.profile?.isWakeWordOn ?? false,
+  );
+  const isHandsFreeOn = useAppSelector(
+    (state) => state.helm.profile?.isHandsFreeOn ?? true,
+  );
+  const keyStatus = useAppSelector((state) => state.helm.keyStatus);
+  const topScreen = useAppSelector(selectTopScreen);
+  const { view, isAskRequested, openAsk } = useHelmUrlState();
   const [showsPhoneLine, setShowsPhoneLine] = useState(false);
+  const isHomeView = VIEW_KINDS[view] === 'home';
 
   const voice = useVoiceConversation({
     lang: navigator.language || 'en-US',
@@ -136,8 +152,23 @@ export function useHelmVoice() {
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },
-    onNothingHeard: () => showNote(HELM_COPY.talkHeardNothing),
+    onNothingHeard: () => {
+      interruptedCaptureId.current = null;
+      showNote(HELM_COPY.talkHeardNothing);
+    },
     onCloudHeld: () => setShowsPhoneLine(true),
+    onBargeIn: () => {
+      interruptedCaptureId.current = speakingCaptureId.current;
+    },
+    // A utility screen with no ask bar has nowhere to show the conversation, so it never listens for the phrase.
+    wake: {
+      isOn:
+        isWakeWordOn &&
+        keyStatus === 'ready' &&
+        (isHomeView || topScreen !== null),
+      spellings: toWakeSpellings(name),
+      onWake: wakeUp,
+    },
     cloudListening: {
       tokenSource,
       isAllowed: voiceMode === 'cloudWhenOnline',
@@ -157,7 +188,31 @@ export function useHelmVoice() {
   function say(line: string) {
     voice.settle();
     showNote(line);
-    void voice.speak(line, { priority: 'ack', turnKey: Date.now() });
+    void voice.speak(line, {
+      priority: 'ack',
+      turnKey: Date.now(),
+      canAnswer: isHandsFreeOn && isSurfaceShown.current,
+    });
+  }
+
+  /** The phrase was heard: it starts what a Talk tap starts, from the page in front, or sends the words that came with it. */
+  function wakeUp(rest: string | null) {
+    if (!voice.isAvailable) return false;
+    const page = isHomeView
+      ? null
+      : (selectTopScreen(store.getState())?.context ?? null);
+    const isStarted =
+      rest === null ? talk(page) === 'started' : sendHeard(rest, page);
+    if (isStarted && page !== null && !isAskRequested) void openAsk();
+    return isStarted;
+  }
+
+  function sendHeard(text: string, page: ScreenContext | null) {
+    screen.current = page;
+    setNotice(null);
+    setShowsPhoneLine(false);
+    interruptedCaptureId.current = null;
+    return voice.submit(text, 'browser');
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
@@ -178,6 +233,8 @@ export function useHelmVoice() {
     const timeZone = helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
     const turn = { ...getNextTurn(), createdAt: Date.now() };
     const stopsAtSend = stopCount.current;
+    const interrupted = interruptedCaptureId.current;
+    interruptedCaptureId.current = null;
     const fail = (error: unknown) => {
       console.error('Helm spoken turn did not send', error);
       voice.settle();
@@ -198,7 +255,10 @@ export function useHelmVoice() {
         reading,
         screen: screen.current,
         ...turn,
-        voice: { sttProvider },
+        voice: {
+          sttProvider,
+          interruptedCaptureId: interrupted,
+        },
       });
       recordSentTurn(uid, turn, id);
       const leadId = turn.leadId ?? id;
@@ -266,10 +326,18 @@ export function useHelmVoice() {
     voice.settle();
     // Nothing shows the voice on this view (no Stop, no Mute), so the written reply stands alone.
     if (!isSurfaceShown.current) return;
+    speakingCaptureId.current = capture.id;
     const result = await voice.speak(line, {
       priority: 'ack',
       turnKey: capture.createdAt,
+      canAnswer:
+        capture.inputMode === 'voice' &&
+        isHandsFreeOn &&
+        isSurfaceShown.current,
     });
+    if (speakingCaptureId.current === capture.id) {
+      speakingCaptureId.current = null;
+    }
     if (uid && result.status === 'spoken' && result.adapterId !== null) {
       markCaptureSpoken(uid, capture.id, result.adapterId).catch(
         (error: unknown) => console.error('Helm voice was not recorded', error),
@@ -339,6 +407,17 @@ export function useHelmVoice() {
 
   /** Starts listening from `page` (what the page publishes, null from home), or sends what is being said, or stops what is working or speaking. */
   const talk = (page: ScreenContext | null) => {
+    // An answer window or a line being said gives way to listening: the tap is the answer.
+    if (
+      voice.isAvailable &&
+      (voice.isFollowUpOpen || voice.state === 'speaking')
+    ) {
+      if (voice.state === 'speaking') {
+        waiting.current.clear();
+        stopCount.current += 1;
+      }
+      return startListening(page);
+    }
     if (voice.state !== 'idle') {
       if (voice.state !== 'listening') {
         waiting.current.clear();
@@ -358,12 +437,17 @@ export function useHelmVoice() {
       );
       return 'blocked' as const;
     }
+    return startListening(page);
+  };
+
+  function startListening(page: ScreenContext | null) {
     screen.current = page;
     setNotice(null);
     setShowsPhoneLine(false);
+    interruptedCaptureId.current = null;
     voice.listen();
     return 'started' as const;
-  };
+  }
 
   return {
     ...voice,

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { createSpeechListener } from '@/hooks/useSpeechCommands';
 import { useOnTabReturn } from '@/hooks/useOnTabReturn';
 import { unlockAudio } from '@/lib/speech/audioContext';
 import {
@@ -9,6 +10,8 @@ import {
   type ListeningEvent,
 } from '@/lib/speech/listeningMode';
 import { readMicrophonePermission } from '@/lib/speech/microphonePermission';
+import { readWakePhrase } from '@/lib/speech/speechText';
+import { openSpeechGate } from '@/lib/speech/voice/bargeIn';
 import {
   canUseBrowserStt,
   createBrowserStt,
@@ -20,6 +23,7 @@ import { createPlaybackQueue } from '@/lib/speech/voice/playbackQueue';
 import type { SpeechSource } from '@/lib/speech/voice/speechSource';
 import type {
   CloudHeldReason,
+  FrameSource,
   SpeechPriority,
   SttAdapter,
   SttErrorCode,
@@ -57,11 +61,20 @@ interface VoiceConversationOptions {
   cloudListening?: { tokenSource: VoiceTokenSource; isAllowed: boolean } | null;
   /** Speaks a `reply` or `summary` in the cloud while `isAllowed`, online and not held for the day; the device voice takes over whenever it can't. An `ack` always stays on the device. Null speaks on the device only. */
   cloudSpeaking?: { source: SpeechSource; isAllowed: boolean } | null;
+  /** The person started talking over a line that was playing; the line is already stopped and listening is starting. */
+  onBargeIn?: () => void;
+  /** Waits for a phrase with the browser's own recognition while nothing else is going on and the page is visible; Null never does. `onWake` gets the words said after the phrase in the same breath, null when there were none, and says whether it started something. */
+  wake?: {
+    isOn: boolean;
+    spellings: readonly string[];
+    onWake: (rest: string | null) => boolean;
+  } | null;
 }
 
 export type VoiceListeningRoute = 'cloud' | 'device';
 
 const QUIET_MS = 8000;
+const FOLLOW_UP_MS = 8000;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
 const TAP_CONFIG = { lockMs: 0 };
@@ -98,11 +111,14 @@ export function useVoiceConversation({
   cloudListening = null,
   cloudSpeaking = null,
   onCloudHeld,
+  onBargeIn,
+  wake = null,
 }: VoiceConversationOptions) {
   const [isListening, setIsListening] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isFollowUpOpen, setIsFollowUpOpen] = useState(false);
   const [heard, setHeard] = useState('');
   const [saying, setSaying] = useState('');
   const [held, setHeld] = useState<{
@@ -126,7 +142,14 @@ export function useVoiceConversation({
     cloudListening,
     cloudSpeaking,
     onCloudHeld,
+    onBargeIn,
+    wake,
+    reason,
   });
+  const gateHandler = useRef<
+    ((source: FrameSource, isBargeIn: boolean) => void) | null
+  >(null);
+  const pauseOnHide = useRef<() => void>(() => undefined);
   const run = useRef({
     heldDay: null as string | null,
     speechHeldDay: null as string | null,
@@ -137,6 +160,9 @@ export function useVoiceConversation({
     cancelListening: null as (() => void) | null,
     quietId: 0,
     holdId: 0,
+    followUpId: 0,
+    isFollowUp: false,
+    gate: null as { close: () => void } | null,
   });
 
   useEffect(() => {
@@ -152,6 +178,9 @@ export function useVoiceConversation({
       cloudListening,
       cloudSpeaking,
       onCloudHeld,
+      onBargeIn,
+      wake,
+      reason,
     };
   });
 
@@ -191,7 +220,10 @@ export function useVoiceConversation({
           : device;
       },
       onActiveChange: (isActive) =>
-        queueMicrotask(() => setIsSpeaking(isActive)),
+        queueMicrotask(() => {
+          setIsSpeaking(isActive);
+          syncBargeGate();
+        }),
     });
     return queueRef.current;
   };
@@ -239,14 +271,65 @@ export function useVoiceConversation({
     setListeningRoute(null);
     setHeard('');
     if (run.current.isCancelled) return;
+    if (!submit(text, run.current.heardBy)) latest.current.onNothingHeard?.();
+  };
+
+  /** Hands the app words heard elsewhere as a finished utterance (end phrase taken off); false when nothing is left. */
+  const submit = (text: string, sttProvider: string) => {
     const pattern = toEndPattern(latest.current.endPhrases);
     const said = (pattern ? text.replace(pattern, '') : text).trim();
-    if (said === '') {
-      latest.current.onNothingHeard?.();
-      return;
-    }
+    if (said === '') return false;
     setIsThinking(true);
-    latest.current.onUtterance(said, { sttProvider: run.current.heardBy });
+    latest.current.onUtterance(said, { sttProvider });
+    return true;
+  };
+
+  const closeGate = () => {
+    run.current.gate?.close();
+    run.current.gate = null;
+  };
+
+  const endFollowUp = () => {
+    if (!run.current.isFollowUp) return;
+    run.current.isFollowUp = false;
+    window.clearTimeout(run.current.followUpId);
+    run.current.followUpId = 0;
+    closeGate();
+    send({ type: 'WINDOW_ENDED' });
+    run.current.stopListening = null;
+    run.current.cancelListening = null;
+    setIsFollowUpOpen(false);
+    setIsListening(false);
+  };
+
+  useEffect(() => {
+    pauseOnHide.current = () => {
+      endFollowUp();
+      closeGate();
+    };
+  });
+
+  // The microphone is open on the device only while a line that its echo cancellation can hear is playing, and nothing leaves it until the person speaks.
+  const syncBargeGate = () => {
+    if (run.current.isFollowUp) return;
+    const cloud = latest.current.cloudListening;
+    const wants =
+      latest.current.reason === null &&
+      !latest.current.isMuted &&
+      run.current.mode.phase === 'OFF' &&
+      (queueRef.current?.isPlayingThroughWebAudio() ?? false) &&
+      pickListener({
+        isOnline: navigator.onLine,
+        isCloudAllowed: cloud?.isAllowed ?? false,
+        isCloudHeld: run.current.heldDay === toLocalDateInputValue(Date.now()),
+        hasCloud: cloud !== null,
+      }) === 'cloud';
+    if (!wants) closeGate();
+    else {
+      run.current.gate ??= openSpeechGate({
+        onSpeech: (source) => gateHandler.current?.(source, true),
+      });
+    }
   };
 
   // A refusal or an unsupported language stays (until the permission changes); any other failure ends this attempt only, said as nothing heard.
@@ -260,8 +343,11 @@ export function useVoiceConversation({
     if (!isLasting) latest.current.onNothingHeard?.();
   };
 
-  const listen = () => {
-    if (reason !== null || run.current.mode.phase !== 'OFF') return false;
+  const listen = (options: { source?: FrameSource | null } = {}) => {
+    if (reason !== null) return false;
+    endFollowUp();
+    if (run.current.mode.phase !== 'OFF') return false;
+    closeGate();
     unlockAudio();
     getQueue().clear();
     send({ type: 'TAP_MIC' });
@@ -304,6 +390,7 @@ export function useVoiceConversation({
       startAdapter(
         createDeepgramStt({
           lang: latest.current.lang,
+          source: options.source ?? null,
           getToken: cloud.tokenSource.getToken,
           onUnavailable: (heldReason) => {
             if (run.current.isCancelled || run.current.mode.phase === 'OFF') {
@@ -319,7 +406,51 @@ export function useVoiceConversation({
           onClosed: cloud.tokenSource.reportClosed,
         }),
       );
-    } else startBrowser();
+    } else {
+      options.source?.stop();
+      startBrowser();
+    }
+    return true;
+  };
+
+  const handleGate = (source: FrameSource, isBargeIn: boolean) => {
+    run.current.gate = null;
+    const canListen =
+      latest.current.reason === null &&
+      (run.current.isFollowUp || run.current.mode.phase === 'OFF');
+    if (isBargeIn && canListen) latest.current.onBargeIn?.();
+    if (!canListen || !listen({ source })) source.stop();
+  };
+
+  useEffect(() => {
+    gateHandler.current = handleGate;
+  });
+
+  /** Opens a short window after a spoken answer in which speaking starts a listen without a tap; silence closes it with no sound and nothing sent. False when it can't open now (a line still waiting or playing, muted, already listening, the page hidden). */
+  const openFollowUp = () => {
+    if (
+      latest.current.reason !== null ||
+      latest.current.isMuted ||
+      run.current.mode.phase !== 'OFF' ||
+      (queueRef.current?.isActive() ?? false) ||
+      document.visibilityState === 'hidden'
+    ) {
+      return false;
+    }
+    closeGate();
+    send({ type: 'TAP_MIC' });
+    run.current.isFollowUp = true;
+    run.current.stopListening = endFollowUp;
+    run.current.cancelListening = endFollowUp;
+    run.current.followUpId = window.setTimeout(endFollowUp, FOLLOW_UP_MS);
+    run.current.gate = openSpeechGate({
+      onSpeech: (source) => gateHandler.current?.(source, false),
+      onUnavailable: endFollowUp,
+    });
+    setIsFollowUpOpen(true);
+    setIsListening(true);
+    setIsThinking(false);
+    setHeard('');
     return true;
   };
 
@@ -341,22 +472,38 @@ export function useVoiceConversation({
 
   const speak = (
     text: string,
-    options: { priority: SpeechPriority; turnKey: number },
+    options: {
+      priority: SpeechPriority;
+      turnKey: number;
+      /** The person may answer once this line has been said: when it is the last one waiting, a short window opens in which speaking starts a listen without a tap. */
+      canAnswer?: boolean;
+    },
   ): Promise<VoiceSpoken> => {
     if (latest.current.isMuted || run.current.mode.phase !== 'OFF') {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
     defer(() => setIsThinking(false));
-    return getQueue().enqueue(text, {
-      ...options,
+    const { canAnswer = false, ...line } = options;
+    const spoken = getQueue().enqueue(text, {
+      ...line,
       onStart: () => setSaying(text),
     });
+    if (canAnswer) {
+      void spoken.then((result) => {
+        if (result.status === 'spoken') openFollowUp();
+      });
+    }
+    return spoken;
   };
 
   const setMuted = (isOn: boolean) => {
     setIsMuted(isOn);
     latest.current.isMuted = isOn;
-    if (isOn) getQueue().clear();
+    if (isOn) {
+      getQueue().clear();
+      endFollowUp();
+      closeGate();
+    }
   };
 
   const checkPermission = () => {
@@ -374,16 +521,70 @@ export function useVoiceConversation({
   useEffect(checkPermission, []);
   useOnTabReturn(checkPermission);
 
+  useEffect(() => {
+    const handleHidden = () => {
+      if (document.visibilityState === 'hidden') pauseOnHide.current();
+    };
+    document.addEventListener('visibilitychange', handleHidden);
+    return () => document.removeEventListener('visibilitychange', handleHidden);
+  }, []);
+
   useEffect(
     () => () => {
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);
       run.current.cancelListening?.();
-      getQueue().clear();
+      pauseOnHide.current();
+      queueRef.current?.clear();
     },
     [],
   );
+
+  const isWakeActive =
+    (wake?.isOn ?? false) &&
+    reason === null &&
+    !isListening &&
+    !isThinking &&
+    !isSpeaking &&
+    canUseBrowserStt();
+  const wakeSpellings = wake?.spellings.join('|') ?? '';
+
+  // The phrase is heard by the browser's own recognition only; nothing is listened to in the cloud until after it.
+  useEffect(() => {
+    if (!isWakeActive) return;
+    const listener = createSpeechListener(
+      () => undefined,
+      () => undefined,
+    );
+    listener.setOptions({
+      lang,
+      speechLang: lang,
+      onFinalTranscript: (alternatives) => {
+        const phrase = readWakePhrase(
+          alternatives,
+          latest.current.wake?.spellings ?? [],
+        );
+        if (phrase === null) return false;
+        const rest =
+          phrase.rests.find((entry) => entry !== null && entry !== '') ?? null;
+        listener.stop();
+        const isStarted = latest.current.wake?.onWake(rest) ?? false;
+        if (!isStarted) listener.start();
+        return true;
+      },
+    });
+    const handleVisibility = () =>
+      document.visibilityState === 'hidden'
+        ? listener.suspend()
+        : listener.resume();
+    document.addEventListener('visibilitychange', handleVisibility);
+    listener.start();
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      listener.teardown();
+    };
+  }, [isWakeActive, wakeSpellings, lang]);
 
   const state: VoiceState = isListening
     ? 'listening'
@@ -401,6 +602,9 @@ export function useVoiceConversation({
     isMuted,
     setMuted,
     listen,
+    submit,
+    /** The short window after an answer is open: listening for the person to speak, nothing sent yet. */
+    isFollowUpOpen,
     stop,
     cancel,
     speak,

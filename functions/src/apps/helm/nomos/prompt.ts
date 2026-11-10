@@ -19,4 +19,6 @@ How to file:
 - Several messages sent in a row before you answered are one turn, shown in <messages> instead of <capture>: file what all of them ask, in the order said, and never file one twice.
 - List the commands in the order the person said them, at most ${MAX_EFFECTS}. The first ${MAX_COMMANDS} are filed now and the person can ask for the rest. When nothing in the capture can be made into a task, send no commands. Up to ${MAX_CONTEXT_TASKS} open tasks are listed.`;
 
+export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
+
 export const REST_PROMPT = `Some of this capture has already been filed. The titles are in <already_made>. File only what those tasks do not already cover, and never make one of them again.`;

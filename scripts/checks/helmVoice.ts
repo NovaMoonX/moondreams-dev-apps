@@ -15,7 +15,9 @@ import { UNDO_PHRASES } from '../../src/apps/helm/constants.ts';
 import {
   isUndoPhrase,
   normalizeSaid,
+  toWakeSpellings,
 } from '../../src/apps/helm/utils/voicePhrases.ts';
+import { readWakePhrase } from '../../src/lib/speech/speechText.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 20, 0);
 const ZONE = 'America/Los_Angeles';
@@ -198,4 +200,36 @@ assert.deepEqual(
   'the undo phrases',
 );
 
-console.log('check:helm-voice: spoken lines and undo phrases passed.');
+const wake = (heard: string, name = 'Nomos') =>
+  readWakePhrase(heard, toWakeSpellings(name))?.rests[0] ?? undefined;
+assert.equal(wake('Hey Nomos'), '', 'the phrase alone wakes it');
+assert.equal(wake('hey, Nomos.'), '', 'punctuation is ignored');
+assert.equal(
+  wake('Okay hey Nomos call Sam at five'),
+  'call sam at five',
+  'what follows the phrase is the turn',
+);
+assert.equal(
+  wake('Nomos call Sam'),
+  undefined,
+  'the name alone does not wake it',
+);
+assert.equal(
+  wake('tell Sam hey Nomos'),
+  undefined,
+  'the phrase is only matched at the start',
+);
+assert.equal(
+  wake('Hey Pepper', 'Pepper'),
+  '',
+  'renaming the assistant renames the phrase',
+);
+assert.equal(
+  wake('Hey Nomos', 'Pepper'),
+  undefined,
+  'the old name no longer wakes it',
+);
+
+console.log(
+  'check:helm-voice: spoken lines, undo phrases and the wake phrase passed.',
+);

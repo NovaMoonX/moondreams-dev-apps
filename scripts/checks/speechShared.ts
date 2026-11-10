@@ -22,6 +22,7 @@ import {
   readWakePhrase,
   toPlainText,
 } from '../../src/lib/speech/speechText.ts';
+import { createSpeechGate } from '../../src/lib/speech/voice/bargeIn.ts';
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
 import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
@@ -349,6 +350,112 @@ assert.equal(
 );
 
 console.log('speechShared: all checks passed');
+
+{
+  const FRAME_SAMPLES = 480;
+  const frameAt = (index: number, make: (sample: number) => number) =>
+    Int16Array.from({ length: FRAME_SAMPLES }, (_, offset) =>
+      Math.round(make(index * FRAME_SAMPLES + offset) * 32767),
+    );
+  const tone = (hz: number, amplitude: number) => (sample: number) =>
+    amplitude * Math.sin((2 * Math.PI * hz * sample) / 16000);
+  const voiced = (amplitude: number) => {
+    const parts = [tone(180, 1), tone(540, 0.6), tone(1260, 0.3)];
+    return (sample: number) =>
+      (amplitude / 1.9) * parts.reduce((sum, part) => sum + part(sample), 0);
+  };
+  const quiet = () => 0;
+  const room = (sample: number) => 0.002 * Math.sin(sample * 12.9898);
+  const run = (
+    signals: { frames: number; make: (sample: number) => number }[],
+  ) => {
+    const gate = createSpeechGate();
+    const frames = signals.flatMap(({ frames: count, make }) =>
+      Array.from({ length: count }, () => make),
+    );
+    return frames.map((make, index) => gate.push(frameAt(index, make)));
+  };
+
+  assert.ok(
+    !run([{ frames: 200, make: quiet }]).some((read) => read.isTriggered),
+    'silence never triggers the speech gate',
+  );
+  assert.ok(
+    !run([{ frames: 200, make: room }]).some((read) => read.isTriggered),
+    'a quiet room never triggers the speech gate',
+  );
+  const spoken = run([
+    { frames: 30, make: room },
+    { frames: 7, make: voiced(0.3) },
+  ]);
+  assert.equal(
+    spoken.findIndex((read) => read.isTriggered),
+    36,
+    '200 ms of voice triggers the speech gate on its seventh frame',
+  );
+  const trigger = spoken[36];
+  assert.equal(
+    trigger.preRoll.length,
+    10,
+    'the pre-roll holds the last 300 ms',
+  );
+  assert.ok(
+    trigger.preRoll
+      .slice(-7)
+      .every((frame) => frame.some((sample) => Math.abs(sample) > 2000)) &&
+      trigger.preRoll
+        .slice(0, 3)
+        .every((frame) => frame.every((sample) => Math.abs(sample) < 200)),
+    'the pre-roll is the quiet before the voice and then the voice itself',
+  );
+  assert.deepEqual(
+    spoken.slice(0, 36).map((read) => read.preRoll.length),
+    Array.from({ length: 36 }, () => 0),
+    'nothing is handed over before the trigger',
+  );
+  assert.ok(
+    !run([
+      { frames: 30, make: room },
+      { frames: 1, make: voiced(0.6) },
+      { frames: 30, make: room },
+      { frames: 1, make: voiced(0.6) },
+      { frames: 30, make: room },
+    ]).some((read) => read.isTriggered),
+    'a click or two loud frames apart is not speech',
+  );
+  const hum = (amplitude: number) => voiced(amplitude);
+  assert.ok(
+    !run([{ frames: 400, make: hum(0.2) }]).some((read) => read.isTriggered),
+    'a steady hum that was there when the gate opened never triggers it',
+  );
+  assert.ok(
+    !run([
+      { frames: 10, make: () => 0 },
+      { frames: 400, make: hum(0.2) },
+    ]).some((read) => read.isTriggered),
+    'a hum that starts after the zeros of a microphone still starting never triggers it',
+  );
+  assert.ok(
+    run([
+      { frames: 40, make: () => 0 },
+      { frames: 7, make: voiced(0.3) },
+    ]).some((read) => read.isTriggered),
+    'a voice still triggers it after a long digital silence',
+  );
+  const swell = (sample: number) =>
+    hum(0.01 * 1.004 ** Math.floor(sample / FRAME_SAMPLES))(sample);
+  assert.ok(
+    !run([{ frames: 600, make: swell }]).some((read) => read.isTriggered),
+    'a hum that swells slowly is followed by the noise floor and never triggers it',
+  );
+  assert.ok(
+    !run([
+      { frames: 100, make: (sample) => 0.3 * Math.sin(sample * 1.7) },
+    ]).some((read) => read.isTriggered),
+    'hiss outside the voice band never triggers the speech gate',
+  );
+  console.log('speechShared: speech gate checks passed');
+}
 
 const voice = (
   name: string,

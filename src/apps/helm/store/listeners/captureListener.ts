@@ -81,6 +81,7 @@ async function openCapture(
     id: entry.id,
     inputMode: data.inputMode ?? 'typed',
     sttProvider: data.sttProvider ?? null,
+    interruptedCaptureId: data.interruptedCaptureId ?? null,
     ttsProvider: data.ttsProvider ?? null,
     medium: data.medium ?? 'web',
     sessionId: data.sessionId ?? entry.id,

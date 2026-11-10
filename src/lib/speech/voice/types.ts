@@ -19,6 +19,16 @@ export interface SttStartOptions {
   preRoll: Float32Array | null;
 }
 
+/** A microphone already open and running through the capture worklet: the frames from just before it was handed over, then the live ones. */
+export interface FrameSource {
+  /** 16 kHz mono 16-bit little-endian frames, oldest first. */
+  preRoll: ArrayBuffer[];
+  /** Gets every later frame, including any that arrived before this call; call once. */
+  subscribe: (onFrame: (frame: ArrayBuffer) => void) => void;
+  /** Releases the microphone. */
+  stop: () => void;
+}
+
 export interface SttAdapter {
   id: string;
   route: VoiceRoute;

@@ -281,6 +281,14 @@ export const HELM_COPY = {
     "Your speech isn't sent to our voice services, and answers are read by this device's voice. In Chrome, the browser's own listening uses Google.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
+  voiceHandsFreeTitle: 'Answer without tapping',
+  voiceHandsFreeOn:
+    'After a reply, it listens for a few seconds so you can answer. Nothing is sent until you speak.',
+  voiceHandsFreeOff: 'Tap Talk to answer.',
+  voiceWakeTitle: (name: string) => `Hey ${name}`,
+  voiceWake: (name: string) =>
+    `While this is open on screen, this browser's own listening waits for "Hey ${name}". In Chrome that listening uses Google.`,
+  voiceWakeLocked: "This browser can't listen for a phrase.",
   voiceDone: 'Done',
   voiceModeFailed: "Couldn't change that. Try again.",
   voiceOnPhone: 'Listening with this browser for the rest of today.',

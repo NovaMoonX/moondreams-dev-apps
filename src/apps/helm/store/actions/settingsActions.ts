@@ -23,6 +23,8 @@ export async function ensureHelmProfile(uid: string) {
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
       hasSeenAiNotice: false,
       voiceMode: 'cloudWhenOnline',
+      isWakeWordOn: false,
+      isHandsFreeOn: true,
       hasSeenVoiceNotice: false,
       createdAt: Date.now(),
       lastEditedAt: null,
@@ -34,5 +36,17 @@ export async function ensureHelmProfile(uid: string) {
 export const setVoiceMode = (uid: string, voiceMode: VoiceMode) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     voiceMode,
+    lastEditedAt: Date.now(),
+  });
+
+export const setWakeWordOn = (uid: string, isWakeWordOn: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    isWakeWordOn,
+    lastEditedAt: Date.now(),
+  });
+
+export const setHandsFreeOn = (uid: string, isHandsFreeOn: boolean) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    isHandsFreeOn,
     lastEditedAt: Date.now(),
   });

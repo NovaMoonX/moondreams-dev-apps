@@ -16,6 +16,8 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   planFillPercent: data.planFillPercent ?? DEFAULT_PLAN_FILL_PERCENT,
   hasSeenAiNotice: data.hasSeenAiNotice ?? false,
   voiceMode: data.voiceMode ?? 'cloudWhenOnline',
+  isWakeWordOn: data.isWakeWordOn ?? false,
+  isHandsFreeOn: data.isHandsFreeOn ?? true,
   hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? false,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,

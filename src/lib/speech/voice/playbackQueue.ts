@@ -130,5 +130,8 @@ export const createPlaybackQueue = ({
       play();
     },
     isActive: () => state.playing !== null || state.waiting.length > 0,
+    /** True while the line playing goes through the page's audio, so the microphone's echo cancellation can tell it from the person. */
+    isPlayingThroughWebAudio: () =>
+      state.playing?.adapter.isPlayingThroughWebAudio ?? false,
   };
 };
