@@ -114,12 +114,14 @@ function HorizonEndView({
   const [changesPick, setChangesPick] = useState<ChangesChoice>(null);
   const [placeId, setPlaceId] = useState<string | null>(null);
   const [isPickerOpen, setIsPickerOpen] = useState(false);
+  const [pickBeforePicker, setPickBeforePicker] = useState<Choice>(null);
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<Step | null>(null);
   const [isReasonOpen, setIsReasonOpen] = useState(false);
   const [reason, setReason] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
+  const reasonRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
 
   const isCallOff = mode === 'callOff';
@@ -390,7 +392,7 @@ function HorizonEndView({
   const closePicker = () => {
     setIsPickerOpen(false);
     setQuery('');
-    if (place === null) setPick(null);
+    setPick(pickBeforePicker);
   };
   useEffect(() => {
     if (!isPickerOpen) return;
@@ -401,9 +403,9 @@ function HorizonEndView({
     };
     window.addEventListener('keydown', onKeyDown, true);
     return () => window.removeEventListener('keydown', onKeyDown, true);
-    // closePicker only reads `place`, which the deps below cover.
+    // closePicker only reads `pickBeforePicker`, which the deps below cover.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isPickerOpen, place]);
+  }, [isPickerOpen, pickBeforePicker]);
 
   const leftNow = () =>
     Math.max(0, selectBalances(store.getState()).assignedByItem[itemId] ?? 0);
@@ -492,7 +494,7 @@ function HorizonEndView({
 
   const footer = (
     <ModalFooterActions
-      note={step === 'review' || step === 'details' ? error : null}
+      note={step === 'review' ? error : null}
       cancelAction={
         <Button
           type='button'
@@ -504,7 +506,7 @@ function HorizonEndView({
         </Button>
       }
       rightActions={
-        step === 'review' || step === 'details' ? (
+        step === 'review' ? (
           <Button
             type='button'
             className='whitespace-nowrap max-sm:px-3'
@@ -597,6 +599,7 @@ function HorizonEndView({
           ]}
           value={pick}
           onChange={(choice) => {
+            if (choice === 'place') setPickBeforePicker(pick);
             setPick(choice);
             setIsPickerOpen(choice === 'place');
             if (choice !== 'place') setEditing(null);
@@ -650,6 +653,7 @@ function HorizonEndView({
           <EffectPreview
             changeJson={changeJson}
             emptyText=''
+            caption={HORIZON_END_WORDS.detailsMoves}
             isCompact
             lead={
               holdsMoney && where !== null ? (
@@ -677,14 +681,7 @@ function HorizonEndView({
   return (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={goBack} />
-      <div className='space-y-1'>
-        <ActionTitle>{title}</ActionTitle>
-        <p className='text-muted-foreground text-sm'>
-          {isCallOff
-            ? HORIZON_END_WORDS.callOffNote
-            : HORIZON_END_WORDS.finishNote}
-        </p>
-      </div>
+      <ActionTitle>{title}</ActionTitle>
       <div className='space-y-2'>
         {changeRows.length > 0 && changesPick !== null && (
           <SummaryRow
@@ -696,9 +693,11 @@ function HorizonEndView({
         )}
         {holdsMoney && where !== null && (
           <SummaryRow
-            label={mask(
-              HORIZON_END_WORDS.moneyRowLabel(formatCents(leftCents)),
-            )}
+            label={
+              <MaskedText>
+                {HORIZON_END_WORDS.moneyRowLabel(formatCents(leftCents))}
+              </MaskedText>
+            }
             onClick={() => setEditing('money')}
           >
             {getMoneyAnswer(where)}
@@ -734,11 +733,15 @@ function HorizonEndView({
         </>
       )}
       {isCallOff && (
-        <div>
+        <div ref={reasonRef} className='scroll-mb-24'>
           <RevealChip
             onClick={() => {
               if (isReasonOpen) setReason('');
               setIsReasonOpen(!isReasonOpen);
+              if (!isReasonOpen)
+                requestAnimationFrame(() =>
+                  reasonRef.current?.scrollIntoView({ block: 'nearest' }),
+                );
             }}
           >
             {isReasonOpen

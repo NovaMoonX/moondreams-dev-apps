@@ -767,7 +767,6 @@ export const HORIZON_END_WORDS = {
   readySub: 'Nothing is left to pay, so it is ready to finish.',
   finishLabel: (name: string) => `Finish ${name}`,
   finishTitle: (name: string) => `Finish ${name}?`,
-  finishNote: 'Everything is paid or a bill.',
   moneyQuestion: (amount: string) => `What happens to the ${amount} left?`,
   freeBody: 'From today.',
   placeRow: 'Move it to an envelope or goal',
@@ -785,8 +784,6 @@ export const HORIZON_END_WORDS = {
   callOffRowSub: "Unpaid costs stop. What's paid stays.",
   callOffLabel: (name: string) => `Call off ${name}`,
   callOffTitle: (name: string) => `Call off ${name}?`,
-  callOffNote:
-    "Unpaid costs stop asking for money. What's paid stays in its history.",
   whatStops: 'What stops',
   staysBill: (cost: string) => `Stays a bill \u00b7 ${cost}`,
   stopsRow: (cost: string, when: string, figure: string | null) =>
@@ -837,7 +834,8 @@ export const HORIZON_END_WORDS = {
     ]
       .filter(Boolean)
       .join(' \u00b7 '),
-  detailsDays: 'Your coming income days',
+  detailsDays: 'See how your income days change',
+  detailsMoves: 'What moves',
   calledOff: (name: string) => `${name} is called off`,
   undo: 'Undo',
   needsChoice: 'Choose what happens to the money it holds.',
