@@ -856,12 +856,13 @@ export const HELM_COPY = {
   factRingSaid: 'You said',
   factRingInferred: (assistant: string) => `${assistant} inferred`,
   factLineSaid: (day: string) => `You said · ${day}`,
+  factLineAdded: (day: string) => `You added · ${day}`,
   factLineConfirmed: (day: string) => `You confirmed · ${day}`,
   factLineCorrected: (day: string) => `You corrected · ${day}`,
   factLineInferred: (assistant: string, day: string) =>
     `${assistant} inferred · ${day}`,
   factSourceSaid: (assistant: string, day: string) =>
-    `From what you told ${assistant} ${day} · You said this`,
+    `You told ${assistant} this ${day}`,
   factSourceInferred: (assistant: string, day: string) =>
     `${assistant} inferred this from what you told it ${day}`,
   factSourceInferredMail: (assistant: string) =>

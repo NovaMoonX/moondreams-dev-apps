@@ -36,16 +36,13 @@ function FactRow({ fact, assistant, now, subject, onOpen }: FactRowProps) {
         className='mt-1.5'
       />
       <span className='min-w-0 flex-1'>
-        {subject && (
-          <span className='text-muted-foreground block text-[13px] break-words'>
-            {subject}
+        <span className='block'>
+          <span className='text-foreground line-clamp-3 text-[15px] leading-[21px] text-pretty break-words'>
+            {fact.statement}
           </span>
-        )}
-        <span className='text-foreground block text-[15px] leading-[21px] break-words'>
-          {fact.statement}
         </span>
         <span className='text-muted-foreground block text-[13px] break-words'>
-          {line}
+          {subject ? `${subject} · ${line}` : line}
         </span>
       </span>
       <ChevronRight

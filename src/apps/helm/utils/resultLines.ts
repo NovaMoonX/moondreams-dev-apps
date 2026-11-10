@@ -52,10 +52,12 @@ export function buildResultLines(
           key: `${ref.docId}:${index}`,
           docId: ref.docId,
           title:
-            toText(effect?.written['sealed.title']) ??
             toText(effect?.written['sealed.statement']) ??
+            toText(effect?.written['sealed.title']) ??
             HELM_COPY.resultFactFallback,
-          detail: null,
+          detail: toText(effect?.written['sealed.statement'])
+            ? toText(effect?.written['sealed.title'])
+            : null,
         },
       ];
     }

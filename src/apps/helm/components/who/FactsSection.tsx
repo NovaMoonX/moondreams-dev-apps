@@ -70,7 +70,11 @@ function FactsSection({ subject, name }: FactsSectionProps) {
           ))}
         </ul>
       )}
-      <FactSheet factId={openId} onClose={() => setOpenId(null)} />
+      <FactSheet
+        key={openId ?? 'none'}
+        factId={openId}
+        onClose={() => setOpenId(null)}
+      />
       <FactAddSheet
         isOpen={isAdding}
         onClose={() => setIsAdding(false)}

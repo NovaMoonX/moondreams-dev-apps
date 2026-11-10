@@ -54,7 +54,7 @@ export function summarize(counts: EffectCounts, messageCount = 1): string {
   return `Got ${prefix}: ${joined}`;
 }
 
-/** The result line of a noted fact: "Fact · Dana · You said", or "Fact · Dana · Nomos inferred" when it was read between the lines. */
+/** The result line of a noted fact: "Fact · Dana · You said", or "Fact · Dana · {assistant} inferred" when it was read between the lines. */
 export const buildFactLine = (input: {
   subjects: string[];
   isSaid: boolean;

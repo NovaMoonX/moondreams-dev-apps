@@ -159,24 +159,41 @@ export const correctFact = (uid: string, factId: string, statement: string) =>
     };
   });
 
-/** Deletes a fact; Undo writes it back under the same id, unless one is there again. */
+const MAX_CHAIN = 20;
+
+/** Deletes a fact and the earlier facts it replaced; Undo writes them back under the same ids, unless one is there again. */
 export const forgetFact = (uid: string, factId: string) =>
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid), factId);
-    const raw = await runTransaction(db, async (transaction) => {
-      const data = (await transaction.get(ref)).data() as
-        DocumentData | undefined;
-      if (!data) return null;
-      transaction.delete(ref);
-      return data;
+    const taken = await runTransaction(db, async (transaction) => {
+      const readChain = async (
+        id: string | null,
+        seen: string[],
+      ): Promise<{ id: string; data: DocumentData }[]> => {
+        if (!id || seen.includes(id) || seen.length >= MAX_CHAIN) return [];
+        const data = (await transaction.get(doc(factsOf(uid), id))).data() as
+          DocumentData | undefined;
+        if (!data) return [];
+        const supersedesId =
+          typeof data.supersedesId === 'string' ? data.supersedesId : null;
+        return [
+          { id, data },
+          ...(await readChain(supersedesId, [...seen, id])),
+        ];
+      };
+      const chain = await readChain(factId, []);
+      chain.forEach((entry) => transaction.delete(doc(factsOf(uid), entry.id)));
+      return chain;
     });
-    if (!raw) return { kind: 'changed' };
+    if (taken.length === 0) return { kind: 'changed' };
     return {
       kind: 'done',
       undo: () =>
         runTransaction(db, async (transaction) => {
           if ((await transaction.get(ref)).exists()) return false;
-          transaction.set(ref, raw);
+          taken.forEach((entry) =>
+            transaction.set(doc(factsOf(uid), entry.id), entry.data),
+          );
           return true;
         }),
     };
@@ -215,7 +232,10 @@ export const addFact = (uid: string, subject: FactSubject, statement: string) =>
       lastEditedAt: null,
       sealed,
     };
-    await setDoc(ref, fact);
+    // The write queues on a weak connection; waiting on it would hold the sheet open.
+    void setDoc(ref, fact).catch((error: unknown) =>
+      console.error('Helm fact was not added', error),
+    );
     return {
       kind: 'done',
       undo: async () => {

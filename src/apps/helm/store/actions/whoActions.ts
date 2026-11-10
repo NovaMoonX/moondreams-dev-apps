@@ -179,9 +179,10 @@ export async function countOnlyFacts(uid: string, id: string) {
       where('subjectIds', 'array-contains', id),
     ),
   );
-  return snapshot.docs.filter(
-    (entry) => (entry.data() as DocumentData).subjectIds?.length === 1,
-  ).length;
+  return snapshot.docs.filter((entry) => {
+    const data = entry.data() as DocumentData;
+    return data.subjectIds?.length === 1 && data.status !== 'superseded';
+  }).length;
 }
 
 /** Takes a who or place off every record linking it, then deletes it. Each chunk re-reads its records in a transaction, so one edited meanwhile keeps its other changes; a connection is needed. The person's own who is refused. */
@@ -310,7 +311,11 @@ export async function forgetLinked(
         }
       }),
     );
-  const putBack = () => putBackLinks().then(putBackFacts);
+  const putBack = () =>
+    Promise.allSettled([putBackLinks(), putBackFacts()]).then((settled) => {
+      const failed = settled.find((entry) => entry.status === 'rejected');
+      if (failed) throw failed.reason;
+    });
   const failedOutcome = (
     [...outcomes, ...factOutcomes] as PromiseSettledResult<unknown>[]
   ).find((outcome) => outcome.status === 'rejected');
@@ -373,7 +378,10 @@ export async function forgetLinked(
       tasks: countOf('tasks'),
       captures: countOf('captures'),
       who: countOf('who'),
-      facts: factsTaken.filter((entry) => entry.kind === 'deleted').length,
+      facts: factsTaken.filter(
+        (entry) =>
+          entry.kind === 'deleted' && entry.data.status !== 'superseded',
+      ).length,
     },
     restore,
   };

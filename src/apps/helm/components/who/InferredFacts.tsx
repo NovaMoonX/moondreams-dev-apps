@@ -20,17 +20,16 @@ function InferredFacts({ onClose }: InferredFactsProps) {
   const who = useAppSelector((state) => state.helm.who.items);
   const places = useAppSelector((state) => state.helm.places.items);
   const [openId, setOpenId] = useState<string | null>(null);
-  const inferred = useMemo(
-    () =>
-      facts
-        .filter(
-          (fact) =>
-            fact.status === 'inferred' &&
-            fact.whoIds.length + fact.placeIds.length > 0,
-        )
-        .sort((a, b) => b.createdAt - a.createdAt),
-    [facts],
-  );
+  const inferred = useMemo(() => {
+    const known = new Set([...who, ...places].map((entry) => entry.id));
+    return facts
+      .filter(
+        (fact) =>
+          fact.status === 'inferred' &&
+          [...fact.whoIds, ...fact.placeIds].some((id) => known.has(id)),
+      )
+      .sort((a, b) => b.createdAt - a.createdAt);
+  }, [facts, who, places]);
   const subjectOf = (subjectIds: string[]) => {
     const found = [...who, ...places].find(
       (entry) => subjectIds.includes(entry.id) && !entry.isUnreadable,
@@ -62,7 +61,11 @@ function InferredFacts({ onClose }: InferredFactsProps) {
           </ul>
         )}
       </div>
-      <FactSheet factId={openId} onClose={() => setOpenId(null)} />
+      <FactSheet
+        key={openId ?? 'none'}
+        factId={openId}
+        onClose={() => setOpenId(null)}
+      />
     </Subview>
   );
 }

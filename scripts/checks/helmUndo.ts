@@ -688,6 +688,43 @@ test("a noted fact is deleted by its turn's undo while untouched, and kept once 
   assert.equal(confirmed.kind === 'write' ? confirmed.deletes.length : 0, 0);
 });
 
+test("a guess the person then said outright goes back to a guess on that turn's undo", () => {
+  const label = 'Fact · Dana · You said';
+  const said = {
+    ref: { op: 'update', collection: 'facts', docId: 'f2' } as EffectRef,
+    effect: {
+      written: {
+        status: 'confirmed',
+        confirmedAt: NOW,
+        'sealed.title': label,
+        'sealed.statement': 'Dana is the florist',
+      },
+      previous: {
+        status: 'inferred',
+        confirmedAt: null,
+        'sealed.title': label,
+        'sealed.statement': 'Dana is the florist',
+      },
+    },
+  };
+  const result = asWrite(
+    plan(execution([said], { category: 'remember' }), [
+      target(
+        'f2',
+        { status: 'confirmed', confirmedAt: NOW, lastEditedAt: NOW },
+        {
+          statement: 'Dana is the florist',
+          quote: null,
+          value: null,
+        } as unknown as TaskSealed,
+      ),
+    ]),
+  );
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.updates[0].fields.status, 'inferred');
+  assert.equal(result.updates[0].fields.confirmedAt, null);
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

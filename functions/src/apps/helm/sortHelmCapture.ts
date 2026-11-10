@@ -3,6 +3,7 @@ import {
   getFirestore,
   type DocumentReference,
   type Firestore,
+  type QueryDocumentSnapshot,
   type Transaction,
 } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
@@ -600,6 +601,7 @@ async function readPeople(
 
 const MAX_CONTEXT_FACTS = 20;
 const MAX_CONTEXT_SUBJECTS = 10;
+const MAX_CONTEXT_SUBJECT_READS = 100;
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -612,61 +614,66 @@ async function readContextFacts(
   text: string,
 ): Promise<ContextFact[]> {
   try {
-    const [whoSnap, placeSnap] = await Promise.all(
-      ['who', 'places'].map((name) =>
-        firestore.collection(`${base}/${name}`).limit(MAX_PEOPLE_READ).get(),
-      ),
-    );
-    const subjects = [...whoSnap.docs, ...placeSnap.docs].flatMap((doc) => {
-      try {
-        const words = openForHelm(key, doc.get('sealed') as SealedPayload);
-        const names = [
-          words.name,
-          ...(isStringList(words.aliases) ? words.aliases : []),
-        ].filter((name): name is string => typeof name === 'string');
-        const isNamed = names.some(
-          (name) =>
-            name.trim() !== '' &&
-            new RegExp(
-              `(^|[^\\p{L}\\p{N}])${escapeRegExp(name.trim())}($|[^\\p{L}\\p{N}])`,
-              'iu',
-            ).test(text),
-        );
-        return isNamed && typeof words.name === 'string'
-          ? [{ id: doc.id, name: words.name }]
-          : [];
-      } catch {
-        return [];
-      }
-    });
-    const named = subjects.slice(0, MAX_CONTEXT_SUBJECTS);
-    if (named.length === 0) return [];
     const factSnap = await firestore
       .collection(`${base}/facts`)
-      .where(
-        'subjectIds',
-        'array-contains-any',
-        named.map((s) => s.id),
-      )
-      .limit(MAX_CONTEXT_FACTS * 3)
+      .where('status', 'in', ['confirmed', 'inferred'])
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_REPEAT_FACTS_READ)
       .get();
-    return factSnap.docs
-      .flatMap((doc): (ContextFact & { createdAt: number })[] => {
-        const status: unknown = doc.get('status');
-        if (status !== 'confirmed' && status !== 'inferred') return [];
+    const subjectIdsOf = (doc: QueryDocumentSnapshot) => {
+      const ids: unknown = doc.get('subjectIds');
+      return isStringList(ids) ? ids : [];
+    };
+    const subjectIds = [...new Set(factSnap.docs.flatMap(subjectIdsOf))].slice(
+      0,
+      MAX_CONTEXT_SUBJECT_READS,
+    );
+    if (subjectIds.length === 0) return [];
+    const subjectSnaps = await firestore.getAll(
+      ...subjectIds.flatMap((id) => [
+        firestore.doc(`${base}/who/${id}`),
+        firestore.doc(`${base}/places/${id}`),
+      ]),
+    );
+    const named = subjectSnaps
+      .filter((doc) => doc.exists)
+      .flatMap((doc) => {
         try {
           const words = openForHelm(key, doc.get('sealed') as SealedPayload);
-          const ids: unknown = doc.get('subjectIds');
-          const subject = named.find(
-            (entry) => isStringList(ids) && ids.includes(entry.id),
+          const names = [
+            words.name,
+            ...(isStringList(words.aliases) ? words.aliases : []),
+          ].filter((name): name is string => typeof name === 'string');
+          const isNamed = names.some(
+            (name) =>
+              name.trim() !== '' &&
+              new RegExp(
+                `(^|[^\\p{L}\\p{N}])${escapeRegExp(name.trim())}($|[^\\p{L}\\p{N}])`,
+                'iu',
+              ).test(text),
           );
-          return typeof words.statement === 'string' && subject
+          return isNamed && typeof words.name === 'string'
+            ? [{ id: doc.id, name: words.name }]
+            : [];
+        } catch {
+          return [];
+        }
+      })
+      .slice(0, MAX_CONTEXT_SUBJECTS);
+    if (named.length === 0) return [];
+    return factSnap.docs
+      .flatMap((doc): ContextFact[] => {
+        const ids = subjectIdsOf(doc);
+        const subject = named.find((entry) => ids.includes(entry.id));
+        if (!subject) return [];
+        try {
+          const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+          return typeof words.statement === 'string'
             ? [
                 {
                   subject: subject.name,
                   statement: words.statement,
-                  by: status === 'confirmed' ? 'said' : 'inferred',
-                  createdAt: Number(doc.get('createdAt')) || 0,
+                  by: doc.get('status') === 'confirmed' ? 'said' : 'inferred',
                 },
               ]
             : [];
@@ -674,9 +681,7 @@ async function readContextFacts(
           return [];
         }
       })
-      .sort((a, b) => b.createdAt - a.createdAt)
-      .slice(0, MAX_CONTEXT_FACTS)
-      .map(({ subject, statement, by }) => ({ subject, statement, by }));
+      .slice(0, MAX_CONTEXT_FACTS);
   } catch (error) {
     logger.warn('helm.sort.factsUnread', {
       message: error instanceof Error ? error.message : 'unknown',
@@ -703,8 +708,11 @@ async function readSubjectFacts(
     try {
       const words = openForHelm(key, doc.get('sealed') as SealedPayload);
       const subjectIds: unknown = doc.get('subjectIds');
-      return typeof words.statement === 'string' && isStringList(subjectIds)
-        ? [{ statement: words.statement, subjectIds }]
+      const status: unknown = doc.get('status');
+      return typeof words.statement === 'string' &&
+        isStringList(subjectIds) &&
+        (status === 'confirmed' || status === 'inferred')
+        ? [{ id: doc.id, status, statement: words.statement, subjectIds }]
         : [];
     } catch {
       return [];
@@ -1593,6 +1601,9 @@ async function writeResult(
       plan.factCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/facts/${id}`), data),
       );
+      plan.factConfirms.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/facts/${id}`), data),
+      );
       if (home) transaction.update(firestore.doc(base), home.data);
       transaction.create(
         executionRef,
@@ -1666,7 +1677,7 @@ async function writeResult(
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
       hasHome: requestedHome !== null,
-      hasFacts: plan.factCreates.length > 0,
+      hasFacts: noteFacts.length > 0 && !isStale,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

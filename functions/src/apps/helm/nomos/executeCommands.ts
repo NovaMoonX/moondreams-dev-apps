@@ -73,6 +73,8 @@ export interface PeopleInput {
 
 /** A fact the person already has, for the repeat check: its words and subjects. */
 export interface ExistingFact {
+  id: string;
+  status: 'confirmed' | 'inferred';
   statement: string;
   subjectIds: string[];
 }
@@ -95,6 +97,7 @@ export interface WritePlan {
   whoUpdates: { id: string; data: Record<string, unknown> }[];
   placeCreates: { id: string; data: Record<string, unknown> }[];
   factCreates: { id: string; data: Record<string, unknown> }[];
+  factConfirms: { id: string; data: Record<string, unknown> }[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -477,80 +480,158 @@ export function planWrites(input: PlanInput): WritePlan {
       toNameCase(place.name),
     ]),
   ]);
-  const seenFacts = (input.existingFacts ?? []).map(
-    (fact) => `${toLooseText(fact.statement)}#${toSubjectKey(fact.subjectIds)}`,
+  const keyOf = (statement: string, subjectIds: string[]) =>
+    `${toLooseText(statement)}#${toSubjectKey(subjectIds)}`;
+  const existingByKey = new Map(
+    (input.existingFacts ?? []).map((fact) => [
+      keyOf(fact.statement, fact.subjectIds),
+      fact,
+    ]),
   );
   const captureWords = toLooseText(input.captureText ?? '');
-  const factCreates = (input.noteFacts ?? []).flatMap((fact) => {
-    if (effects.length + drafts.size >= MAX_EFFECTS) return [];
-    const isSure =
-      fact.whoRefs.every((ref) => entities.whoIdOf.has(ref)) &&
-      fact.placeRefs.every((ref) => entities.placeIdOf.has(ref));
-    const whoIds = idsOf(fact.whoRefs, entities.whoIdOf);
-    const placeIds = idsOf(fact.placeRefs, entities.placeIdOf);
-    const subjectIds = union(whoIds, placeIds);
-    if (!isSure || subjectIds.length === 0) return [];
-    const repeatKey = `${toLooseText(fact.statement)}#${toSubjectKey(subjectIds)}`;
-    if (seenFacts.includes(repeatKey)) return [];
-    seenFacts.push(repeatKey);
-    const quote =
-      fact.quote !== null &&
-      toLooseText(fact.quote) !== '' &&
-      captureWords.includes(toLooseText(fact.quote))
-        ? fact.quote
-        : null;
-    const isSaid = fact.isStated && quote !== null;
-    const capturedAt = input.people?.capturedAt ?? now;
-    const id = input.newId();
-    const line = buildFactLine({
-      subjects: subjectIds.map((subjectId) => nameOf.get(subjectId) ?? ''),
-      isSaid,
-      assistantName: input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME,
-    });
-    const status = isSaid ? 'confirmed' : 'inferred';
-    const stated = isSaid ? 'personSaid' : 'nomosInferred';
-    record(
-      id,
-      'create',
-      {
-        status,
-        stated,
-        'sealed.title': line,
-        'sealed.statement': fact.statement,
-      },
-      null,
-      'facts',
-    );
-    return [
-      {
+  const capturedAt = input.people?.capturedAt ?? now;
+  const assistantName = input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME;
+  const factSteps = (input.noteFacts ?? []).reduce<{
+    seen: string[];
+    creates: { id: string; data: Record<string, unknown> }[];
+    confirms: { id: string; data: Record<string, unknown> }[];
+  }>(
+    (acc, fact) => {
+      const reserved =
+        effects.length +
+        drafts.size +
+        entities.newWho.length +
+        entities.newPlaces.length;
+      if (reserved >= MAX_EFFECTS) return acc;
+      const isSure =
+        fact.whoRefs.every((ref) => entities.whoIdOf.has(ref)) &&
+        fact.placeRefs.every((ref) => entities.placeIdOf.has(ref));
+      const whoIds = idsOf(fact.whoRefs, entities.whoIdOf);
+      const placeIds = idsOf(fact.placeRefs, entities.placeIdOf);
+      const subjectIds = union(whoIds, placeIds);
+      const quoted = toLooseText(fact.quote ?? '');
+      const isQuestion =
+        (fact.quote?.trim().endsWith('?') ?? false) ||
+        (quoted !== '' &&
+          (input.captureText ?? '')
+            .split(/(?<=[.!?])\s+/)
+            .some(
+              (sentence) =>
+                toLooseText(sentence).includes(quoted) &&
+                sentence.trim().endsWith('?'),
+            ));
+      if (!isSure || subjectIds.length === 0 || isQuestion) return acc;
+      const repeatKey = keyOf(fact.statement, subjectIds);
+      if (acc.seen.includes(repeatKey)) return acc;
+      const seen = [...acc.seen, repeatKey];
+      const quote =
+        fact.quote !== null &&
+        toLooseText(fact.quote) !== '' &&
+        captureWords.includes(toLooseText(fact.quote))
+          ? fact.quote
+          : null;
+      // A word or two lifted from the capture is too thin to stand for something said outright.
+      const isSaid =
+        fact.isStated &&
+        quote !== null &&
+        toLooseText(quote).split(' ').length >= 2 &&
+        toLooseText(quote).length >= 8;
+      const line = buildFactLine({
+        subjects: subjectIds.map((subjectId) => nameOf.get(subjectId) ?? ''),
+        isSaid,
+        assistantName,
+      });
+      const existing = existingByKey.get(repeatKey);
+      // Saying outright what was only a guess confirms the guess instead of filing it twice.
+      if (existing) {
+        if (existing.status !== 'inferred' || !isSaid) return { ...acc, seen };
+        record(
+          existing.id,
+          'update',
+          {
+            status: 'confirmed',
+            confirmedAt: capturedAt,
+            'sealed.title': line,
+            'sealed.statement': existing.statement,
+          },
+          {
+            status: 'inferred',
+            confirmedAt: null,
+            'sealed.title': line,
+            'sealed.statement': existing.statement,
+          },
+          'facts',
+        );
+        return {
+          ...acc,
+          seen,
+          confirms: [
+            ...acc.confirms,
+            {
+              id: existing.id,
+              data: {
+                status: 'confirmed',
+                confirmedAt: capturedAt,
+                lastEditedAt: now,
+              },
+            },
+          ],
+        };
+      }
+      const id = input.newId();
+      const status = isSaid ? 'confirmed' : 'inferred';
+      const stated = isSaid ? 'personSaid' : 'nomosInferred';
+      record(
         id,
-        data: {
+        'create',
+        {
           status,
           stated,
-          kind: 'world',
-          occurredOn: null,
-          sourceCaptureId: input.captureId,
-          sourceExecutionId: input.executionId,
-          sourceConnection: null,
-          aboutField: null,
-          whoIds,
-          placeIds,
-          projectIds: [],
-          syncedIds: [],
-          subjectIds,
-          keptOverSource: null,
-          supersedesId: null,
-          supersededById: null,
-          supersededAt: null,
-          disputedWithId: null,
-          createdAt: capturedAt,
-          confirmedAt: isSaid ? capturedAt : null,
-          lastEditedAt: null,
-          sealed: seal({ statement: fact.statement, quote, value: null }),
+          'sealed.title': line,
+          'sealed.statement': fact.statement,
         },
-      },
-    ];
-  });
+        null,
+        'facts',
+      );
+      return {
+        ...acc,
+        seen,
+        creates: [
+          ...acc.creates,
+          {
+            id,
+            data: {
+              status,
+              stated,
+              kind: 'world',
+              occurredOn: null,
+              sourceCaptureId: input.captureId,
+              sourceExecutionId: input.executionId,
+              sourceConnection: null,
+              aboutField: null,
+              whoIds,
+              placeIds,
+              projectIds: [],
+              syncedIds: [],
+              subjectIds,
+              keptOverSource: null,
+              supersedesId: null,
+              supersededById: null,
+              supersededAt: null,
+              disputedWithId: null,
+              createdAt: capturedAt,
+              confirmedAt: isSaid ? capturedAt : null,
+              lastEditedAt: null,
+              sealed: seal({ statement: fact.statement, quote, value: null }),
+            },
+          },
+        ],
+      };
+    },
+    { seen: [], creates: [], confirms: [] },
+  );
+  const factCreates = factSteps.creates;
+  const factConfirms = factSteps.confirms;
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
@@ -700,6 +781,7 @@ export function planWrites(input: PlanInput): WritePlan {
     whoUpdates,
     placeCreates,
     factCreates,
+    factConfirms,
     linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
     effectRefs,
@@ -926,7 +1008,7 @@ export function buildExecution(
     captureId: input.captureId,
     actor: 'nomos',
     category:
-      plan.factCreates.length > 0 &&
+      plan.factCreates.length + plan.factConfirms.length > 0 &&
       plan.counts.made + plan.counts.updated + plan.counts.completed === 0
         ? 'remember'
         : 'organize',
@@ -945,7 +1027,7 @@ export function buildExecution(
     sealed: input.seal({
       summary: [
         summarize(plan.counts, input.messageCount),
-        describeFacts(plan.factCreates.length),
+        describeFacts(plan.factCreates.length + plan.factConfirms.length),
         homeLine,
       ]
         .filter(Boolean)

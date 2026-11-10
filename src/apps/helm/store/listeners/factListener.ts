@@ -2,6 +2,7 @@ import {
   collection,
   limit,
   onSnapshot,
+  orderBy,
   query,
   where,
   type QueryDocumentSnapshot,
@@ -61,7 +62,7 @@ async function openFact(
   }
 }
 
-/** The confirmed, inferred and superseded facts (a superseded one only for "Was … until …"), newest first (sorted here, so the query needs no composite index). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+/** The confirmed, inferred and superseded facts (a superseded one only for "Was … until …"), newest first, so the cap drops the oldest. A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startFactsListener(
   uid: string,
   read: SealedReader,
@@ -75,6 +76,7 @@ export function startFactsListener(
     query(
       collection(db, 'apps', 'helm', 'users', uid, 'facts'),
       where('status', 'in', ['confirmed', 'inferred', 'superseded']),
+      orderBy('createdAt', 'desc'),
       limit(FACTS_LIMIT),
     ),
     async (snapshot) => {

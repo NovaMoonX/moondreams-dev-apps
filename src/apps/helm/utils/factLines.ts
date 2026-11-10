@@ -35,8 +35,22 @@ export function getFactLine(fact: OpenFact, assistant: string, now: number) {
   if (fact.stated === 'nomosInferred') {
     return HELM_COPY.factLineConfirmed(toFactDay(when, now));
   }
-  return HELM_COPY.factLineSaid(toFactDay(fact.createdAt, now));
+  return fact.sourceCaptureId
+    ? HELM_COPY.factLineSaid(toFactDay(fact.createdAt, now))
+    : HELM_COPY.factLineAdded(toFactDay(fact.createdAt, now));
 }
+
+const toLoose = (text: string) =>
+  text
+    .replace(/[\s\p{P}]+/gu, ' ')
+    .trim()
+    .toLowerCase();
+
+/** The person's own words for a fact, only when they say more than the fact does. */
+export const getFactQuote = (fact: OpenFact) =>
+  fact.quote && toLoose(fact.quote) !== toLoose(fact.statement)
+    ? fact.quote
+    : null;
 
 /** The sheet's source line, which also says where the words came from. */
 export function getFactSource(fact: OpenFact, assistant: string, now: number) {

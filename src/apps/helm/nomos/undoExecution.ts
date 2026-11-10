@@ -67,7 +67,7 @@ async function readUsedIds(
   const checks = await Promise.all(
     made.flatMap((ref) => {
       const field = ref.collection === 'who' ? 'whoIds' : 'placeIds';
-      return (['tasks', 'captures'] as const).map(async (name) => {
+      return (['tasks', 'captures', 'facts'] as const).map(async (name) => {
         const found = await getDocs(
           query(
             collection(userOf(uid), name),

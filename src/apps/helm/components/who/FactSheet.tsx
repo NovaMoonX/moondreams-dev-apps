@@ -18,7 +18,11 @@ import {
   type FactChange,
 } from '@apps/helm/store/actions/memoryActions';
 import type { OpenFact } from '@apps/helm/types';
-import { getFactSource, toFactDay } from '@apps/helm/utils/factLines';
+import {
+  getFactQuote,
+  getFactSource,
+  toFactDay,
+} from '@apps/helm/utils/factLines';
 
 interface FactSheetProps {
   factId: string | null;
@@ -109,6 +113,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   };
 
   const uid = user?.uid ?? '';
+  const quote = shown ? getFactQuote(shown) : null;
   const isCorrecting = draft !== null;
   const isMissing = draft !== null && draft.trim() === '';
 
@@ -138,7 +143,13 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
       </Button>
     </div>
   ) : (
-    <div className='flex flex-wrap items-center justify-end gap-2'>
+    <div
+      className={
+        shown.status === 'inferred'
+          ? 'grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end'
+          : 'flex items-center justify-end gap-2'
+      }
+    >
       <Button
         type='button'
         variant='tertiary'
@@ -221,9 +232,9 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {getFactSource(shown, assistant, now)}
           </p>
-          {shown.quote && (
+          {quote && (
             <blockquote className='border-border text-muted-foreground border-l-2 pl-3 text-[15px] text-pretty'>
-              {`“${shown.quote}”`}
+              {`“${quote}”`}
             </blockquote>
           )}
           {earlier.map((entry) => (

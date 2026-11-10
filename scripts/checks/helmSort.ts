@@ -748,7 +748,12 @@ test("a noted fact is confirmed only when stated with the person's own words, an
   const plan = (
     noteFacts: ReturnType<typeof fact>[],
     known = [dana],
-    existingFacts: { statement: string; subjectIds: string[] }[] = [],
+    existingFacts: {
+      id: string;
+      status: 'confirmed' | 'inferred';
+      statement: string;
+      subjectIds: string[];
+    }[] = [],
   ) =>
     planWrites({
       commands: [],
@@ -829,15 +834,56 @@ test("a noted fact is confirmed only when stated with the person's own words, an
   const repeat = plan(
     [fact()],
     [dana],
-    [{ statement: ' dana is the  Florist ', subjectIds: ['who-dana'] }],
+    [
+      {
+        id: 'fact-1',
+        status: 'confirmed',
+        statement: ' dana is the  Florist ',
+        subjectIds: ['who-dana'],
+      },
+    ],
   );
   assert.equal(repeat.factCreates.length, 0);
+  assert.equal(repeat.factConfirms.length, 0);
+  const guess = {
+    id: 'fact-1',
+    status: 'inferred' as const,
+    statement: 'Dana is the florist',
+    subjectIds: ['who-dana'],
+  };
+  const saidOverGuess = plan([fact()], [dana], [guess]);
+  assert.equal(saidOverGuess.factCreates.length, 0);
+  assert.equal(saidOverGuess.factConfirms.length, 1);
+  assert.equal(saidOverGuess.factConfirms[0].id, 'fact-1');
+  assert.equal(saidOverGuess.factConfirms[0].data.status, 'confirmed');
+  assert.equal(saidOverGuess.effectRefs[0].op, 'update');
+  assert.equal(saidOverGuess.effects[0].previous?.status, 'inferred');
+  const guessAgain = plan([fact({ isStated: false })], [dana], [guess]);
+  assert.equal(
+    guessAgain.factCreates.length + guessAgain.factConfirms.length,
+    0,
+  );
+  assert.equal(
+    plan([fact({ quote: 'is Dana the florist?' })]).factCreates.length,
+    0,
+  );
+  assert.equal(
+    plan([fact({ quote: 'florist' })]).factCreates[0].data.status,
+    'inferred',
+  );
   assert.equal(plan([fact(), fact()]).factCreates.length, 1);
   assert.equal(
     plan(
       [fact()],
       [dana],
-      [{ statement: 'Dana is the florist', subjectIds: ['who-other'] }],
+      [
+        {
+          id: 'fact-2',
+          status: 'confirmed',
+          statement: 'Dana is the florist',
+          subjectIds: ['who-other'],
+        },
+      ],
     ).factCreates.length,
     1,
   );
