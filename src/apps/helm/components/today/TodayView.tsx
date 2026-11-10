@@ -80,7 +80,7 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
   const todayKey = toDayKey(nowMinute, timeZone);
   const selectedKey = pickedKey ?? todayKey;
   const isToday = selectedKey === todayKey;
-  useAutoPlanToday(isToday);
+  useAutoPlanToday(isToday, sources);
 
   const dueSoon = useMemo(
     () =>

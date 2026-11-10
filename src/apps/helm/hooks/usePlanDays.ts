@@ -11,7 +11,11 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { generatePlan } from '@apps/helm/store/actions/planActions';
 import { selectActiveTasks } from '@apps/helm/store/selectors/taskSelectors';
 import { formatDayWord, needsPlan, toDayKey } from '@apps/helm/utils/planDays';
-import { buildPlanInput, type PlanSources } from '@apps/helm/utils/planInput';
+import {
+  buildPlanInput,
+  findClashes,
+  type PlanSources,
+} from '@apps/helm/utils/planInput';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import type {
   HelmProfile,
@@ -108,24 +112,30 @@ export function usePlanDay() {
 }
 
 /** Plans today the first time Today shows it with no plan, once per day for the session. */
-export function useAutoPlanToday(isShowingToday: boolean) {
+export function useAutoPlanToday(
+  isShowingToday: boolean,
+  sources: PlanSources | null,
+) {
   const { plan, isReady, uid } = usePlanDay();
-  const todayKey = useAppSelector((state) => {
-    const zone = state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
-    return toDayKey(Date.now(), zone);
-  });
-  const isDue = useAppSelector((state) =>
-    needsPlan(state.helm.planDays.byId[todayKey]),
+  const todayKey = sources?.todayKey ?? null;
+  const isUnplanned =
+    todayKey !== null && needsPlan(sources?.planDays[todayKey]);
+  const clashKey = useMemo(
+    () =>
+      sources && todayKey && !isUnplanned
+        ? findClashes(sources, todayKey).join(',')
+        : '',
+    [sources, todayKey, isUnplanned],
   );
 
   useEffect(() => {
-    const key = `${uid}|${todayKey}`;
-    if (!isShowingToday || !isReady || !uid || !isDue || attempted.has(key)) {
-      return;
-    }
+    const key = `${uid}|${todayKey}|${clashKey}`;
+    const isDue = isUnplanned || clashKey !== '';
+    if (!isShowingToday || !isReady || !uid || !todayKey || !isDue) return;
+    if (attempted.has(key)) return;
     attempted.add(key);
     void plan(todayKey);
-  }, [isShowingToday, isReady, uid, isDue, todayKey, plan]);
+  }, [isShowingToday, isReady, uid, isUnplanned, clashKey, todayKey, plan]);
 }
 
 /** Plans the day a sorted turn asked for, on sight, once per turn. */

@@ -149,6 +149,20 @@ export function buildPlanInput(
   };
 }
 
+/** A day's suggested slots that now sit on a busy event (a calendar copy that arrived after the plan), as `slotId:start` keys. */
+export function findClashes(sources: PlanSources, dayKey: string): string[] {
+  const { input } = buildPlanInput(sources, dayKey);
+  return Object.entries(input.slots).flatMap(
+    ([id, { status, startAt, endAt }]) =>
+      status === 'suggested' &&
+      startAt !== null &&
+      endAt !== null &&
+      input.busy.some((block) => block.startAt < endAt && block.endAt > startAt)
+        ? [`${id}:${startAt}`]
+        : [],
+  );
+}
+
 export interface Opening {
   startAt: number;
   endAt: number;
