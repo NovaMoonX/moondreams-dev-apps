@@ -74,7 +74,7 @@ export function matchSpokenAnswer(
   if (value.shape !== 'pickRecord') return { kind: 'answer', value };
   const option = question.options.find((entry) => entry.id === value.optionId);
   // A new name can't be heard as an option, so the words go on as a turn.
-  return option?.ref
+  return option?.ref && option.ref.collection !== 'facts'
     ? {
         kind: 'answer',
         value: { shape: 'pickRecord', ref: option.ref, newName: null },

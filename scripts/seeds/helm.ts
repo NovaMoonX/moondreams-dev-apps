@@ -5,6 +5,10 @@ import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
+  buildFactSource,
+  buildWhichIsTrueQuestion,
+} from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
   deriveSeedDataKey,
   keyCheckPath,
   makeKeyCheck,
@@ -1829,17 +1833,96 @@ async function buildPeople(input: {
       questionAnswer: null,
     }),
   };
+  const oldPriceText = 'Dana says centerpieces are $1,800';
+  const oldPriceAt = now - 7 * DAY_MS;
+  const oldPriceCapture: Capture = {
+    ...capture,
+    sessionId: 'seed-alex-centerpieces',
+    turnIndex: 0,
+    seenAt: oldPriceAt + MINUTE_MS,
+    whoIds: ['seed-who-dana'],
+    createdAt: oldPriceAt,
+    sortedAt: oldPriceAt + SORT_DELAY_MS,
+    sealed: await seal<CaptureSealed>({
+      text: oldPriceText,
+      reading: readCapture(oldPriceText, {
+        now: oldPriceAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questionAnswer: null,
+    }),
+  };
+  const newPriceText = 'Dana says centerpieces are $2,100 now';
+  const newPriceAt = now - 35 * MINUTE_MS;
+  const contradictionQuestionId = 'seed-question-which-is-true';
+  const contradictionCapture: Capture = {
+    ...capture,
+    sessionId: 'seed-alex-contradiction',
+    turnIndex: 0,
+    status: 'needsYou',
+    questionState: {
+      [contradictionQuestionId]: {
+        kind: 'whichIsTrue',
+        shape: 'pickOne',
+        askedAt: newPriceAt + SORT_DELAY_MS,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    seenAt: null,
+    whoIds: ['seed-who-dana'],
+    createdAt: newPriceAt,
+    sortedAt: newPriceAt + SORT_DELAY_MS,
+    sealed: await seal({
+      text: newPriceText,
+      reading: readCapture(newPriceText, {
+        now: newPriceAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questions: {
+        [contradictionQuestionId]: buildWhichIsTrueQuestion({
+          older: {
+            id: 'seed-fact-centerpieces-1800',
+            statement: 'Centerpieces are $1,800',
+            detail: buildFactSource({
+              stated: 'personSaid',
+              isConfirmed: true,
+              assistantName: DEFAULT_ASSISTANT_NAME,
+              at: oldPriceAt,
+              timeZone,
+            }),
+          },
+          newer: {
+            id: 'seed-fact-centerpieces-2100',
+            statement: 'Centerpieces are $2,100',
+            detail: buildFactSource({
+              stated: 'personSaid',
+              isConfirmed: true,
+              assistantName: DEFAULT_ASSISTANT_NAME,
+              at: newPriceAt,
+              timeZone,
+            }),
+          },
+        }),
+      },
+    }),
+  };
   const factOf = async (
     id: string,
     fields: Partial<Fact> &
       Pick<Fact, 'status' | 'stated' | 'createdAt'> & {
         statement: string;
+        quote?: string;
         topic?: string;
         value?: string;
       },
     links: Pick<Fact, 'whoIds' | 'placeIds'>,
   ): Promise<{ id: string; fact: Fact }> => {
-    const { statement, topic, value, ...stored } = fields;
+    const { statement, quote, topic, value, ...stored } = fields;
     return {
       id,
       fact: {
@@ -1863,7 +1946,9 @@ async function buildPeople(input: {
         ...stored,
         sealed: await seal<FactSealed>({
           statement,
-          quote: id === 'seed-fact-dana-florist' ? 'Dana is the florist' : null,
+          quote:
+            quote ??
+            (id === 'seed-fact-dana-florist' ? 'Dana is the florist' : null),
           topic: topic ?? null,
           value: value ?? null,
         }),
@@ -1891,6 +1976,34 @@ async function buildPeople(input: {
         stated: 'nomosInferred',
         sourceCaptureId: 'seed-turn-fact-dana',
         createdAt: factAt,
+      },
+      { whoIds: ['seed-who-dana'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-centerpieces-1800',
+      {
+        statement: 'Centerpieces are $1,800',
+        quote: oldPriceText,
+        status: 'confirmed',
+        stated: 'personSaid',
+        sourceCaptureId: 'seed-turn-centerpieces-1800',
+        disputedWithId: 'seed-fact-centerpieces-2100',
+        createdAt: oldPriceAt,
+        confirmedAt: oldPriceAt,
+      },
+      { whoIds: ['seed-who-dana'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-centerpieces-2100',
+      {
+        statement: 'Centerpieces are $2,100',
+        quote: newPriceText,
+        status: 'confirmed',
+        stated: 'personSaid',
+        sourceCaptureId: 'seed-turn-contradiction',
+        disputedWithId: 'seed-fact-centerpieces-1800',
+        createdAt: newPriceAt,
+        confirmedAt: newPriceAt,
       },
       { whoIds: ['seed-who-dana'], placeIds: [] },
     ),
@@ -2008,6 +2121,14 @@ async function buildPeople(input: {
     capture: { id: 'seed-turn-who', capture },
     factCapture: { id: 'seed-turn-fact-dana', capture: factCapture },
     facts,
+    oldPriceCapture: {
+      id: 'seed-turn-centerpieces-1800',
+      capture: oldPriceCapture,
+    },
+    contradictionCapture: {
+      id: 'seed-turn-contradiction',
+      capture: contradictionCapture,
+    },
     questionCapture: { id: 'seed-turn-question', capture: questionCapture },
     askedCapture: { id: 'seed-turn-asked', capture: askedCapture },
   };
@@ -2471,6 +2592,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           batch.set(person.collection('facts').doc(entry.id), entry.fact),
         );
         batch.set(
+          person.collection('captures').doc(people.oldPriceCapture.id),
+          people.oldPriceCapture.capture,
+        );
+        batch.set(
+          person.collection('captures').doc(people.contradictionCapture.id),
+          people.contradictionCapture.capture,
+        );
+        batch.set(
           person.collection('captures').doc(people.questionCapture.id),
           people.questionCapture.capture,
         );
@@ -2485,7 +2614,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.media.length +
           people.tasks.length +
           people.facts.length +
-          4
+          6
         : 0;
       const backToBackCount =
         peopleCount +

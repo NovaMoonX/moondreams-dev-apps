@@ -113,17 +113,19 @@ export async function sortCapture(
 export interface QuestionAnswerInput {
   by: 'tap' | 'voice';
   optionId: string;
+  /** The person's own statement, with the answer "none" to which fact is true. */
+  text?: string;
 }
 
-/** `answered` when another device already answered (nothing to show), `gone` when the chosen person or place no longer exists, `offline` when there was no connection (nothing is queued). */
+/** `answered` when another device already answered (nothing to show), `stale` when the question closed because its facts changed since (nothing was written), `gone` when the chosen person or place no longer exists, `offline` when there was no connection (nothing is queued). */
 export interface ResolveOutcome {
-  kind: 'done' | 'answered' | 'gone' | 'offline' | 'failed';
+  kind: 'done' | 'answered' | 'stale' | 'gone' | 'offline' | 'failed';
   executionId: string | null;
 }
 
 const resolveHelmQuestionCallable = httpsCallable<
   { captureId: string; questionId: string; answer: QuestionAnswerInput },
-  { executionId: string | null }
+  { executionId: string | null; isStale?: boolean }
 >(functions, 'resolveHelmQuestion');
 
 const toErrorCode = (error: unknown) =>
@@ -153,7 +155,9 @@ export async function resolveQuestion(
       questionId,
       answer,
     });
-    return resolved('done', result.data.executionId);
+    return result.data.isStale === true
+      ? resolved('stale')
+      : resolved('done', result.data.executionId);
   } catch (error) {
     const code = toErrorCode(error);
     if (code === 'functions/already-exists') return resolved('answered');

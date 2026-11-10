@@ -54,7 +54,7 @@ function PickRecordAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
   ];
   const wanted = toComparable(query);
   const listed: Candidate[] = question.options.flatMap((option) =>
-    option.ref
+    option.ref && option.ref.collection !== 'facts'
       ? [
           {
             ref: option.ref,

@@ -8,6 +8,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
+import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { FACT_STATEMENT_MAX, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -17,7 +18,9 @@ import {
   forgetFact,
   type FactChange,
 } from '@apps/helm/store/actions/memoryActions';
+import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenFact } from '@apps/helm/types';
+import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
 import {
   getFactQuote,
   getFactSource,
@@ -29,16 +32,23 @@ interface FactSheetProps {
   onClose: () => void;
 }
 
-/** The facts this one replaced, newest first, following each `supersedesId` back. */
+/** The facts this one replaced, newest first: the one its `supersedesId` names and every fact whose `supersededById` names it, followed back the same way. */
 const getEarlier = (fact: OpenFact, facts: OpenFact[]) => {
-  const byId = new Map(facts.map((entry) => [entry.id, entry]));
-  const walk = (current: OpenFact, seen: Set<string>): OpenFact[] => {
-    const previous = current.supersedesId
-      ? byId.get(current.supersedesId)
-      : undefined;
-    if (!previous || seen.has(previous.id)) return [];
-    return [previous, ...walk(previous, new Set([...seen, previous.id]))];
-  };
+  const walk = (current: OpenFact, seen: Set<string>): OpenFact[] =>
+    [
+      ...new Set(
+        [
+          facts.find((entry) => entry.id === current.supersedesId),
+          ...facts.filter((entry) => entry.supersededById === current.id),
+        ].filter((entry): entry is OpenFact => entry !== undefined),
+      ),
+    ]
+      .filter((entry) => !seen.has(entry.id))
+      .sort((a, b) => (b.supersededAt ?? 0) - (a.supersededAt ?? 0))
+      .flatMap((entry) => [
+        entry,
+        ...walk(entry, new Set([...seen, entry.id])),
+      ]);
   return walk(fact, new Set([fact.id]));
 };
 
@@ -52,11 +62,23 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   const shown = fact && fact.status !== 'superseded' ? fact : null;
   const [draft, setDraft] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
+  const held = useAppSelector(selectHeldItems);
   const now = useNow(60_000);
   const earlier = useMemo(
     () => (shown ? getEarlier(shown, facts) : []),
     [shown, facts],
   );
+  const settling = shown?.disputedWithId
+    ? held.needsYou.flatMap((item) =>
+        getOpenQuestions(item.capture).flatMap((entry) =>
+          entry.question.options.some((option) => option.ref?.id === shown.id)
+            ? [{ captureId: item.capture.id, entry }]
+            : [],
+        ),
+      )[0]
+    : undefined;
+  const isSettleView = isSettling && settling !== undefined;
   const isDirty =
     draft !== null && shown !== null && draft.trim() !== shown.statement;
   const close = () => {
@@ -117,7 +139,21 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   const isCorrecting = draft !== null;
   const isMissing = draft !== null && draft.trim() === '';
 
-  const footer = !shown ? undefined : isCorrecting ? (
+  const hasThird =
+    settling !== undefined ||
+    (shown?.status === 'inferred' && !shown.disputedWithId);
+
+  const footer = !shown ? undefined : isSettleView ? (
+    <div className='flex items-center justify-end'>
+      <Button
+        type='button'
+        variant='tertiary'
+        onClick={() => setIsSettling(false)}
+      >
+        {HELM_COPY.planBack}
+      </Button>
+    </div>
+  ) : isCorrecting ? (
     <div className='flex items-center justify-end gap-2'>
       <Button
         type='button'
@@ -145,7 +181,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   ) : (
     <div
       className={
-        shown.status === 'inferred'
+        hasThird
           ? 'grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end'
           : 'flex items-center justify-end gap-2'
       }
@@ -172,7 +208,16 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
       >
         {HELM_COPY.factCorrect}
       </Button>
-      {shown.status === 'inferred' && (
+      {settling !== undefined && (
+        <Button
+          type='button'
+          disabled={isWorking}
+          onClick={() => setIsSettling(true)}
+        >
+          {HELM_COPY.factSettle}
+        </Button>
+      )}
+      {shown.status === 'inferred' && !shown.disputedWithId && (
         <Button
           type='button'
           disabled={isWorking}
@@ -195,11 +240,23 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
       isOpen={shown !== null}
       onClose={requestClose}
       title={
-        isCorrecting ? HELM_COPY.factCorrectTitle : HELM_COPY.factSheetTitle
+        isSettleView
+          ? settling.entry.question.prompt
+          : isCorrecting
+            ? HELM_COPY.factCorrectTitle
+            : HELM_COPY.factSheetTitle
       }
       footer={footer}
-      viewKey={isCorrecting ? 'correct' : 'read'}
+      viewKey={isSettleView ? 'settle' : isCorrecting ? 'correct' : 'read'}
     >
+      {shown && isSettleView && (
+        <QuestionCard
+          captureId={settling.captureId}
+          item={settling.entry}
+          isInSheet
+          isPromptHidden
+        />
+      )}
       {shown && isCorrecting && (
         <div className='space-y-1.5'>
           <label htmlFor='helm-fact-correct' className='text-sm font-medium'>
@@ -213,7 +270,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           />
         </div>
       )}
-      {shown && !isCorrecting && (
+      {shown && !isCorrecting && !isSettleView && (
         <div className='flex flex-col gap-3'>
           <div className='flex items-start gap-3'>
             <SourceRing
@@ -232,6 +289,11 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {getFactSource(shown, assistant, now)}
           </p>
+          {shown.disputedWithId && (
+            <p className='text-muted-foreground text-[13px] text-pretty'>
+              {HELM_COPY.factTwoAnswersLine}
+            </p>
+          )}
           {quote && (
             <blockquote className='border-border text-muted-foreground border-l-2 pl-3 text-[15px] text-pretty'>
               {`“${quote}”`}

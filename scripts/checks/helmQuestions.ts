@@ -1,20 +1,32 @@
 import assert from 'node:assert/strict';
 
-import { sealForHelm } from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  openForHelm,
+  sealForHelm,
+} from '../../functions/src/apps/helm/helmKey.ts';
 import { createAliasBook } from '../../functions/src/apps/helm/nomos/aliases.ts';
 import { type CaptureReading } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
   planWrites,
   settleCapture,
+  type Effect,
+  type EffectRef,
   type KnownWhoState,
   type PeopleInput,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
-import { buildSpokenPick } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  buildSpokenPick,
+  buildWhichIsTrueQuestion,
+} from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import {
   planResolve,
+  type ResolveFact,
   type ResolveInput,
 } from '../../functions/src/apps/helm/nomos/resolveQuestion.ts';
+import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
+import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
+import type { OpenExecution } from '../../src/apps/helm/types.ts';
 
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
 const seal = (fields: Record<string, unknown>) => sealForHelm(KEY, fields);
@@ -339,6 +351,8 @@ const resolveInput = (
     ['t1', { title: 'Lunch with Sam', whoIds: [], placeIds: [] }],
     ['t2', { title: 'Call Sam', whoIds: ['x'], placeIds: [] }],
   ]),
+  facts: new Map(),
+  text: null,
   chosen: { tier: 'passing', tierSetBy: 'nomos', lastMentionedAt: null },
   newId: () => 'made-1',
   seal,
@@ -531,6 +545,309 @@ test('equally close candidates rank the most recently mentioned first', () => {
   assert.deepEqual(
     options.slice(0, 3).map((option) => option.id),
     ['w2', 'w1', 'w3'],
+  );
+});
+
+const fact = (extra: Partial<ResolveFact> = {}): ResolveFact => ({
+  status: 'confirmed',
+  kind: 'world',
+  statement: 'Centerpieces are $1,800',
+  topic: null,
+  createdAt: 1000,
+  confirmedAt: 1000,
+  supersedesId: null,
+  supersededById: null,
+  supersededAt: null,
+  disputedWithId: 'f-new',
+  whoIds: ['who-dana'],
+  placeIds: [],
+  projectIds: [],
+  syncedIds: [],
+  subjectIds: ['who-dana'],
+  ...extra,
+});
+
+const settleInput = (
+  optionId: string,
+  extra: Partial<ResolveInput> = {},
+): ResolveInput => ({
+  ...resolveInput(optionId),
+  tasks: new Map(),
+  opened: {
+    text: 'Dana says centerpieces are $2,100 now',
+    questions: {
+      q1: buildWhichIsTrueQuestion({
+        older: {
+          id: 'f-old',
+          statement: 'Centerpieces are $1,800',
+          detail: '',
+        },
+        newer: {
+          id: 'f-new',
+          statement: 'Centerpieces are $2,100',
+          detail: '',
+        },
+      }),
+    },
+  },
+  capture: {
+    ...resolveInput(optionId).capture,
+    questionState: {
+      q1: {
+        kind: 'whichIsTrue',
+        shape: 'pickOne',
+        askedAt: 4000,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+  },
+  facts: new Map([
+    ['f-old', fact({ disputedWithId: 'f-new' })],
+    [
+      'f-new',
+      fact({
+        statement: 'Centerpieces are $2,100',
+        createdAt: 4000,
+        confirmedAt: 4000,
+        disputedWithId: 'f-old',
+        whoIds: ['who-dana', 'who-lee'],
+        subjectIds: ['who-dana', 'who-lee'],
+      }),
+    ],
+  ]),
+  ...extra,
+});
+
+const updateOf = (
+  result: ReturnType<typeof planned>,
+  id: string,
+): Record<string, unknown> =>
+  result.factUpdates.find((update) => update.id === id)?.data ?? {};
+
+test('picking the newer fact confirms it, supersedes the older and clears both disputes', () => {
+  const result = planned(settleInput('f-new'));
+  assert.deepEqual(updateOf(result, 'f-new'), {
+    disputedWithId: null,
+    status: 'confirmed',
+    confirmedAt: 4000,
+    lastEditedAt: 9000,
+    supersedesId: 'f-old',
+  });
+  assert.deepEqual(updateOf(result, 'f-old'), {
+    disputedWithId: null,
+    status: 'superseded',
+    supersededById: 'f-new',
+    supersededAt: 9000,
+  });
+  assert.equal(result.factCreate, null);
+  const execution = result.execution as {
+    category: string;
+    effectRefs: { op: string; collection: string; docId: string }[];
+    sealed: SealedPayload;
+  };
+  assert.equal(execution.category, 'remember');
+  assert.deepEqual(
+    execution.effectRefs.map((ref) => [ref.op, ref.collection, ref.docId]),
+    [
+      ['update', 'facts', 'f-new'],
+      ['update', 'facts', 'f-old'],
+    ],
+  );
+  const effects = openForHelm(KEY, execution.sealed).effects as {
+    written: Record<string, unknown>;
+    previous: Record<string, unknown>;
+  }[];
+  assert.equal(effects[0].previous.disputedWithId, 'f-old');
+  assert.equal(effects[1].previous.status, 'confirmed');
+  assert.equal(effects[1].previous.supersededById, null);
+  assert.equal(
+    openForHelm(KEY, execution.sealed).summary,
+    'Kept \u201cCenterpieces are $2,100\u201d',
+  );
+  assert.equal(result.capture.status, 'sorted');
+  assert.equal(
+    (result.capture.questionState as Record<string, { answeredAt: number }>).q1
+      .answeredAt,
+    9000,
+  );
+});
+
+test('picking the older fact keeps the newer as superseded by it', () => {
+  const result = planned(settleInput('f-old'));
+  assert.deepEqual(updateOf(result, 'f-old'), {
+    disputedWithId: null,
+    status: 'confirmed',
+    confirmedAt: 1000,
+    lastEditedAt: 9000,
+  });
+  assert.deepEqual(updateOf(result, 'f-new'), {
+    disputedWithId: null,
+    status: 'superseded',
+    supersededById: 'f-old',
+    supersededAt: 9000,
+  });
+});
+
+test('neither with a statement makes a corrected fact that supersedes both', () => {
+  const result = planned(
+    settleInput('none', { text: 'Centerpieces are $1,950' }),
+  );
+  assert.equal(result.factCreate?.id, 'made-1');
+  const data = result.factCreate?.data as Record<string, unknown>;
+  assert.equal(data.status, 'confirmed');
+  assert.equal(data.stated, 'personCorrected');
+  assert.equal(data.supersedesId, 'f-new');
+  assert.equal(data.sourceCaptureId, null);
+  assert.deepEqual(data.subjectIds, ['who-dana', 'who-lee']);
+  assert.equal(
+    openForHelm(KEY, data.sealed as SealedPayload).statement,
+    'Centerpieces are $1,950',
+  );
+  assert.equal(openForHelm(KEY, data.sealed as SealedPayload).quote, null);
+  ['f-old', 'f-new'].forEach((id) =>
+    assert.deepEqual(updateOf(result, id), {
+      disputedWithId: null,
+      status: 'superseded',
+      supersededById: 'made-1',
+      supersededAt: 9000,
+    }),
+  );
+  const execution = result.execution as {
+    effectRefs: { op: string; collection: string }[];
+  };
+  assert.deepEqual(
+    execution.effectRefs.map((ref) => [ref.op, ref.collection]),
+    [
+      ['create', 'facts'],
+      ['update', 'facts'],
+      ['update', 'facts'],
+    ],
+  );
+  assert.equal(
+    planResolve(settleInput('none')).refused,
+    'unknown',
+    'a statement is needed',
+  );
+});
+
+test('a settle closes the question, writing nothing else, when a fact is gone or no longer disputed; it refuses an answered question', () => {
+  const closes = (input: ReturnType<typeof settleInput>) => {
+    const plan = planned(input);
+    assert.equal(plan.isStale, true);
+    assert.equal(plan.execution, null);
+    assert.deepEqual(plan.factUpdates, []);
+    assert.equal(plan.factCreate, null);
+    const capture = plan.capture as {
+      questionState: Record<string, { answeredAt: number | null }>;
+      sealed: { questions: Record<string, { answer: unknown }> };
+      executionIds: string[];
+    };
+    assert.equal(capture.questionState.q1.answeredAt, input.now);
+    assert.deepEqual(capture.sealed.questions.q1.answer, {
+      by: input.by,
+      at: input.now,
+      turnCaptureId: null,
+      shape: 'pickOne',
+      optionId: 'none',
+      otherText: null,
+      isStale: true,
+    });
+    assert.deepEqual(capture.executionIds, input.capture.executionIds);
+  };
+  const gone = settleInput('f-new');
+  gone.facts = new Map([['f-new', gone.facts.get('f-new') as ResolveFact]]);
+  closes(gone);
+  const changed = settleInput('f-new');
+  changed.facts.set('f-old', fact({ disputedWithId: null }));
+  closes(changed);
+  const answered = settleInput('f-new');
+  answered.capture.questionState.q1.answeredAt = 5000;
+  assert.equal(planResolve(answered).refused, 'answered');
+  assert.equal(planResolve(settleInput('f-other')).refused, 'unknown');
+});
+
+test('a settle is undone by the planner: both facts go back to disputed and the corrected one goes', () => {
+  const picked = planned(settleInput('f-new'));
+  const execution = picked.execution as {
+    effectRefs: EffectRef[];
+    sealed: SealedPayload;
+  };
+  const effects = openForHelm(KEY, execution.sealed).effects as Effect[];
+  const original = {
+    id: 'e9',
+    captureId: 'c1',
+    actor: 'nomos',
+    category: 'remember',
+    state: 'succeeded',
+    effectRefs: execution.effectRefs,
+    effects,
+    createdAt: 9000,
+    undoneByExecutionId: null,
+    undoesExecutionId: null,
+    isUnreadable: false,
+  } as unknown as OpenExecution;
+  const written = (id: string, data: Record<string, unknown>) =>
+    [id, { docId: id, data, opened: null }] as const;
+  const afterPick = new Map([
+    written('f-new', {
+      ...fact(),
+      ...updateOf(picked, 'f-new'),
+    }),
+    written('f-old', { ...fact(), ...updateOf(picked, 'f-old') }),
+  ]);
+  const plan = planUndo({
+    original,
+    targets: afterPick,
+    undoExecutionId: 'u1',
+    now: 12000,
+    usedIds: new Set(),
+  });
+  assert.equal(plan.kind, 'write');
+  if (plan.kind !== 'write') return;
+  const byId = new Map(plan.updates.map((update) => [update.docId, update]));
+  assert.equal(byId.get('f-new')?.fields.disputedWithId, 'f-old');
+  assert.equal(byId.get('f-new')?.fields.supersedesId, null);
+  assert.equal(byId.get('f-old')?.fields.disputedWithId, 'f-new');
+  assert.equal(byId.get('f-old')?.fields.status, 'confirmed');
+  assert.equal(byId.get('f-old')?.fields.supersededById, null);
+  assert.equal(plan.deletes.length, 0);
+
+  const corrected = planned(
+    settleInput('none', { text: 'Centerpieces are $1,950' }),
+  );
+  const correctedExecution = corrected.execution as {
+    effectRefs: EffectRef[];
+    sealed: SealedPayload;
+  };
+  const afterNone = new Map([
+    written('made-1', {
+      ...(corrected.factCreate?.data as Record<string, unknown>),
+    }),
+    written('f-new', { ...fact(), ...updateOf(corrected, 'f-new') }),
+    written('f-old', { ...fact(), ...updateOf(corrected, 'f-old') }),
+  ]);
+  const undone = planUndo({
+    original: {
+      ...original,
+      effectRefs: correctedExecution.effectRefs,
+      effects: openForHelm(KEY, correctedExecution.sealed).effects as Effect[],
+    },
+    targets: afterNone,
+    undoExecutionId: 'u2',
+    now: 12000,
+    usedIds: new Set(),
+  });
+  assert.equal(undone.kind, 'write');
+  if (undone.kind !== 'write') return;
+  assert.deepEqual(
+    undone.deletes.map((entry) => entry.docId),
+    ['made-1'],
+  );
+  assert.equal(
+    undone.updates.find((update) => update.docId === 'f-old')?.fields
+      .disputedWithId,
+    'f-new',
   );
 });
 

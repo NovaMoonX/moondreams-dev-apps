@@ -623,6 +623,7 @@ const readFact = (text: string) => {
         value: null,
         isSensitive: false,
         isAboutMe: false,
+        contradicts: null,
       }),
     ],
     mentions: [
@@ -663,8 +664,68 @@ const toNoteFact = (fields: Record<string, unknown>) => ({
   value: null,
   isSensitive: false,
   isAboutMe: true,
+  contradicts: null,
   ...fields,
 });
+
+interface ListedFact {
+  alias: string;
+  subject: string;
+  statement: string;
+}
+
+const NOW_AFTER_RE =
+  /^\s*(?:@?([A-Z][\p{L}'’.-]*)\s+says\s+)?(.+?)\s+(is|are)\s+(.+?)\s+now\s*[.!]?\s*$/u;
+const NOW_BEFORE_RE =
+  /^\s*(?:@?([A-Z][\p{L}'’.-]*)\s+says\s+)?(.+?)\s+(is|are)\s+now\s+(.+?)\s*[.!]?\s*$/u;
+
+const toPhrase = (text: string) =>
+  text
+    .trim()
+    .toLowerCase()
+    .replace(/^(?:the|a|an)\s+/, '');
+
+/** The emulator's stand-in for "Dana says centerpieces are $2,100 now" or "The venue is now X": one noteFact that says it contradicts the fact in context about the same thing (the words before is or are). Null when no fact in context is about it. */
+const readContradiction = (text: string, message: string) => {
+  const match = NOW_BEFORE_RE.exec(text) ?? NOW_AFTER_RE.exec(text);
+  if (!match) return null;
+  const [, named, about, verb, value] = match;
+  const phrase = toPhrase(about);
+  const facts = readBlock<ListedFact[]>(message, 'known_facts') ?? [];
+  const other = facts.find((fact) => {
+    const lead = /^(.+?)\s+(?:is|are)\s/i.exec(fact.statement)?.[1];
+    return (
+      lead !== undefined &&
+      toPhrase(lead) === phrase &&
+      (!named || fact.subject === named)
+    );
+  });
+  if (!other) return null;
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === other.subject);
+  const quote = text.trim().replace(/[.!]$/, '');
+  return {
+    commands: [
+      toNoteFact({
+        statement: `${upperFirst(about.trim())} ${verb} ${value.trim()}`,
+        quote,
+        whoRefs: ['$w1'],
+        isAboutMe: false,
+        contradicts: other.alias,
+      }),
+    ],
+    mentions: [
+      {
+        ref: '$w1',
+        name: other.subject,
+        kind: known?.kind ?? 'person',
+        relation: null,
+        species: known?.species ?? null,
+        organizationKind: known?.organizationKind ?? null,
+      },
+    ],
+    places: [],
+  };
+};
 
 /** The emulator's stand-in for the facts a person says about themself ("I always go to Shell for gas", "my favorite movie is Arrival", "I'm vegan", "I have diabetes") and the private detail said about a named person ("Dana has diabetes"): one noteFact, stated, quoting the words. Null for any other words. */
 const readSelfFact = (text: string) => {
@@ -826,7 +887,10 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const fact = readSelfFact(text) ?? readFact(text);
+      const fact =
+        readContradiction(text, messages[0]?.content ?? '') ??
+        readSelfFact(text) ??
+        readFact(text);
       if (fact) {
         return {
           terminalInput: fact,

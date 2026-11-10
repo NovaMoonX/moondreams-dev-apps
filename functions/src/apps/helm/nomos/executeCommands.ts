@@ -25,7 +25,7 @@ import { readWhoTier, type WhoTierValue } from './whoTier.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { shouldKeepSensitive } from './sensitive.js';
-import { buildSpokenAck } from './spoken.js';
+import { buildSpokenAck, toKnownZone } from './spoken.js';
 import {
   buildAskedQuestion,
   buildCodeQuestion,
@@ -33,7 +33,10 @@ import {
   buildSpokenPick,
   buildSpokenQuestion,
   buildFactLine,
+  buildFactSource,
   buildNotKeptLine,
+  buildSpokenWhichIsTrue,
+  buildWhichIsTrueQuestion,
   describeFacts,
   summarize,
   type CodeQuestionKind,
@@ -85,6 +88,10 @@ export interface ExistingFact {
   subjectIds: string[];
   kind: NoteFactKind;
   topic: string | null;
+  stated: 'personSaid' | 'nomosInferred' | 'personCorrected';
+  createdAt: number;
+  /** The fact it is in dispute with, until the person settles which is true. */
+  disputedWithId: string | null;
 }
 
 export interface EffectRef {
@@ -106,6 +113,8 @@ export interface WritePlan {
   placeCreates: { id: string; data: Record<string, unknown> }[];
   factCreates: { id: string; data: Record<string, unknown> }[];
   factConfirms: { id: string; data: Record<string, unknown> }[];
+  /** Each kept fact a new one disagrees with, marked as in dispute with it. */
+  factDisputes: { id: string; data: Record<string, unknown> }[];
   /** One line for each private detail the turn did not keep. */
   notKept: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
@@ -142,6 +151,7 @@ interface PlanInput {
   existingFacts?: ExistingFact[];
   /** The person's own who record, which a fact about them is filed under. */
   selfWhoId?: string | null;
+  timeZone?: string;
 }
 
 interface Draft {
@@ -333,6 +343,9 @@ const settleTopic = (
   ];
   return topicMatcher.match(topic, used) ?? topic.trim().toLowerCase();
 };
+
+const isOpinion = (kind: NoteFactKind) =>
+  kind === 'preference' || kind === 'favorite';
 
 const isSameDue = (a: TaskDue | null, b: TaskDue | null) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -528,10 +541,44 @@ export function planWrites(input: PlanInput): WritePlan {
   const captureWords = toLooseText(input.captureText ?? '');
   const capturedAt = input.people?.capturedAt ?? now;
   const assistantName = input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME;
+  const zone = toKnownZone(input.timeZone ?? 'UTC');
+  const findContradicted = (
+    fact: NoteFactCommand,
+    subjectIds: string[],
+    kind: NoteFactKind,
+    topic: string | null,
+    taken: string[],
+  ) => {
+    const candidates = (input.existingFacts ?? []).filter(
+      (other) =>
+        other.disputedWithId === null &&
+        !taken.includes(other.id) &&
+        other.subjectIds.some((id) => subjectIds.includes(id)) &&
+        toLooseText(other.statement) !== toLooseText(fact.statement),
+    );
+    return (
+      candidates.find((other) => other.id === fact.contradicts) ??
+      candidates.find(
+        (other) =>
+          isOpinion(kind) &&
+          other.kind === kind &&
+          topic !== null &&
+          toLooseText(other.topic ?? '') === toLooseText(topic) &&
+          toSubjectKey(other.subjectIds) === toSubjectKey(subjectIds),
+      ) ??
+      null
+    );
+  };
   const factSteps = (input.noteFacts ?? []).reduce<{
     seen: string[];
     creates: { id: string; data: Record<string, unknown> }[];
     confirms: { id: string; data: Record<string, unknown> }[];
+    disputes: {
+      older: ExistingFact;
+      newerId: string;
+      statement: string;
+      isSaid: boolean;
+    }[];
     notKept: string[];
   }>(
     (acc, fact) => {
@@ -605,14 +652,25 @@ export function planWrites(input: PlanInput): WritePlan {
           ],
         };
       }
+      const existing = existingByKey.get(repeatKey);
+      const contradicted =
+        existing || acc.disputes.length >= MAX_PICK_QUESTIONS
+          ? null
+          : findContradicted(
+              fact,
+              subjectIds,
+              fact.kind,
+              topic,
+              acc.disputes.map((dispute) => dispute.older.id),
+            );
       const line = buildFactLine({
         subjects: subjectIds.map((subjectId) =>
           subjectId === selfWhoId ? 'You' : (nameOf.get(subjectId) ?? ''),
         ),
         isSaid,
         assistantName,
+        isDisputed: contradicted !== null,
       });
-      const existing = existingByKey.get(repeatKey);
       // Saying outright what was only a guess confirms the guess instead of filing it twice.
       if (existing) {
         if (existing.status !== 'inferred' || !isSaid) return { ...acc, seen };
@@ -664,9 +722,45 @@ export function planWrites(input: PlanInput): WritePlan {
         null,
         'facts',
       );
+      if (contradicted) {
+        const olderLine = buildFactLine({
+          subjects: contradicted.subjectIds.map((subjectId) =>
+            subjectId === selfWhoId ? 'You' : (nameOf.get(subjectId) ?? ''),
+          ),
+          isSaid: contradicted.stated !== 'nomosInferred',
+          assistantName,
+          isDisputed: true,
+        });
+        record(
+          contradicted.id,
+          'update',
+          {
+            disputedWithId: id,
+            'sealed.title': olderLine,
+            'sealed.statement': contradicted.statement,
+          },
+          {
+            disputedWithId: null,
+            'sealed.title': olderLine,
+            'sealed.statement': contradicted.statement,
+          },
+          'facts',
+        );
+      }
       return {
         ...acc,
         seen,
+        disputes: contradicted
+          ? [
+              ...acc.disputes,
+              {
+                older: contradicted,
+                newerId: id,
+                statement: fact.statement,
+                isSaid,
+              },
+            ]
+          : acc.disputes,
         creates: [
           ...acc.creates,
           {
@@ -689,7 +783,7 @@ export function planWrites(input: PlanInput): WritePlan {
               supersedesId: null,
               supersededById: null,
               supersededAt: null,
-              disputedWithId: null,
+              disputedWithId: contradicted?.id ?? null,
               createdAt: capturedAt,
               confirmedAt: isSaid ? capturedAt : null,
               lastEditedAt: null,
@@ -704,10 +798,14 @@ export function planWrites(input: PlanInput): WritePlan {
         ],
       };
     },
-    { seen: [], creates: [], confirms: [], notKept: [] },
+    { seen: [], creates: [], confirms: [], disputes: [], notKept: [] },
   );
   const factCreates = factSteps.creates;
   const factConfirms = factSteps.confirms;
+  const factDisputes = factSteps.disputes.map(({ older, newerId }) => ({
+    id: older.id,
+    data: { disputedWithId: newerId },
+  }));
   const notKept = [...new Set(factSteps.notKept)];
 
   const creates = [...drafts.values()].map((draft) => {
@@ -841,15 +939,59 @@ export function planWrites(input: PlanInput): WritePlan {
           ];
         });
 
+  const disputeQuestions = !isFiling
+    ? []
+    : factSteps.disputes.map(
+        ({ older, newerId, statement, isSaid }): PlannedQuestion => {
+          const newer = {
+            id: newerId,
+            statement,
+            detail: buildFactSource({
+              stated: isSaid ? 'personSaid' : 'nomosInferred',
+              isConfirmed: isSaid,
+              assistantName,
+              at: capturedAt,
+              timeZone: zone,
+            }),
+          };
+          const before = {
+            id: older.id,
+            statement: older.statement,
+            detail: buildFactSource({
+              stated: older.stated,
+              isConfirmed: older.status === 'confirmed',
+              assistantName,
+              at: older.createdAt,
+              timeZone: zone,
+            }),
+          };
+          return {
+            id: input.newId(),
+            state: {
+              kind: 'whichIsTrue',
+              shape: 'pickOne',
+              askedAt: now,
+              answeredAt: null,
+              skippedAt: null,
+            },
+            sealed: buildWhichIsTrueQuestion({ older: before, newer }),
+            spoken: buildSpokenWhichIsTrue(before.statement, newer.statement),
+          };
+        },
+      );
   const questions = !isFiling
     ? []
-    : buildPickQuestions({
-        entities,
-        unsureTasks,
-        people,
-        newId: input.newId,
-        now,
-      });
+    : [
+        ...disputeQuestions,
+        ...buildPickQuestions({
+          entities,
+          unsureTasks,
+          people,
+          newId: input.newId,
+          now,
+          room: MAX_PICK_QUESTIONS - disputeQuestions.length,
+        }),
+      ];
 
   return {
     creates,
@@ -859,6 +1001,7 @@ export function planWrites(input: PlanInput): WritePlan {
     placeCreates,
     factCreates,
     factConfirms,
+    factDisputes,
     notKept,
     linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
@@ -893,6 +1036,7 @@ function buildPickQuestions(input: {
   people: PeopleInput | undefined;
   newId: () => string;
   now: number;
+  room: number;
 }): PlannedQuestion[] {
   const { entities, unsureTasks, people, now } = input;
   if (!people) return [];
@@ -991,7 +1135,7 @@ function buildPickQuestions(input: {
   });
   return [...whoQuestions, ...placeQuestions]
     .filter((question) => question.candidates.length > 0)
-    .slice(0, MAX_PICK_QUESTIONS)
+    .slice(0, input.room)
     .map((question) => ({
       id: input.newId(),
       state: {
@@ -1203,7 +1347,10 @@ interface SettleInput {
 }
 
 const isPickKind = (kind: string) =>
-  kind === 'whichPerson' || kind === 'whichPlace' || kind === 'asked';
+  kind === 'whichPerson' ||
+  kind === 'whichPlace' ||
+  kind === 'whichIsTrue' ||
+  kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
   entry.kind === 'moreToSort' && entry.answeredAt === null;

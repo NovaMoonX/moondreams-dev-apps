@@ -9,6 +9,11 @@ import {
   type QuestionStateEntry,
 } from './executeCommands.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
+import {
+  buildSettledLine,
+  buildSettledNoneLine,
+  SETTLE_LINES,
+} from './summaries.js';
 import { getDayIn, toKnownZone } from './spoken.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
 
@@ -17,6 +22,27 @@ export interface ResolveTask {
   whoIds: string[];
   placeIds: string[];
 }
+
+/** A fact a "which is true now?" question holds, with its words opened. */
+export interface ResolveFact {
+  status: string;
+  kind: string;
+  statement: string;
+  topic: string | null;
+  createdAt: number;
+  confirmedAt: number | null;
+  supersedesId: string | null;
+  supersededById: string | null;
+  supersededAt: number | null;
+  disputedWithId: string | null;
+  whoIds: string[];
+  placeIds: string[];
+  projectIds: string[];
+  syncedIds: string[];
+  subjectIds: string[];
+}
+
+export const FACT_TEXT_MAX = 500;
 
 export interface ResolveInput {
   captureId: string;
@@ -38,6 +64,10 @@ export interface ResolveInput {
   opened: Record<string, unknown>;
   /** The tasks that still exist and open, by id. */
   tasks: Map<string, ResolveTask>;
+  /** The facts a held settleFact names that still exist, by id. */
+  facts: Map<string, ResolveFact>;
+  /** The corrected statement, with the answer "none" to a "which is true now?" question. */
+  text: string | null;
   /** The who or place the option names, or null when it is gone; its tier and last mention are read. */
   chosen: {
     tier: WhoTierValue;
@@ -54,9 +84,13 @@ export interface ResolvePlan {
   taskUpdates: { id: string; data: Record<string, unknown> }[];
   whoCreate: { id: string; data: Record<string, unknown> } | null;
   placeCreate: { id: string; data: Record<string, unknown> } | null;
+  factCreate: { id: string; data: Record<string, unknown> } | null;
+  factUpdates: { id: string; data: Record<string, unknown> }[];
   whoUpdate: { id: string; data: Record<string, unknown> } | null;
   execution: Record<string, unknown> | null;
   capture: Record<string, unknown>;
+  /** True when the question was closed without writing, because its facts changed since. */
+  isStale: boolean;
 }
 
 interface PickOption {
@@ -68,7 +102,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null;
 
 const isHeld = (value: unknown): value is Record<string, unknown> =>
-  isRecord(value) && Array.isArray(value.taskIds);
+  isRecord(value) &&
+  (Array.isArray(value.taskIds) || Array.isArray(value.factIds));
 
 const isOption = (value: unknown): value is PickOption =>
   isRecord(value) &&
@@ -87,6 +122,302 @@ const hasNewDetails = (held: Record<string, unknown>, isPlace: boolean) =>
     : isRecord(held.mention) &&
       typeof held.mention.name === 'string' &&
       held.mention.name.trim() !== '';
+
+const union = (left: string[], right: string[]) => [
+  ...new Set([...left, ...right]),
+];
+
+/** Closes a "which is true now?" question whose facts are no longer in dispute with each other: nothing is written but the question itself, marked stale. */
+function closeStale(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+): ResolvePlan {
+  const { questionId, now, capture } = input;
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...capture.questionState[questionId], answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    taskUpdates: [],
+    whoCreate: null,
+    placeCreate: null,
+    factCreate: null,
+    factUpdates: [],
+    whoUpdate: null,
+    execution: null,
+    isStale: true,
+    capture: {
+      questionState,
+      sealed: {
+        ...input.opened,
+        questions: {
+          ...oldQuestions,
+          [questionId]: {
+            ...question,
+            answer: {
+              by: input.by,
+              at: now,
+              turnCaptureId: null,
+              shape: 'pickOne',
+              optionId: 'none',
+              otherText: null,
+              isStale: true,
+            },
+          },
+        },
+      },
+      status:
+        !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+      executionIds: capture.executionIds,
+    },
+  };
+}
+
+/** What answering "which is true now?" writes: the pick is confirmed and the other kept as superseded, or "none" with a statement makes a corrected fact that supersedes both. Both must still be in dispute with each other. */
+function planSettle(
+  input: ResolveInput,
+  question: Record<string, unknown>,
+  held: Record<string, unknown>,
+  oldQuestions: Record<string, unknown>,
+): { refused: ResolveRefusal } | { refused: null; plan: ResolvePlan } {
+  const { questionId, optionId, now, capture } = input;
+  const state = capture.questionState[questionId];
+  const ids = (held.factIds as unknown[]).filter(
+    (id): id is string => typeof id === 'string',
+  );
+  const text = input.text?.trim() ?? '';
+  if (ids.length !== 2 || (optionId === 'none' && !text)) {
+    return { refused: 'unknown' };
+  }
+  const first = input.facts.get(ids[0]);
+  const second = input.facts.get(ids[1]);
+  if (
+    !first ||
+    !second ||
+    first.disputedWithId !== ids[1] ||
+    second.disputedWithId !== ids[0]
+  ) {
+    return { refused: null, plan: closeStale(input, question, oldQuestions) };
+  }
+  const [older, newer] =
+    first.createdAt <= second.createdAt
+      ? [
+          { id: ids[0], fact: first },
+          { id: ids[1], fact: second },
+        ]
+      : [
+          { id: ids[1], fact: second },
+          { id: ids[0], fact: first },
+        ];
+  const isNone = optionId === 'none';
+  const correctedId = isNone ? input.newId() : null;
+  const kept = older.id === optionId ? older : newer;
+  const dropped = kept === older ? newer : older;
+  const label = (statement: string, line: string) => ({
+    'sealed.title': line,
+    'sealed.statement': statement,
+  });
+  const supersede = (
+    target: typeof older,
+    byId: string,
+  ): { id: string; data: Record<string, unknown>; effect: Effect } => ({
+    id: target.id,
+    data: {
+      disputedWithId: null,
+      status: 'superseded',
+      supersededById: byId,
+      supersededAt: now,
+    },
+    effect: {
+      written: {
+        disputedWithId: null,
+        status: 'superseded',
+        supersededById: byId,
+        supersededAt: now,
+        ...label(target.fact.statement, SETTLE_LINES.replaced),
+      },
+      previous: {
+        disputedWithId: target.fact.disputedWithId,
+        status: target.fact.status,
+        supersededById: target.fact.supersededById,
+        supersededAt: target.fact.supersededAt,
+        ...label(target.fact.statement, SETTLE_LINES.replaced),
+      },
+    },
+  });
+  const links = isNone
+    ? [
+        supersede(older, correctedId as string),
+        supersede(newer, correctedId as string),
+      ]
+    : [supersede(dropped, kept.id)];
+  const isKeptNewer = kept === newer;
+  const adopts = isKeptNewer && kept.fact.supersedesId === null;
+  const confirmedAt = kept.fact.confirmedAt ?? now;
+  const confirm = isNone
+    ? null
+    : {
+        id: kept.id,
+        data: {
+          disputedWithId: null,
+          status: 'confirmed',
+          confirmedAt,
+          lastEditedAt: now,
+          ...(adopts && { supersedesId: dropped.id }),
+        },
+        effect: {
+          written: {
+            disputedWithId: null,
+            status: 'confirmed',
+            confirmedAt,
+            ...(adopts && { supersedesId: dropped.id }),
+            ...label(kept.fact.statement, SETTLE_LINES.kept),
+          },
+          previous: {
+            disputedWithId: kept.fact.disputedWithId,
+            status: kept.fact.status,
+            confirmedAt: kept.fact.confirmedAt,
+            ...(adopts && { supersedesId: null }),
+            ...label(kept.fact.statement, SETTLE_LINES.kept),
+          },
+        } as Effect,
+      };
+  const factCreate = correctedId
+    ? {
+        id: correctedId,
+        data: {
+          status: 'confirmed',
+          stated: 'personCorrected',
+          kind: newer.fact.kind,
+          occurredOn: null,
+          sourceCaptureId: null,
+          sourceExecutionId: null,
+          sourceConnection: null,
+          aboutField: null,
+          whoIds: union(older.fact.whoIds, newer.fact.whoIds),
+          placeIds: union(older.fact.placeIds, newer.fact.placeIds),
+          projectIds: union(older.fact.projectIds, newer.fact.projectIds),
+          syncedIds: [],
+          subjectIds: union(older.fact.subjectIds, newer.fact.subjectIds),
+          keptOverSource: null,
+          supersedesId: newer.id,
+          supersededById: null,
+          supersededAt: null,
+          disputedWithId: null,
+          createdAt: now,
+          confirmedAt: now,
+          lastEditedAt: null,
+          sealed: input.seal({
+            statement: text,
+            quote: null,
+            topic: newer.fact.topic,
+            value: null,
+          }),
+        },
+      }
+    : null;
+  const entries = [
+    ...(factCreate
+      ? [
+          {
+            ref: {
+              op: 'create',
+              collection: 'facts',
+              docId: factCreate.id,
+            } as EffectRef,
+            effect: {
+              written: {
+                status: 'confirmed',
+                stated: 'personCorrected',
+                ...label(text, SETTLE_LINES.corrected),
+              },
+              previous: null,
+            } as Effect,
+          },
+        ]
+      : []),
+    ...[...(confirm ? [confirm] : []), ...links].map((entry) => ({
+      ref: { op: 'update', collection: 'facts', docId: entry.id } as EffectRef,
+      effect: entry.effect,
+    })),
+  ];
+  const execution = {
+    captureId: input.captureId,
+    actor: 'nomos',
+    category: 'remember',
+    autonomyLevel: AUTOMATIC_LEVEL,
+    state: 'succeeded',
+    effectRefs: entries.map(({ ref }) => ref),
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: { captureId: input.captureId, questionId },
+    errorCode: null,
+    createdAt: now,
+    decidedAt: now,
+    finishedAt: now,
+    sealed: input.seal({
+      summary: isNone
+        ? buildSettledNoneLine(text)
+        : buildSettledLine(kept.fact.statement),
+      commands: [],
+      effects: entries.map(({ effect }) => effect),
+      undoReport: null,
+      goneIds: null,
+      spoken: null,
+    }),
+  };
+  const questionState = {
+    ...capture.questionState,
+    [questionId]: { ...state, answeredAt: now },
+  };
+  const isOpen = Object.values(questionState).some(
+    (entry) => entry.answeredAt === null,
+  );
+  return {
+    refused: null,
+    plan: {
+      taskUpdates: [],
+      whoCreate: null,
+      placeCreate: null,
+      factCreate,
+      factUpdates: [...(confirm ? [confirm] : []), ...links].map(
+        ({ id, data }) => ({ id, data }),
+      ),
+      whoUpdate: null,
+      execution,
+      isStale: false,
+      capture: {
+        questionState,
+        sealed: {
+          ...input.opened,
+          questions: {
+            ...oldQuestions,
+            [questionId]: {
+              ...question,
+              answer: {
+                by: input.by,
+                at: now,
+                turnCaptureId: null,
+                shape: 'pickOne',
+                optionId,
+                otherText: null,
+              },
+            },
+          },
+        },
+        status:
+          !isOpen && capture.status === 'needsYou' ? 'sorted' : capture.status,
+        executionIds: [...capture.executionIds, input.executionId],
+      },
+    },
+  };
+}
 
 /** Decides what answering a "which one?" question writes, without touching a database: a pick links the held tasks, "new" makes the person or place first, "none" links nothing, and an answered or unknown question is refused. */
 export function planResolve(
@@ -108,6 +439,9 @@ export function planResolve(
     : null;
   if (!options.some((option) => option.id === optionId) || !held) {
     return { refused: 'unknown' };
+  }
+  if (held.kind === 'settleFact') {
+    return planSettle(input, question, held, oldQuestions);
   }
   const isPlace = held.kind === 'linkPlace';
   if (optionId === 'new' && !hasNewDetails(held, isPlace)) {
@@ -296,17 +630,17 @@ export function planResolve(
   const isOpen = Object.values(questionState).some(
     (entry) => entry.answeredAt === null,
   );
-  const union = (left: string[], right: string[]) => [
-    ...new Set([...left, ...right]),
-  ];
   return {
     refused: null,
     plan: {
       taskUpdates,
       whoCreate,
       placeCreate,
+      factCreate: null,
+      factUpdates: [],
       whoUpdate,
       execution,
+      isStale: false,
       capture: {
         questionState,
         sealed: {

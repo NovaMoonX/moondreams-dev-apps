@@ -102,6 +102,7 @@ const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
       const isKnown =
         question?.kind === 'whichPerson' ||
         question?.kind === 'whichPlace' ||
+        question?.kind === 'whichIsTrue' ||
         question?.kind === 'asked';
       return typeof question === 'object' &&
         question !== null &&

@@ -759,6 +759,9 @@ async function readSubjectFacts(
       const subjectIds: unknown = doc.get('subjectIds');
       const status: unknown = doc.get('status');
       const kind: unknown = doc.get('kind');
+      const stated: unknown = doc.get('stated');
+      const disputedWithId: unknown = doc.get('disputedWithId');
+      const createdAt: unknown = doc.get('createdAt');
       return typeof words.statement === 'string' &&
         isStringList(subjectIds) &&
         (status === 'confirmed' || status === 'inferred')
@@ -775,6 +778,13 @@ async function readSubjectFacts(
                   ? kind
                   : 'world',
               topic: typeof words.topic === 'string' ? words.topic : null,
+              stated:
+                stated === 'personSaid' || stated === 'personCorrected'
+                  ? stated
+                  : 'nomosInferred',
+              createdAt: typeof createdAt === 'number' ? createdAt : 0,
+              disputedWithId:
+                typeof disputedWithId === 'string' ? disputedWithId : null,
             },
           ]
         : [];
@@ -1620,6 +1630,7 @@ async function writeResult(
       noteFacts: isStale ? [] : noteFacts,
       captureText,
       existingFacts,
+      timeZone,
       selfWhoId: (profileSnap?.get('selfWhoId') as string | null) ?? null,
     });
     const plan = home
@@ -1674,7 +1685,7 @@ async function writeResult(
       plan.factCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/facts/${id}`), data),
       );
-      plan.factConfirms.forEach(({ id, data }) =>
+      [...plan.factConfirms, ...plan.factDisputes].forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/facts/${id}`), data),
       );
       if (home) transaction.update(firestore.doc(base), home.data);

@@ -10,6 +10,7 @@ import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps
 import { QUIET_CLASS } from '@apps/helm/components/home/ChoiceButton';
 import DateTimeAnswer from '@apps/helm/components/home/DateTimeAnswer';
 import FreeTextAnswer from '@apps/helm/components/home/FreeTextAnswer';
+import NeitherAnswer from '@apps/helm/components/home/NeitherAnswer';
 import NumberAnswer from '@apps/helm/components/home/NumberAnswer';
 import PickOneAnswer from '@apps/helm/components/home/PickOneAnswer';
 import PickRecordAnswer from '@apps/helm/components/home/PickRecordAnswer';
@@ -61,6 +62,7 @@ function QuestionCard({
   const [isWorking, setIsWorking] = useState(false);
   const [isSent, setIsSent] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [isNeitherOpen, setIsNeitherOpen] = useState(false);
   const { id, question, skippedAt } = item;
   const isSkipped = skippedAt !== null;
   const isModelWritten = question.builtBy === 'model';
@@ -103,17 +105,24 @@ function QuestionCard({
     }
   };
 
-  const answerOnServer = async (value: QuestionAnswerValue) => {
+  const answerOnServer = async (value: QuestionAnswerValue, text?: string) => {
     if (value.shape !== 'pickOne' || isOffline) return;
     setIsWorking(true);
     const result = await resolveQuestion(captureId, id, {
       by: 'tap',
       optionId: value.optionId,
+      ...(text !== undefined && { text }),
     });
     setIsWorking(false);
-    if (result.kind === 'offline') setNote(HELM_COPY.questionNeedsConnection);
-    if (result.kind === 'gone') setNote(HELM_COPY.questionGone(question.kind));
-    if (result.kind === 'failed') setNote(HELM_COPY.heldActionFailed);
+    const failure =
+      result.kind === 'offline'
+        ? HELM_COPY.questionNeedsConnection
+        : result.kind === 'gone' || result.kind === 'stale'
+          ? HELM_COPY.questionGone(question.kind)
+          : result.kind === 'failed'
+            ? HELM_COPY.heldActionFailed
+            : null;
+    setNote(failure);
   };
 
   const answer = (
@@ -122,6 +131,14 @@ function QuestionCard({
   ) => {
     if (isWorking || isSent || isAnswerInFlight(captureId, id)) return;
     setNote(null);
+    if (
+      question.kind === 'whichIsTrue' &&
+      value.shape === 'pickOne' &&
+      value.optionId === 'none'
+    ) {
+      setIsNeitherOpen(true);
+      return;
+    }
     void (isModelWritten
       ? answerAsTurn(value, recordName)
       : answerOnServer(value));
@@ -174,6 +191,20 @@ function QuestionCard({
               ? HELM_COPY.questionSavedOffline
               : HELM_COPY.questionSent}
           </p>
+        ) : isNeitherOpen ? (
+          <NeitherAnswer
+            isBusy={isWorking}
+            onSave={(text) =>
+              void answerOnServer(
+                { shape: 'pickOne', optionId: 'none', otherText: null },
+                text,
+              )
+            }
+            onBack={() => {
+              setNote(null);
+              setIsNeitherOpen(false);
+            }}
+          />
         ) : (
           <>
             <Part

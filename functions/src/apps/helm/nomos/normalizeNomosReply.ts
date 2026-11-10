@@ -85,6 +85,7 @@ const KNOWN_KEYS = new Set([
   'topic',
   'isSensitive',
   'isAboutMe',
+  'contradicts',
   'shape',
   'prompt',
   'options',
@@ -222,6 +223,7 @@ const readRemember = (
 const readNoteFact = (
   item: Record<string, unknown>,
   entities: Entities,
+  facts: AliasBook | undefined,
 ): NoteFactCommand | null => {
   const statement = toText(item.statement, STATEMENT_CAP);
   if (!statement) return null;
@@ -239,6 +241,10 @@ const readNoteFact = (
       item.isSensitive === true ||
       (item.isSensitive == null && kind === 'identity'),
     isAboutMe: item.isAboutMe === true,
+    contradicts:
+      typeof item.contradicts === 'string'
+        ? (facts?.idOf(item.contradicts) ?? null)
+        : null,
   };
 };
 
@@ -729,7 +735,7 @@ export function normalizeNomosReply(
   const noteFacts = items
     .filter((item) => item.kind === 'noteFact')
     .flatMap((item) => {
-      const fact = readNoteFact(item, entities);
+      const fact = readNoteFact(item, entities, context.facts);
       return fact ? [fact] : [];
     })
     .slice(0, MAX_NOTED_FACTS);

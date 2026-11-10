@@ -876,6 +876,13 @@ export const HELM_COPY = {
   factSourceAdded: (day: string) => `You added this ${day}`,
   factWas: (statement: string, day: string) =>
     `Was \u201c${statement}\u201d until ${day}`,
+  factTwoAnswers: 'Two answers',
+  factTwoAnswersLine: 'Two answers \u00b7 Which is true now?',
+  factSettle: 'Settle it',
+  whichIsTrueNoneBack: 'Back',
+  whichIsTrueNoneTitle: "What's true now?",
+  whichIsTrueNoneHelp:
+    'One sentence. Both earlier answers are kept as history.',
   factToday: 'today',
   factYesterday: 'yesterday',
   factConfirm: 'Confirm',
@@ -1022,9 +1029,11 @@ export const HELM_COPY = {
   editFailed: "That didn't save. Try again.",
   editGone: 'This page is gone.',
   questionGone: (kind: string) =>
-    kind === 'whichPlace'
-      ? 'That place was removed.'
-      : 'That person was removed.',
+    kind === 'whichIsTrue'
+      ? 'That fact changed since.'
+      : kind === 'whichPlace'
+        ? 'That place was removed.'
+        : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>

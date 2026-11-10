@@ -59,14 +59,36 @@ export const buildFactLine = (input: {
   subjects: string[];
   isSaid: boolean;
   assistantName: string;
+  isDisputed?: boolean;
 }) =>
   [
     'Fact',
     input.subjects.filter(Boolean).join(', '),
     input.isSaid ? 'You said' : `${input.assistantName} inferred`,
+    input.isDisputed ? 'Two answers' : '',
   ]
     .filter(Boolean)
     .join(' · ');
+
+/** Who stands behind a fact and the day, as a choice's detail: "You said · Nov 3", "You confirmed · Nov 3" for an inference the person kept, "{assistant} inferred · Nov 3". */
+export const buildFactSource = (input: {
+  stated: 'personSaid' | 'nomosInferred' | 'personCorrected';
+  isConfirmed: boolean;
+  assistantName: string;
+  at: number;
+  timeZone: string;
+}) =>
+  `${
+    input.stated !== 'nomosInferred'
+      ? 'You said'
+      : input.isConfirmed
+        ? 'You confirmed'
+        : `${input.assistantName} inferred`
+  } · ${new Date(input.at).toLocaleDateString('en-US', {
+    timeZone: input.timeZone,
+    month: 'short',
+    day: 'numeric',
+  })}`;
 
 /** The card line for a private detail the code did not keep: one said about someone else, or one the assistant only inferred about the person. */
 export const buildNotKeptLine = (input: {
@@ -198,6 +220,71 @@ export const buildPickQuestion = (input: {
     answer: null,
   };
 };
+
+export const WHICH_IS_TRUE_WORDS = {
+  prompt: 'Which is true now?',
+  noneLabel: 'Neither',
+};
+
+export interface TrueCandidate {
+  id: string;
+  statement: string;
+  detail: string;
+}
+
+/** The sealed half of the question asked when a new fact disagrees with one kept: both statements in order, then "Neither", with the two held until one is picked. */
+export const buildWhichIsTrueQuestion = (input: {
+  older: TrueCandidate;
+  newer: TrueCandidate;
+}) => ({
+  kind: 'whichIsTrue' as const,
+  builtBy: 'code' as const,
+  shape: 'pickOne' as const,
+  prompt: WHICH_IS_TRUE_WORDS.prompt,
+  options: [
+    ...[input.older, input.newer].map((fact) => ({
+      id: fact.id,
+      label: fact.statement,
+      detail: fact.detail,
+      ref: { collection: 'facts', id: fact.id },
+    })),
+    {
+      id: 'none',
+      label: WHICH_IS_TRUE_WORDS.noneLabel,
+      detail: null,
+      ref: null,
+    },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  heldCommands: [
+    { kind: 'settleFact', factIds: [input.older.id, input.newer.id] },
+  ],
+  aboutRef: null,
+  answer: null,
+});
+
+/** The card line under each fact a settled contradiction touched. */
+export const SETTLE_LINES = {
+  kept: 'Fact · Kept as true',
+  replaced: 'Fact · No longer true',
+  corrected: 'Fact · Corrected',
+};
+
+/** The execution line of a settled contradiction: "Kept “Centerpieces are $2,100”". */
+export const buildSettledLine = (statement: string) =>
+  `Kept \u201c${statement}\u201d`;
+
+/** The execution line when neither was right and the person wrote the answer. */
+export const buildSettledNoneLine = (statement: string) =>
+  `Replaced both with \u201c${statement}\u201d`;
+
+/** "Which is true now: Centerpieces are $1,800 or Centerpieces are $2,100?" */
+export const buildSpokenWhichIsTrue = (older: string, newer: string) =>
+  `Which is true now: ${older.replace(/[.!?]+$/, '')} or ${newer.replace(/[.!?]+$/, '')}?`;
 
 /** The line said after a spoken turn that asked "Which Sam?": "Which Sam, Sam Rivera or Sam Patel?". */
 export const buildSpokenPick = (

@@ -18,7 +18,12 @@ interface FactRowProps {
 /** One fact: its ring, its words and a quiet line of who stands behind it. Opens the fact. */
 function FactRow({ fact, assistant, now, subject, onOpen }: FactRowProps) {
   const isConfirmed = fact.status === 'confirmed';
-  const line = getFactLine(fact, assistant, now);
+  const line = [
+    getFactLine(fact, assistant, now),
+    fact.disputedWithId ? HELM_COPY.factTwoAnswers : null,
+  ]
+    .filter(Boolean)
+    .join(' \u00b7 ');
   return (
     <Button
       type='button'

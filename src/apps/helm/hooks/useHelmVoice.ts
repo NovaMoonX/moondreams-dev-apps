@@ -344,7 +344,7 @@ export function useHelmVoice() {
       );
     } else if (result.kind === 'offline') {
       say(HELM_COPY.questionNeedsConnection);
-    } else if (result.kind === 'gone') {
+    } else if (result.kind === 'gone' || result.kind === 'stale') {
       say(HELM_COPY.questionGone(question.kind));
     } else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
     else voice.settle();

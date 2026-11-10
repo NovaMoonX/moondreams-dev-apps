@@ -67,6 +67,7 @@ export type QuestionKind =
   | 'moreToSort'
   | 'whichPerson'
   | 'whichPlace'
+  | 'whichIsTrue'
   | 'asked'
   | (string & {});
 
@@ -93,7 +94,10 @@ export interface QuestionOption {
   id: string;
   label: string;
   detail: string | null;
-  ref: { collection: 'who' | 'places'; id: string } | null;
+  ref:
+    | { collection: 'who' | 'places'; id: string }
+    | { collection: 'facts'; id: string }
+    | null;
 }
 
 /** The structured answer to one question, by shape. `isMoney` numbers are integer cents. */
@@ -126,7 +130,7 @@ export interface QuestionNumber {
 
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
-  kind: 'whichPerson' | 'whichPlace' | 'asked';
+  kind: 'whichPerson' | 'whichPlace' | 'whichIsTrue' | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
@@ -651,7 +655,8 @@ export interface Fact {
   supersedesId: string | null;
   supersededById: string | null;
   supersededAt: number | null;
-  disputedWithId: null;
+  /** The fact it disagrees with until the person settles which is true. */
+  disputedWithId: string | null;
   createdAt: number;
   confirmedAt: number | null;
   lastEditedAt: number | null;

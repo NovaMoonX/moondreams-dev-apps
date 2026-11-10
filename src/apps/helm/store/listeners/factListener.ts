@@ -48,7 +48,7 @@ async function openFact(
         supersedesId: data.supersedesId ?? null,
         supersededById: data.supersededById ?? null,
         supersededAt: data.supersededAt ?? null,
-        disputedWithId: null,
+        disputedWithId: data.disputedWithId ?? null,
         createdAt: data.createdAt ?? 0,
         confirmedAt: data.confirmedAt ?? null,
         lastEditedAt: data.lastEditedAt ?? null,

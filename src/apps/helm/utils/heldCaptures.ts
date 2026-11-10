@@ -21,9 +21,14 @@ const hasOpenQuestion = (capture: OpenCapture, kinds: string[]) =>
     (question) => kinds.includes(question.kind) && question.answeredAt === null,
   );
 
-/** Whether the turn still waits on a question the person answers by choosing or writing (which person or place, or one the assistant asked), read from what is readable so a turn whose words won't open still shows. */
+/** Whether the turn still waits on a question the person answers by choosing or writing (which person or place, which fact is true, or one the assistant asked), read from what is readable so a turn whose words won't open still shows. */
 export const hasOpenChoice = (capture: OpenCapture) =>
-  hasOpenQuestion(capture, ['whichPerson', 'whichPlace', 'asked']);
+  hasOpenQuestion(capture, [
+    'whichPerson',
+    'whichPlace',
+    'whichIsTrue',
+    'asked',
+  ]);
 
 export interface OpenQuestion {
   id: string;

@@ -204,6 +204,8 @@ export interface NoteFactCommand {
   value: string | null;
   isSensitive: boolean;
   isAboutMe: boolean;
+  /** The id of a fact in context this one disagrees with, settled from the alias the model wrote. */
+  contradicts: string | null;
 }
 
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
@@ -297,6 +299,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'topic',
             'isSensitive',
             'isAboutMe',
+            'contradicts',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -484,6 +487,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             isAboutMe: nullable(
               'boolean',
               'noteFact: true when it is about the person talking ("I", "my"); false when it is about someone or something else.',
+            ),
+            contradicts: nullable(
+              'string',
+              'noteFact: the alias of a fact above that this one disagrees with ("centerpieces are $2,100 now" against "centerpieces are $1,800"); null when it adds to it.',
             ),
           },
         },

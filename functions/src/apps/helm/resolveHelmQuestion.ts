@@ -8,7 +8,9 @@ import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import { loadKeyringOrFail } from './sortHelmCapture.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import {
+  FACT_TEXT_MAX,
   planResolve,
+  type ResolveFact,
   type ResolveRefusal,
   type ResolveTask,
 } from './nomos/resolveQuestion.js';
@@ -21,6 +23,7 @@ const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 
 interface ResolveResult {
   executionId: string | null;
+  isStale: boolean;
 }
 
 interface CaptureDoc {
@@ -33,16 +36,54 @@ interface CaptureDoc {
   sealed: SealedPayload;
 }
 
-const toRefusal = (refusal: ResolveRefusal, isPlace: boolean) =>
+const toRefusal = (
+  refusal: ResolveRefusal,
+  subject: 'person' | 'place' | 'fact',
+) =>
   refusal === 'answered'
     ? new HttpsError('already-exists', 'This was already answered.')
     : refusal === 'unknown'
       ? new HttpsError('invalid-argument', 'That answer is not valid.')
       : new HttpsError(
           'failed-precondition',
-          isPlace ? 'That place was removed.' : 'That person was removed.',
+          subject === 'fact'
+            ? 'That fact changed since.'
+            : subject === 'place'
+              ? 'That place was removed.'
+              : 'That person was removed.',
           { reason: 'gone' },
         );
+
+const isStringList = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
+const toFact = (
+  data: Record<string, unknown>,
+  words: Record<string, unknown>,
+): ResolveFact | null => {
+  const num = (value: unknown) => (typeof value === 'number' ? value : null);
+  const str = (value: unknown) => (typeof value === 'string' ? value : null);
+  const list = (value: unknown) => (isStringList(value) ? value : []);
+  return typeof words.statement === 'string'
+    ? {
+        status: str(data.status) ?? 'inferred',
+        kind: str(data.kind) ?? 'world',
+        statement: words.statement,
+        topic: str(words.topic),
+        createdAt: num(data.createdAt) ?? 0,
+        confirmedAt: num(data.confirmedAt),
+        supersedesId: str(data.supersedesId),
+        supersededById: str(data.supersededById),
+        supersededAt: num(data.supersededAt),
+        disputedWithId: str(data.disputedWithId),
+        whoIds: list(data.whoIds),
+        placeIds: list(data.placeIds),
+        projectIds: list(data.projectIds),
+        syncedIds: list(data.syncedIds),
+        subjectIds: list(data.subjectIds),
+      }
+    : null;
+};
 
 const openOrRefuse = (
   key: Parameters<typeof openForHelm>[0],
@@ -59,7 +100,18 @@ const readInput = (data: unknown) => {
   const raw = (data ?? {}) as Record<string, unknown>;
   const answer = (raw.answer ?? {}) as Record<string, unknown>;
   const { captureId, questionId } = raw;
-  const { by, optionId } = answer;
+  const { by, optionId, text } = answer;
+  const note =
+    typeof text === 'string' ? text.trim().replace(/\s+/g, ' ') : null;
+  if (
+    text !== undefined &&
+    (optionId !== 'none' ||
+      note === null ||
+      note === '' ||
+      note.length > FACT_TEXT_MAX)
+  ) {
+    throw new HttpsError('invalid-argument', 'That answer is not valid.');
+  }
   if (
     typeof captureId !== 'string' ||
     !ID_RE.test(captureId) ||
@@ -71,7 +123,13 @@ const readInput = (data: unknown) => {
   ) {
     throw new HttpsError('invalid-argument', 'That answer is not valid.');
   }
-  return { captureId, questionId, by: by as 'tap' | 'voice', optionId };
+  return {
+    captureId,
+    questionId,
+    by: by as 'tap' | 'voice',
+    optionId,
+    text: note,
+  };
 };
 
 export const resolveHelmQuestion = onCall(
@@ -92,7 +150,9 @@ export const resolveHelmQuestion = onCall(
     if (!uid) {
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
-    const { captureId, questionId, by, optionId } = readInput(request.data);
+    const { captureId, questionId, by, optionId, text } = readInput(
+      request.data,
+    );
     const firestore = getFirestore();
     const base = `apps/helm/users/${uid}`;
     const captureRef = firestore.doc(`${base}/captures/${captureId}`);
@@ -116,15 +176,30 @@ export const resolveHelmQuestion = onCall(
       const opened = openOrRefuse(key, capture.sealed);
       const questions = (opened.questions ?? {}) as Record<
         string,
-        { heldCommands?: { taskIds?: unknown[]; kind?: string }[] }
+        {
+          heldCommands?: {
+            taskIds?: unknown[];
+            factIds?: unknown[];
+            kind?: string;
+          }[];
+        }
       >;
       const held = questions[questionId]?.heldCommands?.[0];
       const taskIds = (held?.taskIds ?? []).filter(
         (id): id is string => typeof id === 'string' && ID_RE.test(id),
       );
       const isPlace = held?.kind === 'linkPlace';
-      const isPick = optionId !== 'new' && optionId !== 'none';
-      const [taskSnaps, chosenSnap] = await Promise.all([
+      const isSettle = held?.kind === 'settleFact';
+      const factIds = (held?.factIds ?? [])
+        .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
+        .slice(0, 2);
+      const isPick = !isSettle && optionId !== 'new' && optionId !== 'none';
+      const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
+        Promise.all(
+          factIds.map((id) =>
+            transaction.get(firestore.doc(`${base}/facts/${id}`)),
+          ),
+        ),
         Promise.all(
           taskIds.map((id) =>
             transaction.get(firestore.doc(`${base}/tasks/${id}`)),
@@ -163,6 +238,18 @@ export const resolveHelmQuestion = onCall(
           }
         }),
       );
+      const facts = new Map<string, ResolveFact>(
+        factSnaps.flatMap((snap): [string, ResolveFact][] => {
+          const data = snap.data();
+          if (!data) return [];
+          try {
+            const fact = toFact(data, openForHelm(key, data.sealed));
+            return fact ? [[snap.id, fact]] : [];
+          } catch {
+            return [];
+          }
+        }),
+      );
       const executionRef = firestore.collection(`${base}/executions`).doc();
       const result = planResolve({
         captureId,
@@ -182,6 +269,8 @@ export const resolveHelmQuestion = onCall(
         },
         opened,
         tasks,
+        facts,
+        text,
         chosen:
           chosenSnap?.exists === true
             ? {
@@ -200,7 +289,10 @@ export const resolveHelmQuestion = onCall(
         seal,
       });
       if (result.refused !== null) {
-        throw toRefusal(result.refused, isPlace);
+        throw toRefusal(
+          result.refused,
+          isSettle ? 'fact' : isPlace ? 'place' : 'person',
+        );
       }
       const { plan } = result;
       plan.taskUpdates.forEach(({ id, data }) =>
@@ -218,6 +310,15 @@ export const resolveHelmQuestion = onCall(
           plan.placeCreate.data,
         );
       }
+      plan.factUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/facts/${id}`), data),
+      );
+      if (plan.factCreate) {
+        transaction.create(
+          firestore.doc(`${base}/facts/${plan.factCreate.id}`),
+          plan.factCreate.data,
+        );
+      }
       if (plan.whoUpdate) {
         transaction.update(
           firestore.doc(`${base}/who/${plan.whoUpdate.id}`),
@@ -229,7 +330,10 @@ export const resolveHelmQuestion = onCall(
         ...plan.capture,
         sealed: seal(plan.capture.sealed as Record<string, unknown>),
       });
-      return { executionId: plan.execution ? executionRef.id : null };
+      return {
+        executionId: plan.execution ? executionRef.id : null,
+        isStale: plan.isStale,
+      };
     });
   },
 );
