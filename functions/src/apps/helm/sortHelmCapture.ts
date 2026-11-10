@@ -1406,12 +1406,6 @@ async function writeResult(
           ...written,
           effectRefs: [...written.effectRefs, home.ref],
           effects: [...written.effects, home.effect],
-          linkedPlaceIds: [
-            ...new Set([
-              ...written.linkedPlaceIds,
-              ...(homeDoc ? [homeDoc.id] : []),
-            ]),
-          ],
         }
       : written;
     const isFiling = plan.effects.length > 0;

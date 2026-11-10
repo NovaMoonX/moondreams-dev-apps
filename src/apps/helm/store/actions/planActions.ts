@@ -282,7 +282,7 @@ export async function setCurrentPlace(
     state: 'succeeded',
     effectRefs: [{ op: 'update', collection: 'profile', docId: uid }],
     linkedWhoIds: [],
-    linkedPlaceIds: [place.id],
+    linkedPlaceIds: [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
     questionRef: null,
