@@ -1857,7 +1857,7 @@ export const selectIsSortingPaused = (state: RootState) =>
 
 const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
 
-/** The money in Needs a home has a question for: on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. */
+/** The money in Needs a home has a question for: a pairing or pay link it lost, on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. */
 export const selectMoneyInAsks = createSelector(
   [
     selectWaitingList,
@@ -1902,7 +1902,8 @@ export const selectMoneyInAsks = createSelector(
         .filter(
           (purchase) =>
             purchase.amountCents < 0 &&
-            ((purchase.paidByCardId ?? null) !== null ||
+            (lost.some((entry) => entry.id === purchase.id) ||
+              (purchase.paidByCardId ?? null) !== null ||
               mayPair(purchase.id) ||
               deposits.offers.has(purchase.id) ||
               deposits.clear.has(purchase.id)),
