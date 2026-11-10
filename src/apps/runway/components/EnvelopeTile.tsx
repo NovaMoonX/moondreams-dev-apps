@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Pin } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -13,6 +14,7 @@ import ItemSheet from '@apps/runway/components/ItemSheet';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   BILL_WORDS,
+  HOME_PIN_WORDS,
   ITEM_SHEET_R2_WORDS,
   PRIORITY_DIAL_WORDS,
   PRIORITY_LABELS,
@@ -54,6 +56,8 @@ interface EnvelopeTileProps {
   dial?: Priority;
   /** Which figure leads: what it comes to a month, or what each time puts in. */
   figureKind?: 'monthly' | 'payment';
+  /** Pinned to Home's first tiles: the tile wears a small pin. */
+  isPinned?: boolean;
 }
 
 const capitalize = (text: string) =>
@@ -73,6 +77,7 @@ function EnvelopeTile({
   isPart = false,
   dial = 'want',
   figureKind = 'monthly',
+  isPinned = false,
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
   const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
@@ -159,11 +164,7 @@ function EnvelopeTile({
             type='button'
             variant='tertiary'
             className='border-border bg-card text-foreground! h-full min-h-28 w-full flex-col items-start justify-start gap-2 rounded-2xl border p-3! text-left font-normal whitespace-normal'
-            aria-label={
-              isHidden
-                ? `${envelope.name}. Amount hidden. Open`
-                : `${envelope.name}, ${value} ${word}. Open`
-            }
+            aria-label={`${envelope.name}${isPinned ? `, ${HOME_PIN_WORDS.pinned.toLowerCase()}` : ''}${isHidden ? '. Amount hidden' : `, ${value} ${word}`}. Open`}
             onClick={open}
           >
             <span className='flex w-full min-w-0 items-center gap-2'>
@@ -173,6 +174,12 @@ function EnvelopeTile({
               <span className='min-w-0 flex-1 font-medium break-words'>
                 <span className='line-clamp-2'>{envelope.name}</span>
               </span>
+              {isPinned && (
+                <Pin
+                  className='text-muted-foreground h-3.5 w-3.5 shrink-0 self-start'
+                  aria-hidden='true'
+                />
+              )}
             </span>
             <span className='mt-auto block'>
               <span

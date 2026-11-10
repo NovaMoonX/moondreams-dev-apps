@@ -51,6 +51,8 @@ export interface PlanSealedFields {
   bankBackedSeenAt: number | null;
   /** Goal id to the target date the Horizon nudge was dismissed at; a changed date asks again. Null until a nudge is dismissed; a plan sealed before it existed lacks the key. */
   horizonNudgeDismissed: Record<string, number> | null;
+  /** Envelope ids pinned to Home's first tiles, in the person's order. Null until one is pinned; a plan sealed before it existed lacks the key. */
+  homePins: string[] | null;
 }
 
 export interface HoldsPromptChoice {
