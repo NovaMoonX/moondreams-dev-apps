@@ -21,7 +21,6 @@ function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
   const unseenCount = useAppSelector(selectNewSinceLooked).length;
   const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
   const hasKeyDates = useAppSelector(selectHasKeyDates);
-  // Coming up has a tile once there is a date to show.
   const tiles = BROWSE_TILES.filter(
     (tile) => tile.view !== 'comingUp' || hasKeyDates,
   );

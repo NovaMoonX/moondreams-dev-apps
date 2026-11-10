@@ -78,6 +78,7 @@ export function listUpcoming(input: {
               kind,
               label,
               whoName: who.name,
+              whoKind: who.kind,
               isSelf: who.isSelf,
             }),
           },
@@ -93,15 +94,24 @@ export function listUpcoming(input: {
     );
 }
 
-/** Today's order: close people (pets and the person included) first, then regular, soonest first within each. */
-export const orderForToday = (dates: UpcomingKeyDate[]) =>
-  [...dates].sort(
+/** Today's order: a date today or tomorrow first whoever it belongs to, then close people (pets and the person included), then regular, soonest first within each. */
+export const orderForToday = (dates: UpcomingKeyDate[]) => {
+  const closeness = (date: UpcomingKeyDate) =>
+    getCloseness({
+      tier: date.tier,
+      kind: date.whoKind,
+      isSelf: date.isSelf,
+    });
+  const isNear = (date: UpcomingKeyDate) => date.days <= 1;
+  return [...dates].sort(
     (a, b) =>
-      getCloseness({ tier: a.tier, kind: a.whoKind, isSelf: a.isSelf }) -
-        getCloseness({ tier: b.tier, kind: b.whoKind, isSelf: b.isSelf }) ||
-      a.days - b.days ||
+      Number(!isNear(a)) - Number(!isNear(b)) ||
+      (isNear(a)
+        ? a.days - b.days || closeness(a) - closeness(b)
+        : closeness(a) - closeness(b) || a.days - b.days) ||
       a.title.localeCompare(b.title),
   );
+};
 
 export interface MonthGroup {
   /** "2026-11". */
@@ -110,14 +120,16 @@ export interface MonthGroup {
 }
 
 /** The dates grouped by the month they fall in, in order. */
-export const groupByMonth = (dates: UpcomingKeyDate[]): MonthGroup[] =>
-  dates.reduce<MonthGroup[]>((groups, date) => {
+export const groupByMonth = (dates: UpcomingKeyDate[]): MonthGroup[] => {
+  const groups = dates.reduce((byKey, date) => {
     const key = date.date.slice(0, 7);
-    const last = groups[groups.length - 1];
-    return last?.key === key
-      ? [...groups.slice(0, -1), { key, dates: [...last.dates, date] }]
-      : [...groups, { key, dates: [date] }];
-  }, []);
+    const list = byKey.get(key);
+    if (list) list.push(date);
+    else byKey.set(key, [date]);
+    return byKey;
+  }, new Map<string, UpcomingKeyDate[]>());
+  return [...groups].map(([key, list]) => ({ key, dates: list }));
+};
 
 /** "November", or "January 2027" once the year is not today's. */
 export function formatMonthHeading(key: string, todayKey: string) {

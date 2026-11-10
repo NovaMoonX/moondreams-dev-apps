@@ -8,6 +8,7 @@ import type { IndexChange } from '../keyDateIndex.js';
 import { matchWho } from './matchEntities.js';
 import {
   MAX_YEARLY_PER_WHO,
+  checkKeyDateParts,
   partsPaths,
   toIndexEntry,
   type KeyDateParts,
@@ -166,17 +167,41 @@ const birthdayKey = (value: {
   year: number | null;
 }) => `${value.month}-${value.day}-${value.year ?? ''}`;
 
+/** Google's birthday as the code would keep it: a year that can't be one is dropped, a day that can't be one drops the birthday. */
+const usableBirthday = (birthday: Birthday | null | undefined) => {
+  if (!birthday) return null;
+  const thisYear = new Date().getFullYear();
+  const check = (year: number | null) =>
+    checkKeyDateParts(
+      {
+        kind: 'birthday',
+        label: null,
+        month: birthday.month,
+        day: birthday.day,
+        year,
+      },
+      thisYear,
+    );
+  const refusal = check(birthday.year);
+  if (refusal === null) return birthday;
+  return refusal === 'badYear' && check(null) === null
+    ? { ...birthday, year: null }
+    : null;
+};
+
 /** A birthday goes into an empty one only, and never past the cap of dates a who holds. */
 const addBirthday = (
   contact: ContactInput,
   who: ExistingWho | null,
   newId: NewId,
-): BirthdayChange | null =>
-  contact.birthday &&
-  who?.birthday == null &&
-  (who?.yearlyDateCount ?? 0) < MAX_YEARLY_PER_WHO
-    ? { kind: 'add', id: newId('keyDates'), value: contact.birthday }
+): BirthdayChange | null => {
+  const value = usableBirthday(contact.birthday);
+  return value &&
+    who?.birthday == null &&
+    (who?.yearlyDateCount ?? 0) < MAX_YEARLY_PER_WHO
+    ? { kind: 'add', id: newId('keyDates'), value }
     : null;
+};
 
 const photoFor = (
   contact: ContactInput,
@@ -335,7 +360,7 @@ export function planContactUpdate(input: {
     isPhotoNew && isPhotoUntouched && who.mediaIds.length < PHOTOS_PER_WHO
       ? photoFor(contact, who, input.newId)
       : null;
-  const incomingBirthday = contact.birthday ?? null;
+  const incomingBirthday = usableBirthday(contact.birthday);
   const isBirthdayUnedited =
     who.birthday !== null &&
     who.importedFields.birthday !== undefined &&
@@ -345,7 +370,9 @@ export function planContactUpdate(input: {
     incomingBirthday === null
       ? null
       : who.birthday === null
-        ? addBirthday(contact, who, input.newId)
+        ? who.importedFields.birthday === undefined
+          ? addBirthday(contact, who, input.newId)
+          : null
         : isBirthdayUnedited &&
             birthdayKey(who.birthday) !== birthdayKey(incomingBirthday)
           ? {
@@ -366,6 +393,26 @@ export function planContactUpdate(input: {
         birthday,
       };
 }
+
+const sealBirthday = (birthday: BirthdayChange, ownerName: string) => {
+  const { value } = birthday;
+  const sealedParts: KeyDateParts = {
+    kind: 'birthday',
+    label: null,
+    month: value.month,
+    day: value.day,
+    year: value.year,
+    captureId: null,
+  };
+  const title = buildKeyDateLine({
+    verb: birthday.kind === 'add' ? 'Added' : 'Changed',
+    owner: ownerName,
+    kind: 'birthday',
+    label: null,
+    when: formatYearlyDate(value),
+  });
+  return { title, sealedParts, birthday };
+};
 
 export interface PhotoSeal {
   bytesNonce: string;
@@ -431,25 +478,7 @@ export function buildImportWrites(input: {
     };
     const ownerName = before?.name ?? contact.name;
     const dated = change.birthday
-      ? (() => {
-          const { value } = change.birthday;
-          const sealedParts: KeyDateParts = {
-            kind: 'birthday',
-            label: null,
-            month: value.month,
-            day: value.day,
-            year: value.year,
-            captureId: null,
-          };
-          const title = buildKeyDateLine({
-            verb: change.birthday.kind === 'add' ? 'Added' : 'Changed',
-            owner: ownerName,
-            kind: 'birthday',
-            label: null,
-            when: formatYearlyDate(value),
-          });
-          return { title, sealedParts, birthday: change.birthday };
-        })()
+      ? sealBirthday(change.birthday, ownerName)
       : null;
     const mediaIds = [
       ...(before?.mediaIds ?? []),

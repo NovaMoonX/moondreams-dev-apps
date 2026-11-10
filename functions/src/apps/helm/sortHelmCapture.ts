@@ -675,7 +675,23 @@ async function readKeyDateState(
     candidateWhoIds: string[];
   },
 ) {
-  const index = await readIndexIn(transaction, firestore, base, key);
+  const index = await readIndexIn(transaction, firestore, base, key).catch(
+    (error: unknown) => {
+      logger.error('helm.keyDates.indexUnreadable', {
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return null;
+    },
+  );
+  if (!index) {
+    return {
+      index: null,
+      existing: new Map<string, KeyDateRecord>(),
+      kept: new Map<string, { id: string; record: KeyDateRecord }>(),
+      whoCounts: new Map<string, number>(),
+      momentCounts: new Map<string, number>(),
+    };
+  }
   const candidates = [
     ...new Set([
       ...input.candidateWhoIds,
@@ -1846,7 +1862,9 @@ async function writeResult(
       timeZone,
       selfWhoId,
       keyDates: isStale ? [] : keyDates,
-      keyDateIndex: keyDateRead?.index,
+      keyDateIndex: keyDateRead?.index ?? undefined,
+      isKeyDateIndexUnreadable:
+        keyDateRead !== null && keyDateRead.index === null,
       existingKeyDates: keyDateRead?.existing,
       whoCounts: keyDateRead?.whoCounts,
       momentCounts: keyDateRead?.momentCounts,
@@ -1913,7 +1931,7 @@ async function writeResult(
       plan.keyDateDeletes.forEach((id) =>
         transaction.delete(firestore.doc(`${base}/keyDates/${id}`)),
       );
-      if (plan.keyDateIndex && keyDateRead) {
+      if (plan.keyDateIndex && keyDateRead?.index) {
         writeIndexIn(transaction, firestore, base, {
           byWho: plan.keyDateIndex.byWho,
           rebuiltAt: keyDateRead.index.rebuiltAt,

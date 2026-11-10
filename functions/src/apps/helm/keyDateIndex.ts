@@ -19,7 +19,7 @@ export type IndexChange =
   | { op: 'removeWho'; whoId: string };
 
 /** One document holds this many entries before the index splits into twelve month documents. */
-export const INDEX_SPLIT_AT = 6_000;
+export const INDEX_SPLIT_AT = 2_000;
 
 export const INDEX_DOC = 'keyDateIndex';
 
@@ -40,24 +40,26 @@ const withWho = (byWho: ByWho, whoId: string, entries: IndexEntry[]): ByWho => {
   return entries.length === 0 ? rest : { ...rest, [whoId]: entries };
 };
 
+const applyOne = (byWho: ByWho, change: IndexChange): ByWho => {
+  if (change.op === 'removeWho') return withWho(byWho, change.whoId, []);
+  const current = byWho[change.whoId] ?? [];
+  if (change.op === 'remove') {
+    return withWho(
+      byWho,
+      change.whoId,
+      current.filter((entry) => entry[0] !== change.keyDateId),
+    );
+  }
+  const others = current.filter((entry) => entry[0] !== change.entry[0]);
+  return withWho(byWho, change.whoId, [...others, change.entry]);
+};
+
 /** Applies one change and returns the new map with its entry count; a who with no entries left is dropped from the map. */
 export function applyToKeyDateIndex(
   byWho: ByWho,
   change: IndexChange,
 ): { byWho: ByWho; entryCount: number } {
-  const next = ((): ByWho => {
-    if (change.op === 'removeWho') return withWho(byWho, change.whoId, []);
-    const current = byWho[change.whoId] ?? [];
-    if (change.op === 'remove') {
-      return withWho(
-        byWho,
-        change.whoId,
-        current.filter((entry) => entry[0] !== change.keyDateId),
-      );
-    }
-    const others = current.filter((entry) => entry[0] !== change.entry[0]);
-    return withWho(byWho, change.whoId, [...others, change.entry]);
-  })();
+  const next = applyOne(byWho, change);
   return { byWho: next, entryCount: countEntries(next) };
 }
 

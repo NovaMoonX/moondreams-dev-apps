@@ -502,6 +502,18 @@ export const buildKeyDateLine = (input: {
 /** The skipped line for a date the code did not write. */
 export const buildKeyDateSkipLine = (reason: string) => `Not added · ${reason}`;
 
-/** "Noted a date" or "Noted 2 dates", for the summary of a turn that noted some. */
-export const describeKeyDates = (count: number) =>
-  count === 0 ? null : plural(count, 'Noted a date', `Noted ${count} dates`);
+/** One date's line as the summary says it: "Noted Maya's birthday: March 3", "Noted Dana's met: Mar 2015", a removal or change as it was written. */
+const toNotedLine = (line: string) => {
+  const moment = /^Moment · (.+) · (.+) · (.+)$/.exec(line);
+  return moment
+    ? `Noted ${moment[1] === 'You' ? 'your' : `${moment[1]}'s`} ${lowerFirst(moment[2])}: ${moment[3]}`
+    : line.replace(/^Added /, 'Noted ');
+};
+
+/** The summary words for a turn's dates: the one date's own line ("Noted Maya's birthday: March 3", "Removed Mum's birthday: June 3"), or "Noted 3 dates". */
+export const describeKeyDates = (lines: string[]) =>
+  lines.length === 0
+    ? null
+    : lines.length === 1
+      ? toNotedLine(lines[0])
+      : `Noted ${lines.length} dates`;

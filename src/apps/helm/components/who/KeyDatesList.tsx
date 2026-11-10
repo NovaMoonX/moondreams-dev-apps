@@ -25,7 +25,7 @@ const toHint = (date: WhoKeyDate) =>
 /** The dates that come back for one who, each opening its sheet, with "Add a date" in the header. Read from the index alone. */
 function KeyDatesList({ who }: KeyDatesListProps) {
   const assistant = useAssistantName();
-  const { dates, isLoaded } = useKeyDates(who.id);
+  const { dates, isLoaded, isFailed } = useKeyDates(who.id);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
@@ -46,9 +46,11 @@ function KeyDatesList({ who }: KeyDatesListProps) {
         }
       />
       {dates.length === 0 ? (
-        isLoaded && (
+        (isFailed || isLoaded) && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
-            {HELM_COPY.keyDatesEmpty(assistant)}
+            {isFailed
+              ? HELM_COPY.keyDatesUnreadable
+              : HELM_COPY.keyDatesEmpty(assistant)}
           </p>
         )
       ) : (
@@ -84,7 +86,6 @@ function KeyDatesList({ who }: KeyDatesListProps) {
         </ul>
       )}
       <KeyDateSheet
-        key={`${openId ?? 'none'}:${isAdding}`}
         who={who}
         openId={openId}
         isAdding={isAdding}

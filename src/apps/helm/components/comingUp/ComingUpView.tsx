@@ -24,6 +24,7 @@ import {
 } from '@apps/helm/utils/keyDateUpcoming';
 
 interface ComingUpViewProps {
+  backLabel: string;
   onBack: () => void;
   onHome: () => void;
   onOpenWho: (whoId: string) => void;
@@ -32,7 +33,12 @@ interface ComingUpViewProps {
 const ROW_HEIGHT = 52;
 
 /** Coming up: everyone's dates that come back for the next 12 months, by month, with passing people behind "Show everyone". Read from the index alone. */
-function ComingUpView({ onBack, onHome, onOpenWho }: ComingUpViewProps) {
+function ComingUpView({
+  backLabel,
+  onBack,
+  onHome,
+  onOpenWho,
+}: ComingUpViewProps) {
   const assistant = useAssistantName();
   const todayKey = useTodayKey();
   const { isLoaded, isFailed } = useAppSelector(
@@ -76,7 +82,7 @@ function ComingUpView({ onBack, onHome, onOpenWho }: ComingUpViewProps) {
 
   return (
     <>
-      <HelmHeader backLabel='Today' onBack={onBack} onHome={onHome} />
+      <HelmHeader backLabel={backLabel} onBack={onBack} onHome={onHome} />
       <main className='space-y-4 pt-4'>
         <div className='space-y-1'>
           <h1 className='helm-serif text-[28px] leading-[34px]'>

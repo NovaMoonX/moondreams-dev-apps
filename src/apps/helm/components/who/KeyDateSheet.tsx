@@ -4,9 +4,11 @@ import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppToggle from '@/components/AppToggle';
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
+import SuggestionChips from '@/components/SuggestionChips';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -126,10 +128,10 @@ const toNumber = (text: string) =>
 
 const toDraft = (
   date: SheetDate | null,
-  hasBirthday: boolean,
+  canBirthday: boolean,
   startKind: KeyDateKind | null,
 ): Draft => ({
-  kind: date?.kind ?? startKind ?? (hasBirthday ? 'anniversary' : 'birthday'),
+  kind: date?.kind ?? startKind ?? (canBirthday ? 'birthday' : 'anniversary'),
   label: date?.label ?? '',
   comesBack: date ? date.precision === null : true,
   precision: date?.precision ?? 'day',
@@ -175,12 +177,20 @@ const titleOf = (
   date: Pick<SheetDate, 'kind' | 'label' | 'precision'>,
   who: OpenWho,
 ) =>
-  (date.precision === null ? describeKeyDate : describeMoment)({
-    kind: date.kind,
-    label: date.label,
-    whoName: who.name,
-    isSelf: who.isSelf,
-  });
+  date.precision === null
+    ? describeKeyDate({
+        kind: date.kind,
+        label: date.label,
+        whoName: who.name,
+        whoKind: who.kind,
+        isSelf: who.isSelf,
+      })
+    : describeMoment({
+        kind: date.kind,
+        label: date.label,
+        whoName: who.name,
+        isSelf: who.isSelf,
+      });
 
 const refusalText = (refusal: keyof typeof REFUSALS | null) =>
   refusal ? REFUSALS[refusal] : null;
@@ -228,7 +238,7 @@ interface FormProps {
   onSaved?: () => void;
   onDirtyChange: (isDirty: boolean) => void;
   onClose: () => void;
-  requestClose: () => void;
+  onCancel: () => void;
 }
 
 function KeyDateForm({
@@ -239,13 +249,14 @@ function KeyDateForm({
   onSaved,
   onDirtyChange,
   onClose,
-  requestClose,
+  onCancel,
 }: FormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const fieldId = useId();
   const isOffline = useNetworkStatus() === 'offline';
-  const [initial] = useState(() => toDraft(date, hasBirthday, startKind));
+  const canBirthday = !hasBirthday && who.kind !== 'organization';
+  const [initial] = useState(() => toDraft(date, canBirthday, startKind));
   const [draft, setDraft] = useState(initial);
   const [note, setNote] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -259,7 +270,7 @@ function KeyDateForm({
   };
 
   const kinds = KIND_OPTIONS.filter(
-    (option) => option.value !== 'birthday' || !hasBirthday,
+    (option) => option.value !== 'birthday' || canBirthday,
   );
   const isYearlyDraft = isYearly(draft);
   const hasMonthField =
@@ -354,12 +365,17 @@ function KeyDateForm({
   return (
     <div className='space-y-4'>
       {isNew && (
-        <PillGroup
-          label={HELM_COPY.keyDateKindLabel}
-          options={kinds}
-          value={draft.kind}
-          onChange={(kind) => change({ kind })}
-        />
+        <div className='space-y-1.5'>
+          <span className='text-sm font-medium'>
+            {HELM_COPY.keyDateKindLabel}
+          </span>
+          <PillGroup
+            label={HELM_COPY.keyDateKindLabel}
+            options={kinds}
+            value={draft.kind}
+            onChange={(kind) => change({ kind })}
+          />
+        </div>
       )}
       {draft.kind === 'custom' && (
         <div className='space-y-1.5'>
@@ -373,6 +389,13 @@ function KeyDateForm({
             placeholder={HELM_COPY.keyDateNamePlaceholder}
             onChange={(event) => change({ label: event.target.value })}
           />
+          {HELM_COPY.keyDateLabelSuggestions[who.kind].length > 0 && (
+            <SuggestionChips
+              label={HELM_COPY.keyDateLabelSuggestionsLabel}
+              suggestions={HELM_COPY.keyDateLabelSuggestions[who.kind]}
+              onPick={(label) => change({ label })}
+            />
+          )}
         </div>
       )}
       {isNew && draft.kind === 'custom' && (
@@ -416,7 +439,6 @@ function KeyDateForm({
           <Select
             options={MONTHS}
             value={draft.month}
-            placeholder={HELM_COPY.keyDateMonthLabel}
             onChange={(month) => change({ month })}
           />
         </div>
@@ -437,6 +459,8 @@ function KeyDateForm({
                 id={`${fieldId}-day`}
                 inputMode='numeric'
                 maxLength={2}
+                className='h-10 min-h-10'
+                placeholder={HELM_COPY.keyDateDayPlaceholder}
                 value={draft.day}
                 onChange={(event) =>
                   change({ day: event.target.value.replace(/\D/g, '') })
@@ -461,6 +485,8 @@ function KeyDateForm({
                 id={`${fieldId}-year`}
                 inputMode='numeric'
                 maxLength={4}
+                className='h-10 min-h-10'
+                placeholder={HELM_COPY.keyDateYearPlaceholder}
                 value={draft.year}
                 onChange={(event) =>
                   change({ year: event.target.value.replace(/\D/g, '') })
@@ -470,13 +496,18 @@ function KeyDateForm({
           )}
         </div>
       )}
+      {isYearlyDraft && draft.day === '' && (
+        <p className='text-muted-foreground -mt-2 text-[13px] text-pretty'>
+          {HELM_COPY.keyDateNoDayHint}
+        </p>
+      )}
       <ModalFooterActions
         note={note ?? (isOffline ? HELM_COPY.keyDateNeedsConnection : null)}
         cancelAction={
           <Button
             type='button'
             variant='tertiary'
-            onClick={requestClose}
+            onClick={onCancel}
             disabled={isSaving}
           >
             {HELM_COPY.editCancel}
@@ -511,7 +542,9 @@ function KeyDateSheet({
     dates.find((entry) => entry.id === openId) ??
     moments.find((entry) => entry.id === openId) ??
     null;
-  const [isEditing, setIsEditing] = useState(startsEditing);
+  const [editing, setEditing] = useState<{ title: string } | null>(
+    startsEditing ? { title: '' } : null,
+  );
   const [isDirty, setIsDirty] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [source, setSource] = useState<
@@ -525,8 +558,10 @@ function KeyDateSheet({
       ? { id: openId, ...read.parts }
       : null;
   const hasBirthday = dates.some((entry) => entry.kind === 'birthday');
-  const isOpen = isAdding || date !== null;
-  const isForm = isAdding || (isEditing && date !== null);
+  const isEditing = editing !== null;
+  const isGone = isEditing && !isAdding && date === null;
+  const isOpen = isAdding || date !== null || isEditing;
+  const isForm = isAdding || isEditing;
 
   useEffect(() => {
     if (!user || !openId) return;
@@ -545,11 +580,18 @@ function KeyDateSheet({
   }, [user, openId]);
 
   const close = () => {
-    setIsEditing(false);
+    setEditing(null);
     setIsDirty(false);
     onClose();
   };
   const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  const requestBack = useDiscardGuard({
+    isDirty,
+    onClose: () => {
+      setEditing(null);
+      setIsDirty(false);
+    },
+  });
 
   const remove = async () => {
     if (!user || !date || isRemoving) return;
@@ -602,6 +644,15 @@ function KeyDateSheet({
       ? HELM_COPY.momentNewTitle
       : HELM_COPY.keyDateNewTitle;
   const title = date ? titleOf(date, who) : addTitle;
+  const editTitle = (named: string) =>
+    date?.precision != null
+      ? HELM_COPY.momentEditTitle(named)
+      : HELM_COPY.keyDateEditTitle(named);
+  const sheetTitle = editing
+    ? editTitle(date ? title : editing.title)
+    : isAdding
+      ? addTitle
+      : title;
   const quote =
     read?.captureId != null
       ? (captures.find((capture) => capture.id === read.captureId)?.text ??
@@ -639,16 +690,16 @@ function KeyDateSheet({
     <DetailSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={
-        isEditing
-          ? date?.precision != null
-            ? HELM_COPY.momentEditTitle
-            : HELM_COPY.keyDateEditTitle
-          : title
-      }
-      viewKey={isForm ? 'form' : 'read'}
+      title={sheetTitle}
+      viewKey={isGone ? 'gone' : isForm ? 'form' : 'read'}
       footer={
-        isForm || !date ? undefined : (
+        isGone ? (
+          <div className='flex justify-end'>
+            <Button type='button' variant='secondary' onClick={close}>
+              {HELM_COPY.keyDateClose}
+            </Button>
+          </div>
+        ) : isForm || !date ? undefined : (
           <div className='flex items-center justify-end gap-2'>
             <Button
               type='button'
@@ -662,7 +713,7 @@ function KeyDateSheet({
               type='button'
               variant='secondary'
               disabled={isRemoving}
-              onClick={() => setIsEditing(true)}
+              onClick={() => setEditing({ title })}
             >
               {HELM_COPY.keyDateSheetEdit}
             </Button>
@@ -670,17 +721,29 @@ function KeyDateSheet({
         )
       }
     >
-      {isForm ? (
-        <KeyDateForm
-          who={who}
-          date={isAdding ? null : date}
-          hasBirthday={hasBirthday}
-          startKind={startKind ?? null}
-          onSaved={onSaved}
-          onDirtyChange={setIsDirty}
-          onClose={close}
-          requestClose={requestClose}
-        />
+      {isGone ? (
+        <p className='text-[15px] text-pretty'>
+          {HELM_COPY.keyDateGoneMeanwhile}
+        </p>
+      ) : isForm ? (
+        <div className='space-y-2'>
+          {!isAdding && (
+            <div className='-mb-1 flex items-center'>
+              <BackLink isChevronOnly onBack={requestBack} />
+            </div>
+          )}
+          <KeyDateForm
+            key={`${openId ?? 'new'}:${isAdding}`}
+            who={who}
+            date={isAdding ? null : date}
+            hasBirthday={hasBirthday}
+            startKind={startKind ?? null}
+            onSaved={onSaved}
+            onDirtyChange={setIsDirty}
+            onClose={close}
+            onCancel={isAdding ? requestClose : requestBack}
+          />
+        </div>
       ) : (
         date && (
           <div className='flex flex-col gap-3'>

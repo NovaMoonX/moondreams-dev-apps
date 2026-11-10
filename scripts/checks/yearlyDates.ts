@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import {
+  getRecentAdoptionAnniversaries,
   getUpcomingBirthdays,
   nextOccurrenceOnOrAfter,
 } from '../../src/apps/nine-lives/utils/catAnniversaries.ts';
@@ -162,5 +163,18 @@ assert.deepEqual(
   ],
   'the banner lists today and the next 7 days only',
 );
+
+const gotcha = getRecentAdoptionAnniversaries(
+  [{ id: 'leap', adoptedAt: Date.UTC(2020, 1, 29) }] as Parameters<
+    typeof getRecentAdoptionAnniversaries
+  >[0],
+  Date.UTC(2027, 2, 1),
+);
+assert.equal(
+  gotcha[0]?.occursAt,
+  Date.UTC(2027, 1, 28),
+  'a 29 February gotcha day falls on 28 February in a common year',
+);
+assert.equal(gotcha[0]?.daysSince, 1);
 
 console.log('yearly dates ok');

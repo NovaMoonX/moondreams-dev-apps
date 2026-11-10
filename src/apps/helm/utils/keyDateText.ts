@@ -1,5 +1,5 @@
 import { HELM_COPY } from '@apps/helm/constants';
-import type { KeyDateKind, MomentPrecision } from '@apps/helm/types';
+import type { KeyDateKind, MomentPrecision, WhoKind } from '@apps/helm/types';
 import {
   formatMoment,
   formatYearlyDate,
@@ -54,15 +54,16 @@ export const describeMoment = (input: {
 }) =>
   `${input.isSelf ? HELM_COPY.youLabel : input.whoName} · ${toKeyDateTitleWord(input.kind, input.label)}`;
 
-/** Whose date it is, in words: "Maya's birthday", "Your birthday", "Your anniversary with Maya", "Miso's gotcha day". */
+/** Whose date it is, in words: "Maya's birthday", "Your birthday", "Your anniversary with Maya" (a person only; a pet or organization has "Miso's anniversary"), "Miso's gotcha day". */
 export function describeKeyDate(input: {
   kind: KeyDateKind;
   label: string | null;
   whoName: string;
+  whoKind: WhoKind;
   isSelf: boolean;
 }) {
   const word = toKeyDateWord(input.kind, input.label);
-  if (input.kind === 'anniversary') {
+  if (input.kind === 'anniversary' && input.whoKind === 'person') {
     return input.isSelf
       ? `${HELM_COPY.keyDateYours} ${word}`
       : `${HELM_COPY.keyDateYours} ${word}${HELM_COPY.keyDateWith(input.whoName)}`;

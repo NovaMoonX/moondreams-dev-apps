@@ -307,4 +307,46 @@ assert.equal(
   'a birthday that was never imported is never replaced',
 );
 
+const removed = planContactUpdate({
+  contact: moved,
+  who: who('w-priya', 'Priya Raman', {
+    importedFields: { birthday: digest('birthday', '4-22-') },
+  }),
+  digest,
+  newId,
+});
+assert.equal(
+  removed?.birthday ?? null,
+  null,
+  'a birthday the person removed stays removed',
+);
+const neverImported = planContactUpdate({
+  contact: moved,
+  who: who('w-priya', 'Priya Raman'),
+  digest,
+  newId,
+});
+assert.equal(neverImported?.birthday?.kind, 'add');
+
+const badYear = run(
+  ['people/c9'],
+  [],
+  [{ ...withBirthday, birthday: { month: 4, day: 22, year: 3000 } }],
+);
+assert.deepEqual(
+  badYear.changes[0]?.birthday?.value,
+  fromGoogle,
+  'a year that cannot be one is dropped',
+);
+const badDay = run(
+  ['people/c9'],
+  [],
+  [{ ...withBirthday, birthday: { month: 2, day: 30, year: null } }],
+);
+assert.equal(
+  badDay.changes[0]?.birthday ?? null,
+  null,
+  'a day that is not in the month keeps no birthday',
+);
+
 console.log('Helm contact import: all checks passed');
