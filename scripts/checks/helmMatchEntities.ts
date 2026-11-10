@@ -164,7 +164,7 @@ test('places match by name or alias, are new when unknown and unsure when half k
       { kind: 'match', id: 'p2' },
       { kind: 'match', id: 'p2' },
       { kind: 'new' },
-      { kind: 'unsure' },
+      { kind: 'unsure', candidateIds: ['p2'] },
       { kind: 'dropped' },
     ],
   );

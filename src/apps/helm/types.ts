@@ -59,7 +59,8 @@ export type CaptureStatus =
 export type HeldReason =
   'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached' | 'recentLimit';
 
-export type QuestionKind = 'couldNotRead' | 'moreToSort' | (string & {});
+export type QuestionKind =
+  'couldNotRead' | 'moreToSort' | 'whichPerson' | 'whichPlace' | (string & {});
 
 /** The readable state of one question; its words are sealed and never needed on the device. */
 export interface QuestionState {
@@ -68,6 +69,28 @@ export interface QuestionState {
   askedAt: number;
   answeredAt: number | null;
   skippedAt: number | null;
+}
+
+/** One choice of a question; `new` and `none` carry no ref. */
+export interface QuestionOption {
+  id: string;
+  label: string;
+  detail: string | null;
+  ref: { collection: 'who' | 'places'; id: string } | null;
+}
+
+/** An opened sealed question that asks which person or place a name meant; its link is held until it is answered. */
+export interface HelmQuestion {
+  kind: 'whichPerson' | 'whichPlace';
+  builtBy: 'code';
+  shape: 'pickOne';
+  prompt: string;
+  options: QuestionOption[];
+  answer: {
+    by: 'tap' | 'voice';
+    at: number;
+    optionId: string;
+  } | null;
 }
 
 export type CaptureRoute = 'quick' | 'full';
@@ -224,6 +247,8 @@ export interface CaptureSealed {
   text: string;
   reading: CaptureReading;
   answer: CaptureAnswer | null;
+  /** The questions the turn asked, by id; only the readable ones carry words here. */
+  questions?: Record<string, unknown>;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -233,6 +258,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   reading: CaptureReading;
   /** Null on a turn that asked nothing, and on one made before answers were kept. */
   answer: CaptureAnswer | null;
+  /** The which-person and which-place questions the turn asked, by id, once opened. */
+  questions: Record<string, HelmQuestion>;
   isUnreadable: boolean;
   /** The write has not reached the server yet, so it waits for a connection. */
   hasPendingWrites: boolean;

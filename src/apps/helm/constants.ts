@@ -71,6 +71,9 @@ export const PLACES_LIMIT = 500;
 /** Mentions a who's page lists before "Show all". */
 export const MENTIONS_SHOWN = 10;
 
+/** Questions a turn shows at once. */
+export const QUESTIONS_PER_TURN = 3;
+
 export const EARLIER_SESSIONS_PAGE = 20;
 
 /** Whether Disconnect's "also delete" box starts ticked. */
@@ -747,6 +750,65 @@ export const HELM_COPY = {
   showFewerMentions: 'Show fewer',
   placeHomeLine: 'Your home',
   placeTasksEmpty: 'No open tasks here.',
+  questionNeedsConnection: 'Answering needs a connection.',
+  questionSkip: 'Skip',
+  questionSkipped: "Skipped. It's waiting in Needs you.",
+  questionAnswered: 'Done.',
+  questionSheetTitle: 'Which one?',
+  questionOptionAria: (label: string, detail: string | null) =>
+    detail ? `${label}, ${detail}` : label,
+  whoEditMenu: 'Change name, kind or how they relate',
+  whoTierMenu: 'Change how close',
+  whoForgetMenu: (name: string) => `Forget ${name}`,
+  whoEditTitle: 'Change details',
+  whoNameField: 'Name',
+  whoAliasesField: 'Also called',
+  whoAliasesHelp: 'Other names they go by, separated by commas.',
+  whoKindField: 'Kind',
+  whoKindPerson: 'Person',
+  whoKindPet: 'Pet',
+  whoKindOrganization: 'Organization',
+  whoRelationField: 'How they relate',
+  whoRelationPlaceholder: 'my sister',
+  whoSpeciesField: 'Species',
+  whoSpeciesPlaceholder: 'Cat',
+  whoOrganizationKindField: 'Kind of organization',
+  whoOrganizationKindPlaceholder: 'Bakery',
+  whoPhoneField: 'Phone',
+  whoEmailField: 'Email',
+  whoNameMissing: 'A name is needed.',
+  editSave: 'Save',
+  editCancel: 'Cancel',
+  editNeedsConnection: 'Saving changes needs a connection.',
+  editFailed: "That didn't save. Try again.",
+  editGone: 'This page is gone.',
+  editUnreadable: "This page couldn't be opened.",
+  whoTierTitle: 'How close',
+  whoTierHelp: (assistant: string) =>
+    `${assistant} won't change this once you set it.`,
+  tierPassing: 'Passing',
+  forgetNeedsConnection: 'Forgetting needs a connection.',
+  forgetFailed: "That didn't work. Nothing was forgotten.",
+  forgetConfirmWho: (name: string, tasks: number) =>
+    tasks === 0
+      ? `Forget ${name}? No open tasks are linked to them.`
+      : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`,
+  forgetConfirmPlace: (name: string, tasks: number) =>
+    tasks === 0
+      ? `Forget ${name}? No open tasks are linked to it.`
+      : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no place.`,
+  forgetAction: 'Forget',
+  forgotToast: (name: string, tasks: number) =>
+    tasks === 0
+      ? `Forgot ${name}`
+      : `Forgot ${name}, taken off ${tasks === 1 ? '1 task' : `${tasks} tasks`}`,
+  forgotUndone: (name: string) => `Brought back ${name}`,
+  forgotUndoFailed: "That couldn't be brought back.",
+  placeEditMenu: 'Change name or address',
+  placeEditTitle: 'Change place',
+  placeAddressField: 'Address',
+  placeIsHome: 'This is home',
+  placeIsHomeHelp: 'Only one place is home. Choosing this one moves it.',
   linkedPerson: 'Person',
   linkedPet: 'Pet',
   linkedOrganization: 'Organization',

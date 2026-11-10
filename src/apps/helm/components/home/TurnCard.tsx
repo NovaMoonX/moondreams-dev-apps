@@ -8,6 +8,7 @@ import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
+import QuestionBlock from '@apps/helm/components/home/QuestionBlock';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -19,7 +20,10 @@ import {
 } from '@apps/helm/store/actions/captureActions';
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
-import { getHomeHeldLine } from '@apps/helm/utils/heldCaptures';
+import {
+  getHomeHeldLine,
+  getOpenQuestions,
+} from '@apps/helm/utils/heldCaptures';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 
 interface TurnCardProps {
@@ -100,6 +104,7 @@ function TurnCard({
   useEffect(() => {
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
+  const questions = capture.isUnreadable ? [] : getOpenQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
@@ -211,6 +216,14 @@ function TurnCard({
           {`screen ${capture.screen.view} · focus ${capture.screen.focus?.id ?? 'none'} · ${capture.screen.visible.length} visible`}
         </p>
       )}
+      {questions.map((entry) => (
+        <QuestionBlock
+          key={entry.id}
+          captureId={capture.id}
+          item={entry}
+          isInSheet={false}
+        />
+      ))}
       {heldLine !== null && (
         <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
       )}

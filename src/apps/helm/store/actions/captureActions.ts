@@ -208,6 +208,16 @@ export const markCaptureSpoken = (
   ttsProvider: string,
 ) => updateDoc(doc(capturesOf(uid), captureId), { ttsProvider });
 
+/** Sets a question aside so it waits in Needs you; touches only its own field and runs nothing. */
+export const skipQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+) =>
+  updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.skippedAt`]: Date.now(),
+  });
+
 export const markAiNoticeSeen = (uid: string) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });
 

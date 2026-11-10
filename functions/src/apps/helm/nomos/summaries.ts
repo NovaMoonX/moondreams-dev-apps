@@ -95,3 +95,91 @@ export const buildCodeQuestion = (kind: CodeQuestionKind) => ({
   aboutRef: null,
   answer: null,
 });
+
+export type PickKind = 'whichPerson' | 'whichPlace';
+
+/** Fixed wording for the "which one?" questions asked when a name fits more than one record. */
+export const PICK_WORDS: Record<
+  PickKind,
+  { prompt: (name: string) => string; newLabel: string; noneLabel: string }
+> = {
+  whichPerson: {
+    prompt: (name) => `Which ${name}?`,
+    newLabel: 'Someone new',
+    noneLabel: "Don't link anyone",
+  },
+  whichPlace: {
+    prompt: (name) => `Which ${name}?`,
+    newLabel: 'New place',
+    noneLabel: "Don't link a place",
+  },
+};
+
+export interface PickCandidate {
+  id: string;
+  label: string;
+  detail: string | null;
+}
+
+export type HeldLink =
+  | {
+      kind: 'linkWho';
+      taskIds: string[];
+      mention: {
+        name: string;
+        kind: string;
+        relation: string | null;
+        species: string | null;
+        organizationKind: string | null;
+      };
+    }
+  | { kind: 'linkPlace'; taskIds: string[]; place: { name: string } };
+
+/** The sealed half of a "which one?" question: the candidates, a new one and none, with the link held until one is picked. */
+export const buildPickQuestion = (input: {
+  kind: PickKind;
+  name: string;
+  candidates: PickCandidate[];
+  held: HeldLink;
+}) => {
+  const collection = input.kind === 'whichPerson' ? 'who' : 'places';
+  const words = PICK_WORDS[input.kind];
+  return {
+    kind: input.kind,
+    builtBy: 'code' as const,
+    shape: 'pickOne' as const,
+    prompt: words.prompt(input.name),
+    options: [
+      ...input.candidates.map((candidate) => ({
+        ...candidate,
+        ref: { collection, id: candidate.id },
+      })),
+      { id: 'new', label: words.newLabel, detail: null, ref: null },
+      { id: 'none', label: words.noneLabel, detail: null, ref: null },
+    ],
+    allowsSomethingElse: false,
+    noneOption: false,
+    recordKinds: [],
+    dateMode: null,
+    number: null,
+    heldCommands: [input.held],
+    aboutRef: input.held.taskIds[0]
+      ? { collection: 'tasks', id: input.held.taskIds[0] }
+      : null,
+    answer: null,
+  };
+};
+
+/** The line said after a spoken turn that asked "Which Sam?": "Which Sam, Sam Rivera or Sam Patel?". */
+export const buildSpokenPick = (
+  name: string,
+  labels: string[],
+  newWord = 'someone new',
+) => {
+  const spoken = labels.slice(0, 3);
+  const list =
+    spoken.length === 1
+      ? `${spoken[0]} or ${newWord}`
+      : `${spoken.slice(0, -1).join(', ')} or ${spoken[spoken.length - 1]}`;
+  return `Which ${name}, ${list}?`;
+};

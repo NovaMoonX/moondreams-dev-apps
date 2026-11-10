@@ -2,13 +2,15 @@ import { formatTime } from '@/utils/formatUtils';
 import {
   DAY_MS,
   HELM_COPY,
+  QUESTIONS_PER_TURN,
   SWEEP_LEASE_MS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
-import type { OpenCapture } from '@apps/helm/types';
+import type { HelmQuestion, OpenCapture } from '@apps/helm/types';
 
 /** What a turn needs from the person (`needsYou`) or only time (`waiting`). */
-export type HeldKind = 'couldNotRead' | 'moreToSort' | 'failed' | 'waiting';
+export type HeldKind =
+  'couldNotRead' | 'moreToSort' | 'question' | 'failed' | 'waiting';
 
 export interface HeldItem {
   kind: HeldKind;
@@ -20,11 +22,36 @@ const hasOpenQuestion = (capture: OpenCapture, kind: string) =>
     (question) => question.kind === kind && question.answeredAt === null,
   );
 
+export interface OpenQuestion {
+  id: string;
+  question: HelmQuestion;
+  skippedAt: number | null;
+}
+
+/** The which-person and which-place questions a turn still asks, oldest first, at most as many as a turn shows. */
+export const getOpenQuestions = (capture: OpenCapture): OpenQuestion[] =>
+  Object.entries(capture.questionState)
+    .filter(([, state]) => state.answeredAt === null)
+    .sort(([, a], [, b]) => a.askedAt - b.askedAt)
+    .flatMap(([id, state]) =>
+      capture.questions[id]
+        ? [
+            {
+              id,
+              question: capture.questions[id],
+              skippedAt: state.skippedAt,
+            },
+          ]
+        : [],
+    )
+    .slice(0, QUESTIONS_PER_TURN);
+
 export const toHeldKind = (capture: OpenCapture): HeldKind | null => {
   if (capture.status === 'failed') return 'failed';
   if (capture.status === 'needsYou') {
     if (hasOpenQuestion(capture, 'couldNotRead')) return 'couldNotRead';
-    return hasOpenQuestion(capture, 'moreToSort') ? 'moreToSort' : null;
+    if (hasOpenQuestion(capture, 'moreToSort')) return 'moreToSort';
+    return getOpenQuestions(capture).length > 0 ? 'question' : null;
   }
   return capture.status === 'received' ? 'waiting' : null;
 };
@@ -143,7 +170,7 @@ export function toTaskTitle(text: string) {
 /** The line under a held turn on home, short enough to stay one quiet line; null when the turn is not held. */
 export function getHomeHeldLine(capture: OpenCapture, isNewest: boolean) {
   const kind = toHeldKind(capture);
-  if (kind === null) return null;
+  if (kind === null || kind === 'question') return null;
   if (kind !== 'waiting') return HELM_COPY.waitingInNeedsYou;
   if (capture.heldReason === 'dailyLimit') {
     return HELM_COPY.savedHeldDaily(getLimitResetTime());

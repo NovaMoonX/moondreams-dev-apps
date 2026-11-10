@@ -1,17 +1,26 @@
 import { useMemo, useState } from 'react';
 
+import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
+import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
 import WhoMark from '@apps/helm/components/who/WhoMark';
+import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { forgetWho } from '@apps/helm/store/actions/whoActions';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
+
+const { option } = DropdownMenuFactories;
 
 interface WhoDetailProps {
   whoId: string | null;
@@ -22,10 +31,14 @@ interface WhoDetailProps {
 /** One person, pet or organization: what it is, the facts kept about it, its open tasks and the turns that named it. */
 function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   const assistant = useAssistantName();
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
   const [isAllMentions, setIsAllMentions] = useState(false);
+  const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
   const who = items.find((entry) => entry.id === whoId) ?? null;
   const name = who && !who.isUnreadable ? who.name : '';
 
@@ -58,6 +71,69 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
     },
   );
 
+  const forget = async () => {
+    if (!user || !who || who.isSelf) return;
+    if (!navigator.onLine) {
+      addToast({ title: HELM_COPY.forgetNeedsConnection, type: 'info' });
+      return;
+    }
+    const isConfirmed = await confirm({
+      title: HELM_COPY.whoForgetMenu(who.name),
+      message: HELM_COPY.forgetConfirmWho(who.name, tasks.length),
+      confirmText: HELM_COPY.forgetAction,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    try {
+      const { counts, restore } = await forgetWho(user.uid, who.id);
+      onBack();
+      addToast({
+        title: HELM_COPY.forgotToast(who.name, counts.tasks),
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () =>
+            void restore().then(
+              () =>
+                addToast({
+                  title: HELM_COPY.forgotUndone(who.name),
+                  type: 'info',
+                }),
+              (error: unknown) => {
+                console.error('Helm forgotten person was not restored', error);
+                addToast({ title: HELM_COPY.forgotUndoFailed, type: 'error' });
+              },
+            ),
+        },
+      });
+    } catch (error) {
+      console.error('Helm person was not forgotten', error);
+      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+    }
+  };
+
+  const menu =
+    who && !who.isUnreadable
+      ? {
+          items: [
+            option({ label: HELM_COPY.whoEditMenu, value: 'edit' }),
+            ...(who.isSelf
+              ? []
+              : [
+                  option({ label: HELM_COPY.whoTierMenu, value: 'tier' }),
+                  option({
+                    label: HELM_COPY.whoForgetMenu(who.name),
+                    value: 'forget',
+                  }),
+                ]),
+          ],
+          onItemSelect: (value: string) => {
+            if (value === 'forget') void forget();
+            else if (value === 'edit' || value === 'tier') setSheet(value);
+          },
+        }
+      : undefined;
+
   const line = who
     ? getWhoLine(who, {
         you: HELM_COPY.youLabel,
@@ -72,6 +148,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         backLabel={HELM_COPY.peopleTitle}
         onBack={onBack}
         onHome={onHome}
+        menu={menu}
       />
       <main className='space-y-4 pt-4'>
         {isLoaded && !who && (
@@ -151,6 +228,20 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
           </>
         )}
       </main>
+      {who && !who.isUnreadable && (
+        <>
+          <WhoEditSheet
+            isOpen={sheet === 'edit'}
+            onClose={() => setSheet(null)}
+            who={who}
+          />
+          <WhoTierSheet
+            isOpen={sheet === 'tier'}
+            onClose={() => setSheet(null)}
+            who={who}
+          />
+        </>
+      )}
     </>
   );
 }

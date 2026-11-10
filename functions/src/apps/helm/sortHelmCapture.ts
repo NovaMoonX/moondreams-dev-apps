@@ -249,7 +249,7 @@ function pickProvider(text: string, reading: CaptureReading): ModelProvider {
   throw new SortFailure('noModelKey', false);
 }
 
-function loadKeyringOrFail(): Keyring {
+export function loadKeyringOrFail(): Keyring {
   try {
     return loadHelmKeyring();
   } catch {
@@ -474,6 +474,12 @@ async function readPeople(
         kind,
         name: words.name,
         aliases: aliasesOf(words),
+        relation: typeof words.relation === 'string' ? words.relation : null,
+        species: typeof words.species === 'string' ? words.species : null,
+        organizationKind:
+          typeof words.organizationKind === 'string'
+            ? words.organizationKind
+            : null,
         tier: doc.get('tier'),
         tierSetBy: doc.get('tierSetBy'),
         mentionDayKeys: [],
@@ -488,7 +494,14 @@ async function readPeople(
       unreadable.places += 1;
       return [];
     }
-    return [{ id: doc.id, name: words.name, aliases: aliasesOf(words) }];
+    return [
+      {
+        id: doc.id,
+        name: words.name,
+        aliases: aliasesOf(words),
+        address: typeof words.address === 'string' ? words.address : null,
+      },
+    ];
   });
   if (unreadable.who + unreadable.places > 0) {
     logger.warn('helm.sort.peopleUnreadable', unreadable);
@@ -1256,6 +1269,7 @@ async function writeResult(
       opened: openForHelm(key, capture.sealed),
       questionState: capture.questionState ?? {},
       executionIds: capture.executionIds ?? [],
+      questions: isFiling ? plan.questions : [],
     });
     if (mode === 'full') {
       sortedJoined.forEach((snapshot) =>

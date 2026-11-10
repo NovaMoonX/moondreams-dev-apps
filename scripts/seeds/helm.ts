@@ -1241,7 +1241,7 @@ const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
   ...extra,
 });
 
-/** Alex's people: themself, two Sams, a cat and a bakery, a home, three tasks that link them and a turn that names the second Sam. */
+/** Alex's people: themself, two Sams, a cat and a bakery, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
 async function buildPeople(input: {
   displayName: string;
   now: number;
@@ -1296,7 +1296,7 @@ async function buildPeople(input: {
           lastMentionedAt: now - 2 * DAY_MS,
         },
         now - 2 * DAY_MS,
-        await seal(wordsOf('Sam Patel')),
+        await seal(wordsOf('Sam Patel', { relation: 'neighbor' })),
       ),
     },
     {
@@ -1387,7 +1387,99 @@ async function buildPeople(input: {
       { whoIds: [], placeIds: ['seed-place-home'] },
       3,
     ),
+    taskOf('Lunch with Sam', { whoIds: [], placeIds: [] }, 4),
   ]);
+  const questionTaskId = 'seed-task-who-4';
+  const questionText = 'Lunch with Sam Friday';
+  const questionAt = now - 20 * MINUTE_MS;
+  const question = {
+    kind: 'whichPerson',
+    builtBy: 'code',
+    shape: 'pickOne',
+    prompt: 'Which Sam?',
+    options: [
+      {
+        id: 'seed-who-sam-rivera',
+        label: 'Sam Rivera',
+        detail: 'Work friend',
+        ref: { collection: 'who', id: 'seed-who-sam-rivera' },
+      },
+      {
+        id: 'seed-who-sam-patel',
+        label: 'Sam Patel',
+        detail: 'Neighbor',
+        ref: { collection: 'who', id: 'seed-who-sam-patel' },
+      },
+      { id: 'new', label: 'Someone new', detail: null, ref: null },
+      { id: 'none', label: "Don't link anyone", detail: null, ref: null },
+    ],
+    allowsSomethingElse: false,
+    noneOption: false,
+    recordKinds: [],
+    dateMode: null,
+    number: null,
+    heldCommands: [
+      {
+        kind: 'linkWho',
+        taskIds: [questionTaskId],
+        mention: {
+          name: 'Sam',
+          kind: 'person',
+          relation: null,
+          species: null,
+          organizationKind: null,
+        },
+      },
+    ],
+    aboutRef: { collection: 'tasks', id: questionTaskId },
+    answer: null,
+  };
+  const questionCapture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    ttsProvider: null,
+    medium: 'web',
+    sessionId: 'seed-alex-question',
+    turnIndex: 0,
+    route: 'quick',
+    status: 'needsYou',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {
+      'seed-question-which-sam': {
+        kind: 'whichPerson',
+        shape: 'pickOne',
+        askedAt: questionAt + SORT_DELAY_MS,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    executionIds: [],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    seenAt: null,
+    quotedSourceKeys: [],
+    whoIds: [],
+    placeIds: [],
+    createdAt: questionAt,
+    sortedAt: questionAt + SORT_DELAY_MS,
+    planDayKey: null,
+    screen: null,
+    sealed: await seal({
+      text: questionText,
+      reading: readCapture(questionText, {
+        now: questionAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questions: { 'seed-question-which-sam': question },
+    }),
+  };
   const text = 'Sam Patel might join us for lunch on Saturday';
   const turnAt = now - 2 * DAY_MS;
   const capture: Capture = {
@@ -1432,6 +1524,7 @@ async function buildPeople(input: {
     places: [{ id: 'seed-place-home', place: home }],
     tasks,
     capture: { id: 'seed-turn-who', capture },
+    questionCapture: { id: 'seed-turn-question', capture: questionCapture },
   };
 }
 
@@ -1872,9 +1965,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           person.collection('captures').doc(people.capture.id),
           people.capture.capture,
         );
+        batch.set(
+          person.collection('captures').doc(people.questionCapture.id),
+          people.questionCapture.capture,
+        );
       }
       const peopleCount = people
-        ? people.who.length + people.places.length + people.tasks.length + 1
+        ? people.who.length + people.places.length + people.tasks.length + 2
         : 0;
       const backToBackCount =
         peopleCount +

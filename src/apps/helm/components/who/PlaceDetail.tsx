@@ -1,12 +1,20 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+
+import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
+import PlaceEditSheet from '@apps/helm/components/who/PlaceEditSheet';
 import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { forgetPlace } from '@apps/helm/store/actions/placeActions';
+
+const { option } = DropdownMenuFactories;
 
 interface PlaceDetailProps {
   placeId: string | null;
@@ -16,6 +24,10 @@ interface PlaceDetailProps {
 
 /** One place the person named: its name, its address when there is one and the open tasks linked to it. */
 function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const { items, isLoaded } = useAppSelector((state) => state.helm.places);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const place = items.find((entry) => entry.id === placeId) ?? null;
@@ -40,9 +52,72 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
     },
   );
 
+  const forget = async () => {
+    if (!user || !place) return;
+    if (!navigator.onLine) {
+      addToast({ title: HELM_COPY.forgetNeedsConnection, type: 'info' });
+      return;
+    }
+    const isConfirmed = await confirm({
+      title: HELM_COPY.whoForgetMenu(place.name),
+      message: HELM_COPY.forgetConfirmPlace(place.name, tasks.length),
+      confirmText: HELM_COPY.forgetAction,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    try {
+      const { counts, restore } = await forgetPlace(user.uid, place.id);
+      onBack();
+      addToast({
+        title: HELM_COPY.forgotToast(place.name, counts.tasks),
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () =>
+            void restore().then(
+              () =>
+                addToast({
+                  title: HELM_COPY.forgotUndone(place.name),
+                  type: 'info',
+                }),
+              (error: unknown) => {
+                console.error('Helm forgotten place was not restored', error);
+                addToast({ title: HELM_COPY.forgotUndoFailed, type: 'error' });
+              },
+            ),
+        },
+      });
+    } catch (error) {
+      console.error('Helm place was not forgotten', error);
+      addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
+    }
+  };
+
+  const menu =
+    place && !place.isUnreadable
+      ? {
+          items: [
+            option({ label: HELM_COPY.placeEditMenu, value: 'edit' }),
+            option({
+              label: HELM_COPY.whoForgetMenu(place.name),
+              value: 'forget',
+            }),
+          ],
+          onItemSelect: (value: string) => {
+            if (value === 'forget') void forget();
+            else if (value === 'edit') setIsEditOpen(true);
+          },
+        }
+      : undefined;
+
   return (
     <>
-      <HelmHeader backLabel='Home' onBack={onBack} onHome={onHome} />
+      <HelmHeader
+        backLabel='Home'
+        onBack={onBack}
+        onHome={onHome}
+        menu={menu}
+      />
       <main className='space-y-4 pt-4'>
         {isLoaded && !place && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
@@ -86,6 +161,13 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
           </>
         )}
       </main>
+      {place && !place.isUnreadable && (
+        <PlaceEditSheet
+          isOpen={isEditOpen}
+          onClose={() => setIsEditOpen(false)}
+          place={place}
+        />
+      )}
     </>
   );
 }

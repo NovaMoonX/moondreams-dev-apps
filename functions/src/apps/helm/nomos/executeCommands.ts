@@ -19,9 +19,14 @@ import { AUTOMATIC_LEVEL } from './policy.js';
 import { buildSpokenAck } from './spoken.js';
 import {
   buildCodeQuestion,
+  buildPickQuestion,
+  buildSpokenPick,
   summarize,
   type CodeQuestionKind,
   type EffectCounts,
+  type HeldLink,
+  type PickCandidate,
+  type PickKind,
 } from './summaries.js';
 
 export interface ExistingTask {
@@ -36,6 +41,9 @@ export interface ExistingTask {
 
 /** A who the person already has, with what the tier rule reads about it. */
 export interface KnownWhoState extends KnownWho {
+  relation?: string | null;
+  species?: string | null;
+  organizationKind?: string | null;
   tier: WhoTierValue;
   tierSetBy: 'person' | 'nomos';
   mentionDayKeys: string[];
@@ -78,7 +86,18 @@ export interface WritePlan {
   effectRefs: EffectRef[];
   effects: Effect[];
   counts: EffectCounts;
+  /** One "which one?" question for each unsure name a filed task points at, at most MAX_PICK_QUESTIONS. */
+  questions: PlannedQuestion[];
 }
+
+export interface PlannedQuestion {
+  id: string;
+  state: QuestionStateEntry;
+  sealed: Record<string, unknown>;
+  spoken: string;
+}
+
+export const MAX_PICK_QUESTIONS = 3;
 
 interface PlanInput {
   commands: NomosCommand[];
@@ -111,6 +130,72 @@ const NAME_CASE = {
   keepMixedCase: true,
 } as const;
 
+/** The document a new person, pet or organization is made as, whether a turn or an answered question makes it. */
+export const buildWhoDoc = (input: {
+  mention: MentionRead;
+  name: string;
+  tier: WhoTierValue;
+  executionId: string;
+  lastMentionedAt: number;
+  now: number;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}): Record<string, unknown> => ({
+  kind: input.mention.kind,
+  tier: input.tier,
+  tierSetBy: 'nomos',
+  isSelf: false,
+  placeIds: [],
+  photoMediaId: null,
+  mediaIds: [],
+  importedFrom: null,
+  importedFields: {},
+  lastMentionedAt: input.lastMentionedAt,
+  yearlyDateCount: 0,
+  momentCount: 0,
+  createdBy: 'nomos',
+  executionId: input.executionId,
+  createdAt: input.now,
+  lastEditedAt: null,
+  sealed: input.seal({
+    name: input.name,
+    aliases: [],
+    relation: input.mention.relation,
+    phone: null,
+    email: null,
+    notes: null,
+    species: input.mention.species
+      ? toDisplayCase(input.mention.species)
+      : null,
+    organizationKind: input.mention.organizationKind
+      ? toDisplayCase(input.mention.organizationKind)
+      : null,
+  }),
+});
+
+/** The document a new place is made as. */
+export const buildPlaceDoc = (input: {
+  name: string;
+  executionId: string;
+  now: number;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}): Record<string, unknown> => ({
+  isHome: false,
+  photoMediaIds: [],
+  createdBy: 'nomos',
+  executionId: input.executionId,
+  createdAt: input.now,
+  lastEditedAt: null,
+  sealed: input.seal({
+    name: input.name,
+    aliases: [],
+    address: null,
+    notes: null,
+  }),
+});
+
+/** A new name as the person would write it. */
+export const toNameCase = (name: string) => toDisplayCase(name, NAME_CASE);
+
 function settleEntities(input: PlanInput) {
   const people = input.people;
   const empty = {
@@ -118,6 +203,14 @@ function settleEntities(input: PlanInput) {
     placeIdOf: new Map<string, string>(),
     newWho: [] as { id: string; mention: MentionRead }[],
     newPlaces: [] as { id: string; place: PlaceRead }[],
+    unsureWho: new Map<
+      string,
+      { mention: MentionRead; candidateIds: string[] }
+    >(),
+    unsurePlaces: new Map<
+      string,
+      { place: PlaceRead; candidateIds: string[] }
+    >(),
   };
   if (!people) return empty;
   const whoMatches = matchWho({
@@ -146,7 +239,26 @@ function settleEntities(input: PlanInput) {
         ? [{ place, id: input.newId(), isNew: true }]
         : [];
   });
+  const unsure = <T extends { ref: string }>(
+    items: T[],
+    matches: { kind: string; candidateIds?: string[] }[],
+  ) =>
+    items.flatMap((item, index): [string, T, string[]][] => {
+      const ids = matches[index].candidateIds;
+      return ids && ids.length > 0 ? [[item.ref, item, ids]] : [];
+    });
   return {
+    unsureWho: new Map(
+      unsure(people.mentions, whoMatches).map(
+        ([ref, mention, candidateIds]) => [ref, { mention, candidateIds }],
+      ),
+    ),
+    unsurePlaces: new Map(
+      unsure(people.places, placeMatches).map(([ref, place, candidateIds]) => [
+        ref,
+        { place, candidateIds },
+      ]),
+    ),
     whoIdOf: new Map(whoSettled.map((entry) => [entry.mention.ref, entry.id])),
     placeIdOf: new Map(
       placeSettled.map((entry) => [entry.place.ref, entry.id]),
@@ -178,6 +290,15 @@ export function planWrites(input: PlanInput): WritePlan {
   const counts: EffectCounts = { made: 0, updated: 0, completed: 0 };
 
   const entities = settleEntities(input);
+  const unsureTasks = new Map<string, string[]>();
+  const noteUnsure = (taskId: string, refs: string[]) =>
+    refs
+      .filter(
+        (ref) => entities.unsureWho.has(ref) || entities.unsurePlaces.has(ref),
+      )
+      .forEach((ref) =>
+        unsureTasks.set(ref, union(unsureTasks.get(ref) ?? [], [taskId])),
+      );
 
   const record = (
     docId: string,
@@ -197,6 +318,7 @@ export function planWrites(input: PlanInput): WritePlan {
     if (effects.length + drafts.size >= MAX_EFFECTS) return;
     if (command.kind === 'createTask') {
       const id = input.newId();
+      noteUnsure(id, [...command.whoRefs, ...command.placeRefs]);
       drafts.set(command.ref, {
         id,
         title: command.title,
@@ -212,6 +334,7 @@ export function planWrites(input: PlanInput): WritePlan {
     if (draft) {
       if (command.kind === 'completeTask') draft.status = 'done';
       else {
+        noteUnsure(draft.id, [...command.whoRefs, ...command.placeRefs]);
         draft.title = command.title ?? draft.title;
         if (command.hasDue) draft.due = command.due;
         draft.isUrgent = command.isUrgent ?? draft.isUrgent;
@@ -229,6 +352,9 @@ export function planWrites(input: PlanInput): WritePlan {
     const current = working.get(command.taskId);
     if (!current) return;
     const id = command.taskId;
+    if (command.kind === 'updateTask') {
+      noteUnsure(id, [...command.whoRefs, ...command.placeRefs]);
+    }
 
     if (command.kind === 'completeTask') {
       if (current.status === 'done') return;
@@ -372,7 +498,7 @@ export function planWrites(input: PlanInput): WritePlan {
   const whoCreates = !isFiling
     ? []
     : entities.newWho.map(({ id, mention }) => {
-        const name = toDisplayCase(mention.name, NAME_CASE);
+        const name = toNameCase(mention.name);
         const tier = readWhoTier({
           tier: 'passing',
           tierSetBy: 'nomos',
@@ -389,59 +515,30 @@ export function planWrites(input: PlanInput): WritePlan {
         );
         return {
           id,
-          data: {
-            kind: mention.kind,
+          data: buildWhoDoc({
+            mention,
+            name,
             tier,
-            tierSetBy: 'nomos',
-            isSelf: false,
-            placeIds: [],
-            photoMediaId: null,
-            mediaIds: [],
-            importedFrom: null,
-            importedFields: {},
-            lastMentionedAt: people?.capturedAt ?? now,
-            yearlyDateCount: 0,
-            momentCount: 0,
-            createdBy: 'nomos',
             executionId: input.executionId,
-            createdAt: now,
-            lastEditedAt: null,
-            sealed: seal({
-              name,
-              aliases: [],
-              relation: mention.relation,
-              phone: null,
-              email: null,
-              notes: null,
-              species: mention.species ? toDisplayCase(mention.species) : null,
-              organizationKind: mention.organizationKind
-                ? toDisplayCase(mention.organizationKind)
-                : null,
-            }),
-          },
+            lastMentionedAt: people?.capturedAt ?? now,
+            now,
+            seal,
+          }),
         };
       });
   const placeCreates = !isFiling
     ? []
     : entities.newPlaces.map(({ id, place }) => {
-        const name = toDisplayCase(place.name, NAME_CASE);
+        const name = toNameCase(place.name);
         record(id, 'create', { 'sealed.name': name }, null, 'places');
         return {
           id,
-          data: {
-            isHome: false,
-            photoMediaIds: [],
-            createdBy: 'nomos',
+          data: buildPlaceDoc({
+            name,
             executionId: input.executionId,
-            createdAt: now,
-            lastEditedAt: null,
-            sealed: seal({
-              name,
-              aliases: [],
-              address: null,
-              notes: null,
-            }),
-          },
+            now,
+            seal,
+          }),
         };
       });
   const whoUpdates = !isFiling
@@ -469,6 +566,16 @@ export function planWrites(input: PlanInput): WritePlan {
           ];
         });
 
+  const questions = !isFiling
+    ? []
+    : buildPickQuestions({
+        entities,
+        unsureTasks,
+        people,
+        newId: input.newId,
+        now,
+      });
+
   return {
     creates,
     updates: [...patches.entries()].map(([id, data]) => ({ id, data })),
@@ -480,7 +587,149 @@ export function planWrites(input: PlanInput): WritePlan {
     effectRefs,
     effects,
     counts,
+    questions,
   };
+}
+
+const KIND_WORDS: Record<string, string> = {
+  person: 'Person',
+  pet: 'Pet',
+  organization: 'Organization',
+};
+
+/** What tells a candidate apart: its relation, a pet's species, an organization's kind, else its kind word when the candidates differ in kind. */
+const detailOfWho = (state: KnownWhoState, isMixed: boolean): string | null => {
+  if (state.relation) return toDisplayCase(state.relation);
+  if (state.kind === 'pet' && state.species) {
+    return toDisplayCase(state.species);
+  }
+  if (state.kind === 'organization' && state.organizationKind) {
+    return toDisplayCase(state.organizationKind);
+  }
+  return isMixed ? (KIND_WORDS[state.kind] ?? null) : null;
+};
+
+function buildPickQuestions(input: {
+  entities: ReturnType<typeof settleEntities>;
+  unsureTasks: Map<string, string[]>;
+  people: PeopleInput | undefined;
+  newId: () => string;
+  now: number;
+}): PlannedQuestion[] {
+  const { entities, unsureTasks, people, now } = input;
+  if (!people) return [];
+  const comparable = (name: string) => name.trim().toLowerCase();
+  const distinct = <T extends { name: string }>(
+    entries: {
+      ref: string;
+      item: T;
+      kindKey: string;
+      candidateIds: string[];
+    }[],
+  ) =>
+    entries.filter(
+      (entry, index) =>
+        unsureTasks.has(entry.ref) &&
+        entries.findIndex(
+          (other) =>
+            unsureTasks.has(other.ref) &&
+            other.kindKey + comparable(other.item.name) ===
+              entry.kindKey + comparable(entry.item.name),
+        ) === index,
+    );
+  const taskIdsFor = (
+    entries: { ref: string; item: { name: string }; kindKey: string }[],
+    entry: { item: { name: string }; kindKey: string },
+  ) =>
+    union(
+      [],
+      entries
+        .filter(
+          (other) =>
+            other.kindKey + comparable(other.item.name) ===
+            entry.kindKey + comparable(entry.item.name),
+        )
+        .flatMap((other) => unsureTasks.get(other.ref) ?? []),
+    );
+  const whoEntries = [...entities.unsureWho.entries()].map(
+    ([ref, { mention, candidateIds }]) => ({
+      ref,
+      item: mention,
+      kindKey: mention.kind,
+      candidateIds,
+    }),
+  );
+  const placeEntries = [...entities.unsurePlaces.entries()].map(
+    ([ref, { place, candidateIds }]) => ({
+      ref,
+      item: place,
+      kindKey: 'place',
+      candidateIds,
+    }),
+  );
+  const whoQuestions = distinct(whoEntries).flatMap((entry) => {
+    const states = entry.candidateIds.flatMap(
+      (id) => people.known.find((who) => who.id === id) ?? [],
+    );
+    const isMixed = new Set(states.map((who) => who.kind)).size > 1;
+    const candidates: PickCandidate[] = states.map((who) => ({
+      id: who.id,
+      label: who.name,
+      detail: detailOfWho(who, isMixed),
+    }));
+    const { name, kind, relation, species, organizationKind } = entry.item;
+    return [
+      {
+        kind: 'whichPerson' as PickKind,
+        name,
+        candidates,
+        held: {
+          kind: 'linkWho',
+          taskIds: taskIdsFor(whoEntries, entry),
+          mention: { name, kind, relation, species, organizationKind },
+        } as HeldLink,
+      },
+    ];
+  });
+  const placeQuestions = distinct(placeEntries).flatMap((entry) => {
+    const candidates: PickCandidate[] = entry.candidateIds.flatMap((id) => {
+      const place = people.knownPlaces.find((known) => known.id === id);
+      return place
+        ? [{ id, label: place.name, detail: place.address ?? null }]
+        : [];
+    });
+    return [
+      {
+        kind: 'whichPlace' as PickKind,
+        name: entry.item.name,
+        candidates,
+        held: {
+          kind: 'linkPlace',
+          taskIds: taskIdsFor(placeEntries, entry),
+          place: { name: entry.item.name },
+        } as HeldLink,
+      },
+    ];
+  });
+  return [...whoQuestions, ...placeQuestions]
+    .filter((question) => question.candidates.length > 0)
+    .slice(0, MAX_PICK_QUESTIONS)
+    .map((question) => ({
+      id: input.newId(),
+      state: {
+        kind: question.kind,
+        shape: 'pickOne',
+        askedAt: now,
+        answeredAt: null,
+        skippedAt: null,
+      },
+      sealed: buildPickQuestion(question),
+      spoken: buildSpokenPick(
+        question.name,
+        question.candidates.map((candidate) => candidate.label),
+        question.kind === 'whichPlace' ? 'a new place' : 'someone new',
+      ),
+    }));
 }
 
 export function buildExecution(
@@ -525,17 +774,23 @@ export function buildExecution(
       effects: plan.effects,
       undoReport: null,
       goneIds: null,
-      spoken: buildSpokenAck({
-        inputMode: input.inputMode,
-        counts: plan.counts,
-        messageCount: input.messageCount ?? 1,
-        created,
-        timeZone: input.timeZone ?? 'UTC',
-        now: input.now,
-      }),
+      spoken: withQuestion(
+        buildSpokenAck({
+          inputMode: input.inputMode,
+          counts: plan.counts,
+          messageCount: input.messageCount ?? 1,
+          created,
+          timeZone: input.timeZone ?? 'UTC',
+          now: input.now,
+        }),
+        plan.questions[0]?.spoken ?? null,
+      ),
     }),
   };
 }
+
+const withQuestion = (ack: string | null, question: string | null) =>
+  ack && question ? `${ack} ${question}` : ack;
 
 /** An answer writes only the capture's sealed answer, so it has no effects and nothing to undo, unless it noted one fact: then that fact is its one effect and Undo deletes it. A refused fact is recorded as not done. */
 export function buildAnswerExecution(input: {
@@ -601,7 +856,11 @@ interface SettleInput {
   opened: Record<string, unknown>;
   questionState: Record<string, QuestionStateEntry>;
   executionIds: string[];
+  questions?: PlannedQuestion[];
 }
+
+const isPickKind = (kind: string) =>
+  kind === 'whichPerson' || kind === 'whichPlace';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
   entry.kind === 'moreToSort' && entry.answeredAt === null;
@@ -659,14 +918,34 @@ export function settleCapture(input: SettleInput) {
     : input.hasMore
       ? asked('moreToSort', input.newId(), now)
       : null;
+  const pickState = Object.fromEntries(
+    (input.questions ?? []).map((question) => [question.id, question.state]),
+  );
+  const pickSealed = Object.fromEntries(
+    (input.questions ?? []).map((question) => [question.id, question.sealed]),
+  );
+  const isPickOpen = Object.values({
+    ...input.questionState,
+    ...pickState,
+  }).some((entry) => isPickKind(entry.kind) && entry.answeredAt === null);
   const previous =
     typeof opened.sortedThrough === 'number' ? opened.sortedThrough : 0;
   return {
-    status: next ? ('needsYou' as const) : ('sorted' as const),
-    questionState: { ...input.questionState, ...closedState, ...next?.state },
+    status: next || isPickOpen ? ('needsYou' as const) : ('sorted' as const),
+    questionState: {
+      ...input.questionState,
+      ...closedState,
+      ...pickState,
+      ...next?.state,
+    },
     sealed: {
       ...opened,
-      questions: { ...oldQuestions, ...closedQuestions, ...next?.sealed },
+      questions: {
+        ...oldQuestions,
+        ...closedQuestions,
+        ...pickSealed,
+        ...next?.sealed,
+      },
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),

@@ -21,6 +21,7 @@ import { EARLIER_SESSIONS_PAGE } from '@apps/helm/constants';
 import type {
   Capture,
   CaptureSealed,
+  HelmQuestion,
   OpenCapture,
   ScreenContext,
 } from '@apps/helm/types';
@@ -63,6 +64,47 @@ const toScreen = (value: unknown): ScreenContext | null => {
   }
   return screen as ScreenContext;
 };
+
+const isOption = (value: unknown) => {
+  const option = value as Partial<HelmQuestion['options'][number]> | null;
+  return (
+    typeof option === 'object' &&
+    option !== null &&
+    typeof option.id === 'string' &&
+    typeof option.label === 'string'
+  );
+};
+
+/** Keeps the questions that ask which person or place, in the shape the card draws; any other question is left to its own surface. */
+const toQuestions = (value: unknown): Record<string, HelmQuestion> =>
+  Object.fromEntries(
+    Object.entries(
+      typeof value === 'object' && value !== null ? value : {},
+    ).flatMap(([id, entry]) => {
+      const question = entry as Partial<HelmQuestion> | null;
+      return typeof question === 'object' &&
+        question !== null &&
+        (question.kind === 'whichPerson' || question.kind === 'whichPlace') &&
+        typeof question.prompt === 'string' &&
+        Array.isArray(question.options) &&
+        question.options.every(isOption)
+        ? [
+            [
+              id,
+              {
+                ...question,
+                options: question.options.map((option) => ({
+                  ...option,
+                  detail: option.detail ?? null,
+                  ref: option.ref ?? null,
+                })),
+                answer: question.answer ?? null,
+              } as HelmQuestion,
+            ],
+          ]
+        : [];
+    }),
+  );
 
 const toLeadId = (value: unknown) => (typeof value === 'string' ? value : null);
 
@@ -116,6 +158,7 @@ async function openCapture(
       text: payload.text ?? '',
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
+      questions: toQuestions(payload.questions),
       isUnreadable: false,
     };
   } catch {
@@ -124,6 +167,7 @@ async function openCapture(
       text: '',
       reading: EMPTY_READING,
       answer: null,
+      questions: {},
       isUnreadable: true,
     };
   }

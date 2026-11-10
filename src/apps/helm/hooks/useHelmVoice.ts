@@ -37,10 +37,12 @@ import {
 } from '@lib/firebase/config';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import {
   loadExecutionsById,
   markCaptureSpoken,
   sendCapture,
+  skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
@@ -55,6 +57,8 @@ import {
   applyReadingEdits,
   readCapture,
 } from '@apps/helm/utils/captureReading';
+import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
+import { matchSpokenAnswer } from '@apps/helm/utils/questionAnswers';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
@@ -223,7 +227,50 @@ export function useHelmVoice() {
       await undoLatest();
       return;
     }
+    if (await answerQuestion(text)) return;
     await sendTurn(text, sttProvider, interrupted);
+  }
+
+  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn; anything that is not clearly one of its choices is a turn as usual. */
+  async function answerQuestion(text: string) {
+    const state = store.getState();
+    const all = selectAllCaptures(state);
+    const sessionId = getOpenSessionId(all, Date.now());
+    const asked = all
+      .filter(
+        (capture) =>
+          capture.sessionId === sessionId &&
+          capture.inputMode === 'voice' &&
+          capture.status === 'needsYou',
+      )
+      .reverse()
+      .flatMap((capture) =>
+        getOpenQuestions(capture)
+          .filter((entry) => entry.skippedAt === null)
+          .map((entry) => ({ captureId: capture.id, ...entry })),
+      )[0];
+    const answer = asked ? matchSpokenAnswer(text, asked.question) : null;
+    if (!uid || !asked || !answer) return false;
+    if (answer.kind === 'skip') {
+      try {
+        await skipQuestion(uid, asked.captureId, asked.id);
+        say(HELM_COPY.questionSkipped);
+      } catch (error) {
+        console.error('Helm question was not skipped by voice', error);
+        say(HELM_COPY.heldActionFailed);
+      }
+      return true;
+    }
+    const result = await resolveQuestion(asked.captureId, asked.id, {
+      by: 'voice',
+      optionId: answer.optionId,
+    });
+    if (result.kind === 'done') say(HELM_COPY.questionAnswered);
+    else if (result.kind === 'offline') say(HELM_COPY.questionNeedsConnection);
+    else if (result.kind === 'gone') say(result.message ?? HELM_COPY.editGone);
+    else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
+    else voice.settle();
+    return true;
   }
 
   async function sendTurn(

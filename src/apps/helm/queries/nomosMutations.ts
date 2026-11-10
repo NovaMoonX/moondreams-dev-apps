@@ -109,3 +109,60 @@ export async function sortCapture(
     notify();
   }
 }
+
+export interface QuestionAnswerInput {
+  by: 'tap' | 'voice';
+  optionId: string;
+}
+
+/** `answered` when another device already answered (nothing to show), `gone` when the chosen person or place no longer exists, `offline` when there was no connection (nothing is queued). */
+export interface ResolveOutcome {
+  kind: 'done' | 'answered' | 'gone' | 'offline' | 'failed';
+  executionId: string | null;
+  message: string | null;
+}
+
+const resolveHelmQuestionCallable = httpsCallable<
+  { captureId: string; questionId: string; answer: QuestionAnswerInput },
+  { executionId: string | null }
+>(functions, 'resolveHelmQuestion');
+
+const toErrorCode = (error: unknown) =>
+  error instanceof Error && 'code' in error && typeof error.code === 'string'
+    ? error.code
+    : null;
+
+const resolved = (
+  kind: ResolveOutcome['kind'],
+  executionId: string | null = null,
+  message: string | null = null,
+): ResolveOutcome => ({ kind, executionId, message });
+
+/** Answers one open which-person or which-place question on the server. The answer needs a connection and is never queued. */
+export async function resolveQuestion(
+  captureId: string,
+  questionId: string,
+  answer: QuestionAnswerInput,
+): Promise<ResolveOutcome> {
+  try {
+    const result = await resolveHelmQuestionCallable({
+      captureId,
+      questionId,
+      answer,
+    });
+    return resolved('done', result.data.executionId);
+  } catch (error) {
+    const code = toErrorCode(error);
+    if (code === 'functions/already-exists') return resolved('answered');
+    if (code === 'functions/failed-precondition') {
+      return resolved(
+        'gone',
+        null,
+        error instanceof Error ? error.message : null,
+      );
+    }
+    if (isConnectionError(error)) return resolved('offline');
+    console.error('Helm could not answer a question', error);
+    return resolved('failed');
+  }
+}

@@ -10,7 +10,11 @@ import {
   subscribeSorting,
 } from '@apps/helm/queries/nomosMutations';
 import type { OpenCapture } from '@apps/helm/types';
-import { getWaitingReason, type HeldItem } from '@apps/helm/utils/heldCaptures';
+import {
+  getOpenQuestions,
+  getWaitingReason,
+  type HeldItem,
+} from '@apps/helm/utils/heldCaptures';
 
 interface HeldRowProps {
   item: HeldItem;
@@ -26,6 +30,12 @@ const getLine = (
   const time = formatTime(capture.createdAt);
   if (kind === 'couldNotRead') {
     return { reason: HELM_COPY.couldNotRead, trailing: time };
+  }
+  if (kind === 'question') {
+    return {
+      reason: getOpenQuestions(capture)[0]?.question.prompt ?? '',
+      trailing: time,
+    };
   }
   if (kind === 'failed') {
     return { reason: HELM_COPY.couldNotSort, trailing: time };
