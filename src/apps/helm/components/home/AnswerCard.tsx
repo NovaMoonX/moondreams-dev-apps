@@ -15,7 +15,10 @@ interface AnswerCardProps {
 function AnswerCard({ answer, isInset = false }: AnswerCardProps) {
   const { fromRecords, general, scope } = answer;
   const recordsText =
-    fromRecords ?? (scope === 'both' ? null : HELM_COPY.answerNothingInRecords);
+    fromRecords ??
+    (scope === 'both' && answer.searched.length === 0
+      ? null
+      : HELM_COPY.answerNothingInRecords);
   return (
     <div
       className={

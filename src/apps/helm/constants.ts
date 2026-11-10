@@ -400,7 +400,7 @@ export const HELM_COPY = {
   driveStopTitle: 'Stop reading Drive?',
   driveStopConfirm: 'Stop reading Drive',
   driveDisconnectNote:
-    'Answers that quoted this account keep their words, and the quotes from its documents are blanked. What was noted from it stays.',
+    'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
