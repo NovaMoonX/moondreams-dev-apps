@@ -1,4 +1,6 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
+import type { QuoteEntry } from './aliases.js';
+import type { SyncedCopy } from '../syncedCopies.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -28,7 +30,12 @@ export const COMMAND_KINDS = [
   'createTask',
   'updateTask',
   'completeTask',
+  'remember',
 ] as const;
+
+export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
+
+export type RememberField = (typeof REMEMBER_FIELDS)[number];
 
 export const ANSWER_SCOPES = ['yourThings', 'theWorld', 'both'] as const;
 
@@ -39,6 +46,10 @@ export const MAX_EFFECTS = 40;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
 export const ANSWER_TEXT_CAP = 1_200;
+export const MAX_QUOTES = 5;
+export const QUOTE_CAP = 300;
+export const STATEMENT_CAP = 500;
+export const VALUE_CAP = 80;
 export const ANSWER_SPOKEN_CAP = 200;
 
 /** A command whose every reference is settled: a task id from the context, a `$new` ref made in the same reply, or a due the reading made. */
@@ -78,6 +89,15 @@ export type SourceRef =
       label: string | null;
     };
 
+/** One noted fact from a live lookup, its aliases resolved; the guards decide whether it is written. Null where an alias named nothing offered. */
+export interface RememberCommand {
+  statement: string | null;
+  quote: QuoteEntry | null;
+  about: SyncedCopy | null;
+  aboutField: RememberField | null;
+  value: string | null;
+}
+
 /** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
 export interface AnswerCommand {
   scope: AnswerScope;
@@ -85,6 +105,8 @@ export interface AnswerCommand {
   isHealth: boolean;
   fromRecordsText: string | null;
   sources: SourceRef[];
+  quotes: QuoteEntry[];
+  syncedKeys: string[];
   generalText: string | null;
   generalSpoken: string | null;
 }
@@ -121,8 +143,14 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'isHealth',
             'fromRecordsText',
             'sourceAliases',
+            'quoteAliases',
             'generalText',
             'generalSpoken',
+            'statement',
+            'quoteAlias',
+            'aboutAlias',
+            'aboutField',
+            'value',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer'] },
@@ -168,6 +196,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               description:
                 'answer: the alias of every record fromRecordsText rests on, from the open tasks, the synced records or a tool result.',
             },
+            quoteAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `answer: the alias (q1, q2, …) of each email fromRecordsText rests on, from search_mail, at most ${MAX_QUOTES}. The quote shown is copied from the email by code.`,
+            },
             generalText: nullable(
               'string',
               `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and never about the person's own plans, people or things.`,
@@ -175,6 +208,28 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             generalSpoken: nullable(
               'string',
               `answer: generalText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
+            ),
+            statement: nullable(
+              'string',
+              `remember: one plain sentence for what an email says that differs from a calendar event, at most ${STATEMENT_CAP} characters; null for every other kind.`,
+            ),
+            quoteAlias: nullable(
+              'string',
+              "remember: the alias of the email from search_mail that says it; it must also be in the answer's quoteAliases.",
+            ),
+            aboutAlias: nullable(
+              'string',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with.',
+            ),
+            aboutField: {
+              type: ['string', 'null'],
+              enum: [...REMEMBER_FIELDS, null],
+              description:
+                'remember: which part of that event the email gives differently; null for every other kind.',
+            },
+            value: nullable(
+              'string',
+              `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters.`,
             ),
           },
         },

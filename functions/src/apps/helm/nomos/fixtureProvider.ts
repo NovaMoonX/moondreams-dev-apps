@@ -1,5 +1,9 @@
-import type { ModelProvider } from '../../../ai/modelProvider.js';
+import type {
+  ModelProvider,
+  ToolLoopRequest,
+} from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
+import { toSenderName } from './answerGuards.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
@@ -182,10 +186,99 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   isHealth: false,
   fromRecordsText: null,
   sourceAliases: [],
+  quoteAliases: [],
   generalText: null,
   generalSpoken: null,
+  statement: null,
+  quoteAlias: null,
+  aboutAlias: null,
+  aboutField: null,
+  value: null,
   ...fields,
 });
+
+const MAIL_QUESTION_RE = /\b(tasting|e-?mails?|mailed)\b/i;
+
+interface MailResult {
+  alias: string;
+  from: string;
+  subject: string;
+  snippet: string;
+}
+
+const callJson = async <T>(
+  client: ToolLoopRequest['mcpClient'],
+  toolCalls: string[],
+  name: string,
+  args: Record<string, unknown>,
+): Promise<T | null> => {
+  toolCalls.push(name);
+  try {
+    const result = await client.callTool({ name, arguments: args });
+    const [part] = result.content as { type: string; text?: string }[];
+    return result.isError || part?.type !== 'text'
+      ? null
+      : (JSON.parse(part.text ?? 'null') as T);
+  } catch {
+    return null;
+  }
+};
+
+/** The emulator's stand-in for a model that reaches for the mail tools: searches, takes the one message from a business that fits the question (the others are untrusted and ignored), finds the calendar event it is about, and files an answer quoting the email with the one time that differs. Null when mail is not offered or nothing fits. */
+async function readMailAnswer(
+  text: string,
+  client: ToolLoopRequest['mcpClient'] | undefined,
+  toolCalls: string[],
+) {
+  const question = text.trim();
+  if (!client || !MAIL_QUESTION_RE.test(question)) return null;
+  const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
+  if (!offered.some((tool) => tool.name === 'search_mail')) return null;
+  const found = await callJson<{ messages?: MailResult[] }>(
+    client,
+    toolCalls,
+    'search_mail',
+    { query: question.match(/tasting|bakery|cake/i)?.[0] ?? 'tasting' },
+  );
+  const message = found?.messages?.find((entry) =>
+    /bakery|tasting/i.test(`${entry.from} ${entry.subject}`),
+  );
+  if (!message) return null;
+  const time = message.snippet
+    .match(/\b(\d{1,2}(?::\d{2})?)\s*([AP])\.?M\b/i)
+    ?.slice(1, 3);
+  const shownTime = time
+    ? `${time[0].includes(':') ? time[0] : `${time[0]}:00`} ${time[1].toUpperCase()}M`
+    : null;
+  const synced = await callJson<{
+    records?: { alias: string; kind: string }[];
+  }>(client, toolCalls, 'search_synced', { query: 'tasting' });
+  const event = synced?.records?.find((record) => record.kind === 'event');
+  const sender = toSenderName(message.from);
+  return [
+    toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText: shownTime
+        ? `An email from ${sender} says ${shownTime}.`
+        : `${sender} emailed about it.`,
+      sourceAliases: event ? [event.alias] : [],
+      quoteAliases: [message.alias],
+    }),
+    ...(event && shownTime
+      ? [
+          toAnswer({
+            kind: 'remember',
+            statement: `${sender} says the ${shownTime} is when it starts.`,
+            quoteAlias: message.alias,
+            aboutAlias: event.alias,
+            aboutField: 'startAt',
+            value: shownTime,
+          }),
+        ]
+      : []),
+  ];
+}
 
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
@@ -249,7 +342,7 @@ export function createFixtureProvider(
   reading: CaptureReading,
 ): ModelProvider {
   return {
-    runToolLoop: async ({ role, messages, signal }) => {
+    runToolLoop: async ({ role, messages, signal, mcpClient }) => {
       const delayMs =
         role === 'quick' ? ANSWER_DELAY_MS.quick : ANSWER_DELAY_MS.interpret;
       if (await waitOrAbort(delayMs, signal)) {
@@ -271,6 +364,18 @@ export function createFixtureProvider(
           errorCode: null,
           usage: EMPTY_USAGE,
           toolCalls: [],
+        };
+      }
+      const toolCalls: string[] = [];
+      const mail = await readMailAnswer(text, mcpClient, toolCalls);
+      if (mail) {
+        return {
+          terminalInput: { commands: mail },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls,
         };
       }
       const answer = readQuestion(text, messages[0]?.content ?? '');

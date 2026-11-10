@@ -65,3 +65,100 @@ export function createSyncedBook(): SyncedBook {
     getConnection: (alias) => connections.get(alias) ?? null,
   };
 }
+
+export interface QuoteEntry {
+  alias: string;
+  connectorId: string;
+  accountId: string;
+  ref: string;
+  title: string;
+  from: string;
+  at: number;
+  snippet: string;
+  deepLink: string | null;
+}
+
+export interface QuoteBook {
+  add: (entry: Omit<QuoteEntry, 'alias'>) => string;
+  get: (alias: string) => QuoteEntry | null;
+}
+
+/** Aliases for the results of a live search: q1, q2, … One alias per message, however often it is found. */
+export function createQuoteBook(): QuoteBook {
+  const byAlias = new Map<string, QuoteEntry>();
+  const byKey = new Map<string, string>();
+  return {
+    add: (entry) => {
+      const key = `${entry.connectorId}|${entry.accountId}|${entry.ref}`;
+      const known = byKey.get(key);
+      if (known) return known;
+      const alias = `q${byAlias.size + 1}`;
+      byKey.set(key, alias);
+      byAlias.set(alias, { ...entry, alias });
+      return alias;
+    },
+    get: (alias) => byAlias.get(alias) ?? null,
+  };
+}
+
+export interface SearchedEntry {
+  connectorId: string;
+  accountId: string;
+  label: string;
+  at: number;
+  found: number;
+  failed: string | null;
+}
+
+export interface SearchedLog {
+  record: (call: {
+    connectorId: string;
+    accountId: string;
+    label: string;
+    found: number;
+    failure: string | null;
+  }) => void;
+  entries: () => SearchedEntry[];
+}
+
+/** Every live call of one answer, merged to one entry per account: results summed, the latest time, and a failure kept only while no call to it succeeded. */
+export function createSearchedLog(now: () => number = Date.now): SearchedLog {
+  const byAccount = new Map<
+    string,
+    {
+      connectorId: string;
+      accountId: string;
+      label: string;
+      at: number;
+      found: number;
+      successes: number;
+      failure: string | null;
+    }
+  >();
+  return {
+    record: ({ connectorId, accountId, label, found, failure }) => {
+      const key = `${connectorId}|${accountId}`;
+      const previous = byAccount.get(key);
+      byAccount.set(key, {
+        connectorId,
+        accountId,
+        label,
+        at: Math.max(previous?.at ?? 0, now()),
+        found: (previous?.found ?? 0) + found,
+        successes: (previous?.successes ?? 0) + (failure === null ? 1 : 0),
+        failure: failure ?? previous?.failure ?? null,
+      });
+    },
+    entries: () =>
+      [...byAccount.values()].map(
+        ({ connectorId, accountId, label, at, found, successes, failure }) => ({
+          connectorId,
+          accountId,
+          label,
+          at,
+          found,
+          failed: successes > 0 ? null : failure,
+        }),
+      ),
+  };
+}

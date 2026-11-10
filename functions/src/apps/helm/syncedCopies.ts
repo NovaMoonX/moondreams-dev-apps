@@ -6,6 +6,7 @@ import { openForHelm, type HelmKey } from './helmKey.js';
 export interface SyncedCopy {
   id: string;
   connectorId: string;
+  accountId: string;
   kind: string;
   title: string;
   subtitle: string | null;
@@ -74,7 +75,7 @@ export const parseDay = (text: string) => {
 
 const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 
-const toLocalText = (at: number, timeZone: string) =>
+export const toLocalText = (at: number, timeZone: string) =>
   new Intl.DateTimeFormat('sv-SE', {
     timeZone,
     year: 'numeric',
@@ -99,6 +100,7 @@ export function openSyncedCopy(
     return {
       id,
       connectorId: typeof data.connectorId === 'string' ? data.connectorId : '',
+      accountId: typeof data.accountId === 'string' ? data.accountId : '',
       kind: typeof data.kind === 'string' ? data.kind : '',
       title: opened.title,
       subtitle:

@@ -1,14 +1,19 @@
-import type { AliasBook, SyncedBook } from './aliases.js';
+import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import {
   ANSWER_SCOPES,
   ANSWER_SPOKEN_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
   MAX_COMMANDS,
+  MAX_QUOTES,
   QUESTION_CAP,
+  REMEMBER_FIELDS,
+  STATEMENT_CAP,
   TITLE_CAP,
+  VALUE_CAP,
   type AnswerCommand,
   type CaptureReading,
+  type RememberCommand,
   type SourceRef,
   type NomosCommand,
   type TaskDue,
@@ -36,8 +41,14 @@ const KNOWN_KEYS = new Set([
   'isHealth',
   'fromRecordsText',
   'sourceAliases',
+  'quoteAliases',
   'generalText',
   'generalSpoken',
+  'statement',
+  'quoteAlias',
+  'aboutAlias',
+  'aboutField',
+  'value',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -103,15 +114,22 @@ const toSource = (
   return connection ? { kind: 'connection', ...connection } : null;
 };
 
+const toQuote = (alias: unknown, quotes: QuoteBook | undefined) =>
+  typeof alias === 'string' ? (quotes?.get(alias) ?? null) : null;
+
 const readAnswer = (
   item: Record<string, unknown>,
   aliases: AliasBook,
   synced: SyncedBook | undefined,
+  quotes: QuoteBook | undefined,
 ): AnswerCommand | null => {
   const scope = ANSWER_SCOPES.find((entry) => entry === item.scope);
   const question = toText(item.question, QUESTION_CAP);
   if (!scope || !question) return null;
   const listed = Array.isArray(item.sourceAliases) ? item.sourceAliases : [];
+  const listedQuotes = Array.isArray(item.quoteAliases)
+    ? item.quoteAliases.slice(0, MAX_QUOTES)
+    : [];
   return {
     scope,
     question,
@@ -121,10 +139,34 @@ const readAnswer = (
       const source = toSource(alias, aliases, synced);
       return source ? [source] : [];
     }),
+    quotes: listedQuotes.flatMap((alias: unknown) => {
+      const quote = toQuote(alias, quotes);
+      return quote ? [quote] : [];
+    }),
+    syncedKeys: listed.flatMap((alias: unknown) => {
+      const copy = typeof alias === 'string' ? synced?.get(alias) : null;
+      return copy ? [`${copy.connectorId}|${copy.accountId}`] : [];
+    }),
     generalText: toText(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
   };
 };
+
+const readRemember = (
+  item: Record<string, unknown>,
+  synced: SyncedBook | undefined,
+  quotes: QuoteBook | undefined,
+): RememberCommand => ({
+  statement: toText(item.statement, STATEMENT_CAP),
+  quote: toQuote(item.quoteAlias, quotes),
+  about:
+    typeof item.aboutAlias === 'string'
+      ? (synced?.get(item.aboutAlias) ?? null)
+      : null,
+  aboutField:
+    REMEMBER_FIELDS.find((field) => field === item.aboutField) ?? null,
+  value: toText(item.value, VALUE_CAP),
+});
 
 const readCommand = (
   item: Record<string, unknown>,
@@ -133,7 +175,7 @@ const readCommand = (
   aliases: AliasBook,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
-  if (!kind) return null;
+  if (!kind || kind === 'remember') return null;
   const title = toTitle(item.title);
   const due = toDue(item.dueSpanId, reading);
   const isUrgent = typeof item.isUrgent === 'boolean' ? item.isUrgent : null;
@@ -186,19 +228,21 @@ const hasEveryToken = (
     );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source alias resolved or dropped. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {
     reading: CaptureReading;
     aliases: AliasBook;
     synced?: SyncedBook;
+    quotes?: QuoteBook;
     alreadyMade?: string[];
   },
 ): {
   commands: NomosCommand[];
   hasMore: boolean;
   answer: AnswerCommand | null;
+  remember: RememberCommand[];
 } {
   if (!isRecord(raw) || !Array.isArray(raw.commands)) {
     throw new NomosReplyError('badShape');
@@ -211,9 +255,17 @@ export function normalizeNomosReply(
     items
       .filter((item) => item.kind === 'answer')
       .flatMap((item) => {
-        const read = readAnswer(item, context.aliases, context.synced);
+        const read = readAnswer(
+          item,
+          context.aliases,
+          context.synced,
+          context.quotes,
+        );
         return read ? [read] : [];
       })[0] ?? null;
+  const remember = items
+    .filter((item) => item.kind === 'remember')
+    .map((item) => readRemember(item, context.synced, context.quotes));
   const read = items.flatMap((item) => {
     const command = readCommand(item, state, context.reading, context.aliases);
     return command ? [command] : [];
@@ -229,5 +281,6 @@ export function normalizeNomosReply(
     commands: fresh.slice(0, MAX_COMMANDS),
     hasMore: fresh.length > MAX_COMMANDS,
     answer,
+    remember,
   };
 }

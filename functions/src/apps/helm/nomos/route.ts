@@ -11,7 +11,7 @@ const QUESTION_OPENERS = new Set(
   ).split(' '),
 );
 
-const isQuestion = (text: string) =>
+export const isQuestion = (text: string) =>
   text.includes('?') ||
   QUESTION_OPENERS.has(
     text

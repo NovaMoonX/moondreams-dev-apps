@@ -18,13 +18,13 @@ export interface ExistingTask {
   sealed: Record<string, unknown>;
 }
 
-interface EffectRef {
+export interface EffectRef {
   op: 'create' | 'update';
-  collection: 'tasks';
+  collection: 'tasks' | 'facts';
   docId: string;
 }
 
-interface Effect {
+export interface Effect {
   written: Record<string, unknown>;
   previous: Record<string, unknown> | null;
 }
@@ -267,13 +267,15 @@ export function buildExecution(
   };
 }
 
-/** An answer writes nothing but the capture's sealed answer: no effects and nothing to undo. */
+/** An answer writes only the capture's sealed answer, so it has no effects and nothing to undo, unless it noted one fact: then that fact is its one effect and Undo deletes it. A refused fact is recorded as not done. */
 export function buildAnswerExecution(input: {
   captureId: string;
   answer: CaptureAnswer;
   spoken: string | null;
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
+  fact?: { effectRef: EffectRef; effect: Effect; note: string } | null;
+  notDone?: string[];
 }): Record<string, unknown> {
   return {
     captureId: input.captureId,
@@ -281,7 +283,7 @@ export function buildAnswerExecution(input: {
     category: 'answer',
     autonomyLevel: AUTOMATIC_LEVEL,
     state: 'succeeded',
-    effectRefs: [],
+    effectRefs: input.fact ? [input.fact.effectRef] : [],
     undoesExecutionId: null,
     undoneByExecutionId: null,
     questionRef: null,
@@ -290,9 +292,12 @@ export function buildAnswerExecution(input: {
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
-      summary: summarizeAnswer(input.answer),
+      summary: input.fact
+        ? `${summarizeAnswer(input.answer)} ${input.fact.note}`
+        : summarizeAnswer(input.answer),
       commands: [],
-      effects: [],
+      effects: input.fact ? [input.fact.effect] : [],
+      notDone: input.notDone ?? [],
       undoReport: null,
       goneIds: null,
       spoken: input.spoken,

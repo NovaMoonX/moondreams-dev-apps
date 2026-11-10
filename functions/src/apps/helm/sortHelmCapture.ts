@@ -30,7 +30,13 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
+import type { LiveGrant } from '../../connections/liveRouter.js';
 import { createHelmMcpServer } from './mcp/server.js';
+import {
+  createQuoteBook,
+  createSearchedLog,
+  type SearchedLog,
+} from './nomos/aliases.js';
 import {
   buildContext,
   readMadeTitles,
@@ -43,8 +49,10 @@ import {
   type AnswerCommand,
   type CaptureReading,
   type NomosCommand,
+  type RememberCommand,
   type TaskDue,
 } from './nomos/commands.js';
+import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import { buildAnswer } from './nomos/answerGuards.js';
 import {
   buildAnswerExecution,
@@ -70,6 +78,7 @@ import {
 import { decide } from './nomos/policy.js';
 import {
   HAND_OVER_TOOL,
+  isQuestion,
   pickRoute,
   runRouted,
   type Route,
@@ -77,6 +86,7 @@ import {
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
   REST_PROMPT,
   SYSTEM_PROMPT,
@@ -207,6 +217,11 @@ const readApiKey = () => {
     return '';
   }
 };
+
+const readLiveGrants = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
+    .catch((): LiveGrant[] => []);
 
 function pickProvider(text: string, reading: CaptureReading): ModelProvider {
   const apiKey = readApiKey();
@@ -651,8 +666,15 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
     });
     const provider = pickProvider(combined.text, combined.reading);
+    const liveGrants =
+      mode !== 'rest' && isQuestion(combined.text.trim())
+        ? await readLiveGrants(firestore, uid)
+        : [];
+    const quotes = createQuoteBook();
+    const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
+      liveGrants.length > 0 ? MAIL_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
       capture.interruptedCaptureId !== ''
@@ -669,6 +691,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         synced: context.synced,
         timeZone,
         firestore,
+        liveGrants,
+        quotes,
+        searched,
       });
       const maxMillis = canHandOver ? QUICK_LOOP_MILLIS : LOOP_LIMITS.maxMillis;
       const loop = await provider
@@ -745,6 +770,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       context,
       combined,
       route: routed.route,
+      quotes,
+      searched,
     };
   };
 
@@ -770,7 +797,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quietMs: SETTLE_QUIET_MS,
     maxWaitMs: SETTLE_MAX_MS,
   });
-  const { loop, context, combined, route } = result;
+  const { loop, context, combined, route, quotes, searched } = result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -783,6 +810,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reading: combined.reading,
     aliases: context.aliases,
     synced: context.synced,
+    quotes,
     alreadyMade,
   });
   const answer = mode === 'full' ? reply.answer : null;
@@ -795,6 +823,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     key,
     commands,
     answer,
+    remember: mode === 'full' ? reply.remember : [],
+    searched,
     hasMore: reply.hasMore,
     base,
     joinedIds: read.ids,
@@ -810,6 +840,8 @@ async function writeResult(
     key: HelmKey;
     commands: NomosCommand[];
     answer: AnswerCommand | null;
+    remember: RememberCommand[];
+    searched: SearchedLog;
     hasMore: boolean;
     base: string;
     joinedIds: string[];
@@ -827,6 +859,8 @@ async function writeResult(
     key,
     commands,
     answer,
+    remember,
+    searched,
     hasMore,
     base,
     mode,
@@ -838,10 +872,14 @@ async function writeResult(
   } = input;
   const tasksPath = `${base}/tasks`;
   const built = answer
-    ? buildAnswer(answer, (code) =>
-        logger.info('helm.answer.dropped', { code }),
+    ? buildAnswer(
+        answer,
+        (code) => logger.info('helm.answer.dropped', { code }),
+        searched.entries(),
       )
     : null;
+  const noted = settleRemember({ remember, built, timeZone });
+  noted.refused.forEach((code) => logger.info('helm.answer.dropped', { code }));
   const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
     ...new Set(
@@ -956,6 +994,18 @@ async function writeResult(
       ? firestore.collection(`${base}/executions`).doc()
       : null;
     if (built && answerExecutionRef) {
+      const factRef = firestore.collection(`${base}/facts`).doc();
+      const factWrite = noted.fact
+        ? buildFactWrite({
+            fact: noted.fact,
+            captureId: captureRef.id,
+            executionId: answerExecutionRef.id,
+            factId: factRef.id,
+            now,
+            seal,
+          })
+        : null;
+      if (factWrite) transaction.create(factRef, factWrite.data);
       transaction.create(
         answerExecutionRef,
         buildAnswerExecution({
@@ -964,6 +1014,8 @@ async function writeResult(
           spoken: spokenLine,
           now,
           seal,
+          fact: factWrite,
+          notDone: noted.refused,
         }),
       );
     }
@@ -1003,7 +1055,11 @@ async function writeResult(
     }
     transaction.update(captureRef, {
       ...(mode === 'full'
-        ? { joinedCaptureIds: joinedIds, turnLeadId: null }
+        ? {
+            joinedCaptureIds: joinedIds,
+            turnLeadId: null,
+            quotedSourceKeys: built?.quotedSourceKeys ?? [],
+          }
         : {}),
       status: settled.status,
       sortedAt: now,
@@ -1034,6 +1090,7 @@ async function writeResult(
       commands: commands.length,
       effects: plan.effects.length,
       hasAnswer: built !== null,
+      hasFact: noted.fact !== null,
       ...plan.counts,
     });
     return sorted;
