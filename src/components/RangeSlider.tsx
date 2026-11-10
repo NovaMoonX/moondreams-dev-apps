@@ -78,7 +78,12 @@ function RangeSlider({
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const at = valueAt(event.clientX);
     if (at === null) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Without capture no lost-capture event comes, so the drag would never settle.
+      return;
+    }
     const handle = nearestHandle(at);
     setDragging(handle);
     dragged.current = withHandle(handle, at);

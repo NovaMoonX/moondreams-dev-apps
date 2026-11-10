@@ -11009,6 +11009,13 @@ const version = (
       ['Boxx 1234 Savings', 'Boxx 1234 Savings'],
       ['Plus - Account Owner', 'Plus - Account Owner'],
       ['T-Mobile Card', 'T-Mobile Card'],
+      ['Venture X 2024', 'Venture X 2024'],
+      ['Card X 500', 'Card X 500'],
+      ['Money Market .05 Plus', 'Money Market .05 Plus'],
+      ['Checking .... 1234', 'Checking'],
+      ['Total Checking ...5678 - Joint Owner', 'Total Checking'],
+      ['Card ••3153', 'Card'],
+      ['Gold XX-1234', 'Gold'],
     ] as const
   ).forEach(([name, cleaned]) =>
     assert.equal(cleanBankName(name), cleaned, `bank name ${name}`),
@@ -11030,6 +11037,11 @@ const version = (
     isBankMove({ ...cardPay, pairedWithId: 'in' }),
     false,
     'a paired side is already an account move',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, assignedBy: 'person' }),
+    false,
+    'a side the person unpaired goes back to Needs a home, not back to waiting',
   );
   assert.equal(
     isBankMove({ ...cardPay, source: 'manual' }),

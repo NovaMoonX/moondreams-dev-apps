@@ -262,6 +262,8 @@ const OWN_MOVE_CATEGORIES = new Set([
 /** A synced purchase the bank calls a card payment or a move between the person's own accounts, still waiting and unpaired: not spending until the person says it is. */
 export const isBankMove = (purchase: OpenPurchase) =>
   purchase.source === 'link' &&
+  // Once the person has answered (unpaired it, undone a choice), their answer wins over the bank's.
+  purchase.assignedBy !== 'person' &&
   purchase.needsHome &&
   purchase.pairedWithId === null &&
   purchase.incomeDayId === null &&

@@ -11,8 +11,9 @@ import type {
 export const isLastFour = (text: string) => /^\d{4}$/.test(text);
 
 // A bank's account name can carry its masked number ("XXXXXXX3153", "...3153", "••3153") and who holds it ("- Credit Holder").
+// One mask character must touch its digits ("x1234"); only a run of them may have a space ("XX 1234"), so "Venture X 2024" stays.
 const MASKED_NUMBER =
-  /\s*(?:[([]\s*)?(?<![A-Za-z0-9])(?:[Xx*•.…]{1,}\s*-?\s*)\d{2,6}(?:\s*[)\]])?/g;
+  /\s*(?:[([]\s*)?(?<![A-Za-z0-9])(?:[Xx*•.…]{2,}\s*-?\s*|[Xx*•…])\d{2,6}(?![\d.])(?:\s*[)\]])?/g;
 const HOLDER_PART =
   /\s+[-–—]\s+[^-–—]*\b(?:holder|user|member|owner)\b[^-–—]*$/i;
 

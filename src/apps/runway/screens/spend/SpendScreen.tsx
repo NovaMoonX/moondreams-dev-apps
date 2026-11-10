@@ -174,7 +174,9 @@ function SpendScreen() {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const looks = useAppSelector(selectItemLooks);
-  const { isHidden } = useValuesHidden();
+  const { isHidden, isScrambled } = useValuesHidden();
+  // A range would carry real cents into the address bar and to a screen reader.
+  const isAmountShown = !isHidden && !isScrambled;
   const {
     spendEnvelope,
     showSpendEnvelope,
@@ -314,12 +316,13 @@ function SpendScreen() {
     spendEnvelope !== null && counts.has(spendEnvelope) ? spendEnvelope : null;
 
   const amountTop = getAmountTop(ofKind);
+  const low = spendMin !== null && spendMin < amountTop ? spendMin : 0;
   const committedAmount: AmountEnds = [
-    Math.min(spendMin ?? 0, amountTop),
-    Math.min(spendMax ?? amountTop, amountTop),
+    low,
+    Math.max(low, Math.min(spendMax ?? amountTop, amountTop)),
   ];
   const amount = amountDraft ?? committedAmount;
-  const isAmountOn = !isHidden && (amount[0] > 0 || amount[1] < amountTop);
+  const isAmountOn = isAmountShown && (amount[0] > 0 || amount[1] < amountTop);
 
   const showEnvelope = (envelopeId: string | null) => {
     showSpendEnvelope(envelopeId);
@@ -590,7 +593,7 @@ function SpendScreen() {
                 />
               </FilterSection>
             )}
-            {!isHidden && ofKind.length >= 2 && (
+            {isAmountShown && ofKind.length >= 2 && (
               <FilterSection title={SPEND_FILTER_WORDS.amount}>
                 <div className='flex justify-between text-sm tabular-nums'>
                   <span>{formatDollars(amount[0])}</span>
