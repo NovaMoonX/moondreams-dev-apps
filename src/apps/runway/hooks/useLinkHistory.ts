@@ -24,7 +24,9 @@ import { openPurchase } from '@apps/runway/store/listeners/openLedger';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectIsLinkHistory,
+  selectIsMemoriesLoaded,
   selectIsNeedsHomeLoaded,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, PurchaseDoc } from '@apps/runway/types';
 import { describePurchaseHistory } from '@apps/runway/utils/purchaseText';
@@ -66,6 +68,8 @@ export function useLinkHistory(uid: string | null) {
     (state) => state.runway.plan?.startDate ?? null,
   );
   const isLinkHistory = useAppSelector(selectIsLinkHistory);
+  const isMemoriesLoaded = useAppSelector(selectIsMemoriesLoaded);
+  const routes = useAppSelector(selectRouteMemories);
   const tried = useRef(new Set<string>());
   const latest = useRef({ addToast });
 
@@ -74,7 +78,9 @@ export function useLinkHistory(uid: string | null) {
   });
 
   useEffect(() => {
-    if (uid === null || !isReady || level !== 'link') return;
+    if (uid === null || !isReady || !isMemoriesLoaded || level !== 'link') {
+      return;
+    }
     const swept = readSwept();
     const unswept = links.filter(
       (link) => !swept.includes(`${uid}:${link.id}`),
@@ -83,6 +89,7 @@ export function useLinkHistory(uid: string | null) {
     const pairSides = getPairSideIds(
       waiting,
       addUtcDays(todayAsUtcDate(), -AUTO_MATCH_DAYS),
+      routes,
     );
     const fresh = waiting.filter(
       (purchase) =>
@@ -193,5 +200,15 @@ export function useLinkHistory(uid: string | null) {
     };
 
     void run();
-  }, [uid, isReady, level, waiting, links, startDate, isLinkHistory]);
+  }, [
+    uid,
+    isReady,
+    isMemoriesLoaded,
+    level,
+    waiting,
+    links,
+    startDate,
+    isLinkHistory,
+    routes,
+  ]);
 }

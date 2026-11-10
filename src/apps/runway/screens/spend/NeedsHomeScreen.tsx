@@ -209,7 +209,9 @@ function NeedsHomeRow({
       detail={detail}
       figure={amount}
       ariaLabel={`${isHidden ? title : `${title}, ${amount}`}, ${detail}${tick ? '' : '. Open'}`}
-      tick={tick}
+      tick={
+        tick ? { ...tick, label: NEEDS_HOME_WORDS.selectRow(title) } : undefined
+      }
       onOpen={tick ? undefined : onOpen}
     />
   );

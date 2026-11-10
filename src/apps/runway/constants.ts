@@ -4680,6 +4680,7 @@ export const NEEDS_HOME_WORDS = {
   unseenRow: 'A payment from an account Runway doesn’t see',
   unseenRowSub: 'It will not count as income',
   select: 'Select',
+  selectRow: (name: string) => `Select ${name}`,
   selectedCount: (count: number) => `${count} selected`,
   selectAll: 'Select all',
   clearAll: 'Clear all',

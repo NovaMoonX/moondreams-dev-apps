@@ -48,13 +48,20 @@ export function readSorting(value: unknown): SortingState | null {
     : null;
 }
 
-/** Counts what waits: money in always, a charge only when "I'm not sorting yet" has not quieted it. */
+/** Counts what waits: money in always, and a charge unless "I'm not sorting yet" quiets it; a quiet charge still counts when money in of its amount waits (a possible move, which the screen keeps). Lost pairs and lost deposits are not in the query. */
 export function countWaiting(
   purchases: { createdAt: number; amountCents: number }[],
   sorting: SortingState,
 ) {
+  const moneyIn = new Set(
+    purchases
+      .filter(({ amountCents }) => amountCents < 0)
+      .map(({ amountCents }) => -amountCents),
+  );
   return purchases.filter(
     ({ createdAt, amountCents }) =>
-      amountCents <= 0 || (!sorting.isPaused && createdAt >= sorting.from),
+      amountCents <= 0 ||
+      (!sorting.isPaused && createdAt >= sorting.from) ||
+      moneyIn.has(amountCents),
   ).length;
 }

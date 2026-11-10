@@ -66,7 +66,12 @@ interface ItemRowProps {
   /** What a screen reader hears while private amounts are hidden; defaults to the name alone. */
   hiddenAriaLabel?: string;
   /** A row ticked from a checklist: tapping the row ticks it and the chevron opens the sheet. */
-  tick?: { checked: boolean; onChange: (checked: boolean) => void };
+  tick?: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    /** What a screen reader hears for the box; defaults to "{name} done". */
+    label?: string;
+  };
   /** Replaces the chevron and the sheet with the controls for placing the row. */
   reorder?: ItemRowReorder;
   /** Just moved by a saved reorder: the row is highlighted for a moment. */
@@ -327,7 +332,7 @@ function ItemRow({
               className={TICK_HIT_CLASS}
               checked={tick.checked}
               onCheckedChange={(next) => tick.onChange(Boolean(next))}
-              aria-label={`${name} done`}
+              aria-label={tick.label ?? `${name} done`}
             />
           ) : (
             slot

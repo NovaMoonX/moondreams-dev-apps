@@ -37,6 +37,17 @@ const BATCH_SIZE = 20;
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
 
+/** A purchase's amount, or 0 when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
+const readAmount = (key: Buffer, payload: unknown) => {
+  if (!isSealed(payload)) return 0;
+  try {
+    const { amountCents } = openWithKey(key, payload);
+    return typeof amountCents === 'number' ? amountCents : 0;
+  } catch {
+    return 0;
+  }
+};
+
 /** Creates the day's claim; false when it already exists, so a rerun never sends twice. */
 const claimDay = (
   firestore: Firestore,
@@ -79,16 +90,16 @@ async function digestForPlan(
     sorting === null
       ? (await waitingPurchases.count().get()).data().count
       : countWaiting(
-          (
-            await waitingPurchases.select('createdAt', 'sealed').get()
-          ).docs.flatMap((purchase) => {
-            const { createdAt, sealed: payload } = purchase.data();
-            if (typeof createdAt !== 'number' || !isSealed(payload)) return [];
-            const { amountCents } = openWithKey(planKey.key, payload);
-            return typeof amountCents === 'number'
-              ? [{ createdAt, amountCents }]
-              : [];
-          }),
+          (await waitingPurchases.select('createdAt', 'sealed').get()).docs.map(
+            (purchase) => {
+              const { createdAt, sealed: payload } = purchase.data();
+              const created = typeof createdAt === 'number' ? createdAt : now;
+              return {
+                createdAt: created,
+                amountCents: readAmount(planKey.key, payload),
+              };
+            },
+          ),
           sorting,
         );
   if (waiting === 0) return 'empty';
