@@ -1,5 +1,9 @@
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import {
+  FieldPath,
+  getFirestore,
+  type Firestore,
+} from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
@@ -131,7 +135,7 @@ async function readTrips(
 ) {
   const snapshot = await firestore
     .collection('apps/waypoint/trips')
-    .where(`members.${uid}.uid`, '==', uid)
+    .where(new FieldPath('members', uid, 'uid'), '==', uid)
     .select(...TRIP_FIELDS, ...extraFields)
     .limit(TRIP_LIMIT)
     .get();
@@ -260,8 +264,8 @@ const readEventSubtitle = (doc: FirebaseFirestore.QueryDocumentSnapshot) => {
   return readText(doc.get('customTypeLabel')) ?? 'Plan';
 };
 
-async function readEvents(trip: Trip, uid: string): Promise<Item[]> {
-  const { docs } = await readDocs(
+async function readEvents(trip: Trip, uid: string) {
+  const { docs, isFull } = await readDocs(
     trip.ref
       .collection('events')
       .select(
@@ -284,7 +288,7 @@ async function readEvents(trip: Trip, uid: string): Promise<Item[]> {
         'lastEditedAt',
       ),
   );
-  return docs.flatMap((doc): Item[] => {
+  const items = docs.flatMap((doc): Item[] => {
     const title = readText(doc.get('title'));
     const isForPerson =
       doc.get('attendeeTargetType') === 'EVERYONE_INCLUDING_FUTURE' ||
@@ -320,10 +324,11 @@ async function readEvents(trip: Trip, uid: string): Promise<Item[]> {
       },
     ];
   });
+  return { items, isFull };
 }
 
-async function readStays(trip: Trip): Promise<Item[]> {
-  const { docs } = await readDocs(
+async function readStays(trip: Trip) {
+  const { docs, isFull } = await readDocs(
     trip.ref
       .collection('stays')
       .select(
@@ -339,7 +344,7 @@ async function readStays(trip: Trip): Promise<Item[]> {
         'lastEditedAt',
       ),
   );
-  return docs.flatMap((doc): Item[] => {
+  const items = docs.flatMap((doc): Item[] => {
     const title = readText(doc.get('name'));
     if (title === null) return [];
     const zone = readText(doc.get('checkInTimezone'));
@@ -369,10 +374,11 @@ async function readStays(trip: Trip): Promise<Item[]> {
       },
     ];
   });
+  return { items, isFull };
 }
 
-async function readRentals(trip: Trip): Promise<Item[]> {
-  const { docs } = await readDocs(
+async function readRentals(trip: Trip) {
+  const { docs, isFull } = await readDocs(
     trip.ref
       .collection('rentals')
       .select(
@@ -386,7 +392,7 @@ async function readRentals(trip: Trip): Promise<Item[]> {
         'lastEditedAt',
       ),
   );
-  return docs.flatMap((doc): Item[] => {
+  const items = docs.flatMap((doc): Item[] => {
     const title = readText(doc.get('name'));
     if (title === null) return [];
     const zone = readText(doc.get('timezone'));
@@ -412,6 +418,7 @@ async function readRentals(trip: Trip): Promise<Item[]> {
       },
     ];
   });
+  return { items, isFull };
 }
 
 const syncTrips = async (
@@ -450,10 +457,10 @@ const syncItinerary = (
       readRentals(trip),
     ]);
     return {
-      records: [...events, ...stays, ...rentals].flatMap((item) =>
-        toItemRecords(item, windowStart),
+      records: [...events.items, ...stays.items, ...rentals.items].flatMap(
+        (item) => toItemRecords(item, windowStart),
       ),
-      isFull: true,
+      isFull: events.isFull && stays.isFull && rentals.isFull,
     };
   });
 

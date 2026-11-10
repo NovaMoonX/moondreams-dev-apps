@@ -3,7 +3,7 @@ import { CalendarDays, ChevronRight } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
-import { formatTime } from '@/utils/formatUtils';
+import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { SyncedRecord } from '@apps/helm/types';
 
@@ -14,9 +14,13 @@ interface SyncedCardProps {
 
 const timeLine = (record: SyncedRecord) => {
   if (record.isAllDay || record.startAt === null) return HELM_COPY.syncedAllDay;
-  return record.endAt === null
-    ? formatTime(record.startAt)
-    : `${formatTime(record.startAt)} – ${formatTime(record.endAt)}`;
+  if (record.endAt === null) return formatTime(record.startAt);
+  const isOneDay =
+    new Date(record.startAt).toDateString() ===
+    new Date(record.endAt).toDateString();
+  return isOneDay
+    ? `${formatTime(record.startAt)} – ${formatTime(record.endAt)}`
+    : `${formatDateShort(record.startAt)}, ${formatTime(record.startAt)} – ${formatDateShort(record.endAt)}, ${formatTime(record.endAt)}`;
 };
 
 /** Another app's event: a plain card with the source's logo, read-only, that opens its source block. */

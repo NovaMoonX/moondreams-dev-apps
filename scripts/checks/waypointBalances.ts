@@ -75,6 +75,28 @@ const ledger = [
   },
   { ...ledgerBase, payerUid: 'b', paidAmount: 30, status: 'PAID' },
   { ...ledgerBase, targetType: 'JUST_ME', payerUid: 'a', amount: 8 },
+  { ...ledgerBase, payerUid: 'gone', amount: 24 },
+  { ...ledgerBase, payerUid: null, amount: 18 },
+  {
+    ...ledgerBase,
+    payerUid: 'c',
+    amount: 40,
+    splitAmounts: { a: 25, gone: 15 },
+  },
+  {
+    ...ledgerBase,
+    payerUid: 'a',
+    amount: 27,
+    targetType: 'SPECIFIC_MEMBERS',
+    targetMemberIds: ['b', 'gone'],
+  },
+  {
+    ...ledgerBase,
+    payerUid: 'b',
+    amount: 16,
+    targetType: 'EVERYONE_INCLUDING_FUTURE',
+  },
+  { ...ledgerBase, payerUid: 'c', amount: 9, targetType: 'UNKNOWN' },
 ] as unknown as TripExpense[];
 ledgerMembers.forEach((uid) => {
   const real = sharedBalance(ledger, ledgerMembers, uid);
