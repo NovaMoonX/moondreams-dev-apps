@@ -146,7 +146,7 @@ function MediaViewer({
           <Button
             type='button'
             variant='tertiary'
-            className='bg-muted relative flex aspect-4/3 h-auto max-h-[40dvh] w-full items-center justify-center overflow-hidden rounded-2xl p-0'
+            className='bg-muted relative flex aspect-4/3 h-auto max-h-[40dvh] w-full items-center justify-center overflow-hidden rounded-2xl p-0!'
             disabled={!url}
             aria-label={HELM_COPY.photoOpenFull}
             onClick={() => setIsFull(true)}

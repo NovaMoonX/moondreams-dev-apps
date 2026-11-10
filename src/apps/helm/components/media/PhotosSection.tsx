@@ -51,8 +51,8 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
       variant='tertiary'
       className={
         index === 0
-          ? 'relative block aspect-4/3 h-auto w-full overflow-hidden rounded-2xl p-0'
-          : 'relative block size-20 shrink-0 overflow-hidden rounded-xl p-0'
+          ? 'relative block aspect-4/3 h-auto w-full overflow-hidden rounded-2xl p-0!'
+          : 'relative block size-20 shrink-0 overflow-hidden rounded-xl p-0!'
       }
       aria-label={HELM_COPY.photoLabel(name, index + 1)}
       onClick={() => setViewedId(entry.id)}
