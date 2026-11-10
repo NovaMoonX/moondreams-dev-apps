@@ -3,6 +3,7 @@ import {
   CalendarDays,
   History,
   Inbox,
+  Link2,
   ListChecks,
   Settings2,
   type LucideIcon,
@@ -21,6 +22,8 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   tasks: { label: HELM_COPY.tasksTitle, icon: ListChecks },
   settings: { label: HELM_COPY.settingsTitle, icon: Settings2 },
   activity: { label: HELM_COPY.activityTitle, icon: History },
+  connectedApps: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
+  connection: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },
 };
 
 interface BrowseTileProps {

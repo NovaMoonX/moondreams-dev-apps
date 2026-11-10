@@ -2,7 +2,14 @@ import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
 /** The views that have a screen so far; each later issue adds its own. */
 export type HelmView =
-  'home' | 'today' | 'inbox' | 'tasks' | 'settings' | 'activity';
+  | 'home'
+  | 'today'
+  | 'inbox'
+  | 'tasks'
+  | 'settings'
+  | 'activity'
+  | 'connectedApps'
+  | 'connection';
 
 export type Sealed = EncryptedFieldPayload;
 

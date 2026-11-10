@@ -12,6 +12,11 @@ export { changePinchShare } from './apps/pinch/changePinchShare.js';
 export { copyPinchShareCover } from './apps/pinch/copyPinchShareCover.js';
 export { getRunwayKey } from './apps/runway/getRunwayKey.js';
 export { verifyRunwayKeys } from './apps/runway/verifyRunwayKeys.js';
+export {
+  grantConnection,
+  updateConnection,
+  endConnection,
+} from './connections/callables.js';
 export { getHelmKey } from './apps/helm/getHelmKey.js';
 export { verifyHelmKeys } from './apps/helm/verifyHelmKeys.js';
 export { sortHelmCapture } from './apps/helm/sortHelmCapture.js';

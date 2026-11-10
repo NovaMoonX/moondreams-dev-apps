@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Eye, History, Mic } from 'lucide-react';
+import { Eye, History, Link2, Mic } from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
@@ -8,17 +8,24 @@ import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
+import { useConnections } from '@/lib/connections/useConnections';
 import { HELM_COPY } from '@apps/helm/constants';
 
 interface SettingsScreenProps {
   onBack: () => void;
   onOpenActivity: () => void;
+  onOpenConnectedApps: () => void;
 }
 
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
-function SettingsScreen({ onBack, onOpenActivity }: SettingsScreenProps) {
+function SettingsScreen({
+  onBack,
+  onOpenActivity,
+  onOpenConnectedApps,
+}: SettingsScreenProps) {
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const { grants } = useConnections({ readerAppId: 'helm' });
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
 
   return (
@@ -33,6 +40,19 @@ function SettingsScreen({ onBack, onOpenActivity }: SettingsScreenProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.settingsTitle}
         </h1>
+        <SettingsGroup title={HELM_COPY.settingsConnections}>
+          <SettingsRow
+            icon={<Link2 className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.connectedAppsRowTitle}
+            description={
+              grants.length > 0
+                ? HELM_COPY.connectedAppsCount(grants.length)
+                : HELM_COPY.connectedAppsNone
+            }
+            onClick={onOpenConnectedApps}
+            hasChevron
+          />
+        </SettingsGroup>
         <SettingsGroup title={HELM_COPY.settingsVoice}>
           <SettingsRow
             icon={<Mic className='size-5' aria-hidden='true' />}

@@ -10,6 +10,8 @@ import AskConversation from '@apps/helm/components/shell/AskConversation';
 import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
+import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
+import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
 import TasksView from '@apps/helm/components/tasks/TasksView';
@@ -27,6 +29,7 @@ function Helm() {
   const [isComposing, setIsComposing] = useState(false);
   const {
     view,
+    grant,
     isBrowseOpen,
     isAskRequested,
     closeAsk,
@@ -106,9 +109,19 @@ function Helm() {
           <SettingsScreen
             onBack={goBack}
             onOpenActivity={() => showView('activity')}
+            onOpenConnectedApps={() => showView('connectedApps')}
           />
         )}
         {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
+        {!isLocked && view === 'connectedApps' && (
+          <ConnectedAppsScreen
+            onBack={goBack}
+            onOpenConnection={(grantId) => showView('connection', grantId)}
+          />
+        )}
+        {!isLocked && view === 'connection' && (
+          <ConnectionPage grantId={grant} onBack={goBack} />
+        )}
         {isAskRequested && !isLocked && screen && (
           <AskConversation entry={screen} onClose={() => void closeAsk()} />
         )}

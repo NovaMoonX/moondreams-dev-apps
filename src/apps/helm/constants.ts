@@ -272,6 +272,52 @@ export const HELM_COPY = {
   undoNeedsConnectionBody:
     "Undo checks each record as it is now, so it waits until you're back online.",
   settingsTitle: 'Settings',
+  settingsConnections: 'Connections',
+  connectedAppsRowTitle: 'Connected apps',
+  connectedAppsCount: (count: number) => `${count} connected`,
+  connectedAppsNone: 'None yet',
+  connectedAppsLead: (name: string) =>
+    `What ${name} can read. It never changes anything in them.`,
+  connectedSection: 'Connected',
+  notConnectedSection: 'Not connected',
+  connectedNothingOn: 'Nothing switched on',
+  connectedStopped: 'Stopped sharing',
+  connectedAppsEmpty: (name: string) =>
+    `None of your apps can share with ${name} yet.`,
+  connectedAppsFailed:
+    "Your connections didn't open. Close this page and open it again.",
+  connectedAppsLoading: 'Opening your connections',
+  connectSheetTitle: 'Connect an app',
+  connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
+  connectReadOnly: (name: string, app: string) =>
+    `${name} reads what you tick. It can't add, change or delete anything in ${app}.`,
+  connectStartsTicked: (labels: string, count: number) =>
+    `${labels} ${count === 1 ? 'starts' : 'start'} ticked.`,
+  connectNeverShared: (never: string) => `Never shared: ${never}`,
+  connectTickOne: 'Tick at least one',
+  connectNotNow: 'Not now',
+  connectConfirm: (app: string) => `Connect ${app}`,
+  connectAlreadyConnected: (app: string) => `${app} is already connected.`,
+  connectFailed: "That didn't connect. Try again.",
+  connectionConnectedOn: (date: string) => `Connected ${date}`,
+  connectionAccountLabel: 'Account',
+  connectionAccountValue: 'Your moondreams account',
+  connectionReadOnly: (name: string, app: string) =>
+    `${name} reads these and changes nothing in ${app}.`,
+  connectionReads: (name: string) => `What ${name} reads`,
+  connectionSwitchedOff: (label: string) => `${label} switched off.`,
+  connectionUndo: 'Undo',
+  connectionToggleFailed: "That didn't change. Try again.",
+  connectionNeverShared: (never: string) => `Never shared: ${never}`,
+  connectionDisconnect: (app: string) => `Disconnect ${app}`,
+  disconnectTitle: (app: string) => `Disconnect ${app}?`,
+  disconnectBody: (name: string, app: string) =>
+    `${name} stops reading ${app}. You can connect it again any time.`,
+  disconnectConfirm: 'Disconnect',
+  disconnectFailed: "That didn't disconnect. Try again.",
+  connectionsNeedConnection: 'Needs a connection',
+  connectionsNeedConnectionBody:
+    "Changing a connection checks it with the server, so it waits until you're back online.",
   settingsVoice: 'Voice',
   settingsVoiceRowTitle: 'Voice service',
   settingsVoiceCloud: 'Cloud when online',

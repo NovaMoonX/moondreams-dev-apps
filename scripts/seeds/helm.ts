@@ -29,6 +29,12 @@ import type {
   TaskDue,
   TaskSealed,
 } from '../../src/apps/helm/types.ts';
+import {
+  SITE_ACCOUNT_ID,
+  toAppConnectorId,
+  toGrantId,
+  type ConnectionGrant,
+} from '../../src/lib/connections/contract.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -908,6 +914,37 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     }),
   );
 
+  const connectedAt = context.now - 3 * DAY_MS;
+  const pinchGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: toAppConnectorId('pinch'),
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      plannedMeals: { isOn: true, changedAt: connectedAt },
+      shoppingList: { isOn: true, changedAt: connectedAt },
+      useSoon: { isOn: false, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: {},
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: null,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(toGrantId('helm', toAppConnectorId('pinch'), SITE_ACCOUNT_ID)),
+    pinchGrant,
+  );
+
   Object.keys(keyring.keys).forEach((masterKeyId) =>
     batch.set(
       context.firestore.doc(keyCheckPath(masterKeyId)),
@@ -916,13 +953,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key.
+  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
       SEED_PROFILES.length * 2 +
       turnCounts.reduce((total, count) => total + count, 0) +
-      Object.keys(keyring.keys).length,
+      Object.keys(keyring.keys).length +
+      1,
   };
   return result;
 }

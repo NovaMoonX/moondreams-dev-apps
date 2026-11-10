@@ -6,6 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { sendPushToUsers, toAppUrl } from '../../notifications/sendPush.js';
 import {
+  DEFAULT_LEAD_DAYS,
   getDigestBounds,
   getDigestLink,
   getDigestMessage,
@@ -24,7 +25,6 @@ if (getApps().length === 0) {
 const SETTINGS_PATH = 'apps/pinch/settings';
 const BOX_LIMIT = 100;
 const PACKAGE_LIMIT = 100;
-const DEFAULT_LEAD_DAYS = 1;
 
 interface DigestContext {
   today: number;

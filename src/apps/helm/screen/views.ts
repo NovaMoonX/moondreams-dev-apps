@@ -39,8 +39,7 @@ const TILES = [
 // More than one lead or three major tiles fails to typecheck here.
 export const BROWSE_TILES = TILES satisfies ValidTiles<typeof TILES>;
 
-/** Connected apps join once their screen exists. */
-export const BROWSE_FOOT: readonly HelmView[] = ['settings', 'activity'];
+export const BROWSE_FOOT: readonly HelmView[] = ['connectedApps', 'settings', 'activity'];
 
 /** Where Back from a view lands; a view that is not listed goes home. */
 export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
@@ -49,6 +48,8 @@ export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   tasks: 'today',
   settings: 'home',
   activity: 'settings',
+  connectedApps: 'settings',
+  connection: 'connectedApps',
 };
 
 export const VIEW_KINDS = {
@@ -58,4 +59,6 @@ export const VIEW_KINDS = {
   tasks: 'content',
   settings: 'utility',
   activity: 'utility',
+  connectedApps: 'utility',
+  connection: 'utility',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;
