@@ -534,7 +534,7 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
 });
 {
   const requests: MintVoiceTokenRequest[] = [];
-  const state = { isFailing: false };
+  const state = { isFailing: false, isKeyless: false };
   const READY: MintVoiceTokenResult = {
     status: 'ready',
     token: 't',
@@ -548,6 +548,7 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     mint: async (request) => {
       requests.push(request);
       if (state.isFailing) throw new Error('offline');
+      if (state.isKeyless) return { status: 'held', reason: 'unavailable' };
       return READY;
     },
   });
@@ -570,6 +571,16 @@ assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
     requests[3].closed,
     [{ mintId: 'b', ms: 2000 }],
     'a report kept after a failed request is sent with the next one',
+  );
+  source.reportClosed('c', 3000);
+  state.isKeyless = true;
+  await source.getToken();
+  state.isKeyless = false;
+  await source.getToken();
+  assert.deepEqual(
+    requests[5].closed,
+    [{ mintId: 'c', ms: 3000 }],
+    'a report the server could not count (held unavailable) is sent again',
   );
 }
 (

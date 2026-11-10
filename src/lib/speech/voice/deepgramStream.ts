@@ -73,13 +73,22 @@ export const createDeepgramStt = ({
   onUnavailable,
   onClosed,
 }: DeepgramSttOptions): SttAdapter => {
-  const run = { stop: null as (() => void) | null };
+  const run = {
+    stop: null as (() => void) | null,
+    cancel: null as (() => void) | null,
+    asked: null as 'stop' | 'cancel' | null,
+  };
   return {
     id: 'deepgram',
     route: 'cloud',
     canStream: true,
     start: async (options) => {
-      run.stop?.();
+      run.asked = null;
+      const tokenRequest = getToken().catch(() => null);
+      const releaseToken = () =>
+        void tokenRequest.then((answer) => {
+          if (answer?.status === 'ready') onClosed(answer.mintId, 0);
+        });
       const stream = await navigator.mediaDevices
         .getUserMedia({
           audio: {
@@ -97,7 +106,16 @@ export const createDeepgramStt = ({
           } else onUnavailable(null);
           return null;
         });
-      if (!stream) return;
+      if (!stream) {
+        releaseToken();
+        return;
+      }
+      if (run.asked !== null) {
+        stream.getTracks().forEach((track) => track.stop());
+        releaseToken();
+        options.onFinal('');
+        return;
+      }
 
       const state = {
         isDone: false,
@@ -127,6 +145,7 @@ export const createDeepgramStt = ({
       };
       const teardown = () => {
         run.stop = null;
+        run.cancel = null;
         document.removeEventListener('visibilitychange', handleVisibility);
         window.clearTimeout(state.openId);
         window.clearTimeout(state.closeId);
@@ -167,6 +186,18 @@ export const createDeepgramStt = ({
         }
         options.onFinal(text);
       };
+      const cancel = () => {
+        if (state.isDone) return;
+        state.isDone = true;
+        teardown();
+        if (state.mintId) {
+          onClosed(
+            state.mintId,
+            state.isOpen ? Date.now() - state.openedAt : 0,
+          );
+        }
+        options.onFinal('');
+      };
       function stop() {
         if (state.isDone || state.isClosing) return;
         state.isClosing = true;
@@ -184,6 +215,7 @@ export const createDeepgramStt = ({
 
       document.addEventListener('visibilitychange', handleVisibility);
       run.stop = stop;
+      run.cancel = cancel;
       startPcmCapture({ stream, onFrame: send }).then(
         (capture) => {
           if (state.isDone || state.isClosing) capture.stop();
@@ -198,10 +230,8 @@ export const createDeepgramStt = ({
       const timeout = new Promise<null>((resolve) =>
         window.setTimeout(() => resolve(null), tokenWaitMs),
       );
-      const answer = await Promise.race([
-        getToken().catch(() => null),
-        timeout,
-      ]);
+      const answer = await Promise.race([tokenRequest, timeout]);
+      if (state.isDone || answer === null) releaseToken();
       if (state.isDone) return;
       if (answer === null || answer.status === 'held') {
         fail(
@@ -255,6 +285,13 @@ export const createDeepgramStt = ({
         options.onPartial(read());
       };
     },
-    stop: () => run.stop?.(),
+    stop: () => {
+      if (run.stop) run.stop();
+      else run.asked = 'stop';
+    },
+    cancel: () => {
+      if (run.cancel) run.cancel();
+      else run.asked = 'cancel';
+    },
   };
 };

@@ -159,7 +159,7 @@ export async function reserveListen(
       mintId,
       worstCaseMicros: listenCostMicros(VOICE_UTTERANCE_MS),
     });
-    transaction.set(usageRef, result.usage);
+    transaction.set(usageRef, { ...usageSnapshot.data(), ...result.usage });
     if (result.held === null) {
       transaction.set(
         budgetRef,
@@ -191,9 +191,11 @@ export async function releaseListen(
   const budgetRef = firestore.doc(budgetPath(getUtcDayKey(now)));
   try {
     await firestore.runTransaction(async (transaction) => {
-      const usage = readUsage((await transaction.get(usageRef)).data());
+      const stored = (await transaction.get(usageRef)).data();
+      const usage = readUsage(stored);
       if (!Object.hasOwn(usage.openMints, mintId)) return;
       transaction.set(usageRef, {
+        ...stored,
         ...usage,
         mints: Math.max(0, usage.mints - 1),
         openMints: Object.fromEntries(

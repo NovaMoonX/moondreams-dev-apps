@@ -40,7 +40,7 @@ export interface VoiceTokenSource {
   reportClosed: (mintId: string, ms: number) => void;
 }
 
-/** Asks the server for a short-lived listening token (`mint` is the callable, injected). A failed request reads as held `unavailable` and keeps the unsent stream reports. */
+/** Asks the server for a short-lived listening token (`mint` is the callable, injected). A failed request reads as held `unavailable`; the stream reports stay for the next request when the server couldn't count them. */
 export const createVoiceTokenSource = ({
   appId,
   mint,
@@ -58,6 +58,8 @@ export const createVoiceTokenSource = ({
           timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           closed: sent,
         });
+        if (result.status === 'held' && result.reason === 'unavailable')
+          return result;
         pending.closed = pending.closed.filter(
           (report) => !sent.includes(report),
         );

@@ -24,6 +24,8 @@ export interface SttAdapter {
   start: (options: SttStartOptions) => Promise<void>;
   /** Ends the utterance; `onFinal` fires once with everything heard. */
   stop: () => void;
+  /** Ends the utterance without sending anything more; `onFinal` fires once, empty. */
+  cancel?: () => void;
 }
 
 export interface TtsSpeakOptions {

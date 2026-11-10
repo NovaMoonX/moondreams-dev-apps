@@ -127,6 +127,7 @@ export function useVoiceConversation({
     mode: createListeningState('TAP'),
     isCancelled: false,
     stopListening: null as (() => void) | null,
+    cancelListening: null as (() => void) | null,
     quietId: 0,
     holdId: 0,
   });
@@ -206,6 +207,7 @@ export function useVoiceConversation({
   const handleFinal = (text: string) => {
     clearTimers();
     run.current.stopListening = null;
+    run.current.cancelListening = null;
     send({ type: 'STOP' });
     setIsListening(false);
     setListeningRoute(null);
@@ -248,6 +250,7 @@ export function useVoiceConversation({
     const startAdapter = (adapter: SttAdapter) => {
       run.current.heardBy = adapter.id;
       run.current.stopListening = () => adapter.stop();
+      run.current.cancelListening = () => (adapter.cancel ?? adapter.stop)();
       setListeningRoute(adapter.route === 'cloud' ? 'cloud' : 'device');
       adapter.start(callbacks).catch((error: unknown) => {
         console.error('Voice listening did not start', error);
@@ -306,7 +309,8 @@ export function useVoiceConversation({
   const cancel = () => {
     if (run.current.mode.phase === 'OFF') return;
     run.current.isCancelled = true;
-    finish();
+    clearTimers();
+    run.current.cancelListening?.();
   };
 
   const speak = (
@@ -349,7 +353,7 @@ export function useVoiceConversation({
       run.current.isCancelled = true;
       window.clearTimeout(run.current.quietId);
       window.clearTimeout(run.current.holdId);
-      run.current.stopListening?.();
+      run.current.cancelListening?.();
       getQueue().clear();
     },
     [],
