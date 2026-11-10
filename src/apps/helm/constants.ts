@@ -700,7 +700,7 @@ export const HELM_COPY = {
   planAnyTime: 'Any time today',
   planWhenHome: 'When you get home',
   planImHome: "I'm home",
-  planHomeTill: (time: string) => `Home till ${time}`,
+  planHomeTill: (time: string) => `Till ${time}`,
   homeTitle: 'Home',
   homeRowDetail: 'Where you are now',
   homeToast: 'Home for the next 3 hours',

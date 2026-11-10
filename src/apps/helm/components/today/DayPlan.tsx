@@ -293,10 +293,12 @@ function DayPlan({
   const homeSection = homeTasks.length > 0 && (
     <section className='space-y-3'>
       <SectionDivider
-        label={HELM_COPY.planWhenHome}
+        label={
+          <span className='whitespace-nowrap'>{HELM_COPY.planWhenHome}</span>
+        }
         trailing={
           isHome && profile.currentPlace ? (
-            <span className='text-muted-foreground text-sm'>
+            <span className='text-muted-foreground text-sm whitespace-nowrap'>
               {HELM_COPY.planHomeTill(
                 formatClock(
                   getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
