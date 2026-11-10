@@ -4764,8 +4764,7 @@ export const PAIR_WORDS = {
   waitingCardPayment: 'Your bank calls this a card payment',
   waitingTransfer: 'Your bank calls this a move between accounts',
   waitingSheet: 'Pair it with its other side, or say it is spending.',
-  waitingIntro:
-    'Your bank calls these card payments or moves. They stay off Purchases.',
+  waitingIntro: 'Your bank calls these card payments or moves.',
   isSpending: 'This is spending',
   isSpendingSub: 'Back on Purchases, from Free to Spend',
 } as const;

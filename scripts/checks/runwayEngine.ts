@@ -6,6 +6,7 @@ import {
   listPlanChangeDays,
 } from '../../src/apps/runway/engine/planChanges.ts';
 import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
+import { cleanBankName } from '../../src/apps/runway/utils/accountText.ts';
 import {
   createSealedReader,
   sealJson,
@@ -11000,6 +11001,18 @@ const version = (
   const none = (matches: ReturnType<typeof findAccountPairs>) =>
     matches.clear.size + matches.offers.size;
 
+  (
+    [
+      ['Venture X - Credit Holder XXXXXXX3153', 'Venture X'],
+      ['Savings (…4321)', 'Savings'],
+      ['Freedom x1234', 'Freedom'],
+      ['Boxx 1234 Savings', 'Boxx 1234 Savings'],
+      ['Plus - Account Owner', 'Plus - Account Owner'],
+      ['T-Mobile Card', 'T-Mobile Card'],
+    ] as const
+  ).forEach(([name, cleaned]) =>
+    assert.equal(cleanBankName(name), cleaned, `bank name ${name}`),
+  );
   const cardPay = side('pay', 45_524, 0, {
     category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
   });

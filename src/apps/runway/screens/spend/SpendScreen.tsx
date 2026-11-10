@@ -282,8 +282,16 @@ function SpendScreen() {
     }),
     { purchases: 0, refunds: 0, notCounted: 0 },
   );
+  // Purchases and Refunds split by sign, so they wait until amounts show.
+  const shownKinds = SPEND_KINDS.filter((kind) =>
+    kind === 'notCounted' ? kindCounts.notCounted > 0 : !isHidden,
+  );
   const kindId: SpendKind | null =
-    spendKind !== null && kindCounts[spendKind] > 0 ? spendKind : null;
+    spendKind !== null &&
+    kindCounts[spendKind] > 0 &&
+    shownKinds.includes(spendKind)
+      ? spendKind
+      : null;
   const ofKind = purchases.filter((purchase) => fitsKind(purchase, kindId));
 
   const sources = ofKind.reduce<Map<string, { name: string; count: number }>>(
@@ -311,7 +319,7 @@ function SpendScreen() {
     Math.min(spendMax ?? amountTop, amountTop),
   ];
   const amount = amountDraft ?? committedAmount;
-  const isAmountOn = amount[0] > 0 || amount[1] < amountTop;
+  const isAmountOn = !isHidden && (amount[0] > 0 || amount[1] < amountTop);
 
   const showEnvelope = (envelopeId: string | null) => {
     showSpendEnvelope(envelopeId);
@@ -358,7 +366,7 @@ function SpendScreen() {
       (sourceIds.length === 0 || sourceIds.includes(getSourceId(purchase))) &&
       (!isAmountOn ||
         (Math.abs(purchase.amountCents) >= amount[0] &&
-          Math.abs(purchase.amountCents) <= amount[1])) &&
+          Math.abs(purchase.amountCents) < amount[1] + DOLLAR)) &&
       (needle === '' ||
         `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.label ?? ''} ${purchase.merchant ?? ''} ${purchase.bankName ?? ''} ${purchase.note ?? ''} ${paidWithOf(purchase) ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
           .toLowerCase()
@@ -404,9 +412,7 @@ function SpendScreen() {
       detail: String(countedCount),
       ariaLabel: `${SPEND_WORDS.all}, ${countedCount}`,
     },
-    ...SPEND_KINDS.filter(
-      (kind) => kind !== 'notCounted' || kindCounts.notCounted > 0,
-    ).map((kind) => ({
+    ...shownKinds.map((kind) => ({
       value: kind as string,
       label: SPEND_FILTER_WORDS.kinds[kind],
       detail: String(kindCounts[kind]),
@@ -446,12 +452,10 @@ function SpendScreen() {
       ? [
           {
             key: 'amount',
-            label: isHidden
-              ? SPEND_FILTER_WORDS.amount
-              : SPEND_FILTER_WORDS.amountChip(
-                  formatDollars(amount[0]),
-                  formatDollars(amount[1]),
-                ),
+            label: SPEND_FILTER_WORDS.amountChip(
+              formatDollars(amount[0]),
+              formatDollars(amount[1]),
+            ),
           },
         ]
       : []),
@@ -559,21 +563,23 @@ function SpendScreen() {
             doneLabel={SPEND_FILTER_WORDS.show(matches.length)}
             compactDoneLabel={SPEND_FILTER_WORDS.showShort(matches.length)}
           >
-            <FilterSection title={SPEND_FILTER_WORDS.kind}>
-              <PillGroup
-                label={SPEND_FILTER_WORDS.kind}
-                options={kindOptions}
-                value={kindId ?? ''}
-                onChange={(value) =>
-                  showKind(value === '' ? null : (value as SpendKind))
-                }
-              />
-              {kindId === 'notCounted' && (
-                <p className='text-muted-foreground text-xs'>
-                  {SPEND_FILTER_WORDS.notCountedHelp}
-                </p>
-              )}
-            </FilterSection>
+            {shownKinds.length > 0 && (
+              <FilterSection title={SPEND_FILTER_WORDS.kind}>
+                <PillGroup
+                  label={SPEND_FILTER_WORDS.kind}
+                  options={kindOptions}
+                  value={kindId ?? ''}
+                  onChange={(value) =>
+                    showKind(value === '' ? null : (value as SpendKind))
+                  }
+                />
+                {kindId === 'notCounted' && (
+                  <p className='text-muted-foreground text-xs'>
+                    {SPEND_FILTER_WORDS.notCountedHelp}
+                  </p>
+                )}
+              </FilterSection>
+            )}
             {sources.size >= 2 && (
               <FilterSection title={SPEND_FILTER_WORDS.paidWith}>
                 <MultiPillGroup
@@ -581,18 +587,6 @@ function SpendScreen() {
                   options={sourceOptions}
                   values={sourceIds}
                   onChange={showSources}
-                />
-              </FilterSection>
-            )}
-            {counts.size >= 2 && (
-              <FilterSection title={SPEND_WORDS.envelope}>
-                <PillGroup
-                  label={SPEND_WORDS.envelope}
-                  options={filterOptions}
-                  value={filterId ?? ''}
-                  onChange={(value) =>
-                    showEnvelope(value === '' ? null : value)
-                  }
                 />
               </FilterSection>
             )}
@@ -616,6 +610,18 @@ function SpendScreen() {
                   onCommit={commitAmount}
                   formatValue={formatDollars}
                   className='-mx-3'
+                />
+              </FilterSection>
+            )}
+            {counts.size >= 2 && (
+              <FilterSection title={SPEND_WORDS.envelope}>
+                <PillGroup
+                  label={SPEND_WORDS.envelope}
+                  options={filterOptions}
+                  value={filterId ?? ''}
+                  onChange={(value) =>
+                    showEnvelope(value === '' ? null : value)
+                  }
                 />
               </FilterSection>
             )}
