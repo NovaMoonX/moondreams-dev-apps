@@ -942,7 +942,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
     aliases: [],
     lastMentionedAt: null,
     tier: 'passing' as const,
-    tierSetBy: 'nomos' as const,
+    tierSetBy: 'nomos' as 'nomos' | 'person',
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
