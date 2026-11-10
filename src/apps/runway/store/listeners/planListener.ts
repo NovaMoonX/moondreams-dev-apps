@@ -25,6 +25,7 @@ async function openPlan(
         holdsPrompt: null,
         bankBackedSeenAt: null,
         horizonNudgeDismissed: null,
+        homePins: null,
       };
   const result: OpenPlan = {
     uid: plan.uid,
@@ -46,6 +47,7 @@ async function openPlan(
     holdsPrompt: fields.holdsPrompt ?? null,
     bankBackedSeenAt: fields.bankBackedSeenAt ?? null,
     horizonNudgeDismissed: fields.horizonNudgeDismissed ?? null,
+    homePins: fields.homePins ?? null,
   };
   return result;
 }

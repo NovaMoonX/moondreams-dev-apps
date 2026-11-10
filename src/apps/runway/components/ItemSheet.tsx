@@ -15,6 +15,8 @@ import {
   Link2,
   Pause,
   Pencil,
+  Pin,
+  PinOff,
   Play,
   ReceiptText,
   Route,
@@ -32,6 +34,8 @@ import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
+import HomePinsList from '@apps/runway/components/HomePinsList';
+import { useHomePins } from '@apps/runway/hooks/useHomePins';
 import FoldedDateField from '@/components/FoldedDateField';
 import PartOfPicker from '@apps/runway/components/PartOfPicker';
 import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
@@ -113,6 +117,7 @@ import {
   SET_HELD_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
+  HOME_PIN_WORDS,
   HORIZON_PLAN_WORDS,
   HORIZON_WORDS,
   PRIORITY_LABELS,
@@ -229,7 +234,8 @@ type View =
   | 'dayAction'
   | 'planChoice'
   | 'comingList'
-  | 'changeSheet';
+  | 'changeSheet'
+  | 'pins';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 export interface ItemSheetProps {
@@ -337,6 +343,7 @@ const VIEW_NOTES: Record<View, string> = {
   planChoice: '',
   comingList: '',
   changeSheet: '',
+  pins: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -439,6 +446,7 @@ function ItemSheet({
   const isSavingRef = useRef(false);
   const mask = useMaskedText();
   const { isHidden } = useValuesHidden();
+  const homePins = useHomePins(today);
   const allCards = useAppSelector(selectAllCards);
   const versions = useAppSelector((state) => state.runway.versions);
   const paid = useBillPaid({
@@ -1131,6 +1139,7 @@ function ItemSheet({
   };
   const blocker = getBlocker();
   const isArchivable = itemKind !== 'source' && header?.archivedAt == null;
+  const isPinned = homePins.pins.includes(itemId);
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
@@ -1587,6 +1596,31 @@ function ItemSheet({
             onClick={() => void release()}
           />
         )}
+        {itemKind === 'envelope' && isArchivable && isPinned && (
+          <ActionRow
+            isGrouped
+            icon={<PinOff />}
+            label={HOME_PIN_WORDS.unpin}
+            subtitle={HOME_PIN_WORDS.unpinSub}
+            onClick={() => void homePins.setPin(itemId, payload.name, false)}
+          />
+        )}
+        {itemKind === 'envelope' && isArchivable && !isPinned && (
+          <ActionRow
+            isGrouped
+            hasChevron={homePins.isFull}
+            icon={<Pin />}
+            label={HOME_PIN_WORDS.pin}
+            subtitle={
+              homePins.isFull ? HOME_PIN_WORDS.fullSub : HOME_PIN_WORDS.pinSub
+            }
+            onClick={() =>
+              homePins.isFull
+                ? goTo('pins')
+                : void homePins.setPin(itemId, payload.name, true)
+            }
+          />
+        )}
       </ActionGroup>
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
@@ -1731,6 +1765,29 @@ function ItemSheet({
             setPhase('purchaseDetail');
           }}
         />
+      )}
+    </div>
+  );
+
+  const pinsView = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>{HOME_PIN_WORDS.title}</ActionTitle>
+      <p className='text-muted-foreground -mt-2 text-sm'>
+        {homePins.isFull ? HOME_PIN_WORDS.full : HOME_PIN_WORDS.subtitle}
+      </p>
+      <HomePinsList today={today} />
+      {!homePins.isFull && !isPinned && (
+        <Button
+          type='button'
+          className='w-full'
+          onClick={() => {
+            void homePins.setPin(itemId, payload.name, true);
+            goTo('menu');
+          }}
+        >
+          {HOME_PIN_WORDS.pinThis(payload.name)}
+        </Button>
       )}
     </div>
   );
@@ -2264,14 +2321,16 @@ function ItemSheet({
                                 ? changeSheetView
                                 : view === 'horizonLink' && horizonLinkView
                                   ? horizonLinkView
-                                  : view === 'dayAction' &&
-                                      dayAction?.renderView
-                                    ? dayAction.renderView({
-                                        onBack: () => goTo('menu'),
-                                        onClose,
-                                        openChange,
-                                      })
-                                    : action
+                                  : view === 'pins'
+                                    ? pinsView
+                                    : view === 'dayAction' &&
+                                        dayAction?.renderView
+                                      ? dayAction.renderView({
+                                          onBack: () => goTo('menu'),
+                                          onClose,
+                                          openChange,
+                                        })
+                                      : action
         }
       >
         {menu}

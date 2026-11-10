@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Home, ShoppingBag } from 'lucide-react';
+import { ChevronRight, Home, ShoppingBag } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
+import FormSheet from '@/components/FormSheet';
 import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNow } from '@/hooks/useNow';
@@ -18,11 +19,15 @@ import BankBackedRow from '@apps/runway/components/BankBackedRow';
 import NeedsHomeDoor from '@apps/runway/components/NeedsHomeDoor';
 import LevelGate from '@apps/runway/components/LevelGate';
 import EnvelopeTile from '@apps/runway/components/EnvelopeTile';
+import HomePinsList from '@apps/runway/components/HomePinsList';
+import { useHomePins } from '@apps/runway/hooks/useHomePins';
+import { orderHomeTiles } from '@apps/runway/utils/homePins';
 import IncomeDayCard from '@apps/runway/components/IncomeDayCard';
 import LookaheadWarnings from '@apps/runway/components/LookaheadWarnings';
 import MoneyCard from '@apps/runway/components/MoneyCard';
 import {
   CARD_DUE_WARN_DAYS,
+  HOME_PIN_WORDS,
   HOME_TILE_COUNT,
   HOME_WORDS,
   SPEND_WORDS,
@@ -87,7 +92,9 @@ function HomeScreen() {
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? 0,
   );
+  const { pins } = useHomePins(today);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
+  const [isArranging, setIsArranging] = useState(false);
   const { openView, openDay, showTab, showPlanSection } = useRunwayUrlState();
 
   if (!isLoaded) {
@@ -116,10 +123,7 @@ function HomeScreen() {
   const nextDay = open.find((day) => day.status !== 'notArrived') ?? null;
   const hasMoney = ({ item }: (typeof envelopes)[number]) =>
     (balances.assignedByItem[item.id] ?? 0) !== 0;
-  const shown = [
-    ...envelopes.filter(hasMoney),
-    ...envelopes.filter((entry) => !hasMoney(entry)),
-  ].slice(0, HOME_TILE_COUNT);
+  const shown = orderHomeTiles(envelopes, pins, hasMoney, HOME_TILE_COUNT);
   const dueCards = isTrack
     ? getDueCards(
         getListedCards(allCards, balances.reserveByCard),
@@ -215,10 +219,37 @@ function HomeScreen() {
                 pairedNote={describePairedBy(pairedBy[item.id] ?? [])}
                 today={today}
                 look='tile'
+                isPinned={pins.includes(item.id)}
               />
             ))}
           </ul>
+          {pins.length >= 2 && (
+            <Button
+              type='button'
+              variant='tertiary'
+              className="text-muted-foreground! relative h-7 justify-start gap-0.5 px-0! text-sm font-normal after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+              onClick={() => setIsArranging(true)}
+            >
+              {HOME_PIN_WORDS.arrange}
+              <ChevronRight className='h-4 w-4' aria-hidden='true' />
+            </Button>
+          )}
         </div>
+      )}
+      {isArranging && (
+        <FormSheet
+          isOpen
+          isDrawerWhenShort
+          title={HOME_PIN_WORDS.title}
+          onClose={() => setIsArranging(false)}
+        >
+          <div className='space-y-3'>
+            <p className='text-muted-foreground text-sm'>
+              {HOME_PIN_WORDS.subtitle}
+            </p>
+            <HomePinsList today={today} />
+          </div>
+        </FormSheet>
       )}
       {nextDay && (
         <div className='space-y-2'>

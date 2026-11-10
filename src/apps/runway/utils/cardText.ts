@@ -192,6 +192,21 @@ export const getListedCards = (
     (card) => card.archivedAt === null || (reserveByCard[card.id] ?? 0) > 0,
   );
 
+/** What the listed cards owe together, as Home and Plan's Cards header say it; a card paid ahead counts as nothing, as its row shows. While amounts are hidden it always names a figure, so "nothing owed" never gives the total away. */
+export const describeCardsOwed = (
+  cards: readonly OpenCard[],
+  reserveByCard: Readonly<Record<string, Cents>>,
+  isHidden: boolean,
+) => {
+  const owed = cards.reduce(
+    (sum, card) => sum + Math.max(0, reserveByCard[card.id] ?? 0),
+    0,
+  );
+  return owed > 0 || isHidden
+    ? CARD_WORDS.totalOwed(formatCents(owed))
+    : CARD_WORDS.nothingOwed;
+};
+
 /** A card coming due as one sentence: "Chase is due Nov 3 · $120.00 waiting", "is due today", or "was due Oct 14" when past due. */
 export const describeDueCard = (name: string, due: DueCard) => {
   const amount = formatCents(due.waitingCents);
