@@ -866,6 +866,8 @@ export const HELM_COPY = {
     `You told ${assistant} this ${day}`,
   factSourceInferred: (assistant: string, day: string) =>
     `${assistant} inferred this from what you told it ${day}`,
+  factSourceInferredOnly: (assistant: string, day: string) =>
+    `${assistant} inferred this ${day}`,
   factSourceInferredMail: (assistant: string) =>
     `${assistant} inferred this from an email`,
   factSourceConfirmed: (assistant: string, day: string, confirmedDay: string) =>

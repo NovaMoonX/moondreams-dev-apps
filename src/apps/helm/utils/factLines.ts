@@ -72,7 +72,10 @@ export function getFactSource(fact: OpenFact, assistant: string, now: number) {
       toOnDay(fact.confirmedAt ?? fact.createdAt, now),
     );
   }
-  return fact.sourceCaptureId
-    ? HELM_COPY.factSourceInferred(assistant, day)
-    : HELM_COPY.factSourceInferredMail(assistant);
+  if (fact.sourceCaptureId) {
+    return HELM_COPY.factSourceInferred(assistant, day);
+  }
+  return fact.sourceConnection
+    ? HELM_COPY.factSourceInferredMail(assistant)
+    : HELM_COPY.factSourceInferredOnly(assistant, day);
 }
