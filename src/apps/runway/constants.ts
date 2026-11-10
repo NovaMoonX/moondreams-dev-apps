@@ -2176,7 +2176,7 @@ export const SPEND_WORDS = {
   offline: 'This needs a connection. Nothing was saved.',
   detailTitle: 'Purchase',
   refundTitle: 'Refund',
-  cashOrTyped: 'Cash or debit',
+  cashOrTyped: 'No card or account',
   notCounted: 'Not counted',
   edit: 'Change this purchase',
   save: 'Save',
