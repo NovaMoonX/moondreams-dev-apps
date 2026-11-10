@@ -40,7 +40,7 @@ export interface TtsSpeakOptions {
 export interface TtsAdapter {
   id: string;
   route: VoiceRoute;
-  /** Resolves with the id of the adapter that actually played, when it isn't this one. */
+  /** Resolves with the id of what actually played (provider-qualified for the cloud, the fallback's id when it stood in); void means this adapter's id. */
   speak: (text: string, options: TtsSpeakOptions) => Promise<string | void>;
   /** True when the audio goes through the page's audio graph, so the browser's echo cancellation hears it. */
   isPlayingThroughWebAudio: boolean;

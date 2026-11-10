@@ -1,4 +1,5 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
+import { isRunningInEmulator } from '../emulator.js';
 import { getAppCheck } from 'firebase-admin/app-check';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -40,7 +41,7 @@ const ALLOWED_ORIGINS: (string | RegExp)[] = [
   'https://apps.moondreams.dev',
   /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
 ];
-const isEmulator = () => process.env.FUNCTIONS_EMULATOR === 'true';
+const isEmulator = isRunningInEmulator;
 // The dev server and a phone on the LAN load the page over plain HTTP from any host.
 const SERVED_ORIGINS: (string | RegExp)[] = isEmulator()
   ? [...ALLOWED_ORIGINS, /^http:\/\/[^/]+:\d+$/]
@@ -302,6 +303,7 @@ export const streamSpeech = onRequest(
     res.setHeader('Content-Type', speech.contentType);
     res.setHeader('X-Voice-Provider', providerId);
     const write = async (bytes: Uint8Array) => {
+      if (res.destroyed) throw new Error('The client left');
       if (res.write(bytes)) return;
       await new Promise((resolve) => {
         res.once('drain', resolve);

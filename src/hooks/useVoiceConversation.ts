@@ -34,7 +34,7 @@ export type VoiceUnavailableReason = 'no-recognition' | 'no-permission';
 
 export interface VoiceSpoken {
   status: 'spoken' | 'cancelled' | 'failed';
-  /** Which adapter said it ('cloud', 'natural' or 'system'); null when none did. */
+  /** Which adapter said it ('cloud:{provider}', 'natural' or 'system'); null when none did. */
   adapterId: string | null;
 }
 

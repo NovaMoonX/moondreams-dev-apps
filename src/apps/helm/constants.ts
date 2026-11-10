@@ -275,10 +275,10 @@ export const HELM_COPY = {
   settingsVoice: 'Voice',
   settingsVoiceRowTitle: 'Voice service',
   settingsVoiceCloud: 'Cloud when online',
-  settingsVoiceDevice: 'This phone only',
-  voiceDeviceOnlyTitle: 'Keep voice on this phone',
+  settingsVoiceDevice: 'On this device',
+  voiceDeviceOnlyTitle: 'Keep voice on this device',
   voiceDeviceOnlyOn:
-    "Your speech isn't sent to a voice service, and answers are read by this phone's voice. In Chrome, the browser's own listening uses Google's speech service.",
+    "Your speech isn't sent to our voice services, and answers are read by this device's voice. In Chrome, the browser's own listening uses Google.",
   voiceDeviceOnlyOff:
     "Online, Deepgram turns your speech into words for clearer listening. This browser listens when it can't.",
   voiceDone: 'Done',
