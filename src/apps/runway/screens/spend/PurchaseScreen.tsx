@@ -849,7 +849,6 @@ function PurchaseScreen({
             <PairOffer
               purchase={purchase}
               onDone={onClose}
-              elseSubtitle={PAIR_WORDS.pickEnvelope}
             >
               <NeedsHomeAssign
                 purchase={purchase}
@@ -921,7 +920,6 @@ function PurchaseScreen({
             {isWaiting && purchase.amountCents > 0 && (
               <LeaveOutRow isKeepFree purchase={purchase} onDone={onClose} />
             )}
-            {isWaiting && <LeaveOutRow purchase={purchase} onDone={onClose} />}
             {placedRule !== null && (
               <ActionRow
                 isGrouped

@@ -84,6 +84,7 @@ import {
 } from '@apps/runway/engine/dates';
 import {
   findAccountPairs,
+  findDepositDays,
   findLostPairs,
   isBankMove,
   type DepositDay,
@@ -1609,6 +1610,22 @@ export const selectSpendPurchases = createSelector(
   },
 );
 
+/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts. Spend's Money in and Free to Spend's "Money in this month" both read it. */
+export const selectMoneyIn = createSelector(
+  [selectKnownPurchases],
+  (purchases) => {
+    const result = purchases
+      .filter(
+        (purchase) =>
+          purchase.amountCents < 0 &&
+          purchase.pairedWithId === null &&
+          !isBankMove(purchase),
+      )
+      .sort(byNewest);
+    return result;
+  },
+);
+
 /** Card payments and moves the bank flagged that are not paired yet, newest first: they wait under Account moves rather than in spending. */
 export const selectWaitingBankMoves = createSelector(
   [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
@@ -1838,7 +1855,63 @@ export const selectIsSortingPaused = (state: RootState) =>
 
 const selectSorting = (state: RootState) => state.runway.plan?.sorting ?? null;
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. A card payment or move the bank flagged waits under Account moves instead. */
+/** The money in Needs a home has a question for: on a card (card payment, refund or an unseen account), or with a move or a pay day it may be. At Link the rest is already in Free to Spend through the balance, so it never waits; it is found under Spend's Money in. */
+export const selectMoneyInAsks = createSelector(
+  [
+    selectWaitingList,
+    selectLostDeposits,
+    selectLostPairs,
+    selectDepositDays,
+    selectPurchases,
+  ],
+  (waitingList, lostDeposits, lostPairs, days, purchases) => {
+    const lost = [
+      ...lostDeposits.map((entry) => ({
+        ...entry,
+        needsHome: true,
+        incomeDayId: null,
+      })),
+      ...lostPairs.map((entry) => ({
+        ...entry,
+        needsHome: true,
+        pairedWithId: null,
+        pairKind: null,
+      })),
+    ];
+    const waiting = [
+      ...waitingList,
+      ...lost.filter(
+        (entry, index) =>
+          !waitingList.some((other) => other.id === entry.id) &&
+          lost.findIndex((other) => other.id === entry.id) === index,
+      ),
+    ];
+    const { offers } = findAccountPairs(waiting, true);
+    const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
+    // A move the bank flagged waits under Account moves and offers this side there.
+    const mayPair = (id: string) =>
+      (offers.get(id) ?? []).some(({ otherId }) => {
+        const other = byId.get(otherId);
+        return other !== undefined && !isBankMove(other);
+      });
+    const deposits = findDepositDays(waiting, days, purchases);
+    const result = new Set(
+      waiting
+        .filter(
+          (purchase) =>
+            purchase.amountCents < 0 &&
+            ((purchase.paidByCardId ?? null) !== null ||
+              mayPair(purchase.id) ||
+              deposits.offers.has(purchase.id) ||
+              deposits.clear.has(purchase.id)),
+        )
+        .map((purchase) => purchase.id),
+    );
+    return result;
+  },
+);
+
+/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading when there is something to ask (`selectMoneyInAsks`), and history the person placed by hand that may be counted twice. A card payment or move the bank flagged waits under Account moves instead. */
 export const selectNeedsHome = createSelector(
   [
     selectWaitingList,
@@ -1847,6 +1920,7 @@ export const selectNeedsHome = createSelector(
     selectHistoryPurchases,
     selectHistoryDuplicates,
     selectSorting,
+    selectMoneyInAsks,
   ],
   (
     waitingList,
@@ -1855,6 +1929,7 @@ export const selectNeedsHome = createSelector(
     historyPurchases,
     duplicates,
     sorting,
+    moneyInAsks,
   ) => {
     const lost = [...lostDeposits, ...lostPairs];
     const waiting = [
@@ -1883,7 +1958,9 @@ export const selectNeedsHome = createSelector(
     const spending = sortable.filter(
       (purchase) => purchase.amountCents >= 0 && !isQuiet(purchase),
     );
-    const moneyIn = sortable.filter((purchase) => purchase.amountCents < 0);
+    const moneyIn = sortable.filter(
+      (purchase) => purchase.amountCents < 0 && moneyInAsks.has(purchase.id),
+    );
     const listed = new Set(sorted.map((purchase) => purchase.id));
     const maybeTwice = historyPurchases
       .filter(

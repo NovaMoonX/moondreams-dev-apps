@@ -37,14 +37,17 @@ const BATCH_SIZE = 20;
 const isSealed = (value: unknown): value is SealedPayload =>
   typeof value === 'object' && value !== null && 'value' in value;
 
-/** A purchase's amount, or 0 when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
-const readAmount = (key: Buffer, payload: unknown) => {
-  if (!isSealed(payload)) return 0;
+/** A purchase's amount and whether it is on a card; 0 cents when it can't be opened, so a bad document counts as waiting instead of sinking the plan's digest. */
+const readPurchase = (key: Buffer, payload: unknown) => {
+  if (!isSealed(payload)) return { amountCents: 0, isOnCard: false };
   try {
-    const { amountCents } = openWithKey(key, payload);
-    return typeof amountCents === 'number' ? amountCents : 0;
+    const { amountCents, paidByCardId } = openWithKey(key, payload);
+    return {
+      amountCents: typeof amountCents === 'number' ? amountCents : 0,
+      isOnCard: typeof paidByCardId === 'string' && paidByCardId !== '',
+    };
   } catch {
-    return 0;
+    return { amountCents: 0, isOnCard: false };
   }
 };
 
@@ -86,23 +89,20 @@ async function digestForPlan(
   const waitingPurchases = firestore
     .collection(`apps/runway/plans/${uid}/purchases`)
     .where('needsHome', '==', true);
-  const waiting =
-    sorting === null
-      ? (await waitingPurchases.count().get()).data().count
-      : countWaiting(
-          (
-            await waitingPurchases.select('createdAt', 'date', 'sealed').get()
-          ).docs.map((purchase) => {
-            const { createdAt, date: day, sealed: payload } = purchase.data();
-            const created = typeof createdAt === 'number' ? createdAt : now;
-            return {
-              createdAt: created,
-              date: typeof day === 'number' ? day : created,
-              amountCents: readAmount(planKey.key, payload),
-            };
-          }),
-          sorting,
-        );
+  const waiting = countWaiting(
+    (await waitingPurchases.select('createdAt', 'date', 'sealed').get()).docs.map(
+      (purchase) => {
+        const { createdAt, date: day, sealed: payload } = purchase.data();
+        const created = typeof createdAt === 'number' ? createdAt : now;
+        return {
+          createdAt: created,
+          date: typeof day === 'number' ? day : created,
+          ...readPurchase(planKey.key, payload),
+        };
+      },
+    ),
+    sorting,
+  );
   if (waiting === 0) return 'empty';
   if (!(await isGateOpenForUid(uid, 'runway', 'link-banks', 'off'))) {
     return 'closed';

@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { ArrowLeftRight, Ban, ListChecks } from 'lucide-react';
+import { ListChecks } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
-import ActionGroup from '@/components/ActionGroup';
-import ActionRow from '@/components/ActionRow';
 import FormSheet from '@/components/FormSheet';
 import HelpTip from '@/components/HelpTip';
 import SearchInput from '@/components/SearchInput';
@@ -21,20 +19,15 @@ import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import DepositOffer from '@apps/runway/components/DepositOffer';
 import ItemBadge from '@apps/runway/components/ItemBadge';
-import PairOffer from '@apps/runway/components/PairOffer';
+import MoneyInSheet from '@apps/runway/components/MoneyInSheet';
 import ItemRow from '@apps/runway/components/ItemRow';
-import SheetHead from '@apps/runway/components/SheetHead';
 import {
-  DEPOSIT_WORDS,
   NEEDS_HOME_WORDS,
   PAIR_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import PurchaseForm from '@apps/runway/forms/PurchaseForm';
-import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
 import {
@@ -75,94 +68,6 @@ const useSourceName = () => {
     accounts.find((account) => account.id === purchase.accountId)?.name ??
     NEEDS_HOME_WORDS.fromBank;
 };
-
-function MoneyInSheet({
-  purchase,
-  sourceName,
-  onClose,
-}: {
-  purchase: OpenPurchase;
-  sourceName: string;
-  onClose: () => void;
-}) {
-  const title = purchase.merchant?.trim() || NEEDS_HOME_WORDS.moneyIn;
-  const isOnCard = (purchase.paidByCardId ?? null) !== null;
-  const [isRefunding, setIsRefunding] = useState(false);
-
-  if (isRefunding) {
-    return (
-      <PurchaseForm
-        isOpen
-        editing={purchase}
-        onClose={onClose}
-        onCancel={() => setIsRefunding(false)}
-      />
-    );
-  }
-
-  const cardChoices = (
-    <ActionGroup isRoomy>
-      <ActionRow
-        isGrouped
-        isRoomy
-        icon={<ArrowLeftRight />}
-        label={NEEDS_HOME_WORDS.refundRow}
-        subtitle={NEEDS_HOME_WORDS.refundRowSub}
-        onClick={() => setIsRefunding(true)}
-      />
-      <LeaveOutRow
-        purchase={purchase}
-        onDone={onClose}
-        label={NEEDS_HOME_WORDS.unseenRow}
-        subtitle={NEEDS_HOME_WORDS.unseenRowSub}
-      />
-    </ActionGroup>
-  );
-
-  return (
-    <FormSheet
-      isOpen
-      isDrawerWhenShort
-      onClose={onClose}
-      title={title}
-      actions={<ValuesEyeButton />}
-    >
-      <div className='space-y-4 pb-4'>
-        <SheetHead
-          label={NEEDS_HOME_WORDS.moneyIn}
-          figure={`+${formatCents(-purchase.amountCents)}`}
-          fact={`${formatDateOrdinalUTC(purchase.date)} · ${sourceName}`}
-        />
-        {purchase.incomeDayId !== null && (
-          <p className='text-muted-foreground text-sm'>{DEPOSIT_WORDS.lost}</p>
-        )}
-        {purchase.pairedWithId !== null && (
-          <p className='text-muted-foreground text-sm'>{PAIR_WORDS.lost}</p>
-        )}
-        {purchase.status === 'posted' ? (
-          <PairOffer
-            purchase={purchase}
-            onDone={onClose}
-            elseSubtitle={isOnCard ? PAIR_WORDS.pickRefund : PAIR_WORDS.pickPay}
-          >
-            {isOnCard ? (
-              cardChoices
-            ) : (
-              <DepositOffer deposit={purchase} onDone={onClose} />
-            )}
-          </PairOffer>
-        ) : (
-          isOnCard && cardChoices
-        )}
-        {!isOnCard && (
-          <ActionGroup isRoomy>
-            <LeaveOutRow purchase={purchase} onDone={onClose} />
-          </ActionGroup>
-        )}
-      </div>
-    </FormSheet>
-  );
-}
 
 function NeedsHomeRow({
   purchase,
@@ -301,7 +206,6 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const cards = useAppSelector(selectAllCards);
   const { user } = useAuth();
   const { addToast } = useToast();
-  const { confirm } = useActionModal();
   const selection = useSelection();
   const [openId, setOpenId] = useState<string | null>(null);
   const [sent, setSent] = useState<OpenPurchase | null>(null);
@@ -455,24 +359,6 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
     }, []);
     void runBulk(entries, (written, total) =>
       NEEDS_HOME_WORDS.bulkPlaced(written, total, nameOf(envelopeId)),
-    );
-  };
-
-  const leaveOut = async () => {
-    const isConfirmed = await confirm({
-      title: NEEDS_HOME_WORDS.bulkLeaveOutTitle(selected.length),
-      message: NEEDS_HOME_WORDS.bulkLeaveOutMessage(selected.length),
-      confirmText: NEEDS_HOME_WORDS.bulkLeaveOutConfirm(selected.length),
-      destructive: true,
-    });
-    if (!isConfirmed) return;
-    await runBulk(
-      selected.map((purchase) => ({
-        purchase,
-        lines: [],
-        summary: describePurchaseAssigned(purchase, [], () => ''),
-      })),
-      NEEDS_HOME_WORDS.bulkLeft,
     );
   };
 
@@ -662,15 +548,6 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
               isDisabled: isNothingTicked || isWriting,
               onClick: () => setIsPicking(true),
             },
-            {
-              key: 'leave',
-              label: NEEDS_HOME_WORDS.bulkLeaveOut,
-              shortLabel: NEEDS_HOME_WORDS.bulkLeaveOutShort,
-              icon: <Ban className='h-4 w-4' aria-hidden='true' />,
-              isDisabled: isNothingTicked || isWriting,
-              isDestructive: true,
-              onClick: () => void leaveOut(),
-            },
           ]}
           primary={{
             key: 'free',
@@ -705,7 +582,6 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
         <MoneyInSheet
           key={opened.id}
           purchase={opened}
-          sourceName={sourceNameOf(opened)}
           onClose={() => setOpenId(null)}
         />
       )}

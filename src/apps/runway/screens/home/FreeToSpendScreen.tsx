@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  ArrowDownLeft,
   Calculator,
   ChevronRight,
   Landmark,
@@ -36,6 +37,11 @@ import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
 import { CheckBalanceBody } from '@apps/runway/screens/home/CheckBalanceScreen';
 import { WhereYourCashIsBody } from '@apps/runway/screens/home/WhereYourCashIsScreen';
 import LevelGate from '@apps/runway/components/LevelGate';
+import { DEFAULT_SPEND_PERIOD } from '@apps/runway/constants';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { selectMoneyIn } from '@apps/runway/store/selectors/runwaySelectors';
+import { getSpendRange } from '@apps/runway/utils/spendPeriod';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
@@ -82,7 +88,25 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     openCashPosition,
     closeCashPosition,
     leaveViewForTab,
+    showSpendKind,
+    showSpendPeriod,
   } = useRunwayUrlState();
+  const mask = useMaskedText();
+  const now = useNow(60_000);
+  const monthRange = getSpendRange(DEFAULT_SPEND_PERIOD, todayAsUtcDate(now));
+  const monthMoneyIn = useAppSelector(selectMoneyIn).filter(
+    (purchase) =>
+      purchase.date >= monthRange.from && purchase.date < monthRange.to,
+  );
+  const monthMoneyInCents = monthMoneyIn.reduce(
+    (sum, purchase) => sum - purchase.amountCents,
+    0,
+  );
+  const openMoneyIn = () => {
+    showSpendKind('moneyIn');
+    showSpendPeriod(DEFAULT_SPEND_PERIOD);
+    leaveViewForTab('spend');
+  };
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
   const isViewingCash = view === 'cashPosition';
@@ -168,7 +192,6 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   const openSection = (section: PlanSection) => {
     leaveViewForTab('plan', section);
   };
-  const now = useNow(60_000);
   const startCreatedAt = useAppSelector((state) =>
     state.runway.moves
       .filter((move) => move.kind === 'start' && move.reversesMoveId === null)
@@ -372,6 +395,24 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                 label={CASH_POSITION_WORDS.open}
                 subtitle={CASH_POSITION_WORDS.openSub}
                 onClick={openCashPosition}
+              />
+              <ActionRow
+                isGrouped
+                isRoomy
+                hasChevron
+                icon={<ArrowDownLeft />}
+                label={FREE_SUM_WORDS.moneyIn}
+                subtitle={
+                  monthMoneyIn.length === 0
+                    ? FREE_SUM_WORDS.moneyInNone
+                    : mask(
+                        FREE_SUM_WORDS.moneyInSub(
+                          formatCents(monthMoneyInCents),
+                          monthMoneyIn.length,
+                        ),
+                      )
+                }
+                onClick={openMoneyIn}
               />
             </LevelGate>
           </ActionGroup>
