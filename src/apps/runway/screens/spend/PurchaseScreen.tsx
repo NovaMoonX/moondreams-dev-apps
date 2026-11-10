@@ -103,6 +103,8 @@ import {
 import {
   describeEnvelopes,
   describePurchaseRemoval,
+  describePurchaseWhere,
+  getPaidWithName,
   getPurchaseFacts,
   getPurchaseTitle,
   isRefund,
@@ -148,7 +150,7 @@ function PurchaseScreen({
   fallback = null,
   hasGroupLink = true,
   onSuggestRule,
-  kindLabel = SPEND_WORDS.detailTitle,
+  kindLabel,
 }: PurchaseScreenProps) {
   const { user } = useAuth();
   const { confirm } = useActionModal();
@@ -263,11 +265,10 @@ function PurchaseScreen({
         : [...acc, { line, spills: [] }],
     [],
   );
-  const sourceName = purchase
-    ? (cards.find((card) => card.id === purchase.paidByCardId)?.name ??
-      accounts.find((account) => account.id === purchase.accountId)?.name ??
-      NEEDS_HOME_WORDS.fromBank)
-    : '';
+  const paidWithName = purchase
+    ? getPaidWithName(purchase, cards, accounts)
+    : null;
+  const sourceName = paidWithName ?? NEEDS_HOME_WORDS.fromBank;
 
   if (purchase === null) {
     return (
@@ -355,9 +356,12 @@ function PurchaseScreen({
         ]
       : isWaiting
         ? [sourceName]
-        : facts.length > 0
-          ? facts
-          : [refund && !isHidden ? `refund to ${envelopes}` : envelopes]),
+        : [
+            ...(paidWithName === null ? [] : [paidWithName]),
+            ...(facts.length > 0
+              ? facts
+              : [describePurchaseWhere(purchase, envelopes, isHidden)]),
+          ]),
   ].join(' · ');
   const note = purchase.note?.trim() || null;
   const bankName =
@@ -673,7 +677,12 @@ function PurchaseScreen({
       >
         <div ref={sheetBody} className='space-y-4 pb-4'>
           <SheetHead
-            label={kindLabel}
+            label={
+              kindLabel ??
+              (refund && !isHidden
+                ? SPEND_WORDS.refundTitle
+                : SPEND_WORDS.detailTitle)
+            }
             figure={refund ? `+${amount}` : amount}
             fact={fact}
             secondFact={

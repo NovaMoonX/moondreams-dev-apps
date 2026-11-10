@@ -1464,7 +1464,11 @@ async function writeSeedCards(
   const cards: { id: string; sealed: CardSealed; createdAt: number }[] = [
     {
       id: SEED_VENTURE_CARD,
-      sealed: { issuer: 'Capital One', name: 'Venture X', dueDay: 14 },
+      sealed: {
+        issuer: 'Capital One',
+        name: 'Venture X - Credit Holder XXXXXXX3153',
+        dueDay: 14,
+      },
       createdAt,
     },
     {
@@ -4183,6 +4187,26 @@ async function writeSeedPurchases(
       status: 'posted',
       accountId: 'seed-account-checking-a',
       cardId: null,
+    },
+    {
+      id: 'seed-link-card-payment-waiting',
+      daysAgo: 3,
+      merchant: 'CAPITAL ONE MOBILE PYMT',
+      amountCents: 45_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+      category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+    },
+    {
+      id: 'seed-link-savings-waiting',
+      daysAgo: 5,
+      merchant: 'Withdrawal to Wealthfront Cash',
+      amountCents: 20_000,
+      status: 'posted',
+      accountId: 'seed-account-checking-a',
+      cardId: null,
+      category: 'TRANSFER_OUT_SAVINGS',
     },
     {
       id: 'seed-link-transfer-out',

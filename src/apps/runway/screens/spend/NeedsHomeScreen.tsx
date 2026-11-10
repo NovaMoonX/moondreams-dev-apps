@@ -113,10 +113,8 @@ function MoneyInSheet({
       <LeaveOutRow
         purchase={purchase}
         onDone={onClose}
-        words={{
-          label: NEEDS_HOME_WORDS.unseenRow,
-          subtitle: NEEDS_HOME_WORDS.unseenRowSub,
-        }}
+        label={NEEDS_HOME_WORDS.unseenRow}
+        subtitle={NEEDS_HOME_WORDS.unseenRowSub}
       />
     </ActionGroup>
   );
