@@ -23,6 +23,8 @@ import {
   setKeyStatus,
   setOpenTasks,
   setOpenTasksFailed,
+  setPlanDays,
+  setPlanDaysFailed,
   setProfile,
   setRecentCaptures,
   setRecentCapturesFailed,
@@ -43,11 +45,14 @@ import {
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
+import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
+import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
 import { SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+import { getPlanDaysWindow } from '@apps/helm/utils/planDays';
 import { isDueForRefresh } from '@apps/helm/utils/synced';
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
@@ -133,6 +138,7 @@ export function useHelmSync(uid: string | null) {
   }, [uid, dispatch]);
 
   useCaptureSweep(uid);
+  usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
@@ -192,6 +198,16 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm tasks listener failed', error);
               dispatch(setOpenTasksFailed());
+            },
+          ),
+          startPlanDaysListener(
+            uid,
+            read,
+            getPlanDaysWindow(Date.now()),
+            (days) => dispatch(setPlanDays(days)),
+            (error) => {
+              console.error('Helm plan days listener failed', error);
+              dispatch(setPlanDaysFailed());
             },
           ),
           startFactsListener(

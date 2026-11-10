@@ -8,6 +8,7 @@ import type {
   OpenExecution,
   OpenFact,
   OpenTask,
+  PlanDay,
   SyncedRecord,
 } from '@apps/helm/types';
 
@@ -21,6 +22,13 @@ export interface CaptureSet {
 
 export interface LoadedSet<T> {
   items: T[];
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+export interface PlanDaySet {
+  /** Keyed by day ("YYYY-MM-DD" in the profile's zone). */
+  byId: Record<string, PlanDay>;
   isLoaded: boolean;
   isFailed: boolean;
 }
@@ -48,6 +56,8 @@ export interface HelmState {
   waitingCaptures: CaptureSet;
   /** The person's open tasks, newest first. */
   openTasks: LoadedSet<OpenTask>;
+  /** The plan days from yesterday to six days ahead. */
+  planDays: PlanDaySet;
   /** The person's confirmed and inferred facts. */
   facts: LoadedSet<OpenFact>;
   /** Copies of other apps' records, opened. */
@@ -73,6 +83,12 @@ const emptySet: CaptureSet = { captures: [], isLoaded: false, isFailed: false };
 
 const emptyLoadedSet = { items: [], isLoaded: false, isFailed: false };
 
+const emptyPlanDays: PlanDaySet = {
+  byId: {},
+  isLoaded: false,
+  isFailed: false,
+};
+
 const initialState: HelmState = {
   keyStatus: 'loading',
   keyAttempt: 0,
@@ -85,6 +101,7 @@ const initialState: HelmState = {
   unseenCaptures: emptySet,
   waitingCaptures: emptySet,
   openTasks: emptyLoadedSet,
+  planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
@@ -164,6 +181,18 @@ const helmSlice = createSlice({
     },
     setOpenTasksFailed: (state) => {
       state.openTasks.isFailed = true;
+    },
+    setPlanDays: (state, action: PayloadAction<PlanDay[]>) => {
+      state.planDays = {
+        byId: Object.fromEntries(
+          action.payload.map((entry) => [entry.id, entry]),
+        ),
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setPlanDaysFailed: (state) => {
+      state.planDays.isFailed = true;
     },
     setFacts: (state, action: PayloadAction<OpenFact[]>) => {
       state.facts = { items: action.payload, isLoaded: true, isFailed: false };
@@ -271,6 +300,8 @@ export const {
   setWaitingCapturesFailed,
   setOpenTasks,
   setOpenTasksFailed,
+  setPlanDays,
+  setPlanDaysFailed,
   setFacts,
   setFactsFailed,
   setSynced,

@@ -1,10 +1,13 @@
 import {
   collection,
+  doc,
+  getDoc,
   limit,
   onSnapshot,
   orderBy,
   query,
   where,
+  type DocumentSnapshot,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -19,8 +22,8 @@ const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('Your tasks did not open.');
 
 /** A task that won't open is kept, with no title, so the surface can say so instead of dropping it. */
-async function openTask(
-  entry: QueryDocumentSnapshot,
+export async function openTask(
+  entry: DocumentSnapshot | QueryDocumentSnapshot,
   read: SealedReader,
 ): Promise<OpenTask> {
   const data = entry.data() as Partial<Task>;
@@ -97,4 +100,20 @@ export function startOpenTasksListener(
     run.isStopped = true;
     stop();
   };
+}
+
+/** Tasks by id, for a day's record of tasks that have since been done; an id that is gone or can't be fetched is left out. */
+export async function fetchTasksById(
+  uid: string,
+  read: SealedReader,
+  ids: string[],
+): Promise<OpenTask[]> {
+  const opened = await Promise.all(
+    ids.map((id) =>
+      getDoc(doc(db, 'apps', 'helm', 'users', uid, 'tasks', id))
+        .then((entry) => (entry.exists() ? openTask(entry, read) : null))
+        .catch(() => null),
+    ),
+  );
+  return opened.filter((task): task is OpenTask => task !== null);
 }

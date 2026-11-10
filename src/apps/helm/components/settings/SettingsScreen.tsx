@@ -1,17 +1,19 @@
 import { useState } from 'react';
 
-import { Eye, History, Link2, Mic } from 'lucide-react';
+import { Eye, History, Link2, Mic, Sun } from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
+import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { HELM_COPY } from '@apps/helm/constants';
+import { formatClockTime } from '@/utils/formatUtils';
 import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 
 interface SettingsScreenProps {
@@ -28,6 +30,7 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const [isDayOpen, setIsDayOpen] = useState(false);
   const { grants: allGrants, isKnown } = useConnections({
     readerAppId: 'helm',
     includeEnded: true,
@@ -43,6 +46,7 @@ function SettingsScreen({
     return at !== null && (newest === null || at > newest) ? at : newest;
   }, null);
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
+  const profile = useAppSelector((state) => state.helm.profile);
 
   return (
     <>
@@ -56,6 +60,22 @@ function SettingsScreen({
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.settingsTitle}
         </h1>
+        <SettingsGroup title={HELM_COPY.settingsPlanning}>
+          <SettingsRow
+            icon={<Sun className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.yourDayRow}
+            description={
+              profile
+                ? HELM_COPY.yourDayLine(
+                    formatClockTime(profile.dayStartTime),
+                    formatClockTime(profile.dayEndTime),
+                  )
+                : undefined
+            }
+            onClick={() => setIsDayOpen(true)}
+            hasChevron
+          />
+        </SettingsGroup>
         <SettingsGroup title={HELM_COPY.settingsConnections}>
           <SettingsRow
             icon={<Link2 className='size-5' aria-hidden='true' />}
@@ -106,6 +126,7 @@ function SettingsScreen({
           />
         </SettingsGroup>
       </main>
+      <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings
         isOpen={isVoiceOpen}
         onClose={() => setIsVoiceOpen(false)}

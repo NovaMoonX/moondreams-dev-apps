@@ -65,3 +65,14 @@ export const foldCalendarOffer = (uid: string) =>
     calendarOfferFoldedAt: Date.now(),
     lastEditedAt: Date.now(),
   });
+
+export const setDayWindow = (
+  uid: string,
+  dayStartTime: string,
+  dayEndTime: string,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    dayStartTime,
+    dayEndTime,
+    lastEditedAt: Date.now(),
+  });

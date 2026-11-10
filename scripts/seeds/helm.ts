@@ -31,6 +31,8 @@ import type {
   FactSealed,
   ScreenContext,
   HelmEncryption,
+  PlanDaySealed,
+  PlanSlot,
   Task,
   TaskDue,
   TaskSealed,
@@ -1030,6 +1032,146 @@ async function buildAnswerTurns(input: {
   return { turns, tasks };
 }
 
+/** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */
+async function buildPlanDays(input: {
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { now, timeZone, encryption } = input;
+  const todayKey = new Date(getDueDay({ kind: 'moment', at: now }, timeZone))
+    .toISOString()
+    .slice(0, 10);
+  const yesterdayKey = new Date(Date.parse(todayKey) - DAY_MS)
+    .toISOString()
+    .slice(0, 10);
+  const at = (key: string, time: string) =>
+    zonedDateTimeToEpoch(key, time, timeZone);
+  const slot = (
+    taskId: string,
+    key: string,
+    from: string,
+    to: string,
+    source: PlanSlot['source'],
+  ): PlanSlot => ({
+    taskId,
+    startAt: at(key, from),
+    endAt: at(key, to),
+    status: 'kept',
+    source,
+    decidedAt: at(key, from) - 2 * 60 * MINUTE_MS,
+  });
+  const doneTitle = "Send RSVP for Priya's party";
+  const doneTask: Task = {
+    status: 'done',
+    importance: null,
+    isUrgent: false,
+    due: null,
+    durationMinutes: 30,
+    energy: null,
+    context: null,
+    projectId: null,
+    milestoneId: null,
+    whoIds: [],
+    placeIds: [],
+    notUntil: null,
+    waitsOnTaskIds: [],
+    waitsOnWhoId: null,
+    stepState: {},
+    mediaIds: [],
+    createdBy: 'person',
+    sourceCaptureId: null,
+    executionId: null,
+    createdAt: now - 3 * DAY_MS,
+    lastEditedAt: at(yesterdayKey, '14:25'),
+    completedAt: at(yesterdayKey, '14:25'),
+    sealed: await sealJson<TaskSealed>(
+      { title: doneTitle, notes: null, steps: {} },
+      encryption,
+    ),
+  };
+  const day = async (
+    key: string,
+    generatedAt: number,
+    slots: Record<string, PlanSlot>,
+    sealed: PlanDaySealed,
+  ) => ({
+    id: key,
+    day: {
+      date: Date.parse(key),
+      slots,
+      isRestDay: false,
+      restDayOverriddenAt: null,
+      generatedAt,
+      calendarReadAt: generatedAt,
+      sealed: await sealJson<PlanDaySealed>(sealed, encryption),
+    },
+  });
+  const days = await Promise.all([
+    day(
+      yesterdayKey,
+      at(yesterdayKey, '08:05'),
+      {
+        'seed-slot-yesterday-1': slot(
+          'seed-task-plan-done',
+          yesterdayKey,
+          '14:00',
+          '14:30',
+          'nomos',
+        ),
+        'seed-slot-yesterday-2': slot(
+          'seed-task-3-1',
+          yesterdayKey,
+          '16:00',
+          '16:20',
+          'person',
+        ),
+      },
+      {
+        reasons: {
+          'seed-slot-yesterday-1': '30 min · fits after the venue walk-through',
+          'seed-slot-yesterday-2': '20 min · due soon',
+        },
+        calendarSnapshot: [
+          {
+            eventRef: 'seed-snapshot-walkthrough',
+            title: 'Venue walk-through',
+            startAt: at(yesterdayKey, '11:00'),
+            endAt: at(yesterdayKey, '12:00'),
+            isAllDay: false,
+          },
+        ],
+      },
+    ),
+    day(
+      todayKey,
+      now - 3 * 60 * MINUTE_MS,
+      {
+        'seed-slot-today-1': slot(
+          'seed-task-hand-2',
+          todayKey,
+          '10:00',
+          '10:15',
+          'nomos',
+        ),
+        'seed-slot-today-2': {
+          ...slot('seed-task-hand-5', todayKey, '13:00', '13:30', 'nomos'),
+          status: 'suggested',
+          decidedAt: null,
+        },
+      },
+      {
+        reasons: {
+          'seed-slot-today-1': '15 min · due in 2 days',
+          'seed-slot-today-2': 'about 30 min · estimate',
+        },
+        calendarSnapshot: [],
+      },
+    ),
+  ]);
+  return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
+}
+
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const createdAt = context.now - 14 * DAY_MS;
   const keyring = readEmulatorKeyring('HELM_MASTER_KEYS');
@@ -1422,13 +1564,31 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           gmailTurn.fact,
         );
       }
+      const planDays =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildPlanDays({
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+      if (planDays) {
+        planDays.days.forEach((entry) =>
+          batch.set(person.collection('planDays').doc(entry.id), entry.day),
+        );
+        batch.set(
+          person.collection('tasks').doc(planDays.task.id),
+          planDays.task.task,
+        );
+      }
       const backToBackCount =
         backToBack.captures.length +
         backToBack.tasks.length +
         1 +
         answerTurns.turns.length * 2 +
         answerTurns.tasks.length +
-        (gmailTurn ? 3 : 0);
+        (gmailTurn ? 3 : 0) +
+        (planDays ? planDays.days.length + 1 : 0);
       return (
         backToBackCount +
         turns.reduce(

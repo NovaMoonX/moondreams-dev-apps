@@ -27,6 +27,10 @@ export const groupByDay = (items: OpenExecution[]): ActivityDay[] =>
     }, new Map<number, OpenExecution[]>()),
   ].map(([dayStart, dayItems]) => ({ dayStart, items: dayItems }));
 
+/** A plan still waiting on its suggestions is not a thing the assistant did yet. */
+export const isShownInActivity = (execution: OpenExecution) =>
+  !(execution.category === 'plan' && execution.state === 'proposed');
+
 const withoutPeriod = (text: string) => text.replace(/[.!]+$/, '');
 
 /** One line for a row: what was done, as the summary the execution sealed. */

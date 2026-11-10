@@ -16,17 +16,25 @@ import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import ConnectCalendarRow from '@apps/helm/components/today/ConnectCalendarRow';
+import DayPlan from '@apps/helm/components/today/DayPlan';
+import DayStrip from '@apps/helm/components/today/DayStrip';
+import PastDay from '@apps/helm/components/today/PastDay';
+import SuggestionSheet, {
+  type SuggestionTarget,
+} from '@apps/helm/components/today/SuggestionSheet';
 import SyncedToday from '@apps/helm/components/today/SyncedToday';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import { HELM_COPY, OPEN_TASKS_LIMIT } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useAutoPlanToday, usePlanSources } from '@apps/helm/hooks/usePlanDays';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import { useTaskTicks } from '@apps/helm/hooks/useTaskTicks';
 import type { RestoreResult } from '@apps/helm/store/actions/taskActions';
 import { selectOpenTasksById } from '@apps/helm/store/selectors/captureSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
+import { getStripKeys, toDayKey } from '@apps/helm/utils/planDays';
 import {
   DUE_SOON_DAYS,
   getDueDaysAway,
@@ -42,7 +50,7 @@ interface TodayViewProps {
   onOpenTasks: () => void;
 }
 
-/** Today: the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
+/** Today: a strip of days with each day's events and plan (what was kept and what is suggested), and on today the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
 function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -66,6 +74,13 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
   const { pending, showUndo, undo } = useUndoRemoval();
   const [openId, setOpenId] = useState<string | null>(null);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  const [pickedKey, setPickedKey] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<SuggestionTarget | null>(null);
+  const sources = usePlanSources(nowMinute);
+  const todayKey = toDayKey(nowMinute, timeZone);
+  const selectedKey = pickedKey ?? todayKey;
+  const isToday = selectedKey === todayKey;
+  useAutoPlanToday(isToday);
 
   const dueSoon = useMemo(
     () =>
@@ -142,9 +157,35 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
             {HELM_COPY.todayFirstRun(assistantName)}
           </p>
         )}
+        {sources && (
+          <DayStrip
+            keys={getStripKeys(todayKey)}
+            todayKey={todayKey}
+            selectedKey={selectedKey}
+            onSelect={setPickedKey}
+          />
+        )}
         <ConnectCalendarRow />
-        <SyncedToday now={now} />
-        {isLoaded && (tasks.length > 0 || held.size > 0) && (
+        {sources &&
+          (selectedKey < todayKey ? (
+            <PastDay dayKey={selectedKey} sources={sources} />
+          ) : (
+            <DayPlan
+              dayKey={selectedKey}
+              sources={sources}
+              getTask={(taskId) =>
+                tasksById.get(taskId) ?? held.get(taskId)?.task ?? null
+              }
+              heldIds={new Set(held.keys())}
+              onOpenTask={setOpenId}
+              onOpenSuggestion={setSuggestion}
+              onTick={tick}
+              onUndoTick={(taskId) => void undoTick(taskId)}
+              onSelectDay={setPickedKey}
+            />
+          ))}
+        {isToday && <SyncedToday now={now} />}
+        {isToday && isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>
             <SectionDivider label={HELM_COPY.todayDueSoon} />
             {dueSoon.length === 0 ? (
@@ -207,6 +248,12 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
         onTick={tick}
         onUndoTick={(taskId) => void undoTick(taskId)}
         onDeleted={handleDeleted}
+      />
+      <SuggestionSheet
+        target={suggestion}
+        sources={sources}
+        onClose={() => setSuggestion(null)}
+        onSkipped={showUndo}
       />
       <UndoSnackbar pending={pending} onUndo={undo} />
     </>

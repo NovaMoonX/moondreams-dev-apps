@@ -6,6 +6,7 @@ import { Hourglass } from 'lucide-react';
 
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import ModalFooterActions from '@/components/ModalFooterActions';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import SummaryRow from '@/components/SummaryRow';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,6 +17,10 @@ import { useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import {
+  PlacementBody,
+  PlacementFooter,
+} from '@apps/helm/components/today/Placement';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
 import TaskDetails, {
   WhenRow,
@@ -30,11 +35,15 @@ import {
   NOTES_MAX_CHARS,
   TASK_TITLE_CAP,
 } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { usePlacementMode } from '@apps/helm/hooks/usePlacementMode';
+import { usePlanSources } from '@apps/helm/hooks/usePlanDays';
 import {
   useScreenContext,
   type ContentView,
 } from '@apps/helm/hooks/useScreenContext';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { addKeptSlot } from '@apps/helm/store/actions/planActions';
 import {
   deleteTask,
   updateTaskFields,
@@ -50,6 +59,18 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import {
+  formatDayWord,
+  formatLength,
+  formatSlotRange,
+  shiftDayKey,
+  toDayKey,
+} from '@apps/helm/utils/planDays';
+import {
+  getOpenings,
+  toPlannerTask,
+  type Opening,
+} from '@apps/helm/utils/planInput';
 import { formatWeekdayDayUTC } from '@apps/helm/utils/taskDue';
 import { getOrderedSteps } from '@apps/helm/utils/taskEdits';
 
@@ -71,7 +92,8 @@ interface TaskSheetProps {
   ) => void;
 }
 
-type View = 'main' | 'steps' | 'waits' | 'title' | 'notes' | `step:${string}`;
+type View =
+  'main' | 'steps' | 'waits' | 'title' | 'notes' | 'plan' | `step:${string}`;
 
 /** Words just saved, shown until the store carries them. */
 interface Held<T> {
@@ -173,12 +195,23 @@ function TaskSheet({
   const [heldNotes, setHeldNotes] = useState<Held<string | null> | null>(null);
   const [isWordsDirty, setIsWordsDirty] = useState(false);
   const isDeleting = useRef(false);
+  const assistantName = useAssistantName();
+  const [planMode, setPlanMode] = usePlacementMode();
+  const sources = usePlanSources(nowMinute);
+  const isKeptToday = useAppSelector((state) => {
+    const zone = state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
+    const day = state.helm.planDays.byId[toDayKey(Date.now(), zone)];
+    return Object.values(day?.slots ?? {}).some(
+      (slot) => slot.taskId === task?.id && slot.status === 'kept',
+    );
+  });
 
   const close = () => {
     setNav(null);
     setHeldTitle(null);
     setHeldNotes(null);
     setIsWordsDirty(false);
+    setPlanMode('main');
     onClose();
   };
   const requestClose = useDiscardGuard({
@@ -321,7 +354,142 @@ function TaskSheet({
         ? waitedTasks[0].title
         : HELM_COPY.waitsOnTasks(waitedTasks.length);
 
+  const canPlan =
+    sources !== null &&
+    doneAt === null &&
+    !task.isUnreadable &&
+    activity?.kind === 'active' &&
+    !isKeptToday;
+  const getFound = () => {
+    if (!sources || shownView !== 'plan') return null;
+    const { todayKey } = sources;
+    const plannerTask = toPlannerTask(task);
+    return (
+      [todayKey, shiftDayKey(todayKey, 1)]
+        .flatMap((dayKey) =>
+          getOpenings(sources, dayKey, plannerTask, null, 1).map((opening) => ({
+            dayKey,
+            opening,
+          })),
+        )
+        .at(0) ?? null
+    );
+  };
+  const found = getFound();
+  const place = (
+    dayKey: string,
+    opening: Opening | null,
+    source: 'nomos' | 'person',
+  ) => {
+    run(
+      addKeptSlot(uid, dayKey, {
+        taskId: task.id,
+        startAt: opening?.startAt ?? null,
+        endAt: opening?.endAt ?? null,
+        source,
+      }),
+    );
+    setPlanMode('main');
+    go('main');
+  };
+  const backToMain = (
+    <Button type='button' variant='tertiary' onClick={() => go('main')}>
+      {HELM_COPY.planBack}
+    </Button>
+  );
+
+  const getPlanBody = () => {
+    if (!sources) return null;
+    const plannerTask = toPlannerTask(task);
+    const { todayKey, timeZone: zone } = sources;
+    const body = (mode: typeof planMode, headline: string | null) => (
+      <PlacementBody
+        mode={mode}
+        sources={sources}
+        task={plannerTask}
+        slotId={null}
+        headline={headline}
+        chip={
+          mode === 'main'
+            ? task.durationMinutes
+              ? formatLength(task.durationMinutes)
+              : HELM_COPY.planEstimate
+            : null
+        }
+        assistantName={assistantName}
+        onModeChange={setPlanMode}
+        onPlace={(dayKey, opening) => place(dayKey, opening, 'person')}
+      />
+    );
+    if (!found) {
+      return (
+        <div className='space-y-3'>
+          <p className='text-[15px] text-pretty'>{HELM_COPY.planNoRoom}</p>
+          {body('days', null)}
+        </div>
+      );
+    }
+    const dayWord = formatDayWord(found.dayKey, todayKey);
+    return body(
+      planMode,
+      found.opening
+        ? HELM_COPY.planFoundSlot(
+            dayWord,
+            formatSlotRange(found.opening.startAt, found.opening.endAt, zone),
+          )
+        : HELM_COPY.planFoundNoTime(dayWord),
+    );
+  };
+
+  const getFooter = () => {
+    if (shownView === 'plan') {
+      return found ? (
+        <PlacementFooter
+          mode={planMode}
+          leftAction={backToMain}
+          onModeChange={setPlanMode}
+          onKeep={() => place(found.dayKey, found.opening, 'nomos')}
+        />
+      ) : (
+        <div className={FOOT}>
+          <ModalFooterActions cancelAction={backToMain} rightActions={null} />
+        </div>
+      );
+    }
+    if (shownView !== 'main') return null;
+    return (
+      <>
+        <div className={FOOT}>
+          <ModalFooterActions
+            leftActions={
+              <DeleteIconButton
+                label={HELM_COPY.deleteConfirm}
+                onClick={() => void remove()}
+              />
+            }
+            rightActions={
+              canPlan ? (
+                <Button
+                  type='button'
+                  variant='primary'
+                  onClick={() => {
+                    setPlanMode('main');
+                    go('plan');
+                  }}
+                >
+                  {HELM_COPY.planPlanIt}
+                </Button>
+              ) : null
+            }
+          />
+        </div>
+        <AskAboutThisControl placement='sheet' />
+      </>
+    );
+  };
+
   const getBody = () => {
+    if (shownView === 'plan') return getPlanBody();
     if (shownView === 'title') {
       return (
         <WordsEditor
@@ -493,19 +661,7 @@ function TaskSheet({
             }
           />
         }
-        footer={
-          shownView === 'main' && (
-            <>
-              <div className={FOOT}>
-                <DeleteIconButton
-                  label={HELM_COPY.deleteConfirm}
-                  onClick={() => void remove()}
-                />
-              </div>
-              <AskAboutThisControl placement='sheet' />
-            </>
-          )
-        }
+        footer={getFooter()}
       >
         <div key={task.id}>{getBody()}</div>
       </DetailSheet>

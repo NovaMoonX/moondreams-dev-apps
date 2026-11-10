@@ -1,4 +1,5 @@
 import type { ConnectionGrant } from '@/lib/connections/contract';
+import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { DAY_MS, SYNC_REFRESH_MS, SYNC_STALE_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
@@ -79,3 +80,52 @@ export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
       Object.keys(grant.categories).some(isOnAndUnread))
   );
 };
+
+export const isCalendarEvent = (record: SyncedRecord) =>
+  record.connectorId === 'google:calendar';
+
+/** The copies whose connection still shares them: live with their category on, or kept copies of an ended connection when `includeEnded`. */
+export const getLiveRecords = (
+  stored: SyncedRecord[],
+  grants: ConnectionGrantWithId[],
+  includeEnded: boolean,
+) =>
+  stored.filter((record) => {
+    const grant = grants.find((entry) => entry.id === record.grantId);
+    if (!grant) return false;
+    return grant.status === 'ended'
+      ? includeEnded && record.connectionEndedAt !== null
+      : grant.categories[record.category]?.isOn === true &&
+          record.connectionEndedAt === null;
+  });
+
+/** The events of the day `at` falls on, all-day first then by start; an event on two accounts shares a key and shows once, from whichever sorts first. */
+export function getDayEvents(
+  records: SyncedRecord[],
+  at: number,
+  timeZone: string,
+) {
+  const events = records
+    .filter((record) => isEventToday(record, at, timeZone))
+    .sort(
+      (a, b) =>
+        Number(b.isAllDay) - Number(a.isAllDay) ||
+        (a.startAt ?? 0) - (b.startAt ?? 0),
+    );
+  const shown = events.filter((record, index, all) => {
+    const key = record.sealed.extra.sameEventKey;
+    return (
+      !isCalendarEvent(record) ||
+      typeof key !== 'string' ||
+      all.findIndex(
+        (other) =>
+          isCalendarEvent(other) && other.sealed.extra.sameEventKey === key,
+      ) === index
+    );
+  });
+  return {
+    events: shown,
+    calendarEvents: shown.filter(isCalendarEvent),
+    appEvents: shown.filter((record) => !isCalendarEvent(record)),
+  };
+}
