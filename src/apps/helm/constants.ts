@@ -1365,16 +1365,33 @@ export const HELM_COPY = {
   projectFinishButton: 'Finish',
   projectOnTrack: 'On track: nothing overdue',
   projectOverdue: (count: number) => `${count} overdue`,
+  projectNoTasks: 'No tasks yet',
+  projectOpenNoDates: (open: number) => `${open} open, no dates yet`,
+  projectNextDue: (title: string, days: number) => {
+    const short =
+      title.length > 28 ? `${title.slice(0, 27).trimEnd()}…` : title;
+    return days === 0
+      ? `${short} today`
+      : days === 1
+        ? `${short} tomorrow`
+        : `${short} in ${days} days`;
+  },
   projectKeyOpen: (name: string, note: string | null, count: number) =>
     `${name}${note ? ` (${note})` : ''} has ${count} open`,
   projectQuiet: (days: number, open: number) =>
     `Nothing done in ${days} days · ${open} open`,
-  projectTargetLine: (dateLabel: string, daysAway: number) =>
-    daysAway === 0
-      ? `${dateLabel} · today`
-      : daysAway > 0
-        ? `${dateLabel} · in ${daysAway} ${daysAway === 1 ? 'day' : 'days'}`
-        : `${dateLabel} · ${-daysAway} ${daysAway === -1 ? 'day' : 'days'} ago`,
+  projectTargetLine: (
+    dateLabel: string,
+    daysAway: number,
+    isFinished: boolean,
+  ) =>
+    daysAway > 0
+      ? `${dateLabel} · in ${daysAway} ${daysAway === 1 ? 'day' : 'days'}`
+      : daysAway === 0
+        ? `${dateLabel} · today`
+        : isFinished
+          ? `Target was ${dateLabel}`
+          : `Target was ${dateLabel} · ${-daysAway} ${daysAway === -1 ? 'day' : 'days'} ago`,
   projectTabTasks: 'Tasks',
   projectTabPeople: 'People',
   projectTabsLabel: 'Project sections',
@@ -1394,19 +1411,19 @@ export const HELM_COPY = {
   projectAddSomeone: 'Add someone',
   projectAddTitle: 'Add someone',
   projectAddPick: 'Who',
+  projectAddSearch: 'Search people',
   projectAddNew: 'Someone new',
   projectAddNewPlaceholder: 'Their name',
   projectAddRole: 'Their part',
   projectAddAction: 'Add',
   projectAddNeedsPerson: 'Pick someone or type a name.',
-  projectAddNoOne: 'Everyone you know is already here.',
   projectRoleKey: 'Key',
   projectRoleInvolved: 'Involved',
   projectRoleMentioned: 'Mentioned',
   projectRoleTitle: (name: string) => name,
   projectRoleField: 'Their part',
   projectRoleNoteField: 'A note',
-  projectRoleNotePlaceholder: 'florist',
+  projectRoleNotePlaceholder: 'How they fit, like the florist',
   projectRoleSave: 'Save',
   projectRoleOffMenu: 'Take off this project',
   projectRoleOpenPage: 'Open their page',
@@ -1434,11 +1451,11 @@ export const HELM_COPY = {
   projectReopenedToast: (name: string) => `Reopened ${name}`,
   projectFinishedBar: (dateLabel: string) => `Finished ${dateLabel}`,
   projectReopen: 'Reopen',
-  projectDeleteConfirm: (name: string, tasks: number) =>
+  projectDeleteConfirm: (name: string, tasks: number, done: number) =>
     `Delete ${name}? ${
       tasks === 0
         ? 'It has no tasks.'
-        : `Its ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no project;`
+        : `Its ${tasks === 1 ? '1 task' : `${tasks} tasks`}${done > 0 ? ` (${done} done)` : ''} ${tasks === 1 ? 'stays' : 'stay'}, with no project;`
     } its people keep their pages.`,
   projectDeleteAction: 'Delete',
   projectDeletedToast: (name: string) => `Deleted ${name}`,

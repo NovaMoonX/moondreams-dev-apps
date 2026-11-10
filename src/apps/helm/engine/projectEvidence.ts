@@ -15,12 +15,12 @@ export interface ProjectEvidence {
   canFinish: boolean;
 }
 
-/** A short line built only from what the project's tasks show: what is overdue, what a key person still has open, how long it has been quiet. Never a percentage, a bar or a grade. */
+/** A short line built only from what the project's tasks show: what is overdue, the next dated task, how long it has been quiet, what a key person still has open. Never a percentage, a bar or a grade. */
 export function selectProjectEvidence(input: {
   project: Pick<OpenProject, 'id' | 'whoRoles' | 'roleNotes' | 'createdAt'>;
   tasks: Pick<
     OpenTask,
-    'projectId' | 'status' | 'due' | 'whoIds' | 'completedAt'
+    'projectId' | 'status' | 'due' | 'whoIds' | 'completedAt' | 'title'
   >[];
   /** Names of the people the project has roles for, by id. */
   whoNames: Map<string, string>;
@@ -36,9 +36,17 @@ export function selectProjectEvidence(input: {
       canFinish: true,
     };
   }
+  const today = getDueDay({ kind: 'moment', at: now }, timeZone);
   const overdue = open.filter(
     (task) => task.due !== null && isOverdue(task.due, timeZone, now),
   ).length;
+  const nextDue = open
+    .flatMap((task) =>
+      task.due !== null && !isOverdue(task.due, timeZone, now)
+        ? [{ title: task.title, day: getDueDay(task.due, timeZone) }]
+        : [],
+    )
+    .sort((left, right) => left.day - right.day)[0];
   const keyOpen = Object.entries(project.whoRoles)
     .flatMap(([whoId, role]) => {
       const name = whoNames.get(whoId);
@@ -53,22 +61,19 @@ export function selectProjectEvidence(input: {
     ...tasks.map((task) => task.completedAt ?? 0),
   );
   const quietDays = Math.round(
-    (getDueDay({ kind: 'moment', at: now }, timeZone) -
-      getDueDay({ kind: 'moment', at: lastActive }, timeZone)) /
-      DAY_MS,
+    (today - getDueDay({ kind: 'moment', at: lastActive }, timeZone)) / DAY_MS,
   );
   const isQuiet = open.length > 0 && quietDays >= PROJECT_QUIET_DAYS;
   const parts: EvidencePart[] = [
     ...(overdue > 0
       ? [{ text: HELM_COPY.projectOverdue(overdue), tone: 'warning' as const }]
       : []),
-    ...(keyOpen
+    ...(nextDue
       ? [
           {
-            text: HELM_COPY.projectKeyOpen(
-              keyOpen.name,
-              keyOpen.note,
-              keyOpen.count,
+            text: HELM_COPY.projectNextDue(
+              nextDue.title,
+              Math.round((nextDue.day - today) / DAY_MS),
             ),
             tone: 'muted' as const,
           },
@@ -82,12 +87,27 @@ export function selectProjectEvidence(input: {
           },
         ]
       : []),
+    ...(keyOpen
+      ? [
+          {
+            text: HELM_COPY.projectKeyOpen(
+              keyOpen.name,
+              keyOpen.note,
+              keyOpen.count,
+            ),
+            tone: 'muted' as const,
+          },
+        ]
+      : []),
   ].slice(0, 2);
+  const fallback =
+    tasks.length === 0
+      ? HELM_COPY.projectNoTasks
+      : open.some((task) => task.due !== null)
+        ? HELM_COPY.projectOnTrack
+        : HELM_COPY.projectOpenNoDates(open.length);
   return {
-    parts:
-      parts.length > 0
-        ? parts
-        : [{ text: HELM_COPY.projectOnTrack, tone: 'muted' }],
+    parts: parts.length > 0 ? parts : [{ text: fallback, tone: 'muted' }],
     canFinish: false,
   };
 }

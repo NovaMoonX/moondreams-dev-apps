@@ -32,6 +32,7 @@ const open = (
   due: null,
   whoIds: [],
   completedAt: null,
+  title: 'Pick the ceremony readings',
   ...extra,
 });
 const done = (daysAgo: number) =>
@@ -63,13 +64,57 @@ test('every task done offers to finish', () => {
   );
 });
 
-test('a project with no tasks is on track, not finished', () => {
+test('a project with no tasks says so and is not finished', () => {
   const evidence = read([]);
   assert.deepEqual(
     evidence.parts.map((part) => part.text),
-    ['On track: nothing overdue'],
+    ['No tasks yet'],
   );
   assert.equal(evidence.canFinish, false);
+});
+
+test('open tasks with no dates say how many are open', () => {
+  assert.deepEqual(texts([open(), open(), open(), done(1)]), [
+    '3 open, no dates yet',
+  ]);
+});
+
+test('the next dated open task is named with its day count', () => {
+  assert.deepEqual(
+    texts([
+      open({ due: { kind: 'day', date: day(20) } }),
+      open({ title: 'Book the quartet', due: { kind: 'day', date: day(3) } }),
+      open(),
+      done(1),
+    ]),
+    ['Book the quartet in 3 days'],
+  );
+  assert.deepEqual(
+    texts([open({ due: { kind: 'day', date: day(20) } }), done(1)]),
+    ['Pick the ceremony readings in 20 days'],
+  );
+  assert.deepEqual(
+    texts([open({ due: { kind: 'day', date: day(1) } }), done(1)]),
+    ['Pick the ceremony readings tomorrow'],
+  );
+});
+
+test('a task due today is the next due, not overdue', () => {
+  assert.deepEqual(
+    texts([open({ due: { kind: 'day', date: day(0) } }), done(1)]),
+    ['Pick the ceremony readings today'],
+  );
+});
+
+test('a long title is shortened', () => {
+  const [line] = texts([
+    open({
+      title: 'Confirm the florist can deliver before the ceremony starts',
+      due: { kind: 'day', date: day(2) },
+    }),
+    done(1),
+  ]);
+  assert.equal(line, 'Confirm the florist can del… in 2 days');
 });
 
 test('overdue tasks are counted and are the only warning-coloured part', () => {
@@ -80,16 +125,10 @@ test('overdue tasks are counted and are the only warning-coloured part', () => {
     done(1),
   ]);
   assert.equal(evidence.parts[0].text, '2 overdue');
+  assert.equal(evidence.parts.length, 2);
   assert.deepEqual(
     evidence.parts.map((part) => part.tone),
     evidence.parts.map((_, index) => (index === 0 ? 'warning' : 'muted')),
-  );
-});
-
-test('a day due today is not overdue until the day ends', () => {
-  assert.deepEqual(
-    texts([open({ due: { kind: 'day', date: day(0) } }), done(1)]),
-    ['On track: nothing overdue'],
   );
 });
 
@@ -102,10 +141,10 @@ test('a key person with open tasks is named with their note', () => {
 
 test('an involved person is not named, and a key person with nothing open is not either', () => {
   assert.deepEqual(texts([open({ whoIds: ['maya'] }), done(2)]), [
-    'On track: nothing overdue',
+    '1 open, no dates yet',
   ]);
   assert.deepEqual(texts([open(), done(2)], { roleNotes: {} }), [
-    'On track: nothing overdue',
+    '1 open, no dates yet',
   ]);
 });
 
@@ -123,7 +162,7 @@ test('twelve quiet days with open tasks says so', () => {
 });
 
 test('nine quiet days is not quiet yet, ten is', () => {
-  assert.deepEqual(texts([open(), done(9)]), ['On track: nothing overdue']);
+  assert.deepEqual(texts([open(), done(9)]), ['1 open, no dates yet']);
   assert.deepEqual(texts([open(), done(10)]), [
     'Nothing done in 10 days · 1 open',
   ]);
@@ -135,12 +174,27 @@ test('with nothing done yet, the quiet count starts from when it was made', () =
   ]);
 });
 
-test('no more than two parts, overdue first', () => {
-  const parts = texts([
-    open({ due: { kind: 'day', date: day(-3) }, whoIds: ['dana'] }),
-    done(20),
+test('no more than two parts, in the order overdue, next due, quiet, key person', () => {
+  const dana = { whoIds: ['dana'] };
+  assert.deepEqual(
+    texts([
+      open({ due: { kind: 'day', date: day(-3) }, ...dana }),
+      open({ due: { kind: 'day', date: day(4) } }),
+      done(20),
+    ]),
+    ['1 overdue', 'Pick the ceremony readings in 4 days'],
+  );
+  assert.deepEqual(
+    texts([open({ due: { kind: 'day', date: day(4) }, ...dana }), done(20)]),
+    [
+      'Pick the ceremony readings in 4 days',
+      'Nothing done in 20 days · 1 open',
+    ],
+  );
+  assert.deepEqual(texts([open(dana), done(20)]), [
+    'Nothing done in 20 days · 1 open',
+    'Dana (florist) has 1 open',
   ]);
-  assert.deepEqual(parts, ['1 overdue', 'Dana (florist) has 1 open']);
 });
 
 test("another project's tasks are ignored", () => {

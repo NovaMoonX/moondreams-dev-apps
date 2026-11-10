@@ -360,7 +360,12 @@ async function undoRole(input: {
   const projectRef = doc(projectsOf(uid), projectId);
   const whoRef = doc(collection(userOf(uid), 'who'), whoId);
   await runTransaction(db, async (transaction) => {
-    const project = await transaction.get(projectRef);
+    const [project, who] = await Promise.all([
+      transaction.get(projectRef),
+      input.raised.tierBefore !== null && !input.raised.madeWho
+        ? transaction.get(whoRef)
+        : null,
+    ]);
     if (project.exists()) {
       const opened = await openJson<ProjectSealed>(
         (project.data() as Project).sealed as Sealed,
@@ -381,14 +386,11 @@ async function undoRole(input: {
       });
     }
     if (input.raised.madeWho) transaction.delete(whoRef);
-    else if (input.raised.tierBefore !== null) {
-      const who = await transaction.get(whoRef);
-      if (who.exists()) {
-        transaction.update(whoRef, {
-          tier: input.raised.tierBefore,
-          lastEditedAt: Date.now(),
-        });
-      }
+    else if (input.raised.tierBefore !== null && who?.exists()) {
+      transaction.update(whoRef, {
+        tier: input.raised.tierBefore,
+        lastEditedAt: Date.now(),
+      });
     }
   });
 }
@@ -405,12 +407,14 @@ export class ProjectDeletePartialError extends Error {
   }
 }
 
-/** How many tasks, open or done, belong to a project; needs a connection. */
+/** How many tasks, open or done, belong to a project and how many of them are done; needs a connection. */
 export async function countProjectTasks(uid: string, projectId: string) {
-  const snapshot = await getCountFromServer(
-    query(tasksOf(uid), where('projectId', '==', projectId)),
-  );
-  return snapshot.data().count;
+  const inProject = query(tasksOf(uid), where('projectId', '==', projectId));
+  const [all, done] = await Promise.all([
+    getCountFromServer(inProject),
+    getCountFromServer(query(inProject, where('status', '==', 'done'))),
+  ]);
+  return { total: all.data().count, done: done.data().count };
 }
 
 const relink = (uid: string, projectId: string, ids: string[]) =>

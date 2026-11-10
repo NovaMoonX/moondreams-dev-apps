@@ -1,3 +1,5 @@
+import { Fragment } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
@@ -38,15 +40,17 @@ function EvidenceLine({ project, onFinish }: EvidenceLineProps) {
     <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
       <p className='text-muted-foreground min-w-0 text-[13px] break-words'>
         {evidence.parts.map((part, index) => (
-          <span
-            key={part.text}
-            className={join(
-              part.tone === 'warning' && 'text-[var(--helm-overdue)]',
-            )}
-          >
+          <Fragment key={part.text}>
             {index > 0 ? ' · ' : ''}
-            {part.text}
-          </span>
+            <span
+              className={join(
+                'whitespace-nowrap',
+                part.tone === 'warning' && 'text-[var(--helm-overdue)]',
+              )}
+            >
+              {part.text}
+            </span>
+          </Fragment>
         ))}
       </p>
       {evidence.canFinish && onFinish && (

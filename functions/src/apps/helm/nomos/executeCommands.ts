@@ -610,16 +610,10 @@ export function planWrites(input: PlanInput): WritePlan {
     commands: projectCommands.flatMap((command) =>
       command.kind === 'setProjectRole' ? [command] : [],
     ),
-    taskWho: [...drafts.values()].flatMap((draft) =>
-      draft.projectId
-        ? [
-            {
-              projectId: draft.projectId,
-              whoIds: draft.whoIds.filter((id) => id !== selfWhoId),
-            },
-          ]
-        : [],
-    ),
+    taskWho: [...drafts.values()].map((draft) => ({
+      projectId: draft.projectId,
+      whoIds: draft.whoIds.filter((id) => id !== selfWhoId),
+    })),
     namedWhoIds: [...entities.whoIdOf.values()].filter(
       (id) => id !== selfWhoId,
     ),
@@ -948,7 +942,13 @@ export function planWrites(input: PlanInput): WritePlan {
   keyDatePlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
-  const notKept = [...new Set([...factSteps.notKept, ...keyDatePlan.notKept])];
+  const notKept = [
+    ...new Set([
+      ...factSteps.notKept,
+      ...keyDatePlan.notKept,
+      ...projectPlan.notKept,
+    ]),
+  ];
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';

@@ -103,6 +103,10 @@ export const buildNotKeptLine = (input: {
 export const describeFacts = (count: number) =>
   count === 0 ? null : plural(count, 'Noted a fact', `Noted ${count} facts`);
 
+/** The skipped line for a role asked of a project the person has no active one by that name. */
+export const buildProjectNotFoundLine = (name: string) =>
+  `Couldn't find a project called ${name}`;
+
 /** The result line of a role given: "Dana · key person · 💍 Wedding". */
 export const buildRoleLine = (input: {
   names: string[];

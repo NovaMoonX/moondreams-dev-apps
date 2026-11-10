@@ -1444,11 +1444,15 @@ async function buildProjects(input: {
       sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
     },
   });
+  const todayYear = new Date(today).getUTCFullYear();
+  const nextJuneTwentieth = [todayYear, todayYear + 1]
+    .map((year) => Date.UTC(year, 5, 20))
+    .find((date) => date >= today) as number;
   const projects = await Promise.all([
     projectOf(
       'seed-project-wedding',
       {
-        targetDate: today + 100 * DAY_MS,
+        targetDate: nextJuneTwentieth,
         status: 'active',
         whoRoles: {
           'seed-who-dana': 'key',

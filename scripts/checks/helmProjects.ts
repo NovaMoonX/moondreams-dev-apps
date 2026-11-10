@@ -141,7 +141,6 @@ const plan = (
 };
 
 const dana = mention('$w1', 'Dana');
-const sam = mention('$w2', 'Sam');
 const refsOf = (result: WritePlan) =>
   result.effectRefs.map((ref) => `${ref.op}:${ref.collection}`);
 
@@ -275,23 +274,73 @@ test('an unsure or unknown projectRef links nothing and asks nothing', () => {
   assert.equal(none.creates[0].data.projectId, null);
 });
 
-test('a who named beside a project, with no other role, is mentioned', () => {
+test('a who named in a turn that only starts a project is mentioned on it', () => {
+  const result = plan(
+    {
+      commands: [project('Wedding')],
+      mentions: [dana],
+    },
+    { who: [known('w1', 'Dana')] },
+  );
+  assert.deepEqual(result.projectCreates[0].data.whoRoles, { w1: 'mentioned' });
+});
+
+test('a who named beside an existing project but not on its task is not mentioned on it', () => {
+  const mom = mention('$w3', 'Mom');
   const result = plan(
     {
       commands: [
-        task('Call Dana', { projectRef: 'Wedding', whoRefs: ['$w1'] }),
+        task('Book the quartet', { projectRef: 'Wedding' }),
+        task("Buy Mom's cake", { whoRefs: ['$w3'] }),
       ],
-      mentions: [dana, sam],
+      mentions: [mom],
     },
     {
       projects: [existingProject('pr1', 'Wedding')],
-      who: [known('w1', 'Dana'), known('w2', 'Sam')],
+      who: [known('w3', 'Mom')],
     },
   );
-  assert.deepEqual(result.projectUpdates[0].data.whoRoles, {
-    w1: 'involved',
-    w2: 'mentioned',
-  });
+  assert.equal(result.creates[0].data.projectId, 'pr1');
+  assert.equal(result.projectUpdates.length, 0);
+});
+
+test('a who named beside a project started with an unrelated task is not mentioned on it', () => {
+  const mom = mention('$w3', 'Mom');
+  const result = plan(
+    {
+      commands: [
+        project('Wedding'),
+        task('Book the quartet', { projectRef: 'Wedding' }),
+        task("Buy Mom's cake", { whoRefs: ['$w3'] }),
+      ],
+      mentions: [mom],
+    },
+    { who: [known('w3', 'Mom')] },
+  );
+  assert.deepEqual(result.projectCreates[0].data.whoRoles, {});
+});
+
+test('a project whose name is the new one with an article is linked, not made twice', () => {
+  const result = plan(
+    { commands: [project('The wedding')] },
+    { projects: [existingProject('pr1', 'Wedding')] },
+  );
+  assert.equal(result.projectCreates.length, 0);
+});
+
+test('a role asked of a project the person has no active one by that name is not kept', () => {
+  const result = plan(
+    {
+      commands: [role('Move', ['$w1'], 'key')],
+      mentions: [dana],
+    },
+    {
+      projects: [existingProject('pr1', 'Wedding')],
+      who: [known('w1', 'Dana')],
+    },
+  );
+  assert.equal(result.projectUpdates.length, 0);
+  assert.deepEqual(result.notKept, ["Couldn't find a project called Move"]);
 });
 
 test('a project started with its people carries the roles in its own document', () => {
@@ -313,14 +362,21 @@ test('a project started with its people carries the roles in its own document', 
 
 test('the reply keeps one project and the roles are capped', () => {
   const reply = read({
-    commands: [project('Wedding'), project('Move')],
-    mentions: [],
+    commands: [
+      project('Wedding'),
+      project('Move'),
+      ...Array.from({ length: 7 }, (_, index) =>
+        role('Wedding', [`$w${index + 1}`], 'key'),
+      ),
+    ],
+    mentions: Array.from({ length: 7 }, (_, index) =>
+      mention(`$w${index + 1}`, `Person ${index + 1}`),
+    ),
     places: [],
   });
-  assert.equal(
-    reply.projects.filter((entry) => entry.kind === 'createProject').length,
-    1,
-  );
+  const kinds = reply.projects.map((entry) => entry.kind);
+  assert.equal(kinds.filter((kind) => kind === 'createProject').length, 1);
+  assert.equal(kinds.filter((kind) => kind === 'setProjectRole').length, 5);
 });
 
 const failures: string[] = [];

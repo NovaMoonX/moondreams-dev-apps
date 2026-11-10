@@ -5,7 +5,9 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import FormSheet from '@/components/FormSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import SearchInput from '@/components/SearchInput';
 import SegmentedControl from '@/components/SegmentedControl';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useAppSelector } from '@/store';
 import type { ApplyRole } from '@apps/helm/components/projects/ProjectPeople';
 import { HELM_COPY, PROJECT_ROLE_NOTE_MAX } from '@apps/helm/constants';
@@ -25,13 +27,23 @@ const ROLE_OPTIONS = [
 
 const TIER_ORDER = { close: 0, regular: 1, passing: 2 } as const;
 
+const SEARCH_FROM = 8;
+
 interface AddFormProps {
   project: OpenProject;
   onClose: () => void;
+  requestClose: () => void;
+  onDirtyChange: (isDirty: boolean) => void;
   onApply: ApplyRole;
 }
 
-function AddForm({ project, onClose, onApply }: AddFormProps) {
+function AddForm({
+  project,
+  onClose,
+  requestClose,
+  onDirtyChange,
+  onApply,
+}: AddFormProps) {
   const people = useAppSelector((state) => state.helm.who.items);
   const [choice, setChoice] = useState('');
   const [newName, setNewName] = useState('');
@@ -39,15 +51,37 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
   const [note, setNote] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isTouched, setIsTouched] = useState(false);
-  const options = people
-    .filter((who) => !who.isUnreadable && !(who.id in project.whoRoles))
+  const [query, setQuery] = useState('');
+  const edit =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      set(value);
+      onDirtyChange(true);
+    };
+  const everyone = people
+    .filter(
+      (who) =>
+        !who.isUnreadable &&
+        !who.isSelf &&
+        (project.whoRoles[who.id] ?? 'mentioned') === 'mentioned',
+    )
     .sort(
       (left, right) =>
         TIER_ORDER[left.tier] - TIER_ORDER[right.tier] ||
         left.name.localeCompare(right.name),
     )
     .map((who) => ({ value: who.id, label: who.name }));
-  const isNew = choice === NEW_CHOICE || options.length === 0;
+  const hasSearch = everyone.length >= SEARCH_FROM;
+  const words = query.trim().toLowerCase();
+  const options =
+    hasSearch && words !== ''
+      ? everyone.filter(
+          (option) =>
+            option.value === choice ||
+            option.label.toLowerCase().includes(words),
+        )
+      : everyone;
+  const isNew = choice === NEW_CHOICE || everyone.length === 0;
   const name = newName.trim();
   const isMissing = isNew ? name === '' : choice === '';
 
@@ -75,6 +109,13 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
         <span className='block text-sm font-medium'>
           {HELM_COPY.projectAddPick}
         </span>
+        {hasSearch && (
+          <SearchInput
+            value={query}
+            onChange={setQuery}
+            placeholder={HELM_COPY.projectAddSearch}
+          />
+        )}
         <PickOrCreate
           label={HELM_COPY.projectAddPick}
           options={options}
@@ -83,6 +124,7 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
           onChange={(next, text) => {
             setChoice(next);
             setNewName(text);
+            onDirtyChange(true);
           }}
           newPillLabel={HELM_COPY.projectAddNew}
           newPlaceholder={HELM_COPY.projectAddNewPlaceholder}
@@ -97,7 +139,7 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
           label={HELM_COPY.projectAddRole}
           options={ROLE_OPTIONS}
           value={role}
-          onChange={setRole}
+          onChange={edit(setRole)}
         />
       </div>
       <div className='space-y-1.5'>
@@ -109,7 +151,7 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
           value={note}
           maxLength={PROJECT_ROLE_NOTE_MAX}
           placeholder={HELM_COPY.projectRoleNotePlaceholder}
-          onChange={(event) => setNote(event.target.value)}
+          onChange={(event) => edit(setNote)(event.target.value)}
         />
       </div>
       <ModalFooterActions
@@ -118,7 +160,7 @@ function AddForm({ project, onClose, onApply }: AddFormProps) {
           <Button
             type='button'
             variant='tertiary'
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isSaving}
           >
             {HELM_COPY.editCancel}
@@ -141,14 +183,27 @@ function ProjectAddSheet({
   onClose,
   onApply,
 }: ProjectAddSheetProps) {
+  const [isDirty, setIsDirty] = useState(false);
+  const close = () => {
+    setIsDirty(false);
+    onClose();
+  };
+  const requestClose = useDiscardGuard({ isDirty, onClose: close });
+
   return (
     <FormSheet
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={requestClose}
       title={HELM_COPY.projectAddTitle}
     >
       {isOpen && (
-        <AddForm project={project} onClose={onClose} onApply={onApply} />
+        <AddForm
+          project={project}
+          onClose={close}
+          requestClose={requestClose}
+          onDirtyChange={setIsDirty}
+          onApply={onApply}
+        />
       )}
     </FormSheet>
   );

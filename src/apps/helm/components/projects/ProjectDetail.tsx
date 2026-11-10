@@ -13,7 +13,7 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
-import { formatDateShortUTC } from '@/utils/formatUtils';
+import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
@@ -129,19 +129,23 @@ function ProjectDetail({
       addToast({ title: HELM_COPY.projectDeleteNeedsConnection, type: 'info' });
       return;
     }
-    const count = await countProjectTasks(user.uid, project.id).catch(
+    const counts = await countProjectTasks(user.uid, project.id).catch(
       (error: unknown) => {
         console.error('Helm project tasks were not counted', error);
         return null;
       },
     );
-    if (count === null) {
+    if (counts === null) {
       addToast({ title: HELM_COPY.projectDeleteFailed, type: 'error' });
       return;
     }
     const isConfirmed = await confirm({
       title: HELM_COPY.projectMenuDelete,
-      message: HELM_COPY.projectDeleteConfirm(project.name, count),
+      message: HELM_COPY.projectDeleteConfirm(
+        project.name,
+        counts.total,
+        counts.done,
+      ),
       confirmText: HELM_COPY.projectDeleteAction,
       destructive: true,
     });
@@ -188,7 +192,12 @@ function ProjectDetail({
       ? {
           items: [
             ...(isFinished
-              ? []
+              ? [
+                  option({
+                    label: HELM_COPY.projectReopen,
+                    value: 'reopen',
+                  }),
+                ]
               : [
                   option({
                     label: HELM_COPY.projectMenuEdit,
@@ -204,6 +213,7 @@ function ProjectDetail({
           onItemSelect: (value: string) => {
             if (value === 'edit') setIsEditing(true);
             else if (value === 'finish') changeStatus('finished');
+            else if (value === 'reopen') changeStatus('active');
             else if (value === 'delete') void remove();
           },
         }
@@ -254,6 +264,7 @@ function ProjectDetail({
                   {HELM_COPY.projectTargetLine(
                     formatDateShortUTC(project.targetDate),
                     daysAway,
+                    isFinished,
                   )}
                 </p>
               )}
@@ -262,7 +273,7 @@ function ProjectDetail({
               <div className='border-border bg-muted/40 flex items-center justify-between gap-3 rounded-xl border px-4 py-2'>
                 <p className='text-muted-foreground text-[13px]'>
                   {HELM_COPY.projectFinishedBar(
-                    formatDateShortUTC(project.finishedAt ?? project.createdAt),
+                    formatDateShort(project.finishedAt ?? project.createdAt),
                   )}
                 </p>
                 <Button

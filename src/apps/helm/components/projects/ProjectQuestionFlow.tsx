@@ -8,7 +8,6 @@ import EmojiField from '@/components/EmojiField';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import QuestionFlow from '@/components/QuestionFlow';
-import RevealChip from '@/components/RevealChip';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useQuestionFlow, type QuestionStep } from '@/hooks/useQuestionFlow';
@@ -74,11 +73,8 @@ function ProjectFlowForm({
     setAnswers((current) => ({ ...current, ...patch }));
     onDirtyChange(true);
   };
+  const [isNameTouched, setIsNameTouched] = useState(false);
   const isSkipped = (id: string) => answers.skipped.includes(id);
-  const skip = (id: string, moveOn: () => void) => {
-    set({ skipped: [...answers.skipped, id] });
-    moveOn();
-  };
   const date = fromDateInputValue(answers.date) ?? null;
   const name = answers.name.trim();
 
@@ -106,7 +102,10 @@ function ProjectFlowForm({
             maxLength={PROJECT_NAME_MAX}
             autoFocus={canFocusFieldOnOpen()}
             value={answers.name}
-            onChange={(event) => set({ name: event.target.value })}
+            onChange={(event) => {
+              setIsNameTouched(true);
+              set({ name: event.target.value });
+            }}
           />
         </div>
       ),
@@ -117,20 +116,15 @@ function ProjectFlowForm({
       summaryLabel: HELM_COPY.projectFlowObjectiveLabel,
       summaryValue: answers.objective.trim() || HELM_COPY.projectFlowNone,
       isAnswered: answers.objective.trim() !== '' || isSkipped('objective'),
-      render: ({ moveOn }) => (
-        <div className='space-y-3'>
-          <Input
-            variant='outline'
-            aria-label={HELM_COPY.projectFlowObjectiveLabel}
-            placeholder={HELM_COPY.projectFlowObjectivePlaceholder}
-            maxLength={PROJECT_OBJECTIVE_MAX}
-            value={answers.objective}
-            onChange={(event) => set({ objective: event.target.value })}
-          />
-          <RevealChip onClick={() => skip('objective', moveOn)}>
-            {HELM_COPY.projectFlowSkip}
-          </RevealChip>
-        </div>
+      render: () => (
+        <Input
+          variant='outline'
+          aria-label={HELM_COPY.projectFlowObjectiveLabel}
+          placeholder={HELM_COPY.projectFlowObjectivePlaceholder}
+          maxLength={PROJECT_OBJECTIVE_MAX}
+          value={answers.objective}
+          onChange={(event) => set({ objective: event.target.value })}
+        />
       ),
     },
     {
@@ -140,21 +134,23 @@ function ProjectFlowForm({
       summaryValue:
         date === null ? HELM_COPY.projectFlowNone : formatDateUTC(date),
       isAnswered: date !== null || isSkipped('date'),
-      render: ({ moveOn }) => (
-        <div className='space-y-3'>
-          <DateInput
-            aria-label={HELM_COPY.projectFlowDateLabel}
-            value={answers.date}
-            onChange={(event) => set({ date: event.target.value })}
-          />
-          <RevealChip onClick={() => skip('date', moveOn)}>
-            {HELM_COPY.projectFlowSkip}
-          </RevealChip>
-        </div>
+      render: () => (
+        <DateInput
+          aria-label={HELM_COPY.projectFlowDateLabel}
+          value={answers.date}
+          onChange={(event) => set({ date: event.target.value })}
+        />
       ),
     },
   ];
   const flow = useQuestionFlow({ steps });
+  const openId = flow.open?.id ?? null;
+  const isSkippable = openId === 'objective' || openId === 'date';
+  const skip = () => {
+    if (openId === null) return;
+    set({ skipped: [...answers.skipped, openId] });
+    flow.moveOnFrom(openId);
+  };
   const create = async () => {
     if (!user || isSaving || name === '') return;
     const existing = active.find(
@@ -210,7 +206,7 @@ function ProjectFlowForm({
     <div className='space-y-5'>
       <QuestionFlow flow={flow} />
       <ModalFooterActions
-        note={flow.hasReviewed ? null : flow.blocker}
+        note={flow.hasReviewed || !isNameTouched ? null : flow.blocker}
         cancelAction={
           <Button
             type='button'
@@ -232,13 +228,23 @@ function ProjectFlowForm({
               {HELM_COPY.projectFlowCreate}
             </Button>
           ) : (
-            <Button
-              type='button'
-              disabled={!flow.open?.isAnswered}
-              onClick={flow.advance}
-            >
-              {HELM_COPY.projectFlowNext}
-            </Button>
+            <>
+              {isSkippable && (
+                <Button type='button' variant='secondary' onClick={skip}>
+                  {HELM_COPY.projectFlowSkip}
+                </Button>
+              )}
+              <Button
+                type='button'
+                disabled={openId !== 'name' && !flow.open?.isAnswered}
+                onClick={() => {
+                  if (!flow.open?.isAnswered) setIsNameTouched(true);
+                  flow.advance();
+                }}
+              >
+                {HELM_COPY.projectFlowNext}
+              </Button>
+            </>
           )
         }
       />

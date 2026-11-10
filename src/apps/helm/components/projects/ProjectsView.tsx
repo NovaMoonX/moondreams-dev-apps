@@ -5,6 +5,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
 import ProjectQuestionFlow from '@apps/helm/components/projects/ProjectQuestionFlow';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -44,11 +45,17 @@ function ProjectRow({ project, isFinished, onOpen }: ProjectRowProps) {
           <span className='text-foreground block text-[15px] leading-[21px] break-words'>
             {project.name}
           </span>
-          {!isFinished && (
-            <span className='block'>
+          <span className='block'>
+            {isFinished ? (
+              <span className='text-muted-foreground text-[13px]'>
+                {HELM_COPY.projectFinishedBar(
+                  formatDateShort(project.finishedAt ?? project.createdAt),
+                )}
+              </span>
+            ) : (
               <EvidenceLine project={project} />
-            </span>
-          )}
+            )}
+          </span>
         </span>
         <ChevronRight
           className='text-muted-foreground size-4 shrink-0'

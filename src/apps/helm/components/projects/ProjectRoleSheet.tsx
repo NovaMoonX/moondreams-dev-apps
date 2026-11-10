@@ -1,10 +1,12 @@
 import { useId, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight, UserMinus } from 'lucide-react';
 
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import SegmentedControl from '@/components/SegmentedControl';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import type { ApplyRole } from '@apps/helm/components/projects/ProjectPeople';
 import { HELM_COPY, PROJECT_ROLE_NOTE_MAX } from '@apps/helm/constants';
 import type { OpenProject, OpenWho, ProjectRole } from '@apps/helm/types';
@@ -43,6 +45,13 @@ function ProjectRoleSheet({
   const [note, setNote] = useState(project.roleNotes[who.id] ?? '');
   const [isSaving, setIsSaving] = useState(false);
   const hasNote = role !== 'mentioned';
+  const isDirty =
+    role !== current || note !== (project.roleNotes[who.id] ?? '');
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose,
+    isBusy: isSaving,
+  });
 
   const run = async (change: Parameters<ApplyRole>[1], title: string) => {
     setIsSaving(true);
@@ -54,7 +63,7 @@ function ProjectRoleSheet({
   return (
     <FormSheet
       isOpen
-      onClose={onClose}
+      onClose={requestClose}
       title={HELM_COPY.projectRoleTitle(who.name)}
     >
       <div className='space-y-4'>
@@ -63,6 +72,7 @@ function ProjectRoleSheet({
           options={ROLE_OPTIONS}
           value={role}
           onChange={setRole}
+          isStacked
         />
         {hasNote && (
           <div className='space-y-1.5'>
@@ -78,41 +88,46 @@ function ProjectRoleSheet({
             />
           </div>
         )}
-        <div className='flex flex-wrap gap-2'>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            disabled={isSaving}
-            onClick={() => {
-              onClose();
-              onOpenWho(who.id);
-            }}
-          >
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          className="bg-muted text-foreground relative h-auto min-h-7 max-w-full justify-between gap-2 rounded-full border-0 px-3 py-1 after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+          disabled={isSaving}
+          onClick={() => {
+            onClose();
+            onOpenWho(who.id);
+          }}
+        >
+          <span className='min-w-0 text-left'>
             {HELM_COPY.projectRoleOpenPage}
-          </Button>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className='text-destructive!'
-            disabled={isSaving}
-            onClick={() =>
-              void run(
-                { role: null },
-                HELM_COPY.projectRoleOff(who.name, project.name),
-              )
-            }
-          >
-            {HELM_COPY.projectRoleOffMenu}
-          </Button>
-        </div>
+          </span>
+          <ChevronRight
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
+        </Button>
+        <Button
+          type='button'
+          variant='secondary'
+          className='text-destructive! border-destructive/40! w-full justify-start gap-2'
+          disabled={isSaving}
+          onClick={() =>
+            void run(
+              { role: null },
+              HELM_COPY.projectRoleOff(who.name, project.name),
+            )
+          }
+        >
+          <UserMinus className='size-4 shrink-0' aria-hidden='true' />
+          <span>{HELM_COPY.projectRoleOffMenu}</span>
+        </Button>
         <ModalFooterActions
           cancelAction={
             <Button
               type='button'
               variant='tertiary'
-              onClick={onClose}
+              onClick={requestClose}
               disabled={isSaving}
             >
               {HELM_COPY.editCancel}

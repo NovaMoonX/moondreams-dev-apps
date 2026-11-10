@@ -1415,7 +1415,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             base,
             key,
             MAX_CONTEXT_PROJECTS,
-          ).catch(() => []);
+          ).catch((error): Awaited<ReturnType<typeof readContextProjects>> => {
+            logger.warn('helm.sort.projectsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          });
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -2116,8 +2121,11 @@ async function writeResult(
       hasPlanDay: planDayKey !== null,
       hasHome: requestedHome !== null,
       hasFacts:
-        noteFacts.length + keyDates.length + projectCommands.length > 0 &&
-        !isStale,
+        noteFacts.length +
+          keyDates.length +
+          written.projectCreates.length +
+          written.projectUpdates.length >
+          0 && !isStale,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

@@ -1,13 +1,10 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import {
-  createOptionMatcher,
-  toComparable,
-} from '../../../vendor/optionMatchUtils.js';
+import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
 import type {
   CreateProjectCommand,
   SetProjectRoleCommand,
 } from './commands.js';
-import { buildRoleLine } from './summaries.js';
+import { buildProjectNotFoundLine, buildRoleLine } from './summaries.js';
 
 export type ProjectRoleName = 'key' | 'involved' | 'mentioned';
 
@@ -54,7 +51,7 @@ export interface CreatedProject {
   command: CreateProjectCommand;
 }
 
-/** The projects a task may point at: the active ones, plus the one this turn starts; a project whose name is exactly the new one's is linked, not made twice. */
+/** The projects a task may point at: the active ones, plus the one this turn starts; a project the new one's name surely means is linked, not made twice. */
 export function settleProjectStart(input: {
   command: CreateProjectCommand | null;
   existing: ExistingProject[];
@@ -63,10 +60,7 @@ export function settleProjectStart(input: {
   const pool = input.existing.map(({ id, name }) => ({ id, name }));
   const { command } = input;
   if (!command) return { created: null, pool };
-  const same = pool.find(
-    (entry) => toComparable(entry.name) === toComparable(command.name),
-  );
-  if (same) return { created: null, pool };
+  if (matchProject(command.name, pool)) return { created: null, pool };
   const id = input.newId();
   return {
     created: { id, command },
@@ -88,8 +82,8 @@ export function planProjectRoles(input: {
   existing: ExistingProject[];
   pool: ProjectPoolEntry[];
   commands: SetProjectRoleCommand[];
-  /** The who a task filed in a project names, by project id. */
-  taskWho: { projectId: string; whoIds: string[] }[];
+  /** The who each task of the turn names, by the project it is filed in. */
+  taskWho: { projectId: string | null; whoIds: string[] }[];
   /** Every who the capture names that is settled, the person's own excluded. */
   namedWhoIds: string[];
   whoIdOf: Map<string, string>;
@@ -103,6 +97,7 @@ export function planProjectRoles(input: {
   effects: Effect[];
   roleWhoIds: Set<string>;
   rolesSet: number;
+  notKept: string[];
 } {
   const add = (
     requests: Map<string, Map<string, Request>>,
@@ -122,9 +117,12 @@ export function planProjectRoles(input: {
     });
     requests.set(projectId, forProject);
   };
-  const said = input.commands.flatMap((command) => {
-    const projectId = matchProject(command.projectRef, input.pool);
-    return projectId
+  const matched = input.commands.map((command) => ({
+    command,
+    projectId: matchProject(command.projectRef, input.pool),
+  }));
+  const said = matched.flatMap(({ command, projectId }) =>
+    projectId
       ? [
           ...new Set(
             command.whoRefs.flatMap((ref) => input.whoIdOf.get(ref) ?? []),
@@ -135,31 +133,33 @@ export function planProjectRoles(input: {
           role: command.role,
           note: command.note,
         }))
-      : [];
-  });
+      : [],
+  );
   const involved = input.taskWho.flatMap(({ projectId, whoIds }) =>
-    whoIds.map((whoId) => ({
-      projectId,
-      whoId,
-      role: 'involved' as const,
-      note: null,
-    })),
+    projectId
+      ? whoIds.map((whoId) => ({
+          projectId,
+          whoId,
+          role: 'involved' as const,
+          note: null,
+        }))
+      : [],
   );
   const strong = [...said, ...involved].reduce((requests, entry) => {
     add(requests, entry.projectId, entry.whoId, entry);
     return requests;
   }, new Map<string, Map<string, Request>>());
-  const touched = new Set([
-    ...strong.keys(),
-    ...input.taskWho.map((entry) => entry.projectId),
-    ...(input.created ? [input.created.id] : []),
-  ]);
-  const requests = [...touched].reduce((all, projectId) => {
-    input.namedWhoIds.forEach((whoId) =>
-      add(all, projectId, whoId, { role: 'mentioned', note: null }),
-    );
-    return all;
-  }, strong);
+  const startedId = input.created?.id ?? null;
+  const isStartedAlone = input.taskWho.every(
+    (entry) => entry.projectId === startedId,
+  );
+  const requests =
+    startedId && isStartedAlone
+      ? input.namedWhoIds.reduce((all, whoId) => {
+          add(all, startedId, whoId, { role: 'mentioned', note: null });
+          return all;
+        }, strong)
+      : strong;
   const roleWhoIds = new Set(
     [...said, ...involved].map((entry) => entry.whoId),
   );
@@ -305,6 +305,13 @@ export function planProjectRoles(input: {
       ...changes.map((change) => change.effect),
     ],
     roleWhoIds,
+    notKept: [
+      ...new Set(
+        matched.flatMap(({ command, projectId }) =>
+          projectId ? [] : [buildProjectNotFoundLine(command.projectRef)],
+        ),
+      ),
+    ],
     rolesSet: changes.reduce((total, change) => total + change.count, 0),
   };
 }

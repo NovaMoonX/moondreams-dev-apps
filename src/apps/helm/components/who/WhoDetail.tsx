@@ -5,6 +5,7 @@ import {
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { ChevronRight } from 'lucide-react';
 
 import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
@@ -276,12 +277,18 @@ function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
                   <li key={line.id}>
                     <Button
                       type='button'
-                      variant='tertiary'
+                      variant='secondary'
                       size='sm'
-                      className='h-auto min-h-0 px-0! py-1 text-[15px] font-normal'
+                      className="bg-muted text-foreground relative h-auto min-h-7 max-w-full justify-between gap-2 rounded-full border-0 px-3 py-1 text-[15px] font-normal after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
                       onClick={() => void showView('project', line.id)}
                     >
-                      {line.text}
+                      <span className='min-w-0 text-left break-words'>
+                        {line.text}
+                      </span>
+                      <ChevronRight
+                        className='text-muted-foreground size-4 shrink-0'
+                        aria-hidden='true'
+                      />
                     </Button>
                   </li>
                 ))}
