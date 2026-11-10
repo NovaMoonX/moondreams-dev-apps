@@ -463,8 +463,8 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   const leaveOut = async () => {
     const isConfirmed = await confirm({
       title: NEEDS_HOME_WORDS.bulkLeaveOutTitle(selected.length),
-      message: NEEDS_HOME_WORDS.bulkLeaveOutMessage,
-      confirmText: NEEDS_HOME_WORDS.bulkLeaveOutConfirm,
+      message: NEEDS_HOME_WORDS.bulkLeaveOutMessage(selected.length),
+      confirmText: NEEDS_HOME_WORDS.bulkLeaveOutConfirm(selected.length),
       destructive: true,
     });
     if (!isConfirmed) return;

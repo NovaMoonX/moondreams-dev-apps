@@ -4724,10 +4724,13 @@ export const NEEDS_HOME_WORDS = {
   bulkNoMatch: 'Nothing matches that.',
   bulkNoEnvelopes: 'You have no envelopes yet.',
   bulkLeaveOutTitle: (count: number) =>
-    count === 1 ? 'Leave out 1 purchase?' : `Leave out ${count} purchases?`,
-  bulkLeaveOutMessage:
-    'They will not count as spending, so Free to Spend gets the money back. You can undo it right after.',
-  bulkLeaveOutConfirm: 'Leave them out',
+    count === 1 ? 'Leave out 1 charge?' : `Leave out ${count} charges?`,
+  bulkLeaveOutMessage: (count: number) =>
+    count === 1
+      ? "It won't count as spending, so Free to Spend gets the money back. You can undo it right after."
+      : "They won't count as spending, so Free to Spend gets the money back. You can undo it right after.",
+  bulkLeaveOutConfirm: (count: number) =>
+    count === 1 ? 'Leave it out' : 'Leave them out',
   bulkKept: (written: number, total: number) =>
     `Kept ${getBulkCount(written, total)} in Free to Spend`,
   bulkPlaced: (written: number, total: number, envelope: string) =>
