@@ -47,7 +47,7 @@ export const createPlaybackQueue = ({
     playing: Playing,
     status: SpeakResult['status'],
     isResuming: boolean,
-    playedBy: string | void = undefined,
+    playedBy?: string | void,
   ) => {
     if (state.playing !== playing) return;
     state.playing = null;

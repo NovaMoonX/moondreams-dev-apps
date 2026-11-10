@@ -232,10 +232,23 @@ export const streamSpeech = onRequest(
       timeZone,
       characters,
       costMicros: cost,
+    }).catch(() => {
+      logger.error('voice.reserveFailed', { event: 'voice.reserveFailed' });
+      return 'failed' as const;
     });
+    if (held === 'failed') return fail(503, 'unavailable');
     if (held !== null) return fail(429, 'held', { reason: held });
+    const release = () =>
+      releaseSpeech(firestore, {
+        uid,
+        now,
+        timeZone,
+        characters,
+        costMicros: cost,
+      });
 
     res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Voice-Provider');
     if (provider === null) {
       res.setHeader('Content-Type', 'audio/wav');
       res.setHeader('X-Voice-Provider', 'emulator');
@@ -261,13 +274,7 @@ export const streamSpeech = onRequest(
         signal,
       })
       .catch(async (error: unknown) => {
-        await releaseSpeech(firestore, {
-          uid,
-          now,
-          timeZone,
-          characters,
-          costMicros: cost,
-        });
+        await release();
         const status = toStatus(error);
         logger.error('voice.speechFailed', {
           event: 'voice.speechFailed',
@@ -280,16 +287,34 @@ export const streamSpeech = onRequest(
       });
     if (speech === null) return fail(502, 'unavailable');
 
+    const reader = speech.stream.getReader();
+    const first = await reader.read().catch(() => null);
+    if (first === null || first.done || first.value.length === 0) {
+      await release();
+      logger.error('voice.speechFailed', {
+        event: 'voice.speechFailed',
+        status: null,
+      });
+      return fail(502, 'unavailable');
+    }
+
     res.status(200);
     res.setHeader('Content-Type', speech.contentType);
     res.setHeader('X-Voice-Provider', providerId);
-    const reader = speech.stream.getReader();
+    const write = async (bytes: Uint8Array) => {
+      if (res.write(bytes)) return;
+      await new Promise((resolve) => {
+        res.once('drain', resolve);
+        res.once('close', resolve);
+      });
+    };
     const pump = async (): Promise<void> => {
       const chunk = await reader.read();
       if (chunk.done) return;
-      res.write(chunk.value);
+      await write(chunk.value);
       return pump();
     };
+    await write(first.value);
     await pump().catch(() =>
       logger.error('voice.speechCut', { event: 'voice.speechCut' }),
     );

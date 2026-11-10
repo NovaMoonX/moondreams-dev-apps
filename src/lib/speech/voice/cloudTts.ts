@@ -4,6 +4,7 @@ import type { SpeechSource } from '@/lib/speech/voice/speechSource';
 import type { SpeechHeldReason, TtsAdapter } from '@/lib/speech/voice/types';
 
 const MAX_CHARS = 600;
+const RESUME_MS = 1000;
 
 export interface CloudPlayer {
   /** Turns the audio into something `play` can start; throws when it can't. */
@@ -25,7 +26,13 @@ const webAudioPlayer: CloudPlayer = {
   play: async (audio, signal, onStart) => {
     const context = getAudioContext();
     if (context === null) throw new Error('Audio is not available');
-    await context.resume().catch(() => undefined);
+    await Promise.race([
+      context.resume().catch(() => undefined),
+      new Promise((resolve) => setTimeout(resolve, RESUME_MS)),
+    ]);
+    if (context.state !== 'running' && !signal.aborted) {
+      throw new Error('Audio could not start');
+    }
     await new Promise<void>((resolve) => {
       if (signal.aborted) {
         resolve();
@@ -93,14 +100,17 @@ export const createCloudTts = ({
   isPlayingThroughWebAudio: true,
   speak: async (text, options) => {
     const { priority, signal, onStart } = options;
+    const speakFallback = async () =>
+      (await fallback.speak(text, options)) ?? fallback.id;
     const spoken = toSpokenText(text);
-    if (spoken.length > MAX_CHARS) return fallback.speak(text, options);
+    if (spoken.length > MAX_CHARS) return speakFallback();
     if (signal.aborted) return;
     const controller = new AbortController();
     const abort = () => controller.abort();
     signal.addEventListener('abort', abort);
-    const state = { isPlaying: false };
+    const state = { isPlaying: false, playedBy: 'cloud' };
     const timers: ReturnType<typeof setTimeout>[] = [];
+    const readers: ReadableStreamDefaultReader<Uint8Array>[] = [];
     const within = <T>(work: Promise<T>, ms: number) =>
       Promise.race([
         work,
@@ -110,7 +120,7 @@ export const createCloudTts = ({
       ]);
     const toFallback = () => {
       controller.abort();
-      return signal.aborted ? undefined : fallback.speak(text, options);
+      return signal.aborted ? undefined : speakFallback();
     };
     const firstByteBy = Date.now() + firstByteMs;
     try {
@@ -129,7 +139,9 @@ export const createCloudTts = ({
         onHeld?.(answer.reason);
         return await toFallback();
       }
+      state.playedBy = `cloud:${answer.provider}`;
       const reader = answer.body.getReader();
+      readers.push(reader);
       const first = await within(
         reader.read(),
         Math.max(0, firstByteBy - Date.now()),
@@ -152,13 +164,14 @@ export const createCloudTts = ({
         state.isPlaying = true;
         onStart();
       });
-      return 'cloud';
+      return state.playedBy;
     } catch (error) {
-      if (signal.aborted || state.isPlaying) return 'cloud';
+      if (signal.aborted || state.isPlaying) return state.playedBy;
       console.error('The cloud voice failed to read', error);
       return await toFallback();
     } finally {
       timers.forEach(clearTimeout);
+      readers.forEach((reader) => reader.cancel().catch(() => undefined));
       signal.removeEventListener('abort', abort);
     }
   },

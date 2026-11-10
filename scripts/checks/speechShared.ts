@@ -743,7 +743,6 @@ console.log('speechShared: voice router and playback queue checks passed');
     isPlayingThroughWebAudio: false,
     speak: async (text) => {
       calls.push(text);
-      return 'system';
     },
   };
   const controller = new AbortController();
@@ -813,6 +812,40 @@ console.log('speechShared: voice router and playback queue checks passed');
     calls.length,
     callsBefore,
     'an abort before the first byte plays nothing',
+  );
+  const startedWith: string[] = [];
+  const spokeBy = await createCloudTts({
+    source: {
+      fetchSpeech: async () => ({
+        status: 'ready',
+        provider: 'googleTts',
+        body: new ReadableStream<Uint8Array>({
+          start: (stream) => {
+            stream.enqueue(new Uint8Array([1, 2, 3]));
+            stream.close();
+          },
+        }),
+      }),
+    },
+    fallback,
+    player: {
+      decode: async (bytes) => {
+        startedWith.push(`decoded ${bytes.byteLength}`);
+        return {} as AudioBuffer;
+      },
+      play: async (_audio, _signal, onStart) => onStart(),
+    },
+  }).speak('Five', options);
+  assert.equal(
+    spokeBy,
+    'cloud:googleTts',
+    'a played answer reports the cloud and its provider',
+  );
+  assert.deepEqual(startedWith, ['decoded 3'], 'the whole answer is decoded');
+  assert.equal(
+    calls.includes('Five'),
+    false,
+    'a played answer never reaches the fallback',
   );
 }
 console.log('speechShared: cloud voice checks passed');
