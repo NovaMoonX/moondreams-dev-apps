@@ -294,7 +294,7 @@ export function useVoiceConversation({
     run.current.gate = null;
   };
 
-  const endFollowUp = () => {
+  const endFollowUp = (isDeferred = false) => {
     if (!run.current.isFollowUp) return;
     run.current.isFollowUp = false;
     window.clearTimeout(run.current.followUpId);
@@ -303,8 +303,12 @@ export function useVoiceConversation({
     send({ type: 'WINDOW_ENDED' });
     run.current.stopListening = null;
     run.current.cancelListening = null;
-    setIsFollowUpOpen(false);
-    setIsListening(false);
+    const closeWindow = () => {
+      setIsFollowUpOpen(false);
+      setIsListening(false);
+    };
+    if (isDeferred) defer(closeWindow);
+    else closeWindow();
   };
 
   useEffect(() => {
@@ -452,12 +456,15 @@ export function useVoiceConversation({
     closeGate();
     send({ type: 'TAP_MIC' });
     run.current.isFollowUp = true;
-    run.current.stopListening = endFollowUp;
-    run.current.cancelListening = endFollowUp;
-    run.current.followUpId = window.setTimeout(endFollowUp, FOLLOW_UP_MS);
+    run.current.stopListening = () => endFollowUp();
+    run.current.cancelListening = () => endFollowUp();
+    run.current.followUpId = window.setTimeout(
+      () => endFollowUp(),
+      FOLLOW_UP_MS,
+    );
     run.current.gate = openSpeechGate({
       onSpeech: (source) => gateHandler.current?.(source, false),
-      onUnavailable: endFollowUp,
+      onUnavailable: () => endFollowUp(),
     });
     setIsFollowUpOpen(true);
     setIsListening(true);
@@ -491,7 +498,7 @@ export function useVoiceConversation({
       canAnswer?: boolean;
     },
   ): Promise<VoiceSpoken> => {
-    if (run.current.isFollowUp) endFollowUp();
+    endFollowUp(true);
     if (latest.current.isMuted || run.current.mode.phase !== 'OFF') {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
@@ -522,7 +529,9 @@ export function useVoiceConversation({
   const checkPermission = () => {
     readMicrophonePermission()
       .then((permission) => {
-        isMicGranted.current = permission === 'granted';
+        if (permission !== 'unknown') {
+          isMicGranted.current = permission === 'granted';
+        }
         if (permission === 'denied') setReason('no-permission');
         else
           setReason((current) =>
@@ -575,9 +584,7 @@ export function useVoiceConversation({
       lang,
       speechLang: lang,
       onHalt: (error) => {
-        if (error === 'denied' || error === 'no-microphone') {
-          setReason('no-permission');
-        }
+        if (error === 'denied' || error === 'no-microphone') checkPermission();
       },
       onFinalTranscript: (alternatives) => {
         const phrase = readWakePhrase(
