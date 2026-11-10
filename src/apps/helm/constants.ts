@@ -861,15 +861,15 @@ export const HELM_COPY = {
   factLineInferred: (assistant: string, day: string) =>
     `${assistant} inferred · ${day}`,
   factSourceSaid: (assistant: string, day: string) =>
-    `From what you told ${assistant} on ${day} · You said this`,
+    `From what you told ${assistant} ${day} · You said this`,
   factSourceInferred: (assistant: string, day: string) =>
-    `${assistant} inferred this from what you told it on ${day}`,
+    `${assistant} inferred this from what you told it ${day}`,
   factSourceInferredMail: (assistant: string) =>
     `${assistant} inferred this from an email`,
   factSourceConfirmed: (assistant: string, day: string, confirmedDay: string) =>
-    `From what you told ${assistant} on ${day} · You confirmed this on ${confirmedDay}`,
-  factSourceCorrected: (day: string) => `You corrected this on ${day}`,
-  factSourceAdded: (day: string) => `You added this on ${day}`,
+    `From what you told ${assistant} ${day} · You confirmed this ${confirmedDay}`,
+  factSourceCorrected: (day: string) => `You corrected this ${day}`,
+  factSourceAdded: (day: string) => `You added this ${day}`,
   factWas: (statement: string, day: string) =>
     `Was \u201c${statement}\u201d until ${day}`,
   factToday: 'today',

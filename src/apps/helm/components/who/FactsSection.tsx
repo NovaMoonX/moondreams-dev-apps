@@ -43,9 +43,9 @@ function FactsSection({ subject, name }: FactsSectionProps) {
         trailing={
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
             size='sm'
-            className='relative after:absolute after:-inset-x-1 after:-inset-y-2'
+            className="relative whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
             onClick={() => setIsAdding(true)}
           >
             {HELM_COPY.factsAdd}

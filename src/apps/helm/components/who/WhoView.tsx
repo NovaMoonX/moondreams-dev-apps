@@ -41,8 +41,11 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
   const [isInferredOpen, setIsInferredOpen] = useState(false);
   const inferredCount = useAppSelector(
     (state) =>
-      state.helm.facts.items.filter((fact) => fact.status === 'inferred')
-        .length,
+      state.helm.facts.items.filter(
+        (fact) =>
+          fact.status === 'inferred' &&
+          fact.whoIds.length + fact.placeIds.length > 0,
+      ).length,
   );
   const groups = useMemo(() => groupWho(items, search), [items, search]);
   const isSearching = search.trim() !== '';

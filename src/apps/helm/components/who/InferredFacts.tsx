@@ -23,7 +23,11 @@ function InferredFacts({ onClose }: InferredFactsProps) {
   const inferred = useMemo(
     () =>
       facts
-        .filter((fact) => fact.status === 'inferred')
+        .filter(
+          (fact) =>
+            fact.status === 'inferred' &&
+            fact.whoIds.length + fact.placeIds.length > 0,
+        )
         .sort((a, b) => b.createdAt - a.createdAt),
     [facts],
   );

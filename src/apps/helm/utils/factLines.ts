@@ -13,6 +13,13 @@ export const toFactDay = (at: number, now: number) => {
   return formatDateShort(at);
 };
 
+const toOnDay = (at: number, now: number) => {
+  const day = toFactDay(at, now);
+  return day === HELM_COPY.factToday || day === HELM_COPY.factYesterday
+    ? day
+    : `on ${day}`;
+};
+
 /** The muted line under a fact: who stands behind it and when. */
 export function getFactLine(fact: OpenFact, assistant: string, now: number) {
   if (fact.status === 'inferred') {
@@ -33,10 +40,10 @@ export function getFactLine(fact: OpenFact, assistant: string, now: number) {
 
 /** The sheet's source line, which also says where the words came from. */
 export function getFactSource(fact: OpenFact, assistant: string, now: number) {
-  const day = toFactDay(fact.createdAt, now);
+  const day = toOnDay(fact.createdAt, now);
   if (fact.stated === 'personCorrected') {
     return HELM_COPY.factSourceCorrected(
-      toFactDay(fact.confirmedAt ?? fact.createdAt, now),
+      toOnDay(fact.confirmedAt ?? fact.createdAt, now),
     );
   }
   if (fact.stated === 'personSaid') {
@@ -48,7 +55,7 @@ export function getFactSource(fact: OpenFact, assistant: string, now: number) {
     return HELM_COPY.factSourceConfirmed(
       assistant,
       day,
-      toFactDay(fact.confirmedAt ?? fact.createdAt, now),
+      toOnDay(fact.confirmedAt ?? fact.createdAt, now),
     );
   }
   return fact.sourceCaptureId
