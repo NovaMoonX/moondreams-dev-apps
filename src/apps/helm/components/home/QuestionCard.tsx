@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { useAuth } from '@/hooks/useAuth';
@@ -19,6 +20,7 @@ import YesNoAnswer from '@apps/helm/components/home/YesNoAnswer';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
 import { skipQuestion } from '@apps/helm/store/actions/captureActions';
 import {
   isAnswerInFlight,
@@ -34,6 +36,8 @@ interface QuestionCardProps {
   isInSheet: boolean;
   /** The sheet that holds the question already shows its prompt as its title. */
   isPromptHidden?: boolean;
+  /** The words typed under "Neither", held by a sheet that must guard them when it closes; a card on its own keeps them itself. */
+  neitherDraft?: { text: string; onChange: (text: string) => void };
 }
 
 const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
@@ -55,8 +59,13 @@ function QuestionCard({
   item,
   isInSheet,
   isPromptHidden = false,
+  neitherDraft,
 }: QuestionCardProps) {
   const { user } = useAuth();
+  const { addToast } = useToast();
+  const [ownText, setOwnText] = useState('');
+  const neitherText = neitherDraft?.text ?? ownText;
+  const setNeitherText = neitherDraft?.onChange ?? setOwnText;
   const name = useAssistantName();
   const isOffline = useNetworkStatus() === 'offline';
   const [isWorking, setIsWorking] = useState(false);
@@ -114,6 +123,36 @@ function QuestionCard({
       ...(text !== undefined && { text }),
     });
     setIsWorking(false);
+    if (result.kind === 'done' && result.executionId && isInSheet && user) {
+      const { uid } = user;
+      const { executionId } = result;
+      const kept = question.options.find(
+        (option) => option.id === value.optionId,
+      );
+      const title =
+        question.kind !== 'whichIsTrue'
+          ? HELM_COPY.questionAnswered
+          : value.optionId === 'none' || !kept
+            ? HELM_COPY.factKeptNeither
+            : HELM_COPY.factKept(kept.label);
+      addToast({
+        title,
+        type: 'success',
+        action: {
+          label: HELM_COPY.undo,
+          onClick: () =>
+            void takeBack(uid, executionId).then((undone) => {
+              if (undone.kind === 'offline') {
+                addToast({
+                  title: HELM_COPY.undoNeedsConnectionTitle,
+                  description: HELM_COPY.undoNeedsConnectionBody,
+                  type: 'error',
+                });
+              }
+            }),
+        },
+      });
+    }
     const failure =
       result.kind === 'offline'
         ? HELM_COPY.questionNeedsConnection
@@ -194,6 +233,8 @@ function QuestionCard({
         ) : isNeitherOpen ? (
           <NeitherAnswer
             isBusy={isWorking}
+            text={neitherText}
+            onTextChange={setNeitherText}
             onSave={(text) =>
               void answerOnServer(
                 { shape: 'pickOne', optionId: 'none', otherText: null },
@@ -201,6 +242,7 @@ function QuestionCard({
               )
             }
             onBack={() => {
+              setNeitherText('');
               setNote(null);
               setIsNeitherOpen(false);
             }}

@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
@@ -12,6 +13,7 @@ import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { FACT_STATEMENT_MAX, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { closeQuestion } from '@apps/helm/store/actions/captureActions';
 import {
   confirmFact,
   correctFact,
@@ -22,6 +24,7 @@ import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenFact } from '@apps/helm/types';
 import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
 import {
+  getDisputePartner,
   getFactQuote,
   getFactSource,
   toFactDay,
@@ -63,29 +66,43 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
+  const [neitherText, setNeitherText] = useState('');
   const held = useAppSelector(selectHeldItems);
   const now = useNow(60_000);
   const earlier = useMemo(
     () => (shown ? getEarlier(shown, facts) : []),
     [shown, facts],
   );
-  const settling = shown?.disputedWithId
-    ? held.needsYou.flatMap((item) =>
-        getOpenQuestions(item.capture).flatMap((entry) =>
-          entry.question.options.some((option) => option.ref?.id === shown.id)
-            ? [{ captureId: item.capture.id, entry }]
-            : [],
-        ),
-      )[0]
-    : undefined;
+  const partner = shown ? getDisputePartner(shown, facts) : null;
+  const settling =
+    shown && partner
+      ? held.needsYou.flatMap((item) =>
+          getOpenQuestions(item.capture).flatMap((entry) =>
+            entry.question.options.some((option) => option.ref?.id === shown.id)
+              ? [{ captureId: item.capture.id, entry }]
+              : [],
+          ),
+        )[0]
+      : undefined;
   const isSettleView = isSettling && settling !== undefined;
+  const isNeitherDirty = isSettleView && neitherText.trim() !== '';
   const isDirty =
-    draft !== null && shown !== null && draft.trim() !== shown.statement;
+    isNeitherDirty ||
+    (draft !== null && shown !== null && draft.trim() !== shown.statement);
   const close = () => {
     setDraft(null);
+    setNeitherText('');
+    setIsSettling(false);
     onClose();
   };
   const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  const requestBack = useDiscardGuard({
+    isDirty: isNeitherDirty,
+    onClose: () => {
+      setNeitherText('');
+      setIsSettling(false);
+    },
+  });
 
   const settle = (change: FactChange, title: string, isDone: () => void) => {
     if (change.kind === 'offline') {
@@ -118,6 +135,19 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
     });
   };
 
+  const closeSettling = () => {
+    if (!user || !settling) return;
+    const { captureId, entry } = settling;
+    const isLastOpen = !Object.entries(
+      held.needsYou.find((item) => item.capture.id === captureId)?.capture
+        .questionState ?? {},
+    ).some(([id, state]) => id !== entry.id && state.answeredAt === null);
+    closeQuestion(user.uid, captureId, entry.id, isLastOpen).catch(
+      (error: unknown) =>
+        console.error('Helm settled question was not closed', error),
+    );
+  };
+
   const run = async (
     action: () => Promise<FactChange>,
     title: string,
@@ -140,122 +170,123 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
   const isMissing = draft !== null && draft.trim() === '';
 
   const hasThird =
-    settling !== undefined ||
-    (shown?.status === 'inferred' && !shown.disputedWithId);
+    settling !== undefined || (shown?.status === 'inferred' && !partner);
 
-  const footer = !shown ? undefined : isSettleView ? (
-    <div className='flex items-center justify-end'>
-      <Button
-        type='button'
-        variant='tertiary'
-        onClick={() => setIsSettling(false)}
-      >
-        {HELM_COPY.planBack}
-      </Button>
-    </div>
-  ) : isCorrecting ? (
-    <div className='flex items-center justify-end gap-2'>
-      <Button
-        type='button'
-        variant='tertiary'
-        disabled={isWorking}
-        onClick={() => setDraft(null)}
-      >
-        {HELM_COPY.editCancel}
-      </Button>
-      <Button
-        type='button'
-        loading={isWorking}
-        disabled={isMissing || !isDirty}
-        onClick={() =>
-          void run(
-            () => correctFact(uid, shown.id, draft.trim(), shown.topic),
-            HELM_COPY.factCorrectedToast,
-            close,
-          )
-        }
-      >
-        {HELM_COPY.editSave}
-      </Button>
-    </div>
-  ) : (
-    <div
-      className={
-        hasThird
-          ? 'grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end'
-          : 'flex items-center justify-end gap-2'
-      }
-    >
-      <Button
-        type='button'
-        variant='tertiary'
-        disabled={isWorking}
-        onClick={() =>
-          void run(
-            () => forgetFact(uid, shown.id),
-            HELM_COPY.factForgotToast,
-            close,
-          )
-        }
-      >
-        {HELM_COPY.factForget}
-      </Button>
-      <Button
-        type='button'
-        variant='secondary'
-        disabled={isWorking}
-        onClick={() => setDraft(shown.statement)}
-      >
-        {HELM_COPY.factCorrect}
-      </Button>
-      {settling !== undefined && (
+  const footer =
+    !shown || isSettleView ? undefined : isCorrecting ? (
+      <div className='flex items-center justify-end gap-2'>
         <Button
           type='button'
+          variant='tertiary'
           disabled={isWorking}
-          onClick={() => setIsSettling(true)}
+          onClick={() => setDraft(null)}
         >
-          {HELM_COPY.factSettle}
+          {HELM_COPY.editCancel}
         </Button>
-      )}
-      {shown.status === 'inferred' && !shown.disputedWithId && (
         <Button
           type='button'
-          disabled={isWorking}
+          loading={isWorking}
+          disabled={isMissing || !isDirty}
           onClick={() =>
             void run(
-              () => confirmFact(uid, shown.id),
-              HELM_COPY.factConfirmedToast,
-              () => undefined,
+              () => correctFact(uid, shown.id, draft.trim(), shown.topic),
+              HELM_COPY.factCorrectedToast,
+              () => {
+                closeSettling();
+                close();
+              },
             )
           }
         >
-          {HELM_COPY.factConfirm}
+          {HELM_COPY.editSave}
         </Button>
-      )}
-    </div>
-  );
+      </div>
+    ) : (
+      <div
+        className={
+          hasThird
+            ? 'grid grid-cols-3 gap-2 sm:flex sm:items-center sm:justify-end max-sm:[&>button]:px-2 max-sm:[&>button]:whitespace-nowrap'
+            : 'flex items-center justify-end gap-2'
+        }
+      >
+        <Button
+          type='button'
+          variant='tertiary'
+          disabled={isWorking}
+          onClick={() =>
+            void run(
+              () => forgetFact(uid, shown.id),
+              HELM_COPY.factForgotToast,
+              () => {
+                closeSettling();
+                close();
+              },
+            )
+          }
+        >
+          {HELM_COPY.factForget}
+        </Button>
+        <Button
+          type='button'
+          variant='secondary'
+          disabled={isWorking}
+          onClick={() => setDraft(shown.statement)}
+        >
+          {HELM_COPY.factCorrect}
+        </Button>
+        {settling !== undefined && (
+          <Button
+            type='button'
+            disabled={isWorking}
+            onClick={() => setIsSettling(true)}
+          >
+            {HELM_COPY.factSettle}
+          </Button>
+        )}
+        {shown.status === 'inferred' && !partner && (
+          <Button
+            type='button'
+            disabled={isWorking}
+            onClick={() =>
+              void run(
+                () => confirmFact(uid, shown.id),
+                HELM_COPY.factConfirmedToast,
+                () => undefined,
+              )
+            }
+          >
+            {HELM_COPY.factConfirm}
+          </Button>
+        )}
+      </div>
+    );
 
   return (
     <DetailSheet
       isOpen={shown !== null}
       onClose={requestClose}
       title={
-        isSettleView
-          ? settling.entry.question.prompt
-          : isCorrecting
-            ? HELM_COPY.factCorrectTitle
-            : HELM_COPY.factSheetTitle
+        isCorrecting ? HELM_COPY.factCorrectTitle : HELM_COPY.factSheetTitle
       }
       footer={footer}
       viewKey={isSettleView ? 'settle' : isCorrecting ? 'correct' : 'read'}
     >
       {shown && isSettleView && (
-        <QuestionCard
-          captureId={settling.captureId}
-          item={settling.entry}
-          isInSheet
-          isPromptHidden
-        />
+        <div className='space-y-4'>
+          <div className='flex items-center gap-1'>
+            <BackLink isChevronOnly onBack={requestBack} />
+            <p className='min-w-0 text-2xl font-semibold'>
+              {settling.entry.question.prompt}
+            </p>
+          </div>
+          <QuestionCard
+            captureId={settling.captureId}
+            item={settling.entry}
+            isInSheet
+            isPromptHidden
+            neitherDraft={{ text: neitherText, onChange: setNeitherText }}
+          />
+        </div>
       )}
       {shown && isCorrecting && (
         <div className='space-y-1.5'>
@@ -289,9 +320,9 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {getFactSource(shown, assistant, now)}
           </p>
-          {shown.disputedWithId && (
-            <p className='text-muted-foreground text-[13px] text-pretty'>
-              {HELM_COPY.factTwoAnswersLine}
+          {partner && (
+            <p className='text-muted-foreground text-[13px] break-words'>
+              {HELM_COPY.factDisagrees(partner.statement)}
             </p>
           )}
           {quote && (

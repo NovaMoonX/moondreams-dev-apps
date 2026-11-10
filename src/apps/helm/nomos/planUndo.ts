@@ -520,3 +520,21 @@ export const getTakenBackIds = (undo: OpenExecution | null) =>
         )
       : [],
   );
+
+/** What taking back an answer to a "which is true now?" question writes to its turn so the question asks again; null for any other execution. */
+export const planReopen = (
+  original: Pick<OpenExecution, 'questionRef'>,
+  capture: {
+    status: string;
+    questionState: Record<string, { kind: string; answeredAt: number | null }>;
+  } | null,
+): Record<string, unknown> | null => {
+  const ref = original.questionRef;
+  const state = ref && capture ? capture.questionState[ref.questionId] : null;
+  if (!ref || !capture || !state) return null;
+  if (state.kind !== 'whichIsTrue' || state.answeredAt === null) return null;
+  return {
+    [`questionState.${ref.questionId}.answeredAt`]: null,
+    ...(capture.status === 'sorted' && { status: 'needsYou' }),
+  };
+};

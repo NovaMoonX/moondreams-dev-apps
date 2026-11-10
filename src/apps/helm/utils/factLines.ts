@@ -79,3 +79,11 @@ export function getFactSource(fact: OpenFact, assistant: string, now: number) {
     ? HELM_COPY.factSourceInferredMail(assistant)
     : HELM_COPY.factSourceInferredOnly(assistant, day);
 }
+
+/** The fact this one is in dispute with, only when both still name each other. */
+export const getDisputePartner = (fact: OpenFact, facts: OpenFact[]) => {
+  const partner = fact.disputedWithId
+    ? facts.find((entry) => entry.id === fact.disputedWithId)
+    : undefined;
+  return partner && partner.disputedWithId === fact.id ? partner : null;
+};

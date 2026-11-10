@@ -4,6 +4,7 @@ import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import {
   canUndo,
   getTakenBackIds,
+  planReopen,
   planUndo,
   type UndoPlan,
   type UndoTarget,
@@ -723,6 +724,35 @@ test("a guess the person then said outright goes back to a guess on that turn's 
   assert.equal(result.updates.length, 1);
   assert.equal(result.updates[0].fields.status, 'inferred');
   assert.equal(result.updates[0].fields.confirmedAt, null);
+});
+
+test('taking back a settle reopens its question and the turn; no other answer does', () => {
+  const ref = { captureId: 'turn-1', questionId: 'q1' };
+  const capture = (
+    kind: string,
+    answeredAt: number | null,
+    status: string,
+  ) => ({
+    status,
+    questionState: { q1: { kind, answeredAt } },
+  });
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('whichIsTrue', NOW, 'sorted')),
+    { 'questionState.q1.answeredAt': null, status: 'needsYou' },
+  );
+  assert.deepEqual(
+    planReopen({ questionRef: ref }, capture('whichIsTrue', NOW, 'needsYou')),
+    { 'questionState.q1.answeredAt': null },
+  );
+  assert.equal(
+    planReopen({ questionRef: ref }, capture('asked', NOW, 'sorted')),
+    null,
+  );
+  assert.equal(
+    planReopen({ questionRef: ref }, capture('whichIsTrue', null, 'needsYou')),
+    null,
+  );
+  assert.equal(planReopen({ questionRef: null }, null), null);
 });
 
 const failures = tests.flatMap(([name, run]) => {

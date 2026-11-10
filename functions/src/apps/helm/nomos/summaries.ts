@@ -224,6 +224,7 @@ export const buildPickQuestion = (input: {
 export const WHICH_IS_TRUE_WORDS = {
   prompt: 'Which is true now?',
   noneLabel: 'Neither',
+  newest: 'Newest',
 };
 
 export interface TrueCandidate {
@@ -242,7 +243,13 @@ export const buildWhichIsTrueQuestion = (input: {
   shape: 'pickOne' as const,
   prompt: WHICH_IS_TRUE_WORDS.prompt,
   options: [
-    ...[input.older, input.newer].map((fact) => ({
+    ...[
+      input.older,
+      {
+        ...input.newer,
+        detail: `${input.newer.detail} · ${WHICH_IS_TRUE_WORDS.newest}`,
+      },
+    ].map((fact) => ({
       id: fact.id,
       label: fact.statement,
       detail: fact.detail,

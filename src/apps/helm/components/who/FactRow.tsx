@@ -1,10 +1,11 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight } from 'lucide-react';
 
+import { useAppSelector } from '@/store';
 import SourceRing from '@apps/helm/components/who/SourceRing';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenFact } from '@apps/helm/types';
-import { getFactLine } from '@apps/helm/utils/factLines';
+import { getDisputePartner, getFactLine } from '@apps/helm/utils/factLines';
 
 interface FactRowProps {
   fact: OpenFact;
@@ -17,10 +18,13 @@ interface FactRowProps {
 
 /** One fact: its ring, its words and a quiet line of who stands behind it. Opens the fact. */
 function FactRow({ fact, assistant, now, subject, onOpen }: FactRowProps) {
+  const isDisputed = useAppSelector(
+    (state) => getDisputePartner(fact, state.helm.facts.items) !== null,
+  );
   const isConfirmed = fact.status === 'confirmed';
   const line = [
     getFactLine(fact, assistant, now),
-    fact.disputedWithId ? HELM_COPY.factTwoAnswers : null,
+    isDisputed ? HELM_COPY.factTwoAnswers : null,
   ]
     .filter(Boolean)
     .join(' \u00b7 ');

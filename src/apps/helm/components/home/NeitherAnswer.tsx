@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 
@@ -8,14 +8,21 @@ import { FACT_STATEMENT_MAX, HELM_COPY } from '@apps/helm/constants';
 
 interface NeitherAnswerProps {
   isBusy: boolean;
+  text: string;
+  onTextChange: (text: string) => void;
   onSave: (text: string) => void;
   onBack: () => void;
 }
 
 /** "Neither" to which fact is true: one field for what is true now, which becomes the fact that replaces both. */
-function NeitherAnswer({ isBusy, onSave, onBack }: NeitherAnswerProps) {
+function NeitherAnswer({
+  isBusy,
+  text,
+  onTextChange,
+  onSave,
+  onBack,
+}: NeitherAnswerProps) {
   const fieldId = useId();
-  const [text, setText] = useState('');
   const trimmed = text.trim();
   const requestBack = useDiscardGuard({
     isDirty: trimmed !== '',
@@ -32,7 +39,7 @@ function NeitherAnswer({ isBusy, onSave, onBack }: NeitherAnswerProps) {
         id={fieldId}
         value={text}
         maxLength={FACT_STATEMENT_MAX}
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => onTextChange(event.target.value)}
       />
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.whichIsTrueNoneHelp}

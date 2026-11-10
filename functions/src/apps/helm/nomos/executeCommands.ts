@@ -654,7 +654,9 @@ export function planWrites(input: PlanInput): WritePlan {
       }
       const existing = existingByKey.get(repeatKey);
       const contradicted =
-        existing || acc.disputes.length >= MAX_PICK_QUESTIONS
+        existing ||
+        acc.disputes.length >= MAX_PICK_QUESTIONS ||
+        reserved + 2 > MAX_EFFECTS
           ? null
           : findContradicted(
               fact,

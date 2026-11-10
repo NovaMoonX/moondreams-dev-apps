@@ -332,6 +332,10 @@ export function useHelmVoice() {
       return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
     }
     if (optionId === null) return false;
+    if (question.kind === 'whichIsTrue' && optionId === 'none') {
+      say(HELM_COPY.whichIsTrueNoneVoice);
+      return true;
+    }
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: 'voice',
       optionId,

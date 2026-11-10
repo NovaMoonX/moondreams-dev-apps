@@ -975,9 +975,10 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     noteFacts: ReturnType<typeof fact>[],
     existingFacts = [older],
     selfWhoId: string | null = null,
+    commands: Parameters<typeof planWrites>[0]['commands'] = [],
   ) =>
     planWrites({
-      commands: [],
+      commands,
       existing: new Map(),
       captureId: CAPTURE_ID,
       executionId: 'exec-fact',
@@ -1008,6 +1009,17 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
       selfWhoId,
       timeZone: 'UTC',
     });
+
+  const crowded = Array.from({ length: 39 }, (_, index) => ({
+    ...create(`Task ${index}`),
+    ref: `$t${index}`,
+    whoRefs: [],
+    placeRefs: [],
+  })) as unknown as Parameters<typeof planWrites>[0]['commands'];
+  const squeezed = plan([fact()], [older], null, crowded);
+  assert.equal(squeezed.factCreates.length, 1);
+  assert.equal(squeezed.questions.length, 0);
+  assert.equal(squeezed.factCreates[0].data.disputedWithId, null);
 
   const made = plan([fact()]);
   assert.equal(made.factCreates.length, 1);
@@ -1061,7 +1073,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     sealed.options.map((option) => [option.id, option.label, option.detail]),
     [
       ['fact-old', 'Centerpieces are $1,800', 'You said · Nov 3'],
-      [created.id, 'Centerpieces are $2,100', 'You said · Nov 10'],
+      [created.id, 'Centerpieces are $2,100', 'You said · Nov 10 · Newest'],
       ['none', 'Neither', null],
     ],
   );

@@ -88,11 +88,12 @@ const toFact = (
 const openOrRefuse = (
   key: Parameters<typeof openForHelm>[0],
   sealed: SealedPayload,
+  message = 'This capture is gone.',
 ) => {
   try {
     return openForHelm(key, sealed);
   } catch {
-    throw new HttpsError('failed-precondition', 'This capture is gone.');
+    throw new HttpsError('failed-precondition', message);
   }
 };
 
@@ -242,12 +243,17 @@ export const resolveHelmQuestion = onCall(
         factSnaps.flatMap((snap): [string, ResolveFact][] => {
           const data = snap.data();
           if (!data) return [];
-          try {
-            const fact = toFact(data, openForHelm(key, data.sealed));
-            return fact ? [[snap.id, fact]] : [];
-          } catch {
-            return [];
+          const fact = toFact(
+            data,
+            openOrRefuse(key, data.sealed, 'That fact is not readable.'),
+          );
+          if (!fact) {
+            throw new HttpsError(
+              'failed-precondition',
+              'That fact is not readable.',
+            );
           }
+          return [[snap.id, fact]];
         }),
       );
       const executionRef = firestore.collection(`${base}/executions`).doc();

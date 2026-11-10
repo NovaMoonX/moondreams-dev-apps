@@ -127,13 +127,23 @@ const union = (left: string[], right: string[]) => [
   ...new Set([...left, ...right]),
 ];
 
-/** Closes a "which is true now?" question whose facts are no longer in dispute with each other: nothing is written but the question itself, marked stale. */
+/** Closes a "which is true now?" question whose facts are no longer in dispute with each other, marked stale; a survivor still pointing at a partner that is gone or no longer points back is freed, and nothing else is written. */
 function closeStale(
   input: ResolveInput,
   question: Record<string, unknown>,
   oldQuestions: Record<string, unknown>,
+  ids: string[],
 ): ResolvePlan {
   const { questionId, now, capture } = input;
+  const freed = ids.flatMap((id, index) => {
+    const fact = input.facts.get(id);
+    const partnerId = ids[1 - index];
+    return fact &&
+      fact.disputedWithId === partnerId &&
+      input.facts.get(partnerId)?.disputedWithId !== id
+      ? [{ id, data: { disputedWithId: null } }]
+      : [];
+  });
   const questionState = {
     ...capture.questionState,
     [questionId]: { ...capture.questionState[questionId], answeredAt: now },
@@ -146,7 +156,7 @@ function closeStale(
     whoCreate: null,
     placeCreate: null,
     factCreate: null,
-    factUpdates: [],
+    factUpdates: freed,
     whoUpdate: null,
     execution: null,
     isStale: true,
@@ -201,7 +211,10 @@ function planSettle(
     first.disputedWithId !== ids[1] ||
     second.disputedWithId !== ids[0]
   ) {
-    return { refused: null, plan: closeStale(input, question, oldQuestions) };
+    return {
+      refused: null,
+      plan: closeStale(input, question, oldQuestions, ids),
+    };
   }
   const [older, newer] =
     first.createdAt <= second.createdAt

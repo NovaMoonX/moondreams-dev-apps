@@ -732,11 +732,14 @@ test('neither with a statement makes a corrected fact that supersedes both', () 
 });
 
 test('a settle closes the question, writing nothing else, when a fact is gone or no longer disputed; it refuses an answered question', () => {
-  const closes = (input: ReturnType<typeof settleInput>) => {
+  const closes = (input: ReturnType<typeof settleInput>, freed: string[]) => {
     const plan = planned(input);
     assert.equal(plan.isStale, true);
     assert.equal(plan.execution, null);
-    assert.deepEqual(plan.factUpdates, []);
+    assert.deepEqual(
+      plan.factUpdates,
+      freed.map((id) => ({ id, data: { disputedWithId: null } })),
+    );
     assert.equal(plan.factCreate, null);
     const capture = plan.capture as {
       questionState: Record<string, { answeredAt: number | null }>;
@@ -757,10 +760,17 @@ test('a settle closes the question, writing nothing else, when a fact is gone or
   };
   const gone = settleInput('f-new');
   gone.facts = new Map([['f-new', gone.facts.get('f-new') as ResolveFact]]);
-  closes(gone);
+  closes(gone, ['f-new']);
   const changed = settleInput('f-new');
   changed.facts.set('f-old', fact({ disputedWithId: null }));
-  closes(changed);
+  closes(changed, ['f-new']);
+  const moved = settleInput('f-new');
+  moved.facts.set('f-old', fact({ disputedWithId: 'f-other' }));
+  closes(moved, ['f-new']);
+  const elsewhere = settleInput('f-new');
+  elsewhere.facts.set('f-old', fact({ disputedWithId: null }));
+  elsewhere.facts.set('f-new', fact({ disputedWithId: 'f-other' }));
+  closes(elsewhere, []);
   const answered = settleInput('f-new');
   answered.capture.questionState.q1.answeredAt = 5000;
   assert.equal(planResolve(answered).refused, 'answered');

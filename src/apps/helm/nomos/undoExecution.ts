@@ -17,6 +17,7 @@ import { openJson, sealJson } from '@apps/helm/security';
 import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
+  planReopen,
   planUndo,
   type UndoRefusal,
   type UndoTarget,
@@ -161,6 +162,25 @@ export async function undoExecution(
         if (plan.kind === 'refused') {
           return { kind: 'refused', reason: plan.reason, report: plan.report };
         }
+        const questionCaptureId = original.questionRef?.captureId ?? null;
+        const captureRef = questionCaptureId
+          ? doc(userOf(uid), 'captures', questionCaptureId)
+          : null;
+        const captureSnap = captureRef
+          ? await transaction.get(captureRef)
+          : null;
+        const reopen = planReopen(
+          original,
+          captureSnap?.exists()
+            ? (captureSnap.data() as {
+                status: string;
+                questionState: Record<
+                  string,
+                  { kind: string; answeredAt: number | null }
+                >;
+              })
+            : null,
+        );
         const resealed = await Promise.all(
           plan.updates.map(async (update) =>
             update.reseal
@@ -186,6 +206,7 @@ export async function undoExecution(
             ...resealed[index],
           }),
         );
+        if (captureRef && reopen) transaction.update(captureRef, reopen);
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
         transaction.update(executionRef, { undoneByExecutionId: undoRef.id });
         return {

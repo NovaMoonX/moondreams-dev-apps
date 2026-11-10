@@ -228,6 +228,18 @@ export const skipQuestion = (
     [`questionState.${questionId}.skippedAt`]: Date.now(),
   });
 
+/** Marks a question answered without running anything, because what it asked was settled another way; touches only its own fields, and the turn is sorted once none is left open. */
+export const closeQuestion = (
+  uid: string,
+  captureId: string,
+  questionId: string,
+  isLastOpen: boolean,
+) =>
+  updateDoc(doc(capturesOf(uid), captureId), {
+    [`questionState.${questionId}.answeredAt`]: Date.now(),
+    ...(isLastOpen && { status: 'sorted' }),
+  });
+
 export const markAiNoticeSeen = (uid: string) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), { hasSeenAiNotice: true });
 
