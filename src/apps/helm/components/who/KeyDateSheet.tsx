@@ -4,7 +4,6 @@ import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppToggle from '@/components/AppToggle';
-import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
@@ -727,11 +726,6 @@ function KeyDateSheet({
         </p>
       ) : isForm ? (
         <div className='space-y-2'>
-          {!isAdding && (
-            <div className='-mb-1 flex items-center'>
-              <BackLink isChevronOnly onBack={requestBack} />
-            </div>
-          )}
           <KeyDateForm
             key={`${openId ?? 'new'}:${isAdding}`}
             who={who}
