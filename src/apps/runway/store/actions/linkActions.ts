@@ -14,6 +14,7 @@ import type {
   NormalizedAccount,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 export interface LinkSession {
   linkId: string;
@@ -163,20 +164,20 @@ export async function linkChosenAccounts(
         encryption,
         {
           issuer: session.institutionName,
-          name: entry.name,
+          name: cleanBankName(entry.name),
           dueDay: null,
           lastFour: entry.mask,
           payFromAccountId: null,
           owedCents: Math.max(0, entry.balanceCents ?? 0),
         },
-        LINK_WORDS.newCardSummary(entry.name),
+        LINK_WORDS.newCardSummary(cleanBankName(entry.name)),
       );
       created.push(cardId);
       onCreated(index, { kind: 'existing', target: 'card', id: cardId });
       return { ...base, cardId };
     }
     const accountId = await createAccount(uid, encryption, {
-      name: entry.name,
+      name: cleanBankName(entry.name),
       institution: session.institutionName,
       kind: toAccountKind(entry.subtype),
       countedTowardTotal: true,

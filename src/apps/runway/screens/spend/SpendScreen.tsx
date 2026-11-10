@@ -12,7 +12,8 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import EmptyCard from '@/components/EmptyCard';
 import FloatingAction from '@/components/FloatingAction';
-import { PillGroup } from '@/components/PillGroup';
+import { MultiPillGroup, PillGroup } from '@/components/PillGroup';
+import RangeSlider from '@/components/RangeSlider';
 import SensitiveValue from '@/components/SensitiveValue';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import FilterBar, { FilterSection } from '@/components/FilterBar';
@@ -28,6 +29,8 @@ import {
   SPEND_PAGE_SIZE,
   SPEND_PERIOD_LABELS,
   SPEND_PERIOD_WORDS,
+  SPEND_FILTER_WORDS,
+  SPEND_KINDS,
   SPEND_PERIODS,
   PAIR_WORDS,
   RULE_WORDS,
@@ -53,13 +56,48 @@ import {
   selectIsMovesLoaded,
   selectIsRulesLoaded,
   selectAccountPairs,
+  selectAllCards,
   selectRules,
   selectSpendPurchases,
+  selectWaitingBankMoves,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { getPurchaseTitle } from '@apps/runway/utils/purchaseText';
+import {
+  getPaidWithName,
+  getPurchaseTitle,
+} from '@apps/runway/utils/purchaseText';
+
+type SpendKind = (typeof SPEND_KINDS)[number];
+type AmountEnds = readonly [number, number];
+
+const isCounted = (purchase: OpenPurchase) => purchase.lines.length > 0;
+
+const fitsKind = (purchase: OpenPurchase, kind: SpendKind | null) => {
+  if (kind === 'notCounted') return !isCounted(purchase);
+  if (!isCounted(purchase)) return false;
+  if (kind === 'purchases') return purchase.amountCents > 0;
+  if (kind === 'refunds') return purchase.amountCents < 0;
+  return true;
+};
+
+const CASH_SOURCE = 'cash';
+const getSourceId = (purchase: OpenPurchase) =>
+  purchase.paidByCardId ?? purchase.accountId ?? CASH_SOURCE;
+
+const DOLLAR = 100;
+/** The amount slider's top end: the largest amount in view, up to the next whole dollar. */
+const getAmountTop = (purchases: readonly OpenPurchase[]) =>
+  Math.max(
+    DOLLAR,
+    Math.ceil(
+      purchases.reduce(
+        (top, purchase) => Math.max(top, Math.abs(purchase.amountCents)),
+        0,
+      ) / DOLLAR,
+    ) * DOLLAR,
+  );
 
 const monthFormat = new Intl.DateTimeFormat('en-US', {
   month: 'long',
@@ -140,6 +178,13 @@ function SpendScreen() {
   const {
     spendEnvelope,
     showSpendEnvelope,
+    spendKind,
+    showSpendKind,
+    spendFrom,
+    showSpendFrom,
+    spendMin,
+    spendMax,
+    showSpendAmount,
     openPurchase,
     purchaseId,
     closePurchase,
@@ -150,7 +195,11 @@ function SpendScreen() {
     closeGroups,
     openView,
   } = useRunwayUrlState();
-  const pairCount = useAppSelector(selectAccountPairs).length;
+  const pairCount =
+    useAppSelector(selectAccountPairs).length +
+    useAppSelector(selectWaitingBankMoves).length;
+  const cards = useAppSelector(selectAllCards);
+  const accounts = useAppSelector((state) => state.runway.accounts);
   const expenseCount = useAppSelector(selectExpenses).length;
   const level = useAppSelector(selectLevel);
   const ruleCount = useAppSelector(selectRules).length;
@@ -212,17 +261,42 @@ function SpendScreen() {
             ]
           : []),
       ];
-  const total = purchases.reduce(
-    (sum, purchase) => sum + purchase.amountCents,
-    0,
-  );
+  const total = purchases
+    .filter(isCounted)
+    .reduce((sum, purchase) => sum + purchase.amountCents, 0);
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
+  const [amountDraft, setAmountDraft] = useState<AmountEnds | null>(null);
 
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
-  const counts = purchases.reduce<Map<string, number>>((acc, purchase) => {
+  const paidWithOf = (purchase: OpenPurchase) =>
+    getPaidWithName(purchase, cards, accounts);
+  const resetPaging = () => setShown(SPEND_PAGE_SIZE);
+
+  const kindCounts = SPEND_KINDS.reduce<Record<SpendKind, number>>(
+    (acc, kind) => ({
+      ...acc,
+      [kind]: purchases.filter((purchase) => fitsKind(purchase, kind)).length,
+    }),
+    { purchases: 0, refunds: 0, notCounted: 0 },
+  );
+  const kindId: SpendKind | null =
+    spendKind !== null && kindCounts[spendKind] > 0 ? spendKind : null;
+  const ofKind = purchases.filter((purchase) => fitsKind(purchase, kindId));
+
+  const sources = ofKind.reduce<Map<string, { name: string; count: number }>>(
+    (acc, purchase) => {
+      const id = getSourceId(purchase);
+      const name = paidWithOf(purchase) ?? SPEND_WORDS.cashOrTyped;
+      return acc.set(id, { name, count: (acc.get(id)?.count ?? 0) + 1 });
+    },
+    new Map(),
+  );
+  const sourceIds = spendFrom.filter((id) => sources.has(id));
+
+  const counts = ofKind.reduce<Map<string, number>>((acc, purchase) => {
     new Set(purchase.lines.map((line) => line.envelopeId)).forEach((id) => {
       if (id !== null) acc.set(id, (acc.get(id) ?? 0) + 1);
     });
@@ -230,19 +304,63 @@ function SpendScreen() {
   }, new Map());
   const filterId =
     spendEnvelope !== null && counts.has(spendEnvelope) ? spendEnvelope : null;
+
+  const amountTop = getAmountTop(ofKind);
+  const committedAmount: AmountEnds = [
+    Math.min(spendMin ?? 0, amountTop),
+    Math.min(spendMax ?? amountTop, amountTop),
+  ];
+  const amount = amountDraft ?? committedAmount;
+  const isAmountOn = amount[0] > 0 || amount[1] < amountTop;
+
   const showEnvelope = (envelopeId: string | null) => {
     showSpendEnvelope(envelopeId);
-    setShown(SPEND_PAGE_SIZE);
+    resetPaging();
   };
+  const showKind = (kind: SpendKind | null) => {
+    showSpendKind(kind);
+    showSpendAmount(null, null);
+    resetPaging();
+  };
+  const showSources = (ids: string[]) => {
+    showSpendFrom(ids);
+    resetPaging();
+  };
+  const commitAmount = ([low, high]: AmountEnds) => {
+    setAmountDraft(null);
+    showSpendAmount(low > 0 ? low : null, high < amountTop ? high : null);
+    resetPaging();
+  };
+  const clearFilters = () => {
+    showSpendKind(null);
+    showSpendFrom([]);
+    showSpendEnvelope(null);
+    showSpendAmount(null, null);
+    resetPaging();
+  };
+  const removeFilter = (key: string) => {
+    if (key === 'kind') showKind(null);
+    if (key === 'from') showSources([]);
+    if (key === 'envelope') showEnvelope(null);
+    if (key === 'amount') commitAmount([0, amountTop]);
+  };
+
   const hasBar =
-    purchases.length >= RUNWAY_SEARCH_THRESHOLD || counts.size >= 2;
+    purchases.length >= RUNWAY_SEARCH_THRESHOLD ||
+    kindCounts.notCounted > 0 ||
+    sources.size >= 2 ||
+    counts.size >= 2;
   const needle = hasBar ? query.trim().toLowerCase() : '';
-  const matches = purchases.filter(
+  const matches = ofKind.filter(
     (purchase) =>
       (filterId === null ||
         purchase.lines.some((line) => line.envelopeId === filterId)) &&
+      (sourceIds.length === 0 || sourceIds.includes(getSourceId(purchase))) &&
+      (!isAmountOn ||
+        (Math.abs(purchase.amountCents) >= amount[0] &&
+          Math.abs(purchase.amountCents) <= amount[1])) &&
       (needle === '' ||
-        `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.label ?? ''} ${purchase.merchant ?? ''} ${purchase.bankName ?? ''} ${purchase.note ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
+        `${getPurchaseTitle(purchase, nameOf, isHidden)} ${purchase.label ?? ''} ${purchase.merchant ?? ''} ${purchase.bankName ?? ''} ${purchase.note ?? ''} ${paidWithOf(purchase) ?? ''} ${purchase.lines.map((line) => (line.envelopeId === null ? SPEND_WORDS.freeToSpend : nameOf(line.envelopeId))).join(' ')} ${isHidden ? '' : formatCents(Math.abs(purchase.amountCents))}`
           .toLowerCase()
           .includes(needle)),
   );
@@ -278,12 +396,72 @@ function SpendScreen() {
     label: monthFormat.format(getMonthStart(month)),
   }));
 
+  const countedCount = purchases.length - kindCounts.notCounted;
+  const kindOptions = [
+    {
+      value: '',
+      label: SPEND_WORDS.all,
+      detail: String(countedCount),
+      ariaLabel: `${SPEND_WORDS.all}, ${countedCount}`,
+    },
+    ...SPEND_KINDS.filter(
+      (kind) => kind !== 'notCounted' || kindCounts.notCounted > 0,
+    ).map((kind) => ({
+      value: kind as string,
+      label: SPEND_FILTER_WORDS.kinds[kind],
+      detail: String(kindCounts[kind]),
+      ariaLabel: `${SPEND_FILTER_WORDS.kinds[kind]}, ${kindCounts[kind]}`,
+    })),
+  ];
+  const sourceOptions = [...sources.entries()]
+    .map(([id, { name, count }]) => ({
+      value: id,
+      label: name,
+      detail: String(count),
+      ariaLabel: `${name}, ${count}`,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  const formatDollars = (cents: number) =>
+    formatCents(cents).replace(/\.00$/, '');
+  const activeFilters = [
+    ...(kindId === null
+      ? []
+      : [{ key: 'kind', label: SPEND_FILTER_WORDS.kinds[kindId] }]),
+    ...(sourceIds.length === 0
+      ? []
+      : [
+          {
+            key: 'from',
+            label:
+              sourceIds.length === 1
+                ? (sources.get(sourceIds[0])?.name ??
+                  SPEND_FILTER_WORDS.paidWith)
+                : `${sources.get(sourceIds[0])?.name ?? SPEND_FILTER_WORDS.paidWith} and ${sourceIds.length - 1} more`,
+          },
+        ]),
+    ...(filterId === null
+      ? []
+      : [{ key: 'envelope', label: nameOf(filterId) }]),
+    ...(isAmountOn
+      ? [
+          {
+            key: 'amount',
+            label: isHidden
+              ? SPEND_FILTER_WORDS.amount
+              : SPEND_FILTER_WORDS.amountChip(
+                  formatDollars(amount[0]),
+                  formatDollars(amount[1]),
+                ),
+          },
+        ]
+      : []),
+  ];
   const filterOptions = [
     {
       value: '',
       label: SPEND_WORDS.all,
-      detail: String(purchases.length),
-      ariaLabel: `${SPEND_WORDS.all}, ${purchases.length}`,
+      detail: String(ofKind.length),
+      ariaLabel: `${SPEND_WORDS.all}, ${ofKind.length}`,
     },
     ...[...counts.entries()]
       .map(([id, count]) => ({
@@ -374,17 +552,38 @@ function SpendScreen() {
             searchPlaceholder={
               isQuickPeriod ? SPEND_WORDS.search : `Search ${periodLabel}`
             }
-            filterLabel='Filter purchases'
-            activeFilters={
-              filterId === null
-                ? []
-                : [{ key: 'envelope', label: nameOf(filterId) }]
-            }
-            onRemoveFilter={() => showEnvelope(null)}
-            onClearFilters={() => showEnvelope(null)}
-            doneLabel={`Show ${matches.length} ${matches.length === 1 ? 'purchase' : 'purchases'}`}
-            compactDoneLabel={`Show ${matches.length}`}
+            filterLabel={SPEND_FILTER_WORDS.label}
+            activeFilters={activeFilters}
+            onRemoveFilter={removeFilter}
+            onClearFilters={clearFilters}
+            doneLabel={SPEND_FILTER_WORDS.show(matches.length)}
+            compactDoneLabel={SPEND_FILTER_WORDS.showShort(matches.length)}
           >
+            <FilterSection title={SPEND_FILTER_WORDS.kind}>
+              <PillGroup
+                label={SPEND_FILTER_WORDS.kind}
+                options={kindOptions}
+                value={kindId ?? ''}
+                onChange={(value) =>
+                  showKind(value === '' ? null : (value as SpendKind))
+                }
+              />
+              {kindId === 'notCounted' && (
+                <p className='text-muted-foreground text-xs'>
+                  {SPEND_FILTER_WORDS.notCountedHelp}
+                </p>
+              )}
+            </FilterSection>
+            {sources.size >= 2 && (
+              <FilterSection title={SPEND_FILTER_WORDS.paidWith}>
+                <MultiPillGroup
+                  label={SPEND_FILTER_WORDS.paidWith}
+                  options={sourceOptions}
+                  values={sourceIds}
+                  onChange={showSources}
+                />
+              </FilterSection>
+            )}
             {counts.size >= 2 && (
               <FilterSection title={SPEND_WORDS.envelope}>
                 <PillGroup
@@ -394,6 +593,29 @@ function SpendScreen() {
                   onChange={(value) =>
                     showEnvelope(value === '' ? null : value)
                   }
+                />
+              </FilterSection>
+            )}
+            {!isHidden && ofKind.length >= 2 && (
+              <FilterSection title={SPEND_FILTER_WORDS.amount}>
+                <div className='flex justify-between text-sm tabular-nums'>
+                  <span>{formatDollars(amount[0])}</span>
+                  <span>{formatDollars(amount[1])}</span>
+                </div>
+                <RangeSlider
+                  label={SPEND_FILTER_WORDS.amountLabel}
+                  handleLabels={[
+                    SPEND_FILTER_WORDS.minLabel,
+                    SPEND_FILTER_WORDS.maxLabel,
+                  ]}
+                  min={0}
+                  max={amountTop}
+                  step={DOLLAR}
+                  value={amount}
+                  onChange={setAmountDraft}
+                  onCommit={commitAmount}
+                  formatValue={formatDollars}
+                  className='-mx-3'
                 />
               </FilterSection>
             )}
@@ -422,7 +644,7 @@ function SpendScreen() {
         )}
         {matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
-            {purchases.length === 0
+            {ofKind.length === 0 && kindId === null
               ? SPEND_PERIOD_WORDS.emptyPeriod
               : SPEND_WORDS.noMatch}
           </p>
@@ -436,6 +658,7 @@ function SpendScreen() {
                     key={purchase.id}
                     purchase={purchase}
                     looks={looks}
+                    paidWith={paidWithOf(purchase)}
                     onOpen={() => openPurchase(purchase.id)}
                   />
                 ))}

@@ -15,11 +15,18 @@ import {
 interface PurchaseRowProps {
   purchase: OpenPurchase;
   looks: ReadonlyMap<string, { name: string; emoji: string | null }>;
+  /** The card or account it was paid with, shown after the day. */
+  paidWith?: string | null;
   onOpen: () => void;
 }
 
-/** One purchase in a list: its label, merchant or envelopes as the name, the day and whichever of those the name left out, and the amount. A refund reads as money coming back. */
-function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
+/** One purchase in a list: its label, merchant or envelopes as the name, the day, the card or account and whichever of those the name left out, and the amount. A refund reads as money coming back. */
+function PurchaseRow({
+  purchase,
+  looks,
+  paidWith = null,
+  onOpen,
+}: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
   const nameOf = (envelopeId: string) =>
     looks.get(envelopeId)?.name ?? 'An envelope';
@@ -41,6 +48,7 @@ function PurchaseRow({ purchase, looks, onOpen }: PurchaseRowProps) {
   const title = getPurchaseTitle(purchase, nameOf, isHidden);
   const detail = [
     date,
+    ...(paidWith ? [paidWith] : []),
     ...getPurchaseFacts(purchase, shortEnvelopes, isHidden),
   ].join(' · ');
   const amount = refund

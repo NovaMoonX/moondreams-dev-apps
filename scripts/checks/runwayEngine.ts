@@ -32,6 +32,7 @@ import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  isBankMove,
   findDepositDays,
   findPurchaseMatches,
   type DepositDay,
@@ -10998,6 +10999,42 @@ const version = (
   const onCard = { accountId: null, paidByCardId: 'venture' };
   const none = (matches: ReturnType<typeof findAccountPairs>) =>
     matches.clear.size + matches.offers.size;
+
+  const cardPay = side('pay', 45_524, 0, {
+    category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+  });
+  assert.equal(
+    isBankMove(cardPay),
+    true,
+    'a waiting charge the bank calls a card payment is a move, not spending',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, needsHome: false }),
+    false,
+    'once the person places it, it is spending again',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, pairedWithId: 'in' }),
+    false,
+    'a paired side is already an account move',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, source: 'manual' }),
+    false,
+    'a purchase typed by hand is never judged by a bank category',
+  );
+  assert.equal(
+    isBankMove(
+      side('zelle', 4_000, 0, { category: 'TRANSFER_OUT_OTHER_TRANSFER_OUT' }),
+    ),
+    false,
+    'money sent to a person still counts as spending',
+  );
+  assert.equal(
+    isBankMove(side('atm', 6_000, 0, { category: 'TRANSFER_OUT_WITHDRAWAL' })),
+    false,
+    'a cash withdrawal still counts as spending',
+  );
 
   const transfer = findAccountPairs([
     side('out', 25_000, 0),

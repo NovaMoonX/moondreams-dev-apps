@@ -9,6 +9,7 @@ import type {
   OpenAccount,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -40,7 +41,7 @@ export function startAccountsListener(
               updatedAt: data.updatedAt,
               archivedAt: data.archivedAt ?? null,
               linkId: data.linkId ?? null,
-              name: payload.name ?? '',
+              name: cleanBankName(payload.name ?? ''),
               institution: payload.institution ?? '',
               kind: payload.kind ?? 'checking',
               countedTowardTotal: payload.countedTowardTotal ?? false,

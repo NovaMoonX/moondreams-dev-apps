@@ -2175,6 +2175,9 @@ export const SPEND_WORDS = {
   needsTwo: 'Pick at least two envelopes.',
   offline: 'This needs a connection. Nothing was saved.',
   detailTitle: 'Purchase',
+  refundTitle: 'Refund',
+  cashOrTyped: 'Cash or debit',
+  notCounted: 'Not counted',
   edit: 'Change this purchase',
   save: 'Save',
   removeLabel: 'Remove purchase',
@@ -3461,6 +3464,29 @@ export const PLAN_OVERVIEW_WORDS = {
 export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
 
+/** What Spend's Kind filter narrows to, as the URL keeps it; none shows every purchase and refund that counts. */
+export const SPEND_KINDS = ['purchases', 'refunds', 'notCounted'] as const;
+
+export const SPEND_FILTER_WORDS = {
+  label: 'Filter purchases',
+  kind: 'Kind',
+  kinds: {
+    purchases: 'Purchases',
+    refunds: 'Refunds',
+    notCounted: 'Not counted',
+  },
+  paidWith: 'Card or account',
+  amount: 'Amount',
+  amountLabel: 'Amount range',
+  amountChip: (from: string, to: string) => `${from} to ${to}`,
+  minLabel: 'Lowest amount',
+  maxLabel: 'Highest amount',
+  notCountedHelp: 'Left out of spending, or from before you linked.',
+  show: (count: number) =>
+    `Show ${count} ${count === 1 ? 'purchase' : 'purchases'}`,
+  showShort: (count: number) => `Show ${count}`,
+} as const;
+
 export const SPEND_PERIOD_LABELS = {
   month: 'This month',
   lastMonth: 'Last month',
@@ -4733,6 +4759,15 @@ export const PAIR_WORDS = {
     `You moved this from ${from} to ${to}.`,
   sheetCardPayment: (from: string, card: string) =>
     `You paid ${card} from ${from}.`,
+  waitingTitle: 'Waiting to pair',
+  pairedTitle: 'Paired',
+  waitingCardPayment: 'Your bank calls this a card payment',
+  waitingTransfer: 'Your bank calls this a move between accounts',
+  waitingSheet: 'Pair it with its other side, or say it is spending.',
+  waitingIntro:
+    'Your bank calls these card payments or moves. They stay off Purchases.',
+  isSpending: 'This is spending',
+  isSpendingSub: 'Counts in Free to Spend, with no envelope',
 } as const;
 
 export const LINK_WORDS = {
