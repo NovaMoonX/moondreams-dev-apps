@@ -394,7 +394,7 @@ The success toast carries one Undo that puts every written bill back as it was (
 
 ## Pinned envelopes and the card total
 
-- **Home's four envelope tiles** are the pinned envelopes first, in the person's order, then the rest as before: money before empty, each in plan order (priority, then the Priorities rank, then oldest). Up to four can be pinned (`HOME_TILE_COUNT`), so what is pinned is what Home shows; a pinned tile wears a small pin beside its name.
+- **Home's four envelope tiles** are the pinned envelopes first, in the person's order, then the rest as before: money before empty, each in plan order (priority, then the Priorities rank, then oldest). Up to four can be pinned (`HOME_TILE_COUNT`), so what is pinned is what Home shows (restoring an archived pinned envelope can make five, and Home shows the first four until one is unpinned); a pinned tile wears a small pin beside its name.
 - **Pinning lives on the envelope's sheet** at every level: "Pin to Home" pins at once with a toast, and "Unpin from Home" takes it off. With four pinned, the row says so ("4 already pinned. Make room first") and opens "Pinned on Home" in the sheet, where unpinning one shows "Pin Groceries" as the one primary. Nothing is pinned or unpinned on the person's behalf: an archived or ended envelope leaves the tiles and the pinned list and stops counting toward the four, but keeps its pin, so restoring it brings it back pinned.
 - **Arranging:** with two or more pinned, a quiet "Arrange pinned ›" row under Home's tiles opens the same list in a sheet (Move up, Move down, Unpin on each row). A list of four needs no pick-and-place.
 - **Pins are kept on the plan** (sealed with its other fields), so they follow the person to every device.
