@@ -20,6 +20,7 @@ export { deleteKeptCopies } from './connections/callables.js';
 export { startGoogleConnection } from './connections/google/oauth.js';
 export { finishGoogleConnection } from './connections/google/oauth.js';
 export { verifyConnectionKeys } from './connections/verifyConnectionKeys.js';
+export { readConnectorOptions } from './connections/options.js';
 export { syncConnectionsHourly } from './connections/scheduled.js';
 export { expireKeptCopies } from './connections/scheduled.js';
 export { getHelmKey } from './apps/helm/getHelmKey.js';

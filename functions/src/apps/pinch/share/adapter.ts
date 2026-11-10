@@ -418,6 +418,7 @@ export function createPinchAdapter(
       deletedRefs: [],
       cursor: null,
       isDone: true,
+      resumeState: null,
     }),
     deepLink: (ref) => {
       const [collection] = ref.split('/');

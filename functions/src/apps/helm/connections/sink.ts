@@ -78,6 +78,11 @@ const hasEndedBefore = (data: DocumentData, cutoff: number) => {
 const toAnchor = (record: SharedRecord) =>
   record.startAt ?? record.dueAt ?? record.sourceUpdatedAt ?? 0;
 
+const toCalendarKey = (accountId: string, record: SharedRecord) =>
+  typeof record.extra.calendarId === 'string'
+    ? `${accountId}/${record.extra.calendarId}`
+    : null;
+
 const chunk = <T>(items: T[], size: number): T[][] =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, index) =>
     items.slice(index * size, (index + 1) * size),
@@ -197,8 +202,11 @@ class HelmSinkSession implements SinkSession {
           endAt: record.endAt,
           isAllDay: record.isAllDay,
           dueAt: record.dueAt,
-          calendarKey: null,
-          isBusy: null,
+          calendarKey: toCalendarKey(accountId, record),
+          isBusy:
+            typeof record.extra.calendarId === 'string'
+              ? record.extra.isFree !== true
+              : null,
           sourceUpdatedAt: record.sourceUpdatedAt,
           contentHash: hash,
           syncedAt: now,
@@ -259,6 +267,30 @@ class HelmSinkSession implements SinkSession {
     await commitAll(this.firestore, docs, (batch, doc) =>
       batch.delete(doc.ref),
     );
+    return docs.length;
+  }
+
+  async deleteRefs(grantId: string, category: string, refs: string[]) {
+    const docs = (
+      await Promise.all(
+        chunk(
+          refs.map((ref) =>
+            this.firestore.doc(
+              `${syncedPath(this.uid)}/${toSyncedId(grantId, category, ref)}`,
+            ),
+          ),
+          READ_CHUNK,
+        ).map((group) => this.firestore.getAll(...group)),
+      )
+    )
+      .flat()
+      .filter((doc) => doc.exists);
+    await chunk(docs, BATCH_SIZE).reduce(async (done, group) => {
+      await done;
+      const batch = this.firestore.batch();
+      group.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+    }, Promise.resolve());
     return docs.length;
   }
 

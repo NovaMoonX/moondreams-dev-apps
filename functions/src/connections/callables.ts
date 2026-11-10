@@ -28,10 +28,20 @@ import {
   readUpdateConnectionRequest,
   requestedScopes,
 } from './grants.js';
-import { READER_APPS, READER_SINKS, SOURCE_ADAPTERS } from './registry.js';
+import {
+  READER_APPS,
+  READER_SINKS,
+  SOURCE_ADAPTERS,
+  SOURCE_SECRETS,
+} from './registry.js';
 import { InProcessSourceClient } from './sourceClient.js';
-import { errorCause, syncGrant, type SyncDeps } from './syncRunner.js';
-import { revokeGoogleAccount } from './tokens.js';
+import {
+  clearSyncCursors,
+  errorCause,
+  syncGrant,
+  type SyncDeps,
+} from './syncRunner.js';
+import { GOOGLE_SECRETS, revokeGoogleAccount } from './tokens.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -51,8 +61,13 @@ const OPTIONS: CallableOptions = {
 const SYNC_OPTIONS: CallableOptions = {
   ...OPTIONS,
   timeoutSeconds: 120,
-  secrets: Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+  secrets: [
+    ...Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+    ...SOURCE_SECRETS,
+  ],
 };
+
+const END_OPTIONS: CallableOptions = { ...OPTIONS, secrets: GOOGLE_SECRETS };
 
 export const SYNC_THROTTLE_MS = 15 * 60_000;
 const SYNC_NOW_THROTTLE_MS = 60_000;
@@ -251,6 +266,11 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
     return { current, turnedOff };
   });
 
+  await Promise.all(
+    grant.turnedOff.map((id) =>
+      clearSyncCursors(firestore, auth.uid, req.grantId, id),
+    ),
+  );
   const sink = sinkFor(grant.current.readerAppId);
   if (sink && grant.turnedOff.length > 0) {
     const session = sink.openSession(firestore, auth.uid);
@@ -267,7 +287,7 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
   return { grantId: req.grantId };
 });
 
-export const endConnection = onCall(OPTIONS, async (request) => {
+export const endConnection = onCall(END_OPTIONS, async (request) => {
   const auth = requireAuth(request);
   const req = readEndConnectionRequest(request.data);
   const result = await endAndClean(auth.uid, req);
@@ -327,6 +347,7 @@ const endAndClean = async (uid: string, req: EndConnectionRequest) => {
     });
     return { sink, endedAt, keptCopies };
   });
+  await clearSyncCursors(firestore, uid, req.grantId, null);
   if (!ended.sink) return { grantId: req.grantId };
 
   const session = ended.sink.openSession(firestore, uid);

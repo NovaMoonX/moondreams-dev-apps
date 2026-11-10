@@ -243,6 +243,7 @@ const ctxFor = (uid: string) => ({
       connectorId: 'app:pinch',
       accountId: 'site',
       categoryIds: ['plannedMeals', 'shoppingList', 'useSoon'],
+      options: null,
     },
     adapter.manifest,
     NOW,
@@ -253,6 +254,7 @@ const run = async (uid: string, category: string) => {
   const page = await adapter.syncPage(ctxFor(uid), {
     category,
     cursor: null,
+    resumeState: null,
     windowStart: WINDOW_START,
   });
   assert.equal(page.isFull, true);
@@ -442,6 +444,7 @@ const staged = buildNewGrant(
     connectorId: 'app:pinch',
     accountId: 'site',
     categoryIds: ['shoppingList'],
+    options: null,
   },
   adapter.manifest,
   NOW,
