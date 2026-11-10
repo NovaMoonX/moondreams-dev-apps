@@ -45,6 +45,7 @@ import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/man
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
+import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
@@ -1501,6 +1502,45 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: waypointGrantId,
   });
 
+  const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
+  const worthTheWaitGrantId = toGrantId(
+    'helm',
+    worthTheWaitConnectorId,
+    SITE_ACCOUNT_ID,
+  );
+  const worthTheWaitGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: worthTheWaitConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: { boxCounts: { isOn: false, changedAt: connectedAt } },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      WORTH_THE_WAIT_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          { lastOkAt: syncedAt, lastError: null, count: 0 },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(worthTheWaitGrantId),
+    worthTheWaitGrant,
+  );
+
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
     provider: 'google',
@@ -1619,7 +1659,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       1 +
       nineLivesCopies.length +
       1 +
-      waypointCopies.length,
+      waypointCopies.length +
+      1,
   };
   return result;
 }

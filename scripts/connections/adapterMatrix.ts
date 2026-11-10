@@ -2,13 +2,20 @@
 import assert from 'node:assert/strict';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore } from 'firebase-admin/firestore';
+import {
+  DocumentReference,
+  Firestore,
+  Query,
+  getFirestore,
+} from 'firebase-admin/firestore';
 
 import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapter.ts';
+import { gcmEncrypt } from '../../functions/src/appKeys/gcm.ts';
 import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
 import { createNineLivesAdapter } from '../../functions/src/apps/nine-lives/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
 import { createWaypointAdapter } from '../../functions/src/apps/waypoint/share/adapter.ts';
+import { createWorthTheWaitAdapter } from '../../functions/src/apps/worth-the-wait/share/adapter.ts';
 import {
   applyCategoryChanges,
   buildNewGrant,
@@ -1810,5 +1817,227 @@ assert.equal(
   waypointAdapter.deepLink('trips/x/personalChecklist/y', waypointCtx(OWNER)),
   '/waypoint?trip=x',
 );
+
+const SPACE_KEY =
+  'd953f53d9d6c3b3d2a748beca467f20b4b74d7cb7cc17a0e7a7f315f8b3e756f';
+const WRONG_KEY = SPACE_KEY.split('').reverse().join('');
+const STRANGER = 'stranger-uid';
+const ITEM_SECRET = 'SECRET ITEM WORDS';
+const INVITE_SECRET = 'SECRET-INVITE-CODE';
+
+const sealed = (text: string, key = SPACE_KEY) => {
+  const { ciphertext, nonce } = gcmEncrypt(
+    Buffer.from(key, 'hex'),
+    Buffer.from(text),
+    null,
+  );
+  return {
+    value: ciphertext,
+    ciphertext,
+    nonce,
+    keyId: 'wtw-key',
+    keyVersion: 1,
+    algorithm: 'AES-256-GCM',
+  };
+};
+const waitSpaces = firestore.collection('apps/worth-the-wait/spaces');
+const waitSpace = (members: string[], key: string) => ({
+  createdBy: members[0],
+  members,
+  inviteCode: INVITE_SECRET,
+  activeAction: null,
+  encryption: { appId: 'worth-the-wait', keyId: 'wtw-key', keyVersion: 1, key },
+});
+const waitItem = (isRevealed: boolean) => ({
+  authorId: OWNER,
+  content: sealed(ITEM_SECRET),
+  isRevealed,
+  revealedAt: isRevealed ? NOW : null,
+  revealedMethod: isRevealed ? 'raffle' : null,
+  createdAt: NOW - 5,
+  lastEditedAt: NOW - 4,
+});
+const waitBox = async (
+  space: string,
+  id: string,
+  name: string,
+  emoji: string,
+  revealedFlags: boolean[],
+  key = SPACE_KEY,
+) => {
+  const box = waitSpaces.doc(space).collection('boxes').doc(id);
+  await box.set({
+    name: sealed(name, key),
+    emoji: sealed(emoji, key),
+    description: sealed('SECRET DESCRIPTION'),
+    isDefault: false,
+    createdBy: OWNER,
+    revealHistory: [],
+    revealRequestedBy: [],
+  });
+  await Promise.all(
+    revealedFlags.map((flag, index) =>
+      box.collection('items').doc(`i${index}`).set(waitItem(flag)),
+    ),
+  );
+};
+await Promise.all([
+  waitSpaces.doc('wtw-home').set(waitSpace([OWNER, HOUSEMATE], SPACE_KEY)),
+  waitSpaces.doc('wtw-stranger').set(waitSpace([STRANGER], SPACE_KEY)),
+]);
+await Promise.all([
+  waitBox('wtw-home', 'dates', 'Date ideas', '🍿', [true, true, false]),
+  waitBox('wtw-home', 'trips', 'Trips', '✈️', [false]),
+  waitBox('wtw-home', 'empty', 'Gifts', '🎁', []),
+  waitBox('wtw-home', 'garbled', 'Garbled', '🔒', [true], WRONG_KEY),
+  waitBox('wtw-stranger', 'hidden', 'Hidden box', '🙈', [true, false]),
+]);
+
+const itemReads: string[] = [];
+const pathOfQuery = (query: unknown) => {
+  const options = (
+    query as {
+      _queryOptions?: {
+        parentPath?: { relativeName?: string };
+        collectionId?: string;
+      };
+    }
+  )._queryOptions;
+  return `${options?.parentPath?.relativeName ?? ''}/${options?.collectionId ?? ''}`;
+};
+const watch = (
+  target: { prototype: object },
+  method: string,
+  pathOf: (self: unknown, args: unknown[]) => string,
+) => {
+  const proto = target.prototype as Record<string, unknown>;
+  const original = proto[method] as (...args: unknown[]) => unknown;
+  proto[method] = function (this: unknown, ...args: unknown[]) {
+    const path = pathOf(this, args);
+    if (/(^|\/)items(\/|$)/.test(path)) itemReads.push(`${method} ${path}`);
+    return original.apply(this, args);
+  };
+  return () => {
+    proto[method] = original;
+  };
+};
+const unwatch = [
+  watch(Query, 'get', (self) => pathOfQuery(self)),
+  watch(Query, 'stream', (self) => pathOfQuery(self)),
+  watch(DocumentReference, 'get', (self) => (self as { path: string }).path),
+  watch(Firestore, 'getAll', (_self, args) =>
+    args.map((ref) => (ref as { path?: string }).path ?? '').join(' '),
+  ),
+];
+
+const waitAdapter = createWorthTheWaitAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+assert.deepEqual(
+  waitAdapter.manifest.categories.map((category) => [
+    category.id,
+    category.isOnAtConnect,
+  ]),
+  [['boxCounts', false]],
+);
+const waitCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:worth-the-wait',
+      accountId: 'site',
+      categoryIds: ['boxCounts'],
+      options: null,
+    },
+    waitAdapter.manifest,
+    NOW,
+  ),
+});
+const readWait = (uid: string, category = 'boxCounts') =>
+  waitAdapter.syncPage(waitCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+const runWait = async (uid: string, category = 'boxCounts') => {
+  const page = await readWait(uid, category);
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+// The box sealed under another key stays unknown, so the read is not full and no copy is deleted.
+const ownerPage = await readWait(OWNER);
+assert.equal(ownerPage.isFull, false);
+assert.equal(ownerPage.isDone, true);
+const boxCounts = ownerPage.records;
+assert.deepEqual(refs(boxCounts).sort(), [
+  'spaces/wtw-home/boxes/dates',
+  'spaces/wtw-home/boxes/empty',
+  'spaces/wtw-home/boxes/trips',
+]);
+const countsOf = (ref: string) => {
+  const record = boxCounts.find((one) => one.sourceRef === ref);
+  assert.ok(record, ref);
+  assert.equal(record.kind, 'countSummary');
+  return [record.title, record.subtitle, record.extra];
+};
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/dates'), [
+  'Date ideas',
+  '🍿',
+  { items: 3, revealed: 2, notYetRevealed: 1 },
+]);
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/trips'), [
+  'Trips',
+  '✈️',
+  { items: 1, revealed: 0, notYetRevealed: 1 },
+]);
+assert.deepEqual(countsOf('spaces/wtw-home/boxes/empty'), [
+  'Gifts',
+  '🎁',
+  { items: 0, revealed: 0, notYetRevealed: 0 },
+]);
+assertShape(boxCounts);
+boxCounts.forEach((record) => {
+  assert.deepEqual(
+    Object.keys(record.extra).sort(),
+    [...EXTRA_KEYS.countSummary].sort(),
+  );
+  assert.ok(
+    !flatten(record).some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|INVITE|invite|description/i.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+
+assert.deepEqual(
+  refs((await readWait(HOUSEMATE)).records).sort(),
+  refs(boxCounts).sort(),
+);
+assert.deepEqual(await runWait(OTHER), []);
+assert.deepEqual(refs(await runWait(STRANGER)), [
+  'spaces/wtw-stranger/boxes/hidden',
+]);
+await assert.rejects(() => runWait(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await waitAdapter.status(waitCtx(OWNER)), 'ok');
+assert.equal(await waitAdapter.status(waitCtx(OTHER)), 'noAccess');
+assert.equal(
+  waitAdapter.deepLink('spaces/wtw-home/boxes/dates', waitCtx(OWNER)),
+  '/worth-the-wait',
+);
+
+assert.deepEqual(itemReads, [], 'only the two counts may touch items');
+await firestore
+  .collection('apps/worth-the-wait/spaces/wtw-home/boxes/dates/items')
+  .get();
+assert.equal(itemReads.length, 1, 'the spy sees an item query');
+unwatch.forEach((restore) => restore());
 
 console.log('Adapter matrix passed.');

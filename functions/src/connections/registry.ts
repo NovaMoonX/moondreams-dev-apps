@@ -13,6 +13,7 @@ import { createGoingOnceAdapter } from '../apps/going-once/share/adapter.js';
 import { createNineLivesAdapter } from '../apps/nine-lives/share/adapter.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
+import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
 import type { ReaderSink } from './sink.js';
 
@@ -64,6 +65,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:going-once': createGoingOnceAdapter(),
   'app:nine-lives': createNineLivesAdapter(),
   'app:waypoint': createWaypointAdapter(),
+  'app:worth-the-wait': createWorthTheWaitAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
 };
 
