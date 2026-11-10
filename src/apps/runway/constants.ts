@@ -2923,6 +2923,26 @@ export const PROBLEM_WORDS = {
 
 /** Envelope tiles Home shows at Track, two to a row. */
 export const HOME_TILE_COUNT = 4;
+
+export const HOME_PIN_WORDS = {
+  pin: 'Pin to Home',
+  pinSub: 'It shows first on Home',
+  unpin: 'Unpin from Home',
+  unpinSub: 'It goes back to its usual place',
+  fullSub: `${HOME_TILE_COUNT} already pinned. Make room first`,
+  full: `Home already shows ${HOME_TILE_COUNT} pinned envelopes. Unpin one first.`,
+  title: 'Pinned on Home',
+  subtitle: 'They take the first tiles on Home, in this order.',
+  arrange: 'Arrange pinned',
+  pinned: 'Pinned',
+  pinThis: (name: string) => `Pin ${name}`,
+  moveUp: (name: string) => `Move ${name} up`,
+  moveDown: (name: string) => `Move ${name} down`,
+  unpinOne: (name: string) => `Unpin ${name}`,
+  pinnedToast: (name: string) => `${name} is pinned to Home`,
+  unpinnedToast: (name: string) => `${name} is no longer pinned`,
+  failed: "Your pins weren't saved. Check your connection and try again.",
+} as const;
 /** How many days ahead Home warns that a card with money waiting is due. */
 export const CARD_DUE_WARN_DAYS = 7;
 /** How many days ahead Home's warning row counts a Horizon shortfall. */
@@ -4501,6 +4521,8 @@ export const CARD_WORDS = {
   dueToday: 'Due today',
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
+  totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
+  nothingOwed: 'Nothing waiting to be paid on your cards',
   dueWarning: (name: string, date: string, amount: string) =>
     `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>

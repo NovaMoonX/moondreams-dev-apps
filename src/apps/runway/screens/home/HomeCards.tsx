@@ -13,7 +13,9 @@ import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
 import type { DateOnly } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
-import { getListedCards } from '@apps/runway/utils/cardText';
+import { useValuesHidden } from '@/hooks/useValuesHidden';
+import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
+import { describeCardsOwed, getListedCards } from '@apps/runway/utils/cardText';
 
 interface HomeCardsProps {
   today: DateOnly;
@@ -38,12 +40,15 @@ function HomeCards({ today }: HomeCardsProps) {
     return waiting(b.id) - waiting(a.id);
   });
   const shown = ranked.slice(0, HOME_TILE_COUNT);
+  const mask = useMaskedText();
+  const { isHidden } = useValuesHidden();
 
   if (cards.length === 0) return null;
   return (
     <div className='space-y-2'>
       <SectionHeader
         title={CARD_WORDS.homeTitle}
+        subtitle={mask(describeCardsOwed(cards, reserveByCard, isHidden))}
         action={
           cards.length > shown.length && (
             <ShowMoreButton
