@@ -166,6 +166,8 @@ export const HELM_COPY = {
   keepTyping:
     'Keep typing: anything you send before the reply joins this turn.',
   resultLabel: 'What was done',
+  resultAdded: (names: string[]) => `Added ${names.join(', ')}`,
+  resultLinked: (names: string[]) => `Linked ${names.join(', ')}`,
   resultTaskDue: (due: string) => `Task · ${due}`,
   resultDone: 'Marked done',
   resultTaskFallback: 'A task',

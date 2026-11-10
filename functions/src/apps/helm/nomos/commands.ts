@@ -87,7 +87,7 @@ export type NomosCommand =
     }
   | { kind: 'completeTask'; taskId: string };
 
-/** A person, pet or organization the reply names, its ref settled to one `$w1`, `$w2`, … used by the commands that involve it. */
+/** A person, pet or organization the reply names. */
 export interface MentionRead {
   ref: string;
   name: string;

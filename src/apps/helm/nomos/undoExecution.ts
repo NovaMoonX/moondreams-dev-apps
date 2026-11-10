@@ -1,4 +1,13 @@
-import { collection, doc, runTransaction } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  query,
+  runTransaction,
+  where,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import { createSealedReader } from '@lib/security';
@@ -24,6 +33,47 @@ export type UndoResult =
   | { kind: 'offline' };
 
 const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
+
+/** The people and places an execution made that a task or turn outside it also links; a transaction can't query, so this reads just before it. */
+async function readUsedIds(
+  uid: string,
+  executionId: string,
+): Promise<Set<string>> {
+  const snapshot = await getDoc(doc(userOf(uid), 'executions', executionId));
+  if (!snapshot.exists()) return new Set();
+  const data = snapshot.data() as {
+    captureId?: unknown;
+    effectRefs?: EffectRef[];
+  };
+  const refs = Array.isArray(data.effectRefs) ? data.effectRefs : [];
+  const own = new Set([
+    ...refs.map((ref) => ref.docId),
+    ...(typeof data.captureId === 'string' ? [data.captureId] : []),
+  ]);
+  const made = refs.filter(
+    (ref) =>
+      ref.op === 'create' &&
+      (ref.collection === 'who' || ref.collection === 'places'),
+  );
+  const checks = await Promise.all(
+    made.flatMap((ref) => {
+      const field = ref.collection === 'who' ? 'whoIds' : 'placeIds';
+      return (['tasks', 'captures'] as const).map(async (name) => {
+        const found = await getDocs(
+          query(
+            collection(userOf(uid), name),
+            where(field, 'array-contains', ref.docId),
+            limit(own.size + 1),
+          ),
+        );
+        return found.docs.some((entry) => !own.has(entry.id))
+          ? [ref.docId]
+          : [];
+      });
+    }),
+  );
+  return new Set(checks.flat());
+}
 
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
@@ -51,6 +101,7 @@ export async function undoExecution(
   const read = createSealedReader(encryption, openJson);
 
   try {
+    const usedIds = await readUsedIds(uid, executionId);
     return await runTransaction(
       db,
       async (transaction): Promise<UndoResult> => {
@@ -90,6 +141,7 @@ export async function undoExecution(
           targets,
           undoExecutionId: undoRef.id,
           now: Date.now(),
+          usedIds,
         });
         if (plan.kind === 'refused') {
           return { kind: 'refused', reason: plan.reason, report: plan.report };
@@ -111,10 +163,13 @@ export async function undoExecution(
           transaction.delete(doc(collectionOf(from), docId)),
         );
         plan.updates.forEach((update, index) =>
-          transaction.update(doc(tasks, update.docId), {
-            ...update.fields,
-            ...resealed[index],
-          }),
+          transaction.update(
+            doc(collectionOf(update.collection), update.docId),
+            {
+              ...update.fields,
+              ...resealed[index],
+            },
+          ),
         );
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
         transaction.update(executionRef, { undoneByExecutionId: undoRef.id });

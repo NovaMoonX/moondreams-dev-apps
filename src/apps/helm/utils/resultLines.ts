@@ -4,6 +4,7 @@ import { formatTaskDue, toTaskDue } from '@apps/helm/utils/taskDue';
 
 export interface ResultLine {
   key: string;
+  docId: string;
   title: string;
   detail: string | null;
 }
@@ -31,6 +32,7 @@ export function buildResultLines(
       return [
         {
           key: `${ref.docId}:${index}`,
+          docId: ref.docId,
           title:
             toText(effect?.written['sealed.title']) ??
             toText(effect?.written['sealed.statement']) ??
@@ -49,6 +51,17 @@ export function buildResultLines(
       : due
         ? HELM_COPY.resultTaskDue(formatTaskDue(due, timeZone, now))
         : null;
-    return [{ key: `${ref.docId}:${index}`, title, detail }];
+    return [{ key: `${ref.docId}:${index}`, docId: ref.docId, title, detail }];
+  });
+}
+
+/** The names of the people, pets, organizations and places an execution made, from what it sealed. */
+export function readMadeEntities(execution: OpenExecution) {
+  return execution.effectRefs.flatMap((ref, index) => {
+    const isEntity = ref.collection === 'who' || ref.collection === 'places';
+    const name = toText(execution.effects[index]?.written['sealed.name']);
+    return isEntity && ref.op === 'create' && name
+      ? [{ id: ref.docId, name }]
+      : [];
   });
 }

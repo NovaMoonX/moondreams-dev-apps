@@ -26,22 +26,30 @@ interface Named {
   aliases: string[];
 }
 
-const matcher = createOptionMatcher<Named>({
+type Matcher = ReturnType<typeof createOptionMatcher<Named>>;
+
+const whoMatcher = createOptionMatcher<Named>({
   names: (known) => [known.name, ...known.aliases],
 });
 
-const wordsOf = (text: string) =>
-  matcher
-    .comparable(text)
-    .split(' ')
-    .filter((word) => word.length > 1);
+// "the Ferry Building" and "Ferry Building" are one place; a person's name keeps its words.
+const placeMatcher = createOptionMatcher<Named>({
+  names: (known) => [known.name, ...known.aliases],
+  prepare: (text) => text.replace(/^\s*the\s+/i, ''),
+});
 
 const settle = (
+  matcher: Matcher,
   name: string,
   known: Named[],
   assistantName: string | null,
   isSameKind: (option: Named) => boolean,
 ): EntityMatch => {
+  const wordsOf = (text: string) =>
+    matcher
+      .comparable(text)
+      .split(' ')
+      .filter((word) => word.length > 1);
   const comparable = matcher.comparable(name);
   if (comparable === '') return { kind: 'dropped' };
   if (assistantName && comparable === matcher.comparable(assistantName)) {
@@ -61,7 +69,7 @@ const settle = (
   return isNearby ? { kind: 'unsure' } : { kind: 'new' };
 };
 
-/** One result per mention: a sure match to a who the person already has, a new one, or unsure (two candidates, a first name that only half-fits, or the same name on another kind of who). A name equal to the assistant's own is dropped. */
+/** One result per mention; the same name on another kind of who is unsure, never a match. */
 export function matchWho(input: {
   mentions: { name: string; kind: MentionKind }[];
   known: KnownWho[];
@@ -70,6 +78,7 @@ export function matchWho(input: {
   const kinds = new Map(input.known.map((who) => [who.id, who.kind]));
   return input.mentions.map((mention) =>
     settle(
+      whoMatcher,
       mention.name,
       input.known,
       input.assistantName,
@@ -85,6 +94,6 @@ export function matchPlaces(input: {
   assistantName: string | null;
 }): EntityMatch[] {
   return input.names.map((name) =>
-    settle(name, input.known, input.assistantName, () => true),
+    settle(placeMatcher, name, input.known, input.assistantName, () => true),
   );
 }

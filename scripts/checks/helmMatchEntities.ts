@@ -150,6 +150,7 @@ test('places match by name or alias, are new when unknown and unsure when half k
         'home',
         'The House',
         'Ferry building',
+        'the Ferry Building',
         'Pier 39',
         'Ferry Terminal',
         'Nova',
@@ -160,6 +161,7 @@ test('places match by name or alias, are new when unknown and unsure when half k
     [
       { kind: 'match', id: 'p1' },
       { kind: 'match', id: 'p1' },
+      { kind: 'match', id: 'p2' },
       { kind: 'match', id: 'p2' },
       { kind: 'new' },
       { kind: 'unsure' },
@@ -188,6 +190,44 @@ const task = (title: string, extra: Record<string, unknown> = {}) => ({
 });
 const read = (raw: Record<string, unknown>, reading = READING) =>
   normalizeNomosReply(raw, { reading, aliases: createAliasBook('t') });
+
+test('a dropped mention or refs out of order never link another who', () => {
+  const mention = (ref: string, name: string, kind: string) => ({
+    ref,
+    name,
+    kind,
+    relation: null,
+    species: null,
+    organizationKind: null,
+  });
+  const reply = read(
+    {
+      commands: [
+        task('Walk Rex', { whoRefs: ['$w1'] }),
+        task('Call Sam', { whoRefs: ['$w2'] }),
+        task('Text Ana', { whoRefs: ['$w9'] }),
+      ],
+      mentions: [
+        mention('$w1', 'Rex', 'dog'),
+        mention('$w2', 'Sam', 'person'),
+        mention('$w9', 'Ana', 'person'),
+      ],
+      places: [],
+    },
+    { ...READING, people: [] },
+  );
+  const [walk, call, text] = reply.commands;
+  assert.ok(
+    walk.kind === 'createTask' &&
+      call.kind === 'createTask' &&
+      text.kind === 'createTask',
+  );
+  const refOf = (name: string) =>
+    reply.mentions.find((entry) => entry.name === name)?.ref;
+  assert.deepEqual(walk.whoRefs, [], 'the dropped $w1 links nothing');
+  assert.deepEqual(call.whoRefs, [refOf('Sam')]);
+  assert.deepEqual(text.whoRefs, [refOf('Ana')]);
+});
 
 test('a reply names who and places; refs, caps and unknown refs are settled by code', () => {
   const reply = read({

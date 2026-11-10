@@ -403,6 +403,7 @@ async function buildUndone(input: {
       ]),
     ),
     undoExecutionId: undoId,
+    usedIds: new Set(),
     now,
   });
   if (result.kind !== 'write')

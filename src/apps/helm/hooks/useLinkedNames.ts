@@ -11,7 +11,7 @@ export interface LinkedName {
   name: string;
 }
 
-/** The who and places a task is linked to, in the order they were linked; one that is gone or would not open is left out. */
+/** The who and places a task links that still exist and open. */
 export function useLinkedNames(
   task: Pick<OpenTask, 'whoIds' | 'placeIds'>,
 ): LinkedName[] {

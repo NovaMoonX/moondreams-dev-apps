@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAppSelector } from '@/store';
-import { formatDateShort } from '@/utils/formatUtils';
+import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoMark from '@apps/helm/components/who/WhoMark';
@@ -86,7 +86,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         )}
         {who && !who.isUnreadable && (
           <>
-            <div className='flex items-center gap-4'>
+            <div className='flex items-start gap-4'>
               <WhoMark kind={who.kind} name={who.name} isLarge />
               <div className='min-w-0'>
                 <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
@@ -130,7 +130,8 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                           : capture.text}
                       </p>
                       <p className='text-muted-foreground text-[13px]'>
-                        {formatDateShort(capture.createdAt)}
+                        {formatDateShort(capture.createdAt)} ·{' '}
+                        {formatTime(capture.createdAt)}
                       </p>
                     </li>
                   ))}

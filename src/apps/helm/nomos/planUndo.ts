@@ -34,6 +34,7 @@ export type UndoPlan =
       updates: {
         docId: string;
         fields: Record<string, unknown>;
+        collection: EffectRef['collection'];
         reseal: TaskSealed | null;
       }[];
       undoExecution: Omit<Execution, 'sealed'>;
@@ -180,11 +181,15 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   };
 };
 
+const isEntity = (name: EffectRef['collection']) =>
+  name === 'who' || name === 'places';
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
   now: number,
   madeAt: number,
+  isUsedElsewhere: boolean,
 ): RecordOutcome => {
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
@@ -203,6 +208,17 @@ const planRecord = (
       isKept: false,
     });
   if (updated.isKept) return { kind: 'kept', title };
+  // A person or place a later turn or task also uses stays, quietly: the person never edited it.
+  if (create && isEntity(create.ref.collection)) {
+    const mentionedAt = target.data.lastMentionedAt;
+    const isUsed =
+      isUsedElsewhere ||
+      (typeof mentionedAt === 'number' && mentionedAt > madeAt) ||
+      (target.data.lastEditedAt !== null &&
+        target.data.lastEditedAt !== undefined &&
+        target.data.lastEditedAt !== madeAt);
+    if (isUsed) return { kind: 'skipped' };
+  }
   if (create) {
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
@@ -252,8 +268,10 @@ export function planUndo(input: {
   targets: Map<string, UndoTarget>;
   undoExecutionId: string;
   now: number;
+  /** People and places this execution made that another task or turn now links. */
+  usedIds: Set<string>;
 }): UndoPlan {
-  const { original, targets, now } = input;
+  const { original, targets, now, usedIds } = input;
   if (original.undoneByExecutionId !== null) return refuse('alreadyUndone');
   if (
     original.category === 'undo' ||
@@ -277,8 +295,10 @@ export function planUndo(input: {
       entries,
       now,
       original.createdAt,
+      usedIds.has(docId),
     ),
   }));
+  const collectionOf = toCollectionOf(original);
   const kept = outcomes.flatMap(({ outcome }) =>
     outcome.kind === 'kept' ? [outcome.title] : [],
   );
@@ -291,7 +311,10 @@ export function planUndo(input: {
       ? [{ docId, outcome }]
       : [],
   );
-  if (done.length === 0) {
+  const records = done.filter(
+    ({ docId }) => !isEntity(collectionOf.get(docId) ?? 'tasks'),
+  );
+  if (records.length === 0) {
     return refuse(
       'nothingToTakeBack',
       kept,
@@ -299,8 +322,7 @@ export function planUndo(input: {
     );
   }
 
-  const report = HELM_COPY.undoReport(done.length, kept.length, gone);
-  const collectionOf = toCollectionOf(original);
+  const report = HELM_COPY.undoReport(records.length, kept.length, gone);
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -308,7 +330,14 @@ export function planUndo(input: {
   );
   const updates = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'restored'
-      ? [{ docId, fields: outcome.fields, reseal: outcome.reseal }]
+      ? [
+          {
+            docId,
+            fields: outcome.fields,
+            collection: collectionOf.get(docId) ?? 'tasks',
+            reseal: outcome.reseal,
+          },
+        ]
       : [],
   );
   return {
@@ -337,15 +366,15 @@ export function planUndo(input: {
     undoSealed: {
       summary:
         kept.length > 0
-          ? HELM_COPY.tookBackKept(done.length, kept.length)
-          : HELM_COPY.tookBack(done.length),
+          ? HELM_COPY.tookBackKept(records.length, kept.length)
+          : HELM_COPY.tookBack(records.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
       spoken: null,
       goneIds,
     },
-    takenBack: done.map(({ outcome }) => outcome.title),
+    takenBack: records.map(({ outcome }) => outcome.title),
     kept,
     gone,
     goneIds,

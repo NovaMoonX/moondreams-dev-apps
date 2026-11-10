@@ -10,7 +10,7 @@ import type {
   WhoSealed,
 } from '@apps/helm/types';
 
-/** Makes the person's own who and points the profile at it in one transaction, so two tabs opening together make one. A profile that already points at one is left alone. */
+/** Makes the person's own who once; the transaction keeps two tabs from making two. */
 export async function ensureSelfWho(
   uid: string,
   encryption: HelmEncryption,

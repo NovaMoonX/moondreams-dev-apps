@@ -111,7 +111,6 @@ const NAME_CASE = {
   keepMixedCase: true,
 } as const;
 
-/** Each mention's and place's ref to the id it links: a sure match keeps its id, a new one gets a fresh id, an unsure one or the assistant's own name links nothing. */
 function settleEntities(input: PlanInput) {
   const people = input.people;
   const empty = {

@@ -120,10 +120,9 @@ function useSelfWho(uid: string | null, displayName: string | null) {
       state.helm.profile.selfWhoId === null,
   );
   const isMaking = useRef(false);
+  const trimmed = displayName?.trim() ?? '';
   const name =
-    displayName && !displayName.includes('@')
-      ? displayName.trim()
-      : HELM_COPY.selfFallbackName;
+    trimmed && !trimmed.includes('@') ? trimmed : HELM_COPY.selfFallbackName;
 
   useEffect(() => {
     if (!uid || keyStatus !== 'ready' || !hasNoSelf) return;

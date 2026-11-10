@@ -89,6 +89,7 @@ export function useHelmUrlState() {
     const target = {
       view: next,
       browse: null,
+      ask: null,
       grant: next === 'connection' ? id : null,
       item: next === 'who' || next === 'place' ? id : null,
     };

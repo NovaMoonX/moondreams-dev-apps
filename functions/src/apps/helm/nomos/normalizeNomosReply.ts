@@ -226,7 +226,6 @@ const toNextRef = (prefix: string, used: Set<string>) =>
 interface Entities {
   mentions: MentionRead[];
   places: PlaceRead[];
-  /** The model's own ref (or a handle's text) to the settled ref it stands for. */
   whoRefs: Map<string, string>;
   placeRefs: Map<string, string>;
 }
@@ -256,7 +255,6 @@ const readEntities = (
     if (mentions.length >= MAX_MENTIONS) return;
     const ref = toNextRef('$w', new Set(mentions.map((entry) => entry.ref)));
     mentions.push({ ref, ...draft });
-    whoRefs.set(ref, ref);
     if (wanted) whoRefs.set(wanted, ref);
   };
   const addPlace = (wanted: string | null, name: string) => {
@@ -270,7 +268,6 @@ const readEntities = (
     if (places.length >= MAX_PLACES) return;
     const ref = toNextRef('$p', new Set(places.map((entry) => entry.ref)));
     places.push({ ref, name });
-    placeRefs.set(ref, ref);
     if (wanted) placeRefs.set(wanted, ref);
   };
   (Array.isArray(raw.mentions) ? raw.mentions.filter(isRecord) : []).forEach(

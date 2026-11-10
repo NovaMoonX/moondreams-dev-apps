@@ -36,7 +36,11 @@ assert.equal(
   'two captures over two days',
 );
 assert.equal(readWhoTier({ ...base, taskLinkCount: 1 }), 'regular');
-assert.equal(readWhoTier({ ...base, hasRole: true }), 'regular', 'a role later');
+assert.equal(
+  readWhoTier({ ...base, hasRole: true }),
+  'regular',
+  'a role later',
+);
 assert.equal(
   readWhoTier({ ...base, tierSetBy: 'person', taskLinkCount: 4 }),
   'passing',

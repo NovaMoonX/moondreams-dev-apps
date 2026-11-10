@@ -22,8 +22,8 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
 
   return (
     <ul aria-label={HELM_COPY.resultLabel} className='divide-border divide-y'>
-      {lines.map((line, index) => {
-        const docId = execution.effectRefs[index]?.docId ?? '';
+      {lines.map((line) => {
+        const { docId } = line;
         const isStruck = isUndone && takenBack.has(docId);
         const isGone = isUndone && !isStruck && gone.has(docId);
         const isKept = isUndone && !isStruck && !isGone;

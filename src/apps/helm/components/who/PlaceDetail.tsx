@@ -56,7 +56,7 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
         )}
         {place && !place.isUnreadable && (
           <>
-            <div className='flex items-center gap-4'>
+            <div className='flex items-start gap-4'>
               <WhoMark kind='place' name={place.name} isLarge />
               <div className='min-w-0'>
                 <h1 className='helm-serif text-[28px] leading-[34px] break-words'>

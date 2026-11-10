@@ -87,12 +87,14 @@ const execution = (
 const plan = (
   original: OpenExecution,
   targets: [string, UndoTarget][],
+  usedIds = new Set<string>(),
 ): UndoPlan =>
   planUndo({
     original,
     targets: new Map(targets),
     undoExecutionId: 'undo-1',
     now: NOW,
+    usedIds,
   });
 
 const asWrite = (result: UndoPlan) => {
@@ -476,6 +478,77 @@ test('copy never names the app or the default assistant', () => {
     HELM_COPY.nothingToTakeBack(['Call Dana'], 1),
     'Nothing was taken back: you changed Call Dana since. 1 task was deleted since.',
   );
+});
+
+const madeWho = (docId: string, name: string) => ({
+  ref: { op: 'create', collection: 'who', docId } as EffectRef,
+  effect: {
+    written: { 'sealed.name': name, kind: 'person', tier: 'regular' },
+    previous: null,
+  },
+});
+
+const WITH_JORDAN = [
+  create('t1', 'Bring Jordan the book'),
+  madeWho('w1', 'Jordan'),
+];
+
+test('a person the turn made is taken back but never counted as a task', () => {
+  const result = asWrite(
+    plan(execution(WITH_JORDAN), [
+      target('t1', { lastEditedAt: null }, sealedOf('Bring Jordan the book')),
+      target('w1', { lastEditedAt: null, lastMentionedAt: EARLIER }, null),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => [entry.docId, entry.collection]),
+    [
+      ['t1', 'tasks'],
+      ['w1', 'who'],
+    ],
+  );
+  assert.equal(result.report, 'Took back 1 task.');
+  assert.equal(result.undoSealed.summary, 'Took back 1 task');
+  assert.deepEqual(result.takenBack, ['Bring Jordan the book']);
+});
+
+test('a person a later turn mentioned or another task links stays', () => {
+  const mentioned = asWrite(
+    plan(execution(WITH_JORDAN), [
+      target('t1', { lastEditedAt: null }, sealedOf('Bring Jordan the book')),
+      target('w1', { lastEditedAt: null, lastMentionedAt: NOW }, null),
+    ]),
+  );
+  assert.deepEqual(
+    mentioned.deletes.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.deepEqual(mentioned.kept, []);
+  const linked = asWrite(
+    plan(
+      execution(WITH_JORDAN),
+      [
+        target('t1', { lastEditedAt: null }, sealedOf('Bring Jordan the book')),
+        target('w1', { lastEditedAt: null, lastMentionedAt: EARLIER }, null),
+      ],
+      new Set(['w1']),
+    ),
+  );
+  assert.deepEqual(
+    linked.deletes.map((entry) => entry.docId),
+    ['t1'],
+  );
+  assert.equal(linked.report, 'Took back 1 task.');
+});
+
+test('a turn whose tasks are all gone leaves the people it made alone', () => {
+  const result = asRefused(
+    plan(execution(WITH_JORDAN), [
+      target('t1', null),
+      target('w1', { lastEditedAt: null, lastMentionedAt: EARLIER }, null),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
 });
 
 const failures = tests.flatMap(([name, run]) => {

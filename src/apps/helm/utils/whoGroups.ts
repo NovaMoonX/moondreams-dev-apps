@@ -6,8 +6,9 @@ export interface WhoGroups {
   others: OpenWho[];
 }
 
-const byName = (a: OpenWho, b: OpenWho) =>
-  a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+const collator = new Intl.Collator(undefined, { sensitivity: 'base' });
+
+const byName = (a: OpenWho, b: OpenWho) => collator.compare(a.name, b.name);
 
 const matches = (who: OpenWho, needle: string) =>
   [who.name, ...who.aliases, who.relation ?? '', who.species ?? '']
