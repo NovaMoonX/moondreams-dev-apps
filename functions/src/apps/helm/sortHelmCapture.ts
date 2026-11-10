@@ -61,7 +61,6 @@ import {
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import {
-  NO_HOME_LINE,
   planSetCurrentPlace,
   type CurrentPlace,
 } from './nomos/currentPlace.js';
@@ -1375,8 +1374,8 @@ async function writeResult(
     );
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
-    const homeDoc = homeSnap?.docs[0];
-    const home =
+    const homeDoc = profileSnap?.exists ? homeSnap?.docs[0] : undefined;
+    const homeWords =
       requestedHome && !isStale
         ? planSetCurrentPlace({
             profileId: firestore.doc(base).id,
@@ -1387,10 +1386,13 @@ async function writeResult(
                 }
               : null,
             previous: toCurrentPlace(profileSnap?.get('currentPlace')),
+            saidAt: capture.createdAt,
             now,
             timeZone,
           })
         : null;
+    const home = typeof homeWords === 'string' ? null : homeWords;
+    const homeRefusal = typeof homeWords === 'string' ? homeWords : null;
     const written = planWrites({
       commands: isStale ? [] : commands,
       existing,
@@ -1456,7 +1458,7 @@ async function writeResult(
         buildExecution(
           { ...plan, questions },
           {
-            homeLine: home?.line ?? null,
+            homeLine: home?.line ?? homeRefusal?.replace(/\.$/, '') ?? null,
             questionRef: answerTurn?.ref ?? null,
             commands,
             captureId: captureRef.id,
@@ -1509,7 +1511,7 @@ async function writeResult(
         ? ASK_DEFERRED_LINE
         : isFiling
           ? null
-          : ((requestedHome ? NO_HOME_LINE : null) ??
+          : (homeRefusal ??
             firstQuestion ??
             (reply
               ? null

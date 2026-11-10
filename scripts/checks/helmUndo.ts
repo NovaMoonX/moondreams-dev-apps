@@ -606,7 +606,7 @@ test('"I\'m home" is taken back by putting the profile\'s previous place back', 
     },
   ]);
   assert.equal(result.report, "You're no longer marked home.");
-  assert.equal(result.undoSealed.summary, "Took back I'm home");
+  assert.equal(result.undoSealed.summary, 'Took back being home');
   assert.deepEqual(result.undoExecution.effectRefs, [
     { op: 'update', collection: 'profile', docId: 'uid-1' },
   ]);
@@ -624,6 +624,18 @@ test('"I\'m home" said again since is kept, never overwritten', () => {
     ]),
   );
   assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('"I\'m home" taken back to an earlier home that still holds says so', () => {
+  const earlier = { placeId: 'p1', saidAt: NOW - 60_000 };
+  const { ref, effect, written } = sayHome(earlier);
+  const result = asWrite(
+    plan(execution([{ ref, effect }], { category: 'organize' }), [
+      target('uid-1', { currentPlace: written, lastEditedAt: EARLIER }, null),
+    ]),
+  );
+  assert.equal(result.report, "You're marked home again.");
+  assert.equal(result.undoSealed.summary, 'Took back being home');
 });
 
 test('an import keeps a person who is in use and says so', () => {

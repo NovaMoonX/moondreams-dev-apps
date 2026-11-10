@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { House } from 'lucide-react';
 
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
@@ -101,6 +102,7 @@ function DayPlan({
   const assistantName = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
   const { plan, isReady } = usePlanDay();
   const [isPlanning, setIsPlanning] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string | null>(null);
@@ -195,9 +197,9 @@ function DayPlan({
           (task) =>
             !task.isUnreadable &&
             task.placeIds.includes(homePlace.id) &&
-            !slots.some(
-              ({ slot }) =>
-                slot.taskId === task.id && slot.status !== 'notToday',
+            !slots.some(({ slot }) => slot.taskId === task.id) &&
+            !Object.values(day?.slots ?? {}).some(
+              (slot) => slot.taskId === task.id && slot.status === 'notToday',
             ),
         )
       : [];
@@ -254,19 +256,22 @@ function DayPlan({
             ? 'nothing'
             : null;
 
-  const sayHome = () => {
+  const sayHome = (isThere: boolean) => {
     if (!user || !homePlace) return;
     const uid = user.uid;
     void getHelmEncryption(uid)
       .then((encryption) =>
-        setCurrentPlace(uid, encryption, {
-          id: homePlace.id,
-          name: homePlace.name,
-        }),
+        setCurrentPlace(
+          uid,
+          encryption,
+          { id: homePlace.id, name: homePlace.name },
+          timeZone,
+          isThere,
+        ),
       )
       .then(({ executionId, committed }) => {
         addToast({
-          title: HELM_COPY.homeToast,
+          title: isThere ? HELM_COPY.homeToast : HELM_COPY.notHomeToast,
           type: 'success',
           action: {
             label: HELM_COPY.undo,
@@ -290,6 +295,15 @@ function DayPlan({
       });
   };
 
+  const askLeft = async (time: string) => {
+    const isConfirmed = await confirm({
+      title: HELM_COPY.homeTillTitle(time),
+      message: HELM_COPY.homeTillBody,
+      confirmText: HELM_COPY.homeLeft,
+    });
+    if (isConfirmed) sayHome(false);
+  };
+
   const homeSection = homeTasks.length > 0 && (
     <section className='space-y-3'>
       <SectionDivider
@@ -298,22 +312,38 @@ function DayPlan({
         }
         trailing={
           isHome && profile.currentPlace ? (
-            <span className='text-muted-foreground text-sm whitespace-nowrap'>
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative gap-1.5 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => {
+                if (!profile.currentPlace) return;
+                void askLeft(
+                  formatClock(
+                    getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
+                    timeZone,
+                  ),
+                );
+              }}
+            >
+              <House className='h-3.5 w-3.5 fill-current' aria-hidden />
               {HELM_COPY.planHomeTill(
                 formatClock(
                   getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
                   timeZone,
                 ),
               )}
-            </span>
+            </Button>
           ) : (
             <Button
               type='button'
-              variant='tertiary'
+              variant='secondary'
               size='sm'
-              className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
-              onClick={sayHome}
+              className="relative gap-1.5 whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={() => sayHome(true)}
             >
+              <House className='h-3.5 w-3.5' aria-hidden />
               {HELM_COPY.planImHome}
             </Button>
           )
@@ -362,6 +392,7 @@ function DayPlan({
           onPlanAnyway={isReady ? () => planThisDay(true) : null}
         />
       )}
+      {isHome && homeSection}
       {timeline.length > 0 && (
         <div className='space-y-3'>
           {timeline.map((entry) => {
@@ -394,7 +425,6 @@ function DayPlan({
           })}
         </div>
       )}
-      {isHome && homeSection}
       {untimedKept.length > 0 && (
         <section className='space-y-3'>
           <SectionDivider label={HELM_COPY.planAnyTime} />
