@@ -2928,6 +2928,7 @@ export const HOME_PIN_WORDS = {
   pin: 'Pin to Home',
   pinSub: 'It shows first on Home',
   unpin: 'Unpin from Home',
+  unpinSub: 'It goes back to its usual place',
   fullSub: `${HOME_TILE_COUNT} already pinned. Make room first`,
   full: `Home already shows ${HOME_TILE_COUNT} pinned envelopes. Unpin one first.`,
   title: 'Pinned on Home',
@@ -4520,8 +4521,8 @@ export const CARD_WORDS = {
   dueToday: 'Due today',
   homeTitle: 'Cards',
   homeSeeAll: 'See all',
-  totalOwed: (amount: string) => `${amount} owed across your cards`,
-  nothingOwed: 'Nothing owed on your cards',
+  totalOwed: (amount: string) => `${amount} waiting to be paid on your cards`,
+  nothingOwed: 'Nothing waiting to be paid on your cards',
   dueWarning: (name: string, date: string, amount: string) =>
     `${name} is due\u00a0${date} · ${amount} waiting`,
   dueTodayWarning: (name: string, amount: string) =>

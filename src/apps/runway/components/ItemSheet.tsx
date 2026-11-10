@@ -1547,30 +1547,6 @@ function ItemSheet({
           label={ITEM_SHEET_WORDS.history}
           onClick={openHistory}
         />
-        {itemKind === 'envelope' && isArchivable && isPinned && (
-          <ActionRow
-            isGrouped
-            icon={<PinOff />}
-            label={HOME_PIN_WORDS.unpin}
-            onClick={() => void homePins.setPin(itemId, payload.name, false)}
-          />
-        )}
-        {itemKind === 'envelope' && isArchivable && !isPinned && (
-          <ActionRow
-            isGrouped
-            hasChevron={homePins.isFull}
-            icon={<Pin />}
-            label={HOME_PIN_WORDS.pin}
-            subtitle={
-              homePins.isFull ? HOME_PIN_WORDS.fullSub : HOME_PIN_WORDS.pinSub
-            }
-            onClick={() =>
-              homePins.isFull
-                ? goTo('pins')
-                : void homePins.setPin(itemId, payload.name, true)
-            }
-          />
-        )}
         {canChange && isGroupable && (
           <ActionRow
             isGrouped
@@ -1593,6 +1569,31 @@ function ItemSheet({
             }
             isDisabled={isReleasing}
             onClick={() => void release()}
+          />
+        )}
+        {itemKind === 'envelope' && isArchivable && isPinned && (
+          <ActionRow
+            isGrouped
+            icon={<PinOff />}
+            label={HOME_PIN_WORDS.unpin}
+            subtitle={HOME_PIN_WORDS.unpinSub}
+            onClick={() => void homePins.setPin(itemId, payload.name, false)}
+          />
+        )}
+        {itemKind === 'envelope' && isArchivable && !isPinned && (
+          <ActionRow
+            isGrouped
+            hasChevron={homePins.isFull}
+            icon={<Pin />}
+            label={HOME_PIN_WORDS.pin}
+            subtitle={
+              homePins.isFull ? HOME_PIN_WORDS.fullSub : HOME_PIN_WORDS.pinSub
+            }
+            onClick={() =>
+              homePins.isFull
+                ? goTo('pins')
+                : void homePins.setPin(itemId, payload.name, true)
+            }
           />
         )}
       </ActionGroup>

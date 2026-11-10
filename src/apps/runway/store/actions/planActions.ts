@@ -15,7 +15,11 @@ import {
   HOME_PIN_WORDS,
   HOME_TILE_COUNT,
 } from '@apps/runway/constants';
-import { moveInList, readHomePins } from '@apps/runway/utils/homePins';
+import {
+  moveInList,
+  readHomePins,
+  withHiddenPins,
+} from '@apps/runway/utils/homePins';
 import { toDayStamp } from '@apps/runway/engine/dates';
 import {
   getLevel,
@@ -247,11 +251,15 @@ export async function setHomePin(
   liveIds: string[],
 ) {
   await patchSealedFields(uid, encryption, (current) => {
-    const pins = readHomePins(current.homePins ?? null, liveIds);
-    if (!isPinned) return { homePins: pins.filter((id) => id !== itemId) };
-    if (pins.includes(itemId)) return { homePins: pins };
+    const saved = current.homePins ?? null;
+    const pins = readHomePins(saved, liveIds);
+    const save = (next: string[]) => ({
+      homePins: withHiddenPins(next, saved, liveIds),
+    });
+    if (!isPinned) return save(pins.filter((id) => id !== itemId));
+    if (pins.includes(itemId)) return save(pins);
     if (pins.length >= HOME_TILE_COUNT) throw new Error(HOME_PIN_WORDS.full);
-    return { homePins: [...pins, itemId] };
+    return save([...pins, itemId]);
   });
 }
 
@@ -263,13 +271,11 @@ export async function moveHomePin(
   step: -1 | 1,
   liveIds: string[],
 ) {
-  await patchSealedFields(uid, encryption, (current) => ({
-    homePins: moveInList(
-      readHomePins(current.homePins ?? null, liveIds),
-      itemId,
-      step,
-    ),
-  }));
+  await patchSealedFields(uid, encryption, (current) => {
+    const saved = current.homePins ?? null;
+    const moved = moveInList(readHomePins(saved, liveIds), itemId, step);
+    return { homePins: withHiddenPins(moved, saved, liveIds) };
+  });
 }
 
 const planPath = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);

@@ -54,10 +54,10 @@ function HomePinsList({ today }: HomePinsListProps) {
         return (
           <li key={item.id} className='flex min-h-14 items-center gap-3 px-3'>
             <ItemBadge name={name} emoji={emoji} />
-            <span className='min-w-0 flex-1 font-medium break-words'>
+            <span className='line-clamp-2 min-w-0 flex-1 font-medium break-words'>
               {name}
             </span>
-            <span className='flex shrink-0 items-center gap-2'>
+            <span className='flex shrink-0 items-center gap-0.5'>
               {control(
                 HOME_PIN_WORDS.moveUp(name),
                 <ArrowUp className='h-4 w-4' aria-hidden='true' />,

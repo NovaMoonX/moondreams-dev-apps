@@ -5,6 +5,18 @@ export function readHomePins(saved: string[] | null, liveIds: string[]) {
   return result;
 }
 
+/** The new live pins followed by the saved ones this device doesn't list (archived, ended or not synced yet), so a restored envelope keeps its pin. */
+export function withHiddenPins(
+  pins: string[],
+  saved: string[] | null,
+  liveIds: string[],
+) {
+  const live = new Set(liveIds);
+  const hidden = (saved ?? []).filter((id) => !live.has(id));
+  const result = Array.from(new Set([...pins, ...hidden]));
+  return result;
+}
+
 /** The list with one id swapped with its neighbour; unchanged at either end or when the id is absent. */
 export function moveInList(ids: string[], id: string, step: -1 | 1) {
   const from = ids.indexOf(id);
