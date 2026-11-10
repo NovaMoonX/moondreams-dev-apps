@@ -17,6 +17,7 @@ import {
   type KeyDateRecord,
 } from '../../functions/src/apps/helm/nomos/planKeyDates.ts';
 import { planResolve } from '../../functions/src/apps/helm/nomos/resolveQuestion.ts';
+import { describeKeyDates } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { HELM_COPY } from '../../src/apps/helm/constants.ts';
 import { openJson, sealJson } from '../../src/apps/helm/security.ts';
 import type { OpenWho, HelmEncryption } from '../../src/apps/helm/types.ts';
@@ -504,7 +505,11 @@ test('a moment is made for each precision, with its counter, effect and no index
     assert.equal(result.creates.length, 1, precision);
     assert.equal(result.creates[0].data.shape, 'moment');
     assert.equal(result.momentDeltas.get('who-1'), 1);
-    assert.equal(result.deltas.get('who-1') ?? 0, 0);
+    assert.equal(
+      result.deltas.get('who-1') ?? 0,
+      0,
+      'a moment adds no yearly date, so it never promotes the tier',
+    );
     assert.deepEqual(result.byWho, {});
     assert.equal(result.entryCount, 0);
     assert.equal(result.changes.length, 0);
@@ -977,6 +982,25 @@ test('a named person wins over isAboutMe, an own date has no one named', () => {
     }),
   ]);
   assert.equal(own.creates[0].data.whoId, 'self');
+});
+
+test('the summary names one date or moment, or counts several', () => {
+  assert.equal(
+    describeKeyDates(['Moment · Dana · Met · Mar 2015']),
+    'Noted a moment for Dana: Met · Mar 2015',
+  );
+  assert.equal(
+    describeKeyDates(['Moment · You · Moved to Lisbon · 2019']),
+    'Noted a moment for you: Moved to Lisbon · 2019',
+  );
+  assert.equal(
+    describeKeyDates([
+      'Moment · Dana · Met · Mar 2015',
+      'Moment · Sam · Met · 2010',
+    ]),
+    'Noted 2 dates',
+  );
+  assert.equal(describeKeyDates([]), null);
 });
 
 const failures: string[] = [];

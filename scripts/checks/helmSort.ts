@@ -946,6 +946,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
     mentionDayKeys: [],
     taskLinkCount: 0,
     yearlyDateCount: 0,
+    momentCount: 0,
     hasRole: false,
   };
   const plan = (known = [maya]) =>
@@ -962,6 +963,7 @@ test('a date that comes back raises a passing who to regular, and the summary sa
           comesBack: null,
           quote: null,
           date: { month: 3, day: 3, year: null },
+          precision: null,
         },
       ],
       existing: new Map(),

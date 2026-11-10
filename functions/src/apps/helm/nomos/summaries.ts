@@ -502,11 +502,11 @@ export const buildKeyDateLine = (input: {
 /** The skipped line for a date the code did not write. */
 export const buildKeyDateSkipLine = (reason: string) => `Not added · ${reason}`;
 
-/** One date's line as the summary says it: "Noted Maya's birthday: March 3", "Noted Dana's met: Mar 2015", a removal or change as it was written. */
+/** One date's line as the summary says it: "Noted Maya's birthday: March 3", "Noted a moment for Dana: Met · Mar 2015", a removal or change as it was written. */
 const toNotedLine = (line: string) => {
   const moment = /^Moment · (.+) · (.+) · (.+)$/.exec(line);
   return moment
-    ? `Noted ${moment[1] === 'You' ? 'your' : `${moment[1]}'s`} ${lowerFirst(moment[2])}: ${moment[3]}`
+    ? `Noted a moment for ${moment[1] === 'You' ? 'you' : moment[1]}: ${moment[2]} · ${moment[3]}`
     : line.replace(/^Added /, 'Noted ');
 };
 
