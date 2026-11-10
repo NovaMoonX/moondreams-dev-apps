@@ -1314,7 +1314,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies, his A-List connection with its four, and his fixture Google account, its Calendar grant and token; Jamie's ended one with three kept copies.
+  // Per person: the profile, the wrapped key and their turns with what was made of them; one canary per master key; then each connection, its copies and any account and token.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:

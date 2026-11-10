@@ -26,6 +26,7 @@ export function SyncedCard({ record, onOpen }: SyncedCardProps) {
     timeLine(record),
     record.sealed.extra.isTentative === true ? HELM_COPY.syncedTentative : null,
     record.sealed.subtitle,
+    record.sealed.placeLabel,
   ]
     .filter((part): part is string => !!part)
     .join(' · ');

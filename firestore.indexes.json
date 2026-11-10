@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "viewings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "showtimeAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "viewings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "showtimeAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "captures",
       "queryScope": "COLLECTION",
       "fields": [

@@ -78,6 +78,7 @@ async function syncPlannedShowings(
 ): Promise<CategoryRead> {
   const snapshot = await firestore
     .collection(membershipPath(uid, 'viewings'))
+    .where('status', '==', 'PLANNED')
     .where('showtimeAt', '>=', windowStart)
     .orderBy('showtimeAt')
     .limit(SHOWING_LIMIT)
@@ -85,8 +86,7 @@ async function syncPlannedShowings(
   const records = snapshot.docs.flatMap((doc) => {
     const title = readMovieTitle(doc);
     const startAt = readTime(doc.get('showtimeAt'));
-    if (doc.get('status') !== 'PLANNED' || title === null || startAt === null)
-      return [];
+    if (title === null || startAt === null) return [];
     return [
       toRecord({
         sourceRef: `viewings/${doc.id}`,
@@ -147,6 +147,7 @@ async function syncSeenMovies(
   const snapshot = await firestore
     .collection(membershipPath(uid, 'viewings'))
     .where('status', '==', 'SEEN')
+    .orderBy('showtimeAt', 'desc')
     .limit(SHOWING_LIMIT)
     .get();
   const records = snapshot.docs.flatMap((doc) => {

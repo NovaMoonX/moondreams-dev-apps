@@ -37,6 +37,7 @@ import {
   selectIsAListLoaded,
   selectMembership,
   selectAListLoadError,
+  selectViewingById,
 } from '@apps/a-list/store/selectors';
 import type { AListOverlay, AListTab } from '@apps/a-list/types';
 import { getDayKey } from '@apps/a-list/utils/dayKeys';
@@ -51,10 +52,13 @@ function AList() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [overlay, setOverlay] = useState<AListOverlay | null>(() => {
-    const viewingId = searchParams.get('viewing');
-    return viewingId ? { kind: 'viewing', id: viewingId } : null;
-  });
+  const [openedOverlay, setOverlay] = useState<AListOverlay | null>(null);
+  const linkedViewingId = searchParams.get('viewing');
+  const isLinkedViewingKnown = useAppSelector(
+    (state) =>
+      linkedViewingId !== null &&
+      selectViewingById(state, linkedViewingId) !== null,
+  );
   // Ephemeral: a reload simply lands on the empty calendar, whose nudge offers the same thing.
   const [isPastOfferOpen, setIsPastOfferOpen] = useState(false);
   const [isSetupDismissed, setIsSetupDismissed] = useState(false);
@@ -136,6 +140,13 @@ function AList() {
       </div>
     );
   }
+
+  // A link to a showing deleted since it was shared opens nothing rather than an empty sheet.
+  const overlay: AListOverlay | null =
+    openedOverlay ??
+    (linkedViewingId !== null && isLinkedViewingKnown
+      ? { kind: 'viewing', id: linkedViewingId }
+      : null);
 
   const closeOverlay = () => {
     setOverlay(null);

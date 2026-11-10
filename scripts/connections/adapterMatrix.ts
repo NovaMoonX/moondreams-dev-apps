@@ -479,7 +479,6 @@ assert.deepEqual(readGrant({ status: 'live' }).categories, {});
 assert.equal(readGrant({}).status, 'ended');
 assert.deepEqual(readGrant(JSON.parse(JSON.stringify(staged))), staged);
 
-// A-List
 const membership = (uid: string, path: string) =>
   firestore.doc(`apps/a-list/memberships/${uid}/${path}`);
 
