@@ -170,7 +170,7 @@ export async function readSyncedEvents(
       .where('startAt', '>=', input.firstDay - LOOKBACK_MS)
       .where('startAt', '<', input.firstDay + MAX_ZONE_OFFSET_MS)
       .orderBy('startAt', 'desc')
-      .limit(Math.min(MAX_LOOKBACK_EVENTS, Math.ceil(input.limit / 4)))
+      .limit(MAX_LOOKBACK_EVENTS)
       .get(),
   ]);
   const seen = new Set<string>();
