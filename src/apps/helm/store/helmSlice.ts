@@ -61,7 +61,7 @@ export interface HelmState {
   openTasks: LoadedSet<OpenTask>;
   /** The plan days from yesterday to six days ahead. */
   planDays: PlanDaySet;
-  /** The person's confirmed and inferred facts. */
+  /** The person's confirmed and inferred facts, and the superseded ones they replaced. */
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
   who: LoadedSet<OpenWho>;

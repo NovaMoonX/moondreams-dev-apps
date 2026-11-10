@@ -124,6 +124,8 @@ export interface ForgetCounts {
   tasks: number;
   captures: number;
   who: number;
+  /** Facts that were only about the forgotten record and went with it. */
+  facts: number;
 }
 
 /** The links already taken could not all be put back after a failure, so some may be gone. */
@@ -140,6 +142,10 @@ export interface Forgotten {
   /** Puts the record back and its id on the records it was taken from that still exist. */
   restore: () => Promise<RestoreOutcome>;
 }
+
+type FactTaken =
+  | { kind: 'deleted'; id: string; data: DocumentData }
+  | { kind: 'trimmed'; id: string };
 
 const toChunks = (ids: string[]) =>
   Array.from({ length: Math.ceil(ids.length / CHUNK) }, (_, index) =>
@@ -163,6 +169,19 @@ export async function countLinkedTasks(
     query(collection(userOf(uid), 'tasks'), where(field, 'array-contains', id)),
   );
   return snapshot.data().count;
+}
+
+/** How many facts are only about this who or place, so forgetting it forgets them too; needs a connection. */
+export async function countOnlyFacts(uid: string, id: string) {
+  const snapshot = await getDocs(
+    query(
+      collection(userOf(uid), 'facts'),
+      where('subjectIds', 'array-contains', id),
+    ),
+  );
+  return snapshot.docs.filter(
+    (entry) => (entry.data() as DocumentData).subjectIds?.length === 1,
+  ).length;
 }
 
 /** Takes a who or place off every record linking it, then deletes it. Each chunk re-reads its records in a transaction, so one edited meanwhile keeps its other changes; a connection is needed. The person's own who is refused. */
@@ -220,7 +239,7 @@ export async function forgetLinked(
       ? [{ source, field, ids: outcome.value }]
       : [];
   });
-  const putBack = () =>
+  const putBackLinks = () =>
     inSequence(taken, ({ source, field, ids }) =>
       inSequence(toChunks(ids), (chunk) =>
         runTransaction(db, async (transaction) => {
@@ -237,9 +256,64 @@ export async function forgetLinked(
         }),
       ),
     );
-  const failedOutcome = outcomes.find(
-    (outcome) => outcome.status === 'rejected',
+  const factField = target === 'who' ? 'whoIds' : 'placeIds';
+  const factIds = (
+    await getDocs(
+      query(
+        collection(userOf(uid), 'facts'),
+        where('subjectIds', 'array-contains', id),
+      ),
+    )
+  ).docs.map((entry) => entry.id);
+  const factOutcomes = await Promise.allSettled(
+    toChunks(factIds).map((chunk) =>
+      runTransaction(db, async (transaction) => {
+        const snapshots = await Promise.all(
+          chunk.map((entryId) =>
+            transaction.get(doc(collection(userOf(uid), 'facts'), entryId)),
+          ),
+        );
+        return snapshots.flatMap((snapshot): FactTaken[] => {
+          const data = snapshot.data() as DocumentData | undefined;
+          const subjects: unknown = data?.subjectIds;
+          if (!data || !Array.isArray(subjects) || !subjects.includes(id)) {
+            return [];
+          }
+          if (subjects.length === 1) {
+            transaction.delete(snapshot.ref);
+            return [{ kind: 'deleted', id: snapshot.id, data }];
+          }
+          transaction.update(snapshot.ref, {
+            [factField]: arrayRemove(id),
+            subjectIds: arrayRemove(id),
+          });
+          return [{ kind: 'trimmed', id: snapshot.id }];
+        });
+      }),
+    ),
   );
+  const factsTaken = factOutcomes.flatMap((outcome) =>
+    outcome.status === 'fulfilled' ? outcome.value : [],
+  );
+  const putBackFacts = () =>
+    inSequence(factsTaken, (entry) =>
+      runTransaction(db, async (transaction) => {
+        const factRef = doc(collection(userOf(uid), 'facts'), entry.id);
+        const current = await transaction.get(factRef);
+        if (entry.kind === 'deleted') {
+          if (!current.exists()) transaction.set(factRef, entry.data);
+        } else if (current.exists()) {
+          transaction.update(factRef, {
+            [factField]: arrayUnion(id),
+            subjectIds: arrayUnion(id),
+          });
+        }
+      }),
+    );
+  const putBack = () => putBackLinks().then(putBackFacts);
+  const failedOutcome = (
+    [...outcomes, ...factOutcomes] as PromiseSettledResult<unknown>[]
+  ).find((outcome) => outcome.status === 'rejected');
   const abandon = async (reason: unknown): Promise<never> => {
     await putBack().catch((error: unknown) => {
       console.error('Helm links were not put back', error);
@@ -299,6 +373,7 @@ export async function forgetLinked(
       tasks: countOf('tasks'),
       captures: countOf('captures'),
       who: countOf('who'),
+      facts: factsTaken.filter((entry) => entry.kind === 'deleted').length,
     },
     restore,
   };

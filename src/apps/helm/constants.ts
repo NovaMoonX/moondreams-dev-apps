@@ -67,6 +67,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 /** The most open tasks the app keeps listening to. */
 export const OPEN_TASKS_LIMIT = 150;
 export const FACTS_LIMIT = 300;
+export const FACT_STATEMENT_MAX = 500;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
@@ -123,6 +124,11 @@ const forgetPhotosLine = (photos: number) =>
   photos === 0
     ? ''
     : ` ${photos === 1 ? 'Its photo is' : `Its ${photos} photos are`} deleted too.`;
+
+const forgetFactsLine = (facts: number) =>
+  facts === 0
+    ? ''
+    : ` ${facts === 1 ? 'Its fact is' : `Its ${facts} facts are`} forgotten too.`;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -308,6 +314,18 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackFacts: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'fact' : 'facts'}`,
+  undoReportFacts: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'fact' : 'facts'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportFactsToo: (count: number) =>
+    `${count === 1 ? '1 fact' : `${count} facts`} too.`,
   tookBackPeople: (count: number) =>
     `Took back ${count} ${count === 1 ? 'person' : 'people'}`,
   tookBackPeopleKept: (count: number, other: number) =>
@@ -819,6 +837,51 @@ export const HELM_COPY = {
   whoFactsTitle: 'Facts',
   whoFactsEmpty: (assistant: string) =>
     `Nothing noted yet. What you tell ${assistant} about them lands here.`,
+  factsAdd: 'Add a fact',
+  factsAddTitle: 'Add a fact',
+  factStatementField: 'What is true',
+  factStatementPlaceholder: (name: string) => `Something true about ${name}`,
+  factStatementMissing: 'Write what is true first.',
+  factStatementHelp: 'One sentence. It is saved as something you said.',
+  factSheetTitle: 'Fact',
+  factCorrectTitle: 'Correct this fact',
+  factRingSaid: 'You said',
+  factRingInferred: (assistant: string) => `${assistant} inferred`,
+  factLineSaid: (day: string) => `You said · ${day}`,
+  factLineConfirmed: (day: string) => `You confirmed · ${day}`,
+  factLineCorrected: (day: string) => `You corrected · ${day}`,
+  factLineInferred: (assistant: string, day: string) =>
+    `${assistant} inferred · ${day}`,
+  factSourceSaid: (assistant: string, day: string) =>
+    `From what you told ${assistant} on ${day} · You said this`,
+  factSourceInferred: (assistant: string, day: string) =>
+    `${assistant} inferred this from what you told it on ${day}`,
+  factSourceInferredMail: (assistant: string) =>
+    `${assistant} inferred this from an email`,
+  factSourceConfirmed: (assistant: string, day: string, confirmedDay: string) =>
+    `From what you told ${assistant} on ${day} · You confirmed this on ${confirmedDay}`,
+  factSourceCorrected: (day: string) => `You corrected this on ${day}`,
+  factSourceAdded: (day: string) => `You added this on ${day}`,
+  factWas: (statement: string, day: string) =>
+    `Was \u201c${statement}\u201d until ${day}`,
+  factToday: 'today',
+  factYesterday: 'yesterday',
+  factConfirm: 'Confirm',
+  factCorrect: 'Correct',
+  factForget: 'Forget',
+  factConfirmedToast: 'Confirmed',
+  factCorrectedToast: 'Corrected',
+  factForgotToast: 'Forgot that fact',
+  factAddedToast: 'Added a fact',
+  factUndone: 'Undone',
+  factUndoKept: 'That changed since, so it was left as it is.',
+  factChanged: 'That fact changed just now. Open it again to see it.',
+  factNeedsConnection: 'This needs a connection.',
+  factSubjectGone: 'Someone or something forgotten',
+  inferredDoor: (count: number) => `Inferred \u00b7 ${count}`,
+  inferredTitle: 'Inferred',
+  inferredLead: (assistant: string) =>
+    `What ${assistant} read between the lines. Confirm what is right, correct it, or forget it.`,
   whoTasksTitle: 'Tasks',
   whoTasksEmpty: 'No open tasks.',
   whoMentionsTitle: 'Mentions',
@@ -928,18 +991,28 @@ export const HELM_COPY = {
   tierSetToast: (name: string, tier: string) => `Set ${name} to ${tier}`,
   forgetNeedsConnection: 'Forgetting needs a connection.',
   forgetFailed: "That didn't work. Nothing was forgotten.",
-  forgetConfirmWho: (name: string, tasks: number, photos: number) =>
+  forgetConfirmWho: (
+    name: string,
+    tasks: number,
+    photos: number,
+    facts: number,
+  ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to them.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
-    }${forgetPhotosLine(photos)}`,
-  forgetConfirmPlace: (name: string, tasks: number, photos: number) =>
+    }${forgetFactsLine(facts)}${forgetPhotosLine(photos)}`,
+  forgetConfirmPlace: (
+    name: string,
+    tasks: number,
+    photos: number,
+    facts: number,
+  ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to it.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no place.`
-    }${forgetPhotosLine(photos)}`,
+    }${forgetFactsLine(facts)}${forgetPhotosLine(photos)}`,
   forgetPartial: (name: string) =>
     `Some links may already be gone. Open ${name} to check.`,
   forgetAction: 'Forget',

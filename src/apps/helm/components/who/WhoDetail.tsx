@@ -14,6 +14,7 @@ import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import FactsSection from '@apps/helm/components/who/FactsSection';
 import LinkedTasks from '@apps/helm/components/who/LinkedTasks';
 import WhoEditSheet from '@apps/helm/components/who/WhoEditSheet';
 import PhotosSection from '@apps/helm/components/media/PhotosSection';
@@ -22,10 +23,10 @@ import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
 import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
-import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
   countLinkedTasks,
+  countOnlyFacts,
   ForgetPartialError,
   forgetWho,
 } from '@apps/helm/store/actions/whoActions';
@@ -43,7 +44,6 @@ interface WhoDetailProps {
 
 /** One person, pet or organization: what it is, the facts kept about it, its open tasks and the turns that named it. */
 function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
-  const assistant = useAssistantName();
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -114,7 +114,13 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         return null;
       },
     );
-    if (linkedCount === null) {
+    const factCount = await countOnlyFacts(user.uid, who.id).catch(
+      (error: unknown) => {
+        console.error('Helm facts were not counted', error);
+        return null;
+      },
+    );
+    if (linkedCount === null || factCount === null) {
       addToast({ title: HELM_COPY.forgetFailed, type: 'error' });
       return;
     }
@@ -124,6 +130,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
         who.name,
         linkedCount,
         who.mediaIds.length,
+        factCount,
       ),
       confirmText: HELM_COPY.forgetAction,
       destructive: true,
@@ -273,12 +280,10 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
               photoIds={who.mediaIds}
               mainId={who.photoMediaId}
             />
-            <section className='space-y-3'>
-              <SectionDivider label={HELM_COPY.whoFactsTitle} />
-              <p className='text-muted-foreground text-[15px] text-pretty'>
-                {HELM_COPY.whoFactsEmpty(assistant)}
-              </p>
-            </section>
+            <FactsSection
+              subject={{ kind: 'who', id: who.id }}
+              name={who.name}
+            />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoTasksTitle} />
               <LinkedTasks

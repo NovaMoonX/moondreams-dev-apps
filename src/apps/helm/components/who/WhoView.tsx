@@ -10,6 +10,8 @@ import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import InferredFacts from '@apps/helm/components/who/InferredFacts';
+import SourceRing from '@apps/helm/components/who/SourceRing';
 import WhoRow from '@apps/helm/components/who/WhoRow';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
@@ -36,6 +38,12 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
   const isOffline = useNetworkStatus() === 'offline';
   const [search, setSearch] = useState('');
   const [isOthersOpen, setIsOthersOpen] = useState(false);
+  const [isInferredOpen, setIsInferredOpen] = useState(false);
+  const inferredCount = useAppSelector(
+    (state) =>
+      state.helm.facts.items.filter((fact) => fact.status === 'inferred')
+        .length,
+  );
   const groups = useMemo(() => groupWho(items, search), [items, search]);
   const isSearching = search.trim() !== '';
   const isOthersShown = isOthersOpen || isSearching;
@@ -87,6 +95,28 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
             onChange={setSearch}
             placeholder={HELM_COPY.peopleSearch}
           />
+        )}
+        {inferredCount > 0 && (
+          <Button
+            type='button'
+            variant='tertiary'
+            onClick={() => setIsInferredOpen(true)}
+            className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+          >
+            <span className='flex min-w-0 items-center gap-2'>
+              <SourceRing
+                isConfirmed={false}
+                label={HELM_COPY.factRingInferred(assistant)}
+              />
+              <span className='text-foreground truncate'>
+                {HELM_COPY.inferredDoor(inferredCount)}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
         )}
         {isOffline ? (
           <LockedButton
@@ -147,6 +177,9 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
           </section>
         )}
       </main>
+      {isInferredOpen && (
+        <InferredFacts onClose={() => setIsInferredOpen(false)} />
+      )}
     </>
   );
 }

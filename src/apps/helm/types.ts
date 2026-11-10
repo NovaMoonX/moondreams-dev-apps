@@ -621,12 +621,16 @@ export interface SyncedRecord {
 }
 
 export type FactStatus = 'inferred' | 'confirmed' | 'superseded';
-export type FactStated = 'nomosInferred' | 'personCorrected';
+export type FactStated = 'personSaid' | 'nomosInferred' | 'personCorrected';
+export type FactKind = 'world' | 'preference' | 'favorite' | 'identity';
 export type FactField = 'startAt' | 'endAt' | 'place';
 
 export interface Fact {
   status: FactStatus;
   stated: FactStated;
+  /** A fact written before kinds existed has none and reads as `world`. */
+  kind: FactKind;
+  occurredOn: number | null;
   sourceCaptureId: string | null;
   sourceExecutionId: string | null;
   sourceConnection: {

@@ -679,6 +679,202 @@ test('"I\'m home" files the home place on the profile with its previous value, a
   assert.deepEqual(execution.effectRefs, [home.ref]);
 });
 
+test('buildContext lists the facts about who the turn names, said or inferred, with no id', () => {
+  const { message } = buildContext({
+    text: TEXT,
+    reading: READING,
+    createdAt: Date.UTC(2026, 10, 9, 22, 0),
+    timeZone: 'America/Los_Angeles',
+    tasks: [],
+    facts: [
+      { subject: 'Dana', statement: 'Dana is the florist', by: 'said' },
+      { subject: 'Dana', statement: 'Dana does the flowers', by: 'inferred' },
+    ],
+  });
+  assert.ok(message.includes('<known_facts>'));
+  assert.ok(
+    message.includes('"by":"inferred"') && message.includes('"by":"said"'),
+  );
+  assert.ok(!containsId(message));
+  assert.ok(!newContext().message.includes('<known_facts>'));
+});
+
+test("a noted fact is confirmed only when stated with the person's own words, and is dropped without a sure subject", async () => {
+  const NOW = Date.UTC(2026, 10, 10, 18, 0);
+  const text = 'Dana is the  florist, and she does the wedding flowers';
+  const dana = {
+    id: 'who-dana',
+    kind: 'person' as const,
+    name: 'Dana',
+    aliases: [],
+    lastMentionedAt: null,
+    tier: 'regular' as const,
+    tierSetBy: 'person' as const,
+    mentionDayKeys: [],
+    taskLinkCount: 0,
+    hasRole: false,
+  };
+  const mention = {
+    ref: '$w1',
+    name: 'Dana',
+    kind: 'person' as const,
+    relation: null,
+    species: null,
+    organizationKind: null,
+  };
+  const fact = (extra: Record<string, unknown> = {}) => ({
+    statement: 'Dana is the florist',
+    quote: 'dana is the florist',
+    isStated: true,
+    whoRefs: ['$w1'],
+    placeRefs: [],
+    ...extra,
+  });
+  const plan = (
+    noteFacts: ReturnType<typeof fact>[],
+    known = [dana],
+    existingFacts: { statement: string; subjectIds: string[] }[] = [],
+  ) =>
+    planWrites({
+      commands: [],
+      existing: new Map(),
+      captureId: CAPTURE_ID,
+      executionId: 'exec-fact',
+      now: NOW + 1000,
+      seal,
+      newId: createIdCounter(),
+      people: {
+        mentions: [mention],
+        places: [],
+        known,
+        knownPlaces: [],
+        assistantName: 'Nomos',
+        dayKey: '2026-11-10',
+        capturedAt: NOW,
+      },
+      noteFacts,
+      captureText: text,
+      existingFacts,
+    });
+  const words = (made: ReturnType<typeof plan>) =>
+    openForHelm(KEY, made.factCreates[0].data.sealed as SealedPayload);
+
+  const said = plan([fact()]);
+  assert.equal(said.factCreates.length, 1);
+  const saidData = said.factCreates[0].data;
+  assert.equal(saidData.status, 'confirmed');
+  assert.equal(saidData.stated, 'personSaid');
+  assert.equal(saidData.confirmedAt, NOW);
+  assert.equal(saidData.createdAt, NOW);
+  assert.equal(saidData.kind, 'world');
+  assert.equal(saidData.sourceCaptureId, CAPTURE_ID);
+  assert.equal(saidData.sourceExecutionId, 'exec-fact');
+  assert.deepEqual(saidData.subjectIds, ['who-dana']);
+  assert.equal(words(said).quote, 'dana is the florist');
+  assert.equal(said.effectRefs[0].collection, 'facts');
+  assert.equal(said.effectRefs[0].op, 'create');
+  assert.equal(
+    said.effects[0].written['sealed.title'],
+    'Fact · Dana · You said',
+  );
+  const execution = buildExecution(said, {
+    commands: [],
+    captureId: CAPTURE_ID,
+    now: NOW,
+    seal,
+  });
+  assert.equal(execution.category, 'remember');
+  assert.equal(
+    openForHelm(KEY, execution.sealed as SealedPayload).summary,
+    'Noted a fact',
+  );
+
+  const wrongQuote = plan([fact({ quote: 'Dana is the caterer' })]);
+  assert.equal(wrongQuote.factCreates[0].data.status, 'inferred');
+  assert.equal(wrongQuote.factCreates[0].data.stated, 'nomosInferred');
+  assert.equal(wrongQuote.factCreates[0].data.confirmedAt, null);
+  assert.equal(words(wrongQuote).quote, null);
+  assert.equal(
+    wrongQuote.effects[0].written['sealed.title'],
+    'Fact · Dana · Nomos inferred',
+  );
+
+  const guessed = plan([
+    fact({ isStated: false, quote: 'she does the wedding flowers' }),
+  ]);
+  assert.equal(guessed.factCreates[0].data.status, 'inferred');
+  assert.equal(words(guessed).quote, 'she does the wedding flowers');
+
+  assert.equal(plan([fact({ whoRefs: [] })]).factCreates.length, 0);
+  assert.equal(plan([fact({ whoRefs: [] })]).effects.length, 0);
+  const twins = plan([fact()], [dana, { ...dana, id: 'who-dana-2' }]);
+  assert.equal(twins.factCreates.length, 0);
+  assert.equal(twins.questions.length, 0);
+
+  const repeat = plan(
+    [fact()],
+    [dana],
+    [{ statement: ' dana is the  Florist ', subjectIds: ['who-dana'] }],
+  );
+  assert.equal(repeat.factCreates.length, 0);
+  assert.equal(plan([fact(), fact()]).factCreates.length, 1);
+  assert.equal(
+    plan(
+      [fact()],
+      [dana],
+      [{ statement: 'Dana is the florist', subjectIds: ['who-other'] }],
+    ).factCreates.length,
+    1,
+  );
+
+  const fresh = plan([fact()], []);
+  assert.equal(fresh.whoCreates.length, 1);
+  assert.deepEqual(fresh.factCreates[0].data.whoIds, [fresh.whoCreates[0].id]);
+
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasFacts: true,
+    hasMore: false,
+    executionId: 'exec-fact',
+    now: NOW,
+    newId: createIdCounter(),
+    opened: {},
+    questionState: {},
+    executionIds: [],
+  });
+  assert.equal(settled.status, 'sorted');
+});
+
+test('"Dana is the florist" reads as one stated fact about Dana', async () => {
+  const reading = { ...READING, people: [], dates: [] };
+  const ask = async (words: string) => {
+    const run = await createFixtureProvider(words, reading).runToolLoop({
+      role: 'quick',
+      system: '',
+      messages: [{ role: 'user', content: '' }],
+      mcpClient: {} as never,
+      terminalTool: FILE_RESULTS_TOOL,
+      limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+    });
+    return normalizeNomosReply(run.terminalInput, {
+      reading,
+      aliases: newContext().aliases,
+    });
+  };
+  const said = await ask('Dana is the florist.');
+  assert.equal(said.commands.length, 0);
+  assert.equal(said.noteFacts.length, 1);
+  assert.equal(said.noteFacts[0].statement, 'Dana is the florist');
+  assert.equal(said.noteFacts[0].quote, 'Dana is the florist');
+  assert.equal(said.noteFacts[0].isStated, true);
+  assert.equal(said.mentions.length, 1);
+  assert.deepEqual(said.noteFacts[0].whoRefs, [said.mentions[0].ref]);
+  assert.equal((await ask('Marcus is a plumber')).noteFacts.length, 1);
+  assert.equal((await ask('Is Dana the florist?')).noteFacts.length, 0);
+  assert.equal((await ask('This is the plan')).noteFacts.length, 0);
+});
+
 test('a loop that hits its limit ends as a failed reading, after one ask', async () => {
   let calls = 0;
   const asks: boolean[] = [];

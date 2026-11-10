@@ -32,6 +32,8 @@ async function openFact(
         id: entry.id,
         status: data.status ?? 'inferred',
         stated: data.stated ?? 'nomosInferred',
+        kind: data.kind ?? 'world',
+        occurredOn: data.occurredOn ?? null,
         sourceCaptureId: data.sourceCaptureId ?? null,
         sourceExecutionId: data.sourceExecutionId ?? null,
         sourceConnection: data.sourceConnection ?? null,
@@ -59,7 +61,7 @@ async function openFact(
   }
 }
 
-/** The confirmed and inferred facts, newest first (sorted here, so the query needs no composite index). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
+/** The confirmed, inferred and superseded facts (a superseded one only for "Was … until …"), newest first (sorted here, so the query needs no composite index). A slower open never overwrites a newer snapshot or lands after the listener stopped. */
 export function startFactsListener(
   uid: string,
   read: SealedReader,
@@ -72,7 +74,7 @@ export function startFactsListener(
   const stop = onSnapshot(
     query(
       collection(db, 'apps', 'helm', 'users', uid, 'facts'),
-      where('status', 'in', ['confirmed', 'inferred']),
+      where('status', 'in', ['confirmed', 'inferred', 'superseded']),
       limit(FACTS_LIMIT),
     ),
     async (snapshot) => {

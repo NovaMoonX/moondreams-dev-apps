@@ -645,6 +645,37 @@ test('an import keeps a person who is in use and says so', () => {
   assert.deepEqual(result.kept, ['Priya']);
 });
 
+test("a noted fact is deleted by its turn's undo while untouched, and kept once the person confirmed it", () => {
+  const fact = {
+    ref: { op: 'create', collection: 'facts', docId: 'f1' } as EffectRef,
+    effect: {
+      written: {
+        status: 'inferred',
+        stated: 'nomosInferred',
+        'sealed.title': 'Fact · Dana · Nomos inferred',
+        'sealed.statement': 'Dana does the wedding flowers',
+      },
+      previous: null,
+    },
+  };
+  const original = execution([fact], {
+    category: 'remember',
+    summary: 'Noted a fact',
+  });
+  const result = asWrite(
+    plan(original, [target('f1', { lastEditedAt: null }, null)]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['f1'],
+  );
+  assert.equal(result.report, 'Took back 1 fact.');
+  const confirmed = plan(original, [
+    target('f1', { lastEditedAt: NOW - 1000 }, null),
+  ]);
+  assert.equal(confirmed.kind === 'write' ? confirmed.deletes.length : 0, 0);
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

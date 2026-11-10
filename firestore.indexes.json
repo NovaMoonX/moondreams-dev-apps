@@ -49,6 +49,14 @@
       ]
     },
     {
+      "collectionGroup": "facts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "inquiries",
       "queryScope": "COLLECTION",
       "fields": [

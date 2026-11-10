@@ -391,12 +391,16 @@ export function planUndo(input: {
       : [],
   );
   const isImport = original.category === 'import';
+  const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
+  const factsDone = done.filter(({ docId }) => isFactDoc(docId));
   const records = done.filter(({ docId }) =>
     isImport
       ? collectionOf.get(docId) === 'who'
-      : !isEntity(collectionOf.get(docId) ?? 'tasks') && !isMediaDoc(docId),
+      : !isEntity(collectionOf.get(docId) ?? 'tasks') &&
+        !isMediaDoc(docId) &&
+        !isFactDoc(docId),
   );
-  if (records.length === 0) {
+  if (records.length === 0 && factsDone.length === 0) {
     return refuse(
       'nothingToTakeBack',
       kept,
@@ -404,14 +408,23 @@ export function planUndo(input: {
     );
   }
 
-  const isHomeOnly = records.every(
-    ({ docId }) => collectionOf.get(docId) === 'profile',
-  );
-  const report = isHomeOnly
-    ? HELM_COPY.undoReportHome
-    : isImport
-      ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
-      : HELM_COPY.undoReport(records.length, kept.length, gone);
+  const isHomeOnly =
+    records.length > 0 &&
+    records.every(({ docId }) => collectionOf.get(docId) === 'profile');
+  const factCount = factsDone.length;
+  const report =
+    records.length === 0
+      ? HELM_COPY.undoReportFacts(factCount, kept.length, gone)
+      : [
+          isHomeOnly
+            ? HELM_COPY.undoReportHome
+            : isImport
+              ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
+              : HELM_COPY.undoReport(records.length, kept.length, gone),
+          factCount > 0 ? HELM_COPY.undoReportFactsToo(factCount) : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -455,22 +468,25 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isHomeOnly
-        ? HELM_COPY.tookBackHome
-        : isImport
-          ? kept.length > 0
-            ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
-            : HELM_COPY.tookBackPeople(records.length)
-          : kept.length > 0
-            ? HELM_COPY.tookBackKept(records.length, kept.length)
-            : HELM_COPY.tookBack(records.length),
+      summary:
+        records.length === 0
+          ? HELM_COPY.tookBackFacts(factCount)
+          : isHomeOnly
+            ? HELM_COPY.tookBackHome
+            : isImport
+              ? kept.length > 0
+                ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
+                : HELM_COPY.tookBackPeople(records.length)
+              : kept.length > 0
+                ? HELM_COPY.tookBackKept(records.length, kept.length)
+                : HELM_COPY.tookBack(records.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
       spoken: null,
       goneIds,
     },
-    takenBack: records.map(({ outcome }) => outcome.title),
+    takenBack: [...records, ...factsDone].map(({ outcome }) => outcome.title),
     kept,
     gone,
     goneIds,

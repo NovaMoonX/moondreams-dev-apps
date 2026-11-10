@@ -40,6 +40,7 @@ import {
 import {
   buildContext,
   readMadeTitles,
+  type ContextFact,
   type ContextTask,
   type EarlierTurn,
 } from './nomos/buildContext.js';
@@ -51,6 +52,7 @@ import {
   type AskCommand,
   type CaptureReading,
   type MentionRead,
+  type NoteFactCommand,
   type NomosCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -85,6 +87,7 @@ import {
   planAsks,
   planWrites,
   settleCapture,
+  type ExistingFact,
   type ExistingTask,
   type KnownWhoState,
   type PeopleInput,
@@ -152,6 +155,7 @@ const toCurrentPlace = (value: unknown): CurrentPlace | null => {
     : null;
 };
 const MAX_FACTS_READ = 20;
+const MAX_REPEAT_FACTS_READ = 300;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 // Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
 const QUICK_LOOP_MILLIS = 15_000;
@@ -595,6 +599,120 @@ async function readPeople(
   };
 }
 
+const MAX_CONTEXT_FACTS = 20;
+const MAX_CONTEXT_SUBJECTS = 10;
+
+const escapeRegExp = (text: string) =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** What the person's records hold about the people and places the words name, for the model to answer from: confirmed facts as said, inferred ones as guesses. A failed read gives none, so a turn never waits on it. */
+async function readContextFacts(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  text: string,
+): Promise<ContextFact[]> {
+  try {
+    const [whoSnap, placeSnap] = await Promise.all(
+      ['who', 'places'].map((name) =>
+        firestore.collection(`${base}/${name}`).limit(MAX_PEOPLE_READ).get(),
+      ),
+    );
+    const subjects = [...whoSnap.docs, ...placeSnap.docs].flatMap((doc) => {
+      try {
+        const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+        const names = [
+          words.name,
+          ...(isStringList(words.aliases) ? words.aliases : []),
+        ].filter((name): name is string => typeof name === 'string');
+        const isNamed = names.some(
+          (name) =>
+            name.trim() !== '' &&
+            new RegExp(
+              `(^|[^\\p{L}\\p{N}])${escapeRegExp(name.trim())}($|[^\\p{L}\\p{N}])`,
+              'iu',
+            ).test(text),
+        );
+        return isNamed && typeof words.name === 'string'
+          ? [{ id: doc.id, name: words.name }]
+          : [];
+      } catch {
+        return [];
+      }
+    });
+    const named = subjects.slice(0, MAX_CONTEXT_SUBJECTS);
+    if (named.length === 0) return [];
+    const factSnap = await firestore
+      .collection(`${base}/facts`)
+      .where(
+        'subjectIds',
+        'array-contains-any',
+        named.map((s) => s.id),
+      )
+      .limit(MAX_CONTEXT_FACTS * 3)
+      .get();
+    return factSnap.docs
+      .flatMap((doc): (ContextFact & { createdAt: number })[] => {
+        const status: unknown = doc.get('status');
+        if (status !== 'confirmed' && status !== 'inferred') return [];
+        try {
+          const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+          const ids: unknown = doc.get('subjectIds');
+          const subject = named.find(
+            (entry) => isStringList(ids) && ids.includes(entry.id),
+          );
+          return typeof words.statement === 'string' && subject
+            ? [
+                {
+                  subject: subject.name,
+                  statement: words.statement,
+                  by: status === 'confirmed' ? 'said' : 'inferred',
+                  createdAt: Number(doc.get('createdAt')) || 0,
+                },
+              ]
+            : [];
+        } catch {
+          return [];
+        }
+      })
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, MAX_CONTEXT_FACTS)
+      .map(({ subject, statement, by }) => ({ subject, statement, by }));
+  } catch (error) {
+    logger.warn('helm.sort.factsUnread', {
+      message: error instanceof Error ? error.message : 'unknown',
+    });
+    return [];
+  }
+}
+
+/** The person's confirmed and inferred facts, newest first and opened, for the repeat check; one that won't open is left out. */
+async function readSubjectFacts(
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+): Promise<ExistingFact[]> {
+  const snapshot = await transaction.get(
+    firestore
+      .collection(`${base}/facts`)
+      .where('status', 'in', ['confirmed', 'inferred'])
+      .orderBy('createdAt', 'desc')
+      .limit(MAX_REPEAT_FACTS_READ),
+  );
+  return snapshot.docs.flatMap((doc): ExistingFact[] => {
+    try {
+      const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+      const subjectIds: unknown = doc.get('subjectIds');
+      return typeof words.statement === 'string' && isStringList(subjectIds)
+        ? [{ statement: words.statement, subjectIds }]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
 /** The tasks a page showed, read again under the capture's own account: a missing one or one that won't open is left out. */
 async function readScreenTasks(
   firestore: Firestore,
@@ -811,6 +929,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       commands: [],
       answer: null,
       remember: [],
+      noteFacts: [],
+      captureText: '',
       planDay: null,
       setCurrentPlace: null,
       asks: [],
@@ -943,6 +1063,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
+    const facts =
+      mode === 'rest'
+        ? []
+        : await readContextFacts(firestore, base, key, combined.text);
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -955,6 +1079,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       screen,
       earlierTurns,
       answeredQuestion,
+      facts,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1121,6 +1246,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     commands,
     answer,
     remember: mode === 'full' ? reply.remember : [],
+    noteFacts: mode === 'full' ? reply.noteFacts : [],
+    captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
@@ -1145,6 +1272,8 @@ async function writeResult(
     commands: NomosCommand[];
     answer: AnswerCommand | null;
     remember: RememberCommand[];
+    noteFacts: NoteFactCommand[];
+    captureText: string;
     planDay: PlanDayCommand | null;
     setCurrentPlace: SetCurrentPlaceCommand | null;
     asks: AskCommand[];
@@ -1170,6 +1299,8 @@ async function writeResult(
     key,
     answer,
     remember,
+    noteFacts,
+    captureText,
     planDay: requestedPlanDay,
     setCurrentPlace: requestedHome,
     asks,
@@ -1313,7 +1444,7 @@ async function writeResult(
     const reply = isStale ? null : built;
     const asksNow = isStale ? [] : asks;
     const people =
-      commands.length > 0 && !isStale
+      (commands.length > 0 || noteFacts.length > 0) && !isStale
         ? await readPeople(transaction, {
             firestore,
             base,
@@ -1326,6 +1457,10 @@ async function writeResult(
             capturedAt: capture.createdAt,
           })
         : undefined;
+    const existingFacts =
+      noteFacts.length > 0 && !isStale
+        ? await readSubjectFacts(transaction, firestore, base, key)
+        : [];
     const joinedRefs = (ids: string[]) =>
       ids.map((id) => captureRef.parent.doc(id));
     const listedNow = [
@@ -1400,6 +1535,9 @@ async function writeResult(
       seal,
       newId: () => firestore.collection(tasksPath).doc().id,
       people,
+      noteFacts: isStale ? [] : noteFacts,
+      captureText,
+      existingFacts,
     });
     const plan = home
       ? {
@@ -1449,6 +1587,9 @@ async function writeResult(
       );
       plan.placeCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/places/${id}`), data),
+      );
+      plan.factCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/facts/${id}`), data),
       );
       if (home) transaction.update(firestore.doc(base), home.data);
       transaction.create(
@@ -1523,6 +1664,7 @@ async function writeResult(
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
       hasHome: requestedHome !== null,
+      hasFacts: plan.factCreates.length > 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

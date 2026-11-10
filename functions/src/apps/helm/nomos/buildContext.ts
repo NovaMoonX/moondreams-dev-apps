@@ -15,6 +15,13 @@ export interface ContextTask {
   due: TaskDue | null;
 }
 
+/** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
+export interface ContextFact {
+  subject: string;
+  statement: string;
+  by: 'said' | 'inferred';
+}
+
 export interface ContextInput {
   text: string;
   /** Each message of a turn made of several, address already stripped. */
@@ -33,6 +40,7 @@ export interface ContextInput {
   earlierTurns?: EarlierTurn[];
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
+  facts?: ContextFact[];
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -135,6 +143,9 @@ export function buildContext(input: ContextInput): {
       ? [
           `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
         ]
+      : []),
+    ...(input.facts?.length
+      ? [`<known_facts>${toDataJson(input.facts)}</known_facts>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

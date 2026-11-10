@@ -1,11 +1,13 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { toDisplayCase } from '../../../vendor/optionMatchUtils.js';
 import {
+  DEFAULT_ASSISTANT_NAME,
   MAX_EFFECTS,
   MAX_OPEN_ASKED,
   type AskCommand,
   type MentionRead,
   type NomosCommand,
+  type NoteFactCommand,
   type PlaceRead,
   type TaskDue,
 } from './commands.js';
@@ -25,6 +27,8 @@ import {
   buildPickQuestion,
   buildSpokenPick,
   buildSpokenQuestion,
+  buildFactLine,
+  describeFacts,
   summarize,
   type CodeQuestionKind,
   type EffectCounts,
@@ -67,6 +71,12 @@ export interface PeopleInput {
   capturedAt: number;
 }
 
+/** A fact the person already has, for the repeat check: its words and subjects. */
+export interface ExistingFact {
+  statement: string;
+  subjectIds: string[];
+}
+
 export interface EffectRef {
   op: 'create' | 'update';
   collection: 'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile';
@@ -84,6 +94,7 @@ export interface WritePlan {
   whoCreates: { id: string; data: Record<string, unknown> }[];
   whoUpdates: { id: string; data: Record<string, unknown> }[];
   placeCreates: { id: string; data: Record<string, unknown> }[];
+  factCreates: { id: string; data: Record<string, unknown> }[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -112,6 +123,10 @@ interface PlanInput {
   seal: (fields: Record<string, unknown>) => SealedPayload;
   newId: () => string;
   people?: PeopleInput;
+  noteFacts?: NoteFactCommand[];
+  /** The words of the turn, which a fact's quote must come from. */
+  captureText?: string;
+  existingFacts?: ExistingFact[];
 }
 
 interface Draft {
@@ -280,6 +295,11 @@ const idsOf = (refs: string[], idOf: Map<string, string>) => [
   ...new Set(refs.flatMap((ref) => idOf.get(ref) ?? [])),
 ];
 
+const toLooseText = (text: string) =>
+  text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+const toSubjectKey = (ids: string[]) => [...ids].sort().join('|');
+
 const isSameDue = (a: TaskDue | null, b: TaskDue | null) =>
   JSON.stringify(a) === JSON.stringify(b);
 
@@ -439,6 +459,99 @@ export function planWrites(input: PlanInput): WritePlan {
     counts.updated += 1;
   });
 
+  const nameOf = new Map<string, string>([
+    ...(input.people?.known ?? []).map((who): [string, string] => [
+      who.id,
+      who.name,
+    ]),
+    ...(input.people?.knownPlaces ?? []).map((place): [string, string] => [
+      place.id,
+      place.name,
+    ]),
+    ...entities.newWho.map(({ id, mention }): [string, string] => [
+      id,
+      toNameCase(mention.name),
+    ]),
+    ...entities.newPlaces.map(({ id, place }): [string, string] => [
+      id,
+      toNameCase(place.name),
+    ]),
+  ]);
+  const seenFacts = (input.existingFacts ?? []).map(
+    (fact) => `${toLooseText(fact.statement)}#${toSubjectKey(fact.subjectIds)}`,
+  );
+  const captureWords = toLooseText(input.captureText ?? '');
+  const factCreates = (input.noteFacts ?? []).flatMap((fact) => {
+    if (effects.length + drafts.size >= MAX_EFFECTS) return [];
+    const isSure =
+      fact.whoRefs.every((ref) => entities.whoIdOf.has(ref)) &&
+      fact.placeRefs.every((ref) => entities.placeIdOf.has(ref));
+    const whoIds = idsOf(fact.whoRefs, entities.whoIdOf);
+    const placeIds = idsOf(fact.placeRefs, entities.placeIdOf);
+    const subjectIds = union(whoIds, placeIds);
+    if (!isSure || subjectIds.length === 0) return [];
+    const repeatKey = `${toLooseText(fact.statement)}#${toSubjectKey(subjectIds)}`;
+    if (seenFacts.includes(repeatKey)) return [];
+    seenFacts.push(repeatKey);
+    const quote =
+      fact.quote !== null &&
+      toLooseText(fact.quote) !== '' &&
+      captureWords.includes(toLooseText(fact.quote))
+        ? fact.quote
+        : null;
+    const isSaid = fact.isStated && quote !== null;
+    const capturedAt = input.people?.capturedAt ?? now;
+    const id = input.newId();
+    const line = buildFactLine({
+      subjects: subjectIds.map((subjectId) => nameOf.get(subjectId) ?? ''),
+      isSaid,
+      assistantName: input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME,
+    });
+    const status = isSaid ? 'confirmed' : 'inferred';
+    const stated = isSaid ? 'personSaid' : 'nomosInferred';
+    record(
+      id,
+      'create',
+      {
+        status,
+        stated,
+        'sealed.title': line,
+        'sealed.statement': fact.statement,
+      },
+      null,
+      'facts',
+    );
+    return [
+      {
+        id,
+        data: {
+          status,
+          stated,
+          kind: 'world',
+          occurredOn: null,
+          sourceCaptureId: input.captureId,
+          sourceExecutionId: input.executionId,
+          sourceConnection: null,
+          aboutField: null,
+          whoIds,
+          placeIds,
+          projectIds: [],
+          syncedIds: [],
+          subjectIds,
+          keptOverSource: null,
+          supersedesId: null,
+          supersededById: null,
+          supersededAt: null,
+          disputedWithId: null,
+          createdAt: capturedAt,
+          confirmedAt: isSaid ? capturedAt : null,
+          lastEditedAt: null,
+          sealed: seal({ statement: fact.statement, quote, value: null }),
+        },
+      },
+    ];
+  });
+
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
     record(
@@ -586,6 +699,7 @@ export function planWrites(input: PlanInput): WritePlan {
     whoCreates,
     whoUpdates,
     placeCreates,
+    factCreates,
     linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
     effectRefs,
@@ -811,7 +925,11 @@ export function buildExecution(
   return {
     captureId: input.captureId,
     actor: 'nomos',
-    category: 'organize',
+    category:
+      plan.factCreates.length > 0 &&
+      plan.counts.made + plan.counts.updated + plan.counts.completed === 0
+        ? 'remember'
+        : 'organize',
     autonomyLevel: AUTOMATIC_LEVEL,
     state: 'succeeded',
     effectRefs: plan.effectRefs,
@@ -825,7 +943,11 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
-      summary: [summarize(plan.counts, input.messageCount), homeLine]
+      summary: [
+        summarize(plan.counts, input.messageCount),
+        describeFacts(plan.factCreates.length),
+        homeLine,
+      ]
         .filter(Boolean)
         .join('. '),
       commands: input.commands,
@@ -897,6 +1019,7 @@ interface SettleInput {
   hasPlanDay?: boolean;
   /** The turn said the person is home, whether or not a home place exists to file it on. */
   hasHome?: boolean;
+  hasFacts?: boolean;
   hasMore: boolean;
   executionId: string | null;
   answer?: {
@@ -973,6 +1096,7 @@ export function settleCapture(input: SettleInput) {
     !input.answer &&
     !input.hasPlanDay &&
     !input.hasHome &&
+    !input.hasFacts &&
     !input.hadAsks &&
     !input.isAnswerTurn;
   const next = isUnread

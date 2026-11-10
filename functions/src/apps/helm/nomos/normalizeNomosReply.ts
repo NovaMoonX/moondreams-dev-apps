@@ -15,7 +15,9 @@ import {
   ANSWER_SPOKEN_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
+  FACT_QUOTE_CAP,
   MAX_COMMANDS,
+  MAX_NOTED_FACTS,
   MAX_MENTIONS,
   MAX_PLACES,
   MAX_QUOTES,
@@ -30,6 +32,7 @@ import {
   type AnswerCommand,
   type CaptureReading,
   type MentionRead,
+  type NoteFactCommand,
   type PlaceRead,
   type PlanDayCommand,
   type SetCurrentPlaceCommand,
@@ -74,6 +77,8 @@ const KNOWN_KEYS = new Set([
   'value',
   'whoRefs',
   'placeRefs',
+  'quote',
+  'isStated',
   'shape',
   'prompt',
   'options',
@@ -203,6 +208,21 @@ const readRemember = (
     REMEMBER_FIELDS.find((field) => field === item.aboutField) ?? null,
   value: toText(item.value, VALUE_CAP),
 });
+
+const readNoteFact = (
+  item: Record<string, unknown>,
+  entities: Entities,
+): NoteFactCommand | null => {
+  const statement = toText(item.statement, STATEMENT_CAP);
+  if (!statement) return null;
+  return {
+    statement,
+    quote: toText(item.quote, FACT_QUOTE_CAP),
+    isStated: item.isStated === true,
+    whoRefs: toRefs(item.whoRefs, entities.whoRefs),
+    placeRefs: toRefs(item.placeRefs, entities.placeRefs),
+  };
+};
 
 /** An unknown span drops only the plan request, never the rest of the reply. */
 const readPlanDue = (value: unknown, reading: CaptureReading) => {
@@ -577,7 +597,8 @@ const readCommand = (
     !kind ||
     kind === 'remember' ||
     kind === 'planDay' ||
-    kind === 'setCurrentPlace'
+    kind === 'setCurrentPlace' ||
+    kind === 'noteFact'
   ) {
     return null;
   }
@@ -654,6 +675,7 @@ export function normalizeNomosReply(
   hasMore: boolean;
   answer: AnswerCommand | null;
   remember: RememberCommand[];
+  noteFacts: NoteFactCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -684,6 +706,13 @@ export function normalizeNomosReply(
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
+  const noteFacts = items
+    .filter((item) => item.kind === 'noteFact')
+    .flatMap((item) => {
+      const fact = readNoteFact(item, entities);
+      return fact ? [fact] : [];
+    })
+    .slice(0, MAX_NOTED_FACTS);
   const { asks, dropped: askDropped } = readAsks(
     items,
     context.aliases,
@@ -720,6 +749,7 @@ export function normalizeNomosReply(
     hasMore: fresh.length > MAX_COMMANDS,
     answer,
     remember,
+    noteFacts,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

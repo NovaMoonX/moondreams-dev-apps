@@ -33,6 +33,7 @@ export const COMMAND_KINDS = [
   'remember',
   'planDay',
   'setCurrentPlace',
+  'noteFact',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -62,6 +63,8 @@ export const ANSWER_TEXT_CAP = 1_200;
 export const MAX_QUOTES = 5;
 export const QUOTE_CAP = 300;
 export const STATEMENT_CAP = 500;
+export const FACT_QUOTE_CAP = 280;
+export const MAX_NOTED_FACTS = 5;
 export const VALUE_CAP = 80;
 export const ANSWER_SPOKEN_CAP = 200;
 export const MAX_ASKS = 5;
@@ -179,6 +182,15 @@ export interface RememberCommand {
   value: string | null;
 }
 
+/** Something true about a person, pet, organization or place the capture named, its refs settled to the reply's mentions and places; code decides whether it is stated or inferred. */
+export interface NoteFactCommand {
+  statement: string;
+  quote: string | null;
+  isStated: boolean;
+  whoRefs: string[];
+  placeRefs: string[];
+}
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -264,6 +276,8 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'unit',
             'isMoney',
             'decimals',
+            'quote',
+            'isStated',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -324,7 +338,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             statement: nullable(
               'string',
-              `remember: one plain sentence for what an email says that differs from a calendar event, at most ${STATEMENT_CAP} characters; null for every other kind.`,
+              `remember: one plain sentence for what an email says that differs from a calendar event, at most ${STATEMENT_CAP} characters. noteFact: the fact as one plain sentence ("Dana is the florist"), at most ${STATEMENT_CAP} characters; null for every other kind.`,
             ),
             quoteAlias: nullable(
               'string',
@@ -345,10 +359,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters.`,
             ),
             whoRefs: NAMED_BY_REF(
-              'createTask and updateTask: the ref ($w1, …) of each entry in mentions this task is about or involves; null or empty when none.',
+              'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; null or empty when none.',
             ),
             placeRefs: NAMED_BY_REF(
-              'createTask and updateTask: the ref ($p1, …) of each entry in places this task happens at or involves; null or empty when none.',
+              'createTask, updateTask and noteFact: the ref ($p1, …) of each entry in places this task or fact is about; null or empty when none.',
             ),
             place: {
               type: ['string', 'null'],
@@ -425,6 +439,14 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             decimals: nullable(
               'number',
               'ask number: 0, 1 or 2 digits after the point; null for whole numbers.',
+            ),
+            quote: nullable(
+              'string',
+              `noteFact: the person's exact words from the capture that say it, at most ${FACT_QUOTE_CAP} characters; null when none.`,
+            ),
+            isStated: nullable(
+              'boolean',
+              'noteFact: true only when the person said it outright; false when it is read between the lines.',
             ),
           },
         },

@@ -54,6 +54,24 @@ export function summarize(counts: EffectCounts, messageCount = 1): string {
   return `Got ${prefix}: ${joined}`;
 }
 
+/** The result line of a noted fact: "Fact · Dana · You said", or "Fact · Dana · Nomos inferred" when it was read between the lines. */
+export const buildFactLine = (input: {
+  subjects: string[];
+  isSaid: boolean;
+  assistantName: string;
+}) =>
+  [
+    'Fact',
+    input.subjects.filter(Boolean).join(', '),
+    input.isSaid ? 'You said' : `${input.assistantName} inferred`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+/** "Noted a fact" or "Noted 2 facts", for the summary of a turn that noted some. */
+export const describeFacts = (count: number) =>
+  count === 0 ? null : plural(count, 'Noted a fact', `Noted ${count} facts`);
+
 export type CodeQuestionKind = 'couldNotRead' | 'moreToSort';
 
 /** Fixed wording for the two questions code asks when a capture is not fully sorted. */

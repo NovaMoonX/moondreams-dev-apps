@@ -538,6 +538,62 @@ const readAtHome = (text: string) =>
     ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
     : null;
 
+const FACT_RE =
+  /^\s*(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)\s+is\s+(?:the|a|an)\s+[^?]+?\s*[.!]?\s*$/u;
+
+const NOT_NAMES = new Set([
+  'It',
+  'This',
+  'That',
+  'There',
+  'Here',
+  'He',
+  'She',
+  'They',
+  'Who',
+  'What',
+  'Where',
+  'When',
+  'Why',
+  'How',
+  'Today',
+  'Tomorrow',
+]);
+
+/** The emulator's stand-in for "Dana is the florist" or "Dana is a florist": one noteFact, stated, quoting the words, about the name that starts them. Null for any other words. */
+const readFact = (text: string) => {
+  const match = FACT_RE.exec(text);
+  const handle = match?.[1];
+  const name = handle?.replace(/^@/, '');
+  if (!match || !handle || !name || NOT_NAMES.has(name)) return null;
+  const quote = text.trim().replace(/[.!]$/, '');
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === name);
+  return {
+    commands: [
+      toAnswer({
+        kind: 'noteFact',
+        statement: quote.replace(/^@/, ''),
+        quote,
+        isStated: true,
+        isHealth: null,
+        whoRefs: ['$w1'],
+        placeRefs: [],
+      }),
+    ],
+    mentions: [
+      {
+        ref: '$w1',
+        name,
+        kind: known?.kind ?? 'person',
+        relation: null,
+        species: known?.species ?? null,
+        organizationKind: known?.organizationKind ?? null,
+      },
+    ],
+    places: [],
+  };
+};
+
 /** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
 const readPlanDay = (text: string, reading: CaptureReading) =>
   PLAN_DAY_RE.test(text)
@@ -596,6 +652,17 @@ export function createFixtureProvider(
       if (atHome) {
         return {
           terminalInput: { commands: atHome },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const fact = readFact(text);
+      if (fact) {
+        return {
+          terminalInput: fact,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

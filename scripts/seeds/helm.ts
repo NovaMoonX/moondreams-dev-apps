@@ -921,6 +921,8 @@ async function buildGmailTurn(input: {
   const fact: Fact = {
     status: 'inferred',
     stated: 'nomosInferred',
+    kind: 'world',
+    occurredOn: null,
     sourceCaptureId: 'seed-turn-answer-gmail',
     sourceExecutionId: executionId,
     sourceConnection: {
@@ -1365,7 +1367,7 @@ async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's people: themself, two Sams, a cat and a bakery, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
+/** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
 async function buildPeople(input: {
   uid: string;
   displayName: string;
@@ -1429,6 +1431,21 @@ async function buildPeople(input: {
             email: 'sam.rivera@example.com',
           }),
         ),
+      ),
+    },
+    {
+      id: 'seed-who-dana',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'regular',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 3 * DAY_MS,
+        },
+        madeAt,
+        await seal(wordsOf('Dana')),
       ),
     },
     {
@@ -1790,6 +1807,125 @@ async function buildPeople(input: {
       questionAnswer: null,
     }),
   };
+  const factText = 'Dana is the florist, and she does the wedding flowers';
+  const factAt = now - 4 * DAY_MS;
+  const factCapture: Capture = {
+    ...capture,
+    sessionId: 'seed-alex-facts',
+    turnIndex: 0,
+    seenAt: factAt + MINUTE_MS,
+    whoIds: ['seed-who-dana'],
+    createdAt: factAt,
+    sortedAt: factAt + SORT_DELAY_MS,
+    sealed: await seal<CaptureSealed>({
+      text: factText,
+      reading: readCapture(factText, {
+        now: factAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questionAnswer: null,
+    }),
+  };
+  const factOf = async (
+    id: string,
+    fields: Partial<Fact> &
+      Pick<Fact, 'status' | 'stated' | 'createdAt'> & { statement: string },
+    links: Pick<Fact, 'whoIds' | 'placeIds'>,
+  ): Promise<{ id: string; fact: Fact }> => {
+    const { statement, ...stored } = fields;
+    return {
+      id,
+      fact: {
+        kind: 'world',
+        occurredOn: null,
+        sourceCaptureId: null,
+        sourceExecutionId: null,
+        sourceConnection: null,
+        aboutField: null,
+        ...links,
+        projectIds: [],
+        syncedIds: [],
+        subjectIds: [...links.whoIds, ...links.placeIds],
+        keptOverSource: null,
+        supersedesId: null,
+        supersededById: null,
+        supersededAt: null,
+        disputedWithId: null,
+        confirmedAt: null,
+        lastEditedAt: null,
+        ...stored,
+        sealed: await seal<FactSealed>({
+          statement,
+          quote: id === 'seed-fact-dana-florist' ? 'Dana is the florist' : null,
+          value: null,
+        }),
+      },
+    };
+  };
+  const facts = await Promise.all([
+    factOf(
+      'seed-fact-dana-florist',
+      {
+        statement: 'Dana is the florist',
+        status: 'confirmed',
+        stated: 'personSaid',
+        sourceCaptureId: 'seed-turn-fact-dana',
+        createdAt: factAt,
+        confirmedAt: factAt,
+      },
+      { whoIds: ['seed-who-dana'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-dana-flowers',
+      {
+        statement: 'Dana does the wedding flowers',
+        status: 'inferred',
+        stated: 'nomosInferred',
+        sourceCaptureId: 'seed-turn-fact-dana',
+        createdAt: factAt,
+      },
+      { whoIds: ['seed-who-dana'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-sam-acme',
+      {
+        statement: 'Sam works at Acme',
+        status: 'superseded',
+        stated: 'personSaid',
+        createdAt: now - 5 * DAY_MS,
+        confirmedAt: now - 5 * DAY_MS,
+        supersededById: 'seed-fact-sam-bluefin',
+        supersededAt: now - DAY_MS,
+        lastEditedAt: now - DAY_MS,
+      },
+      { whoIds: ['seed-who-sam-rivera'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-sam-bluefin',
+      {
+        statement: 'Sam works at Bluefin',
+        status: 'confirmed',
+        stated: 'personCorrected',
+        supersedesId: 'seed-fact-sam-acme',
+        createdAt: now - DAY_MS,
+        confirmedAt: now - DAY_MS,
+      },
+      { whoIds: ['seed-who-sam-rivera'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-home-key',
+      {
+        statement: 'The spare key is under the blue pot',
+        status: 'confirmed',
+        stated: 'personSaid',
+        createdAt: now - 3 * DAY_MS,
+        confirmedAt: now - 3 * DAY_MS,
+      },
+      { whoIds: [], placeIds: ['seed-place-home'] },
+    ),
+  ]);
   return {
     who: who.map((entry) =>
       entry.id === 'seed-who-miso'
@@ -1812,6 +1948,8 @@ async function buildPeople(input: {
     media: [misoPhoto, homePhoto],
     tasks,
     capture: { id: 'seed-turn-who', capture },
+    factCapture: { id: 'seed-turn-fact-dana', capture: factCapture },
+    facts,
     questionCapture: { id: 'seed-turn-question', capture: questionCapture },
     askedCapture: { id: 'seed-turn-asked', capture: askedCapture },
   };
@@ -2268,6 +2406,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.capture.capture,
         );
         batch.set(
+          person.collection('captures').doc(people.factCapture.id),
+          people.factCapture.capture,
+        );
+        people.facts.forEach((entry) =>
+          batch.set(person.collection('facts').doc(entry.id), entry.fact),
+        );
+        batch.set(
           person.collection('captures').doc(people.questionCapture.id),
           people.questionCapture.capture,
         );
@@ -2281,7 +2426,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.places.length +
           people.media.length +
           people.tasks.length +
-          3
+          people.facts.length +
+          4
         : 0;
       const backToBackCount =
         peopleCount +

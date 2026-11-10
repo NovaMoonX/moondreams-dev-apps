@@ -59,6 +59,8 @@ export async function confirmCalendarRight(
       const confirmed: Omit<Fact, 'sealed'> = {
         status: 'confirmed',
         stated: 'personCorrected',
+        kind: fact.kind,
+        occurredOn: fact.occurredOn,
         sourceCaptureId: null,
         sourceExecutionId: null,
         sourceConnection: null,

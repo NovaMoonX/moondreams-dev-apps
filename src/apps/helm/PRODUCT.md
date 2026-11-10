@@ -719,7 +719,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Projects with an objective, milestones, tasks, people in roles (key, involved, mentioned) and health from evidence (O, C)
 - [x] Add people from Google Contacts, picking each one (O)
 - [x] Places with photos (O)
-- [ ] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)
+- [x] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)
 - [ ] Your preferences, favorites and who you are, kept as facts about you (O)
 - [ ] How [name] sees you: who you are, what you like, how you write and how you like answers, every line editable (O)
 - [ ] How you write: style notes learned from what you type in Helm and, if you switch it on, your sent mail (O)
