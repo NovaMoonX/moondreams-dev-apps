@@ -1,8 +1,8 @@
 /**
  * Maintainer-only: adds a master key to an app's keyring and publishes it as a new secret version.
  *
- *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm --project moondreams-dev-apps --new-id m2 [--keep-current] [--dry-run]
- *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm --project moondreams-dev-apps --canary-only --new-id m1
+ *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm|connections --project moondreams-dev-apps --new-id m2 [--keep-current] [--dry-run]
+ *   tsx scripts/appKeys/publishKeyring.ts --app runway|helm|connections --project moondreams-dev-apps --canary-only --new-id m1
  *
  * A supplied key (a restore) comes from the app's `<APP>_NEW_KEY` variable (64 hex), never from an argument. Nothing prints key bytes.
  * `--canary-only` writes the canary of an id the secret already holds (the first keyring's id, once the secret exists).

@@ -11,6 +11,8 @@ import {
 import { canOpenApp } from '../appAccess.js';
 import {
   SITE_ACCOUNT_ID,
+  type EndConnectionRequest,
+  isOutsideAccount,
   readConnectorAppId,
   toGrantId,
 } from '../vendor/connectionsContract.js';
@@ -24,10 +26,12 @@ import {
   readDeleteKeptRequest,
   readSyncRequest,
   readUpdateConnectionRequest,
+  requestedScopes,
 } from './grants.js';
 import { READER_APPS, READER_SINKS, SOURCE_ADAPTERS } from './registry.js';
 import { InProcessSourceClient } from './sourceClient.js';
 import { errorCause, syncGrant, type SyncDeps } from './syncRunner.js';
+import { revokeGoogleAccount } from './tokens.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -74,6 +78,9 @@ const requireAuth = (request: CallableRequest) => {
 const grantRef = (uid: string, grantId: string) =>
   getFirestore().doc(`connections/${uid}/grants/${grantId}`);
 
+const accountRef = (uid: string, accountId: string) =>
+  getFirestore().doc(`connections/${uid}/accounts/${accountId}`);
+
 const isKnown = <T>(table: Record<string, T>, id: string) =>
   Object.hasOwn(table, id);
 
@@ -87,14 +94,21 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
       "That app can't read from other apps.",
     );
   }
-  const sourceAppId = readConnectorAppId(req.connectorId);
-  if (!isKnown(SOURCE_ADAPTERS, req.connectorId) || sourceAppId === null) {
+  if (!isKnown(SOURCE_ADAPTERS, req.connectorId)) {
     throw new HttpsError('invalid-argument', "That source isn't available.");
   }
-  if (req.accountId !== SITE_ACCOUNT_ID) {
+  const { manifest } = SOURCE_ADAPTERS[req.connectorId];
+  const isOutside = manifest.connect.kind === 'oauth';
+  const sourceAppId = readConnectorAppId(req.connectorId);
+  const isAccountValid = isOutside
+    ? isOutsideAccount(req.accountId)
+    : sourceAppId !== null && req.accountId === SITE_ACCOUNT_ID;
+  if (!isAccountValid) {
     throw new HttpsError('invalid-argument', "That account isn't available.");
   }
-  const { manifest } = SOURCE_ADAPTERS[req.connectorId];
+  if (!isOutside && req.options !== null) {
+    throw new HttpsError('invalid-argument', "That request wasn't understood.");
+  }
   if (req.categoryIds.length === 0) {
     throw new HttpsError(
       'invalid-argument',
@@ -105,8 +119,8 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
 
   const firestore = getFirestore();
   const canOpen = await Promise.all(
-    [req.readerAppId, sourceAppId].map((appId) =>
-      canOpenApp(firestore, appId, auth),
+    [req.readerAppId, ...(sourceAppId === null ? [] : [sourceAppId])].map(
+      (appId) => canOpenApp(firestore, appId, auth),
     ),
   );
   if (!canOpen.every(Boolean)) {
@@ -118,8 +132,30 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
 
   const grantId = toGrantId(req.readerAppId, req.connectorId, req.accountId);
   const ref = grantRef(auth.uid, grantId);
+  const needed = requestedScopes(manifest, req.categoryIds);
   await firestore.runTransaction(async (transaction) => {
-    const snapshot = await transaction.get(ref);
+    const [snapshot, account] = await Promise.all([
+      transaction.get(ref),
+      isOutside
+        ? transaction.get(accountRef(auth.uid, req.accountId))
+        : Promise.resolve(null),
+    ]);
+    if (account) {
+      const data = account.data();
+      const granted: unknown[] = Array.isArray(data?.grantedScopes)
+        ? data.grantedScopes
+        : [];
+      if (
+        !account.exists ||
+        data?.status !== 'live' ||
+        !needed.every((scope) => granted.includes(scope))
+      ) {
+        throw new HttpsError(
+          'failed-precondition',
+          "That account isn't connected for this. Connect it again.",
+        );
+      }
+    }
     if (snapshot.exists && readGrant(snapshot.data()).status === 'live') {
       throw new HttpsError(
         'already-exists',
@@ -162,18 +198,37 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
         "That source isn't available.",
       );
     }
+    const manifest = SOURCE_ADAPTERS[current.connectorId].manifest;
+    const isOutside = manifest.connect.kind === 'oauth';
+    if (req.options !== undefined && !isOutside) {
+      throw new HttpsError(
+        'invalid-argument',
+        "That request wasn't understood.",
+      );
+    }
+    if (
+      req.accountLabel !== undefined &&
+      !isOutsideAccount(current.accountId)
+    ) {
+      throw new HttpsError(
+        'invalid-argument',
+        "That request wasn't understood.",
+      );
+    }
+    const labelRef = accountRef(auth.uid, current.accountId);
+    const labelSnapshot =
+      req.accountLabel !== undefined ? await transaction.get(labelRef) : null;
+    if (labelSnapshot && !labelSnapshot.exists) {
+      throw new HttpsError('not-found', "That account doesn't exist.");
+    }
     const now = Date.now();
-    const categories = applyCategoryChanges(
-      current,
-      req.categories,
-      SOURCE_ADAPTERS[current.connectorId].manifest,
-      now,
-    );
-    const turnedOff = Object.entries(req.categories).flatMap(([id, isOn]) =>
+    const changes = req.categories ?? {};
+    const categories = applyCategoryChanges(current, changes, manifest, now);
+    const turnedOff = Object.entries(changes).flatMap(([id, isOn]) =>
       isOn ? [] : [id],
     );
     transaction.update(ref, {
-      categories,
+      ...(req.categories ? { categories } : {}),
       ...Object.fromEntries(
         turnedOff.map((id) => [
           `categoryState.${id}`,
@@ -187,8 +242,12 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
             ),
           }
         : {}),
+      ...(req.options !== undefined ? { options: req.options } : {}),
       updatedAt: now,
     });
+    if (labelSnapshot) {
+      transaction.update(labelRef, { label: req.accountLabel });
+    }
     return { current, turnedOff };
   });
 
@@ -211,8 +270,35 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
 export const endConnection = onCall(OPTIONS, async (request) => {
   const auth = requireAuth(request);
   const req = readEndConnectionRequest(request.data);
+  const result = await endAndClean(auth.uid, req);
+  await revokeUnusedAccount(auth.uid, req.grantId);
+  return result;
+});
+
+/** An outside account no live grant uses any more is signed out at Google and forgotten; a failure here is logged and never blocks. */
+const revokeUnusedAccount = async (uid: string, grantId: string) => {
+  try {
+    const firestore = getFirestore();
+    const snapshot = await grantRef(uid, grantId).get();
+    if (!snapshot.exists) return;
+    const { accountId } = readGrant(snapshot.data());
+    if (!isOutsideAccount(accountId)) return;
+    const sharing = await firestore
+      .collection(`connections/${uid}/grants`)
+      .where('accountId', '==', accountId)
+      .get();
+    const isInUse = sharing.docs.some(
+      (doc) => readGrant(doc.data()).status !== 'ended',
+    );
+    if (!isInUse) await revokeGoogleAccount(firestore, uid, accountId);
+  } catch (error) {
+    logger.warn('connections.end.revokeFailed', { cause: errorCause(error) });
+  }
+};
+
+const endAndClean = async (uid: string, req: EndConnectionRequest) => {
   const firestore = getFirestore();
-  const ref = grantRef(auth.uid, req.grantId);
+  const ref = grantRef(uid, req.grantId);
 
   // The grant ends before any copy is touched, so a sync still running settles against the ended state and cleans up what it wrote.
   const ended = await firestore.runTransaction(async (transaction) => {
@@ -243,7 +329,7 @@ export const endConnection = onCall(OPTIONS, async (request) => {
   });
   if (!ended.sink) return { grantId: req.grantId };
 
-  const session = ended.sink.openSession(firestore, auth.uid);
+  const session = ended.sink.openSession(firestore, uid);
   if (ended.keptCopies === null) {
     await session.deleteGrant(req.grantId);
     return { grantId: req.grantId };
@@ -267,7 +353,7 @@ export const endConnection = onCall(OPTIONS, async (request) => {
     });
   });
   return { grantId: req.grantId };
-});
+};
 
 export const deleteKeptCopies = onCall(OPTIONS, async (request) => {
   const auth = requireAuth(request);
