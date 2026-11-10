@@ -1369,12 +1369,12 @@ export const HELM_COPY = {
   projectOpenNoDates: (open: number) => `${open} open, no dates yet`,
   projectNextDue: (title: string, days: number) => {
     const short =
-      title.length > 28 ? `${title.slice(0, 27).trimEnd()}…` : title;
+      title.length > 40 ? `${title.slice(0, 39).trimEnd()}…` : title;
     return days === 0
       ? `${short} today`
       : days === 1
         ? `${short} tomorrow`
-        : `${short} in ${days} days`;
+        : `${short} in\u00a0${days}\u00a0days`;
   },
   projectKeyOpen: (name: string, note: string | null, count: number) =>
     `${name}${note ? ` (${note})` : ''} has ${count} open`,

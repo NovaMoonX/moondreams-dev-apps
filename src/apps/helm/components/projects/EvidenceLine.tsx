@@ -44,8 +44,8 @@ function EvidenceLine({ project, onFinish }: EvidenceLineProps) {
             {index > 0 ? ' · ' : ''}
             <span
               className={join(
-                'whitespace-nowrap',
-                part.tone === 'warning' && 'text-[var(--helm-overdue)]',
+                part.tone === 'warning' &&
+                  'whitespace-nowrap text-[var(--helm-overdue)]',
               )}
             >
               {part.text}

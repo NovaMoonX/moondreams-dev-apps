@@ -87,11 +87,11 @@ test('the next dated open task is named with its day count', () => {
       open(),
       done(1),
     ]),
-    ['Book the quartet in 3 days'],
+    ['Book the quartet in\u00a03\u00a0days'],
   );
   assert.deepEqual(
     texts([open({ due: { kind: 'day', date: day(20) } }), done(1)]),
-    ['Pick the ceremony readings in 20 days'],
+    ['Pick the ceremony readings in\u00a020\u00a0days'],
   );
   assert.deepEqual(
     texts([open({ due: { kind: 'day', date: day(1) } }), done(1)]),
@@ -114,7 +114,10 @@ test('a long title is shortened', () => {
     }),
     done(1),
   ]);
-  assert.equal(line, 'Confirm the florist can del… in 2 days');
+  assert.equal(
+    line,
+    'Confirm the florist can deliver before… in\u00a02\u00a0days',
+  );
 });
 
 test('overdue tasks are counted and are the only warning-coloured part', () => {
@@ -182,12 +185,12 @@ test('no more than two parts, in the order overdue, next due, quiet, key person'
       open({ due: { kind: 'day', date: day(4) } }),
       done(20),
     ]),
-    ['1 overdue', 'Pick the ceremony readings in 4 days'],
+    ['1 overdue', 'Pick the ceremony readings in\u00a04\u00a0days'],
   );
   assert.deepEqual(
     texts([open({ due: { kind: 'day', date: day(4) }, ...dana }), done(20)]),
     [
-      'Pick the ceremony readings in 4 days',
+      'Pick the ceremony readings in\u00a04\u00a0days',
       'Nothing done in 20 days · 1 open',
     ],
   );
