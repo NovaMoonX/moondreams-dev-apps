@@ -96,9 +96,12 @@ function PlaceDetail({ placeId, onBack, onHome }: PlaceDetailProps) {
           label: HELM_COPY.undo,
           onClick: () =>
             void restore().then(
-              () =>
+              (outcome) =>
                 addToast({
-                  title: HELM_COPY.forgotUndone(place.name),
+                  title:
+                    outcome === 'withoutPhotos'
+                      ? HELM_COPY.forgotUndoneWithoutPhotos(place.name)
+                      : HELM_COPY.forgotUndone(place.name),
                   type: 'info',
                 }),
               (error: unknown) => {

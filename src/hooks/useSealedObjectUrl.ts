@@ -5,7 +5,7 @@ import { storage } from '@lib/firebase/config';
 
 import { useAuth } from '@/hooks/useAuth';
 
-const MAX_REMEMBERED_OBJECTS = 24;
+const MAX_REMEMBERED_OBJECTS = 100;
 const remembered = new Map<string, Promise<Blob>>();
 const owner = { uid: null as string | null };
 
@@ -27,6 +27,12 @@ interface SealedObject {
   open: (bytes: Uint8Array, nonce: string) => Promise<Uint8Array>;
 }
 
+const fetchAndOpen = async (object: SealedObject) => {
+  const sealed = await getBytes(ref(storage, object.path));
+  const bytes = await object.open(new Uint8Array(sealed), object.nonce);
+  return new Blob([bytes as BlobPart], { type: object.contentType });
+};
+
 const openObject = (uid: string, object: SealedObject) => {
   if (owner.uid !== uid) {
     remembered.clear();
@@ -34,13 +40,16 @@ const openObject = (uid: string, object: SealedObject) => {
   }
   const key = `${uid}:${object.id}`;
   const known = remembered.get(key);
-  if (known) return known;
-  if (remembered.size >= MAX_REMEMBERED_OBJECTS) remembered.clear();
-  const opening = (async () => {
-    const sealed = await getBytes(ref(storage, object.path));
-    const bytes = await object.open(new Uint8Array(sealed), object.nonce);
-    return new Blob([bytes as BlobPart], { type: object.contentType });
-  })();
+  if (known) {
+    remembered.delete(key);
+    remembered.set(key, known);
+    return known;
+  }
+  const oldest = remembered.keys().next().value;
+  if (remembered.size >= MAX_REMEMBERED_OBJECTS && oldest !== undefined) {
+    remembered.delete(oldest);
+  }
+  const opening = fetchAndOpen(object);
   remembered.set(key, opening);
   opening.catch(() => remembered.delete(key));
   return opening;
@@ -63,7 +72,7 @@ interface UseSealedObjectUrlOptions {
   isEnabled: boolean;
 }
 
-/** An object URL for a sealed Storage object once it is fetched and opened on this device, or `null` while it opens, when it cannot be opened and while `isEnabled` is false. Opened objects are remembered for the session (a few, for the signed-in person only) and the URL is revoked when it changes or the component unmounts. */
+/** An object URL for a sealed Storage object once it is fetched and opened on this device, or `null` while it opens, when it cannot be opened and while `isEnabled` is false. Opened objects are remembered for the session (the most recent hundred, for the signed-in person only) and the URL is revoked when it changes or the component unmounts. */
 export function useSealedObjectUrl({
   id,
   path,

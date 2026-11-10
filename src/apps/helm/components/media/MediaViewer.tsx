@@ -84,7 +84,7 @@ function MediaViewer({
   const remove = async () => {
     if (!user) return;
     if (!navigator.onLine) {
-      addToast({ title: HELM_COPY.photoRemoveFailed, type: 'info' });
+      addToast({ title: HELM_COPY.photoRemoveNeedsConnection, type: 'info' });
       return;
     }
     setIsBusy(true);

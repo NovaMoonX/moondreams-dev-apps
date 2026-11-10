@@ -113,9 +113,12 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
           label: HELM_COPY.undo,
           onClick: () =>
             void restore().then(
-              () =>
+              (outcome) =>
                 addToast({
-                  title: HELM_COPY.forgotUndone(who.name),
+                  title:
+                    outcome === 'withoutPhotos'
+                      ? HELM_COPY.forgotUndoneWithoutPhotos(who.name)
+                      : HELM_COPY.forgotUndone(who.name),
                   type: 'info',
                 }),
               (error: unknown) => {

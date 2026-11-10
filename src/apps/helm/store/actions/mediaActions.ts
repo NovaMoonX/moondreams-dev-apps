@@ -260,9 +260,9 @@ export async function getPhotoIdsOf(uid: string, owner: PhotoOwner) {
   );
 }
 
-/** Deletes these photos' sealed objects and documents for a record that is being forgotten (the record's own lists are not touched), keeping the sealed bytes in memory so `restore` can put the photos back. Each document is marked to be swept first; a photo whose bytes cannot be read is still deleted, and Undo cannot return it. */
+/** Deletes these photos' sealed objects and documents for a record that is being forgotten (the record's own lists are not touched), keeping the sealed bytes in memory so `restore` can put the photos back. Every photo's bytes are read before anything is deleted; if any delete fails, the photos already deleted are put back and it fails. */
 export async function removeMediaOf(uid: string, mediaIds: string[]) {
-  const taken = (
+  const held = (
     await Promise.all(
       mediaIds.map(async (mediaId) => {
         const mediaRef = doc(mediaOf(uid), mediaId);
@@ -274,35 +274,38 @@ export async function removeMediaOf(uid: string, mediaIds: string[]) {
             ? [getMediaObjectPath(uid, mediaId, true)]
             : []),
         ];
-        const held = await holdObjects(paths).catch(() =>
-          paths.map((path): HeldObject => ({ path, bytes: null })),
-        );
-        await updateDoc(mediaRef, {
-          status: 'discarded',
-          decidedAt: Date.now(),
-          deleteAfter: Date.now() + DAY_MS,
-        });
-        return [
-          {
-            mediaRef,
-            previous,
-            held,
-            gone: await eraseObjects(mediaRef, held),
-          },
-        ];
+        return [{ mediaRef, previous, held: await holdObjects(paths) }];
       }),
     )
   ).flat();
-  return {
-    count: taken.length,
-    restore: () =>
-      Promise.all(
-        taken.map(async ({ mediaRef, previous, held, gone }) => {
-          await putObjectsBack(held, gone);
-          await setDoc(mediaRef, previous);
-        }),
-      ).then(() => undefined),
-  };
+  const settled = await Promise.allSettled(
+    held.map(async (entry) => {
+      await updateDoc(entry.mediaRef, {
+        status: 'discarded',
+        decidedAt: Date.now(),
+        deleteAfter: Date.now() + DAY_MS,
+      });
+      return { ...entry, gone: await eraseObjects(entry.mediaRef, entry.held) };
+    }),
+  );
+  const taken = settled.flatMap((result) =>
+    result.status === 'fulfilled' ? [result.value] : [],
+  );
+  const restore = () =>
+    Promise.all(
+      taken.map(async ({ mediaRef, previous, held: bytes, gone }) => {
+        await putObjectsBack(bytes, gone);
+        await setDoc(mediaRef, previous);
+      }),
+    ).then(() => undefined);
+  const failure = settled.find((result) => result.status === 'rejected');
+  if (failure) {
+    await restore().catch((error: unknown) => {
+      console.error('Helm photos were not put back', error);
+    });
+    throw failure.reason;
+  }
+  return { count: taken.length, restore };
 }
 
 export interface RemovedPhoto {
@@ -346,7 +349,12 @@ export async function removePhoto(
         deleteAfter: Date.now() + DAY_MS,
       });
     }
-    return { index: ids.indexOf(mediaId), wasMain, previous };
+    return {
+      index: ids.indexOf(mediaId),
+      wasMain,
+      promotedId: wasMain ? (remaining[0] ?? null) : null,
+      previous,
+    };
   });
   if (!taken) return 'missing';
 
@@ -371,7 +379,8 @@ export async function removePhoto(
             ...ids.slice(taken.index),
           ],
           ...(owner.kind === 'who' &&
-          (taken.wasMain || mainOf(data, owner) === null)
+          (mainOf(data, owner) === null ||
+            (taken.wasMain && mainOf(data, owner) === taken.promotedId))
             ? { photoMediaId: mediaId }
             : {}),
         });

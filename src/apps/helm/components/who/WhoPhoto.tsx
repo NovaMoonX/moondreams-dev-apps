@@ -18,7 +18,9 @@ function WhoPhoto({ kind, name, mediaId, isLarge = false }: WhoPhotoProps) {
   const media = useAppSelector((state) =>
     mediaId === null
       ? null
-      : (state.helm.media.items.find((entry) => entry.id === mediaId) ?? null),
+      : (state.helm.media.items.find(
+          (entry) => entry.id === mediaId && entry.status === 'kept',
+        ) ?? null),
   );
   const mark = <WhoMark kind={kind} name={name} isLarge={isLarge} />;
   if (!media || media.isUnreadable) return mark;

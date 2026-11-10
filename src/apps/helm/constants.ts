@@ -885,6 +885,8 @@ export const HELM_COPY = {
       ? `Forgot ${name}`
       : `Forgot ${name}, taken off ${tasks === 1 ? '1 task' : `${tasks} tasks`}`,
   forgotUndone: (name: string) => `Brought back ${name}`,
+  forgotUndoneWithoutPhotos: (name: string) =>
+    `Brought back ${name}, but not the photos.`,
   forgotUndoFailed: "That couldn't be brought back.",
   placeEditMenu: 'Change details',
   placeEditTitle: 'Change place',
@@ -903,6 +905,7 @@ export const HELM_COPY = {
   photoAdded: 'Photo added',
   photoFailed: "That photo didn't save. Try again.",
   photoNeedsConnection: 'Adding a photo needs a connection.',
+  photoRemoveNeedsConnection: 'Removing a photo needs a connection.',
   photoGone: 'This page is gone, so the photo was not kept.',
   photoLabel: (name: string, position: number) => `${name}, photo ${position}`,
   photoMainBadge: 'Main',

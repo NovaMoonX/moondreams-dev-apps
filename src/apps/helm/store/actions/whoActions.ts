@@ -19,6 +19,7 @@ import { openJson, sealJson } from '@apps/helm/security';
 import {
   getPhotoIdsOf,
   removeMediaOf,
+  type PhotoOwner,
 } from '@apps/helm/store/actions/mediaActions';
 import type {
   HelmEncryption,
@@ -132,7 +133,7 @@ export class ForgetPartialError extends Error {
   }
 }
 
-export type RestoreOutcome = 'restored' | 'exists';
+export type RestoreOutcome = 'restored' | 'exists' | 'withoutPhotos';
 
 export interface Forgotten {
   counts: ForgetCounts;
@@ -303,17 +304,19 @@ export async function forgetLinked(
   };
 }
 
-/** Forgets a who or place and deletes its photos with it; Undo puts the record and its photos back. A photo that cannot be deleted puts the record back and fails. */
+/** Forgets a who or place and deletes its photos with it; Undo puts the photos and then the record back. A photo that cannot be deleted puts the record back and fails. */
 export async function forgetWithPhotos(
   uid: string,
   target: 'who' | 'places',
   id: string,
 ): Promise<Forgotten> {
-  const photoIds = await getPhotoIdsOf(uid, {
-    kind: target === 'who' ? 'who' : 'place',
-    id,
-  });
+  const owner: PhotoOwner = { kind: target === 'who' ? 'who' : 'place', id };
+  const listedIds = await getPhotoIdsOf(uid, owner);
   const forgotten = await forgetLinked(uid, target, id);
+  // A photo added from another device during the forget is only found after it.
+  const photoIds = Array.from(
+    new Set([...listedIds, ...(await getPhotoIdsOf(uid, owner))]),
+  );
   if (photoIds.length === 0) return forgotten;
   const photos = await removeMediaOf(uid, photoIds).catch(
     async (error: unknown) => {
@@ -326,9 +329,15 @@ export async function forgetWithPhotos(
   return {
     ...forgotten,
     restore: async () => {
+      const arePhotosBack = await photos.restore().then(
+        () => true,
+        (error: unknown) => {
+          console.error('Helm photos were not put back', error);
+          return false;
+        },
+      );
       const outcome = await forgotten.restore();
-      if (outcome === 'restored') await photos.restore();
-      return outcome;
+      return arePhotosBack ? outcome : 'withoutPhotos';
     },
   };
 }
