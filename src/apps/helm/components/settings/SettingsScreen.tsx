@@ -25,7 +25,7 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-  const { grants } = useConnections({ readerAppId: 'helm' });
+  const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
 
   return (
@@ -45,9 +45,11 @@ function SettingsScreen({
             icon={<Link2 className='size-5' aria-hidden='true' />}
             title={HELM_COPY.connectedAppsRowTitle}
             description={
-              grants.length > 0
-                ? HELM_COPY.connectedAppsCount(grants.length)
-                : HELM_COPY.connectedAppsNone
+              !isKnown
+                ? undefined
+                : grants.length > 0
+                  ? HELM_COPY.connectedAppsCount(grants.length)
+                  : HELM_COPY.connectedAppsNone
             }
             onClick={onOpenConnectedApps}
             hasChevron

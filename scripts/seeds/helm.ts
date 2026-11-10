@@ -35,6 +35,7 @@ import {
   toGrantId,
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
+import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -926,7 +927,14 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     },
     options: null,
     status: 'live',
-    categoryState: {},
+    categoryState: Object.fromEntries(
+      PINCH_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          { lastOkAt: null, lastError: null, count: 0 },
+        ]),
+      ),
+    ),
     errors: [],
     newCategoryIds: [],
     lastSyncAt: null,

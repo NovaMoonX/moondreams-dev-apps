@@ -275,9 +275,11 @@ export const HELM_COPY = {
   settingsConnections: 'Connections',
   connectedAppsRowTitle: 'Connected apps',
   connectedAppsCount: (count: number) => `${count} connected`,
-  connectedAppsNone: 'None yet',
+  connectedAppsNone: 'Not connected',
   connectedAppsLead: (name: string) =>
-    `What ${name} can read. It never changes anything in them.`,
+    `${name} can read these. It can't add, change or delete anything in them.`,
+  connectReadOnlyPromise: (name: string, app: string) =>
+    `${name} can read these. It can't add, change or delete anything in ${app}.`,
   connectedSection: 'Connected',
   notConnectedSection: 'Not connected',
   connectedNothingOn: 'Nothing switched on',
@@ -289,8 +291,6 @@ export const HELM_COPY = {
   connectedAppsLoading: 'Opening your connections',
   connectSheetTitle: 'Connect an app',
   connectQuestion: (name: string, app: string) => `Let ${name} read ${app}?`,
-  connectReadOnly: (name: string, app: string) =>
-    `${name} reads what you tick. It can't add, change or delete anything in ${app}.`,
   connectStartsTicked: (labels: string, count: number) =>
     `${labels} ${count === 1 ? 'starts' : 'start'} ticked.`,
   connectNeverShared: (never: string) => `Never shared: ${never}`,
@@ -299,11 +299,13 @@ export const HELM_COPY = {
   connectConfirm: (app: string) => `Connect ${app}`,
   connectAlreadyConnected: (app: string) => `${app} is already connected.`,
   connectFailed: "That didn't connect. Try again.",
+  connectNotAllowed: (app: string) =>
+    `You can't open ${app}, so it can't be connected.`,
+  connectNotActive: "That connection isn't active any more.",
+  connectionGone: 'That app was already disconnected.',
   connectionConnectedOn: (date: string) => `Connected ${date}`,
   connectionAccountLabel: 'Account',
   connectionAccountValue: 'Your moondreams account',
-  connectionReadOnly: (name: string, app: string) =>
-    `${name} reads these and changes nothing in ${app}.`,
   connectionReads: (name: string) => `What ${name} reads`,
   connectionSwitchedOff: (label: string) => `${label} switched off.`,
   connectionUndo: 'Undo',
@@ -312,7 +314,7 @@ export const HELM_COPY = {
   connectionDisconnect: (app: string) => `Disconnect ${app}`,
   disconnectTitle: (app: string) => `Disconnect ${app}?`,
   disconnectBody: (name: string, app: string) =>
-    `${name} stops reading ${app}. You can connect it again any time.`,
+    `${name} stops reading ${app}. Everything in ${app} stays as it is. You can connect it again any time.`,
   disconnectConfirm: 'Disconnect',
   disconnectFailed: "That didn't disconnect. Try again.",
   connectionsNeedConnection: 'Needs a connection',

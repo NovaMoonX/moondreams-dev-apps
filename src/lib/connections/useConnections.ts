@@ -41,6 +41,7 @@ interface Loaded {
   key: string;
   grants: ConnectionGrantWithId[];
   error: Error | null;
+  isServerKnown: boolean;
 }
 
 /** The person's grants for one reader app, live; ended ones only with `includeEnded`. */
@@ -63,6 +64,7 @@ export function useConnections({
         collection(db, 'connections', uid, 'grants'),
         where('readerAppId', '==', readerAppId),
       ),
+      { includeMetadataChanges: true },
       (snapshot) =>
         setLoaded({
           key,
@@ -70,10 +72,11 @@ export function useConnections({
             toGrant(entry.id, entry.data() as Partial<ConnectionGrant>),
           ),
           error: null,
+          isServerKnown: !(snapshot.empty && snapshot.metadata.fromCache),
         }),
       (error) => {
         console.error('Connections list failed', error);
-        setLoaded({ key, grants: [], error });
+        setLoaded({ key, grants: [], error, isServerKnown: false });
       },
     );
   }, [uid, key, readerAppId]);
@@ -91,5 +94,6 @@ export function useConnections({
     grants,
     isLoading: key !== null && !current,
     error: current?.error ?? null,
+    isKnown: !!current && !current.error && current.isServerKnown,
   };
 }

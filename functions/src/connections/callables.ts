@@ -117,7 +117,7 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
     if (!snapshot.exists)
       throw new HttpsError('not-found', "That connection doesn't exist.");
     const grant = readGrant(snapshot.data());
-    if (grant.status !== 'live') {
+    if (grant.status === 'ended') {
       throw new HttpsError(
         'failed-precondition',
         "That connection isn't active.",

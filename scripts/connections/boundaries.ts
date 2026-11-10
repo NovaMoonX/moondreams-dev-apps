@@ -69,12 +69,6 @@ const ALLOWED: Allowed[] = [
     why: 'Generated copy of the contract.',
   },
   {
-    file: 'src/lib/connections/readers.ts',
-    kind: 'word',
-    match: 'helm',
-    why: 'The reader registry names the apps that read.',
-  },
-  {
     file: 'src/lib/connections/sources.ts',
     kind: 'word',
     match: 'helm',

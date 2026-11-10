@@ -25,7 +25,10 @@ const isText = (value: unknown): value is string =>
   value.length <= MAX_TEXT_LENGTH;
 
 const isGrantId = (value: unknown): value is string =>
-  isText(value) && !value.includes('/') && value.split('__').length === 3;
+  isText(value) &&
+  !value.includes('/') &&
+  value.split('__').length === 3 &&
+  value.split('__').every((part) => part.length > 0);
 
 const isNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value);

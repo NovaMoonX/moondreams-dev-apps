@@ -13,10 +13,10 @@ import {
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
 import {
-  DEFAULT_LEAD_DAYS,
   dayToUtcMidnight,
   getDigestBounds,
   getLocalMoment,
+  readReminders,
 } from '../eatSoonDigest.js';
 import { CATALOG_NAMES } from './catalogNames.js';
 import { PINCH_SHARES } from './manifest.js';
@@ -291,8 +291,10 @@ async function syncUseSoon(
   uid: string,
   now: number,
 ): Promise<SharedRecord[]> {
-  const today = dayToUtcMidnight(getLocalMoment(now, 'UTC').day);
-  const { from, to } = getDigestBounds(today, DEFAULT_LEAD_DAYS);
+  const settings = await firestore.doc(`apps/pinch/settings/${uid}`).get();
+  const { leadDays, timeZone } = readReminders(settings.data() ?? {});
+  const today = dayToUtcMidnight(getLocalMoment(now, timeZone ?? 'UTC').day);
+  const { from, to } = getDigestBounds(today, leadDays);
   const [containers, packages] = await Promise.all([
     firestore
       .collection(kitchenPath(uid, 'containers'))

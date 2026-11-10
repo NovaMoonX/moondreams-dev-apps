@@ -26,7 +26,9 @@ function ConnectedAppsScreen({
 }: ConnectedAppsScreenProps) {
   const name = useAssistantName();
   const { apps } = useAppCatalog();
-  const { grants, isLoading, error } = useConnections({ readerAppId: 'helm' });
+  const { grants, isLoading, isKnown, error } = useConnections({
+    readerAppId: 'helm',
+  });
   const [connecting, setConnecting] = useState<{
     id: string;
     name: string;
@@ -68,8 +70,7 @@ function ConnectedAppsScreen({
     )
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const isEmpty =
-    !isLoading && connected.length === 0 && available.length === 0;
+  const isEmpty = isKnown && connected.length === 0 && available.length === 0;
 
   return (
     <>
@@ -120,7 +121,7 @@ function ConnectedAppsScreen({
             </div>
           </section>
         )}
-        {!isLoading && available.length > 0 && (
+        {isKnown && available.length > 0 && (
           <section className='flex flex-col gap-3'>
             <SectionHeader title={HELM_COPY.notConnectedSection} />
             <div className='helm-card overflow-hidden'>

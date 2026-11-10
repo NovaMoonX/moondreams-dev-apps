@@ -29,6 +29,16 @@ interface ConnectionPageProps {
 const without = <T,>(record: Record<string, T>, key: string) =>
   Object.fromEntries(Object.entries(record).filter(([id]) => id !== key));
 
+const failureLine = (error: unknown, appName: string, fallback: string) => {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'functions/permission-denied')
+    return HELM_COPY.connectNotAllowed(appName);
+  if (code === 'functions/failed-precondition')
+    return HELM_COPY.connectNotActive;
+  if (code === 'functions/not-found') return HELM_COPY.connectionGone;
+  return fallback;
+};
+
 const formatDay = (timestamp: number) =>
   new Date(timestamp).toLocaleDateString(undefined, {
     month: 'short',
@@ -41,9 +51,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const { apps } = useAppCatalog();
   const { confirm } = useActionModal();
   const isOffline = useNetworkStatus() === 'offline';
-  const { grants, isLoading } = useConnections({ readerAppId: 'helm' });
+  const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
   const grant = grants.find((entry) => entry.id === grantId) ?? null;
-  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const [pending, setPending] = useState<
+    Record<string, { isOn: boolean; since: number }>
+  >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnecting, setIsDisconnecting] = useState(false);
@@ -52,12 +64,12 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   );
   const hasLeft = useRef(false);
 
-  // A grant that is gone, unknown or ended shows the list instead; the same lands after Disconnect.
+  // A grant that is gone or ended shows the list instead; the same lands after Disconnect.
   useEffect(() => {
-    if (isLoading || grant || hasLeft.current) return;
+    if (!isKnown || grant || hasLeft.current) return;
     hasLeft.current = true;
     onBack();
-  }, [isLoading, grant, onBack]);
+  }, [isKnown, grant, onBack]);
 
   if (!grant) return null;
 
@@ -66,7 +78,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const manifest = getSourceManifest(appId);
 
   const change = async (categoryId: string, isOn: boolean) => {
-    setPending((current) => ({ ...current, [categoryId]: isOn }));
+    setPending((current) => ({
+      ...current,
+      [categoryId]: { isOn, since: grant.updatedAt },
+    }));
     setFailures((current) => without(current, categoryId));
     try {
       await updateConnection({
@@ -76,12 +91,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       setSwitchedOff((current) => ({ ...current, [categoryId]: !isOn }));
     } catch (error) {
       console.error('Helm connection did not change', error);
+      setPending((current) => without(current, categoryId));
       setFailures((current) => ({
         ...current,
-        [categoryId]: HELM_COPY.connectionToggleFailed,
+        [categoryId]: failureLine(
+          error,
+          appName,
+          HELM_COPY.connectionToggleFailed,
+        ),
       }));
-    } finally {
-      setPending((current) => without(current, categoryId));
     }
   };
 
@@ -99,7 +117,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       await endConnection({ grantId: grant.id, deleteCopies: true });
     } catch (error) {
       console.error('Helm connection did not end', error);
-      setDisconnectFailure(HELM_COPY.disconnectFailed);
+      setDisconnectFailure(
+        failureLine(error, appName, HELM_COPY.disconnectFailed),
+      );
       setIsDisconnecting(false);
     }
   };
@@ -141,20 +161,21 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         {HELM_COPY.connectionAccountValue}
       </p>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.connectionReadOnly(name, appName)}
+        {HELM_COPY.connectReadOnlyPromise(name, appName)}
       </p>
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
         <ul className='helm-card divide-border divide-y overflow-hidden'>
           {(manifest?.categories ?? []).map((category) => {
+            const entry = pending[category.id];
+            const waiting =
+              entry && entry.since === grant.updatedAt ? entry : null;
             const isOn =
-              pending[category.id] ??
-              grant.categories[category.id]?.isOn ??
-              false;
-            const isWaiting = pending[category.id] !== undefined;
+              waiting?.isOn ?? grant.categories[category.id]?.isOn ?? false;
+            const isWaiting = waiting !== null;
             return (
               <li key={category.id} className='flex flex-col gap-1 px-4 py-3'>
-                <div className='flex min-h-11 items-center gap-3'>
+                <label className='flex min-h-11 items-center gap-3'>
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px]'>
                       {category.label}
@@ -173,7 +194,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       onCheckedChange={(next) => void change(category.id, next)}
                     />
                   )}
-                </div>
+                </label>
                 {failures[category.id] && (
                   <p className='text-destructive text-[13px]' role='alert'>
                     {failures[category.id]}
@@ -221,15 +242,17 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
         </LockedButton>
       ) : (
-        <Button
-          type='button'
-          variant='tertiary'
-          className='text-destructive! min-h-12 w-full justify-start px-4'
-          loading={isDisconnecting}
-          onClick={() => void disconnect()}
-        >
-          {HELM_COPY.connectionDisconnect(appName)}
-        </Button>
+        <div className='helm-card overflow-hidden'>
+          <Button
+            type='button'
+            variant='tertiary'
+            className='text-destructive! min-h-12 w-full justify-start rounded-none px-4'
+            loading={isDisconnecting}
+            onClick={() => void disconnect()}
+          >
+            {HELM_COPY.connectionDisconnect(appName)}
+          </Button>
+        </div>
       )}
     </main>
   );

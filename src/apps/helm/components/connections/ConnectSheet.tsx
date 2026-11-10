@@ -5,9 +5,11 @@ import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import AppLogo from '@/components/AppLogo';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import LockedButton from '@/components/LockedButton';
 import { grantConnection } from '@/lib/connections/connectionCalls';
 import { SITE_ACCOUNT_ID, toAppConnectorId } from '@/lib/connections/contract';
 import { getSourceManifest } from '@/lib/connections/sources';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 
@@ -18,8 +20,17 @@ interface ConnectSheetProps {
 
 const list = new Intl.ListFormat('en', { type: 'conjunction' });
 
-const isAlreadyExists = (error: unknown) =>
-  (error as { code?: string } | null)?.code === 'functions/already-exists';
+const failureLine = (error: unknown, appName: string) => {
+  const code = (error as { code?: string } | null)?.code;
+  if (code === 'functions/already-exists')
+    return HELM_COPY.connectAlreadyConnected(appName);
+  if (code === 'functions/permission-denied')
+    return HELM_COPY.connectNotAllowed(appName);
+  if (code === 'functions/failed-precondition')
+    return HELM_COPY.connectNotActive;
+  if (code === 'functions/not-found') return HELM_COPY.connectionGone;
+  return HELM_COPY.connectFailed;
+};
 
 function ConnectForm({
   app,
@@ -29,6 +40,7 @@ function ConnectForm({
   onClose: () => void;
 }) {
   const name = useAssistantName();
+  const isOffline = useNetworkStatus() === 'offline';
   const manifest = getSourceManifest(app.id);
   const categories = manifest?.categories ?? [];
   const [ticked, setTicked] = useState(
@@ -63,11 +75,7 @@ function ConnectForm({
       onClose();
     } catch (error) {
       console.error('Helm connection did not start', error);
-      setFailure(
-        isAlreadyExists(error)
-          ? HELM_COPY.connectAlreadyConnected(app.name)
-          : HELM_COPY.connectFailed,
-      );
+      setFailure(failureLine(error, app.name));
       setIsConnecting(false);
     }
   };
@@ -81,8 +89,13 @@ function ConnectForm({
         </h3>
       </div>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.connectReadOnly(name, app.name)}
+        {HELM_COPY.connectReadOnlyPromise(name, app.name)}
       </p>
+      {manifest && manifest.never.length > 0 && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.connectNeverShared(manifest.never.join(', '))}
+        </p>
+      )}
       <ul className='flex flex-col'>
         {categories.map((category) => (
           <li key={category.id}>
@@ -127,11 +140,6 @@ function ConnectForm({
           )}
         </p>
       )}
-      {manifest && manifest.never.length > 0 && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.connectNeverShared(manifest.never.join(', '))}
-        </p>
-      )}
       {failure && (
         <p className='text-destructive text-sm text-pretty' role='alert'>
           {failure}
@@ -149,13 +157,22 @@ function ConnectForm({
           </Button>
         }
         rightActions={
-          <Button
-            type='button'
-            onClick={() => void connect()}
-            loading={isConnecting}
-          >
-            {HELM_COPY.connectConfirm(app.name)}
-          </Button>
+          isOffline ? (
+            <LockedButton
+              label={HELM_COPY.connectConfirm(app.name)}
+              title={HELM_COPY.connectionsNeedConnection}
+            >
+              <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+            </LockedButton>
+          ) : (
+            <Button
+              type='button'
+              onClick={() => void connect()}
+              loading={isConnecting}
+            >
+              {HELM_COPY.connectConfirm(app.name)}
+            </Button>
+          )
         }
       />
     </div>

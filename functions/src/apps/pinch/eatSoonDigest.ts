@@ -232,3 +232,29 @@ export const getDigestMessage = (items: DigestItem[]): DigestMessage | null => {
         : `${pastText}, and ${due.length} more ${be(due)} due soon`,
   };
 };
+
+/** A person's reminder settings, each field read as its default when missing or out of range. */
+export const readReminders = (data: Record<string, unknown>) => {
+  const reminders = (data.reminders ?? {}) as Record<string, unknown>;
+  const hour = reminders.hour;
+  const leadDays = reminders.leadDays;
+  return {
+    reminders,
+    hour:
+      typeof hour === 'number' &&
+      Number.isInteger(hour) &&
+      hour >= 0 &&
+      hour <= 23
+        ? hour
+        : null,
+    leadDays:
+      typeof leadDays === 'number' &&
+      Number.isInteger(leadDays) &&
+      leadDays >= 1 &&
+      leadDays <= 3
+        ? leadDays
+        : DEFAULT_LEAD_DAYS,
+    timeZone:
+      typeof reminders.timeZone === 'string' ? reminders.timeZone : null,
+  };
+};

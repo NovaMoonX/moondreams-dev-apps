@@ -17,7 +17,7 @@ interface ConnectedSourcesListProps {
   onOpen: (id: string) => void;
 }
 
-/** One full-width row per connection (logo, name, a line of what it reads, chevron); the caller writes the words and the row opens whatever it stands for. */
+/** One full-width row per connection (logo, name, a line of what it reads, chevron). */
 function ConnectedSourcesList({ rows, onOpen }: ConnectedSourcesListProps) {
   return (
     <ul className='divide-border divide-y overflow-hidden'>

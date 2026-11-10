@@ -1248,7 +1248,7 @@ Central (general, no Helm words):
   src/utils/yearlyDateUtils.ts             # nextYearlyOccurrence, formatYearlyDate, round 6e: formatMoment (29 Feb on the 28th);
                                            # Nine Lives moves onto it
   src/lib/google/requestGoogleAuthCode.ts
-  src/lib/connections/                     # contract, sources, readers, useConnections, connectionCalls (section 19)
+  src/lib/connections/                     # contract, sources, useConnections, connectionCalls (section 19)
   src/components/ConnectedSourcesList.tsx
   src/apps/<app>/share/manifest.ts
   src/lib/security (createSealedReader)    # moved from Runway's security.ts
@@ -1314,7 +1314,7 @@ The owner's words: a pipeline for apps to read data from one another, with Helm 
 
 ### Where it lives
 
-- **Shared, no app's words:** `src/lib/connections/` (the contract, source manifests re-exported from each app, the reader registry, `useConnections`, call wrappers), `src/components/ConnectedSourcesList.tsx`, `src/lib/google/requestGoogleAuthCode.ts`, and on the server `functions/src/connections/` (registry, grants, callables, sync runner, live router, token store, the Google connectors, expiry). `contract.ts` is canonical in `src/` and vendored to `functions/src/vendor/connectionsContract.ts` under `check:server-copies`. Nothing in these names a recipe, trip, cat or movie; `check:connection-boundaries` greps them for every app's entity words.
+- **Shared, no app's words:** `src/lib/connections/` (the contract, source manifests re-exported from each app, `useConnections`, call wrappers), `src/components/ConnectedSourcesList.tsx`, `src/lib/google/requestGoogleAuthCode.ts`, and on the server `functions/src/connections/` (registry, grants, callables, sync runner, live router, token store, the Google connectors, expiry). `contract.ts` is canonical in `src/` and vendored to `functions/src/vendor/connectionsContract.ts` under `check:server-copies`. Nothing in these names a recipe, trip, cat or movie; `check:connection-boundaries` greps them for every app's entity words.
 - **Owned by each app:** `src/apps/<app>/share/manifest.ts` (what it shares, in the person's words) and `functions/src/apps/<app>/share/adapter.ts` (how), registered in `SOURCE_ADAPTERS`. A reader owns its sink, `functions/src/apps/<reader>/connections/sink.ts`, registered in `READER_SINKS`, and its grant page, registered in `READER_APPS`.
 - **The rule that makes graduation possible:** a reader never reads another app's Firestore, slice or types. `check:connection-boundaries` fails when a file under `src/apps/A` or `functions/src/apps/A` imports from app B's folder or names a path under `apps/B/`; only B's adapter reads B.
 

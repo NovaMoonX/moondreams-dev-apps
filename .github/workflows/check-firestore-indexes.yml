@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check:indexes
+      - run: npm run check:server-copies
+      - run: npm run check:connection-boundaries
       - run: npm run check:rules-size
       - run: npm run check:gates
       - run: npm run check:pipeline-map
