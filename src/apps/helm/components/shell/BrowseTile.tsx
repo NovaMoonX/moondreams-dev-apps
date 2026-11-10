@@ -7,6 +7,7 @@ import {
   ListChecks,
   MapPin,
   Settings2,
+  UserRound,
   Users,
   type LucideIcon,
 } from 'lucide-react';
@@ -14,10 +15,14 @@ import {
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 
 import { HELM_COPY } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import type { BrowseImportance } from '@apps/helm/screen/views';
 import type { HelmView } from '@apps/helm/types';
 
-const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
+const VIEW_ENTRIES: Record<
+  HelmView,
+  { label: string | ((assistant: string) => string); icon: LucideIcon }
+> = {
   home: { label: 'Home', icon: CalendarDays },
   today: { label: 'Today', icon: CalendarDays },
   inbox: { label: 'Needs you', icon: Inbox },
@@ -29,6 +34,7 @@ const VIEW_ENTRIES: Record<HelmView, { label: string; icon: LucideIcon }> = {
   people: { label: HELM_COPY.peopleTitle, icon: Users },
   who: { label: HELM_COPY.peopleTitle, icon: Users },
   place: { label: HELM_COPY.linkedPlace, icon: MapPin },
+  howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
 };
 
 interface BrowseTileProps {
@@ -55,7 +61,10 @@ function BrowseTile({
   isWide,
   onOpen,
 }: BrowseTileProps) {
-  const { label, icon: Icon } = VIEW_ENTRIES[view];
+  const assistant = useAssistantName();
+  const { label: entryLabel, icon: Icon } = VIEW_ENTRIES[view];
+  const label =
+    typeof entryLabel === 'function' ? entryLabel(assistant) : entryLabel;
   const isShrunk = grows === 'openQuestions' && openQuestions === 0;
   const isSmall = importance === 'minor' || isShrunk;
 

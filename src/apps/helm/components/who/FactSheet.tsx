@@ -133,7 +133,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
         disabled={isMissing || !isDirty}
         onClick={() =>
           void run(
-            () => correctFact(uid, shown.id, draft.trim()),
+            () => correctFact(uid, shown.id, draft.trim(), shown.topic),
             HELM_COPY.factCorrectedToast,
             close,
           )

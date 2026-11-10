@@ -42,6 +42,7 @@ import {
   buildContext,
   readMadeTitles,
   type ContextFact,
+  type ContextSelfFact,
   type ContextTask,
   type EarlierTurn,
 } from './nomos/buildContext.js';
@@ -600,19 +601,21 @@ async function readPeople(
 }
 
 const MAX_CONTEXT_FACTS = 20;
+const MAX_SELF_FACTS = 30;
 const MAX_CONTEXT_SUBJECTS = 10;
 const MAX_CONTEXT_SUBJECT_READS = 100;
 
 const escapeRegExp = (text: string) =>
   text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** What the person's records hold about the people and places the words name, for the model to answer from: confirmed facts as said, inferred ones as guesses. A failed read gives none, so a turn never waits on it. */
+/** What the person's records hold about themself, and about the people and places the words name, for the model to answer from: confirmed facts as said, inferred ones as guesses. A failed read gives none, so a turn never waits on it. */
 async function readContextFacts(
   firestore: Firestore,
   base: string,
   key: HelmKey,
   text: string,
-): Promise<ContextFact[]> {
+  selfWhoId: string | null,
+): Promise<{ facts: ContextFact[]; selfFacts: ContextSelfFact[] }> {
   try {
     const factSnap = await firestore
       .collection(`${base}/facts`)
@@ -624,11 +627,54 @@ async function readContextFacts(
       const ids: unknown = doc.get('subjectIds');
       return isStringList(ids) ? ids : [];
     };
-    const subjectIds = [...new Set(factSnap.docs.flatMap(subjectIdsOf))].slice(
-      0,
-      MAX_CONTEXT_SUBJECT_READS,
-    );
-    if (subjectIds.length === 0) return [];
+    const byOf = (doc: QueryDocumentSnapshot) =>
+      doc.get('status') === 'confirmed' ? 'said' : 'inferred';
+    const selfFacts = selfWhoId
+      ? factSnap.docs
+          .flatMap((doc): ContextSelfFact[] => {
+            const kind: unknown = doc.get('kind');
+            if (
+              (kind !== 'preference' &&
+                kind !== 'favorite' &&
+                kind !== 'identity') ||
+              !subjectIdsOf(doc).includes(selfWhoId)
+            ) {
+              return [];
+            }
+            try {
+              const words = openForHelm(
+                key,
+                doc.get('sealed') as SealedPayload,
+              );
+              return typeof words.statement === 'string'
+                ? [
+                    {
+                      id: doc.id,
+                      kind,
+                      topic:
+                        typeof words.topic === 'string' ? words.topic : null,
+                      value:
+                        typeof words.value === 'string' ? words.value : null,
+                      statement: words.statement,
+                      by: byOf(doc),
+                    },
+                  ]
+                : [];
+            } catch {
+              return [];
+            }
+          })
+          .slice(0, MAX_SELF_FACTS)
+      : [];
+    const selfIds = new Set(selfFacts.map((fact) => fact.id));
+    const subjectIds = [
+      ...new Set(
+        factSnap.docs
+          .filter((doc) => !selfIds.has(doc.id))
+          .flatMap(subjectIdsOf),
+      ),
+    ].slice(0, MAX_CONTEXT_SUBJECT_READS);
+    if (subjectIds.length === 0) return { facts: [], selfFacts };
     const subjectSnaps = await firestore.getAll(
       ...subjectIds.flatMap((id) => [
         firestore.doc(`${base}/who/${id}`),
@@ -660,9 +706,10 @@ async function readContextFacts(
         }
       })
       .slice(0, MAX_CONTEXT_SUBJECTS);
-    if (named.length === 0) return [];
-    return factSnap.docs
+    if (named.length === 0) return { facts: [], selfFacts };
+    const facts = factSnap.docs
       .flatMap((doc): ContextFact[] => {
+        if (selfIds.has(doc.id)) return [];
         const ids = subjectIdsOf(doc);
         const subject = named.find((entry) => ids.includes(entry.id));
         if (!subject) return [];
@@ -671,9 +718,10 @@ async function readContextFacts(
           return typeof words.statement === 'string'
             ? [
                 {
+                  id: doc.id,
                   subject: subject.name,
                   statement: words.statement,
-                  by: doc.get('status') === 'confirmed' ? 'said' : 'inferred',
+                  by: byOf(doc),
                 },
               ]
             : [];
@@ -682,11 +730,12 @@ async function readContextFacts(
         }
       })
       .slice(0, MAX_CONTEXT_FACTS);
+    return { facts, selfFacts };
   } catch (error) {
     logger.warn('helm.sort.factsUnread', {
       message: error instanceof Error ? error.message : 'unknown',
     });
-    return [];
+    return { facts: [], selfFacts: [] };
   }
 }
 
@@ -709,10 +758,25 @@ async function readSubjectFacts(
       const words = openForHelm(key, doc.get('sealed') as SealedPayload);
       const subjectIds: unknown = doc.get('subjectIds');
       const status: unknown = doc.get('status');
+      const kind: unknown = doc.get('kind');
       return typeof words.statement === 'string' &&
         isStringList(subjectIds) &&
         (status === 'confirmed' || status === 'inferred')
-        ? [{ id: doc.id, status, statement: words.statement, subjectIds }]
+        ? [
+            {
+              id: doc.id,
+              status,
+              statement: words.statement,
+              subjectIds,
+              kind:
+                kind === 'preference' ||
+                kind === 'favorite' ||
+                kind === 'identity'
+                  ? kind
+                  : 'world',
+              topic: typeof words.topic === 'string' ? words.topic : null,
+            },
+          ]
         : [];
     } catch {
       return [];
@@ -1070,10 +1134,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     const timeLeft = () =>
       claimed.startedAt + CALL_BUDGET_MS - Date.now() - RESTART_MARGIN_MS;
     const combined = combineMessages(read.messages);
-    const facts =
+    const { facts, selfFacts } =
       mode === 'rest'
-        ? []
-        : await readContextFacts(firestore, base, key, combined.text);
+        ? { facts: [], selfFacts: [] }
+        : await readContextFacts(
+            firestore,
+            base,
+            key,
+            combined.text,
+            (profile.data()?.selfWhoId as string | null | undefined) ?? null,
+          );
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -1087,6 +1157,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       earlierTurns,
       answeredQuestion,
       facts,
+      selfFacts,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1237,6 +1308,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reading: combined.reading,
     aliases: context.aliases,
     synced: context.synced,
+    facts: context.facts,
     quotes,
     alreadyMade,
     timeZone,
@@ -1399,7 +1471,7 @@ async function writeResult(
               .limit(1),
           )
         : Promise.resolve(null),
-      requestedHome
+      requestedHome || noteFacts.length > 0
         ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
       ...targetIds.map((id) =>
@@ -1548,6 +1620,7 @@ async function writeResult(
       noteFacts: isStale ? [] : noteFacts,
       captureText,
       existingFacts,
+      selfWhoId: (profileSnap?.get('selfWhoId') as string | null) ?? null,
     });
     const plan = home
       ? {
@@ -1667,11 +1740,13 @@ async function writeResult(
             firstQuestion ??
             (reply
               ? null
-              : answerTurn && commands.length > 0
-                ? NOTHING_CHANGED_LINE
-                : answerTurn && turn?.kind === 'apply'
-                  ? buildAnswerKeptLine(answerTurn.words)
-                  : null));
+              : plan.notKept.length > 0
+                ? plan.notKept.join('. ')
+                : answerTurn && commands.length > 0
+                  ? NOTHING_CHANGED_LINE
+                  : answerTurn && turn?.kind === 'apply'
+                    ? buildAnswerKeptLine(answerTurn.words)
+                    : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

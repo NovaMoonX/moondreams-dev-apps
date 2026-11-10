@@ -470,6 +470,44 @@ async function readDocumentAnswer(
   ];
 }
 
+interface ListedSelfFact {
+  alias: string;
+  kind: string;
+  topic: string | null;
+  value: string | null;
+  by: string;
+}
+
+/** "Where should I get gas?" answered from the person's own preference on that topic, or plainly not known yet; null for any other question. */
+function readSelfAnswer(question: string, words: string[], message: string) {
+  const asked = /^where should i get (\p{L}+)/iu.exec(question);
+  const own = (readBlock<ListedSelfFact[]>(message, 'about_you') ?? []).find(
+    (fact) =>
+      fact.value !== null &&
+      (fact.topic ?? '')
+        .split(' ')
+        .some((word) => word.length > 2 && words.includes(word)),
+  );
+  if (own?.value) {
+    return toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText:
+        own.by === 'inferred'
+          ? `It looks like you usually go to ${own.value}.`
+          : `You usually go to ${own.value}.`,
+      sourceAliases: [own.alias],
+    });
+  }
+  return asked
+    ? toAnswer({
+        scope: 'theWorld',
+        question,
+        generalText: `I don't know where you like to get ${asked[1].toLowerCase()} yet.`,
+      })
+    : null;
+}
+
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
   const question = text.trim();
@@ -484,6 +522,8 @@ function readQuestion(text: string, message: string) {
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
+  const own = readSelfAnswer(question, words, message);
+  if (own) return own;
   const scored = records.map((record) => ({
     record,
     score: words.filter((word) => record.title.toLowerCase().includes(word))
@@ -578,6 +618,133 @@ const readFact = (text: string) => {
         isHealth: null,
         whoRefs: ['$w1'],
         placeRefs: [],
+        factKind: 'world',
+        topic: null,
+        value: null,
+        isSensitive: false,
+        isAboutMe: false,
+      }),
+    ],
+    mentions: [
+      {
+        ref: '$w1',
+        name,
+        kind: known?.kind ?? 'person',
+        relation: null,
+        species: known?.species ?? null,
+        organizationKind: known?.organizationKind ?? null,
+      },
+    ],
+    places: [],
+  };
+};
+
+const PREFERENCE_RE =
+  /^\s*i\s+(?:always|usually)\s+go\s+to\s+(.+?)\s+for\s+(.+?)\s*[.!]?\s*$/i;
+const FAVORITE_RE = /^\s*my\s+favou?rite\s+(.+?)\s+is\s+(.+?)\s*[.!]?\s*$/i;
+const IDENTITY_RE = /^\s*i(?:'m|’m| am)\s+(vegan|vegetarian)\s*[.!]?\s*$/i;
+const SENSITIVE_ME_RE = /^\s*i\s+have\s+(diabetes)\s*[.!]?\s*$/i;
+const SENSITIVE_OTHER_RE =
+  /^\s*@?([A-Z][\p{L}'’.-]*)\s+(?:has diabetes|is pregnant)\s*[.!]?\s*$/u;
+
+const TOPIC_NAMES: Record<string, string> = { gas: 'gas station' };
+
+const upperFirst = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
+
+const toNoteFact = (fields: Record<string, unknown>) => ({
+  kind: 'noteFact',
+  isStated: true,
+  isHealth: null,
+  whoRefs: [],
+  placeRefs: [],
+  factKind: 'world',
+  topic: null,
+  value: null,
+  isSensitive: false,
+  isAboutMe: true,
+  ...fields,
+});
+
+/** The emulator's stand-in for the facts a person says about themself ("I always go to Shell for gas", "my favorite movie is Arrival", "I'm vegan", "I have diabetes") and the private detail said about a named person ("Dana has diabetes"): one noteFact, stated, quoting the words. Null for any other words. */
+const readSelfFact = (text: string) => {
+  const quote = text.trim().replace(/[.!]$/, '');
+  const preference = PREFERENCE_RE.exec(text);
+  if (preference) {
+    const [, value, about] = preference;
+    return {
+      commands: [
+        toNoteFact({
+          statement: `Goes to ${value} for ${about.toLowerCase()}`,
+          quote,
+          factKind: 'preference',
+          topic: TOPIC_NAMES[about.toLowerCase()] ?? about.toLowerCase(),
+          value: upperFirst(value),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const favorite = FAVORITE_RE.exec(text);
+  if (favorite) {
+    const [, about, value] = favorite;
+    const topic = about.toLowerCase();
+    return {
+      commands: [
+        toNoteFact({
+          statement: `Favorite ${topic} is ${value}`,
+          quote,
+          factKind: 'favorite',
+          topic: topic.endsWith('s') ? topic : `${topic}s`,
+          value,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const identity = IDENTITY_RE.exec(text);
+  if (identity) {
+    return {
+      commands: [
+        toNoteFact({
+          statement: upperFirst(identity[1].toLowerCase()),
+          quote,
+          factKind: 'identity',
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (SENSITIVE_ME_RE.test(text)) {
+    return {
+      commands: [
+        toNoteFact({
+          statement: 'Has diabetes',
+          quote,
+          factKind: 'identity',
+          isSensitive: true,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const other = SENSITIVE_OTHER_RE.exec(text);
+  const name = other?.[1];
+  if (!name || NOT_NAMES.has(name)) return null;
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === name);
+  return {
+    commands: [
+      toNoteFact({
+        statement: quote.replace(/^@/, ''),
+        quote,
+        factKind: 'identity',
+        isSensitive: true,
+        isAboutMe: false,
+        whoRefs: ['$w1'],
       }),
     ],
     mentions: [
@@ -659,7 +826,7 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const fact = readFact(text);
+      const fact = readSelfFact(text) ?? readFact(text);
       if (fact) {
         return {
           terminalInput: fact,

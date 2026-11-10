@@ -948,6 +948,7 @@ async function buildGmailTurn(input: {
       {
         statement: "Sweet Layer Bakery's email says the tasting is at 2:00 PM",
         quote: 'Your cake tasting is at 2:00 PM.',
+        topic: null,
         value: '2:00 PM',
       },
       encryption,
@@ -1367,7 +1368,7 @@ async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
+/** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
 async function buildPeople(input: {
   uid: string;
   displayName: string;
@@ -1831,10 +1832,14 @@ async function buildPeople(input: {
   const factOf = async (
     id: string,
     fields: Partial<Fact> &
-      Pick<Fact, 'status' | 'stated' | 'createdAt'> & { statement: string },
+      Pick<Fact, 'status' | 'stated' | 'createdAt'> & {
+        statement: string;
+        topic?: string;
+        value?: string;
+      },
     links: Pick<Fact, 'whoIds' | 'placeIds'>,
   ): Promise<{ id: string; fact: Fact }> => {
-    const { statement, ...stored } = fields;
+    const { statement, topic, value, ...stored } = fields;
     return {
       id,
       fact: {
@@ -1859,7 +1864,8 @@ async function buildPeople(input: {
         sealed: await seal<FactSealed>({
           statement,
           quote: id === 'seed-fact-dana-florist' ? 'Dana is the florist' : null,
-          value: null,
+          topic: topic ?? null,
+          value: value ?? null,
         }),
       },
     };
@@ -1924,6 +1930,58 @@ async function buildPeople(input: {
         confirmedAt: now - 3 * DAY_MS,
       },
       { whoIds: [], placeIds: ['seed-place-home'] },
+    ),
+    factOf(
+      'seed-fact-self-shell',
+      {
+        statement: 'Goes to Shell for gas',
+        topic: 'gas station',
+        value: 'Shell',
+        kind: 'preference',
+        status: 'confirmed',
+        stated: 'personSaid',
+        createdAt: now - 2 * DAY_MS,
+        confirmedAt: now - 2 * DAY_MS,
+      },
+      { whoIds: ['self'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-self-oat-milk',
+      {
+        statement: 'Likes oat milk in coffee',
+        topic: 'coffee',
+        value: 'Oat milk',
+        kind: 'preference',
+        status: 'inferred',
+        stated: 'nomosInferred',
+        createdAt: now - DAY_MS,
+      },
+      { whoIds: ['self'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-self-arrival',
+      {
+        statement: 'Favorite movie is Arrival',
+        topic: 'movies',
+        value: 'Arrival',
+        kind: 'favorite',
+        status: 'confirmed',
+        stated: 'personSaid',
+        createdAt: now - 4 * DAY_MS,
+        confirmedAt: now - 4 * DAY_MS,
+      },
+      { whoIds: ['self'], placeIds: [] },
+    ),
+    factOf(
+      'seed-fact-self-vegan',
+      {
+        statement: 'Vegan',
+        kind: 'identity',
+        status: 'inferred',
+        stated: 'nomosInferred',
+        createdAt: now - 6 * 60 * 60 * 1000,
+      },
+      { whoIds: ['self'], placeIds: [] },
     ),
   ]);
   return {

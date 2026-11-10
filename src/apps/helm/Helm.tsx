@@ -5,6 +5,7 @@ import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
 import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import Loading from '@/ui/Loading';
+import HowNomosSeesYou from '@apps/helm/components/howNomosSeesYou/HowNomosSeesYou';
 import HomeSurface from '@apps/helm/components/home/HomeSurface';
 import InboxView from '@apps/helm/components/inbox/InboxView';
 import AskConversation from '@apps/helm/components/shell/AskConversation';
@@ -117,6 +118,7 @@ function HelmApp() {
             onBack={goBack}
             onOpenActivity={() => showView('activity')}
             onOpenConnectedApps={() => showView('connectedApps')}
+            onOpenSeesYou={() => showView('howNomosSeesYou')}
           />
         )}
         {!isLocked && view === 'activity' && <ActivityScreen onBack={goBack} />}
@@ -138,6 +140,9 @@ function HelmApp() {
         )}
         {!isLocked && view === 'who' && (
           <WhoDetail whoId={item} onBack={goBack} onHome={goHome} />
+        )}
+        {!isLocked && view === 'howNomosSeesYou' && (
+          <HowNomosSeesYou onBack={goBack} onHome={goHome} />
         )}
         {!isLocked && view === 'place' && (
           <PlaceDetail placeId={item} onBack={goBack} onHome={goHome} />

@@ -15,7 +15,8 @@ export type HelmView =
   | 'connection'
   | 'people'
   | 'who'
-  | 'place';
+  | 'place'
+  | 'howNomosSeesYou';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -660,7 +661,9 @@ export interface Fact {
 export interface FactSealed {
   statement: string;
   quote: string | null;
-  /** The shown text of what the fact says about its field, such as "2:00 PM". */
+  /** What a preference or favorite is about ("gas station", "movies"); a fact written before topics existed has none. */
+  topic: string | null;
+  /** The shown text of what the fact says about its field, such as "2:00 PM", or the preferred or favorite thing ("Shell"). */
   value: string | null;
 }
 
@@ -669,6 +672,7 @@ export interface OpenFact extends Omit<Fact, 'sealed'> {
   id: string;
   statement: string;
   quote: string | null;
+  topic: string | null;
   value: string | null;
 }
 

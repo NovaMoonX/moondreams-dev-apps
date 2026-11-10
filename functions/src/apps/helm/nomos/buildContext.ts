@@ -17,7 +17,18 @@ export interface ContextTask {
 
 /** What the records hold about a person, pet, organization or place the turn names; `by` says whether the person said it or the assistant inferred it. */
 export interface ContextFact {
+  id: string;
   subject: string;
+  statement: string;
+  by: 'said' | 'inferred';
+}
+
+/** What the records hold about the person themself: a preference, a favorite or who they are. */
+export interface ContextSelfFact {
+  id: string;
+  kind: 'preference' | 'favorite' | 'identity';
+  topic: string | null;
+  value: string | null;
   statement: string;
   by: 'said' | 'inferred';
 }
@@ -41,6 +52,7 @@ export interface ContextInput {
   /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
   answeredQuestion?: string | null;
   facts?: ContextFact[];
+  selfFacts?: ContextSelfFact[];
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -84,8 +96,10 @@ export function buildContext(input: ContextInput): {
   message: string;
   aliases: AliasBook;
   synced: SyncedBook;
+  facts: AliasBook;
 } {
   const aliases = createAliasBook('t');
+  const facts = createAliasBook('f');
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
     alias: synced.add(copy),
@@ -145,7 +159,24 @@ export function buildContext(input: ContextInput): {
         ]
       : []),
     ...(input.facts?.length
-      ? [`<known_facts>${toDataJson(input.facts)}</known_facts>`]
+      ? [
+          `<known_facts>${toDataJson(
+            input.facts.map(({ id, ...fact }) => ({
+              alias: facts.add(id),
+              ...fact,
+            })),
+          )}</known_facts>`,
+        ]
+      : []),
+    ...(input.selfFacts?.length
+      ? [
+          `<about_you>${toDataJson(
+            input.selfFacts.map(({ id, ...fact }) => ({
+              alias: facts.add(id),
+              ...fact,
+            })),
+          )}</about_you>`,
+        ]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
@@ -156,7 +187,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced };
+  return { message, aliases, synced, facts };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */

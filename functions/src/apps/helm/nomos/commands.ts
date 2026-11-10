@@ -1,6 +1,7 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
 import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
+import { SENSITIVE_CATEGORIES } from './sensitive.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -65,6 +66,15 @@ export const QUOTE_CAP = 300;
 export const STATEMENT_CAP = 500;
 export const FACT_QUOTE_CAP = 280;
 export const MAX_NOTED_FACTS = 5;
+export const TOPIC_CAP = 40;
+export const FACT_KINDS = [
+  'world',
+  'preference',
+  'favorite',
+  'identity',
+] as const;
+
+export type NoteFactKind = (typeof FACT_KINDS)[number];
 export const VALUE_CAP = 80;
 export const ANSWER_SPOKEN_CAP = 200;
 export const MAX_ASKS = 5;
@@ -157,7 +167,7 @@ export interface PlaceRead {
 
 /** A record an answer rests on, as stored with the answer. */
 export type SourceRef =
-  | { kind: 'task'; id: string }
+  | { kind: 'task' | 'fact'; id: string }
   | {
       kind: 'synced';
       id: string;
@@ -189,6 +199,11 @@ export interface NoteFactCommand {
   isStated: boolean;
   whoRefs: string[];
   placeRefs: string[];
+  kind: NoteFactKind;
+  topic: string | null;
+  value: string | null;
+  isSensitive: boolean;
+  isAboutMe: boolean;
 }
 
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
@@ -278,6 +293,10 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'decimals',
             'quote',
             'isStated',
+            'factKind',
+            'topic',
+            'isSensitive',
+            'isAboutMe',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -356,7 +375,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             value: nullable(
               'string',
-              `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters.`,
+              `remember: what the email says for that part, as it should read ("2:00 PM"), at most ${VALUE_CAP} characters. noteFact: the preferred or favorite thing ("Shell", "Arrival"), at most ${VALUE_CAP} characters; null otherwise.`,
             ),
             whoRefs: NAMED_BY_REF(
               'createTask, updateTask and noteFact: the ref ($w1, …) of each entry in mentions this task or fact is about; null or empty when none.',
@@ -447,6 +466,24 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             isStated: nullable(
               'boolean',
               'noteFact: true only when the person said it outright; false when it is read between the lines.',
+            ),
+            factKind: {
+              type: ['string', 'null'],
+              enum: [...FACT_KINDS, null],
+              description:
+                'noteFact: preference for what someone usually picks ("I always go to Shell for gas"), favorite for a favorite ("my favorite movie is Arrival"), identity for who someone is ("I\'m vegan", "Dana is allergic to nuts"), world for anything else; null for every other kind.',
+            },
+            topic: nullable(
+              'string',
+              `noteFact: a preference or favorite's subject in one or two lowercase words ("gas station", "movies"), at most ${TOPIC_CAP} characters; null otherwise.`,
+            ),
+            isSensitive: nullable(
+              'boolean',
+              `noteFact: true when it is about ${SENSITIVE_CATEGORIES.join(', ')}; false otherwise.`,
+            ),
+            isAboutMe: nullable(
+              'boolean',
+              'noteFact: true when it is about the person talking ("I", "my"); false when it is about someone or something else.',
             ),
           },
         },

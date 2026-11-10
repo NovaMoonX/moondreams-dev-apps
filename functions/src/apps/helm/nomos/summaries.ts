@@ -68,6 +68,15 @@ export const buildFactLine = (input: {
     .filter(Boolean)
     .join(' · ');
 
+/** The card line for a private detail the code did not keep: one said about someone else, or one the assistant only inferred about the person. */
+export const buildNotKeptLine = (input: {
+  isAboutSelf: boolean;
+  assistantName: string;
+}) =>
+  input.isAboutSelf
+    ? `Not kept · ${input.assistantName} keeps private details only when you say them`
+    : 'Not kept · a private detail about someone else';
+
 /** "Noted a fact" or "Noted 2 facts", for the summary of a turn that noted some. */
 export const describeFacts = (count: number) =>
   count === 0 ? null : plural(count, 'Noted a fact', `Noted ${count} facts`);

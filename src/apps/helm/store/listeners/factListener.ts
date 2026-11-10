@@ -54,6 +54,7 @@ async function openFact(
         lastEditedAt: data.lastEditedAt ?? null,
         statement: payload.statement,
         quote: typeof payload.quote === 'string' ? payload.quote : null,
+        topic: typeof payload.topic === 'string' ? payload.topic : null,
         value: typeof payload.value === 'string' ? payload.value : null,
       },
     ];

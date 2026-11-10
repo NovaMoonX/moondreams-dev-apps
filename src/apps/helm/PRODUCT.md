@@ -720,7 +720,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Add people from Google Contacts, picking each one (O)
 - [x] Places with photos (O)
 - [x] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)
-- [ ] Your preferences, favorites and who you are, kept as facts about you (O)
+- [x] Your preferences, favorites and who you are, kept as facts about you (O)
 - [ ] How [name] sees you: who you are, what you like, how you write and how you like answers, every line editable (O)
 - [ ] How you write: style notes learned from what you type in Helm and, if you switch it on, your sent mail (O)
 - [ ] Knowledge: topics as living documents written from what you tell it, nested up to three levels, each part showing where it came from, with a history of versions and Undo; ask about one while reading, tell it what to change; loose notes for what fits no topic (O, C)

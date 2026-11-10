@@ -1,5 +1,8 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { toDisplayCase } from '../../../vendor/optionMatchUtils.js';
+import {
+  createOptionMatcher,
+  toDisplayCase,
+} from '../../../vendor/optionMatchUtils.js';
 import {
   DEFAULT_ASSISTANT_NAME,
   MAX_EFFECTS,
@@ -8,6 +11,7 @@ import {
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
+  type NoteFactKind,
   type PlaceRead,
   type TaskDue,
 } from './commands.js';
@@ -20,6 +24,7 @@ import {
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
+import { shouldKeepSensitive } from './sensitive.js';
 import { buildSpokenAck } from './spoken.js';
 import {
   buildAskedQuestion,
@@ -28,6 +33,7 @@ import {
   buildSpokenPick,
   buildSpokenQuestion,
   buildFactLine,
+  buildNotKeptLine,
   describeFacts,
   summarize,
   type CodeQuestionKind,
@@ -77,6 +83,8 @@ export interface ExistingFact {
   status: 'confirmed' | 'inferred';
   statement: string;
   subjectIds: string[];
+  kind: NoteFactKind;
+  topic: string | null;
 }
 
 export interface EffectRef {
@@ -98,6 +106,8 @@ export interface WritePlan {
   placeCreates: { id: string; data: Record<string, unknown> }[];
   factCreates: { id: string; data: Record<string, unknown> }[];
   factConfirms: { id: string; data: Record<string, unknown> }[];
+  /** One line for each private detail the turn did not keep. */
+  notKept: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -130,6 +140,8 @@ interface PlanInput {
   /** The words of the turn, which a fact's quote must come from. */
   captureText?: string;
   existingFacts?: ExistingFact[];
+  /** The person's own who record, which a fact about them is filed under. */
+  selfWhoId?: string | null;
 }
 
 interface Draft {
@@ -302,6 +314,25 @@ const toLooseText = (text: string) =>
   text.replace(/\s+/g, ' ').trim().toLowerCase();
 
 const toSubjectKey = (ids: string[]) => [...ids].sort().join('|');
+
+const topicMatcher = createOptionMatcher({ foldPlurals: true });
+
+/** A topic files under one the person's facts of that kind already use ("gas stations" under "gas station"); a new one is written in lowercase like the rest. */
+const settleTopic = (
+  topic: string | null,
+  kind: NoteFactKind,
+  existing: ExistingFact[],
+) => {
+  if (!topic) return null;
+  const used = [
+    ...new Set(
+      existing.flatMap((fact) =>
+        fact.kind === kind && fact.topic ? [fact.topic] : [],
+      ),
+    ),
+  ];
+  return topicMatcher.match(topic, used) ?? topic.trim().toLowerCase();
+};
 
 const isSameDue = (a: TaskDue | null, b: TaskDue | null) =>
   JSON.stringify(a) === JSON.stringify(b);
@@ -480,14 +511,20 @@ export function planWrites(input: PlanInput): WritePlan {
       toNameCase(place.name),
     ]),
   ]);
-  const keyOf = (statement: string, subjectIds: string[]) =>
-    `${toLooseText(statement)}#${toSubjectKey(subjectIds)}`;
+  const keyOf = (
+    statement: string,
+    subjectIds: string[],
+    kind: NoteFactKind,
+    topic: string | null,
+  ) =>
+    `${toLooseText(statement)}#${toSubjectKey(subjectIds)}#${kind}#${toLooseText(topic ?? '')}`;
   const existingByKey = new Map(
     (input.existingFacts ?? []).map((fact) => [
-      keyOf(fact.statement, fact.subjectIds),
+      keyOf(fact.statement, fact.subjectIds, fact.kind, fact.topic),
       fact,
     ]),
   );
+  const selfWhoId = input.selfWhoId ?? null;
   const captureWords = toLooseText(input.captureText ?? '');
   const capturedAt = input.people?.capturedAt ?? now;
   const assistantName = input.people?.assistantName ?? DEFAULT_ASSISTANT_NAME;
@@ -495,6 +532,7 @@ export function planWrites(input: PlanInput): WritePlan {
     seen: string[];
     creates: { id: string; data: Record<string, unknown> }[];
     confirms: { id: string; data: Record<string, unknown> }[];
+    notKept: string[];
   }>(
     (acc, fact) => {
       const reserved =
@@ -506,7 +544,15 @@ export function planWrites(input: PlanInput): WritePlan {
       const isSure =
         fact.whoRefs.every((ref) => entities.whoIdOf.has(ref)) &&
         fact.placeRefs.every((ref) => entities.placeIdOf.has(ref));
-      const whoIds = idsOf(fact.whoRefs, entities.whoIdOf);
+      const isAboutSelf =
+        fact.isAboutMe ||
+        (fact.kind !== 'world' &&
+          fact.whoRefs.length + fact.placeRefs.length === 0);
+      if (isAboutSelf && !selfWhoId) return acc;
+      const whoIds = union(
+        idsOf(fact.whoRefs, entities.whoIdOf),
+        isAboutSelf && selfWhoId ? [selfWhoId] : [],
+      );
       const placeIds = idsOf(fact.placeRefs, entities.placeIdOf);
       const subjectIds = union(whoIds, placeIds);
       const quoted = toLooseText(fact.quote ?? '');
@@ -521,7 +567,12 @@ export function planWrites(input: PlanInput): WritePlan {
                 sentence.trim().endsWith('?'),
             ));
       if (!isSure || subjectIds.length === 0 || isQuestion) return acc;
-      const repeatKey = keyOf(fact.statement, subjectIds);
+      const topic = settleTopic(
+        fact.topic,
+        fact.kind,
+        input.existingFacts ?? [],
+      );
+      const repeatKey = keyOf(fact.statement, subjectIds, fact.kind, topic);
       if (acc.seen.includes(repeatKey)) return acc;
       const seen = [...acc.seen, repeatKey];
       const quote =
@@ -536,8 +587,31 @@ export function planWrites(input: PlanInput): WritePlan {
         quote !== null &&
         toLooseText(quote).split(' ').length >= 2 &&
         toLooseText(quote).length >= 8;
+      if (
+        !shouldKeepSensitive({
+          isSensitive: fact.isSensitive,
+          provenance: isSaid ? 'personSaid' : 'nomosInferred',
+          subjectWhoIds: subjectIds,
+          selfWhoId,
+        })
+      ) {
+        return {
+          ...acc,
+          seen,
+          notKept: [
+            ...acc.notKept,
+            buildNotKeptLine({
+              isAboutSelf:
+                subjectIds.length === 1 && subjectIds[0] === selfWhoId,
+              assistantName,
+            }),
+          ],
+        };
+      }
       const line = buildFactLine({
-        subjects: subjectIds.map((subjectId) => nameOf.get(subjectId) ?? ''),
+        subjects: subjectIds.map((subjectId) =>
+          subjectId === selfWhoId ? 'You' : (nameOf.get(subjectId) ?? ''),
+        ),
         isSaid,
         assistantName,
       });
@@ -603,7 +677,7 @@ export function planWrites(input: PlanInput): WritePlan {
             data: {
               status,
               stated,
-              kind: 'world',
+              kind: fact.kind,
               occurredOn: null,
               sourceCaptureId: input.captureId,
               sourceExecutionId: input.executionId,
@@ -622,16 +696,22 @@ export function planWrites(input: PlanInput): WritePlan {
               createdAt: capturedAt,
               confirmedAt: isSaid ? capturedAt : null,
               lastEditedAt: null,
-              sealed: seal({ statement: fact.statement, quote, value: null }),
+              sealed: seal({
+                statement: fact.statement,
+                quote,
+                topic,
+                value: fact.value,
+              }),
             },
           },
         ],
       };
     },
-    { seen: [], creates: [], confirms: [] },
+    { seen: [], creates: [], confirms: [], notKept: [] },
   );
   const factCreates = factSteps.creates;
   const factConfirms = factSteps.confirms;
+  const notKept = factSteps.notKept;
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
@@ -782,6 +862,7 @@ export function planWrites(input: PlanInput): WritePlan {
     placeCreates,
     factCreates,
     factConfirms,
+    notKept,
     linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
     effectRefs,
@@ -1028,6 +1109,7 @@ export function buildExecution(
       summary: [
         summarize(plan.counts, input.messageCount),
         describeFacts(plan.factCreates.length + plan.factConfirms.length),
+        ...plan.notKept,
         homeLine,
       ]
         .filter(Boolean)

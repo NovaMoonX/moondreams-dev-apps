@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { Eye, History, Link2, Mic, Sun } from 'lucide-react';
+import { Eye, History, Link2, Mic, Sun, UserRound } from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
@@ -13,6 +13,7 @@ import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { formatClockTime } from '@/utils/formatUtils';
 import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 
@@ -20,6 +21,7 @@ interface SettingsScreenProps {
   onBack: () => void;
   onOpenActivity: () => void;
   onOpenConnectedApps: () => void;
+  onOpenSeesYou: () => void;
 }
 
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
@@ -27,7 +29,9 @@ function SettingsScreen({
   onBack,
   onOpenActivity,
   onOpenConnectedApps,
+  onOpenSeesYou,
 }: SettingsScreenProps) {
+  const assistant = useAssistantName();
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isDayOpen, setIsDayOpen] = useState(false);
@@ -115,6 +119,13 @@ function SettingsScreen({
             title={HELM_COPY.activityTitle}
             description={HELM_COPY.activityRowHint}
             onClick={onOpenActivity}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<UserRound className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.seesYouTitle(assistant)}
+            description={HELM_COPY.seesYouRowHint}
+            onClick={onOpenSeesYou}
             hasChevron
           />
           <SettingsRow

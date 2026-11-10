@@ -8,6 +8,7 @@ const VIEWS = new Set([
   'people',
   'who',
   'place',
+  'howNomosSeesYou',
 ]);
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
 export const MAX_SCREEN_VISIBLE = 20;

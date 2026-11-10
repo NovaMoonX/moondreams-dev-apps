@@ -21,6 +21,7 @@ const URL_VIEWS = [
   'people',
   'who',
   'place',
+  'howNomosSeesYou',
 ] as const satisfies readonly HelmView[];
 
 const MARKER = 'helmStep';

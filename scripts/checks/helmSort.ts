@@ -702,8 +702,18 @@ test('buildContext lists the facts about who the turn names, said or inferred, w
     timeZone: 'America/Los_Angeles',
     tasks: [],
     facts: [
-      { subject: 'Dana', statement: 'Dana is the florist', by: 'said' },
-      { subject: 'Dana', statement: 'Dana does the flowers', by: 'inferred' },
+      {
+        id: 'fact-a',
+        subject: 'Dana',
+        statement: 'Dana is the florist',
+        by: 'said',
+      },
+      {
+        id: 'fact-b',
+        subject: 'Dana',
+        statement: 'Dana does the flowers',
+        by: 'inferred',
+      },
     ],
   });
   assert.ok(message.includes('<known_facts>'));
@@ -743,6 +753,11 @@ test("a noted fact is confirmed only when stated with the person's own words, an
     isStated: true,
     whoRefs: ['$w1'],
     placeRefs: [],
+    kind: 'world' as const,
+    topic: null,
+    value: null,
+    isSensitive: false,
+    isAboutMe: false,
     ...extra,
   });
   const plan = (
@@ -774,7 +789,11 @@ test("a noted fact is confirmed only when stated with the person's own words, an
       },
       noteFacts,
       captureText: text,
-      existingFacts,
+      existingFacts: existingFacts.map((entry) => ({
+        kind: 'world' as const,
+        topic: null,
+        ...entry,
+      })),
     });
   const words = (made: ReturnType<typeof plan>) =>
     openForHelm(KEY, made.factCreates[0].data.sealed as SealedPayload);

@@ -11,7 +11,7 @@ import { db } from '@lib/firebase/config';
 
 import { sealJson } from '@apps/helm/security';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
-import type { Fact, FactSealed } from '@apps/helm/types';
+import type { Fact, FactKind, FactSealed } from '@apps/helm/types';
 
 /** A change that went through, with the way to take it back; `undo` says false when the fact changed since and was left alone. */
 export type FactChange =
@@ -79,13 +79,18 @@ export const confirmFact = (uid: string, factId: string) =>
   });
 
 /** Replaces a fact's words: the old one is kept as superseded and a confirmed, corrected one takes its subjects. Undo removes the new fact and brings the old one back, only while the new one is untouched. */
-export const correctFact = (uid: string, factId: string, statement: string) =>
+export const correctFact = (
+  uid: string,
+  factId: string,
+  statement: string,
+  topic: string | null,
+) =>
   guard(async (): Promise<FactChange> => {
     const facts = factsOf(uid);
     const oldRef = doc(facts, factId);
     const newRef = doc(facts);
     const sealed = await sealJson<FactSealed>(
-      { statement, quote: null, value: null },
+      { statement, quote: null, topic, value: null },
       await getHelmEncryption(uid),
     );
     const now = Date.now();
@@ -199,19 +204,27 @@ export const forgetFact = (uid: string, factId: string) =>
     };
   });
 
-/** Adds a fact the person types about a person, pet, organization or place: confirmed, said by them, from no capture. Undo deletes it. */
-export const addFact = (uid: string, subject: FactSubject, statement: string) =>
+/** Adds a fact the person types about a person, pet, organization or place, or about themself as a preference, favorite or who they are: confirmed, said by them, from no capture. Undo deletes it. */
+export const addFact = (
+  uid: string,
+  subject: FactSubject,
+  statement: string,
+  about: { kind: FactKind; topic: string | null } = {
+    kind: 'world',
+    topic: null,
+  },
+) =>
   guard(async (): Promise<FactChange> => {
     const ref = doc(factsOf(uid));
     const now = Date.now();
     const sealed = await sealJson<FactSealed>(
-      { statement, quote: null, value: null },
+      { statement, quote: null, topic: about.topic, value: null },
       await getHelmEncryption(uid),
     );
     const fact: Fact = {
       status: 'confirmed',
       stated: 'personSaid',
-      kind: 'world',
+      kind: about.kind,
       occurredOn: null,
       sourceCaptureId: null,
       sourceExecutionId: null,

@@ -68,6 +68,7 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export const OPEN_TASKS_LIMIT = 150;
 export const FACTS_LIMIT = 300;
 export const FACT_STATEMENT_MAX = 500;
+export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
@@ -891,6 +892,36 @@ export const HELM_COPY = {
   inferredTitle: 'Inferred',
   inferredLead: (assistant: string) =>
     `What ${assistant} read between the lines. Confirm what is right, correct it, or forget it.`,
+  seesYouTitle: (assistant: string) => `How ${assistant} sees you`,
+  seesYouLead: (assistant: string) =>
+    `What ${assistant} believes about you. Change anything that's wrong.`,
+  seesYouRowHint: 'Preferences, favorites and who you are',
+  seesYouEmpty: (assistant: string) =>
+    `As you talk to ${assistant}, what it learns about you shows here, for you to check.`,
+  seesYouIdentity: 'Who you are',
+  seesYouPreferences: 'Preferences',
+  seesYouFavorites: 'Favorites',
+  seesYouAdd: 'Add something',
+  seesYouAddTitle: 'Add something about you',
+  seesYouKindField: 'What kind',
+  seesYouKindIdentity: 'Who you are',
+  seesYouKindPreference: 'Preference',
+  seesYouKindFavorite: 'Favorite',
+  seesYouStatementField: 'What to remember',
+  seesYouStatementPlaceholder: {
+    identity: 'Vegetarian',
+    preference: 'Goes to Shell for gas',
+    favorite: 'Favorite movie is Arrival',
+  },
+  seesYouStatementMissing: 'Write what to remember first.',
+  seesYouStatementHelp: 'One sentence. It is saved as something you said.',
+  seesYouTopicField: 'Topic (optional)',
+  seesYouTopicPlaceholder: 'gas station',
+  seesYouTopicSuggestions: 'Topics you already use',
+  seesYouAddedToast: 'Added to what is kept about you',
+  askSeesYou: 'Ask about what is kept about you',
+  chipSeesYou: 'About you',
+  backToSeesYou: (assistant: string) => `Back to How ${assistant} sees you`,
   whoTasksTitle: 'Tasks',
   whoTasksEmpty: 'No open tasks.',
   whoMentionsTitle: 'Mentions',

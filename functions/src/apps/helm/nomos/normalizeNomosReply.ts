@@ -15,6 +15,7 @@ import {
   ANSWER_SPOKEN_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
+  FACT_KINDS,
   FACT_QUOTE_CAP,
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
@@ -28,6 +29,7 @@ import {
   REMEMBER_FIELDS,
   STATEMENT_CAP,
   TITLE_CAP,
+  TOPIC_CAP,
   VALUE_CAP,
   type AnswerCommand,
   type CaptureReading,
@@ -79,6 +81,10 @@ const KNOWN_KEYS = new Set([
   'placeRefs',
   'quote',
   'isStated',
+  'factKind',
+  'topic',
+  'isSensitive',
+  'isAboutMe',
   'shape',
   'prompt',
   'options',
@@ -138,10 +144,13 @@ const toSource = (
   alias: unknown,
   aliases: AliasBook,
   synced: SyncedBook | undefined,
+  facts: AliasBook | undefined,
 ): SourceRef | null => {
   if (typeof alias !== 'string') return null;
   const taskId = aliases.idOf(alias);
   if (taskId) return { kind: 'task', id: taskId };
+  const factId = facts?.idOf(alias);
+  if (factId) return { kind: 'fact', id: factId };
   const copy = synced?.get(alias);
   if (copy)
     return {
@@ -163,6 +172,7 @@ const readAnswer = (
   aliases: AliasBook,
   synced: SyncedBook | undefined,
   quotes: QuoteBook | undefined,
+  facts: AliasBook | undefined,
 ): AnswerCommand | null => {
   const scope = ANSWER_SCOPES.find((entry) => entry === item.scope);
   const question = toText(item.question, QUESTION_CAP);
@@ -177,7 +187,7 @@ const readAnswer = (
     isHealth: item.isHealth === true,
     fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
     sources: listed.flatMap((alias: unknown) => {
-      const source = toSource(alias, aliases, synced);
+      const source = toSource(alias, aliases, synced, facts);
       return source ? [source] : [];
     }),
     quotes: listedQuotes.flatMap((alias: unknown) => {
@@ -221,6 +231,11 @@ const readNoteFact = (
     isStated: item.isStated === true,
     whoRefs: toRefs(item.whoRefs, entities.whoRefs),
     placeRefs: toRefs(item.placeRefs, entities.placeRefs),
+    kind: FACT_KINDS.find((entry) => entry === item.factKind) ?? 'world',
+    topic: toText(item.topic, TOPIC_CAP),
+    value: toText(item.value, VALUE_CAP),
+    isSensitive: item.isSensitive === true,
+    isAboutMe: item.isAboutMe === true,
   };
 };
 
@@ -664,6 +679,7 @@ export function normalizeNomosReply(
     reading: CaptureReading;
     aliases: AliasBook;
     synced?: SyncedBook;
+    facts?: AliasBook;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -700,6 +716,7 @@ export function normalizeNomosReply(
           context.aliases,
           context.synced,
           context.quotes,
+          context.facts,
         );
         return read ? [read] : [];
       })[0] ?? null;
