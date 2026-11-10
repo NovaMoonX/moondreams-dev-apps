@@ -1370,7 +1370,7 @@ Categories in the manifest are product's table; a Never line has no category and
 
 | Source (adapter reads) | Categories: On | Categories: Off | Notes |
 |---|---|---|---|
-| A-List (`memberships/{uid}`) | `plannedShowings` (event), `savedTheaters` (place) | `seenMovies` (knowledge: title, rating) | |
+| A-List (`memberships/{uid}/viewings` and `theatres`) | `plannedShowings` (event: movie, start, end, theater as place label and zone; planned only, from the sync window on), `savedTheaters` (place: name, address) | `seenMovies` (knowledge: title, rating; only seen showings the person rated) | Opens at `/a-list?viewing=<id>`; no price, ticket, savings, membership or share-link field is read |
 | Going Once (sales the uid is in) | `pickups` (event), `mySales` (project: name, available/pending/sold counts) | | No buyer, contact, floor price, note or price fields exist |
 | Nine Lives (households the uid is a member of) | `cats` (pet: name), `vetVisits` (event), `dueCare` (task), `clinics` (place: name, phone, address) | `conditions` (knowledge) | |
 | Pinch (`kitchens/{uid}`) | `plannedMeals` (event), `shoppingList` (task: unticked only) | `useSoon` (task) | |

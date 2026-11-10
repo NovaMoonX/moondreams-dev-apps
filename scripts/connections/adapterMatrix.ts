@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
+import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
 import {
   applyCategoryChanges,
@@ -477,5 +478,185 @@ assert.equal(
 assert.deepEqual(readGrant({ status: 'live' }).categories, {});
 assert.equal(readGrant({}).status, 'ended');
 assert.deepEqual(readGrant(JSON.parse(JSON.stringify(staged))), staged);
+
+// A-List
+const membership = (uid: string, path: string) =>
+  firestore.doc(`apps/a-list/memberships/${uid}/${path}`);
+
+const showing = (
+  status: string,
+  title: string,
+  showtimeAt: number,
+  extra: Record<string, unknown> = {},
+) => ({
+  movieKey: 'tmdb-1',
+  movie: { title, runtimeMinutes: 120, posterUrl: null },
+  showtimeAt,
+  endsAt: showtimeAt + 3 * 3_600_000,
+  status,
+  theatre: {
+    theatreId: '2078',
+    name: 'AMC Town Center 20',
+    city: 'Leawood',
+    state: 'KS',
+    timeZone: 'America/Chicago',
+  },
+  ticket: {
+    priceCents: SECRET_PRICE,
+    totalCents: 777,
+    feeAvoidedCents: 999,
+  },
+  purchase: { url: 'https://example.com/SECRET-buy' },
+  rating: null,
+  lastEditedAt: NOW - 7,
+  ...extra,
+});
+
+await Promise.all([
+  membership(OWNER, 'viewings/v-next').set(
+    showing('PLANNED', 'Starlight Harbor', NOW + DAY),
+  ),
+  membership(OWNER, 'viewings/v-notheatre').set(
+    showing('PLANNED', 'Galaxy Drift', NOW + 2 * DAY, { theatre: null }),
+  ),
+  membership(OWNER, 'viewings/v-old').set(
+    showing('PLANNED', 'Ancient Showing', NOW - 60 * DAY),
+  ),
+  membership(OWNER, 'viewings/v-seen').set(
+    showing('SEEN', 'Dune', NOW - 3 * DAY, { rating: 4.5 }),
+  ),
+  membership(OWNER, 'viewings/v-seen-unrated').set(
+    showing('SEEN', 'The Matrix', NOW - 4 * DAY),
+  ),
+  membership(OWNER, 'theatres/2078').set({
+    theatreId: '2078',
+    name: 'AMC Town Center 20',
+    addressLine: '4701 Town Center Dr',
+    city: 'Leawood',
+    state: 'KS',
+    postalCode: '66211',
+    latitude: 38.9,
+    longitude: -94.6,
+    timeZone: 'America/Chicago',
+    lastEditedAt: NOW - 9,
+  }),
+  membership(OWNER, 'theatres/manual-1').set({
+    theatreId: 'manual-1',
+    name: 'Southlake Cinema',
+    addressLine: null,
+    city: null,
+    state: null,
+    postalCode: null,
+    timeZone: null,
+    lastEditedAt: NOW - 10,
+  }),
+]);
+
+const aListAdapter = createAListAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+
+const aListCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:a-list',
+      accountId: 'site',
+      categoryIds: ['plannedShowings', 'savedTheaters', 'seenMovies'],
+      options: null,
+    },
+    aListAdapter.manifest,
+    NOW,
+  ),
+});
+
+const runAList = async (uid: string, category: string) => {
+  const page = await aListAdapter.syncPage(aListCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+const showings = await runAList(OWNER, 'plannedShowings');
+assert.deepEqual(refs(showings), ['viewings/v-next', 'viewings/v-notheatre']);
+const nextShowing = showings.find(
+  (entry) => entry.sourceRef === 'viewings/v-next',
+);
+assert.equal(nextShowing?.kind, 'event');
+assert.equal(nextShowing?.title, 'Starlight Harbor');
+assert.equal(nextShowing?.startAt, NOW + DAY);
+assert.equal(nextShowing?.endAt, NOW + DAY + 3 * 3_600_000);
+assert.equal(nextShowing?.placeLabel, 'AMC Town Center 20');
+assert.equal(nextShowing?.timeZone, 'America/Chicago');
+assert.equal(
+  showings.find((entry) => entry.sourceRef === 'viewings/v-notheatre')
+    ?.placeLabel,
+  null,
+);
+
+const theaters = await runAList(OWNER, 'savedTheaters');
+assert.deepEqual(refs(theaters), ['theatres/2078', 'theatres/manual-1']);
+assert.ok(theaters.every((entry) => entry.kind === 'place'));
+assert.deepEqual(
+  theaters.find((entry) => entry.sourceRef === 'theatres/2078')?.extra,
+  { address: '4701 Town Center Dr, Leawood, KS 66211' },
+);
+assert.deepEqual(
+  theaters.find((entry) => entry.sourceRef === 'theatres/manual-1')?.extra,
+  { address: null },
+);
+
+const seen = await runAList(OWNER, 'seenMovies');
+assert.deepEqual(refs(seen), ['viewings/v-seen']);
+assert.equal(seen[0].kind, 'knowledge');
+assert.equal(seen[0].title, 'Dune');
+assert.deepEqual(seen[0].extra, { rating: 4.5 });
+await assert.rejects(() => runAList(OWNER, 'nothing'), /Unknown category/);
+
+const aListAll = [...showings, ...theaters, ...seen];
+assertShape(aListAll);
+aListAll.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    !values.includes(SECRET_PRICE) &&
+      !values.includes(777) &&
+      !values.includes(999) &&
+      !values.includes(38.9),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' && /SECRET|secret|1234|https:/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+
+const otherAList = await Promise.all(
+  ['plannedShowings', 'savedTheaters', 'seenMovies'].map((category) =>
+    runAList(OTHER, category),
+  ),
+);
+assert.deepEqual(otherAList, [[], [], []]);
+assert.equal(await aListAdapter.status(aListCtx(OWNER)), 'ok');
+assert.equal(await aListAdapter.status(aListCtx(OTHER)), 'noAccess');
+assert.equal(
+  aListAdapter.deepLink('viewings/v-next', aListCtx(OWNER)),
+  '/a-list?viewing=v-next',
+);
+assert.equal(
+  aListAdapter.deepLink('theatres/2078', aListCtx(OWNER)),
+  '/a-list',
+);
+assert.equal(aListAdapter.deepLink('???', aListCtx(OWNER)), '/a-list');
 
 console.log('Adapter matrix passed.');

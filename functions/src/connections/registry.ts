@@ -8,6 +8,7 @@ import type {
   SharedRecord,
 } from '../vendor/connectionsContract.js';
 import { createHelmSink } from '../apps/helm/connections/sink.js';
+import { createAListAdapter } from '../apps/a-list/share/adapter.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
 import type { ReaderSink } from './sink.js';
@@ -56,6 +57,7 @@ export interface SourceAdapter {
 
 export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:pinch': createPinchAdapter(),
+  'app:a-list': createAListAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
 };
 

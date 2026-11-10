@@ -36,7 +36,6 @@ function SyncedSheet({ record, now, onClose }: SyncedSheetProps) {
             record={record}
             appName={nameOf(record.connectorId)}
             now={now}
-            onOpened={onClose}
           />
         </div>
       )}

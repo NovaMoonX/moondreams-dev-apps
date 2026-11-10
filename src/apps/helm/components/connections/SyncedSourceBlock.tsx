@@ -10,6 +10,7 @@ import {
 } from '@/lib/connections/contract';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -20,8 +21,6 @@ interface SyncedSourceBlockProps {
   record: SyncedRecord;
   appName: string;
   now: number;
-  /** Called before the app opens, so a sheet can close behind the person. */
-  onOpened?: () => void;
 }
 
 /** "From Google Calendar · work": the account a copy came from, by its label when it has one and its email otherwise. */
@@ -48,12 +47,7 @@ const isInternalRoute = (link: string) =>
   link.startsWith('/') && !link.startsWith('//');
 
 /** The muted block under a copied record: whose it is, how fresh the copy is, and the way to the source. */
-function SyncedSourceBlock({
-  record,
-  appName,
-  now,
-  onOpened,
-}: SyncedSourceBlockProps) {
+function SyncedSourceBlock({ record, appName, now }: SyncedSourceBlockProps) {
   const name = useAssistantName();
   const navigate = useNavigate();
   const appId = readConnectorAppId(record.connectorId) ?? '';
@@ -105,10 +99,7 @@ function SyncedSourceBlock({
           variant='secondary'
           size='sm'
           className='self-start'
-          onClick={() => {
-            onOpened?.();
-            navigate(link);
-          }}
+          onClick={() => afterBackLayersClose(() => navigate(link))}
         >
           {HELM_COPY.syncedOpenIn(appName)}
           <ExternalLink className='ml-1 size-3.5' aria-hidden='true' />

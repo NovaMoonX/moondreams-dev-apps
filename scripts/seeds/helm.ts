@@ -40,7 +40,9 @@ import {
   type ConnectionAccount,
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
+import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
+import { getShowtime } from './aList.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -48,6 +50,21 @@ import {
   type SeedContext,
   type SeedResult,
 } from './types.ts';
+
+interface CopyDefinition {
+  category: string;
+  sourceRef: string;
+  kind: 'event' | 'task' | 'place';
+  title: string;
+  subtitle: string | null;
+  startAt: number | null;
+  dueAt: number | null;
+  deepLink: string;
+  endAt?: number;
+  isAllDay?: boolean;
+  placeLabel?: string;
+  extra?: Record<string, string>;
+}
 
 const DAY_MS = 86_400_000;
 const MINUTE_MS = 60_000;
@@ -941,7 +958,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     `${new Date(context.now).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })}T00:00:00Z`,
   );
 
-  const copyDefinitions = [
+  const copyDefinitions: CopyDefinition[] = [
     {
       category: 'plannedMeals',
       sourceRef: 'plannedMeals/seed-meal-1',
@@ -1006,25 +1023,26 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
 
   const writeCopies = (
     uid: string,
-    copies: typeof copyDefinitions,
+    copies: CopyDefinition[],
     endedAt: number | null,
+    source = { connectorId: pinchConnectorId, grantId: pinchGrantId },
   ) => {
     const data = deriveSeedDataKey(keyring, uid);
     copies.forEach((copy) => {
       const id = createHash('sha256')
-        .update(`${pinchGrantId}|${copy.category}|${copy.sourceRef}`)
+        .update(`${source.grantId}|${copy.category}|${copy.sourceRef}`)
         .digest('hex')
         .slice(0, 40);
       batch.set(users.doc(uid).collection('synced').doc(id), {
-        connectorId: pinchConnectorId,
+        connectorId: source.connectorId,
         accountId: SITE_ACCOUNT_ID,
-        grantId: pinchGrantId,
+        grantId: source.grantId,
         category: copy.category,
         kind: copy.kind,
         sourceRef: copy.sourceRef,
         startAt: copy.startAt,
-        endAt: null,
-        isAllDay: copy.startAt !== null,
+        endAt: copy.endAt ?? null,
+        isAllDay: copy.isAllDay ?? copy.startAt !== null,
         dueAt: copy.dueAt,
         calendarKey: null,
         isBusy: null,
@@ -1040,11 +1058,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             title: copy.title,
             subtitle: copy.subtitle,
             detail: null,
-            placeLabel: null,
+            placeLabel: copy.placeLabel ?? null,
             amountCents: null,
             currency: null,
             deepLink: copy.deepLink,
-            extra: {},
+            extra: copy.extra ?? {},
           },
         ),
       });
@@ -1095,6 +1113,106 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     pinchGrant,
   );
   writeCopies(FIXTURE_USERS.partnerOne.uid, copyDefinitions, null);
+
+  const aListConnectorId = toAppConnectorId('a-list');
+  const aListGrantId = toGrantId('helm', aListConnectorId, SITE_ACCOUNT_ID);
+  const aListCopies: CopyDefinition[] = [
+    {
+      category: 'plannedShowings',
+      sourceRef: 'viewings/seed-viewing-starlight',
+      kind: 'event',
+      title: 'Starlight Harbor',
+      subtitle: null,
+      startAt: getShowtime(context.now, 4),
+      endAt: getShowtime(context.now, 4) + 2.5 * 60 * MINUTE_MS,
+      isAllDay: false,
+      dueAt: null,
+      placeLabel: 'AMC Dine-In Mission Valley 20',
+      deepLink: '/a-list?viewing=seed-viewing-starlight',
+    },
+    {
+      category: 'plannedShowings',
+      sourceRef: 'viewings/seed-viewing-galaxy',
+      kind: 'event',
+      title: 'Galaxy Drift',
+      subtitle: null,
+      startAt: getShowtime(context.now, 25),
+      endAt: getShowtime(context.now, 25) + 3 * 60 * MINUTE_MS,
+      isAllDay: false,
+      dueAt: null,
+      placeLabel: 'AMC Town Center 20',
+      deepLink: '/a-list?viewing=seed-viewing-galaxy',
+    },
+    {
+      category: 'savedTheaters',
+      sourceRef: 'theatres/2078',
+      kind: 'place',
+      title: 'AMC Dine-In Mission Valley 20',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      extra: { address: '5000 Metcalf Ave, Overland Park, KS 66202' },
+      deepLink: '/a-list',
+    },
+    {
+      category: 'savedTheaters',
+      sourceRef: 'theatres/2105',
+      kind: 'place',
+      title: 'AMC Town Center 20',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      extra: { address: '4701 Town Center Dr, Leawood, KS 66211' },
+      deepLink: '/a-list',
+    },
+  ];
+  const aListGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: aListConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      plannedShowings: { isOn: true, changedAt: connectedAt },
+      savedTheaters: { isOn: true, changedAt: connectedAt },
+      seenMovies: { isOn: false, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      A_LIST_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => {
+          const count = aListCopies.filter(
+            (copy) => copy.category === category.id,
+          ).length;
+          return [
+            category.id,
+            count > 0
+              ? { lastOkAt: syncedAt, lastError: null, count }
+              : { lastOkAt: null, lastError: null, count: 0 },
+          ];
+        }),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(aListGrantId),
+    aListGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, aListCopies, null, {
+    connectorId: aListConnectorId,
+    grantId: aListGrantId,
+  });
 
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
@@ -1196,7 +1314,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies and his fixture Google account, its Calendar grant and token; Jamie's ended one with three kept copies.
+  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies, his A-List connection with its four, and his fixture Google account, its Calendar grant and token; Jamie's ended one with three kept copies.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
@@ -1206,7 +1324,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       2 +
       3 +
       copyDefinitions.length +
-      keptDefinitions.length,
+      keptDefinitions.length +
+      1 +
+      aListCopies.length,
   };
   return result;
 }

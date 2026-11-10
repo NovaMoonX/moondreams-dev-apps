@@ -4,11 +4,16 @@ import {
   type SourceShares,
 } from '@/lib/connections/contract';
 import { GOOGLE_CALENDAR_MANIFEST } from '@/lib/connections/google/calendarManifest';
+import { A_LIST_SHARES } from '@apps/a-list/share/manifest';
 import { HELM_SHARES } from '@apps/helm/share/manifest';
 import { PINCH_SHARES } from '@apps/pinch/share/manifest';
 
 /** Every site app's sharing declaration; an app is added here when it declares what it offers. */
-export const SOURCE_SHARES: SourceShares[] = [PINCH_SHARES, HELM_SHARES];
+export const SOURCE_SHARES: SourceShares[] = [
+  PINCH_SHARES,
+  A_LIST_SHARES,
+  HELM_SHARES,
+];
 
 /** The manifest an app offers, or null when it offers nothing. */
 export const getSourceManifest = (appId: string) =>
