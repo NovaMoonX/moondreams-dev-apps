@@ -4709,7 +4709,7 @@ export const NEEDS_HOME_WORDS = {
   cancelSelect: 'Cancel',
   nothingTicked: 'Tick the charges you want to sort together.',
   bulkKeepFree: 'Keep in Free to Spend',
-  bulkKeepFreeShort: 'Free to Spend',
+  bulkKeepFreeShort: 'Keep',
   bulkPut: 'Put in an envelope',
   bulkPutShort: 'Envelope',
   bulkLeaveOut: 'Leave out of spending',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ArrowLeftRight, Ban } from 'lucide-react';
+import { ArrowLeftRight, Ban, ListChecks } from 'lucide-react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -154,9 +154,11 @@ function MoneyInSheet({
         ) : (
           isOnCard && cardChoices
         )}
-        <ActionGroup isRoomy>
-          <LeaveOutRow purchase={purchase} onDone={onClose} />
-        </ActionGroup>
+        {!isOnCard && (
+          <ActionGroup isRoomy>
+            <LeaveOutRow purchase={purchase} onDone={onClose} />
+          </ActionGroup>
+        )}
       </div>
     </FormSheet>
   );
@@ -487,6 +489,14 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
     </ul>
   );
 
+  const getMoveKindLabel = (id: string) => {
+    const move = moves.find((entry) => entry.purchase.id === id);
+    if (!move) return undefined;
+    return move.others[0].kind === 'cardPayment'
+      ? NEEDS_HOME_WORDS.cardPaymentKind
+      : NEEDS_HOME_WORDS.moveKind;
+  };
+
   const chargesTrailing = selection.isActive ? (
     <span className='flex items-center gap-1'>
       <Button
@@ -509,10 +519,12 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
   ) : (
     <Button
       type='button'
-      variant='tertiary'
+      variant='base'
       size='sm'
+      className="bg-muted text-foreground! border-border hover:bg-accent relative h-7 min-h-0 gap-1 rounded-full border px-3 py-0 text-sm font-medium whitespace-nowrap after:absolute after:-inset-x-1 after:-inset-y-[7px] after:content-['']"
       onClick={selection.start}
     >
+      <ListChecks className='h-3.5 w-3.5' aria-hidden='true' />
       {NEEDS_HOME_WORDS.select}
     </Button>
   );
@@ -539,15 +551,17 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           </p>
         ) : (
           <>
-            <div>
-              <HelpTip
-                title={NEEDS_HOME_WORDS.title}
-                badgeLabel={NEEDS_HOME_WORDS.countedChip}
-              >
-                <p>{NEEDS_HOME_WORDS.intro}</p>
-              </HelpTip>
-            </div>
-            {moves.length > 0 && (
+            {!selection.isActive && (
+              <div>
+                <HelpTip
+                  title={NEEDS_HOME_WORDS.title}
+                  badgeLabel={NEEDS_HOME_WORDS.countedChip}
+                >
+                  <p>{NEEDS_HOME_WORDS.intro}</p>
+                </HelpTip>
+              </div>
+            )}
+            {!selection.isActive && moves.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider
                   label={NEEDS_HOME_WORDS.movesHeading}
@@ -575,7 +589,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
                 </ul>
               </div>
             )}
-            {moneyIn.length > 0 && (
+            {!selection.isActive && moneyIn.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider
                   label={NEEDS_HOME_WORDS.moneyIn}
@@ -588,7 +602,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
                 {renderRows(moneyIn)}
               </div>
             )}
-            {maybeTwice.length > 0 && (
+            {!selection.isActive && maybeTwice.length > 0 && (
               <div className='space-y-2'>
                 <SectionDivider
                   label={NEEDS_HOME_WORDS.maybeTwice}
@@ -630,7 +644,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
           </>
         )}
       </div>
-      {selection.isActive && (
+      {selection.isActive && charges.length > 0 && (
         <SelectionBar
           note={
             isNothingTicked
@@ -676,6 +690,7 @@ function NeedsHomeScreen({ onClose }: NeedsHomeScreenProps) {
         <PurchaseScreen
           key={openId}
           purchaseId={openId}
+          kindLabel={getMoveKindLabel(openId)}
           fallback={opened ?? (sent?.id === openId ? sent : null)}
           onOpen={setOpenId}
           onClose={() => setOpenId(null)}
