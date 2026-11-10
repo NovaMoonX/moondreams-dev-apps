@@ -1,10 +1,17 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 
+import { httpsCallable } from 'firebase/functions';
+
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useVoiceConversation } from '@/hooks/useVoiceConversation';
 import type { VoiceIdentity } from '@/lib/speech/voice/types';
+import {
+  createVoiceTokenSource,
+  type MintVoiceTokenRequest,
+  type MintVoiceTokenResult,
+} from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import {
@@ -18,6 +25,7 @@ import {
   getNextTurn,
   recordSentTurn,
 } from '@apps/helm/hooks/useSession';
+import { functions } from '@lib/firebase/config';
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
@@ -41,6 +49,11 @@ import { isUndoPhrase } from '@apps/helm/utils/voicePhrases';
 const NOTE_MS = 6000;
 // A turn still unsorted this long after it was sent while offline stops the wait; it is filed once the connection is back.
 const OFFLINE_WAIT_MS = 20_000;
+
+const mintVoiceToken = httpsCallable<
+  MintVoiceTokenRequest,
+  MintVoiceTokenResult
+>(functions, 'mintVoiceToken');
 
 const HELM_VOICE_IDENTITY: VoiceIdentity = {
   id: 'helm-assistant',
@@ -72,15 +85,28 @@ export function useHelmVoice() {
   const isSurfaceShown = useRef(true);
   // Rises on each Stop, so a turn still being sent when Stop was tapped is never waited on.
   const stopCount = useRef(0);
+  const [tokenSource] = useState(() =>
+    createVoiceTokenSource({
+      appId: 'helm',
+      mint: async (request) => (await mintVoiceToken(request)).data,
+    }),
+  );
+  const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
+  const [showsPhoneLine, setShowsPhoneLine] = useState(false);
 
   const voice = useVoiceConversation({
     lang: navigator.language || 'en-US',
     identity: HELM_VOICE_IDENTITY,
     endPhrases: END_PHRASES,
-    onUtterance: (text) => {
-      void handleUtterance(text);
+    onUtterance: (text, heardBy) => {
+      void handleUtterance(text, heardBy.sttProvider);
     },
     onNothingHeard: () => showNote(HELM_COPY.talkHeardNothing),
+    onCloudHeld: () => setShowsPhoneLine(true),
+    cloudListening: {
+      tokenSource,
+      isAllowed: voiceMode !== 'deviceOnly',
+    },
   });
 
   function showNote(text: string) {
@@ -95,15 +121,15 @@ export function useHelmVoice() {
     void voice.speak(line, { priority: 'ack', turnKey: Date.now() });
   }
 
-  async function handleUtterance(text: string) {
+  async function handleUtterance(text: string, sttProvider: string) {
     if (isUndoPhrase(text)) {
       await undoLatest();
       return;
     }
-    await sendTurn(text);
+    await sendTurn(text, sttProvider);
   }
 
-  async function sendTurn(text: string) {
+  async function sendTurn(text: string, sttProvider: string) {
     const { helm } = store.getState();
     if (!uid || helm.keyStatus !== 'ready' || !helm.recentCaptures.isLoaded) {
       voice.settle();
@@ -133,7 +159,7 @@ export function useHelmVoice() {
         reading,
         screen: screen.current,
         ...turn,
-        voice: { sttProvider: 'browser' },
+        voice: { sttProvider },
       });
       recordSentTurn(uid, turn, id);
       const leadId = turn.leadId ?? id;
@@ -295,6 +321,7 @@ export function useHelmVoice() {
     }
     screen.current = page;
     setNotice(null);
+    setShowsPhoneLine(false);
     voice.listen();
     return 'started' as const;
   };
@@ -303,6 +330,7 @@ export function useHelmVoice() {
     ...voice,
     note,
     notice,
+    showsPhoneLine,
     clearNotice: () => setNotice(null),
     talk,
     setSurfaceShown,

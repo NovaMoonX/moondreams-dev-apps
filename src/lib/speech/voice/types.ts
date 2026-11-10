@@ -1,5 +1,7 @@
 export type VoiceRoute = 'cloud' | 'device';
 
+export type CloudHeldReason = 'listenLimit' | 'mintLimit' | 'budgetReached';
+
 /** ack: a code-built confirmation of what was done · reply: an answer · summary: a long read. */
 export type SpeechPriority = 'ack' | 'reply' | 'summary';
 

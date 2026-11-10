@@ -48,3 +48,28 @@ export const costMicros = (
   const price = TTS_PRICES[provider];
   return price.micros * (price.per === 'character' ? characters : audioSeconds);
 };
+
+/** The most the site spends on voice in one UTC day, across every app and person. */
+export const VOICE_DAILY_BUDGET_CENTS = 500;
+
+/** The longest one listening turn is counted as. */
+export const VOICE_UTTERANCE_MS = 60_000;
+
+export const VOICE_TOKEN_TTL_SECONDS = 60;
+
+export const STT_MODEL = 'nova-3';
+
+/** Millionths of a dollar per minute of streamed listening, read from the provider's docs (search results) and unverified until the first real run. */
+export const STT_PRICES = {
+  deepgramStream: { perMinuteMicros: 7_700, readOn: '2026-11-09' },
+} as const;
+
+/** The cost in millionths of a dollar of listening for `ms`, rounded up. */
+export const listenCostMicros = (ms: number) =>
+  Math.ceil((STT_PRICES.deepgramStream.perMinuteMicros * ms) / 60_000);
+
+export interface VoiceAppLimits {
+  listenMsPerDay: number;
+  mintsPerDay: number;
+  spokenCharsPerDay: number;
+}

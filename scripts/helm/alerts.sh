@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Creates the three alert policies that watch Helm's master keyring (a failed check, a missing heartbeat, a changed secret).
+# Creates the three alert policies that watch Helm's master keyring (a failed check, a missing heartbeat, a changed secret), and one for the site's voice cap.
 #   npm run helm:alerts -- you@example.com
 # Run it after the merge that deploys verifyHelmKeys. It is safe to run again: what already exists is left alone.
 set -euo pipefail
@@ -96,6 +96,19 @@ cat > "$WORK/audit.json" <<JSON
 }
 JSON
 create_policy "Helm: master keyring changed" "$WORK/audit.json"
+cat > "$WORK/voice.json" <<JSON
+{
+  "displayName": "Voice: daily cap reached",
+  "combiner": "OR",
+  "conditions": [{
+    "displayName": "voice.budgetReached logged",
+    "conditionMatchedLog": { "filter": "jsonPayload.event=\"voice.budgetReached\"" }
+  }],
+  "alertStrategy": { "notificationRateLimit": { "period": "86400s" }, "autoClose": "86400s" },
+  "notificationChannels": ["$CHANNEL"]
+}
+JSON
+create_policy "Voice: daily cap reached" "$WORK/voice.json"
 
 echo
 echo "To see the failure alert reach you, write a test entry (not key material):"

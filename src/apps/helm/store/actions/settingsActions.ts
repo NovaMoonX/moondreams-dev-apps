@@ -1,4 +1,4 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction, updateDoc } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import {
@@ -6,7 +6,7 @@ import {
   DEFAULT_DAY_START_TIME,
   DEFAULT_PLAN_FILL_PERCENT,
 } from '@apps/helm/constants';
-import type { HelmProfile } from '@apps/helm/types';
+import type { HelmProfile, VoiceMode } from '@apps/helm/types';
 
 /** Creates the profile on first open, with this device's zone, and leaves an existing one alone, so two tabs opening together make one. */
 export async function ensureHelmProfile(uid: string) {
@@ -22,9 +22,17 @@ export async function ensureHelmProfile(uid: string) {
       dayEndTime: DEFAULT_DAY_END_TIME,
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
       hasSeenAiNotice: false,
+      voiceMode: 'cloudWhenOnline',
+      hasSeenVoiceNotice: false,
       createdAt: Date.now(),
       lastEditedAt: null,
     };
     transaction.set(profileRef, profile);
   });
 }
+
+export const setVoiceMode = (uid: string, voiceMode: VoiceMode) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    voiceMode,
+    lastEditedAt: Date.now(),
+  });

@@ -1,10 +1,16 @@
+import { useRef, useState } from 'react';
+
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ArrowUp, Mic, Square, X } from 'lucide-react';
 
+import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import MuteControl from '@apps/helm/components/voice/MuteControl';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
+import { markVoiceNoticeSeen } from '@apps/helm/store/actions/captureActions';
 import type { ScreenContext } from '@apps/helm/types';
 
 const BUTTON =
@@ -17,6 +23,29 @@ interface VoiceStatusProps {
   onBlocked?: () => void;
   /** What a turn started here is asked about; null from home. */
   screen?: ScreenContext | null;
+}
+
+function VoiceNotice() {
+  const { user } = useAuth();
+  const hasSeen = useAppSelector(
+    (state) => state.helm.profile?.hasSeenVoiceNotice,
+  );
+  // Decided when the line first appears, so it stays while it is read and the profile then changes.
+  const [isShown] = useState(hasSeen === false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  useOnceVisible(ref, isShown && user !== null, async () => {
+    if (!user) return;
+    await markVoiceNoticeSeen(user.uid).catch((error: unknown) => {
+      console.error('Helm voice notice was not marked seen', error);
+      throw error;
+    });
+  });
+  if (!isShown) return null;
+  return (
+    <p ref={ref} className='text-muted-foreground text-[13px] text-pretty'>
+      {HELM_COPY.voiceNotice}
+    </p>
+  );
 }
 
 /** What the voice is doing, in words: what is heard as it is said (the newest words kept in view), the line being spoken, or the short line after an undo, with Mute while a line plays and Muted once it is on. Draws nothing while idle unless it carries the controls or the voice is muted. */
@@ -37,7 +66,15 @@ function VoiceStatus({
           : '';
   const isIdle = voice.state === 'idle';
   const isWorking = voice.state === 'thinking' || voice.state === 'speaking';
-  if (text === '' && !(hasControls && isIdle) && !voice.isMuted) return null;
+  const showsPhoneLine = isIdle && voice.showsPhoneLine;
+  if (
+    text === '' &&
+    !(hasControls && isIdle) &&
+    !voice.isMuted &&
+    !showsPhoneLine
+  ) {
+    return null;
+  }
 
   return (
     <div
@@ -63,6 +100,14 @@ function VoiceStatus({
           )}
         >
           {text}
+        </p>
+      )}
+      {voice.state === 'listening' && voice.listeningRoute === 'cloud' && (
+        <VoiceNotice />
+      )}
+      {showsPhoneLine && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.voiceOnPhone}
         </p>
       )}
       {!(hasControls && isWorking) && (

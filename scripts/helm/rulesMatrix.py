@@ -148,12 +148,13 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest'):
+    for p in (f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
         admin([put(p, {'x': 1})])
+        label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():
-            check(f'{p.split("/")[-2]} read [{a}]', get(p, tok), False)
-            check(f'{p.split("/")[-2]} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)
-            check(f'{p.split("/")[-2]} write [{a}]', commit(tok, [put(p, {'x': 2})]), False)
+            check(f'{label} read [{a}]', get(p, tok), False)
+            check(f'{label} create [{a}]', commit(tok, [put_new(p + '-new', {'x': 2})]), False)
+            check(f'{label} write [{a}]', commit(tok, [put(p, {'x': 2})]), False)
 
     if args.out:
         with open(args.out, 'w') as f: json.dump(dict(sorted(results.items())), f, indent=1)

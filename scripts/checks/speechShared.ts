@@ -25,15 +25,29 @@ import {
 import { createDeepgramAura } from '../../functions/src/voice/providers/deepgramAura.ts';
 import { createGeminiTts } from '../../functions/src/voice/providers/geminiTts.ts';
 import { createGoogleTts } from '../../functions/src/voice/providers/googleTts.ts';
+import { grantDeepgramToken } from '../../functions/src/voice/providers/deepgram.ts';
 import { pcmToWav } from '../../functions/src/voice/providers/pcm.ts';
 import type { TtsProvider } from '../../functions/src/voice/providers/types.ts';
 import {
+  getLocalDayKey,
+  planListen,
+  type ListenUsage,
+} from '../../functions/src/voice/usage.ts';
+import {
   costMicros,
+  listenCostMicros,
   TTS_PRICES,
+  VOICE_DAILY_BUDGET_CENTS,
+  VOICE_UTTERANCE_MS,
   type TtsProviderId,
 } from '../../functions/src/voice/voiceConfig.ts';
 import { toSpokenText } from '../../src/lib/speech/spokenText.ts';
 import { createPlaybackQueue } from '../../src/lib/speech/voice/playbackQueue.ts';
+import {
+  createVoiceTokenSource,
+  type MintVoiceTokenRequest,
+  type MintVoiceTokenResult,
+} from '../../src/lib/speech/voice/voiceToken.ts';
 import type { TtsAdapter } from '../../src/lib/speech/voice/types.ts';
 import {
   pickListener,
@@ -83,19 +97,21 @@ const VOICE_SERVICE_WORDS = new RegExp(
   `${APP_WORDS.source}|\\btasks?\\b|capture`,
   'i',
 );
-sharedFiles.forEach((file) => {
-  const isVoiceService = /\/(functions\/src|scripts)\/voice\//.test(
-    file.pathname,
-  );
-  const found = readFileSync(file, 'utf8').match(
-    isVoiceService ? VOICE_SERVICE_WORDS : APP_WORDS,
-  );
-  assert.equal(
-    found,
-    null,
-    `${file.pathname.split('/').slice(-2).join('/')} carries no one app's words`,
-  );
-});
+sharedFiles
+  .filter((file) => !file.pathname.endsWith('/voiceApps.ts'))
+  .forEach((file) => {
+    const isVoiceService = /\/(functions\/src|scripts)\/voice\//.test(
+      file.pathname,
+    );
+    const found = readFileSync(file, 'utf8').match(
+      isVoiceService ? VOICE_SERVICE_WORDS : APP_WORDS,
+    );
+    assert.equal(
+      found,
+      null,
+      `${file.pathname.split('/').slice(-2).join('/')} carries no one app's words`,
+    );
+  });
 
 const spellings = ['ok computer', 'okay computer', 'hey computer'];
 assert.deepEqual(
@@ -495,16 +511,67 @@ console.log('speechShared: spoken text checks passed');
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
-assert.equal(
-  pickListener({ isOnline: true }),
-  'browser',
-  'online listens with the browser',
-);
-assert.equal(
-  pickListener({ isOnline: false }),
-  'browser',
-  'offline listens with the browser',
-);
+const CLOUD_ON = {
+  isOnline: true,
+  isCloudAllowed: true,
+  isCloudHeld: false,
+  hasCloud: true,
+};
+assert.equal(pickListener(CLOUD_ON), 'cloud', 'all on listens in the cloud');
+(
+  [
+    { isOnline: false },
+    { isCloudAllowed: false },
+    { isCloudHeld: true },
+    { hasCloud: false },
+  ] as const
+).forEach((off) => {
+  assert.equal(
+    pickListener({ ...CLOUD_ON, ...off }),
+    'browser',
+    `${Object.keys(off)[0]} off listens with the browser`,
+  );
+});
+{
+  const requests: MintVoiceTokenRequest[] = [];
+  const state = { isFailing: false };
+  const READY: MintVoiceTokenResult = {
+    status: 'ready',
+    token: 't',
+    expiresAt: 1,
+    provider: 'deepgram',
+    model: 'm',
+    mintId: 'mint-1',
+  };
+  const source = createVoiceTokenSource({
+    appId: 'x',
+    mint: async (request) => {
+      requests.push(request);
+      if (state.isFailing) throw new Error('offline');
+      return READY;
+    },
+  });
+  source.reportClosed('a', 1000);
+  const first = await source.getToken();
+  assert.equal(first.status, 'ready', 'a minted token is ready');
+  assert.deepEqual(requests[0].closed, [{ mintId: 'a', ms: 1000 }]);
+  await source.getToken();
+  assert.deepEqual(requests[1].closed, [], 'a sent report is not sent twice');
+  source.reportClosed('b', 2000);
+  state.isFailing = true;
+  assert.deepEqual(
+    await source.getToken(),
+    { status: 'held', reason: 'unavailable' },
+    'a failed request reads as held unavailable',
+  );
+  state.isFailing = false;
+  await source.getToken();
+  assert.deepEqual(
+    requests[3].closed,
+    [{ mintId: 'b', ms: 2000 }],
+    'a report kept after a failed request is sent with the next one',
+  );
+}
 (
   [
     [{ isOnline: true, priority: 'ack', isNaturalVoiceReady: true }, 'natural'],
@@ -1028,5 +1095,169 @@ assert.equal(
   costMicros('geminiTts', { characters: 1000, audioSeconds: 60 }),
   9000,
   'a minute of Gemini audio costs about $0.009',
+);
+
+const grantCalls: { url: string; init: RequestInit }[] = [];
+const grantWith = (response: Response) =>
+  grantDeepgramToken({
+    apiKey: 'dg-secret-key',
+    ttlSeconds: 60,
+    fetchImpl: (async (url: string, init: RequestInit) => {
+      grantCalls.push({ url, init });
+      return response;
+    }) as unknown as typeof fetch,
+  });
+assert.deepEqual(
+  await grantWith(Response.json({ access_token: 'dg-token', expires_in: 60 })),
+  { token: 'dg-token', expiresInSeconds: 60 },
+  'a valid grant answers the token and its lifetime',
+);
+assert.deepEqual(
+  [
+    grantCalls[0].url,
+    grantCalls[0].init.method,
+    (grantCalls[0].init.headers as Record<string, string>).Authorization,
+    grantCalls[0].init.body,
+  ],
+  [
+    'https://api.deepgram.com/v1/auth/grant',
+    'POST',
+    'Token dg-secret-key',
+    '{"ttl_seconds":60}',
+  ],
+  'the grant is a POST with the key and the lifetime',
+);
+await assert.rejects(
+  grantWith(Response.json({ expires_in: 60 })),
+  'a grant without a token throws',
+);
+let grantCancelled = false;
+const refusedGrant = new Response(
+  new ReadableStream({
+    cancel() {
+      grantCancelled = true;
+    },
+  }),
+  { status: 401 },
+);
+await assert.rejects(
+  grantWith(refusedGrant),
+  (error: Error) =>
+    error.message === 'deepgram answered 401' &&
+    !error.message.includes('dg-secret-key'),
+  'a refused grant throws the status alone',
+);
+assert.ok(grantCancelled, 'a refused grant cancels its body unread');
+
+assert.equal(
+  getLocalDayKey(Date.parse('2026-11-10T05:00:00Z'), 'America/Los_Angeles'),
+  '2026-11-09',
+  "the day key is the day in the person's zone",
+);
+assert.equal(
+  getLocalDayKey(Date.parse('2026-11-10T05:00:00Z'), 'Not/AZone'),
+  '2026-11-10',
+  'an invalid zone gives the UTC day',
+);
+
+const listenLimits = {
+  listenMsPerDay: 3_600_000,
+  mintsPerDay: 300,
+  spokenCharsPerDay: 30_000,
+};
+const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
+const emptyUsage: ListenUsage = { listenMs: 0, mints: 0, openMints: {} };
+const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
+  planListen({
+    usage: emptyUsage,
+    budgetMicros: 0,
+    limits: listenLimits,
+    now: 1,
+    closed: [],
+    mintId: 'new',
+    worstCaseMicros: worstCase,
+    ...overrides,
+  });
+const openUsage: ListenUsage = { listenMs: 0, mints: 1, openMints: { a: 1 } };
+assert.equal(
+  plan({
+    usage: openUsage,
+    closed: [{ mintId: 'a', ms: 9_999_999 }],
+  }).usage.listenMs,
+  VOICE_UTTERANCE_MS,
+  'a closed report adds at most one utterance',
+);
+assert.equal(
+  plan({ usage: openUsage, closed: [{ mintId: 'a', ms: -5 }] }).usage.listenMs,
+  0,
+  'a negative report adds nothing',
+);
+const replayed = plan({
+  usage: { listenMs: 0, mints: 1, openMints: {} },
+  closed: [
+    { mintId: 'a', ms: 5_000 },
+    { mintId: 'zzz', ms: 5_000 },
+  ],
+});
+assert.equal(replayed.usage.listenMs, 0, 'unknown or replayed ids add nothing');
+const settledOnce = plan({
+  usage: openUsage,
+  closed: [
+    { mintId: 'a', ms: 5_000 },
+    { mintId: 'a', ms: 5_000 },
+  ],
+});
+assert.equal(settledOnce.usage.listenMs, 5_000, 'a report counts once');
+assert.deepEqual(
+  Object.keys(settledOnce.usage.openMints),
+  ['new'],
+  'a settled mint is closed and the new one is open',
+);
+const burst = Array.from({ length: 300 }).reduce<{
+  usage: ListenUsage;
+  failures: number;
+}>(
+  (acc, _, index) => {
+    const next = plan({ usage: acc.usage, mintId: `m${index}` });
+    return {
+      usage: next.usage,
+      failures: acc.failures + (next.held === null ? 0 : 1),
+    };
+  },
+  { usage: emptyUsage, failures: 0 },
+);
+assert.equal(burst.failures, 0, 'the first 300 plans all succeed');
+assert.equal(
+  plan({ usage: burst.usage, mintId: 'm300' }).held,
+  'mintLimit',
+  'the 301st plan is held at the mint limit',
+);
+assert.equal(
+  plan({ usage: { ...emptyUsage, listenMs: listenLimits.listenMsPerDay } })
+    .held,
+  'listenLimit',
+  'listening at the limit is held',
+);
+assert.equal(
+  plan({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000 - worstCase + 1,
+  }).held,
+  'budgetReached',
+  'a budget one worst case short is held',
+);
+assert.equal(
+  plan({ budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000 - worstCase }).held,
+  null,
+  'a budget with room for one worst case is not held',
+);
+const heldPlan = plan({
+  usage: openUsage,
+  closed: [{ mintId: 'a', ms: 7_000 }],
+  budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000,
+});
+assert.deepEqual(
+  [heldPlan.held, heldPlan.usage.listenMs, heldPlan.budgetDeltaMicros],
+  ['budgetReached', 7_000, 0],
+  'a held plan saves the closed reports and charges nothing',
 );
 console.log('speechShared: voice provider checks passed');

@@ -1,11 +1,13 @@
 import { useState } from 'react';
 
-import { Eye, History } from 'lucide-react';
+import { Eye, History, Mic } from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
+import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
 
 interface SettingsScreenProps {
@@ -16,6 +18,8 @@ interface SettingsScreenProps {
 /** A utility screen: Back to Home, its title and its groups, with no ask bar. */
 function SettingsScreen({ onBack, onOpenActivity }: SettingsScreenProps) {
   const [isSeesOpen, setIsSeesOpen] = useState(false);
+  const [isVoiceOpen, setIsVoiceOpen] = useState(false);
+  const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
 
   return (
     <>
@@ -29,6 +33,19 @@ function SettingsScreen({ onBack, onOpenActivity }: SettingsScreenProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.settingsTitle}
         </h1>
+        <SettingsGroup title={HELM_COPY.settingsVoice}>
+          <SettingsRow
+            icon={<Mic className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.settingsVoiceRowTitle}
+            description={
+              voiceMode === 'deviceOnly'
+                ? HELM_COPY.settingsVoiceDevice
+                : HELM_COPY.settingsVoiceCloud
+            }
+            onClick={() => setIsVoiceOpen(true)}
+            hasChevron
+          />
+        </SettingsGroup>
         <SettingsGroup title={HELM_COPY.settingsYourData}>
           <SettingsRow
             icon={<History className='size-5' aria-hidden='true' />}
@@ -46,6 +63,10 @@ function SettingsScreen({ onBack, onOpenActivity }: SettingsScreenProps) {
           />
         </SettingsGroup>
       </main>
+      <VoiceSettings
+        isOpen={isVoiceOpen}
+        onClose={() => setIsVoiceOpen(false)}
+      />
       <WhatTheAiSees isOpen={isSeesOpen} onClose={() => setIsSeesOpen(false)} />
     </>
   );

@@ -27,6 +27,7 @@ Built:
 - Several messages sent before the reply starts are one turn: each stays its own bubble, one reply covers them all, and a message sent after the reply starts is a new turn; it works offline too.
 - Talk: tap Talk (or the mic in the ask bar), say it and tap again, say "that's all" or pause; the browser's recognition writes a spoken turn that is filed like a typed one, a short "Got it" line is said in this phone's voice once it is sorted, and "undo that" takes the session's latest turn back. Typed turns are never spoken, and Mute silences spoken lines until Helm is closed.
 - The voice benchmark (a developer tool, not in the app): `npm run voice:benchmark` renders twelve replies through three cloud voices, times and prices them and opens a page to listen beside the natural voice; the pick is the owner's and `docs/voice-benchmark.md` records it.
+- Online, what you say is heard by the cloud listener (Deepgram) as you speak; past 60 minutes a day, or once the site's $5 voice cap is reached, the phone's own listening takes over with one quiet line, and Settings → Voice keeps listening in the browser.
 - Short, plain turns ("add milk", "done with the dentist", "thanks") are sorted by a quick, light model; a question, a longer turn or "sort the rest" goes to the fuller one, and the quick one can hand a turn over once. Each route has its own allowance.
 
 Next (Core MVP):

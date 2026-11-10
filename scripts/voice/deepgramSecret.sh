@@ -39,6 +39,25 @@ fi
 printf %s "$key" | firebase functions:secrets:set DEEPGRAM_API_KEY --project "$PROJECT" --data-file=-
 echo "✓ DEEPGRAM_API_KEY saved in Firebase (running this again adds a new version)"
 
+# Functions read this secret at run time without binding it, so the runtime account needs read access to it.
+grant_read() {
+  local name="$1"
+  if command -v gcloud >/dev/null 2>&1; then
+    local number
+    number=$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')
+    gcloud secrets add-iam-policy-binding "$name" --project="$PROJECT" \
+      --member="serviceAccount:${number}-compute@developer.gserviceaccount.com" \
+      --role="roles/secretmanager.secretAccessor" >/dev/null
+    echo "✓ The functions can read $name"
+  else
+    echo "• gcloud isn't installed, so give the functions read access in the browser (one time):"
+    echo "  1. Open https://console.cloud.google.com/security/secret-manager/secret/$name/permissions?project=$PROJECT"
+    echo "  2. Grant access → New principal: the account ending in -compute@developer.gserviceaccount.com"
+    echo "  3. Role: Secret Manager Secret Accessor → Save"
+  fi
+}
+grant_read DEEPGRAM_API_KEY
+
 echo
 echo "Last, set a low usage alert so a surprise never costs much:"
 echo "  1. Open $KEYS_PAGE and click Billing in the left menu"

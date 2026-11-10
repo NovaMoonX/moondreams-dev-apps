@@ -272,6 +272,18 @@ export const HELM_COPY = {
   undoNeedsConnectionBody:
     "Undo checks each record as it is now, so it waits until you're back online.",
   settingsTitle: 'Settings',
+  settingsVoice: 'Voice',
+  settingsVoiceRowTitle: 'Voice',
+  settingsVoiceCloud: 'Clearer listening online, through the voice service',
+  settingsVoiceDevice: 'Listening in this browser only',
+  voiceDeviceOnlyTitle: 'Listen in this browser only',
+  voiceDeviceOnlyHint:
+    "Your speech isn't sent to the voice service (Deepgram). In Chrome, the browser's own listening uses Google's speech service.",
+  voiceDone: 'Done',
+  voiceModeFailed: "Couldn't change that. Try again.",
+  voiceOnPhone: "Using this phone's voice for the rest of today.",
+  voiceNotice:
+    "Your speech goes to Deepgram to be turned into words. You'll see the words; the sound isn't kept.",
   settingsYourData: 'Your data',
   activityTitle: 'Activity',
   activityRowHint: 'What was done, and when',

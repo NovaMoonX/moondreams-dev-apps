@@ -8,6 +8,8 @@ export type Sealed = EncryptedFieldPayload;
 
 export type HelmEncryption = AppEncryption<'helm'>;
 
+export type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';
+
 export interface HelmProfile {
   /** IANA zone, set from the device on first open. */
   timeZone: string;
@@ -18,6 +20,10 @@ export interface HelmProfile {
   planFillPercent: number;
   /** The first-capture AI line was shown. */
   hasSeenAiNotice: boolean;
+  /** Whether listening may use the cloud voice service while online. */
+  voiceMode: VoiceMode;
+  /** The line saying who hears what was shown. */
+  hasSeenVoiceNotice: boolean;
   createdAt: number;
   lastEditedAt: number | null;
 }

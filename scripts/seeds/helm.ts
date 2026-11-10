@@ -568,6 +568,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
         hasSeenAiNotice: false,
+        voiceMode: 'cloudWhenOnline',
+        hasSeenVoiceNotice: false,
         createdAt,
         lastEditedAt: null,
       });
