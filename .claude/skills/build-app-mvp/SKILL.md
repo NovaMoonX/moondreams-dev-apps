@@ -145,6 +145,8 @@ Start this once every MVP PR is merged up and reviewed.
 4. **Spawn `product-reviewer` and `design-reviewer` in parallel** (read-only), each briefed with **polish mode**, the app, the polish branch and the dev server URL.
 
    Both must walk **every user flow in `src/apps/<id>/UX.md`** in a real browser in `America/Los_Angeles`, at 390px first and then at desktop width. They use the shared dev server and emulators, and never reset seeds. Each returns structured findings and rule candidates.
+   - **Against the mockups and today's apps:** each screen is put beside its board in the app's UX canvas artifact and judged on whether it reads as a clean, modern app (current patterns for its kind: a chat app's composer floats or reads as part of the conversation, never a flat box on the page). A screen that drifted from its mockup without a reason in `UX.md` is a finding (owner, Helm).
+   - **Its own colours:** the palette is compared with every other app's (`app-look.md` "Pick the metaphor first").
    - **Phone first:** a phone screen that's wrong outranks a desktop nicety.
    - **Web may differ on purpose:** it can use its width for side-by-side content, popovers, dropdowns and a right-side detail panel.
    - **No bottom drawers at desktop width.**
