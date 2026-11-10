@@ -263,6 +263,7 @@ function DayPlan({
                   key={entry.record.id}
                   record={entry.record}
                   alsoIn={alsoInOf(entry.record.id)}
+                  timeZone={timeZone}
                   onOpen={(opened) => setOpenRecordId(opened.id)}
                 />
               );

@@ -123,7 +123,7 @@ assert.equal(
 // Two accounts: one event counts once, by its shared key or by title and start.
 const twoAccounts = mergeSameThings([
   copy('p', 'Team offsite', START, { ...PERSONAL, sameEventKey: 'k1' }),
-  copy('w', 'Team offsite (work)', START + 30 * MINUTE, {
+  copy('w', 'Team offsite (work)', START + 5 * MINUTE, {
     ...WORK,
     sameEventKey: 'k1',
   }),
@@ -156,6 +156,51 @@ const moved = mergeSameThings([
   copy('app', 'Starlight Harbor', START + 90 * MINUTE, A_LIST),
 ]);
 assert.equal(moved.length, 2);
+
+// A shared key is not enough on its own: a repeating event's sessions share it.
+assert.equal(
+  mergeSameThings([
+    copy('am', 'Workshop', START, { ...PERSONAL, sameEventKey: 'r1' }),
+    copy('pm', 'Workshop', START + 360 * MINUTE, {
+      ...PERSONAL,
+      sameEventKey: 'r1',
+    }),
+  ]).length,
+  2,
+);
+
+// Matches never chain: a copy 12 minutes after one that is 12 after the first is its own event.
+const chain = mergeSameThings([
+  copy('c1', 'Yoga', START, A_LIST),
+  copy('c2', 'Yoga', START + 12 * MINUTE, PERSONAL),
+  copy('c3', 'Yoga', START + 24 * MINUTE, WORK),
+]);
+assert.deepEqual(
+  chain.map(({ record, alsoIn }) => [record.id, alsoIn.map((c) => c.id)]),
+  [
+    ['c2', ['c1']],
+    ['c3', []],
+  ],
+);
+
+// The merged event sits at its shown time, after an event that starts between the two copies.
+const ordered = mergeSameThings([
+  copy('app7', 'Starlight Harbor', START, A_LIST),
+  copy('other', 'Call Mom', START + 5 * MINUTE, WORK),
+  copy('cal10', 'Starlight Harbor', START + 10 * MINUTE, PERSONAL),
+]);
+assert.deepEqual(
+  ordered.map(({ record }) => record.id),
+  ['other', 'cal10'],
+);
+
+// Two accounts that disagree: the other calendar's time is found too.
+assert.equal(
+  findOtherTime(copy('p3', 'Dentist', START, PERSONAL), [
+    copy('w3', 'Dentist', START + 10 * MINUTE, WORK),
+  ])?.id,
+  'w3',
+);
 
 const theater = {
   ...app,

@@ -13,11 +13,10 @@ export const findPlace = (shown: SyncedRecord, others: SyncedRecord[]) =>
   others.find((other) => other.sealed.placeLabel !== null)?.sealed.placeLabel ??
   null;
 
-/** Another source's copy whose start differs from the shown one, for the one line that says so; null when they agree. */
+/** Another copy whose start differs from the shown one (another app's, or another account's calendar), for the one line that says so; null when they agree. */
 export const findOtherTime = (shown: SyncedRecord, others: SyncedRecord[]) =>
   others.find(
     (other) =>
-      !isCalendarCopy(other) &&
       !other.isAllDay &&
       !shown.isAllDay &&
       other.startAt !== null &&

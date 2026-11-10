@@ -101,7 +101,7 @@ function BusyAllDayRow({ eventId }: { eventId: string }) {
 
 /** A copied record, read-only: its words, then where it came from. A calendar event also says when it is, and an all-day one can be marked as keeping the person busy. */
 function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
-  const { nameOf } = useSourceAppName();
+  const { nameOf, sourceNameOf } = useSourceAppName();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const isCalendar = record !== null && isCalendarEvent(record);
@@ -118,7 +118,7 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
             isCalendar ? getEventFacts(record, now, timeZone) : null,
             other && other.startAt !== null
               ? HELM_COPY.sameThingTime(
-                  nameOf(other.connectorId),
+                  sourceNameOf(other),
                   formatClock(other.startAt, timeZone),
                 )
               : null,

@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarDays, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight, Clock } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -9,6 +9,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { findOtherTime, findPlace } from '@apps/helm/engine/authority';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import type { SyncedRecord } from '@apps/helm/types';
+import { formatClock } from '@apps/helm/utils/planDays';
 
 interface SyncedCardProps {
   record: SyncedRecord;
@@ -18,6 +19,7 @@ interface SyncedCardProps {
 interface EventCardProps extends SyncedCardProps {
   /** The same event's copies from other sources, shown as a second mark. */
   alsoIn: SyncedRecord[];
+  timeZone: string;
 }
 
 function SourceMark({
@@ -53,10 +55,15 @@ const timeLine = (record: SyncedRecord) => {
 };
 
 /** Another app's event: a plain card with the source's logo (and a second source's, when both have it), read-only, that opens its source block. */
-export function SyncedCard({ record, alsoIn, onOpen }: EventCardProps) {
-  const { nameOf } = useSourceAppName();
+export function SyncedCard({
+  record,
+  alsoIn,
+  timeZone,
+  onOpen,
+}: EventCardProps) {
+  const { sourceNameOf } = useSourceAppName();
   const other = findOtherTime(record, alsoIn);
-  const second = alsoIn.find((copy) => copy.connectorId !== record.connectorId);
+  const second = alsoIn[0] ?? null;
   const detail = [
     timeLine(record),
     record.sealed.extra.isTentative === true ? HELM_COPY.syncedTentative : null,
@@ -77,7 +84,7 @@ export function SyncedCard({ record, alsoIn, onOpen }: EventCardProps) {
         {second && (
           <SourceMark
             record={second}
-            className='ring-card absolute -right-1.5 -bottom-1.5 size-5 rounded-md ring-2'
+            className='ring-card absolute -right-2 -bottom-2 size-[22px] rounded-md ring-2'
           />
         )}
       </span>
@@ -89,10 +96,11 @@ export function SyncedCard({ record, alsoIn, onOpen }: EventCardProps) {
           {detail}
         </span>
         {other && other.startAt !== null && (
-          <span className='text-muted-foreground block text-[13px] break-words'>
+          <span className='text-foreground flex items-start gap-1 text-[13px] break-words'>
+            <Clock className='mt-[3px] size-3.5 shrink-0' aria-hidden='true' />
             {HELM_COPY.sameThingTime(
-              nameOf(other.connectorId),
-              formatTime(other.startAt),
+              sourceNameOf(other),
+              formatClock(other.startAt, timeZone),
             )}
           </span>
         )}
