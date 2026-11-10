@@ -192,6 +192,8 @@ function Composer({
         text: sent,
         reading: sentReading,
         screen,
+        answersQuestion: null,
+        questionAnswer: null,
         ...turn,
       });
       recordSentTurn(uid, turn, id);

@@ -63,6 +63,54 @@ export const QUOTE_CAP = 300;
 export const STATEMENT_CAP = 500;
 export const VALUE_CAP = 80;
 export const ANSWER_SPOKEN_CAP = 200;
+export const MAX_ASKS = 5;
+export const MAX_OPEN_ASKED = 20;
+export const OPTION_CAP = 80;
+export const UNIT_CAP = 20;
+export const NUMBER_LIMIT = 1e9;
+export const FREE_TEXT_CAP = 500;
+
+export const ASK_SHAPES = [
+  'pickOne',
+  'pickSeveral',
+  'yesNo',
+  'freeText',
+  'dateTime',
+  'pickRecord',
+  'number',
+] as const;
+
+export type AskShape = (typeof ASK_SHAPES)[number];
+
+export const ASK_RECORD_KINDS = ['who', 'place'] as const;
+
+export const ASK_DATE_MODES = ['date', 'time', 'dateTime'] as const;
+
+export interface AskOption {
+  id: string;
+  label: string;
+  detail: string | null;
+  ref: { collection: 'who' | 'places'; id: string } | null;
+}
+
+/** A question the model asked, checked by shape: the options carry their code-added closers and every record settled to a reference. */
+export interface AskCommand {
+  shape: AskShape;
+  prompt: string;
+  options: AskOption[];
+  allowsSomethingElse: boolean;
+  noneOption: boolean;
+  recordKinds: (typeof ASK_RECORD_KINDS)[number][];
+  dateMode: (typeof ASK_DATE_MODES)[number] | null;
+  number: {
+    min: number | null;
+    max: number | null;
+    unit: string | null;
+    isMoney: boolean;
+    decimals: 0 | 1 | 2;
+  } | null;
+  aboutRef: { collection: 'tasks'; id: string } | null;
+}
 
 /** A command whose every reference is settled: a task id from the context, a `$new` ref made in the same reply, or a due the reading made. */
 export type NomosCommand =
@@ -197,9 +245,20 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'value',
             'whoRefs',
             'placeRefs',
+            'shape',
+            'prompt',
+            'options',
+            'allowsSomethingElse',
+            'recordKinds',
+            'dateMode',
+            'numberMin',
+            'numberMax',
+            'unit',
+            'isMoney',
+            'decimals',
           ],
           properties: {
-            kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer'] },
+            kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
             ref: nullable(
               'string',
               'createTask: a name for the new task such as $new1, so a later command can point at it; null otherwise.',
@@ -265,7 +324,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             aboutAlias: nullable(
               'string',
-              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with.',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null.',
             ),
             aboutField: {
               type: ['string', 'null'],
@@ -282,6 +341,76 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             placeRefs: NAMED_BY_REF(
               'createTask and updateTask: the ref ($p1, …) of each entry in places this task happens at or involves; null or empty when none.',
+            ),
+            shape: {
+              type: ['string', 'null'],
+              enum: [...ASK_SHAPES, null],
+              description:
+                'ask: the kind of answer wanted; null for every other kind.',
+            },
+            prompt: nullable(
+              'string',
+              `ask: the question in plain words, at most ${QUESTION_CAP} characters, no Markdown or links.`,
+            ),
+            options: {
+              type: ['array', 'null'],
+              description:
+                'ask: the choices for pickOne (2 to 6), pickSeveral (2 to 8) and pickRecord (people or places already in the records); null or empty for the other shapes. Never add "None of these", "Yes", "No" or "Someone new": they are added for you.',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['label', 'detail', 'recordAlias'],
+                properties: {
+                  label: {
+                    type: 'string',
+                    description: `The choice in plain words, at most ${OPTION_CAP} characters.`,
+                  },
+                  detail: nullable(
+                    'string',
+                    `What tells it apart, at most ${OPTION_CAP} characters; null when nothing does.`,
+                  ),
+                  recordAlias: nullable(
+                    'string',
+                    'pickRecord: the alias of the person or place this choice is; null otherwise.',
+                  ),
+                },
+              },
+            },
+            allowsSomethingElse: nullable(
+              'boolean',
+              'ask pickOne: true when the choices may not cover what the person means, so a "Something else" answer is offered.',
+            ),
+            recordKinds: {
+              type: ['array', 'null'],
+              items: { type: 'string', enum: [...ASK_RECORD_KINDS, 'project'] },
+              description:
+                'ask pickRecord: who the question searches, who for people, pets and organizations and place for places; null otherwise.',
+            },
+            dateMode: {
+              type: ['string', 'null'],
+              enum: [...ASK_DATE_MODES, null],
+              description:
+                'ask dateTime: date, time or dateTime; null otherwise.',
+            },
+            numberMin: nullable(
+              'number',
+              'ask number: the smallest sensible answer, or null. In dollars when isMoney.',
+            ),
+            numberMax: nullable(
+              'number',
+              'ask number: the largest sensible answer, or null. In dollars when isMoney.',
+            ),
+            unit: nullable(
+              'string',
+              `ask number: the unit after the figure ("nights"), at most ${UNIT_CAP} characters; null when none.`,
+            ),
+            isMoney: nullable(
+              'boolean',
+              'ask number: true when the answer is an amount of money.',
+            ),
+            decimals: nullable(
+              'number',
+              'ask number: 0, 1 or 2 digits after the point; null for whole numbers.',
             ),
           },
         },

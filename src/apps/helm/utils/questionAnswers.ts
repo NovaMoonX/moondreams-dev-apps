@@ -1,72 +1,159 @@
-import { createOptionMatcher } from '@/utils/optionMatchUtils';
-import type { HelmQuestion } from '@apps/helm/types';
-import { normalizeSaid } from '@apps/helm/utils/voicePhrases';
+import {
+  readSpokenAnswer,
+  type SpokenQuestion,
+} from '@/lib/speech/readSpokenAnswer';
+import { formatCents } from '@/utils/moneyUtils';
+import { parseNaturalDate } from '@/utils/naturalDateUtils';
+import { HELM_COPY } from '@apps/helm/constants';
+import type { HelmQuestion, QuestionAnswerValue } from '@apps/helm/types';
+import { getClockOf, getDueDay } from '@apps/helm/utils/captureReading';
 
 export type SpokenAnswer =
-  { kind: 'option'; optionId: string } | { kind: 'skip' };
+  { kind: 'skip' } | { kind: 'answer'; value: QuestionAnswerValue };
 
-interface Choice {
-  answer: SpokenAnswer;
-  names: string[];
-}
-
-const ORDINALS = ['first', 'second', 'third', 'fourth'];
 const NEW_NAMES = ['someone new', 'new', 'a new one', 'new one', 'new person'];
-const NONE_NAMES = [
-  'nobody',
-  'no one',
-  'none',
-  "don't link anyone",
-  "don't link",
-  'neither',
-];
+const NONE_NAMES = ["don't link anyone", "don't link"];
 
-const matcher = createOptionMatcher<Choice>({
-  names: (choice) => choice.names,
-  ignoreTypedWords: new Set(['the', 'please', 'link', 'it', 'to']),
-  typos: false,
+const toSpokenQuestion = (question: HelmQuestion): SpokenQuestion => ({
+  shape: question.shape,
+  options: question.options.map((option) => ({
+    id: option.id,
+    label: option.label,
+    detail: option.detail,
+    aliases:
+      option.id === 'new'
+        ? NEW_NAMES
+        : option.id === 'none'
+          ? NONE_NAMES
+          : undefined,
+    isClosing: option.id === 'new' || option.id === 'none',
+  })),
+  noneOptionId: question.options.some((option) => option.id === 'none')
+    ? 'none'
+    : null,
+  allowsSomethingElse: question.allowsSomethingElse,
+  number: question.number,
+  dateMode: question.dateMode,
 });
 
-/** What a spoken answer picks from an open question: a candidate by its name, what tells it apart or its place in the list, a new one, nobody, or Skip. A reply that is not clearly one of them is `null`, so it is sent as a turn. */
+const toDateReader =
+  (context: { now: number; timeZone: string }) => (text: string) => {
+    const [first] = parseNaturalDate(text, context);
+    if (!first) return null;
+    return first.due.kind === 'day'
+      ? { date: first.due.date, time: null }
+      : {
+          date: getDueDay(first.due, context.timeZone),
+          time: getClockOf(first.due.at, context.timeZone),
+        };
+  };
+
+/** What a spoken answer says to an open question, as the value a tap would have written: an option, several, yes or no, words, a number, a day or time, a person or place, or Skip. A reply that is not clearly one of them is `null`, so it goes on as a turn. */
 export function matchSpokenAnswer(
   text: string,
   question: HelmQuestion,
+  context: { now: number; timeZone: string },
 ): SpokenAnswer | null {
-  const candidates = question.options.filter((option) => option.ref !== null);
-  const tokensOf = (label: string) => normalizeSaid(label).split(' ');
-  const uniqueTokens = (label: string) =>
-    tokensOf(label).filter(
-      (token) =>
-        token !== '' &&
-        candidates.every(
-          (other) =>
-            other.label === label || !tokensOf(other.label).includes(token),
-        ),
-    );
-  const choices: Choice[] = [
-    ...candidates.map((option, index) => ({
-      answer: { kind: 'option' as const, optionId: option.id },
-      names: [
-        option.label,
-        ...uniqueTokens(option.label),
-        ...(option.detail ? [option.detail] : []),
-        ORDINALS[index],
-        `${ORDINALS[index]} one`,
-      ].filter(Boolean),
-    })),
-    ...question.options
-      .filter((option) => option.id === 'new')
-      .map((option) => ({
-        answer: { kind: 'option' as const, optionId: option.id },
-        names: [option.label, ...NEW_NAMES],
-      })),
-    ...question.options
-      .filter((option) => option.id === 'none')
-      .map((option) => ({
-        answer: { kind: 'option' as const, optionId: option.id },
-        names: [option.label, ...NONE_NAMES],
-      })),
-    { answer: { kind: 'skip' as const }, names: ['skip', 'skip it'] },
-  ];
-  return matcher.match(normalizeSaid(text), choices)?.answer ?? null;
+  const read = readSpokenAnswer(toSpokenQuestion(question), text, {
+    readDate: toDateReader(context),
+  });
+  if (read === null || read.kind === 'skip') return read;
+  const { value } = read;
+  if (value.shape !== 'pickRecord') return { kind: 'answer', value };
+  const option = question.options.find((entry) => entry.id === value.optionId);
+  // A new name can't be heard as an option, so the words go on as a turn.
+  return option?.ref
+    ? {
+        kind: 'answer',
+        value: { shape: 'pickRecord', ref: option.ref, newName: null },
+      }
+    : null;
+}
+
+const joinLabels = (labels: string[]) =>
+  labels.length < 2
+    ? (labels[0] ?? '')
+    : `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
+
+const formatDay = (date: number) =>
+  new Intl.DateTimeFormat(undefined, {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(date));
+
+const formatClock = (time: string) =>
+  new Date(`2000-01-01T${time}:00Z`).toLocaleTimeString(undefined, {
+    timeZone: 'UTC',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+/** An answer in the words the turn that carries it seals ("Picked Snow chains and Sunscreen", "4 nights", "Friday, Nov 13"); `recordName` is the chosen person's or place's name when it is not one of the question's options. */
+export function describeAnswer(
+  question: HelmQuestion,
+  value: QuestionAnswerValue,
+  recordName: string | null = null,
+): string {
+  const labelOf = (id: string) =>
+    question.options.find((option) => option.id === id)?.label ?? id;
+  if (value.shape === 'yesNo') return labelOf(value.optionId);
+  if (value.shape === 'pickOne') {
+    return value.otherText ?? HELM_COPY.answerPicked(labelOf(value.optionId));
+  }
+  if (value.shape === 'pickSeveral') {
+    return value.optionIds.includes('none')
+      ? HELM_COPY.answerNone
+      : HELM_COPY.answerPicked(joinLabels(value.optionIds.map(labelOf)));
+  }
+  if (value.shape === 'freeText') return value.text;
+  if (value.shape === 'number') {
+    const { unit, isMoney } = question.number ?? {
+      unit: null,
+      isMoney: false,
+    };
+    if (isMoney) return formatCents(value.value);
+    return unit ? `${value.value} ${unit}` : String(value.value);
+  }
+  if (value.shape === 'dateTime') {
+    return value.date !== null && value.time !== null
+      ? HELM_COPY.answerAt(formatDay(value.date), formatClock(value.time))
+      : value.date !== null
+        ? formatDay(value.date)
+        : formatClock(value.time ?? '00:00');
+  }
+  if (value.newName !== null) {
+    return question.recordKinds[0] === 'place'
+      ? HELM_COPY.answerNewPlace(value.newName)
+      : HELM_COPY.answerSomeoneNew(value.newName);
+  }
+  const chosen = question.options.find(
+    (option) =>
+      option.ref?.id === value.ref?.id &&
+      option.ref?.collection === value.ref?.collection,
+  );
+  return recordName ?? chosen?.label ?? '';
+}
+
+/** The line a turn's card keeps after the question is answered ("You picked Snow chains and Sunscreen"). */
+export function describeYourAnswer(
+  question: HelmQuestion,
+  value: QuestionAnswerValue,
+  recordName: string | null = null,
+): string {
+  const words = describeAnswer(question, value, recordName);
+  if (value.shape === 'freeText') return HELM_COPY.answerYouWrote(words);
+  if (value.shape === 'yesNo') return HELM_COPY.answerYouSaid(words);
+  if (value.shape === 'number' || value.shape === 'dateTime') {
+    return HELM_COPY.answerYouAnswered(words);
+  }
+  if (
+    (value.shape === 'pickSeveral' && value.optionIds.includes('none')) ||
+    (value.shape === 'pickOne' && value.otherText !== null) ||
+    (value.shape === 'pickRecord' && value.newName !== null)
+  ) {
+    return HELM_COPY.answerYouAnswered(words);
+  }
+  return HELM_COPY.answerYouPicked(words.replace(/^Picked /, ''));
 }

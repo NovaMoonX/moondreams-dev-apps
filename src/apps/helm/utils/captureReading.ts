@@ -172,7 +172,7 @@ export const getReadingKey = (kind: string, text: string) =>
 
 export const URGENT_KEY = 'urgent';
 
-const getClockOf = (at: number, timeZone: string) => {
+export const getClockOf = (at: number, timeZone: string) => {
   const parts = new Intl.DateTimeFormat('en-GB', {
     timeZone,
     hour: '2-digit',

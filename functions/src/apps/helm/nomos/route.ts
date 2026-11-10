@@ -20,15 +20,18 @@ export const isQuestion = (text: string) =>
       .replace(/[^\p{L}']/gu, ''),
   );
 
-/** Short plain turns go to the quick model; a question, a long turn and "sort the rest" go to the full one. */
+/** Short plain turns go to the quick model; a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,
   mode,
+  isAnswer = false,
 }: {
   text: string;
   mode: 'full' | 'rest';
+  isAnswer?: boolean;
 }): Route => {
   const trimmed = text.trim();
+  if (isAnswer && mode === 'full') return 'quick';
   return mode === 'full' &&
     trimmed.length <= MAX_QUICK_CHARS &&
     !isQuestion(trimmed)

@@ -709,7 +709,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] The assistant on every screen, knowing what is in view: "move this to Friday", "who's this?", "add a step" (O, C)
 - [ ] Send photos, screenshots, PDFs, voice notes and Markdown files; the assistant keeps each on the record it changed or lets it go, and says which (O, C)
 - [ ] One turn split into several things, each filed as a task, fact, who, place, preference or note and linked to a project, with one Undo; typed shorthand read exactly (O, N, C)
-- [ ] Questions in the shape that fits (pick one, pick several, yes or no, a few words, a date or time, a person, place or project, a number), asked only for what the assistant can't settle, one at a time when spoken, answered by tap or voice, skippable to Needs you, with Undo (O, N, C)
+- [x] Questions in the shape that fits (pick one, pick several, yes or no, a few words, a date or time, a person, place or project, a number), asked only for what the assistant can't settle, one at a time when spoken, answered by tap or voice, skippable to Needs you, with Undo (O, N, C)
 - [ ] Inbox: Needs you (the questions waiting) and what's new since you looked (O, C)
 - [x] Turns kept when the AI, the connection or the day's limit is away, and sorted once it is back (N, C)
 - [ ] Tasks with importance, urgency, deadline, length, energy, context, place, who, steps, what they wait on and "not until" (O, N)

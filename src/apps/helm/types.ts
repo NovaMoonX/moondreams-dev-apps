@@ -60,7 +60,21 @@ export type HeldReason =
   'offline' | 'aiUnavailable' | 'dailyLimit' | 'budgetReached' | 'recentLimit';
 
 export type QuestionKind =
-  'couldNotRead' | 'moreToSort' | 'whichPerson' | 'whichPlace' | (string & {});
+  | 'couldNotRead'
+  | 'moreToSort'
+  | 'whichPerson'
+  | 'whichPlace'
+  | 'asked'
+  | (string & {});
+
+export type QuestionShape =
+  | 'pickOne'
+  | 'pickSeveral'
+  | 'yesNo'
+  | 'freeText'
+  | 'dateTime'
+  | 'pickRecord'
+  | 'number';
 
 /** The readable state of one question; its words are sealed and never needed on the device. */
 export interface QuestionState {
@@ -79,18 +93,48 @@ export interface QuestionOption {
   ref: { collection: 'who' | 'places'; id: string } | null;
 }
 
-/** An opened sealed question that asks which person or place a name meant; its link is held until it is answered. */
+/** The structured answer to one question, by shape. `isMoney` numbers are integer cents. */
+export type QuestionAnswerValue =
+  | { shape: 'pickOne'; optionId: string; otherText: string | null }
+  | { shape: 'yesNo'; optionId: string; otherText: string | null }
+  | { shape: 'pickSeveral'; optionIds: string[] }
+  | { shape: 'freeText'; text: string }
+  | { shape: 'dateTime'; date: number | null; time: string | null }
+  | {
+      shape: 'pickRecord';
+      ref: { collection: 'who' | 'places'; id: string } | null;
+      newName: string | null;
+    }
+  | { shape: 'number'; value: number };
+
+export type QuestionAnswer = {
+  by: 'tap' | 'voice';
+  at: number;
+  turnCaptureId: string | null;
+} & QuestionAnswerValue;
+
+export interface QuestionNumber {
+  min: number | null;
+  max: number | null;
+  unit: string | null;
+  isMoney: boolean;
+  decimals: 0 | 1 | 2;
+}
+
+/** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
-  kind: 'whichPerson' | 'whichPlace';
-  builtBy: 'code';
-  shape: 'pickOne';
+  kind: 'whichPerson' | 'whichPlace' | 'asked';
+  builtBy: 'code' | 'model';
+  shape: QuestionShape;
   prompt: string;
   options: QuestionOption[];
-  answer: {
-    by: 'tap' | 'voice';
-    at: number;
-    optionId: string;
-  } | null;
+  allowsSomethingElse: boolean;
+  noneOption: boolean;
+  recordKinds: ('who' | 'place')[];
+  dateMode: 'date' | 'time' | 'dateTime' | null;
+  number: QuestionNumber | null;
+  aboutRef: { collection: string; id: string } | null;
+  answer: QuestionAnswer | null;
 }
 
 export type CaptureRoute = 'quick' | 'full';
@@ -143,6 +187,8 @@ export interface Capture {
   sttProvider: string | null;
   /** The capture whose spoken reply the person talked over to say this; null on every other turn. */
   interruptedCaptureId: string | null;
+  /** The question this turn answers, when it answers one the assistant wrote; null on every other turn and on one made before questions had shapes. */
+  answersQuestion: { captureId: string; questionId: string } | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
   medium: 'web';
@@ -249,6 +295,8 @@ export interface CaptureSealed {
   answer: CaptureAnswer | null;
   /** The questions the turn asked, by id; only the readable ones carry words here. */
   questions?: Record<string, unknown>;
+  /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
+  questionAnswer?: QuestionAnswerValue | null;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -258,7 +306,7 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   reading: CaptureReading;
   /** Null on a turn that asked nothing, and on one made before answers were kept. */
   answer: CaptureAnswer | null;
-  /** The which-person and which-place questions the turn asked, by id, once opened. */
+  /** The questions the turn asked, by id, once opened. */
   questions: Record<string, HelmQuestion>;
   isUnreadable: boolean;
   /** The write has not reached the server yet, so it waits for a connection. */

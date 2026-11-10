@@ -1,3 +1,5 @@
+import type { AskCommand } from './commands.js';
+
 const plural = (count: number, one: string, many: string) =>
   count === 1 ? one : many;
 
@@ -182,4 +184,84 @@ export const buildSpokenPick = (
       ? `${spoken[0]} or ${newWord}`
       : `${spoken.slice(0, -1).join(', ')} or ${spoken[spoken.length - 1]}`;
   return `Which ${name}, ${list}?`;
+};
+
+/** The words code adds to a model-written question: the model never writes them. */
+export const ASK_WORDS = {
+  yes: 'Yes',
+  no: 'No',
+  none: 'None of these',
+  newWho: 'Someone new',
+  newPlace: 'New place',
+};
+
+export const ASK_DEFERRED_LINE =
+  "I'll ask about that once you've answered a few of the waiting questions.";
+
+export const ALREADY_ANSWERED_LINE = 'That was already answered.';
+
+/** The sealed half of a model-written question: no held commands, and no answer until one is given. */
+export const buildAskedQuestion = (ask: AskCommand) => ({
+  kind: 'asked' as const,
+  builtBy: 'model' as const,
+  shape: ask.shape,
+  prompt: ask.prompt,
+  options: ask.options,
+  allowsSomethingElse: ask.allowsSomethingElse,
+  noneOption: ask.noneOption,
+  recordKinds: ask.recordKinds,
+  dateMode: ask.dateMode,
+  number: ask.number,
+  heldCommands: [],
+  aboutRef: ask.aboutRef,
+  answer: null,
+});
+
+const SPOKEN_OPTIONS = 4;
+const SPOKEN_FIRST = 3;
+const YES_NO_OPENERS = new Set(
+  'is are do does did can could should will would have has'.split(' '),
+);
+
+const joinOr = (labels: string[]) =>
+  labels.length < 2
+    ? (labels[0] ?? '')
+    : `${labels.slice(0, -1).join(', ')} or ${labels[labels.length - 1]}`;
+
+const toSentence = (prompt: string) =>
+  /[?.!:]$/.test(prompt) ? prompt : `${prompt}?`;
+
+/** The line said for an open question, worded per shape; a long list is read in part and the rest is left to the screen. */
+export const buildSpokenQuestion = (question: {
+  shape: string;
+  prompt: string;
+  options: { id: string; label: string }[];
+}): string => {
+  const prompt = toSentence(question.prompt);
+  const labels = question.options
+    .filter((option) => option.id !== 'none' && option.id !== 'new')
+    .map((option) => option.label);
+  const isLong = labels.length > SPOKEN_OPTIONS;
+  const rest = labels.length - SPOKEN_FIRST;
+  const spokenList = isLong
+    ? `${labels.slice(0, SPOKEN_FIRST).join(', ')}, or one of ${rest} more on your screen.`
+    : null;
+  if (question.shape === 'pickOne') {
+    return `${prompt} ${spokenList ?? `${joinOr(labels)}?`}`;
+  }
+  if (question.shape === 'pickSeveral') {
+    if (spokenList) return `${prompt} ${spokenList} You can say more than one.`;
+    return labels.length === 2
+      ? `${prompt} ${labels[0]}, ${labels[1]}, or both?`
+      : `${prompt} ${joinOr(labels)}. You can say more than one.`;
+  }
+  if (question.shape === 'yesNo') {
+    const opener = question.prompt
+      .trim()
+      .split(/\s+/)[0]
+      .toLowerCase()
+      .replace(/[^a-z]/g, '');
+    return YES_NO_OPENERS.has(opener) ? prompt : `${prompt} Yes or no?`;
+  }
+  return prompt;
 };

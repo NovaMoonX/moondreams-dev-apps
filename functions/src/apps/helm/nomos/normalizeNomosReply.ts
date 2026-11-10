@@ -1,6 +1,17 @@
+import { toComparable } from '../../../vendor/optionMatchUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
+import { ASK_WORDS } from './summaries.js';
 import {
   ANSWER_SCOPES,
+  ASK_DATE_MODES,
+  ASK_RECORD_KINDS,
+  ASK_SHAPES,
+  MAX_ASKS,
+  NUMBER_LIMIT,
+  OPTION_CAP,
+  UNIT_CAP,
+  type AskCommand,
+  type AskOption,
   ANSWER_SPOKEN_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
@@ -62,6 +73,17 @@ const KNOWN_KEYS = new Set([
   'value',
   'whoRefs',
   'placeRefs',
+  'shape',
+  'prompt',
+  'options',
+  'allowsSomethingElse',
+  'recordKinds',
+  'dateMode',
+  'numberMin',
+  'numberMax',
+  'unit',
+  'isMoney',
+  'decimals',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -211,6 +233,192 @@ const readPlanDay = (
   return date < today || date > today + PLAN_DAY_AHEAD * DAY_MS
     ? null
     : { kind: 'planDay', date: { kind: 'day', date } };
+};
+
+export type AskDrop = 'ask-invalid' | 'ask-extra';
+
+/** Resolves a person or place alias the model was offered to the record it stands for. */
+export interface RecordBook {
+  get: (alias: string) => { collection: 'who' | 'places'; id: string } | null;
+}
+
+const MAX_PICK_ONE = 6;
+const MAX_PICK_SEVERAL = 8;
+const MAX_PICK_RECORD = 6;
+
+const readAskOptions = (
+  value: unknown,
+  records: RecordBook | undefined,
+  reserved: Set<string>,
+) => {
+  const seen = new Set<string>();
+  return (Array.isArray(value) ? value.filter(isRecord) : []).flatMap(
+    (item): Omit<AskOption, 'id'>[] => {
+      const label = toText(item.label, OPTION_CAP);
+      const key = label ? toComparable(label) : '';
+      if (!label || !key || reserved.has(key) || seen.has(key)) return [];
+      seen.add(key);
+      return [
+        {
+          label,
+          detail: toText(item.detail, OPTION_CAP),
+          ref:
+            typeof item.recordAlias === 'string'
+              ? (records?.get(item.recordAlias) ?? null)
+              : null,
+        },
+      ];
+    },
+  );
+};
+
+const toOptionIds = (options: Omit<AskOption, 'id'>[]): AskOption[] =>
+  options.map((option, index) => ({ id: `o${index + 1}`, ...option }));
+
+const toLimit = (value: unknown) =>
+  value === null || value === undefined
+    ? { isValid: true as const, value: null }
+    : typeof value === 'number' &&
+        Number.isFinite(value) &&
+        Math.abs(value) <= NUMBER_LIMIT
+      ? { isValid: true as const, value }
+      : { isValid: false as const, value: null };
+
+const readAskNumber = (item: Record<string, unknown>) => {
+  const min = toLimit(item.numberMin);
+  const max = toLimit(item.numberMax);
+  if (!min.isValid || !max.isValid) return null;
+  if (min.value !== null && max.value !== null && min.value > max.value) {
+    return null;
+  }
+  const isMoney = item.isMoney === true;
+  const decimals: 0 | 1 | 2 =
+    item.decimals === 1 || item.decimals === 2 ? item.decimals : 0;
+  const toUnits = (value: number | null) =>
+    value !== null && isMoney ? Math.round(value * 100) : value;
+  return {
+    min: toUnits(min.value),
+    max: toUnits(max.value),
+    unit: toText(item.unit, UNIT_CAP),
+    isMoney,
+    decimals: isMoney ? (0 as const) : decimals,
+  };
+};
+
+/** One model-written question checked by its shape; null when it can't be shown (fewer than two choices, an unusable range), and the rest of the reply stands. */
+const readAsk = (
+  item: Record<string, unknown>,
+  aliases: AliasBook,
+  records: RecordBook | undefined,
+): AskCommand | null => {
+  const shape = ASK_SHAPES.find((entry) => entry === item.shape);
+  const prompt = toText(item.prompt, QUESTION_CAP);
+  if (!shape || !prompt) return null;
+  const aboutId =
+    typeof item.aboutAlias === 'string' ? aliases.idOf(item.aboutAlias) : null;
+  const base = {
+    shape,
+    prompt,
+    allowsSomethingElse: false,
+    noneOption: false,
+    recordKinds: [] as AskCommand['recordKinds'],
+    dateMode: null,
+    number: null,
+    aboutRef: aboutId ? { collection: 'tasks' as const, id: aboutId } : null,
+  };
+  if (shape === 'yesNo') {
+    return {
+      ...base,
+      options: [
+        { id: 'yes', label: ASK_WORDS.yes, detail: null, ref: null },
+        { id: 'no', label: ASK_WORDS.no, detail: null, ref: null },
+      ],
+    };
+  }
+  if (shape === 'freeText') return { ...base, options: [] };
+  if (shape === 'dateTime') {
+    return {
+      ...base,
+      options: [],
+      dateMode:
+        ASK_DATE_MODES.find((entry) => entry === item.dateMode) ?? 'dateTime',
+    };
+  }
+  if (shape === 'number') {
+    const number = readAskNumber(item);
+    return number ? { ...base, options: [], number } : null;
+  }
+  if (shape === 'pickRecord') {
+    const recordKinds = ASK_RECORD_KINDS.filter(
+      (kind) =>
+        Array.isArray(item.recordKinds) && item.recordKinds.includes(kind),
+    );
+    if (recordKinds.length === 0) return null;
+    const reserved = new Set(
+      [ASK_WORDS.none, ASK_WORDS.newWho, ASK_WORDS.newPlace].map((word) =>
+        toComparable(word),
+      ),
+    );
+    const resolved = readAskOptions(item.options, records, reserved)
+      .filter((option) => option.ref !== null)
+      .slice(0, MAX_PICK_RECORD);
+    return {
+      ...base,
+      recordKinds,
+      options: [
+        ...toOptionIds(resolved),
+        {
+          id: 'new',
+          label:
+            recordKinds[0] === 'who' ? ASK_WORDS.newWho : ASK_WORDS.newPlace,
+          detail: null,
+          ref: null,
+        },
+      ],
+    };
+  }
+  const isSeveral = shape === 'pickSeveral';
+  const reserved = new Set(isSeveral ? [toComparable(ASK_WORDS.none)] : []);
+  const options = readAskOptions(item.options, records, reserved).slice(
+    0,
+    isSeveral ? MAX_PICK_SEVERAL : MAX_PICK_ONE,
+  );
+  if (options.length < 2) return null;
+  return {
+    ...base,
+    allowsSomethingElse: !isSeveral && item.allowsSomethingElse === true,
+    noneOption: isSeveral,
+    options: [
+      ...toOptionIds(options),
+      ...(isSeveral
+        ? [{ id: 'none', label: ASK_WORDS.none, detail: null, ref: null }]
+        : []),
+    ],
+  };
+};
+
+const readAsks = (
+  items: Record<string, unknown>[],
+  aliases: AliasBook,
+  records: RecordBook | undefined,
+) => {
+  const seen = new Set<string>();
+  const read = items
+    .filter((item) => item.kind === 'ask')
+    .map((item) => readAsk(item, aliases, records));
+  const valid = read.flatMap((ask) => {
+    const key = ask ? toComparable(ask.prompt) : '';
+    if (!ask || seen.has(key)) return [];
+    seen.add(key);
+    return [ask];
+  });
+  return {
+    asks: valid.slice(0, MAX_ASKS),
+    dropped: [
+      ...read.flatMap((ask) => (ask ? [] : ['ask-invalid' as AskDrop])),
+      ...valid.slice(MAX_ASKS).map(() => 'ask-extra' as AskDrop),
+    ],
+  };
 };
 
 const toKeyName = (name: string) => name.toLowerCase();
@@ -420,7 +628,7 @@ const hasEveryToken = (
     );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; a `planDay` for today through six days ahead is passed on as one day (a past or farther day is dropped and the rest of the reply kept, a second one is ignored); one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, at most `MAX_ASKS` model-written questions are kept, each checked by its shape (one that can't be shown is dropped and named in `askDropped`), each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; a `planDay` for today through six days ahead is passed on as one day (a past or farther day is dropped and the rest of the reply kept, a second one is ignored); one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {
@@ -429,6 +637,7 @@ export function normalizeNomosReply(
     synced?: SyncedBook;
     quotes?: QuoteBook;
     alreadyMade?: string[];
+    records?: RecordBook;
     now?: number;
     timeZone?: string;
   },
@@ -438,6 +647,8 @@ export function normalizeNomosReply(
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   planDay: PlanDayCommand | null;
+  asks: AskCommand[];
+  askDropped: AskDrop[];
   mentions: MentionRead[];
   places: PlaceRead[];
 } {
@@ -464,6 +675,11 @@ export function normalizeNomosReply(
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
+  const { asks, dropped: askDropped } = readAsks(
+    items,
+    context.aliases,
+    context.records,
+  );
   const planItem = items.find((item) => item.kind === 'planDay');
   const planDay = planItem
     ? readPlanDay(
@@ -496,6 +712,8 @@ export function normalizeNomosReply(
     answer,
     remember,
     planDay,
+    asks,
+    askDropped,
     mentions: entities.mentions,
     places: entities.places,
   };

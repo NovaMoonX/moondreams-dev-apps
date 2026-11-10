@@ -2,6 +2,8 @@ import type { SealedPayload } from '../../../appKeys/seal.js';
 import { toDisplayCase } from '../../../vendor/optionMatchUtils.js';
 import {
   MAX_EFFECTS,
+  MAX_OPEN_ASKED,
+  type AskCommand,
   type MentionRead,
   type NomosCommand,
   type PlaceRead,
@@ -18,9 +20,11 @@ import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { buildSpokenAck } from './spoken.js';
 import {
+  buildAskedQuestion,
   buildCodeQuestion,
   buildPickQuestion,
   buildSpokenPick,
+  buildSpokenQuestion,
   summarize,
   type CodeQuestionKind,
   type EffectCounts,
@@ -732,9 +736,48 @@ function buildPickQuestions(input: {
     }));
 }
 
+/** How many model-written questions the person still has open across their waiting turns, a skipped one included. */
+export const countOpenAsked = (
+  states: (Record<string, QuestionStateEntry> | undefined)[],
+) =>
+  states
+    .flatMap((state) => Object.values(state ?? {}))
+    .filter((entry) => entry.kind === 'asked' && entry.answeredAt === null)
+    .length;
+
+/** Files each model-written question as an open one, up to the room left under the person's cap; `isDeferred` says some were left out for the cap. */
+export function planAsks(input: {
+  asks: AskCommand[];
+  openAsked: number;
+  now: number;
+  newId: () => string;
+}): { questions: PlannedQuestion[]; isDeferred: boolean } {
+  const room = Math.max(0, MAX_OPEN_ASKED - input.openAsked);
+  const kept = input.asks.slice(0, room);
+  return {
+    isDeferred: kept.length < input.asks.length,
+    questions: kept.map((ask) => {
+      const sealed = buildAskedQuestion(ask);
+      return {
+        id: input.newId(),
+        state: {
+          kind: 'asked',
+          shape: ask.shape,
+          askedAt: input.now,
+          answeredAt: null,
+          skippedAt: null,
+        },
+        sealed,
+        spoken: buildSpokenQuestion(sealed),
+      };
+    }),
+  };
+}
+
 export function buildExecution(
   plan: WritePlan,
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
+    questionRef?: { captureId: string; questionId: string } | null;
     commands: NomosCommand[];
     messageCount?: number;
     inputMode?: string;
@@ -763,7 +806,7 @@ export function buildExecution(
     linkedPlaceIds: plan.linkedPlaceIds,
     undoesExecutionId: null,
     undoneByExecutionId: null,
-    questionRef: null,
+    questionRef: input.questionRef ?? null,
     errorCode: null,
     createdAt: input.now,
     decidedAt: input.now,
@@ -857,10 +900,16 @@ interface SettleInput {
   questionState: Record<string, QuestionStateEntry>;
   executionIds: string[];
   questions?: PlannedQuestion[];
+  /** The reply asked questions, even ones the cap left out: not "couldn't read". */
+  hadAsks?: boolean;
+  /** An answer turn that files nothing is a turn well taken, not an unread one. */
+  isAnswerTurn?: boolean;
+  /** A line to say back when the turn made no answer of its own: the first open question, or why nothing more was asked. */
+  line?: string | null;
 }
 
 const isPickKind = (kind: string) =>
-  kind === 'whichPerson' || kind === 'whichPlace';
+  kind === 'whichPerson' || kind === 'whichPlace' || kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>
   entry.kind === 'moreToSort' && entry.answeredAt === null;
@@ -912,7 +961,9 @@ export function settleCapture(input: SettleInput) {
     input.filed === 0 &&
     !input.hasMore &&
     !input.answer &&
-    !input.hasPlanDay;
+    !input.hasPlanDay &&
+    !input.hadAsks &&
+    !input.isAnswerTurn;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
@@ -949,10 +1000,17 @@ export function settleCapture(input: SettleInput) {
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),
-      ...(input.answer && {
-        answer: input.answer.sealed,
-        spoken: input.answer.spoken,
-      }),
+      ...(input.answer
+        ? { answer: input.answer.sealed, spoken: input.answer.spoken }
+        : input.line
+          ? {
+              spoken: {
+                text: input.line,
+                priority: 'reply',
+                builtBy: 'code',
+              },
+            }
+          : {}),
     },
     executionIds: [
       ...input.executionIds,

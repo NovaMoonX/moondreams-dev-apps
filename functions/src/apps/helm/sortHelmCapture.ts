@@ -48,6 +48,7 @@ import {
   MENTION_KINDS,
   toReading,
   type AnswerCommand,
+  type AskCommand,
   type CaptureReading,
   type MentionRead,
   type NomosCommand,
@@ -60,9 +61,17 @@ import {
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
 import { buildAnswer, settleLiveTurn } from './nomos/answerGuards.js';
 import {
+  describeAnsweredQuestion,
+  planAnswerTurn,
+  type AskedCapture,
+} from './nomos/answerTurn.js';
+import { ALREADY_ANSWERED_LINE, ASK_DEFERRED_LINE } from './nomos/summaries.js';
+import {
   buildAnswerExecution,
   buildExecution,
+  countOpenAsked,
   hasOpenMoreToSort,
+  planAsks,
   planWrites,
   settleCapture,
   type ExistingTask,
@@ -114,6 +123,7 @@ const EARLIER_EXECUTIONS = 3;
 const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
+const MAX_OPEN_ASKED_READ = 200;
 const MAX_FACTS_READ = 20;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 // Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
@@ -173,6 +183,7 @@ interface CaptureDoc {
   turnLeadId?: string | null;
   inputMode?: string;
   route?: Route | null;
+  answersQuestion?: { captureId?: unknown; questionId?: unknown } | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
   interruptedCaptureId: string | null;
@@ -695,6 +706,38 @@ async function readEarlierTurns(
   return turns.flat().reverse();
 }
 
+interface AnswerTurn {
+  ref: { captureId: string; questionId: string };
+  value: unknown;
+  words: string;
+}
+
+/** The turn and question an answer turn points at, when both ids are well formed. */
+const readAnswersQuestion = (capture: CaptureDoc) => {
+  const ref = capture.answersQuestion;
+  return ref &&
+    typeof ref.captureId === 'string' &&
+    ID_RE.test(ref.captureId) &&
+    typeof ref.questionId === 'string' &&
+    ID_RE.test(ref.questionId)
+    ? { captureId: ref.captureId, questionId: ref.questionId }
+    : null;
+};
+
+const toAskedCapture = (
+  key: HelmKey,
+  data: CaptureDoc | undefined,
+): AskedCapture | null => {
+  const words = data ? openTitle(key, data.sealed) : null;
+  return data && words
+    ? {
+        status: data.status,
+        questionState: data.questionState ?? {},
+        opened: words.sealed,
+      }
+    : null;
+};
+
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const { firestore, uid, capture, mode } = claimed;
   const base = `apps/helm/users/${uid}`;
@@ -705,6 +748,70 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const opened = openForHelm(key, capture.sealed);
   const leadText = typeof opened.text === 'string' ? opened.text : null;
   if (!leadText) throw new SortFailure('unreadable');
+  const answersQuestion = readAnswersQuestion(capture);
+  const answerTurn: AnswerTurn | null = answersQuestion
+    ? {
+        ref: answersQuestion,
+        value: opened.questionAnswer ?? null,
+        words: leadText,
+      }
+    : null;
+  const askedBefore = answersQuestion
+    ? toAskedCapture(
+        key,
+        (
+          await firestore
+            .doc(`${base}/captures/${answersQuestion.captureId}`)
+            .get()
+        ).data() as CaptureDoc | undefined,
+      )
+    : null;
+  const answeredPlan = answerTurn
+    ? planAnswerTurn({
+        asked: askedBefore,
+        questionId: answerTurn.ref.questionId,
+        value: answerTurn.value,
+        words: answerTurn.words,
+        by: 'tap',
+        turnCaptureId: claimed.captureRef.id,
+        now: Date.now(),
+      })
+    : null;
+  if (answerTurn && answeredPlan?.kind === 'stale') {
+    return writeResult({
+      ...claimed,
+      key,
+      commands: [],
+      answer: null,
+      remember: [],
+      planDay: null,
+      asks: [],
+      answerTurn,
+      mentions: [],
+      places: [],
+      assistantName: null,
+      searched: createSearchedLog(),
+      hasMore: false,
+      base,
+      joinedIds: [],
+      messageCount: 1,
+      route: 'quick',
+      timeZone: 'UTC',
+      isSpoken: capture.inputMode === 'voice',
+    });
+  }
+  const answeredQuestion =
+    answerTurn && answersQuestion
+      ? describeAnsweredQuestion(
+          (
+            (askedBefore?.opened.questions ?? {}) as Record<
+              string,
+              { prompt: string; options: { label: string }[] }
+            >
+          )[answersQuestion.questionId],
+          leadText,
+        )
+      : null;
   const leadMessage: JoinedMessage = {
     text: leadText,
     reading: toReading(opened.reading),
@@ -819,6 +926,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       alreadyMade,
       screen,
       earlierTurns,
+      answeredQuestion,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -898,7 +1006,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route:
         isRestart && timeLeft() < QUICK_LOOP_MILLIS + MIN_RESTART_MS
           ? 'full'
-          : pickRoute({ text: combined.text, mode }),
+          : pickRoute({
+              text: combined.text,
+              mode,
+              isAnswer: answerTurn !== null,
+            }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
       isAborted: () => signal.aborted,
@@ -969,6 +1081,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     alreadyMade,
     timeZone,
   });
+  reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -981,6 +1094,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answer,
     remember: mode === 'full' ? reply.remember : [],
     planDay: mode === 'full' ? reply.planDay : null,
+    asks: mode === 'full' ? reply.asks : [],
+    answerTurn,
     mentions: reply.mentions,
     places: reply.places,
     assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
@@ -1002,6 +1117,8 @@ async function writeResult(
     answer: AnswerCommand | null;
     remember: RememberCommand[];
     planDay: PlanDayCommand | null;
+    asks: AskCommand[];
+    answerTurn: AnswerTurn | null;
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
@@ -1024,6 +1141,8 @@ async function writeResult(
     answer,
     remember,
     planDay: requestedPlanDay,
+    asks,
+    answerTurn,
     mentions,
     places,
     assistantName,
@@ -1058,7 +1177,6 @@ async function writeResult(
       ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)
       : null;
   const aboutId = remember[0]?.about?.id ?? null;
-  const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
     ...new Set(
       commands.flatMap((command) =>
@@ -1068,26 +1186,44 @@ async function writeResult(
       ),
     ),
   ];
+  const askedRef = answerTurn
+    ? captureRef.parent.doc(answerTurn.ref.captureId)
+    : null;
   const result = await firestore.runTransaction(async (transaction) => {
-    const [captureSnap, requestSnap, factsSnap, copySnap, ...targetSnaps] =
-      await Promise.all([
-        transaction.get(captureRef),
-        transaction.get(requestRef),
-        aboutId
-          ? transaction.get(
-              firestore
-                .collection(`${base}/facts`)
-                .where('syncedIds', 'array-contains', aboutId)
-                .limit(MAX_FACTS_READ),
-            )
-          : Promise.resolve(null),
-        aboutId
-          ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
-          : Promise.resolve(null),
-        ...targetIds.map((id) =>
-          transaction.get(firestore.doc(`${tasksPath}/${id}`)),
-        ),
-      ]);
+    const [
+      captureSnap,
+      requestSnap,
+      askedSnap,
+      openAskedSnap,
+      factsSnap,
+      copySnap,
+      ...targetSnaps
+    ] = await Promise.all([
+      transaction.get(captureRef),
+      transaction.get(requestRef),
+      askedRef ? transaction.get(askedRef) : Promise.resolve(null),
+      asks.length > 0
+        ? transaction.get(
+            captureRef.parent
+              .where('status', '==', 'needsYou')
+              .limit(MAX_OPEN_ASKED_READ),
+          )
+        : Promise.resolve(null),
+      aboutId
+        ? transaction.get(
+            firestore
+              .collection(`${base}/facts`)
+              .where('syncedIds', 'array-contains', aboutId)
+              .limit(MAX_FACTS_READ),
+          )
+        : Promise.resolve(null),
+      aboutId
+        ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
+        : Promise.resolve(null),
+      ...targetIds.map((id) =>
+        transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+      ),
+    ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
     const copyHash: unknown = copySnap?.get('contentHash');
@@ -1114,8 +1250,26 @@ async function writeResult(
     ) {
       return null;
     }
+    const now = Date.now();
+    const turn = answerTurn
+      ? planAnswerTurn({
+          asked: toAskedCapture(
+            key,
+            askedSnap?.data() as CaptureDoc | undefined,
+          ),
+          questionId: answerTurn.ref.questionId,
+          value: answerTurn.value,
+          words: answerTurn.words,
+          by: capture.inputMode === 'voice' ? 'voice' : 'tap',
+          turnCaptureId: captureRef.id,
+          now,
+        })
+      : null;
+    const isStale = turn?.kind === 'stale';
+    const reply = isStale ? null : built;
+    const asksNow = isStale ? [] : asks;
     const people =
-      commands.length > 0
+      commands.length > 0 && !isStale
         ? await readPeople(transaction, {
             firestore,
             base,
@@ -1175,11 +1329,10 @@ async function writeResult(
         ];
       }),
     );
-    const now = Date.now();
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
     const plan = planWrites({
-      commands,
+      commands: isStale ? [] : commands,
       existing,
       captureId: captureRef.id,
       executionId: executionRef.id,
@@ -1189,9 +1342,30 @@ async function writeResult(
       people,
     });
     const isFiling = plan.effects.length > 0;
-    if (!isFiling && commands.length > 0 && mode === 'full' && !built) {
+    if (
+      !isFiling &&
+      commands.length > 0 &&
+      mode === 'full' &&
+      !built &&
+      !answerTurn
+    ) {
       throw new SortFailure('nothingToFile');
     }
+    const askPlan = planAsks({
+      asks: asksNow,
+      openAsked: openAskedSnap
+        ? countOpenAsked(
+            openAskedSnap.docs.map((doc) => doc.get('questionState')),
+          )
+        : 0,
+      now,
+      newId: () => crypto.randomUUID(),
+    });
+    const questions = [
+      ...(isFiling ? plan.questions : []),
+      ...askPlan.questions,
+    ];
+    const firstQuestion = isSpoken ? (questions[0]?.spoken ?? null) : null;
 
     if (isFiling) {
       plan.creates.forEach(({ id, data }) =>
@@ -1211,21 +1385,30 @@ async function writeResult(
       );
       transaction.create(
         executionRef,
-        buildExecution(plan, {
-          commands,
-          captureId: captureRef.id,
-          now,
-          seal,
-          messageCount,
-          inputMode: isSpoken ? 'voice' : capture.inputMode,
-          timeZone,
-        }),
+        buildExecution(
+          { ...plan, questions },
+          {
+            questionRef: answerTurn?.ref ?? null,
+            commands,
+            captureId: captureRef.id,
+            now,
+            seal,
+            messageCount,
+            inputMode: isSpoken ? 'voice' : capture.inputMode,
+            timeZone,
+          },
+        ),
       );
     }
-    const answerExecutionRef = built
+    const spokenAnswer = reply && isSpoken ? reply.spoken : null;
+    const spokenLine =
+      spokenAnswer && !isFiling && firstQuestion
+        ? `${spokenAnswer} ${firstQuestion}`
+        : spokenAnswer;
+    const answerExecutionRef = reply
       ? firestore.collection(`${base}/executions`).doc()
       : null;
-    if (built && answerExecutionRef) {
+    if (reply && answerExecutionRef) {
       const factRef = firestore.collection(`${base}/facts`).doc();
       const factWrite = noted.fact
         ? buildFactWrite({
@@ -1242,7 +1425,7 @@ async function writeResult(
         answerExecutionRef,
         buildAnswerExecution({
           captureId: captureRef.id,
-          answer: built.answer,
+          answer: reply.answer,
           spoken: spokenLine,
           now,
           seal,
@@ -1251,6 +1434,13 @@ async function writeResult(
         }),
       );
     }
+    const quietLine = isStale
+      ? ALREADY_ANSWERED_LINE
+      : askPlan.isDeferred
+        ? ASK_DEFERRED_LINE
+        : isFiling
+          ? null
+          : firstQuestion;
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,
@@ -1258,10 +1448,10 @@ async function writeResult(
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:
-        built && answerExecutionRef
+        reply && answerExecutionRef
           ? {
               executionId: answerExecutionRef.id,
-              sealed: built.answer,
+              sealed: reply.answer,
               spoken: spokenLine
                 ? { text: spokenLine, priority: 'reply', builtBy: 'code' }
                 : null,
@@ -1272,8 +1462,20 @@ async function writeResult(
       opened: openForHelm(key, capture.sealed),
       questionState: capture.questionState ?? {},
       executionIds: capture.executionIds ?? [],
-      questions: isFiling ? plan.questions : [],
+      questions,
+      hadAsks: asksNow.length > 0,
+      isAnswerTurn: answerTurn !== null,
+      line: quietLine,
     });
+    if (askedRef && turn?.kind === 'apply') {
+      transaction.update(askedRef, {
+        questionState: turn.questionState,
+        sealed: seal(turn.sealed),
+        status: turn.status,
+        ...(turn.status === 'sorted' &&
+          askedSnap?.get('status') !== 'sorted' && { sortedAt: now }),
+      });
+    }
     if (mode === 'full') {
       sortedJoined.forEach((snapshot) =>
         transaction.update(snapshot.ref, {
@@ -1292,7 +1494,7 @@ async function writeResult(
         ? {
             joinedCaptureIds: joinedIds,
             turnLeadId: null,
-            quotedSourceKeys: built?.quotedSourceKeys ?? [],
+            quotedSourceKeys: reply?.quotedSourceKeys ?? [],
             planDayKey,
           }
         : {}),
@@ -1320,7 +1522,10 @@ async function writeResult(
       settled.status,
       isFiling ? executionRef.id : (answerExecutionRef?.id ?? null),
       releasedJoined.map((snapshot) => snapshot.id),
-      { hasAnswer: built !== null, spoken: spokenLine },
+      {
+        hasAnswer: reply !== null,
+        spoken: isSpoken ? (spokenLine ?? quietLine) : null,
+      },
     );
     transaction.set(requestRef, {
       result: sorted,
@@ -1332,7 +1537,7 @@ async function writeResult(
       status: settled.status,
       commands: commands.length,
       effects: plan.effects.length,
-      hasAnswer: built !== null,
+      hasAnswer: reply !== null,
       hasFact: noted.fact !== null,
       ...plan.counts,
     });

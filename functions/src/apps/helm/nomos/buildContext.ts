@@ -31,6 +31,8 @@ export interface ContextInput {
     visible: (ContextTask & { position: number })[];
   } | null;
   earlierTurns?: EarlierTurn[];
+  /** For a turn that answers a question the model asked: the question, its choices and the answer in words. */
+  answeredQuestion?: string | null;
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -128,6 +130,11 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(earlierTurns.length
       ? [`<earlier_turns>${toDataJson(earlierTurns)}</earlier_turns>`]
+      : []),
+    ...(input.answeredQuestion
+      ? [
+          `<answered_question>${toDataJson(input.answeredQuestion)}</answered_question>`,
+        ]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

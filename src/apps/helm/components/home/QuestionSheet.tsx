@@ -1,5 +1,5 @@
 import DetailSheet from '@/components/DetailSheet';
-import QuestionBlock from '@apps/helm/components/home/QuestionBlock';
+import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import { HELM_COPY } from '@apps/helm/constants';
 import {
   getOpenQuestions,
@@ -12,7 +12,7 @@ interface QuestionSheetProps {
   onClose: () => void;
 }
 
-/** A turn's open which-person and which-place questions from Needs you, read from the live turn so it closes by itself once they are answered. */
+/** Every open question of a turn from Needs you, read from the live turn so it closes by itself once they are answered. */
 function QuestionSheet({ item, onClose }: QuestionSheetProps) {
   const questions = item ? getOpenQuestions(item.capture) : [];
   const title = questions[0]?.question.prompt ?? HELM_COPY.questionSheetTitle;
@@ -36,7 +36,7 @@ function QuestionSheet({ item, onClose }: QuestionSheetProps) {
             </p>
           )}
           {questions.map((entry, index) => (
-            <QuestionBlock
+            <QuestionCard
               key={entry.id}
               captureId={item.capture.id}
               item={entry}

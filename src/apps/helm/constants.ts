@@ -74,6 +74,9 @@ export const MENTIONS_SHOWN = 10;
 /** Questions a turn shows at once. */
 export const QUESTIONS_PER_TURN = 3;
 
+/** The longest typed answer to a question. */
+export const ANSWER_TEXT_MAX = 500;
+
 export const EARLIER_SESSIONS_PAGE = 20;
 
 /** Whether Disconnect's "also delete" box starts ticked. */
@@ -755,6 +758,54 @@ export const HELM_COPY = {
   questionSkipped: "Skipped. It's waiting in Needs you.",
   questionAnswered: 'Done.',
   questionSheetTitle: 'Which one?',
+  questionMore: (count: number) =>
+    count === 1
+      ? '1 more question in Needs you'
+      : `${count} more questions in Needs you`,
+  questionRowMore: (count: number) => `${count} more`,
+  questionRowSkipped: 'Skipped',
+  questionDone: 'Done',
+  questionDoneCount: (count: number) => `Done · ${count}`,
+  questionPickAtLeastOne: 'Pick at least one, or None of these',
+  questionSomethingElse: 'Something else',
+  questionSomethingElseField: (name: string) => `Tell ${name} what you mean`,
+  questionSend: 'Send',
+  questionYes: 'Yes',
+  questionNo: 'No',
+  questionFreeTextPlaceholder: 'Type your answer',
+  questionDateLabel: 'Day',
+  questionTimeLabel: 'Time',
+  questionNumberLabel: 'Number',
+  questionRecordSearch: (kinds: ('who' | 'place')[]) =>
+    kinds.length === 1 && kinds[0] === 'place'
+      ? 'Search your places'
+      : kinds.length === 1
+        ? 'Search your people'
+        : 'Search your people and places',
+  questionRecordNone: 'Nothing found. Try another name.',
+  questionNewNameField: (isPlace: boolean) =>
+    isPlace ? 'Name of the place' : 'Their name',
+  questionAnswerNeedsName: 'A name is needed.',
+  questionAnswerNeedsValue: 'Add an answer first.',
+  questionNumberOutOfRange: (min: number | null, max: number | null) =>
+    min !== null && max !== null
+      ? `Pick a number from ${min} to ${max}.`
+      : min !== null
+        ? `The smallest is ${min}.`
+        : `The largest is ${max}.`,
+  questionAskAgain: (choices: string) => `Sorry, which one? ${choices}`,
+  answerNoted: 'Got it.',
+  answerNone: 'None of these',
+  answerPicked: (labels: string) => `Picked ${labels}`,
+  answerSomeoneNew: (name: string) => `Someone new: ${name}`,
+  answerNewPlace: (name: string) => `New place: ${name}`,
+  answerAt: (day: string, time: string) => `${day} at ${time}`,
+  answerYouPicked: (words: string) => `You picked ${words}`,
+  answerYouSaid: (words: string) => `You said ${words}`,
+  answerYouAnswered: (words: string) => `You answered ${words}`,
+  answerYouWrote: (words: string) => `You wrote: ${words}`,
+  questionAsked: (prompt: string) => `Asked: ${prompt}`,
+  questionSent: 'Sent.',
   questionSkippedNote: "You skipped this. It's still waiting.",
   questionOptionAria: (label: string, detail: string | null) =>
     detail ? `${label}, ${detail}` : label,

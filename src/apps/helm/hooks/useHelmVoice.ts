@@ -47,18 +47,28 @@ import {
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { formatDayName, toDayKey } from '@apps/helm/utils/planDays';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
+import { sendQuestionAnswer } from '@apps/helm/store/actions/questionActions';
 import { takeBack } from '@apps/helm/store/actions/undoActions';
 import {
   selectAllCaptures,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
-import type { OpenCapture, ScreenContext } from '@apps/helm/types';
+import type {
+  HelmQuestion,
+  OpenCapture,
+  QuestionAnswerValue,
+  ScreenContext,
+} from '@apps/helm/types';
 import {
   applyReadingEdits,
   readCapture,
 } from '@apps/helm/utils/captureReading';
 import { getOpenQuestions } from '@apps/helm/utils/heldCaptures';
 import { matchSpokenAnswer } from '@apps/helm/utils/questionAnswers';
+import {
+  buildAskAgainLine,
+  buildSpokenQuestion,
+} from '@apps/helm/utils/spokenQuestion';
 import { getOpenSessionId } from '@apps/helm/utils/sessions';
 import { isUndoPhrase, toWakeSpellings } from '@apps/helm/utils/voicePhrases';
 
@@ -116,6 +126,12 @@ export function useHelmVoice() {
   const screen = useRef<ScreenContext | null>(null);
   const noteId = useRef(0);
   const waiting = useRef(new Set<string>());
+  // Code-built questions already asked again once, so a second miss goes on as a turn.
+  const askedAgain = useRef(new Set<string>());
+  // Answer turns by id, with the question each answered, so its reply is followed by the turn's next question.
+  const afterAnswer = useRef(
+    new Map<string, { captureId: string; questionId: string }>(),
+  );
   const onSettled = useRef(() => undefined as void);
   const offlineId = useRef(0);
   const isSurfaceShown = useRef(true);
@@ -227,15 +243,33 @@ export function useHelmVoice() {
       await undoLatest();
       return;
     }
-    if (await answerQuestion(text)) return;
+    // eslint-disable-next-line react-hooks/purity -- runs from a heard phrase; the compiler flags every clock read once the answer path calls the sender
+    if (await answerQuestion(text, sttProvider, Date.now())) return;
     await sendTurn(text, sttProvider, interrupted);
   }
 
-  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn; anything that is not clearly one of its choices is a turn as usual. */
-  async function answerQuestion(text: string) {
+  /** The words that ask the next open question of a turn aloud, leaving out the one just settled; null when none is left. */
+  function sayNextQuestion(captureId: string, settledId: string) {
+    const capture = selectAllCaptures(store.getState()).find(
+      (entry) => entry.id === captureId,
+    );
+    const next = capture
+      ? getOpenQuestions(capture).find(
+          (entry) => entry.id !== settledId && entry.skippedAt === null,
+        )
+      : undefined;
+    return next ? buildSpokenQuestion(next.question) : null;
+  }
+
+  /** An answer to the open question of the latest spoken turn settles it instead of becoming a turn of its own kind: a code-built question is answered on the server, one the assistant wrote goes as an answer turn (what could not be placed goes as its words). A code-built question's reply that is none of its choices is asked again once, then goes on as a turn. */
+  async function answerQuestion(
+    text: string,
+    sttProvider: string,
+    now: number,
+  ) {
     const state = store.getState();
     const all = selectAllCaptures(state);
-    const sessionId = getOpenSessionId(all, Date.now());
+    const sessionId = getOpenSessionId(all, now);
     const asked = all
       .filter(
         (capture) =>
@@ -249,29 +283,116 @@ export function useHelmVoice() {
           .filter((entry) => entry.skippedAt === null)
           .map((entry) => ({ captureId: capture.id, ...entry })),
       )[0];
-    const answer = asked ? matchSpokenAnswer(text, asked.question) : null;
-    if (!uid || !asked || !answer) return false;
-    if (answer.kind === 'skip') {
+    if (!uid || !asked) return false;
+    const { question } = asked;
+    const askedKey = `${asked.captureId}:${asked.id}`;
+    const answer = matchSpokenAnswer(text, question, {
+      now,
+      timeZone: state.helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC',
+    });
+    if (answer?.kind === 'skip') {
       try {
         await skipQuestion(uid, asked.captureId, asked.id);
-        say(HELM_COPY.questionSkipped);
+        say(
+          [
+            HELM_COPY.questionSkipped,
+            sayNextQuestion(asked.captureId, asked.id),
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
       } catch (error) {
         console.error('Helm question was not skipped by voice', error);
         say(HELM_COPY.heldActionFailed);
       }
       return true;
     }
+    if (question.builtBy === 'model') {
+      return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
+    }
+    if (answer?.value.shape !== 'pickOne') {
+      if (askedAgain.current.has(askedKey)) return false;
+      askedAgain.current.add(askedKey);
+      say(buildAskAgainLine(question));
+      return true;
+    }
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: 'voice',
-      optionId: answer.optionId,
+      optionId: answer.value.optionId,
     });
-    if (result.kind === 'done') say(HELM_COPY.questionAnswered);
-    else if (result.kind === 'offline') say(HELM_COPY.questionNeedsConnection);
-    else if (result.kind === 'gone')
-      say(HELM_COPY.questionGone(asked.question.kind));
-    else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
+    if (result.kind === 'done') {
+      say(
+        [HELM_COPY.questionAnswered, sayNextQuestion(asked.captureId, asked.id)]
+          .filter(Boolean)
+          .join(' '),
+      );
+    } else if (result.kind === 'offline') {
+      say(HELM_COPY.questionNeedsConnection);
+    } else if (result.kind === 'gone') {
+      say(HELM_COPY.questionGone(question.kind));
+    } else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
     else voice.settle();
     return true;
+  }
+
+  async function answerAsTurn(
+    asked: { captureId: string; id: string; question: HelmQuestion },
+    value: QuestionAnswerValue | null,
+    transcript: string,
+    sttProvider: string,
+  ) {
+    if (!uid) return false;
+    const stopsAtSend = stopCount.current;
+    try {
+      const { write, id } = await sendQuestionAnswer(uid, {
+        captureId: asked.captureId,
+        questionId: asked.id,
+        question: asked.question,
+        value,
+        transcript,
+        assistantName: name,
+        sttProvider,
+      });
+      afterAnswer.current.set(id, {
+        captureId: asked.captureId,
+        questionId: asked.id,
+      });
+      trackSent(uid, id, id, write, stopsAtSend);
+    } catch (error) {
+      console.error('Helm spoken answer did not send', error);
+      voice.settle();
+      addToast({ title: HELM_COPY.talkSendFailed, type: 'error' });
+    }
+    return true;
+  }
+
+  /** Waits for the sorted reply of a sent turn so it is said once, and gives up the wait when the device is offline. */
+  function trackSent(
+    uid: string,
+    id: string,
+    leadId: string,
+    write: Promise<void>,
+    stopsAtSend: number,
+  ) {
+    write.catch((error: unknown) => {
+      clearSentTurn(uid, id);
+      waiting.current.delete(leadId);
+      console.error('Helm spoken turn did not send', error);
+      voice.settle();
+      addToast({ title: HELM_COPY.talkSendFailed, type: 'error' });
+    });
+    if (stopCount.current !== stopsAtSend) return;
+    waiting.current.add(leadId);
+    window.clearTimeout(offlineId.current);
+    offlineId.current = window.setTimeout(
+      () => {
+        if (!waiting.current.has(leadId) || navigator.onLine) return;
+        waiting.current.delete(leadId);
+        voice.settle();
+        showNote(HELM_COPY.talkSavedOffline);
+      },
+      navigator.onLine ? OFFLINE_WAIT_MS : 0,
+    );
   }
 
   async function sendTurn(
@@ -307,6 +428,8 @@ export function useHelmVoice() {
         text,
         reading,
         screen: screen.current,
+        answersQuestion: null,
+        questionAnswer: null,
         ...turn,
         voice: {
           sttProvider,
@@ -314,24 +437,7 @@ export function useHelmVoice() {
         },
       });
       recordSentTurn(uid, turn, id);
-      const leadId = turn.leadId ?? id;
-      write.catch((error: unknown) => {
-        clearSentTurn(uid, id);
-        waiting.current.delete(leadId);
-        fail(error);
-      });
-      if (stopCount.current !== stopsAtSend) return;
-      waiting.current.add(leadId);
-      window.clearTimeout(offlineId.current);
-      offlineId.current = window.setTimeout(
-        () => {
-          if (!waiting.current.has(leadId) || navigator.onLine) return;
-          waiting.current.delete(leadId);
-          voice.settle();
-          showNote(HELM_COPY.talkSavedOffline);
-        },
-        navigator.onLine ? OFFLINE_WAIT_MS : 0,
-      );
+      trackSent(uid, id, turn.leadId ?? id, write, stopsAtSend);
     } catch (error) {
       fail(error);
     }
@@ -428,13 +534,19 @@ export function useHelmVoice() {
                 .flatMap((id) => executionsById.get(id) ?? [])
                 .find((execution) => execution.spoken !== null)?.spoken ?? null)
             : null;
-        const line =
+        const answered = afterAnswer.current.get(leadId);
+        afterAnswer.current.delete(leadId);
+        const reply =
           spoken ??
           (capture.status === 'sorted' && capture.planDayKey
             ? HELM_COPY.planningDaySpoken(
                 formatDayName(capture.planDayKey, toDayKey(Date.now(), zone)),
               )
             : null);
+        const next = answered
+          ? sayNextQuestion(answered.captureId, answered.questionId)
+          : null;
+        const line = [reply, next].filter(Boolean).join(' ') || null;
         if (line === null) voice.settle();
         else void deliver(capture, line);
       });

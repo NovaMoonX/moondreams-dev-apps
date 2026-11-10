@@ -8,10 +8,11 @@ import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
 import AnswerCard from '@apps/helm/components/home/AnswerCard';
-import QuestionBlock from '@apps/helm/components/home/QuestionBlock';
+import AnsweredQuestion from '@apps/helm/components/home/AnsweredQuestion';
+import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
-import { HELM_COPY } from '@apps/helm/constants';
+import { HELM_COPY, QUESTIONS_PER_TURN } from '@apps/helm/constants';
 import { useOnceVisible } from '@apps/helm/hooks/useOnceVisible';
 import { isSorting, subscribeSorting } from '@apps/helm/queries/nomosMutations';
 import {
@@ -21,6 +22,7 @@ import {
 import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
 import type { OpenCapture } from '@apps/helm/types';
 import {
+  getAnsweredQuestions,
   getHomeHeldLine,
   getOpenQuestions,
 } from '@apps/helm/utils/heldCaptures';
@@ -104,10 +106,18 @@ function TurnCard({
   useEffect(() => {
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
-  const questions = capture.isUnreadable ? [] : getOpenQuestions(capture);
+  const openQuestions = capture.isUnreadable ? [] : getOpenQuestions(capture);
+  const questions = openQuestions.slice(0, QUESTIONS_PER_TURN);
+  const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
   const hasCard = hasResults && executions.length > 0;
+  const isQuietAnswer =
+    isSorted &&
+    capture.answersQuestion !== null &&
+    capture.executionIds.length === 0 &&
+    !capture.answer &&
+    !capture.planDayKey;
   const hasLost =
     hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
   function getPlanLine() {
@@ -202,6 +212,11 @@ function TurnCard({
           <AssistantLine>{planLine}</AssistantLine>
         </div>
       )}
+      {isQuietAnswer && (
+        <div className='flex w-full flex-col items-start gap-2' role='status'>
+          <AssistantLine>{HELM_COPY.answerNoted}</AssistantLine>
+        </div>
+      )}
       {capture.answer && !capture.isUnreadable && (
         <AnswerCard answer={capture.answer} isInset />
       )}
@@ -216,14 +231,26 @@ function TurnCard({
           {`screen ${capture.screen.view} · focus ${capture.screen.focus?.id ?? 'none'} · ${capture.screen.visible.length} visible`}
         </p>
       )}
+      {answered.map((entry) => (
+        <AnsweredQuestion
+          key={entry.id}
+          question={entry.question}
+          answer={entry.answer}
+        />
+      ))}
       {questions.map((entry) => (
-        <QuestionBlock
+        <QuestionCard
           key={entry.id}
           captureId={capture.id}
           item={entry}
           isInSheet={false}
         />
       ))}
+      {openQuestions.length > questions.length && (
+        <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
+          {HELM_COPY.questionMore(openQuestions.length - questions.length)}
+        </p>
+      )}
       {heldLine !== null && (
         <p className='text-muted-foreground text-[13px]'>{heldLine}</p>
       )}

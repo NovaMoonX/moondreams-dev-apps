@@ -46,6 +46,7 @@ import type {
   CaptureSealed,
   HelmEncryption,
   OpenCapture,
+  QuestionAnswerValue,
   ScreenContext,
   Task,
   TaskSealed,
@@ -83,6 +84,9 @@ export async function sendCapture(
     leadId: string | null;
     reading: CaptureReading;
     screen: ScreenContext | null;
+    /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
+    answersQuestion: Capture['answersQuestion'];
+    questionAnswer: QuestionAnswerValue | null;
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
   },
@@ -92,7 +96,12 @@ export async function sendCapture(
     throw new Error('A turn is 1 to 4,000 characters.');
   }
   const sealed = await sealJson<CaptureSealed>(
-    { text, reading: turn.reading, answer: null },
+    {
+      text,
+      reading: turn.reading,
+      answer: null,
+      questionAnswer: turn.questionAnswer,
+    },
     encryption,
   );
   const { createdAt } = turn;
@@ -101,6 +110,7 @@ export async function sendCapture(
     inputMode: turn.voice ? 'voice' : 'typed',
     sttProvider: turn.voice?.sttProvider ?? null,
     interruptedCaptureId: turn.voice?.interruptedCaptureId ?? null,
+    answersQuestion: turn.answersQuestion,
     ttsProvider: null,
     medium: 'web',
     sessionId: turn.sessionId,

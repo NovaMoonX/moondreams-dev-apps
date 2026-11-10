@@ -515,6 +515,7 @@ async function buildBackToBack(input: {
         inputMode: 'typed',
         sttProvider: null,
         interruptedCaptureId: null,
+        answersQuestion: null,
         ttsProvider: null,
         medium: 'web',
         sessionId: `seed-${uid}-today`,
@@ -835,6 +836,7 @@ async function buildGmailTurn(input: {
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
+    answersQuestion: null,
     ttsProvider: null,
     medium: 'web',
     sessionId: `seed-${uid}-answers`,
@@ -963,6 +965,7 @@ async function buildAnswerTurns(input: {
         inputMode: 'typed',
         sttProvider: null,
         interruptedCaptureId: null,
+        answersQuestion: null,
         ttsProvider: null,
         medium: 'web',
         sessionId: `seed-${uid}-answers`,
@@ -1438,6 +1441,7 @@ async function buildPeople(input: {
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
+    answersQuestion: null,
     ttsProvider: null,
     medium: 'web',
     sessionId: 'seed-alex-question',
@@ -1480,12 +1484,103 @@ async function buildPeople(input: {
       questions: { 'seed-question-which-sam': question },
     }),
   };
+  const askedText = 'Help me pack for the Tahoe trip';
+  const askedAt = now - 8 * MINUTE_MS;
+  const asked = (fields: Record<string, unknown>) => ({
+    kind: 'asked',
+    builtBy: 'model',
+    allowsSomethingElse: false,
+    noneOption: false,
+    recordKinds: [],
+    dateMode: null,
+    number: null,
+    heldCommands: [],
+    aboutRef: null,
+    answer: null,
+    ...fields,
+  });
+  const packingQuestion = asked({
+    shape: 'pickSeveral',
+    prompt: 'Which of these should go on the packing list?',
+    noneOption: true,
+    options: [
+      { id: 'o1', label: 'Snow chains', detail: null, ref: null },
+      { id: 'o2', label: 'Sunscreen', detail: null, ref: null },
+      { id: 'o3', label: 'Board games', detail: null, ref: null },
+      { id: 'none', label: 'None of these', detail: null, ref: null },
+    ],
+  });
+  const nightsQuestion = asked({
+    shape: 'number',
+    prompt: 'How many nights?',
+    options: [],
+    number: { min: 1, max: 30, unit: 'nights', isMoney: false, decimals: 0 },
+  });
+  const askedCapture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    answersQuestion: null,
+    ttsProvider: null,
+    medium: 'web',
+    sessionId: 'seed-alex-asked',
+    turnIndex: 0,
+    route: 'quick',
+    status: 'needsYou',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {
+      'seed-question-asked-packing': {
+        kind: 'asked',
+        shape: 'pickSeveral',
+        askedAt: askedAt + SORT_DELAY_MS,
+        answeredAt: null,
+        skippedAt: null,
+      },
+      'seed-question-asked-nights': {
+        kind: 'asked',
+        shape: 'number',
+        askedAt: askedAt + SORT_DELAY_MS + 1,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    executionIds: [],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    seenAt: null,
+    quotedSourceKeys: [],
+    whoIds: [],
+    placeIds: [],
+    createdAt: askedAt,
+    sortedAt: askedAt + SORT_DELAY_MS,
+    planDayKey: null,
+    screen: null,
+    sealed: await seal({
+      text: askedText,
+      reading: readCapture(askedText, {
+        now: askedAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questionAnswer: null,
+      questions: {
+        'seed-question-asked-packing': packingQuestion,
+        'seed-question-asked-nights': nightsQuestion,
+      },
+    }),
+  };
   const text = 'Sam Patel might join us for lunch on Saturday';
   const turnAt = now - 2 * DAY_MS;
   const capture: Capture = {
     inputMode: 'typed',
     sttProvider: null,
     interruptedCaptureId: null,
+    answersQuestion: null,
     ttsProvider: null,
     medium: 'web',
     sessionId: 'seed-alex-who',
@@ -1525,6 +1620,7 @@ async function buildPeople(input: {
     tasks,
     capture: { id: 'seed-turn-who', capture },
     questionCapture: { id: 'seed-turn-question', capture: questionCapture },
+    askedCapture: { id: 'seed-turn-asked', capture: askedCapture },
   };
 }
 
@@ -1609,6 +1705,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             inputMode: spoken === undefined ? 'typed' : 'voice',
             sttProvider: spoken === undefined ? null : 'browser',
             interruptedCaptureId: null,
+            answersQuestion: null,
             ttsProvider: spoken === undefined ? null : 'natural',
             medium: 'web',
             sessionId: `seed-${user.uid}-${turn.session}`,
@@ -1969,9 +2066,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           person.collection('captures').doc(people.questionCapture.id),
           people.questionCapture.capture,
         );
+        batch.set(
+          person.collection('captures').doc(people.askedCapture.id),
+          people.askedCapture.capture,
+        );
       }
       const peopleCount = people
-        ? people.who.length + people.places.length + people.tasks.length + 2
+        ? people.who.length + people.places.length + people.tasks.length + 3
         : 0;
       const backToBackCount =
         peopleCount +

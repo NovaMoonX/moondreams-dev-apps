@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 
 import {
+  readSpokenAnswer,
+  type SpokenQuestion,
+} from '../../src/lib/speech/readSpokenAnswer.ts';
+
+import {
   describeAmounts,
   describeTimersLeft,
   formatSpokenTime,
@@ -1245,17 +1250,34 @@ expectKind(
   'tips are read when asked for, in the words people use to repeat a thing',
 );
 expectKind(
-  ['read the notes', 'read my notes', 'repeat my note', 'what did I note', 'any notes'],
+  [
+    'read the notes',
+    'read my notes',
+    'repeat my note',
+    'what did I note',
+    'any notes',
+  ],
   { kind: 'READ_NOTES' },
   'notes are read when asked for',
 );
 expectKind(
-  ['read the changes', 'repeat the changes', 'repeat my changes', 'repeat the planned changes', 'any changes'],
+  [
+    'read the changes',
+    'repeat the changes',
+    'repeat my changes',
+    'repeat the planned changes',
+    'any changes',
+  ],
   { kind: 'READ_CHANGES' },
   'planned changes are read on their own, apart from the notes',
 );
 expectKind(
-  ['repeat the instructions', 'read the instructions', 'repeat instructions', 'say the instructions again'],
+  [
+    'repeat the instructions',
+    'read the instructions',
+    'repeat instructions',
+    'say the instructions again',
+  ],
   { kind: 'REPEAT' },
   'the step itself is asked for again as its instructions',
 );
@@ -1270,9 +1292,15 @@ assert.deepEqual(
   'plain repeat still reads the step',
 );
 assert.deepEqual(
-  ['add a tip', 'new tip', 'I have a tip', 'Add a note', 'make a note', 'add a change', 'suggest a change'].map(
-    (phrase) => parse(phrase),
-  ),
+  [
+    'add a tip',
+    'new tip',
+    'I have a tip',
+    'Add a note',
+    'make a note',
+    'add a change',
+    'suggest a change',
+  ].map((phrase) => parse(phrase)),
   [
     { kind: 'ADD_ENTRY', entryKind: 'TIP' },
     { kind: 'ADD_ENTRY', entryKind: 'TIP' },
@@ -1319,17 +1347,34 @@ expectKind(
   'what a step uses is shown by asking for the ingredients for this step, apart from the whole list',
 );
 expectKind(
-  ['note from last time', 'show the note from last time', 'what did I note last time'],
+  [
+    'note from last time',
+    'show the note from last time',
+    'what did I note last time',
+  ],
   { kind: 'SHOW_LAST_NOTE' },
   'the note the first step leads with is shown by asking for last time',
 );
 expectKind(
-  ['close the note', 'close the tips', 'close my notes', 'hide the changes', 'close that', 'close it', 'hide that'],
+  [
+    'close the note',
+    'close the tips',
+    'close my notes',
+    'hide the changes',
+    'close that',
+    'close it',
+    'hide that',
+  ],
   { kind: 'CLOSE_ENTRIES' },
   'what is open above the step is closed by saying so',
 );
 assert.deepEqual(
-  [parse('close'), parse('show'), parse('show me the tip of the iceberg'), parse('close the oven')],
+  [
+    parse('close'),
+    parse('show'),
+    parse('show me the tip of the iceberg'),
+    parse('close the oven'),
+  ],
   [null, null, null, null],
   'a bare close or show, or a sentence that only starts like one, is not a command',
 );
@@ -1340,7 +1385,9 @@ expectKind(
 );
 
 assert.deepEqual(
-  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) => parse(word)),
+  ['constructor', 'toString', 'hasOwnProperty', '__proto__'].map((word) =>
+    parse(word),
+  ),
   [null, null, null, null],
   'a word that names an object property is not a command',
 );
@@ -1365,7 +1412,9 @@ assert.deepEqual(
   'and even a command word is the words, so a tip never moves the step',
 );
 assert.deepEqual(
-  ['never mind', 'cancel', 'forget it'].map((phrase) => parse(phrase, dictating)),
+  ['never mind', 'cancel', 'forget it'].map((phrase) =>
+    parse(phrase, dictating),
+  ),
   Array.from({ length: 3 }, () => ({
     kind: 'TIMER_ANSWER',
     answer: { kind: 'NEVER_MIND' },
@@ -1382,7 +1431,9 @@ assert.equal(parse('   ', dictating), null, 'silence is not a tip');
   const long = parse(`${'tender '.repeat(120)}end`, dictating);
   assert.equal(long?.kind, 'DICTATION', 'a long tip is kept, not dropped');
   assert.equal(
-    long?.kind === 'DICTATION' && long.text.length <= 400 && !long.text.endsWith(' '),
+    long?.kind === 'DICTATION' &&
+      long.text.length <= 400 &&
+      !long.text.endsWith(' '),
     true,
     'but cut to the cap at a word',
   );
@@ -1405,31 +1456,42 @@ const queue: CookReadingQueue = {
 const on = { stepKey: 'adobo:0', isOn: true, openView: null } as const;
 const first = stepCookReading(queue, on);
 assert.deepEqual(
-  first.kind === 'SAY' && [first.segment.view, first.isFirst, first.queue.opened, first.queue.next],
+  first.kind === 'SAY' && [
+    first.segment.view,
+    first.isFirst,
+    first.queue.opened,
+    first.queue.next,
+  ],
   ['TIP', true, 'TIP', 1],
   'the reading after a step starts with the first view and says it opened it',
 );
 const second =
-  first.kind === 'SAY' ? stepCookReading(first.queue, { ...on, openView: 'TIP' }) : first;
+  first.kind === 'SAY'
+    ? stepCookReading(first.queue, { ...on, openView: 'TIP' })
+    : first;
 assert.deepEqual(
   second.kind === 'SAY' && [second.segment.view, second.isFirst],
   ['CHANGE', false],
   'then the next view, without the lead-in',
 );
 const last =
-  second.kind === 'SAY' ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' }) : second;
+  second.kind === 'SAY'
+    ? stepCookReading(second.queue, { ...on, openView: 'CHANGE' })
+    : second;
 assert.deepEqual(
   last,
   { kind: 'FINISH', close: 'CHANGE' },
   'the end takes down the view the reading opened',
 );
 assert.deepEqual(
-  second.kind === 'SAY' && stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
+  second.kind === 'SAY' &&
+    stepCookReading(second.queue, { ...on, openView: 'AMOUNTS' as never }),
   { kind: 'STOP' },
   'a view the person opened in the meantime stops the reading and is left alone',
 );
 assert.deepEqual(
-  first.kind === 'SAY' && stepCookReading(first.queue, { ...on, openView: null }),
+  first.kind === 'SAY' &&
+    stepCookReading(first.queue, { ...on, openView: null }),
   { kind: 'STOP' },
   'closing the view stops the reading, so the next one never reopens',
 );
@@ -1445,6 +1507,283 @@ assert.deepEqual(
   stepCookReading({ ...queue, segments: [] }, on),
   { kind: 'FINISH', close: null },
   'a step with nothing written ends without taking anything down',
+);
+
+const asking = (extra: Partial<SpokenQuestion>): SpokenQuestion => ({
+  shape: 'pickOne',
+  options: [],
+  noneOptionId: null,
+  allowsSomethingElse: false,
+  number: null,
+  dateMode: null,
+  ...extra,
+});
+const gear = [
+  { id: 'o1', label: 'Snow chains', detail: null },
+  { id: 'o2', label: 'Sunscreen', detail: null },
+  { id: 'o3', label: 'Board games', detail: null },
+  { id: 'none', label: 'None of these', detail: null, isClosing: true },
+];
+const several = asking({
+  shape: 'pickSeveral',
+  options: gear,
+  noneOptionId: 'none',
+});
+const readIds = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'pickSeveral'
+    ? read.value.optionIds
+    : read;
+};
+const readNumberOf = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'number'
+    ? read.value.value
+    : read;
+};
+
+assert.deepEqual(readSpokenAnswer(several, 'skip'), { kind: 'skip' }, 'skip');
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'number' }), 'Skip it.'),
+  { kind: 'skip' },
+  'skip works for every shape',
+);
+(
+  [
+    ['yes', 'yes'],
+    ['Yeah', 'yes'],
+    ['sure', 'yes'],
+    ['no', 'no'],
+    ['Nope.', 'no'],
+  ] as const
+).forEach(([said, optionId]) =>
+  assert.deepEqual(
+    readSpokenAnswer(asking({ shape: 'yesNo' }), said),
+    {
+      kind: 'answer',
+      value: { shape: 'yesNo', optionId, otherText: null },
+    },
+    `"${said}" is ${optionId}`,
+  ),
+);
+assert.equal(
+  readSpokenAnswer(asking({ shape: 'yesNo' }), 'maybe tomorrow'),
+  null,
+  'a yes or no question does not guess',
+);
+assert.deepEqual(
+  readIds(several, 'the first two'),
+  ['o1', 'o2'],
+  'the first two',
+);
+assert.deepEqual(
+  readIds(several, 'the last two'),
+  ['o2', 'o3'],
+  'the last two',
+);
+assert.deepEqual(
+  readIds(several, 'all of them'),
+  ['o1', 'o2', 'o3'],
+  'all of them',
+);
+assert.deepEqual(
+  readIds(several, 'the first and the third'),
+  ['o1', 'o3'],
+  'two ordinals',
+);
+assert.deepEqual(
+  readIds(several, 'snow chains and sunscreen'),
+  ['o1', 'o2'],
+  'two labels joined by and',
+);
+assert.deepEqual(
+  readIds(several, 'sunscreen, board games'),
+  ['o2', 'o3'],
+  'labels joined by a comma',
+);
+assert.deepEqual(readIds(several, 'none of these'), ['none'], 'none of these');
+assert.deepEqual(readIds(several, 'none'), ['none'], 'none');
+assert.equal(
+  readIds(several, 'the fifth one'),
+  null,
+  'an ordinal past the list is not placed',
+);
+assert.equal(
+  readIds(several, 'hot cocoa'),
+  null,
+  'a label that is not an option is not placed',
+);
+const pair = asking({
+  shape: 'pickSeveral',
+  options: gear.slice(0, 2).concat(gear[3]),
+  noneOptionId: 'none',
+});
+assert.deepEqual(readIds(pair, 'both'), ['o1', 'o2'], 'both of two');
+assert.equal(readIds(several, 'both'), null, 'both of three is not placed');
+
+const one = asking({ options: gear, noneOptionId: 'none' });
+const readOne = (question: SpokenQuestion, text: string) => {
+  const read = readSpokenAnswer(question, text);
+  return read?.kind === 'answer' && read.value.shape === 'pickOne'
+    ? [read.value.optionId, read.value.otherText]
+    : read;
+};
+assert.deepEqual(
+  readOne(one, 'the second one'),
+  ['o2', null],
+  'the second one',
+);
+assert.deepEqual(readOne(one, 'the last one'), ['o3', null], 'the last one');
+assert.deepEqual(
+  readOne(one, 'Board games please'),
+  ['o3', null],
+  'a label with please',
+);
+assert.deepEqual(
+  readOne(one, 'snow'),
+  ['o1', null],
+  'a word only one label has',
+);
+assert.deepEqual(
+  readOne(one, 'none of these'),
+  ['none', null],
+  'none picks the none option',
+);
+assert.equal(
+  readOne(one, 'the first two'),
+  null,
+  'two picks are not one answer',
+);
+assert.equal(
+  readOne(one, 'something else: a tent'),
+  null,
+  'something else is only heard where the question allows it',
+);
+assert.deepEqual(
+  readOne({ ...one, allowsSomethingElse: true }, 'Something else: a tent'),
+  ['other', 'a tent'],
+  'something else carries the words after it',
+);
+const people = asking({
+  shape: 'pickRecord',
+  options: [
+    { id: 'w1', label: 'Sam Rivera', detail: 'Work friend' },
+    { id: 'w2', label: 'Sam Patel', detail: 'Neighbor' },
+    { id: 'new', label: 'Someone new', detail: null, isClosing: true },
+  ],
+});
+assert.deepEqual(
+  readSpokenAnswer(people, 'Patel'),
+  { kind: 'answer', value: { shape: 'pickRecord', optionId: 'w2' } },
+  'a record by what only it has',
+);
+assert.equal(
+  readSpokenAnswer(people, 'Sam'),
+  null,
+  'a name two share is not placed',
+);
+assert.deepEqual(
+  readSpokenAnswer(people, 'the first one'),
+  { kind: 'answer', value: { shape: 'pickRecord', optionId: 'w1' } },
+  'a record by place, not counting the closing option',
+);
+
+const count = asking({
+  shape: 'number',
+  number: { min: 1, max: 30, isMoney: false },
+});
+assert.equal(readNumberOf(count, 'four'), 4, 'a number word');
+assert.equal(readNumberOf(count, 'twenty five'), 25, 'two number words');
+assert.equal(
+  readNumberOf(count, 'twenty-five nights'),
+  25,
+  'a hyphen and a unit',
+);
+assert.equal(readNumberOf(count, 'two and a half'), 2.5, 'and a half');
+assert.equal(readNumberOf(count, 'three point five'), 3.5, 'point five');
+assert.equal(readNumberOf(count, '7 nights'), 7, 'digits with a unit');
+assert.equal(readNumberOf(count, 'forty'), null, 'out of range is not placed');
+assert.equal(
+  readNumberOf(count, 'zero'),
+  null,
+  'below the range is not placed',
+);
+assert.equal(readNumberOf(count, 'a few'), null, 'no number is not placed');
+const money = asking({
+  shape: 'number',
+  number: { min: 0, max: 1_000_000, isMoney: true },
+});
+assert.equal(
+  readNumberOf(money, 'forty dollars'),
+  4000,
+  'dollars in words are cents',
+);
+assert.equal(
+  readNumberOf(money, 'forty dollars and fifty cents'),
+  4050,
+  'dollars and cents',
+);
+assert.equal(readNumberOf(money, '$12.50'), 1250, 'a typed amount');
+assert.equal(
+  readNumberOf(money, 'a hundred dollars'),
+  10000,
+  'a hundred dollars',
+);
+
+const day = asking({ shape: 'dateTime', dateMode: 'dateTime' });
+const readDate = (text: string) =>
+  text === 'friday at three'
+    ? { date: Date.UTC(2026, 10, 13), time: '15:00' }
+    : text === 'friday'
+      ? { date: Date.UTC(2026, 10, 13), time: null }
+      : null;
+assert.deepEqual(
+  readSpokenAnswer(day, 'friday at three', { readDate }),
+  {
+    kind: 'answer',
+    value: { shape: 'dateTime', date: Date.UTC(2026, 10, 13), time: '15:00' },
+  },
+  "a day and a time through the caller's reader",
+);
+assert.equal(
+  readSpokenAnswer(day, 'friday', { readDate }),
+  null,
+  'a day with no time is not enough where both are asked',
+);
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'dateTime', dateMode: 'date' }), 'friday', {
+    readDate,
+  }),
+  {
+    kind: 'answer',
+    value: { shape: 'dateTime', date: Date.UTC(2026, 10, 13), time: null },
+  },
+  'a day alone where only a day is asked',
+);
+assert.equal(
+  readSpokenAnswer(day, 'friday at three'),
+  null,
+  'no date reader places nothing',
+);
+
+assert.deepEqual(
+  readSpokenAnswer(asking({ shape: 'freeText' }), '  Bring the red tent  '),
+  { kind: 'answer', value: { shape: 'freeText', text: 'Bring the red tent' } },
+  'a few words are taken as said',
+);
+assert.equal(
+  (
+    readSpokenAnswer(asking({ shape: 'freeText' }), 'x'.repeat(600)) as {
+      value: { text: string };
+    }
+  ).value.text.length,
+  500,
+  'a few words stop at 500 characters',
+);
+assert.equal(
+  readSpokenAnswer(several, '   '),
+  null,
+  'silence is not an answer',
 );
 
 console.log('pinchVoice: all checks passed');

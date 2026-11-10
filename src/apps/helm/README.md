@@ -40,7 +40,7 @@ Built:
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase
 - [ ] The assistant on every screen, knowing what is in view
-- [ ] Questions in several shapes (pick one or several, yes or no, a few words, a date, a person, a number), answered by tap or voice or skipped
+- [x] Questions in several shapes (pick one or several, yes or no, a few words, a date, a person, a number), answered by tap or voice or skipped
 - [ ] Photos, PDFs, voice notes and Markdown files, kept on the right record or let go
 - [ ] People, pets and organizations with photos, levels and project roles; key dates; places with photos; Google Contacts picker
 - [ ] Preferences, favorites and who you are; how you write; "How Nomos sees you"

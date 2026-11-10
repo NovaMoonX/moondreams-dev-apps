@@ -237,6 +237,77 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   ...fields,
 });
 
+const toAsk = (fields: Partial<Record<string, unknown>>) =>
+  toAnswer({
+    kind: 'ask',
+    isHealth: null,
+    shape: null,
+    prompt: null,
+    options: [],
+    allowsSomethingElse: null,
+    recordKinds: null,
+    dateMode: null,
+    numberMin: null,
+    numberMax: null,
+    unit: null,
+    isMoney: null,
+    decimals: null,
+    ...fields,
+  });
+
+const PACKING_PROMPT = 'Which of these should go on the packing list?';
+const PACKING_RE = /\bpack\b.*\btahoe\b/i;
+
+const packingOption = (label: string) => ({
+  label,
+  detail: null,
+  recordAlias: null,
+});
+
+/** The emulator's two questions for "Help me pack for the Tahoe trip": what goes on the list, and how many nights. */
+const readPackingAsks = (text: string) =>
+  PACKING_RE.test(text)
+    ? [
+        toAsk({
+          shape: 'pickSeveral',
+          prompt: PACKING_PROMPT,
+          options: ['Snow chains', 'Sunscreen', 'Board games'].map(
+            packingOption,
+          ),
+        }),
+        toAsk({
+          shape: 'number',
+          prompt: 'How many nights?',
+          unit: 'nights',
+          numberMin: 1,
+          numberMax: 30,
+        }),
+      ]
+    : null;
+
+/** The tasks for the items picked in answer to the packing question, read from the context's answered question; any other answered question files nothing, and null means the turn answers no question. */
+const readPackingAnswer = (message: string) => {
+  const line = readBlock<string>(message, 'answered_question');
+  if (line === null) return null;
+  if (!line.includes(PACKING_PROMPT)) return [];
+  const options = (line.match(/Options: ([^·]*)/)?.[1] ?? '')
+    .split(', ')
+    .map((label) => label.trim());
+  const answer = line.split('Answer: ')[1] ?? '';
+  return options
+    .filter((label) => label && answer.includes(label))
+    .map((label, index) => ({
+      kind: 'createTask',
+      ref: `$new${index + 1}`,
+      taskAlias: null,
+      title: `Pack ${label.toLowerCase()}`,
+      dueSpanId: null,
+      isUrgent: null,
+      whoRefs: [],
+      placeRefs: [],
+    }));
+};
+
 const MAIL_QUESTION_RE = /\b(tasting|e-?mails?|mailed)\b/i;
 
 interface MailResult {
@@ -484,6 +555,18 @@ export function createFixtureProvider(
           terminalInput: null,
           terminalName: null,
           endedBy: 'aborted',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const packed = readPackingAnswer(messages[0]?.content ?? '');
+      const packingAsks = packed ? null : readPackingAsks(text);
+      if (packed !== null || packingAsks) {
+        return {
+          terminalInput: { commands: packed ?? packingAsks ?? [] },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
           errorCode: null,
           usage: EMPTY_USAGE,
           toolCalls: [],
