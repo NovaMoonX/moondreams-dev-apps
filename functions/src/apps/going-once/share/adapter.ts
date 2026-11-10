@@ -12,6 +12,7 @@ import {
   SHARED_RECORD_KEYS,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import { isListable } from '../salePageView.js';
 import { GOING_ONCE_SHARES } from './manifest.js';
 
 const readManifest = () => {
@@ -91,11 +92,7 @@ const readItem = (doc: FirebaseFirestore.QueryDocumentSnapshot): ReadItem[] => {
       id: doc.id,
       title: readText(doc.get('title')),
       status,
-      isListable:
-        readText(doc.get('title')) !== null &&
-        doc.get('askingPriceCents') !== null &&
-        doc.get('askingPriceCents') !== undefined &&
-        (doc.get('photos') ?? []).length > 0,
+      isListable: isListable(doc.data()),
       pickupOn: readTime(doc.get('pending.pickupOn')),
     },
   ];
