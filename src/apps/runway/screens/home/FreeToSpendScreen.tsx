@@ -106,8 +106,10 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
   );
   const onItsWayCents = useAppSelector(selectOnItsWay)
     .filter(
-      ({ purchase }) =>
-        purchase.date >= monthRange.from && purchase.date < monthRange.to,
+      ({ purchase, heldBy }) =>
+        heldBy === null &&
+        purchase.date >= monthRange.from &&
+        purchase.date < monthRange.to,
     )
     .reduce((sum, { purchase }) => sum - purchase.amountCents, 0);
   // Money with no envelopes and no pay raised Free to Spend itself; a pay or a refund to envelopes went to the plan.

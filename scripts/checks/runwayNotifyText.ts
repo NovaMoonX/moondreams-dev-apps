@@ -112,6 +112,17 @@ assert.equal(
   ),
   1,
 );
+// Card money in that a pending charge of its amount may be the other side of waits with it and doesn't count.
+assert.equal(
+  countWaiting(
+    [
+      { ...row(100, 0, -900), isOnCard: true },
+      { ...row(100, DAY, 900), isPending: true },
+    ],
+    null,
+  ),
+  1,
+);
 // An unreadable document reads as 0 cents and counts.
 assert.equal(countWaiting([row(100, 0, 0)], paused), 1);
 

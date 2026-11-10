@@ -470,7 +470,8 @@ export function findPendingMoveHolds(
           into.amountCents < 0 &&
           into.pairedWithId === null &&
           into.needsHome &&
-          into.incomeDayId === null,
+          into.incomeDayId === null &&
+          ((into.paidByCardId ?? null) !== null || into.accountId !== null),
       )
       .flatMap((into): [string, string][] => {
         const out = pendingOuts.find(

@@ -1621,11 +1621,14 @@ const selectPendingHolds = createSelector(
       ...waiting.filter((purchase) => !known.has(purchase.id)),
     ];
     const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const { offers } = findAccountPairs(waiting, true);
     const result = new Map(
       [...findPendingMoveHolds(all)].flatMap(
         ([inId, outId]): [string, OpenPurchase][] => {
           const out = byId.get(outId);
-          return out === undefined ? [] : [[inId, out]];
+          return out === undefined || (offers.get(inId)?.length ?? 0) > 0
+            ? []
+            : [[inId, out]];
         },
       ),
     );
@@ -1637,7 +1640,8 @@ const isPendingMoneyIn = (purchase: OpenPurchase) =>
   purchase.source === 'link' &&
   purchase.amountCents < 0 &&
   purchase.status === 'pending' &&
-  purchase.pairedWithId === null;
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null;
 
 /** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts, paired or likely (a waiting side with a pair offer), and never money still on its way (`selectOnItsWay`). Spend's Money in and Free to Spend's "Money in this month" both read it. */
 export const selectMoneyIn = createSelector(
