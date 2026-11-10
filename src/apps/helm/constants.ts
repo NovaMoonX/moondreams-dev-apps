@@ -1378,8 +1378,10 @@ export const HELM_COPY = {
   projectTabTasks: 'Tasks',
   projectTabPeople: 'People',
   projectTabsLabel: 'Project sections',
-  projectTasksEmpty:
-    'No tasks yet. Say "add a task for the wedding" to put one here.',
+  projectTasksEmpty: (name: string, doneCount: number) =>
+    doneCount > 0
+      ? `No open tasks · ${doneCount} done`
+      : `No tasks yet. Say "add a task for ${name}" to put one here.`,
   projectTasksShowAll: (count: number) => `Show all ${count}`,
   projectTasksShowFewer: 'Show fewer',
   projectPeopleEmpty: 'No one is on this project yet.',

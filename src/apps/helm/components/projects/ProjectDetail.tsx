@@ -77,6 +77,9 @@ function ProjectDetail({
       ),
     [projectTasks, projectId, timeZone, now],
   );
+  const doneCount = projectTasks.filter(
+    (task) => task.projectId === projectId && task.status === 'done',
+  ).length;
   const shownTasks = isAllTasks
     ? openTasks
     : openTasks.slice(0, PROJECT_TASKS_SHOWN);
@@ -296,7 +299,10 @@ function ProjectDetail({
               <section className='space-y-3'>
                 <LinkedTasks
                   tasks={shownTasks}
-                  emptyLine={HELM_COPY.projectTasksEmpty}
+                  emptyLine={HELM_COPY.projectTasksEmpty(
+                    project.name,
+                    doneCount,
+                  )}
                   view='project'
                   ownerId={project.id}
                 />
