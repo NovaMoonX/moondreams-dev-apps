@@ -908,12 +908,17 @@ export const HELM_COPY = {
   photoRemoveNeedsConnection: 'Removing a photo needs a connection.',
   photoGone: 'This page is gone, so the photo was not kept.',
   photoLabel: (name: string, position: number) => `${name}, photo ${position}`,
+  photoOfTotal: (name: string, position: number, total: number) =>
+    total > 1 ? `${name}, photo ${position} of ${total}` : name,
+  photosTitleCounted: (count: number) =>
+    `Photos · ${count} of ${PHOTOS_PER_RECORD}`,
   photoMainBadge: 'Main',
   photoSheetTitle: 'Photo',
   photoOpenFull: 'Open full screen',
   photoMakeMain: 'Make main photo',
   photoMakeMainSubtitle: (name: string) =>
     `Shown first, and beside ${name} in your lists`,
+  photoMakeMainPlaceSubtitle: 'Shown first on this page',
   photoMadeMain: 'Made the main photo',
   photoMainBack: 'Main photo put back',
   photoMakeMainFailed: "That didn't change. Try again.",

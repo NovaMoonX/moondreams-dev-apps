@@ -26,6 +26,9 @@ interface MediaViewerProps {
   ownerName: string;
   media: OpenMedia;
   isMain: boolean;
+  /** Where the photo sits among the record's photos, from 1. */
+  position: number;
+  total: number;
   onClose: () => void;
 }
 
@@ -35,6 +38,8 @@ function MediaViewer({
   ownerName,
   media,
   isMain,
+  position,
+  total,
   onClose,
 }: MediaViewerProps) {
   const { user } = useAuth();
@@ -149,7 +154,7 @@ function MediaViewer({
             {url && (
               <FallbackImage
                 src={url}
-                alt={HELM_COPY.photoLabel(ownerName, 1)}
+                alt={HELM_COPY.photoOfTotal(ownerName, position, total)}
                 className='size-full object-contain'
               />
             )}
@@ -168,7 +173,7 @@ function MediaViewer({
                 subtitle={
                   owner.kind === 'who'
                     ? HELM_COPY.photoMakeMainSubtitle(ownerName)
-                    : undefined
+                    : HELM_COPY.photoMakeMainPlaceSubtitle
                 }
                 isDisabled={isBusy}
                 onClick={() => void makeMain()}
@@ -188,7 +193,12 @@ function MediaViewer({
       </FormSheet>
       {isFull && url && (
         <ImageViewer
-          slides={[{ caption: null, pictures: [{ src: url, label: null }] }]}
+          slides={[
+            {
+              caption: HELM_COPY.photoOfTotal(ownerName, position, total),
+              pictures: [{ src: url, label: null }],
+            },
+          ]}
           startIndex={0}
           onClose={() => setIsFull(false)}
           label={HELM_COPY.photoViewerLabel}

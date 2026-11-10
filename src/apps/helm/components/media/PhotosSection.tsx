@@ -67,7 +67,7 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
           </span>
         }
       />
-      {entry.id === mainId && (
+      {entry.id === mainId && shown.length > 1 && (
         <span className='bg-background/85 text-foreground absolute bottom-1.5 left-1.5 rounded-full px-2 py-0.5 text-[12px]'>
           {HELM_COPY.photoMainBadge}
         </span>
@@ -77,7 +77,13 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionDivider label={HELM_COPY.photosTitle} />
+      <SectionDivider
+        label={
+          shown.length >= PHOTOS_PER_RECORD - 3
+            ? HELM_COPY.photosTitleCounted(shown.length)
+            : HELM_COPY.photosTitle
+        }
+      />
       {shown.length === 0 && (
         <p className='text-muted-foreground text-[15px] text-pretty'>
           {HELM_COPY.photosEmpty(name)}
@@ -114,6 +120,8 @@ function PhotosSection({ owner, name, photoIds, mainId }: PhotosSectionProps) {
           ownerName={name}
           media={viewed}
           isMain={viewed.id === mainId}
+          position={shown.indexOf(viewed) + 1}
+          total={shown.length}
           onClose={() => setViewedId(null)}
         />
       )}
