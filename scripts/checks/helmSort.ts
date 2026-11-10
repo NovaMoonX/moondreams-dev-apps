@@ -598,6 +598,7 @@ test('"I\'m home" files the home place on the profile with its previous value, a
   const ask = async (words: string) => {
     const run = await createFixtureProvider(words, reading).runToolLoop({
       role: 'quick',
+      system: '',
       messages: [{ role: 'user', content: '' }],
       mcpClient: {} as never,
       terminalTool: FILE_RESULTS_TOOL,
