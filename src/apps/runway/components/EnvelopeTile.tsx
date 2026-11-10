@@ -10,6 +10,7 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import { useItemEmoji } from '@apps/runway/hooks/useItemEmoji';
 import ItemRow, { type ItemRowReorder } from '@apps/runway/components/ItemRow';
 import ItemSheet from '@apps/runway/components/ItemSheet';
+import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
 import {
   BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
@@ -74,6 +75,15 @@ function EnvelopeTile({
   figureKind = 'monthly',
 }: EnvelopeTileProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
+  const request =
+    look === 'row' &&
+    figureKind === 'monthly' &&
+    !isPart &&
+    openItem?.itemId === itemId &&
+    openItem.eventId !== null
+      ? openItem
+      : null;
   const { isHidden } = useValuesHidden();
   const level = useAppSelector(selectLevel);
   const { value, word } = describeEnvelopeFigure(level, cents);
@@ -198,10 +208,11 @@ function EnvelopeTile({
           isFaded={isFaded}
         />
       )}
-      {isOpen && (
+      {(isOpen || request !== null) && (
         <ItemSheet
           itemId={itemId}
           kind='envelope'
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel={
             isPlan
@@ -231,7 +242,13 @@ function EnvelopeTile({
             subtitle: ITEM_SHEET_R2_WORDS.changeAmountSub,
             step: 'amount',
           }}
-          onClose={() => setIsOpen(false)}
+          onClose={() => {
+            setIsOpen(false);
+            if (request === null) return;
+            closeOpenItem();
+            if (request.returnTo !== null)
+              void showPlanSection(request.returnTo);
+          }}
         />
       )}
     </>

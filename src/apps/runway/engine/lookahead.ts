@@ -20,6 +20,7 @@ import type { BillPayment } from './demands';
 import type { Draft } from './draft';
 import { addUtcDays, DAY_MS } from './dates';
 import type { FundedDay } from './progress';
+import type { GoalCover } from './horizonGoal';
 import { listCostPayments, listHorizonPayments, planHorizon } from './horizon';
 import { getCostNameKey } from './parts';
 import { effectiveStance, pick } from './stance';
@@ -68,6 +69,8 @@ export interface LookaheadHorizonItem {
   rest: HorizonRest;
   costs: readonly HorizonCost[];
   heldCents: Cents;
+  /** The goal the item draws its costs from; null or missing when it has none. */
+  goalCover?: GoalCover | null;
   /** A finished or called-off item asks nothing and is never warned about; read as open when missing. */
   state?: HorizonState;
   /** Payments already marked paid; they ask nothing and are not warned about. */
@@ -405,7 +408,11 @@ const findHorizonShort = (
           (entry) => entry.costId === costId && entry.dueOn === dueOn,
         ),
     );
-    return { item, all, covers: planHorizon(item, item.heldCents, open) };
+    return {
+      item,
+      all,
+      covers: planHorizon(item, item.heldCents, open, item.goalCover ?? null),
+    };
   });
   const later = items.flatMap(({ item, covers }): HorizonShort[] => {
     const { shortfall } = covers;

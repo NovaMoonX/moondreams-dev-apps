@@ -153,8 +153,9 @@ export function useRunwayUrlState() {
     itemId: string,
     step: string | null = null,
     returnTo: PlanSection | null = null,
+    eventId: string | null = null,
   ) => {
-    setOpenItemRequest({ itemId, step, returnTo });
+    setOpenItemRequest({ itemId, step, returnTo, eventId });
     return Promise.resolve();
   };
   const openDueBill = (billId: string) => openItemAt(billId, 'due');
@@ -304,7 +305,12 @@ export function useRunwayUrlState() {
   const showOnPlan = async (
     section: PlanSection,
     target:
-      | { itemId: string; step?: string; returnTo?: PlanSection }
+      | {
+          itemId: string;
+          step?: string;
+          returnTo?: PlanSection;
+          eventId?: string;
+        }
       | 'undatedBills',
   ) => {
     // Unconditional: run after a sheet's back steps, this render's `requestedDay` can predate the address.
@@ -320,6 +326,7 @@ export function useRunwayUrlState() {
       target.itemId,
       target.step ?? null,
       target.returnTo ?? null,
+      target.eventId ?? null,
     );
   };
 

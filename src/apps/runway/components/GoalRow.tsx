@@ -36,7 +36,7 @@ interface GoalRowProps {
   /** Words put before the pace on the row's line, such as why it is listed on a day. */
   detailLead?: string | null;
   /** A warning elsewhere asked for this goal: its sheet is open at this step (null for the sheet itself) until `onRequestDone`. */
-  request?: { step: string | null } | null;
+  request?: { step: string | null; eventId: string | null } | null;
   onRequestDone?: () => void;
 }
 
@@ -52,11 +52,11 @@ const describePaceShort = (
   const reaches = pace.reachedOn
     ? `reaches it ${formatDateOrdinalUTC(pace.reachedOn.on)}`
     : PACE_WORDS.notReached;
-  if (goal.targetDate !== null && pace.state === 'behind') {
+  if (pace.targetDate !== null && pace.state === 'behind') {
     const short = pace.remainingCents - pace.plannedByDateCents;
-    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(goal.targetDate)}`;
+    return `${PACE_STATE_LABELS.behind}, ${formatCentsShort(short)} short by ${formatDateOrdinalUTC(pace.targetDate)}`;
   }
-  if (goal.targetDate === null || pace.state === null || savedCents === 0) {
+  if (pace.targetDate === null || pace.state === null || savedCents === 0) {
     return reaches.charAt(0).toUpperCase() + reaches.slice(1);
   }
   return `${PACE_STATE_LABELS[pace.state]}, ${reaches}`;
@@ -113,6 +113,7 @@ function GoalRow({
           itemId={goalId}
           kind='goal'
           startsAtStep={request?.step ?? undefined}
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel='Saved'
           figure={formatCents(savedCents)}

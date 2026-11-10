@@ -18,7 +18,9 @@ import {
 } from '@/hooks/useQuestionFlow';
 import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -33,7 +35,9 @@ import {
   INCOME_FREQUENCIES,
   MAX_ENDING_COUNT,
   MAX_NAME_LENGTH,
+  PAUSE_PAY_WORDS,
   SCHEDULE_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -66,7 +70,11 @@ import QuickChange from '@apps/runway/components/QuickChange';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
+import {
+  getPlanAheadFrom,
+  INITIAL_FROM_WHEN,
+  type FromWhenValue,
+} from '@apps/runway/utils/fromWhen';
 import RangeAmountField from '@apps/runway/forms/RangeAmountField';
 import {
   describeAmountDraft,
@@ -149,9 +157,21 @@ interface IncomeFormProps {
   editing?: EditingIncome;
   /** A question to open first when changing a pay line ("amount"); every answer starts folded otherwise. */
   openStep?: IncomeStepId | null;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
+  /** The open event a new pay is part of; the pay starts on its first payday. */
+  eventId?: string;
+  /** The day a new pay is planned to start, asked before the form opens; its first payday starts there. */
+  startsOn?: number;
   /** Hands the built income over instead of writing it, for a person who has no plan yet. */
   draft?: DraftSink<CreateIncomeInput>;
+  /** Changing a pay line to nothing for a while: the amount starts at $0 and "For a while, then back" is chosen, so only the dates are left to pick. */
+  isPause?: boolean;
 }
+
+const PAUSE_FROM: FromWhenValue = { ...INITIAL_FROM_WHEN, choice: 'stretch' };
 
 export type IncomeStepId =
   | 'source'
@@ -382,7 +402,12 @@ function IncomeFormBody({
   defaultFrequency,
   editing,
   openStep = null,
+  presetEventId,
+  planAhead,
+  eventId,
+  startsOn,
   draft,
+  isPause = false,
 }: IncomeFormProps & StartOverProps) {
   const { user } = useAuth();
   const today = todayAsUtcDate();
@@ -392,7 +417,12 @@ function IncomeFormBody({
   const isAccountsLoaded = useAppSelector(selectIsAccountsLoaded);
   const [startData] = useState<IncomeFormData>(() =>
     editing
-      ? getEditingData(editing)
+      ? {
+          ...getEditingData(editing),
+          ...(isPause
+            ? { amount: toAmountDraft({ lowCents: 0, highCents: 0 }, null) }
+            : {}),
+        }
       : draft?.initial
         ? {
             ...getDraftData(draft.initial),
@@ -406,7 +436,7 @@ function IncomeFormBody({
             payName: '',
             amount: EMPTY_AMOUNT_DRAFT,
             frequency: defaultFrequency,
-            startDate: toDateInputValue(today),
+            startDate: toDateInputValue(startsOn ?? today),
             firstDay: '',
             secondDay: '',
             endKind: 'never',
@@ -417,7 +447,7 @@ function IncomeFormBody({
   );
   const draftKey = draft
     ? null
-    : `${FORM_DRAFT_PREFIX}income:${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
+    : `${FORM_DRAFT_PREFIX}income:${isPause ? 'pause:' : ''}${editing?.itemId ?? `new:${defaultFrequency ?? 'any'}`}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
   const draftBase = editing ? startData : null;
   const kept = useFormDraft({
@@ -430,6 +460,8 @@ function IncomeFormBody({
   );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const allowsZero = editing?.kind === 'payLine';
+  const initialFrom = isPause ? PAUSE_FROM : getPlanAheadFrom(planAhead);
   const set = (patch: Partial<IncomeFormData>) =>
     setFormData((current) => ({ ...current, ...patch }));
 
@@ -483,6 +515,21 @@ function IncomeFormBody({
   }));
   const sourceName = getSourceName(formData, sourceNames);
   const isEditing = editing !== undefined;
+  const takenNames = new Set(
+    resolved.flatMap(({ payLines }) =>
+      payLines.map(({ version }) => version.payload.name.trim().toLowerCase()),
+    ),
+  );
+  const defaultName = isEditing
+    ? DEFAULT_PAY_LINE_NAME
+    : ([
+        DEFAULT_PAY_LINE_NAME,
+        ...Array.from(
+          { length: 50 },
+          (_, index) => `${DEFAULT_PAY_LINE_NAME} ${index + 2}`,
+        ),
+      ].find((name) => !takenNames.has(name.toLowerCase())) ??
+      DEFAULT_PAY_LINE_NAME);
   const isEditingSource = editing?.kind === 'source';
   const blocker = isEditingSource
     ? formData.payName.trim() === ''
@@ -491,7 +538,7 @@ function IncomeFormBody({
     : getBlocker(
         formData,
         sourceName,
-        parseAmountDraft(formData.amount) !== null,
+        parseAmountDraft(formData.amount, allowsZero) !== null,
         isEditing,
       );
   const isOnce = formData.frequency === 'once';
@@ -610,9 +657,9 @@ function IncomeFormBody({
           ? FORM_FLOW_WORDS.expectedIncomeTitle
           : FORM_FLOW_WORDS.takeHomeTitle,
       summaryLabel: FORM_FLOW_WORDS.takeHome,
-      summaryValue: describeAmountDraft(formData.amount),
-      isAnswered: parseAmountDraft(formData.amount) !== null,
-      blocker: getAmountDraftProblem(formData.amount),
+      summaryValue: describeAmountDraft(formData.amount, allowsZero),
+      isAnswered: parseAmountDraft(formData.amount, allowsZero) !== null,
+      blocker: getAmountDraftProblem(formData.amount, allowsZero),
       render: () => (
         <RangeAmountField
           isHero
@@ -755,14 +802,14 @@ function IncomeFormBody({
       id: 'payName',
       title: FORM_FLOW_WORDS.payNameTitle,
       summaryLabel: FORM_FLOW_WORDS.payName,
-      summaryValue: formData.payName.trim() || DEFAULT_PAY_LINE_NAME,
+      summaryValue: formData.payName.trim() || defaultName,
       isAnswered: true,
       isPreAnswered: true,
       render: () => (
         <Input
           variant='outline'
           aria-label='What this pay is called'
-          placeholder={DEFAULT_PAY_LINE_NAME}
+          placeholder={defaultName}
           maxLength={MAX_NAME_LENGTH}
           value={formData.payName}
           onChange={(event) => set({ payName: event.target.value })}
@@ -788,12 +835,12 @@ function IncomeFormBody({
   const buildPayLine = (data: IncomeFormData): PayLineSealed | null => {
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
-    const amount = parseAmountDraft(data.amount);
+    const amount = parseAmountDraft(data.amount, allowsZero);
     if (!editing || editing.kind !== 'payLine') return null;
     if (!schedule || !ending || amount === null) return null;
     const result: PayLineSealed = {
       ...editing.payload,
-      name: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
+      name: data.payName.trim() || defaultName,
       schedule,
       amount,
       ending,
@@ -830,13 +877,23 @@ function IncomeFormBody({
     current,
     candidate,
     onDone: onClose,
+    presetEventId,
+    planAhead,
     initialNote: kept.restored?.note,
-    initialFrom: kept.restored?.from,
+    initialFrom: kept.restored?.from ?? initialFrom,
   });
-  const editBlocker = flow.getBlocker(blocker);
+  const zeroBlocker =
+    candidate !== null &&
+    'amount' in candidate &&
+    candidate.amount.highCents === 0 &&
+    flow.from.choice !== 'stretch' &&
+    flow.from.choice !== 'dayOnly'
+      ? PAUSE_PAY_WORDS.zeroOnlyPause
+      : null;
+  const editBlocker = flow.getBlocker(blocker ?? zeroBlocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) || isChangeDirty;
   const keptValue = useMemo(
@@ -877,7 +934,7 @@ function IncomeFormBody({
     const data = formData;
     const schedule = buildSchedule(data);
     const ending = buildEnding(data);
-    const amount = parseAmountDraft(data.amount);
+    const amount = parseAmountDraft(data.amount, allowsZero);
     const startDate = fromDateInputValue(data.startDate);
     if (
       (!draft && !user) ||
@@ -893,7 +950,7 @@ function IncomeFormBody({
     const input: CreateIncomeInput = {
       sourceId: existingSource && !draft ? data.source.choice : null,
       sourceName: getSourceName(data, sourceNames),
-      payLineName: data.payName.trim() || DEFAULT_PAY_LINE_NAME,
+      payLineName: data.payName.trim() || defaultName,
       amount,
       stanceOverride: getStanceOverride(data.amount),
       accountId: keepOpenAccountId(
@@ -916,7 +973,19 @@ function IncomeFormBody({
     setIsSaving(true);
     try {
       const encryption = await getRunwayEncryption(user.uid);
-      await createIncome(user.uid, encryption, input);
+      await createIncome(user.uid, encryption, {
+        ...input,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: input.payLineName,
+            what: PART_OF_WORDS.starts,
+            from: input.startDate,
+          },
+        ),
+      });
       onClose();
     } catch (saveError) {
       setError(
@@ -935,6 +1004,7 @@ function IncomeFormBody({
     itemId: editing?.itemId ?? '',
     kind: editing?.kind ?? 'payLine',
     candidate,
+    isPause,
   };
 
   return (
@@ -962,6 +1032,7 @@ function IncomeFormBody({
                 flow={questions}
                 rowIds={['payName', 'schedule']}
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

@@ -63,6 +63,7 @@ interface BillSheetProps {
   planStance: Stance;
   today: number;
   startsAtStep?: string;
+  presetEventId?: string;
   /** An action that opens first for a change that belongs to an income day. */
   dayAction?: ItemSheetProps['dayAction'];
   onClose: () => void;
@@ -117,14 +118,15 @@ function BillRow({
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
+  const paymentCents = payment && !payment.paid ? payment.totalCents : cents;
   const monthly =
     figureKind === 'monthly'
       ? describeBillMonthly(
-          { lowCents: cents, highCents: cents },
+          { lowCents: paymentCents, highCents: paymentCents },
           bill.timing.schedule,
         )
       : null;
-  const amount = monthly?.figure ?? formatCents(cents);
+  const amount = monthly?.figure ?? formatCents(paymentCents);
   const isUndated = isUndatedBill(bill);
   const isSavingUp = isSavingUpBill(bill.timing.schedule, bill.fundedBy);
   const emoji = useItemEmoji(bill.emoji, bill.groupId);
@@ -185,6 +187,7 @@ export function BillSheet({
   planStance,
   today,
   startsAtStep,
+  presetEventId,
   dayAction,
   onClose,
 }: BillSheetProps) {
@@ -202,7 +205,11 @@ export function BillSheet({
   const isSelfPaying = useIsSelfPaying(billId, payment?.dueOn ?? null, today);
   const autoCardName = useBillCardName(billId, payment?.dueOn ?? today);
   const stance = effectiveStance(planStance, bill.stanceOverride);
-  const amount = formatCents(pick(stance, bill.amount, 'expense'));
+  const amount = formatCents(
+    payment && !payment.paid
+      ? payment.totalCents
+      : pick(stance, bill.amount, 'expense'),
+  );
   const { schedule } = bill.timing;
   const isUndated = schedule.anchor === null;
   const isSavingUp = isSavingUpBill(schedule, bill.fundedBy);
@@ -263,6 +270,7 @@ export function BillSheet({
       dayAction={dayAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}
+      presetEventId={presetEventId}
       extra={
         <>
           {madeFrom && (

@@ -6,6 +6,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 
 import { PillGroup } from '@/components/PillGroup';
+import { ActionSection } from '@apps/runway/components/ActionSection';
 import SummaryRow from '@/components/SummaryRow';
 import { toDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateOrdinalUTC } from '@/utils/formatUtils';
@@ -29,6 +30,10 @@ interface FromWhenPickerProps {
   /** The income day whose screen opened the form, if any. */
   presetDayKey: string | null;
   isDisabled?: boolean;
+  /** The change is planned for a later day (Plan a change): only later starts are offered and they are asked in place. */
+  isPlanning?: boolean;
+  /** A pause is always for a while, so only its dates and length are asked. */
+  isPause?: boolean;
 }
 
 const STRETCH_OPTIONS = [
@@ -47,6 +52,8 @@ function FromWhenPicker({
   kind,
   presetDayKey,
   isDisabled = false,
+  isPlanning = false,
+  isPause = false,
 }: FromWhenPickerProps) {
   const preset = days.find((day) => day.dayKey === presetDayKey) ?? null;
   const dayFirst: { value: FromWhenChoice; label: string }[] = [
@@ -57,17 +64,18 @@ function FromWhenPicker({
       ? [{ value: 'fromDay' as const, label: CHANGE_WORDS.fromDay }]
       : []),
   ];
-  const rest: { value: FromWhenChoice; label: string }[] = [
-    { value: 'now', label: CHANGE_WORDS.fromNow },
+  const later: { value: FromWhenChoice; label: string }[] = [
     { value: 'date', label: CHANGE_WORDS.fromDate },
     ...(kind !== 'source'
       ? [{ value: 'stretch' as const, label: CHANGE_WORDS.stretch }]
       : []),
   ];
-  const options =
-    preset !== null
-      ? [...dayFirst, ...rest]
-      : [rest[0], ...dayFirst, ...rest.slice(1)];
+  const now = { value: 'now' as const, label: CHANGE_WORDS.fromNow };
+  const options = isPlanning
+    ? later
+    : preset !== null
+      ? [...dayFirst, now]
+      : [now, ...dayFirst];
   const [isOpen, setIsOpen] = useState(false);
   const dayOptions = days.map((day) => ({
     value: day.dayKey,
@@ -77,15 +85,18 @@ function FromWhenPicker({
   const chosen =
     options.find((option) => option.value === value.choice)?.label ??
     CHANGE_WORDS.fromNow;
+  const isFixed = !isPlanning && options.length < 2;
 
   const controls = (
     <div className='space-y-4'>
-      <PillGroup
-        label={CHANGE_WORDS.fromHeading}
-        options={options}
-        value={value.choice}
-        onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
-      />
+      {!isPause && (
+        <PillGroup
+          label={CHANGE_WORDS.fromHeading}
+          options={options}
+          value={value.choice}
+          onChange={(choice) => !isDisabled && onChange({ ...value, choice })}
+        />
+      )}
       {value.choice === 'fromDay' && preset && (
         <p className='text-muted-foreground text-sm'>
           {formatDateOrdinalUTC(preset.on)}
@@ -123,6 +134,20 @@ function FromWhenPicker({
       {value.choice === 'stretch' && (
         <div className='space-y-2'>
           <p className='text-muted-foreground text-xs'>
+            {CHANGE_WORDS.stretchStartHeading}
+          </p>
+          <DateInput
+            variant='outline'
+            aria-label={CHANGE_WORDS.stretchStartLabel}
+            min={toDateInputValue(today)}
+            max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
+            value={value.date}
+            disabled={isDisabled}
+            onChange={(event) =>
+              onChange({ ...value, date: event.target.value })
+            }
+          />
+          <p className='text-muted-foreground text-xs'>
             {CHANGE_WORDS.stretchHeading}
           </p>
           <PillGroup
@@ -151,7 +176,7 @@ function FromWhenPicker({
             <DateInput
               variant='outline'
               aria-label={CHANGE_WORDS.stretchDateLabel}
-              min={toDateInputValue(today)}
+              min={value.date || toDateInputValue(today)}
               max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
               value={value.until}
               disabled={isDisabled}
@@ -168,12 +193,24 @@ function FromWhenPicker({
     </div>
   );
 
+  if (isPlanning) {
+    return (
+      <ActionSection caption={CHANGE_WORDS.fromHeading}>
+        {controls}
+      </ActionSection>
+    );
+  }
+
   return (
     <>
       <SummaryRow
         label={CHANGE_WORDS.fromHeading}
-        ariaLabel={`${CHANGE_WORDS.fromHeading}: ${chosen}. Change`}
-        onClick={isDisabled ? undefined : () => setIsOpen(true)}
+        ariaLabel={
+          isFixed
+            ? `${CHANGE_WORDS.fromHeading}: ${chosen}`
+            : `${CHANGE_WORDS.fromHeading}: ${chosen}. Change`
+        }
+        onClick={isDisabled || isFixed ? undefined : () => setIsOpen(true)}
       >
         {chosen}
       </SummaryRow>

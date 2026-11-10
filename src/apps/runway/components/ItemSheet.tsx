@@ -2,6 +2,7 @@ import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
   CalendarClock,
+  CalendarPlus,
   CalendarOff,
   Calculator,
   Check,
@@ -31,6 +32,14 @@ import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FoldedDateField from '@/components/FoldedDateField';
+import PartOfPicker from '@apps/runway/components/PartOfPicker';
+import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
+import ComingChangesList from '@apps/runway/components/ComingChangesList';
+import ComingChangesRow from '@apps/runway/components/ComingChangesRow';
+import PlanAheadView, {
+  type PlanAheadChoice,
+} from '@apps/runway/components/PlanAheadView';
+import { getEventLink } from '@apps/runway/utils/eventLink';
 import RevealChip from '@/components/RevealChip';
 import FormSheet from '@/components/FormSheet';
 import PickOrCreate, { NEW_CHOICE } from '@/components/forms/PickOrCreate';
@@ -48,6 +57,9 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import AccountPicker from '@apps/runway/components/AccountPicker';
 import ChangeSteps from '@apps/runway/components/ChangeSteps';
+import HorizonPlanView from '@apps/runway/components/HorizonPlanView';
+import HorizonUnlinkView from '@apps/runway/components/HorizonUnlinkView';
+import HorizonForm, { type HorizonSeed } from '@apps/runway/forms/HorizonForm';
 import AutoAmountSheet from '@apps/runway/components/AutoAmountSheet';
 import ChargePickerView from '@apps/runway/components/ChargePickerView';
 import PaidAmountSheet from '@apps/runway/components/PaidAmountSheet';
@@ -73,6 +85,8 @@ import {
   AUTO_PAY_WORDS,
   CARD_WORDS,
   CHANGE_WORDS,
+  COMING_WORDS,
+  PART_OF_WORDS,
   GOAL_CHART_WORDS,
   CHECK_WORDS,
   CHECKLIST_WORDS,
@@ -96,16 +110,20 @@ import {
   SET_HELD_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
+  HORIZON_PLAN_WORDS,
+  HORIZON_WORDS,
+  PRIORITY_LABELS,
 } from '@apps/runway/constants';
+import { effectiveStance, pick } from '@apps/runway/engine/stance';
+import { getChangeFigure } from '@apps/runway/utils/planChangeText';
 import { getHolderById } from '@apps/runway/engine/accounts';
 import { addUtcDays, addUtcMonths, DAY_MS } from '@apps/runway/engine/dates';
 import type { BillPayment } from '@apps/runway/engine/demands';
 import {
   getVersionStretches,
   resolveCurrentOrNext,
-  resolveNextChange,
-  resolveVersion,
 } from '@apps/runway/engine/resolve';
+import { findLinkHolder } from '@apps/runway/engine/horizonLinks';
 import { occurrences } from '@apps/runway/engine/schedule';
 import BillForm, { type BillStepId } from '@apps/runway/forms/BillForm';
 import EnvelopeForm, {
@@ -141,10 +159,12 @@ import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,
+  selectAllHorizonItems,
   selectEnvelopes,
   selectAllCards,
   selectGroups,
   selectPairedBy,
+  selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import { getBillCardName, getCardNamer } from '@apps/runway/utils/cardText';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -174,6 +194,11 @@ import {
   type ItemPayload,
 } from '@apps/runway/utils/changeText';
 import {
+  getChangeRef,
+  listItemChanges,
+} from '@apps/runway/utils/comingChangeText';
+import type { PlanChange } from '@apps/runway/engine/planChanges';
+import {
   NEW_GROUP_ID,
   resolveGroupChoice,
 } from '@apps/runway/utils/groupChoice';
@@ -195,7 +220,12 @@ type View =
   | 'heldIn'
   | 'spill'
   | 'charge'
-  | 'dayAction';
+  | 'horizonPlan'
+  | 'horizonLink'
+  | 'dayAction'
+  | 'planChoice'
+  | 'comingList'
+  | 'changeSheet';
 type Phase = 'sheet' | 'change' | 'purchase' | 'purchaseDetail' | 'funds';
 
 export interface ItemSheetProps {
@@ -205,7 +235,7 @@ export interface ItemSheetProps {
   today: number;
   onClose: () => void;
   /** What the figure is ("Each income day", "Next payment", "Saved"). */
-  figureLabel: string;
+  figureLabel?: string;
   /** Left out for an item with no amount of its own (an income source). */
   figure?: string;
   /** Small words after the figure ("of $600"). */
@@ -246,6 +276,10 @@ export interface ItemSheetProps {
   };
   /** Opens the change form at this question at once, as a link to "Set the due date" does. */
   startsAtStep?: string;
+  /** Opens at "What will change?" with this open event already picked as what the change is part of. */
+  presetEventId?: string;
+  /** Opens on this coming change's own sheet (its id and first day, as `getChangeRef` reads them from a change). */
+  presetChange?: { changeId: string; on: number };
   /** A bill's next payment, which the sheet can mark paid. */
   payment?: BillPayment | null;
   onMarked?: () => void;
@@ -293,7 +327,12 @@ const VIEW_NOTES: Record<View, string> = {
   heldIn: '',
   spill: '',
   charge: '',
+  horizonPlan: '',
+  horizonLink: '',
   dayAction: '',
+  planChoice: '',
+  comingList: '',
+  changeSheet: '',
 };
 
 /** What a row opens: the item's figure and a few facts, then everything that can be done with it, each stop showing its effect on the coming income days before it is saved. A change, a purchase or the pairings close the sheet and open their own form. */
@@ -313,6 +352,8 @@ function ItemSheet({
   maxAction,
   payAction,
   startsAtStep,
+  presetEventId,
+  presetChange,
   payment = null,
   onMarked,
   onUndone,
@@ -350,30 +391,35 @@ function ItemSheet({
     const start = state.runway.plan?.startDate ?? null;
     return start !== null && start <= today;
   });
-  const next = useAppSelector((state) =>
-    resolveNextChange(state.runway.versions, itemId, today),
-  );
-  const stretchEnd = useAppSelector(
-    (state) =>
-      resolveVersion(state.runway.versions, itemId, today)?.effectiveUntil ??
-      null,
-  );
+  const allVersions = useAppSelector((state) => state.runway.versions);
+  const planStance = useAppSelector(selectStance);
+  const events = useAppSelector((state) => selectAllHorizonItems(state, today));
   const header = useAppSelector(
     (state) => state.runway.items.find((item) => item.id === itemId) ?? null,
   );
   const [phase, setPhase] = useState<Phase>(
     startsAtStep === undefined ? 'sheet' : 'change',
   );
+  const [planAhead, setPlanAhead] = useState<'date' | 'stretch' | null>(null);
+  const [fromPlan, setFromPlan] = useState(false);
+  const [focusedChange, setFocusedChange] = useState(presetChange ?? null);
+  const [isChangeFromList, setIsChangeFromList] = useState(false);
   const [openStep, setOpenStep] = useState<string | null>(startsAtStep ?? null);
-  const [view, setView] = useState<View>('menu');
+  const [isPausing, setIsPausing] = useState(false);
+  const [view, setView] = useState<View>(
+    presetChange ? 'changeSheet' : presetEventId ? 'planChoice' : 'menu',
+  );
   const [reason, setReason] = useState('');
   const [isReasonOpen, setIsReasonOpen] = useState(false);
-  const [endPick, setEndPick] = useState<string>(String(today));
+  const [endPick, setEndPick] = useState<string>('');
   const [endDate, setEndDate] = useState('');
+  const [pauseDate, setPauseDate] = useState(toDateInputValue(today));
+  const [eventId, setEventId] = useState<string | null>(presetEventId ?? null);
   const [error, setError] = useState<string | null>(null);
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const [groupChoice, setGroupChoice] = useState('');
   const [groupText, setGroupText] = useState('');
+  const [horizonSeed, setHorizonSeed] = useState<HorizonSeed | null>(null);
   const [accountChoice, setAccountChoice] = useState(NO_ACCOUNT);
   const openAccounts = useAppSelector(selectAccounts);
   const holdings = useAppSelector((state) =>
@@ -430,6 +476,18 @@ function ItemSheet({
   const endedAt = header?.endedAt ?? null;
 
   const goal = itemKind === 'goal' ? (payload as GoalSealed) : null;
+  const linkedEvent =
+    goal === null
+      ? null
+      : (events.find(
+          ({ version: eventVersion }) =>
+            eventVersion.payload.goalId === itemId &&
+            eventVersion.payload.state === 'open',
+        ) ?? null);
+  const canPlanOnHorizon =
+    canChange &&
+    header?.archivedAt == null &&
+    (goal !== null || (itemKind === 'envelope' && heldCents > 0));
   const isPaused = goal !== null && (goal.state ?? 'active') === 'paused';
   const isUnfunded = goal !== null && goal.funding.cadence.kind === 'none';
   const upcoming = isScheduled(payload)
@@ -454,11 +512,20 @@ function ItemSheet({
     { value: LAST_DAY_OTHER, label: 'A date' },
   ];
   const endOn =
-    endPick === LAST_DAY_OTHER ? fromDateInputValue(endDate) : Number(endPick);
+    endPick === ''
+      ? undefined
+      : endPick === LAST_DAY_OTHER
+        ? fromDateInputValue(endDate)
+        : Number(endPick);
   const isEndValid =
     endOn !== undefined &&
     endOn >= today &&
     endOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
+  const pauseOn = fromDateInputValue(pauseDate);
+  const isPauseValid =
+    pauseOn !== undefined &&
+    pauseOn >= today &&
+    pauseOn <= addUtcDays(today, MAX_CHANGE_DAYS_AHEAD);
   const holdsMoney =
     (itemKind === 'envelope' || itemKind === 'goal' || itemKind === 'bill') &&
     heldCents > 0;
@@ -518,22 +585,32 @@ function ItemSheet({
     }
   };
 
-  const difference = next
-    ? describeChange(payload, next.payload, getCardNamer(allCards))
-    : '';
-  const planned = [
-    next &&
-    difference !== '' &&
-    (endedAt === null || next.effectiveFrom <= endedAt)
-      ? `${CHANGE_WORDS.scheduled} ${formatDateOrdinalUTC(next.effectiveFrom)} · ${difference.replace(/ to /g, ' → ')}`
-      : null,
-    stretchEnd !== null
-      ? `${LIFECYCLE_WORDS.until} ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, ${LIFECYCLE_WORDS.backAfter}`
-      : null,
-    endedAt !== null
+  const comingChanges = listItemChanges(
+    allVersions,
+    header,
+    itemId,
+    today,
+    (link) => findLinkHolder(events, link) !== null,
+  );
+  const getEventName = (change: PlanChange) =>
+    findLinkHolder(events, {
+      changeId: getChangeRef(change).changeId,
+      itemId,
+    })?.version.payload.name;
+  const activeChange =
+    focusedChange === null
+      ? null
+      : (comingChanges.find(
+          (change) =>
+            getChangeRef(change).changeId === focusedChange.changeId &&
+            change.on === focusedChange.on,
+        ) ?? null);
+  const currentView: View =
+    view === 'changeSheet' && activeChange === null ? 'menu' : view;
+  const pastEnd =
+    endedAt !== null && endedAt + DAY_MS <= today
       ? `${LIFECYCLE_WORDS.endsAfter} ${formatDateOrdinalUTC(endedAt)}`
-      : null,
-  ].filter((line): line is string => line !== null);
+      : null;
 
   const pairings =
     version.kind === 'source' || version.kind === 'payLine'
@@ -545,6 +622,9 @@ function ItemSheet({
     setReason('');
     setIsReasonOpen(false);
     setHeldChoice(null);
+    setEventId(presetEventId ?? null);
+    setPauseDate(toDateInputValue(today));
+    setFromPlan(false);
     setView(nextView);
   };
 
@@ -811,7 +891,7 @@ function ItemSheet({
         version: {
           itemId,
           kind: 'goal',
-          effectiveFrom: today,
+          effectiveFrom: view === 'pause' && isPauseValid ? pauseOn : today,
           effectiveUntil: null,
           changeId: 'what-if',
           payload: {
@@ -840,12 +920,38 @@ function ItemSheet({
     try {
       const encryption = await getRunwayEncryption(user.uid);
       if (view === 'pause' || view === 'resume') {
+        const state = view === 'pause' ? 'paused' : 'active';
+        const effectiveFrom =
+          view === 'pause' && isPauseValid ? pauseOn : today;
+        const goalVersions = store
+          .getState()
+          .runway.versions.filter(
+            (candidate): candidate is GoalVersion => candidate.kind === 'goal',
+          );
         await setGoalState(user.uid, encryption, {
           itemId,
           goal: payload as GoalSealed,
-          state: view === 'pause' ? 'paused' : 'active',
+          state,
           note: why,
-          effectiveFrom: today,
+          effectiveFrom,
+          stretches: getVersionStretches<GoalVersion, GoalSealed>(
+            goalVersions,
+            itemId,
+            effectiveFrom,
+          ).map((stretch) => ({
+            ...stretch,
+            payload: { ...stretch.payload, state },
+          })),
+          link: getEventLink(
+            selectAllHorizonItems(store.getState(), today),
+            eventId,
+            {
+              today,
+              itemName: payload.name,
+              what: PART_OF_WORDS.stopsSaving,
+              from: effectiveFrom,
+            },
+          ),
         });
         onClose();
         return;
@@ -857,6 +963,16 @@ function ItemSheet({
           summary: `${payload.name}: ended after ${formatDateOrdinalUTC(endOn)}.`,
           note: why,
           heldChoice: isAskingHeld ? heldChoice : null,
+          link: getEventLink(
+            selectAllHorizonItems(store.getState(), today),
+            eventId,
+            {
+              today,
+              itemName: payload.name,
+              what: PART_OF_WORDS.ends,
+              from: endOn + DAY_MS,
+            },
+          ),
         });
         if (written) onClose();
         else setError(LIFECYCLE_WORDS.alreadyEnded);
@@ -897,6 +1013,8 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as BillStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -910,6 +1028,8 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as EnvelopeStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -923,6 +1043,8 @@ function ItemSheet({
           title={payload.name}
           editing={{ itemId, payload: version.payload }}
           presetDayKey={presetDayKey}
+          presetEventId={presetEventId}
+          planAhead={planAhead ?? undefined}
           openStep={openStep as GoalStepId | null}
           onClose={onClose}
           onCancel={backToSheet}
@@ -934,6 +1056,9 @@ function ItemSheet({
         isOpen
         title={payload.name}
         defaultFrequency={null}
+        isPause={isPausing}
+        presetEventId={presetEventId}
+        planAhead={planAhead ?? undefined}
         openStep={openStep as IncomeStepId | null}
         editing={
           version.kind === 'source'
@@ -994,6 +1119,7 @@ function ItemSheet({
         : LIFECYCLE_WORDS.chipsPause;
   const getBlocker = () => {
     if (view === 'end' && !isEndValid) return LIFECYCLE_WORDS.endBlocker;
+    if (view === 'pause' && !isPauseValid) return LIFECYCLE_WORDS.pauseBlocker;
     if (isAskingHeld && heldChoice === null) return HELD_WORDS.blocker;
     return null;
   };
@@ -1004,15 +1130,120 @@ function ItemSheet({
   const isFunded = itemKind === 'source' || itemKind === 'payLine';
   const hasBillRow =
     itemKind === 'bill' &&
+    version !== null &&
+    version.effectiveFrom <= today &&
     paid.isReady &&
     payment !== null &&
     !(isSelfPaying && !paid.isPaid);
   const canForget =
     itemKind === 'bill' && isTrackingLevel(level) && learnedCount > 0;
 
+  const getOwnHero = (): {
+    label: string;
+    figure?: string;
+    fact?: string;
+  } => {
+    if (itemKind === 'payLine') {
+      const pay = payload as PayLineSealed;
+      return {
+        label: 'Each pay',
+        figure: formatCents(
+          pick(
+            effectiveStance(planStance, pay.stanceOverride),
+            pay.amount,
+            'income',
+          ),
+        ),
+      };
+    }
+    if (itemKind === 'bill') {
+      const bill = payload as BillSealed;
+      return {
+        label: 'Each payment',
+        figure: formatCents(
+          pick(
+            effectiveStance(planStance, bill.stanceOverride),
+            bill.amount,
+            'expense',
+          ),
+        ),
+        fact: PRIORITY_LABELS[bill.priority],
+      };
+    }
+    if (itemKind === 'envelope' || itemKind === 'goal') {
+      const own = payload as EnvelopeSealed | GoalSealed;
+      return {
+        label: ITEM_SHEET_R2_WORDS.eachTime,
+        figure: getChangeFigure(version)?.text,
+        fact: PRIORITY_LABELS[own.priority],
+      };
+    }
+    return { label: 'Income source' };
+  };
+  const ownQuick: NonNullable<ItemSheetProps['quickChange']> =
+    itemKind === 'source'
+      ? { label: ITEM_SHEET_R2_WORDS.changeName, step: 'sourceName' }
+      : {
+          label: ITEM_SHEET_R2_WORDS.change,
+          subtitle:
+            itemKind === 'goal'
+              ? ITEM_SHEET_R2_WORDS.changeTargetSub
+              : itemKind === 'bill'
+                ? ITEM_SHEET_R2_WORDS.changeBillSub
+                : ITEM_SHEET_R2_WORDS.changeAmountSub,
+          step: itemKind === 'goal' ? 'target' : 'amount',
+        };
+
   const openChange = (step: string | null) => {
+    setIsPausing(false);
+    setPlanAhead(null);
     setOpenStep(step);
     setPhase('change');
+  };
+  const openPause = () => {
+    setIsPausing(true);
+    setPlanAhead('stretch');
+    setOpenStep(null);
+    setPhase('change');
+  };
+  const planAheadChoices: PlanAheadChoice[] =
+    !canChange || !isStoppable
+      ? []
+      : [
+          'amount',
+          'stretch',
+          'stop',
+          ...(itemKind === 'payLine' ? (['pause'] as const) : []),
+          ...(goal && !isPaused && !isUnfunded
+            ? (['stopSaving'] as const)
+            : []),
+        ];
+  const planAheadOn = (choice: PlanAheadChoice) => {
+    if (choice === 'amount' || choice === 'stretch') {
+      setIsPausing(false);
+      setPlanAhead(choice === 'amount' ? 'date' : 'stretch');
+      setOpenStep('amount');
+      setPhase('change');
+      return;
+    }
+    if (choice === 'pause') {
+      openPause();
+      return;
+    }
+    if (choice === 'stop') {
+      goTo('end');
+      setEndPick('');
+      setEndDate('');
+    } else {
+      goTo('pause');
+      setPauseDate('');
+    }
+    setFromPlan(true);
+  };
+  const openChangeSheet = (change: PlanChange, isFromList: boolean) => {
+    goTo('changeSheet');
+    setFocusedChange(getChangeRef(change));
+    setIsChangeFromList(isFromList);
   };
   const openHistory = () => goTo('history');
   const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
@@ -1035,13 +1266,16 @@ function ItemSheet({
     if (isConfirmed) void forgetMatch(itemId, payload.name);
   };
 
+  const ownHero = getOwnHero();
+  const quick =
+    quickChange ?? (figureLabel === undefined ? ownQuick : undefined);
   const menu = (
     <div className='space-y-4 [@media(max-height:599px)]:space-y-2.5'>
       <SheetHead
-        label={figureLabel}
-        figure={figure}
+        label={figureLabel ?? ownHero.label}
+        figure={figure ?? ownHero.figure}
         suffix={figureSuffix}
-        fact={fact}
+        fact={fact ?? ownHero.fact}
         secondFact={secondFact}
         help={help}
       />
@@ -1064,6 +1298,28 @@ function ItemSheet({
             {getMarkPaidSub(payment)}
           </p>
         </div>
+      )}
+      {comingChanges.length > 0 && (
+        <ComingChangesRow
+          changes={comingChanges}
+          eventNameOf={getEventName}
+          onOpenChange={(change) => openChangeSheet(change, false)}
+          onOpenList={() => goTo('comingList')}
+        />
+      )}
+      {pastEnd !== null && (
+        <p className='text-muted-foreground text-sm'>{pastEnd}</p>
+      )}
+      {planAheadChoices.length > 0 && (
+        <Button
+          type='button'
+          variant='secondary'
+          className='w-full gap-2'
+          onClick={() => goTo('planChoice')}
+        >
+          <CalendarPlus className='h-4 w-4' aria-hidden='true' />
+          {COMING_WORDS.planChange}
+        </Button>
       )}
       <ActionGroup>
         {itemKind === 'bill' && check?.kind === 'amount' && (
@@ -1126,17 +1382,17 @@ function ItemSheet({
             }}
           />
         )}
-        {canChange && !dayAction && quickChange && (
+        {canChange && !dayAction && quick && (
           <ActionRow
             isGrouped
             hasChevron
             icon={<Pencil />}
-            label={quickChange.label}
-            subtitle={quickChange.subtitle}
-            onClick={() => openChange(quickChange.step)}
+            label={quick.label}
+            subtitle={quick.subtitle}
+            onClick={() => openChange(quick.step)}
           />
         )}
-        {canChange && !quickChange && !dayAction && (
+        {canChange && !quick && !dayAction && (
           <ActionRow
             isGrouped
             hasChevron
@@ -1251,6 +1507,30 @@ function ItemSheet({
             onOpen={() => goTo('balance')}
           />
         )}
+        {goal && linkedEvent && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={HORIZON_PLAN_WORDS.partOf(linkedEvent.version.payload.name)}
+            subtitle={HORIZON_PLAN_WORDS.partOfSub}
+            onClick={() => goTo('horizonLink')}
+          />
+        )}
+        {canPlanOnHorizon && !linkedEvent && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<CalendarClock />}
+            label={HORIZON_PLAN_WORDS.door}
+            subtitle={
+              goal
+                ? HORIZON_PLAN_WORDS.goalDoorSub
+                : HORIZON_PLAN_WORDS.envelopeDoorSub
+            }
+            onClick={() => goTo('horizonPlan')}
+          />
+        )}
         <ActionRow
           isGrouped
           hasChevron
@@ -1282,16 +1562,6 @@ function ItemSheet({
             onClick={() => void release()}
           />
         )}
-        {planned.map((line) => (
-          <ActionRow
-            key={line}
-            isGrouped
-            hasChevron
-            icon={<CalendarClock />}
-            label={mask(line)}
-            onClick={openHistory}
-          />
-        ))}
       </ActionGroup>
       {isTrackEnvelope && (
         <ActionGroup caption={ENVELOPE_SPEND_WORDS.heading}>
@@ -1380,7 +1650,10 @@ function ItemSheet({
               icon={<CalendarOff />}
               label={LIFECYCLE_WORDS.end}
               subtitle={ITEM_SHEET_R2_WORDS.endSub}
-              onClick={() => goTo('end')}
+              onClick={() => {
+                goTo('end');
+                setEndPick('');
+              }}
             />
           )}
           <ActionRow
@@ -1679,6 +1952,42 @@ function ItemSheet({
     />
   );
 
+  const horizonPlanView = (
+    <HorizonPlanView
+      source={
+        goal
+          ? {
+              kind: 'goal',
+              goalId: itemId,
+              name: goal.name,
+              emoji: goal.emoji,
+              targetCents: goal.targetCents,
+              targetDate: goal.targetDate,
+            }
+          : {
+              kind: 'envelope',
+              envelopeId: itemId,
+              name: payload.name,
+              emoji: (payload as EnvelopeSealed).emoji ?? null,
+              heldCents,
+            }
+      }
+      today={today}
+      onBack={() => goTo('menu')}
+      onNewEvent={setHorizonSeed}
+      onClose={onClose}
+    />
+  );
+
+  const horizonLinkView = linkedEvent && (
+    <HorizonUnlinkView
+      goalName={payload.name}
+      event={linkedEvent}
+      today={today}
+      onBack={() => goTo('menu')}
+    />
+  );
+
   const heldInView = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
       <BackLink onBack={() => goTo('menu')} />
@@ -1716,11 +2025,25 @@ function ItemSheet({
     </div>
   );
 
+  const getPrimaryLabel = () => {
+    if (view === 'end' && isEndValid)
+      return LIFECYCLE_WORDS.endAfterConfirm(formatDateOrdinalUTC(endOn));
+    if (fromPlan && view === 'pause' && isPauseValid)
+      return LIFECYCLE_WORDS.stopSavingFromConfirm(
+        formatDateOrdinalUTC(pauseOn),
+      );
+    return getActionTitle(view, itemKind);
+  };
+  const leaveAction = () => goTo(fromPlan ? 'planChoice' : 'menu');
   const action = (
     <div className='flex flex-1 flex-col gap-4 [&_.form-footer]:mt-auto'>
-      <BackLink onBack={() => goTo('menu')} />
+      <BackLink onBack={leaveAction} />
       <div className='space-y-1'>
-        <ActionTitle>{getActionTitle(view, itemKind)}</ActionTitle>
+        <ActionTitle>
+          {fromPlan && view === 'pause'
+            ? COMING_WORDS.planStopSaving
+            : getActionTitle(view, itemKind)}
+        </ActionTitle>
         {VIEW_NOTES[view] !== '' && (
           <p className='text-muted-foreground text-sm'>{VIEW_NOTES[view]}</p>
         )}
@@ -1744,6 +2067,21 @@ function ItemSheet({
             />
           )}
         </ActionSection>
+      )}
+      {view === 'pause' && (
+        <ActionSection caption={LIFECYCLE_WORDS.pauseFromHeading}>
+          <FoldedDateField
+            label={LIFECYCLE_WORDS.pauseFromLabel}
+            todayValue={toDateInputValue(today)}
+            min={toDateInputValue(today)}
+            max={toDateInputValue(addUtcDays(today, MAX_CHANGE_DAYS_AHEAD))}
+            value={pauseDate}
+            onChange={setPauseDate}
+          />
+        </ActionSection>
+      )}
+      {(view === 'pause' || view === 'end') && (
+        <PartOfPicker value={eventId} onChange={setEventId} />
       )}
       <EffectPreview
         changeJson={changeJson}
@@ -1808,7 +2146,7 @@ function ItemSheet({
           <Button
             type='button'
             variant='secondary'
-            onClick={() => goTo('menu')}
+            onClick={leaveAction}
             disabled={isSaving}
           >
             Cancel
@@ -1822,11 +2160,45 @@ function ItemSheet({
             disabled={isSaving || blocker !== null}
             onClick={() => void run()}
           >
-            {getActionTitle(view, itemKind)}
+            {getPrimaryLabel()}
           </Button>
         }
       />
     </div>
+  );
+
+  const planChoiceView = (
+    <PlanAheadView
+      choices={planAheadChoices}
+      isGoal={goal !== null}
+      onPick={planAheadOn}
+      onBack={() => (presetEventId === undefined ? goTo('menu') : onClose())}
+    />
+  );
+
+  const comingListView = (
+    <div className='flex flex-1 flex-col gap-4'>
+      <BackLink onBack={() => goTo('menu')} />
+      <ActionTitle>{COMING_WORDS.listTitle}</ActionTitle>
+      <ComingChangesList
+        changes={comingChanges}
+        today={today}
+        isOwnItem
+        onOpen={(change) => openChangeSheet(change, true)}
+      />
+    </div>
+  );
+
+  const changeSheetView = activeChange && (
+    <ChangeSheetView
+      change={activeChange}
+      today={today}
+      onBack={() =>
+        goTo(
+          isChangeFromList && comingChanges.length > 1 ? 'comingList' : 'menu',
+        )
+      }
+    />
   );
 
   return (
@@ -1838,7 +2210,7 @@ function ItemSheet({
       actions={<ValuesEyeButton />}
     >
       <ChangeSteps
-        isReason={view !== 'menu'}
+        isReason={currentView !== 'menu'}
         reason={
           view === 'history' ||
           view === 'balance' ||
@@ -1857,17 +2229,37 @@ function ItemSheet({
                       ? setHeldView
                       : view === 'heldIn'
                         ? heldInView
-                        : view === 'dayAction' && dayAction?.renderView
-                          ? dayAction.renderView({
-                              onBack: () => goTo('menu'),
-                              onClose,
-                              openChange,
-                            })
-                          : action
+                        : view === 'horizonPlan'
+                          ? horizonPlanView
+                          : view === 'planChoice'
+                            ? planChoiceView
+                            : view === 'comingList'
+                              ? comingListView
+                              : view === 'changeSheet' && changeSheetView
+                                ? changeSheetView
+                                : view === 'horizonLink' && horizonLinkView
+                                  ? horizonLinkView
+                                  : view === 'dayAction' &&
+                                      dayAction?.renderView
+                                    ? dayAction.renderView({
+                                        onBack: () => goTo('menu'),
+                                        onClose,
+                                        openChange,
+                                      })
+                                    : action
         }
       >
         {menu}
       </ChangeSteps>
+      {horizonSeed !== null && (
+        <HorizonForm
+          isOpen
+          title={HORIZON_WORDS.formTitle}
+          seed={horizonSeed}
+          onClose={() => setHorizonSeed(null)}
+          onSaved={onClose}
+        />
+      )}
     </FormSheet>
   );
 }

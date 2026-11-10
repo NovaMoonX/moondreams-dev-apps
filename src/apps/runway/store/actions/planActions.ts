@@ -59,6 +59,7 @@ export async function ensurePlan(uid: string, encryption: RunwayEncryption) {
       notifyTimeZone: null,
       holdsPrompt: null,
       bankBackedSeenAt: null,
+      horizonNudgeDismissed: null,
     } satisfies PlanSealedFields,
     encryption,
   );
@@ -123,6 +124,7 @@ export async function setNotify(
             : patch.timeZone,
         holdsPrompt: current.holdsPrompt ?? null,
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
       } satisfies PlanSealedFields,
       encryption,
     );
@@ -138,7 +140,12 @@ export async function setNotify(
 async function patchSealedFields(
   uid: string,
   encryption: RunwayEncryption,
-  patch: Partial<Pick<PlanSealedFields, 'holdsPrompt' | 'bankBackedSeenAt'>>,
+  patch: Partial<
+    Pick<
+      PlanSealedFields,
+      'holdsPrompt' | 'bankBackedSeenAt' | 'horizonNudgeDismissed'
+    >
+  >,
 ) {
   const ref = doc(db, 'apps', 'runway', 'plans', uid);
   await runTransaction(db, async (transaction) => {
@@ -155,6 +162,7 @@ async function patchSealedFields(
         notifyTimeZone: current.notifyTimeZone ?? null,
         holdsPrompt: current.holdsPrompt ?? null,
         bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        horizonNudgeDismissed: current.horizonNudgeDismissed ?? null,
         ...patch,
       } satisfies PlanSealedFields,
       encryption,
@@ -186,6 +194,39 @@ export async function setBankBackedSeen(
   encryption: RunwayEncryption,
 ) {
   await patchSealedFields(uid, encryption, { bankBackedSeenAt: Date.now() });
+}
+
+/** Stops asking about Horizon for one goal at its current target date; a changed date asks again. Reads the plan fresh so another goal's answer is kept. */
+export async function dismissHorizonNudge(
+  uid: string,
+  encryption: RunwayEncryption,
+  goalId: string,
+  targetDate: DateOnly,
+) {
+  const ref = doc(db, 'apps', 'runway', 'plans', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists()) throw new Error(STALE_MESSAGE);
+    const plan = snapshot.data() as PlanDoc;
+    const current: Partial<PlanSealedFields> = plan.sealed
+      ? await openJson<PlanSealedFields>(plan.sealed, encryption)
+      : {};
+    const sealed = await sealJson(
+      {
+        currencyCode: current.currencyCode ?? DEFAULT_CURRENCY_CODE,
+        notifyHour: current.notifyHour ?? null,
+        notifyTimeZone: current.notifyTimeZone ?? null,
+        holdsPrompt: current.holdsPrompt ?? null,
+        bankBackedSeenAt: current.bankBackedSeenAt ?? null,
+        horizonNudgeDismissed: {
+          ...(current.horizonNudgeDismissed ?? {}),
+          [goalId]: targetDate,
+        },
+      } satisfies PlanSealedFields,
+      encryption,
+    );
+    transaction.update(ref, { sealed, updatedAt: Date.now() });
+  });
 }
 
 const planPath = (uid: string) => doc(db, 'apps', 'runway', 'plans', uid);

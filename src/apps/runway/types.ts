@@ -49,6 +49,8 @@ export interface PlanSealedFields {
   holdsPrompt: HoldsPromptChoice | null;
   /** Epoch ms the person read why Free to Spend now comes from their account balances; null until then. A plan sealed before it existed lacks the key. */
   bankBackedSeenAt: number | null;
+  /** Goal id to the target date the Horizon nudge was dismissed at; a changed date asks again. Null until a nudge is dismissed; a plan sealed before it existed lacks the key. */
+  horizonNudgeDismissed: Record<string, number> | null;
 }
 
 export interface HoldsPromptChoice {
@@ -433,7 +435,13 @@ export interface HorizonMoneyLeft {
   moveId: string | null;
 }
 
-/** One event's costs. */
+/** A planned change to an item that belongs to an event: the change's id (shared by every version it wrote) and the item it changed. */
+export interface HorizonLink {
+  changeId: string;
+  itemId: string;
+}
+
+/** One event's costs and the planned changes linked to it. */
 export interface HorizonSealed {
   name: string;
   emoji: string | null;
@@ -454,13 +462,19 @@ export interface HorizonSealed {
   stateOn: DateOnly | null;
   /** Where its money went when `state` changed; null while open or when it held none. */
   stateMoney: HorizonMoneyLeft | null;
+  /** The planned changes to other items that belong to this event, in the order they were linked; a version sealed before links existed has none. */
+  links: HorizonLink[];
+  /** The goal this event draws its costs from while it keeps saving; null for none, and for a version sealed before goals could be linked. */
+  goalId: string | null;
 }
 
 /** A horizon payload as it may be stored: a version sealed before `rest`, `isOutside`, `ending`, `pricedOn` or `endsAfter` existed lacks them. */
 export type HorizonStored = Omit<
   HorizonSealed,
-  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney'
+  'rest' | 'costs' | 'state' | 'stateOn' | 'stateMoney' | 'links' | 'goalId'
 > & {
+  links?: HorizonLink[];
+  goalId?: string | null;
   rest?: HorizonRest | null;
   state?: HorizonState;
   stateOn?: DateOnly | null;
@@ -786,6 +800,10 @@ export interface ChangeMove {
     fromFreeCents: Cents;
     mark: CostPaidMark;
     purchaseId: string | null;
+    /** What the event's linked goal paid, and which goal; missing on an entry written before goals could be linked. */
+    fromGoalCents?: Cents;
+    goalId?: string | null;
+    goalName?: string | null;
   } | null;
 }
 
@@ -896,6 +914,10 @@ export interface CostPaidSealed {
   mark: CostPaidMark;
   /** The purchase that moved the money when `mark` is `purchase`; null otherwise. */
   purchaseId: string | null;
+  /** The part that came out of the event's linked goal, paid before the event's own money; zero or missing on a mark written before goals could be linked. */
+  fromGoalCents?: Cents;
+  /** The goal `fromGoalCents` came out of; null or missing when none did. */
+  goalId?: string | null;
 }
 
 /** A card paid off: `refId` is the card, `date` the day it was paid. */
@@ -1099,7 +1121,7 @@ export interface ClosingSealed {
   cardPaid: Record<string, [number, Cents, string][]>;
   /** `[day, fromId, toId, cents, moveId, isOutside]` for each transfer not undone; a null `toId` is Free to Spend. */
   transfers: [number, string | null, string | null, Cents, string, boolean][];
-  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
+  /** `[costId, dueDay, amountCents, paidDay, fromFreeCents, mark, purchaseId, moveId, fromGoalCents, goalId]` for each paid cost not undone, by item id; missing on a closing written before Horizon costs could be paid. */
   costPaid?: Record<
     string,
     [
@@ -1111,6 +1133,8 @@ export interface ClosingSealed {
       CostPaidMark,
       string | null,
       string,
+      Cents?,
+      (string | null)?,
     ][]
   >;
   /** `[costId, day]` for each confirmed day that gave back a fronted payment, by item id; missing on a closing written before it. */

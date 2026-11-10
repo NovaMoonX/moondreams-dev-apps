@@ -30,6 +30,7 @@ import {
 import { getDueCards } from '@apps/runway/engine/cards';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import DraftPickUpRow from '@apps/runway/components/DraftPickUpRow';
+import HorizonNudge from '@apps/runway/components/HorizonNudge';
 import PrioritiesNudge from '@apps/runway/components/PrioritiesNudge';
 import TrackInviteCard from '@apps/runway/components/TrackInviteCard';
 import HomeCards from '@apps/runway/screens/home/HomeCards';
@@ -181,7 +182,7 @@ function HomeScreen() {
           dueCosts.length > 0 ||
           checks.length > 0
         }
-        otherwise={<TrackInviteCard />}
+        otherwise={<HorizonNudge otherwise={<TrackInviteCard />} />}
       />
       <LevelGate level='track'>
         <HomeCards today={today} />

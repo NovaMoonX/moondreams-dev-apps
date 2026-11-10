@@ -39,6 +39,7 @@ import {
   type BillProgressInput,
 } from '@apps/runway/engine/progress';
 import {
+  compareDays,
   planBillPayments,
   type BillPayment,
 } from '@apps/runway/engine/demands';
@@ -47,18 +48,29 @@ import { resolveItemEmoji } from '@apps/runway/utils/purposeEmoji';
 import { hashOverride, hashText } from '@apps/runway/engine/fingerprint';
 import { getFixedByBill } from '@apps/runway/engine/billShare';
 import {
+  getFundingRunsOf,
+  getStretchesOf,
+} from '@apps/runway/engine/billStretches';
+import {
   listHorizonPayments,
   type CostPaidEntry,
   type CostPayment,
 } from '@apps/runway/engine/horizon';
+import {
+  getChangesOnlyDoneOn,
+  getItemEnds,
+  getItemStops,
+} from '@apps/runway/engine/horizonLinks';
 import { capEnding, findReachedEnding } from '@apps/runway/engine/endings';
+import { getGoalStretches } from '@apps/runway/engine/goalTimeline';
 import { findReturning } from '@apps/runway/engine/stretch';
 import {
   resolve,
   resolveCurrentOrNext,
   resolveVersion,
 } from '@apps/runway/engine/resolve';
-import { readStance } from '@apps/runway/engine/stance';
+import { getGoalCover, type GoalCover } from '@apps/runway/engine/horizonGoal';
+import { effectiveStance, pick, readStance } from '@apps/runway/engine/stance';
 import {
   LOOKAHEAD_MONTHS,
   OVERDUE_DAYS,
@@ -89,6 +101,7 @@ import type {
   PurchasePairKind,
   GoalVersion,
   GroupVersion,
+  HorizonSealed,
   HorizonVersion,
   OpenVersion,
   PayLineVersion,
@@ -712,24 +725,59 @@ export const selectHorizonVersionId = (
   selectAllHorizonItems(state, on).find(({ item }) => item.id === itemId)
     ?.version.id;
 
-/** The Horizon items still in the plan on a date: the ones that are not finished or called off. */
+/** The day each archived or ended item stops counting, by item id. */
+export const selectItemStops = createSelector([selectItems], getItemStops);
+
+/** The first day each ended item is gone, by item id; a link to an item's ending resolves from it. */
+export const selectItemEnds = createSelector([selectItems], getItemEnds);
+
+/** The Horizon items still in the plan on a date: the ones that are not finished or called off, and not an event of changes alone whose changes have all happened. */
 export const selectHorizonItems = createSelector(
+  [
+    selectAllHorizonItems,
+    selectVersions,
+    selectOn,
+    selectItemStops,
+    selectItemEnds,
+  ],
+  (all, versions, on, stops, ends): ResolvedHorizon[] =>
+    all.filter(
+      ({ version }) =>
+        version.payload.state === 'open' &&
+        getChangesOnlyDoneOn(version.payload, versions, on, stops, ends) ===
+          null,
+    ),
+);
+
+/** Every event still open, a finished-by-its-changes one included, which a change can still be linked to. */
+export const selectOpenHorizonItems = createSelector(
   [selectAllHorizonItems],
   (all): ResolvedHorizon[] =>
     all.filter(({ version }) => version.payload.state === 'open'),
 );
 
-/** The finished and called-off Horizon items, the latest first. */
+/** The finished and called-off Horizon items, and the events of changes alone that have all happened, the latest first. */
 export const selectDoneHorizonItems = createSelector(
-  [selectAllHorizonItems],
-  (all): ResolvedHorizon[] =>
-    all
-      .filter(({ version }) => version.payload.state !== 'open')
+  [
+    selectAllHorizonItems,
+    selectVersions,
+    selectOn,
+    selectItemStops,
+    selectItemEnds,
+  ],
+  (all, versions, on, stops, ends): ResolvedHorizon[] => {
+    const getDoneOn = ({ version }: ResolvedHorizon) =>
+      version.payload.state !== 'open'
+        ? (version.payload.stateOn ?? 0)
+        : getChangesOnlyDoneOn(version.payload, versions, on, stops, ends);
+    return all
+      .filter((entry) => getDoneOn(entry) !== null)
       .sort(
         (a, b) =>
-          (b.version.payload.stateOn ?? 0) - (a.version.payload.stateOn ?? 0) ||
+          (getDoneOn(b) ?? 0) - (getDoneOn(a) ?? 0) ||
           a.item.id.localeCompare(b.item.id),
-      ),
+      );
+  },
 );
 
 export interface DraftView {
@@ -828,6 +876,52 @@ const draftCaches = new WeakMap<object, Map<string, DraftView>>();
 const priorDayCaches = new WeakMap<object, Map<string, ComingDay[]>>();
 
 /** The income days before the ones listed that fall in the first period of a calendar rule, which take their share of a period's amount first; none when no rule is on the calendar. */
+/** Whether a goal covers an event's costs on `on`: not archived and not ended on or before it. */
+export const isGoalCovering = (
+  header: Pick<PlanItemDoc, 'archivedAt' | 'endedAt'>,
+  on: number,
+) =>
+  (header.archivedAt ?? null) === null &&
+  ((header.endedAt ?? null) === null || on < (header.endedAt ?? 0));
+
+/** What the goal an open event draws from holds and will put in, read at `today` with the days the plan has ahead; null when the event has no covering goal. */
+export function getEventGoalCover(
+  payload: Pick<HorizonSealed, 'goalId' | 'state'>,
+  items: RootState['runway']['items'],
+  versions: RootState['runway']['versions'],
+  today: number,
+  days: readonly ComingDay[],
+  heldByItem: Readonly<Record<string, number>>,
+  stance: ReturnType<typeof readStance>,
+): GoalCover | null {
+  const { goalId } = payload;
+  if (goalId === null || payload.state !== 'open') return null;
+  const header = items.find((item) => item.id === goalId);
+  if (!header || !isGoalCovering(header, today)) return null;
+  const stretches = getGoalStretches(versions, header, today);
+  if (stretches.length === 0) return null;
+  return getGoalCover(
+    goalId,
+    stretches,
+    heldByItem[goalId] ?? 0,
+    days.map((day) => ({
+      ...day,
+      moneyCents: pick(
+        effectiveStance(stance, day.stanceOverride),
+        day.amount,
+        'income',
+      ),
+    })),
+    getPriorDays(
+      items,
+      versions,
+      today,
+      days,
+      stretches.map(({ payload }) => payload.funding),
+    ),
+  );
+}
+
 export function getPriorDays(
   items: RootState['runway']['items'],
   versions: RootState['runway']['versions'],
@@ -858,6 +952,8 @@ export interface DraftViewOptions {
   coming?: readonly ComingDay[];
   /** False for a draft that is used once and not kept, such as one step of a lookahead. */
   isCached?: boolean;
+  /** The days before this one are already in `heldByItem`, so the walk does not count them again. */
+  carriesEarlier?: boolean;
 }
 
 export function computeDraftView(
@@ -923,14 +1019,27 @@ export function computeDraftView(
     day.on,
     previousOn,
   );
-  const payLinePairings =
-    resolveCurrentOrNext(versions.filter(isPayLine), day.payLineId, day.on)
-      ?.payload.pairings ?? [];
-  const sourcePairings =
-    day.sourceId === null
-      ? []
-      : (resolveCurrentOrNext(versions.filter(isSource), day.sourceId, day.on)
-          ?.payload.pairings ?? []);
+  const payLineVersions = versions.filter(isPayLine);
+  const sourceVersions = versions.filter(isSource);
+  const getPairingSets = (entry: ComingDay) => ({
+    day:
+      openDays.find(({ id }) => id === entry.dayKey)?.override.pairings ?? null,
+    payLine:
+      resolveCurrentOrNext(payLineVersions, entry.payLineId, entry.on)?.payload
+        .pairings ?? [],
+    source:
+      entry.sourceId === null
+        ? []
+        : (resolveCurrentOrNext(sourceVersions, entry.sourceId, entry.on)
+            ?.payload.pairings ?? []),
+  });
+  const { payLine: payLinePairings, source: sourcePairings } =
+    getPairingSets(day);
+  const earlierDays = options.carriesEarlier
+    ? []
+    : days
+        .filter((entry) => compareDays(entry, day) < 0)
+        .map((entry) => ({ ...entry, pairings: getPairingSets(entry) }));
   const priorDays = getPriorDays(
     items,
     versions,
@@ -957,11 +1066,18 @@ export function computeDraftView(
           ]),
           resolved.map(({ version }) => version.id),
           resolvedBills.map(({ version }) => version.id),
+          resolvedBills.map(({ item }) => getStretchesOf(versions, item)),
+          [...resolved, ...resolvedGoals].map(({ item }) =>
+            getFundingRunsOf(versions, item.id),
+          ),
+          options.carriesEarlier ?? false,
+          earlierDays.map((entry) => [entry.dayKey, entry.pairings]),
           resolvedGoals.map(({ version }) => version.id),
           resolvedGoals.map(({ item }) => heldByItem[item.id] ?? 0),
           resolvedHorizon.map(({ item, version }) => [
             version.id,
             heldByItem[item.id] ?? 0,
+            heldByItem[version.payload.goalId ?? ''] ?? 0,
             hashProgress(billProgress[item.id]),
           ]),
           resolved.map(({ item, version }) =>
@@ -1003,6 +1119,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       maxCents: payload.maxCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1020,6 +1137,7 @@ export function computeDraftView(
     schedule: version.payload.timing.schedule,
     ending: capEnding(version.payload.ending, item.endedAt),
     fundedBy: version.payload.fundedBy,
+    stretches: getStretchesOf(versions, item),
     fixed: fixedByBill.get(item.id),
     paired: pairedByBill.get(item.id),
     oneTimePayLineIds,
@@ -1034,6 +1152,15 @@ export function computeDraftView(
     costs: version.payload.costs,
     state: version.payload.state,
     heldCents: heldByItem[item.id] ?? 0,
+    goalCover: getEventGoalCover(
+      version.payload,
+      items,
+      versions,
+      today,
+      days,
+      heldByItem,
+      stance,
+    ),
     paid: billProgress[item.id]?.costPaid ?? [],
     repaid: billProgress[item.id]?.repaid,
     fixed: Object.fromEntries(
@@ -1052,6 +1179,7 @@ export function computeDraftView(
       orderIndex: payload.orderIndex,
       funding: payload.funding,
       extras: payload.extras ?? null,
+      fundingRuns: getFundingRunsOf(versions, item.id),
       targetCents: version.payload.targetCents,
       heldCents: heldByItem[item.id] ?? 0,
     };
@@ -1068,6 +1196,8 @@ export function computeDraftView(
       },
     ],
     plan: {
+      carriesEarlier: options.carriesEarlier ?? false,
+      earlierDays,
       envelopes,
       bills,
       goals,
@@ -1252,6 +1382,7 @@ export const selectBillPayments = createSelector(
               schedule: payload.timing.schedule,
               ending: capEnding(payload.ending, item.endedAt),
               fundedBy: payload.fundedBy,
+              stretches: getStretchesOf(versions, item),
               fixed: fixedByBill.get(item.id),
               paired: pairedByBill.get(item.id),
               oneTimePayLineIds,

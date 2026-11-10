@@ -83,6 +83,15 @@ const diff = <T>(
   show: (value: T) => string,
 ): Part => (same(before, after) ? null : [label, show(before), show(after)]);
 
+const describeMaxMove = (before: number | null, after: number | null): Part =>
+  before === after
+    ? null
+    : after === null
+      ? 'No longer stops filling'
+      : before === null
+        ? `Stops filling at ${formatCents(after)}`
+        : ['Stops filling at', formatCents(before), formatCents(after)];
+
 const pairingCount = (list: readonly unknown[]) =>
   list.length === 1 ? '1 funded' : `${list.length} funded`;
 
@@ -372,11 +381,9 @@ const getParts = (
       ),
       ...(!('targetCents' in goalBefore) && !('targetCents' in goalAfter)
         ? [
-            diff(
-              'Stops at',
+            describeMaxMove(
               (goalBefore as EnvelopeSealed).maxCents ?? null,
               (goalAfter as EnvelopeSealed).maxCents ?? null,
-              (value) => (value === null ? 'no limit' : formatCents(value)),
             ),
           ]
         : []),
@@ -461,12 +468,15 @@ export function describeReplaced(
     effectiveUntil: number | null;
     before: ItemPayload;
     after: ItemPayload;
+    isReturn?: boolean;
   }[],
   cardNameOf: (cardId: string | null) => string,
 ) {
   const [first] = replaced;
   if (!first) return null;
   const more = replaced.length - 1;
+  if (first.isReturn)
+    return `This replaces going back to what it was on ${formatDateOrdinalUTC(first.effectiveFrom)}${more > 0 ? ` and ${more} more change${more === 1 ? '' : 's'}` : ''}.`;
   const result = `This replaces your change from ${formatDateOrdinalUTC(first.effectiveFrom)}${first.effectiveUntil === null ? '' : ` through ${formatDateOrdinalUTC(first.effectiveUntil - DAY_MS)}`} (${describeChange(first.before, first.after, cardNameOf)})${more > 0 ? ` and ${more} more` : ''}.`;
   return result;
 }
@@ -519,10 +529,15 @@ export const describeCostGivesBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) => {
-  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents;
+  const goal = mark === 'outside' || fromGoal === null ? 0 : fromGoal.cents;
+  const fromItem = mark === 'outside' ? 0 : amountCents - fromFreeCents - goal;
   const free = mark === 'outside' ? 0 : fromFreeCents;
   const parts = [
+    goal > 0 &&
+      fromGoal !== null &&
+      COST_PAID_WORDS.givesBackGoal(fromGoal.name, formatCents(goal)),
     fromItem > 0 && COST_PAID_WORDS.givesBackItem(item, formatCents(fromItem)),
     free > 0 && COST_PAID_WORDS.givesBackFree(formatCents(free)),
     mark === 'purchase' && COST_PAID_WORDS.purchaseRemoved,
@@ -541,10 +556,11 @@ export const describeCostTakenBack = (
   amountCents: number,
   fromFreeCents: number,
   mark: CostPaidMark,
+  fromGoal: { name: string; cents: number } | null = null,
 ) =>
   COST_PAID_WORDS.undoText(
     cost,
     item,
     formatDateOrdinalUTC(dueOn),
-    describeCostGivesBack(item, amountCents, fromFreeCents, mark),
+    describeCostGivesBack(item, amountCents, fromFreeCents, mark, fromGoal),
   );

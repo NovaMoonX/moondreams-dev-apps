@@ -234,6 +234,7 @@ function PairingsEditor({
       value,
       text: label,
       emoji,
+      kind,
       description:
         kind === 'bill' ? 'Bill' : kind === 'goal' ? 'Goal' : 'Envelope',
     }));

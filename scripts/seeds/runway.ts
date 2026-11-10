@@ -368,9 +368,16 @@ async function writeSeedHorizon(
         orderIndex: 20,
         rest: { kind: 'outside' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [
+          {
+            changeId: 'seed-change-eating-out-stretch',
+            itemId: 'seed-envelope-eating-out',
+          },
+        ],
         costs: [
           cost(
             'seed-cost-truck',
@@ -416,9 +423,11 @@ async function writeSeedHorizon(
         orderIndex: 21,
         rest: { kind: 'pays' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-surgery', 'Surgery', 140_000, 180_000, dec18),
           cost(
@@ -451,10 +460,19 @@ async function writeSeedHorizon(
         orderIndex: 22,
         rest: { kind: 'later' },
         note: null,
+        goalId: 'seed-goal-wedding',
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
+          cost(
+            'goal-seed-goal-wedding',
+            'Wedding gift',
+            40_000,
+            40_000,
+            dec19 + 42 * DAY_MS,
+          ),
           cost('seed-cost-venue', 'Venue', 143_000, 143_000, dec19),
           cost(
             'seed-cost-photographer',
@@ -477,9 +495,11 @@ async function writeSeedHorizon(
         orderIndex: 23,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'finished' as const,
         stateOn: today - 3 * DAY_MS,
         stateMoney: null,
+        links: [],
         costs: [
           cost('seed-cost-couch', 'Couch', 90_000, 90_000, today - 5 * DAY_MS),
         ],
@@ -496,6 +516,7 @@ async function writeSeedHorizon(
         orderIndex: 24,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'calledOff' as const,
         stateOn: today - 2 * DAY_MS,
         stateMoney: {
@@ -504,6 +525,7 @@ async function writeSeedHorizon(
           cents: 40_000,
           moveId: 'transfer_seed-calloff-seed-horizon-ski',
         },
+        links: [],
         costs: [
           cost(
             'seed-cost-lift',
@@ -534,9 +556,11 @@ async function writeSeedHorizon(
         orderIndex: 25,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'open' as const,
         stateOn: null,
         stateMoney: null,
+        links: [],
         costs: [
           cost(
             'seed-cost-tuneup',
@@ -559,6 +583,7 @@ async function writeSeedHorizon(
         orderIndex: 26,
         rest: { kind: 'later' },
         note: null,
+        goalId: null,
         state: 'finished' as const,
         stateOn: today - DAY_MS,
         stateMoney: {
@@ -567,6 +592,7 @@ async function writeSeedHorizon(
           cents: 25_000,
           moveId: null,
         },
+        links: [],
         costs: [
           cost('seed-cost-shed', 'Shed', 22_500, 22_500, today - 8 * DAY_MS),
         ],
@@ -1159,6 +1185,7 @@ async function writeSeedLifecycle(
     groupId: null,
   };
 
+  const stretchStart = firstPayday + DAY_MS;
   const stretchEnd = firstPayday + 17 * DAY_MS + DAY_MS;
   const items = [
     {
@@ -1223,7 +1250,7 @@ async function writeSeedLifecycle(
     sealJson(stretchPayload, encryption),
     sealJson(
       {
-        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(today)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
+        summary: `Eating out: Funding $80.00 every income day to $40.00 every income day, from ${formatDateOrdinalUTC(stretchStart)} through ${formatDateOrdinalUTC(stretchEnd - DAY_MS)}, then it goes back.`,
         note: 'Covering the car registration',
       } satisfies ChangeSealed,
       encryption,
@@ -1294,7 +1321,7 @@ async function writeSeedLifecycle(
         'seed-envelope-eating-out',
         'envelope',
         stretchAt,
-        today,
+        stretchStart,
         'seed-change-eating-out-stretch',
         stretchSealed,
       ),
@@ -1306,7 +1333,7 @@ async function writeSeedLifecycle(
     change(
       'seed-change-eating-out-stretch',
       stretchAt,
-      today,
+      stretchStart,
       ['seed-envelope-eating-out'],
       stretchChange,
     ),
@@ -3434,6 +3461,20 @@ async function writeSeedGoals(
         state: 'active',
         groupId: null,
         funding: { amount: exact(10_000), cadence: { kind: 'everyIncomeDay' } },
+      },
+    },
+    {
+      id: 'seed-goal-wedding',
+      payload: {
+        name: 'Wedding gift',
+        emoji: '🎁',
+        priority: 'want',
+        orderIndex: 4,
+        targetCents: 40_000,
+        targetDate: nextCalendarDay(today, 11, 19) + 42 * DAY_MS,
+        state: 'active',
+        groupId: null,
+        funding: { amount: exact(5_000), cadence: { kind: 'everyIncomeDay' } },
       },
     },
   ];

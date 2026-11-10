@@ -142,7 +142,7 @@ function PayLineRow({
   today,
 }: PayLineRowProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const { openItem, closeOpenItem } = useRunwayUrlState();
+  const { openItem, closeOpenItem, showPlanSection } = useRunwayUrlState();
   const request = openItem?.itemId === itemId ? openItem : null;
   const stance = effectiveStance(planStance, payLine.stanceOverride);
   const amount = formatCents(pick(stance, payLine.amount, 'income'));
@@ -163,6 +163,7 @@ function PayLineRow({
           itemId={itemId}
           kind='payLine'
           startsAtStep={request?.step ?? undefined}
+          presetEventId={request?.eventId ?? undefined}
           today={today}
           figureLabel='Each pay'
           figure={amount}
@@ -186,7 +187,10 @@ function PayLineRow({
           }}
           onClose={() => {
             setIsOpen(false);
-            if (request !== null) closeOpenItem();
+            if (request === null) return;
+            closeOpenItem();
+            if (request.returnTo !== null)
+              void showPlanSection(request.returnTo);
           }}
         />
       )}

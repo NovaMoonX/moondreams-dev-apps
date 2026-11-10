@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
+import { getFirstMoneyDay } from '@apps/runway/engine/horizonLinks';
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
@@ -26,6 +27,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { useStore } from 'react-redux';
 import { useAppSelector, type RootState } from '@/store';
+import { getEventLink } from '@apps/runway/utils/eventLink';
+import { selectAllHorizonItems } from '@apps/runway/store/selectors/runwaySelectors';
 import { generateUuid } from '@/utils/idUtils';
 import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
 import { getErrorMessage } from '@/utils/errorUtils';
@@ -58,6 +61,7 @@ import {
   MAX_NAME_LENGTH,
   PRIORITIES,
   PRIORITY_LABELS,
+  PART_OF_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import {
@@ -116,7 +120,6 @@ import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
 import { useChangeFlow } from '@apps/runway/forms/useChangeFlow';
-import { INITIAL_FROM_WHEN } from '@apps/runway/utils/fromWhen';
 import {
   describePayChoice,
   getPayOptions,
@@ -286,6 +289,14 @@ interface BillFormProps {
   editing?: { itemId: string; payload: BillSealed };
   /** The income day whose screen opened the edit; "this income day" then means it. */
   presetDayKey?: string;
+  /** The open event a change from here is part of when the form opens. */
+  presetEventId?: string;
+  /** The change is for a later day: its "When it starts" opens on that question. */
+  planAhead?: 'date' | 'stretch';
+  /** The open event a new bill is part of; the bill starts on its first due day. */
+  eventId?: string;
+  /** The day a new bill is planned to start, asked before the form opens; its first due day starts there. */
+  startsOn?: number;
   /** What the form calls the thing it adds; an expense that is coming is not a bill. */
   noun?: 'bill' | 'expense';
   /** A question to open first when changing a bill ("amount"); every answer starts folded otherwise. */
@@ -635,6 +646,10 @@ function BillFormBody({
   title,
   editing,
   presetDayKey,
+  presetEventId,
+  planAhead,
+  eventId,
+  startsOn,
   noun = 'bill',
   openStep = null,
   draft,
@@ -709,7 +724,7 @@ function BillFormBody({
           name: '',
           amount: EMPTY_AMOUNT_DRAFT,
           priority: 'should',
-          startDate: '',
+          startDate: startsOn === undefined ? '' : toDateInputValue(startsOn),
           isLater: false,
           frequency: null,
           everyCount: '',
@@ -1667,6 +1682,8 @@ function BillFormBody({
       : EMPTY_BILL,
     candidate,
     presetDayKey,
+    presetEventId,
+    planAhead,
     newGroup: resolveGroup(formData).newGroup,
     onDone: onClose,
     afterSave: isFundingChanged ? clearStalePins : undefined,
@@ -1677,7 +1694,7 @@ function BillFormBody({
   const editBlocker = flow.getBlocker(blocker);
   const isChangeDirty =
     flow.note.trim() !== '' ||
-    JSON.stringify(flow.from) !== JSON.stringify(INITIAL_FROM_WHEN);
+    JSON.stringify(flow.from) !== JSON.stringify(flow.initialFrom);
   const isDirty =
     JSON.stringify(formData) !== JSON.stringify(startData) ||
     isChangeDirty ||
@@ -1809,6 +1826,25 @@ function BillFormBody({
         startDate: today,
         bill,
         newGroup: resolveGroup(formData).newGroup,
+        link: getEventLink(
+          selectAllHorizonItems(store.getState(), today),
+          eventId ?? null,
+          {
+            today,
+            itemName: bill.name,
+            what: PART_OF_WORDS.starts,
+            from: getFirstMoneyDay({
+              itemId: '',
+              createdAt: 0,
+              effectiveFrom: today,
+              effectiveUntil: null,
+              id: '',
+              changeId: '',
+              kind: 'bill',
+              payload: bill,
+            }),
+          },
+        ),
       });
       onClose();
     } catch (saveError) {
@@ -1881,6 +1917,7 @@ function BillFormBody({
                   quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
                 }
                 after={changeSection}
+                isAfterFirst={flow.isPlanning}
                 isAll={isAll}
                 onAll={() => setIsAll(true)}
                 onBack={() => setIsAll(false)}

@@ -5,6 +5,8 @@ import {
   History,
   Pencil,
   RotateCcw,
+  Target,
+  Unlink,
   Unlock,
 } from 'lucide-react';
 
@@ -16,6 +18,10 @@ import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import FormSheet from '@/components/FormSheet';
 import InlineNotice from '@/components/InlineNotice';
+import {
+  NOTICE_ACTION_CLASSES,
+  NOTICE_QUIET_CLASSES,
+} from '@/components/noticeActionClasses';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
@@ -27,15 +33,24 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatDateRangeOrdinalUTC } from '@apps/runway/utils/horizonText';
 import { formatCents } from '@/utils/moneyUtils';
 import CostRow from '@apps/runway/components/CostRow';
-import {
-  NOTICE_MAIN_BUTTON,
-  NOTICE_QUIET_BUTTON,
-} from '@apps/runway/components/noticeButtonClasses';
 import MarkOutsideCostRow from '@apps/runway/components/MarkOutsideCostRow';
 import CoversLine from '@apps/runway/components/CoversLine';
 import HorizonBringBackView from '@apps/runway/components/HorizonBringBackView';
 import HorizonEndView from '@apps/runway/components/HorizonEndView';
 import HorizonChangeView from '@apps/runway/components/HorizonChangeView';
+import type { PlanChange } from '@apps/runway/engine/planChanges';
+import {
+  describeChangeLine,
+  getChangeRef,
+  listItemChanges,
+} from '@apps/runway/utils/comingChangeText';
+import ChangeSheetView from '@apps/runway/components/ChangeSheetView';
+import PlanChangePickerView, {
+  NewItemForm,
+  type NewKind,
+} from '@apps/runway/components/PlanChangePickerView';
+import ItemMark from '@apps/runway/components/ItemMark';
+import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import PutTowardView from '@apps/runway/components/PutTowardView';
@@ -46,21 +61,31 @@ import {
   COST_PAID_WORDS,
   FIX_WORDS,
   HORIZON_END_WORDS,
+  HORIZON_PLAN_WORDS,
   HORIZON_WORDS,
   ITEM_SHEET_WORDS,
   ITEM_VIEW_WORDS,
   MAX_HORIZON_COSTS,
+  PART_OF_WORDS,
   RANGE_END_WORDS,
 } from '@apps/runway/constants';
 import {
   changeCost,
   getCostPriority,
+  getNextVersionId,
   listEndlessCosts,
   listOpenCosts,
   type CostChange,
   getPurchaseMarkFigures,
   type CostPaidEntry,
 } from '@apps/runway/engine/horizon';
+import {
+  getLinkDoneOn,
+  getLinkSpan,
+  hasLinkHappened,
+  removeLink,
+  sortLinksByDate,
+} from '@apps/runway/engine/horizonLinks';
 import type { HorizonShort } from '@apps/runway/engine/lookahead';
 import { getRangeEnd } from '@apps/runway/engine/stance';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
@@ -68,19 +93,24 @@ import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   releaseHorizonHeld,
+  setHorizonStateWith,
   undoHorizonState,
 } from '@apps/runway/store/actions/horizonActions';
 import {
   selectBalances,
   selectHeldBy,
 } from '@apps/runway/store/selectors/balanceSelectors';
+import { selectGoalCovers } from '@apps/runway/store/selectors/overviewSelectors';
 import {
+  selectAllCards,
   selectAllHorizonItems,
   selectComingDays,
   selectEnvelopes,
   selectGoals,
   selectCostPaid,
   selectCostPayments,
+  selectItemEnds,
+  selectItemStops,
   selectSpendPurchases,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import {
@@ -92,6 +122,11 @@ import HorizonChangeForm from '@apps/runway/forms/HorizonChangeForm';
 import CostSheet from '@apps/runway/screens/plan/CostSheet';
 import type { HorizonCost, HorizonSealed, Stance } from '@apps/runway/types';
 import { useRunwayUrlState } from '@apps/runway/useRunwayUrlState';
+import { getCardNamer } from '@apps/runway/utils/cardText';
+import {
+  describeChange,
+  type ItemPayload,
+} from '@apps/runway/utils/changeText';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 interface HorizonSheetProps {
@@ -122,6 +157,8 @@ function HorizonSheet({
   const { dial } = usePriorityDial();
   const balances = useAppSelector(selectBalances);
   const paid = useAppSelector(selectCostPaid)[itemId];
+  const goalCover =
+    useAppSelector((state) => selectGoalCovers(state, today))[itemId] ?? null;
   const costPayments = useAppSelector((state) =>
     selectCostPayments(state, today),
   );
@@ -135,8 +172,29 @@ function HorizonSheet({
   const mask = useMaskedText();
   const [isReleasing, setIsReleasing] = useState(false);
   const [view, setView] = useState<
-    'main' | 'change' | 'history' | 'finish' | 'callOff' | 'bringBack'
+    | 'main'
+    | 'change'
+    | 'history'
+    | 'finish'
+    | 'callOff'
+    | 'bringBack'
+    | 'planChange'
   >('main');
+  const [unlinkId, setUnlinkId] = useState<string | null>(null);
+  const [creating, setCreating] = useState<{
+    kind: NewKind;
+    startsOn: number;
+  } | null>(null);
+  const [lastNew, setLastNew] = useState<{
+    kind: NewKind;
+    startsOn: number;
+  } | null>(null);
+  const [openedChange, setOpenedChange] = useState<PlanChange | null>(null);
+  const [isUnlinking, setIsUnlinking] = useState(false);
+  const versions = useAppSelector((state) => state.runway.versions);
+  const stops = useAppSelector(selectItemStops);
+  const ends = useAppSelector(selectItemEnds);
+  const allCards = useAppSelector(selectAllCards);
   const [costId, setCostId] = useState<string | null>(openCostId);
   const [costEdit, setCostEdit] = useState<CostChange | 'form' | null>(null);
   const [addState, setAddState] = useState<'form' | HorizonCost | null>(null);
@@ -161,6 +219,7 @@ function HorizonSheet({
     paid,
     balances.costPaidByItem[itemId] ?? 0,
     balances.costFromFreeByItem[itemId] ?? 0,
+    goalCover,
   );
   const { shortfall } = plan;
   const isDone = horizon.state !== 'open';
@@ -215,12 +274,14 @@ function HorizonSheet({
         );
   const yearLead = hasRepeats ? `${HORIZON_WORDS.overNextYear} ` : '';
   const fact = [
-    yearLead +
-      HORIZON_WORDS.plannedTotal(
-        formatCents(isPlannedRange ? plannedHighCents : plannedCents),
-        isPlannedRange,
-        hasRepeats,
-      ),
+    horizon.costs.length === 0
+      ? ''
+      : yearLead +
+        HORIZON_WORDS.plannedTotal(
+          formatCents(isPlannedRange ? plannedHighCents : plannedCents),
+          isPlannedRange,
+          hasRepeats,
+        ),
     when,
   ]
     .filter(Boolean)
@@ -435,6 +496,197 @@ function HorizonSheet({
     }
   };
 
+  const getItemName = (id: string) => {
+    const latest = [...versions]
+      .filter((version) => version.itemId === id)
+      .sort((a, b) => b.createdAt - a.createdAt)[0];
+    return latest && 'name' in latest.payload ? latest.payload.name : '';
+  };
+  const items = useAppSelector((state) => state.runway.items);
+  const findComing = (link: { changeId: string; itemId: string }) =>
+    listItemChanges(
+      versions,
+      items.find(({ id }) => id === link.itemId) ?? null,
+      link.itemId,
+      today,
+      () => true,
+    ).find(
+      (change) =>
+        !change.isReturn && getChangeRef(change).changeId === link.changeId,
+    ) ?? null;
+  const linkLines = sortLinksByDate(horizon.links, versions, ends).flatMap(
+    (link) => {
+      const span = getLinkSpan(versions, link, stops, ends);
+      if (!span) return [];
+      const getDifference = () => {
+        if (span.kind === 'stop') return HORIZON_WORDS.linkEnds;
+        const text = span.before
+          ? describeChange(
+              span.before.payload as ItemPayload,
+              span.version.payload as ItemPayload,
+              getCardNamer(allCards),
+            ).replace(/ to /g, ' → ')
+          : '';
+        return text === '' && span.kind === 'start'
+          ? HORIZON_WORDS.linkStarts
+          : text;
+      };
+      const difference = getDifference();
+      const isHappened = hasLinkHappened(span, today);
+      const getWhen = () => {
+        if (!span.isLive) return HORIZON_WORDS.changeNoLonger;
+        return isHappened
+          ? HORIZON_WORDS.changeHappened(
+              formatDateOrdinalUTC(getLinkDoneOn(span)),
+            )
+          : HORIZON_WORDS.changeFrom(formatDateOrdinalUTC(span.startsOn));
+      };
+      const when = getWhen();
+      const coming = span.isLive ? findComing(link) : null;
+      return [
+        {
+          link,
+          isLive: span.isLive,
+          coming,
+          itemName: getItemName(link.itemId),
+          line: coming
+            ? describeChangeLine(coming, getCardNamer(allCards))
+            : HORIZON_WORDS.changeLine(
+                getItemName(link.itemId),
+                difference,
+                when,
+              ),
+        },
+      ];
+    },
+  );
+  const liveCount = linkLines.filter(({ isLive }) => isLive).length;
+  const unlinking = linkLines.find(({ link }) => link.changeId === unlinkId);
+  const unlinkChange = async () => {
+    if (!user || isUnlinking || !unlinking) return;
+    setIsUnlinking(true);
+    try {
+      const encryption = await getRunwayEncryption(user.uid);
+      const found = selectAllHorizonItems(
+        store.getState(),
+        todayAsUtcDate(),
+      ).find(({ item }) => item.id === itemId)?.version;
+      const isWritten =
+        found !== undefined &&
+        (await setHorizonStateWith(user.uid, encryption, {
+          versionId: getNextVersionId(found.id),
+          itemId,
+          horizon: removeLink(found.payload, unlinking.link.changeId),
+          summary: PART_OF_WORDS.unlinkedLine(unlinking.itemName, horizon.name),
+          note: null,
+          on: todayAsUtcDate(),
+          move: null,
+        }));
+      if (!isWritten) {
+        addToast({ title: HORIZON_END_WORDS.changedSince, type: 'error' });
+        return;
+      }
+      setUnlinkId(null);
+    } catch (unlinkError) {
+      addToast({
+        title: HORIZON_WORDS.unlinkFailed,
+        description: getErrorMessage(unlinkError, ''),
+        type: 'error',
+      });
+    } finally {
+      setIsUnlinking(false);
+    }
+  };
+  const linkedGoal =
+    horizon.goalId === null
+      ? undefined
+      : goals.find(({ item }) => item.id === horizon.goalId);
+  const goalBlock = linkedGoal && (
+    <div className='space-y-2'>
+      <p className='text-muted-foreground text-sm font-medium'>
+        {HORIZON_PLAN_WORDS.savingForCaption}
+      </p>
+      <ActionGroup>
+        <ActionRow
+          isGrouped
+          hasChevron
+          icon={<Target />}
+          label={mask(
+            HORIZON_PLAN_WORDS.savingForLine(
+              linkedGoal.version.payload.name,
+              formatCents(
+                Math.max(0, balances.assignedByItem[linkedGoal.item.id] ?? 0),
+              ),
+              formatCents(linkedGoal.version.payload.targetCents),
+            ),
+          )}
+          onClick={() =>
+            void showOnPlan('goals', { itemId: linkedGoal.item.id })
+          }
+        />
+      </ActionGroup>
+    </div>
+  );
+  const isChangesOnly = horizon.costs.length === 0;
+  const changesBlock =
+    linkLines.length === 0 && horizon.state !== 'open' ? null : (
+      <div className='space-y-2'>
+        {linkLines.length > 0 && (
+          <>
+            <p className='text-muted-foreground text-sm font-medium'>
+              {HORIZON_WORDS.changesCaption}
+            </p>
+            <ActionGroup>
+              {linkLines.map(({ link, line, itemName, coming }) => (
+                <ActionRow
+                  key={link.changeId}
+                  isGrouped
+                  hasChevron={horizon.state === 'open'}
+                  icon={<ItemMark itemId={link.itemId} name={itemName} />}
+                  label={mask(line)}
+                  onClick={() =>
+                    coming && horizon.state === 'open'
+                      ? setOpenedChange(coming)
+                      : horizon.state === 'open'
+                        ? setUnlinkId(link.changeId)
+                        : undefined
+                  }
+                />
+              ))}
+            </ActionGroup>
+          </>
+        )}
+        {horizon.state === 'open' && (
+          <Button
+            type='button'
+            variant='secondary'
+            className='w-full'
+            onClick={() => setView('planChange')}
+          >
+            {HORIZON_WORDS.planChange}
+          </Button>
+        )}
+      </div>
+    );
+
+  if (creating) {
+    return (
+      <NewItemForm
+        kind={creating.kind}
+        eventId={itemId}
+        startsOn={creating.startsOn}
+        onClose={() => {
+          setCreating(null);
+          setLastNew(null);
+          setView('main');
+        }}
+        onCancel={() => {
+          setLastNew(creating);
+          setCreating(null);
+        }}
+      />
+    );
+  }
   if (addState === 'form') {
     return (
       <CostForm
@@ -464,6 +716,14 @@ function HorizonSheet({
     );
   }
 
+  const openedLive =
+    openedChange === null
+      ? null
+      : findComing({
+          changeId: getChangeRef(openedChange).changeId,
+          itemId: openedChange.itemId,
+        });
+
   return (
     <FormSheet
       isOpen
@@ -473,7 +733,14 @@ function HorizonSheet({
       actions={<ValuesEyeButton />}
     >
       <div ref={bodyRef} className='contents' />
-      {view === 'finish' || view === 'callOff' ? (
+      {openedLive ? (
+        <ChangeSheetView
+          change={openedLive}
+          today={today}
+          isFromEvent
+          onBack={() => setOpenedChange(null)}
+        />
+      ) : view === 'finish' || view === 'callOff' ? (
         <HorizonEndView
           itemId={itemId}
           horizon={horizon}
@@ -494,6 +761,17 @@ function HorizonSheet({
             setCostId(null);
             setView('main');
           }}
+        />
+      ) : view === 'planChange' ? (
+        <PlanChangePickerView
+          eventId={itemId}
+          today={today}
+          resume={lastNew}
+          onBack={() => {
+            setLastNew(null);
+            setView('main');
+          }}
+          onStartNew={(kind, startsOn) => setCreating({ kind, startsOn })}
         />
       ) : view === 'change' ? (
         <HorizonChangeForm
@@ -604,39 +882,43 @@ function HorizonSheet({
               </p>
             )}
           </div>
-          <div className='space-y-2'>
-            <p className='text-muted-foreground text-sm font-medium'>
-              {HORIZON_WORDS.costsCaption}
-            </p>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {costs.map((cost) => {
-                const costPaid = getPaid(cost.id);
-                return (
-                  <CostRow
-                    key={cost.id}
-                    cost={cost}
-                    paid={costPaid}
-                    stoppedNote={
-                      costPaid === null && cost.becameBillId === null
-                        ? HORIZON_END_WORDS.stopped
-                        : null
-                    }
-                    onOpen={() => {
-                      if (cost.becameBillId !== null) {
-                        void showOnPlan('bills', {
-                          itemId: cost.becameBillId,
-                          returnTo: 'horizon',
-                        });
-                        return;
+          {goalBlock}
+          {changesBlock}
+          {!isChangesOnly && (
+            <div className='space-y-2'>
+              <p className='text-muted-foreground text-sm font-medium'>
+                {HORIZON_WORDS.costsCaption}
+              </p>
+              <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                {costs.map((cost) => {
+                  const costPaid = getPaid(cost.id);
+                  return (
+                    <CostRow
+                      key={cost.id}
+                      cost={cost}
+                      paid={costPaid}
+                      stoppedNote={
+                        costPaid === null && cost.becameBillId === null
+                          ? HORIZON_END_WORDS.stopped
+                          : null
                       }
-                      setCostId(cost.id);
-                      setCostEdit(null);
-                    }}
-                  />
-                );
-              })}
-            </ul>
-          </div>
+                      onOpen={() => {
+                        if (cost.becameBillId !== null) {
+                          void showOnPlan('bills', {
+                            itemId: cost.becameBillId,
+                            returnTo: 'horizon',
+                          });
+                          return;
+                        }
+                        setCostId(cost.id);
+                        setCostEdit(null);
+                      }}
+                    />
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           <ActionGroup isRoomy>
             <ActionRow
               isGrouped
@@ -689,36 +971,50 @@ function HorizonSheet({
               <p>{HORIZON_END_WORDS.readySub}</p>
             </InlineNotice>
           )}
-          <SheetHead
-            label={HORIZON_WORDS.left}
-            figure={formatCents(figures.leftCents)}
-            fact={
-              figures.setAsideCents === 0 && !isHidden
-                ? null
-                : HORIZON_WORDS.leftFact(
-                    formatCents(figures.setAsideCents),
-                    formatCents(figures.spentCents),
-                    figures.fromFreeCents > 0 || isHidden
-                      ? formatCents(figures.fromFreeCents)
-                      : null,
-                  )
-            }
-          />
-          <CoversLine
-            plan={plan}
-            costs={horizon.costs}
-            heldCents={figures.leftCents}
-            stance={stance}
-            isSetAsideUsed={figures.setAsideCents > 0}
-            after={
-              (horizon.rest.kind === 'pays' ||
-                horizon.rest.kind === 'onePay') &&
-              plan.coveredUntil !== null
-                ? getRestFromPaysNote()
-                : null
-            }
-          />
-          {shortfall && (
+          {isChangesOnly ? (
+            <SheetHead
+              label={
+                liveCount === 0
+                  ? HORIZON_WORDS.noChangesYet
+                  : HORIZON_WORDS.changesCount(liveCount)
+              }
+              fact={when}
+            />
+          ) : (
+            <SheetHead
+              label={HORIZON_WORDS.left}
+              figure={formatCents(figures.leftCents)}
+              fact={
+                figures.setAsideCents === 0 && !isHidden
+                  ? null
+                  : HORIZON_WORDS.leftFact(
+                      formatCents(figures.setAsideCents),
+                      formatCents(figures.spentCents),
+                      figures.fromFreeCents > 0 || isHidden
+                        ? formatCents(figures.fromFreeCents)
+                        : null,
+                    )
+              }
+            />
+          )}
+          {!isChangesOnly && (
+            <CoversLine
+              plan={plan}
+              costs={horizon.costs}
+              heldCents={figures.leftCents}
+              stance={stance}
+              isSetAsideUsed={figures.setAsideCents > 0}
+              after={
+                (horizon.rest.kind === 'pays' ||
+                  horizon.rest.kind === 'onePay') &&
+                plan.coveredUntil !== null
+                  ? getRestFromPaysNote()
+                  : null
+              }
+            />
+          )}
+          {shortfall && isHidden && <NeedsALookRow />}
+          {shortfall && !isHidden && (
             <InlineNotice
               tone='warning'
               title={
@@ -741,9 +1037,8 @@ function HorizonSheet({
               <div className='mt-2 flex flex-wrap gap-2'>
                 <Button
                   type='button'
-                  variant='outline'
                   size='sm'
-                  className={NOTICE_MAIN_BUTTON.warning}
+                  className={NOTICE_ACTION_CLASSES.warning}
                   onClick={() =>
                     setPutting({ initialCents: shortfall.shortCents })
                   }
@@ -755,7 +1050,7 @@ function HorizonSheet({
                     type='button'
                     variant='tertiary'
                     size='sm'
-                    className={NOTICE_QUIET_BUTTON}
+                    className={NOTICE_QUIET_CLASSES.warning}
                     onClick={() => setIsTakingFromPays(true)}
                   >
                     {HORIZON_WORDS.takeFromPays}
@@ -799,37 +1094,45 @@ function HorizonSheet({
             )}
           </div>
           <div className='space-y-2'>
-            <p className='text-muted-foreground text-sm font-medium'>
-              {HORIZON_WORDS.costsCaption}
-            </p>
-            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
-              {costs.map((cost) => (
-                <CostRow
-                  key={cost.id}
-                  cost={cost}
-                  paid={getPaid(cost.id)}
-                  badge={
-                    cost.priority !== null && cost.priority !== horizon.priority
-                      ? cost.priority
-                      : null
-                  }
-                  isFaded={
-                    !isCountedAt(getCostPriority(cost, horizon.priority), dial)
-                  }
-                  onOpen={() => {
-                    if (cost.becameBillId !== null) {
-                      void showOnPlan('bills', {
-                        itemId: cost.becameBillId,
-                        returnTo: 'horizon',
-                      });
-                      return;
-                    }
-                    setCostId(cost.id);
-                    setCostEdit(null);
-                  }}
-                />
-              ))}
-            </ul>
+            {!isChangesOnly && (
+              <>
+                <p className='text-muted-foreground text-sm font-medium'>
+                  {HORIZON_WORDS.costsCaption}
+                </p>
+                <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+                  {costs.map((cost) => (
+                    <CostRow
+                      key={cost.id}
+                      cost={cost}
+                      paid={getPaid(cost.id)}
+                      badge={
+                        cost.priority !== null &&
+                        cost.priority !== horizon.priority
+                          ? cost.priority
+                          : null
+                      }
+                      isFaded={
+                        !isCountedAt(
+                          getCostPriority(cost, horizon.priority),
+                          dial,
+                        )
+                      }
+                      onOpen={() => {
+                        if (cost.becameBillId !== null) {
+                          void showOnPlan('bills', {
+                            itemId: cost.becameBillId,
+                            returnTo: 'horizon',
+                          });
+                          return;
+                        }
+                        setCostId(cost.id);
+                        setCostEdit(null);
+                      }}
+                    />
+                  ))}
+                </ul>
+              </>
+            )}
             {horizon.costs.length >= MAX_HORIZON_COSTS ? (
               <LockedButton
                 label={HORIZON_WORDS.addCost}
@@ -860,8 +1163,10 @@ function HorizonSheet({
               </ActionGroup>
             )}
           </div>
+          {goalBlock}
+          {changesBlock}
           <ActionGroup isRoomy>
-            {!shortfall && (
+            {!shortfall && !isChangesOnly && (
               <ActionRow
                 isGrouped
                 isRoomy
@@ -910,6 +1215,45 @@ function HorizonSheet({
             />
           )}
         </div>
+      )}
+      {unlinking && (
+        <FormSheet
+          isOpen
+          onClose={() => setUnlinkId(null)}
+          title={HORIZON_WORDS.unlinkTitle}
+        >
+          <div className='space-y-2 pb-4'>
+            <p className='text-base font-medium'>
+              <MaskedText>{unlinking.line}</MaskedText>
+            </p>
+            <p className='text-muted-foreground text-sm'>
+              {HORIZON_WORDS.unlinkNote}
+            </p>
+          </div>
+          <ModalFooterActions
+            cancelAction={
+              <Button
+                type='button'
+                variant='secondary'
+                disabled={isUnlinking}
+                onClick={() => setUnlinkId(null)}
+              >
+                Cancel
+              </Button>
+            }
+            rightActions={
+              <Button
+                type='button'
+                loading={isUnlinking}
+                disabled={isUnlinking}
+                onClick={() => void unlinkChange()}
+              >
+                <Unlink className='h-4 w-4' aria-hidden='true' />
+                {HORIZON_WORDS.unlinkRow(horizon.name)}
+              </Button>
+            }
+          />
+        </FormSheet>
       )}
     </FormSheet>
   );
