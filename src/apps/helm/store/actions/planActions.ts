@@ -68,17 +68,21 @@ function settleExecution(
   ).catch(ignoreMissing);
 }
 
-/** Runs the planner for one day and writes its slots, reasons, calendar snapshot and one proposed execution in one batch. Kept and Not today slots stay as they were. */
+/** Runs the planner for one day and writes its slots, reasons, calendar snapshot and one proposed execution in one batch. Kept and Not today slots stay as they were. A rest day is written too, with nothing suggested; `overrideRestAt` is the moment the person asked for a plan anyway, written with that plan. */
 export async function generatePlan(
   uid: string,
   encryption: HelmEncryption,
   plan: ReturnType<typeof buildPlanInput>,
   existing: PlanDay | undefined,
   dayLabel: string,
+  overrideRestAt: number | null = null,
 ): Promise<PlannerResult> {
-  const { input, calendarSnapshot, calendarReadAt } = plan;
+  const { calendarSnapshot, calendarReadAt } = plan;
+  const input =
+    overrideRestAt === null ? plan.input : { ...plan.input, restDay: null };
   const result = planDay(input, (taskId) => taskId);
   const now = Date.now();
+  const overriddenAt = overrideRestAt ?? existing?.restDayOverriddenAt ?? null;
   const removed = Object.keys(input.slots).filter(
     (id) => !(id in result.slots),
   );
@@ -104,8 +108,8 @@ export async function generatePlan(
     {
       date: toDate(input.dayKey),
       slots,
-      isRestDay: existing?.isRestDay ?? false,
-      restDayOverriddenAt: existing?.restDayOverriddenAt ?? null,
+      isRestDay: input.restDay !== null || overriddenAt !== null,
+      restDayOverriddenAt: overriddenAt,
       generatedAt: now,
       calendarReadAt,
       sealed,

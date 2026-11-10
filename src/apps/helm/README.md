@@ -32,6 +32,7 @@ Built:
 - Short, plain turns ("add milk", "done with the dentist", "thanks") are sorted by a quick, light model; a question, a longer turn or "sort the rest" goes to the fuller one, and the quick one can hand a turn over once. Each route has its own allowance.
 - Ask a question and the answer comes from your tasks and what your connected apps and calendars share, with each source one tap away; what they don't say comes from general knowledge, below "Not from your records" with a caution (a bold one on health), and a question about your own things with nothing behind it says "Nothing in your records answers this." Activity lists each answer.
 - Today plans the day: a strip of days, your events and up to three suggested tasks in real gaps ("40 min · fits before Standup"), each kept, moved to another time or set aside for today; "Plan my day" or "plan tomorrow" asks for it, a past day reads as it was with Bring to today, and Settings sets your day's hours and how full to plan it.
+- The day after a night shift or a late night stays empty with "Plan my day anyway"; a kept task that now overlaps a new event says so and offers another time; a calendar that stopped sharing or couldn't load says so with Reconnect or Try again; an event's sheet gives its day and time and, for an all-day one, "Keeps me busy all day".
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase

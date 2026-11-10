@@ -105,6 +105,11 @@ const CAKE_COPY_ID = createHash('sha256')
   .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${CAKE_SOURCE_REF}`)
   .digest('hex')
   .slice(0, 40);
+const NIGHT_SHIFT_SOURCE_REF = `${GOOGLE_SHIFTS_CALENDAR}|fx-night-shift`;
+const NIGHT_SHIFT_COPY_ID = createHash('sha256')
+  .update(`${GOOGLE_CALENDAR_GRANT_ID}|events|${NIGHT_SHIFT_SOURCE_REF}`)
+  .digest('hex')
+  .slice(0, 40);
 const CAKE_TITLE = 'Cake tasting at Sweet Layer Bakery';
 const CAKE_ZONE = 'America/Los_Angeles';
 const GMAIL_GATE_ID = 'google-mail-and-drive';
@@ -747,6 +752,17 @@ const toCakeTimes = (now: number) => {
   return {
     startAt: zonedDateTimeToEpoch(date, '15:00', CAKE_ZONE),
     endAt: zonedDateTimeToEpoch(date, '16:00', CAKE_ZONE),
+  };
+};
+
+// Tonight 7:30 PM to tomorrow 7:30 AM, so tomorrow is a rest day and today stays a normal one.
+const toNightShiftTimes = (now: number) => {
+  const today = getSeedToday(now);
+  const dateOf = (offset: number) =>
+    new Date(today + offset * DAY_MS).toISOString().slice(0, 10);
+  return {
+    startAt: zonedDateTimeToEpoch(dateOf(0), '19:30', CAKE_ZONE),
+    endAt: zonedDateTimeToEpoch(dateOf(1), '07:30', CAKE_ZONE),
   };
 };
 
@@ -2206,7 +2222,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
     status: 'live',
     categoryState: {
-      events: { lastOkAt: syncedAt, lastError: null, count: 1 },
+      events: { lastOkAt: syncedAt, lastError: null, count: 2 },
     },
     errors: [],
     newCategoryIds: [],
@@ -2296,6 +2312,50 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           deepLink: null,
           extra: {
             calendarId: GOOGLE_PRIMARY_CALENDAR,
+            isTentative: false,
+            isFree: false,
+          },
+        },
+      ),
+    },
+  );
+  const nightShiftTimes = toNightShiftTimes(context.now);
+  batch.set(
+    users
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('synced')
+      .doc(NIGHT_SHIFT_COPY_ID),
+    {
+      connectorId: googleConnectorId,
+      accountId: GOOGLE_ACCOUNT_ID,
+      grantId: GOOGLE_CALENDAR_GRANT_ID,
+      category: 'events',
+      kind: 'event',
+      sourceRef: NIGHT_SHIFT_SOURCE_REF,
+      startAt: nightShiftTimes.startAt,
+      endAt: nightShiftTimes.endAt,
+      isAllDay: false,
+      dueAt: null,
+      calendarKey: `${GOOGLE_ACCOUNT_ID}/${GOOGLE_SHIFTS_CALENDAR}`,
+      isBusy: true,
+      sourceUpdatedAt: syncedAt - DAY_MS,
+      contentHash: `seed-${NIGHT_SHIFT_COPY_ID}`,
+      syncedAt,
+      transformVersion: 1,
+      connectionEndedAt: null,
+      deleteAfter: null,
+      sealed: sealForHelm(
+        { ...alexKey, keyVersion: 1 },
+        {
+          title: 'Night shift',
+          subtitle: null,
+          detail: null,
+          placeLabel: null,
+          amountCents: null,
+          currency: null,
+          deepLink: null,
+          extra: {
+            calendarId: GOOGLE_SHIFTS_CALENDAR,
             isTentative: false,
             isFree: false,
           },
@@ -2399,7 +2459,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       1 +
       waypointCopies.length +
       1 +
-      4,
+      5,
   };
   return result;
 }

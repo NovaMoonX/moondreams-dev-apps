@@ -6,7 +6,9 @@ import SectionDivider from '@/components/SectionDivider';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
+import CalendarFailedLine from '@apps/helm/components/today/CalendarFailedLine';
 import PlannedCard from '@apps/helm/components/today/PlannedCard';
+import RestDayLine from '@apps/helm/components/today/RestDayLine';
 import SuggestedCard from '@apps/helm/components/today/SuggestedCard';
 import SyncedCard from '@apps/helm/components/today/SyncedCard';
 import SyncedSheet from '@apps/helm/components/today/SyncedSheet';
@@ -17,6 +19,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
 import type { OpenTask, PlanSlot, SyncedRecord } from '@apps/helm/types';
 import {
+  formatDayName,
   formatLength,
   formatSlotRange,
   getDayNoon,
@@ -24,7 +27,13 @@ import {
   shiftDayKey,
   sortSlots,
 } from '@apps/helm/utils/planDays';
-import { buildPlanInput, type PlanSources } from '@apps/helm/utils/planInput';
+import {
+  buildPlanInput,
+  findOverlaps,
+  isFailingCalendar,
+  isLiveCalendar,
+  type PlanSources,
+} from '@apps/helm/utils/planInput';
 import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
 
 const FREE_GAP_MINUTES = 45;
@@ -51,9 +60,15 @@ type Entry =
 
 const ORDER = { event: 0, slot: 1, gap: 2 } as const;
 
-const getSummary = (events: number, planned: number, suggested: number) =>
+const getSummary = (
+  events: number,
+  planned: number,
+  suggested: number,
+  isNoCalendar: boolean,
+) =>
   [
-    events > 0 ? HELM_COPY.planEvents(events) : null,
+    isNoCalendar ? HELM_COPY.planNoCalendar : null,
+    !isNoCalendar && events > 0 ? HELM_COPY.planEvents(events) : null,
     planned > 0 ? HELM_COPY.planPlanned(planned) : null,
     suggested > 0 ? HELM_COPY.planSuggested(suggested) : null,
   ]
@@ -85,21 +100,41 @@ function DayPlan({
   const day = sources.planDays[dayKey];
   const isToday = dayKey === todayKey;
 
+  // A calendar Google stopped sharing is left out until it is reconnected.
   const records = useMemo(
-    () => getLiveRecords(stored, grants, true),
+    () =>
+      getLiveRecords(stored, grants, true).filter(
+        (record) =>
+          grants.find((grant) => grant.id === record.grantId)?.status !==
+          'needsReconnect',
+      ),
     [stored, grants],
   );
   const events = useMemo(
     () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).events,
     [records, dayKey, timeZone],
   );
+  const failingGrants = grants.filter(isFailingCalendar);
+  const isFailing = failingGrants.length > 0;
+  const isStopped =
+    !grants.some(isLiveCalendar) &&
+    grants.some(
+      (grant) =>
+        grant.connectorId === 'google:calendar' &&
+        grant.status === 'needsReconnect',
+    );
+  const { input } = buildPlanInput(sources, dayKey);
+  const restDay = isFailing ? null : input.restDay;
+  const isHolding = isFailing || restDay !== null;
   const slots = sortSlots(day?.slots ?? {}).flatMap(({ id, slot }) => {
     const task = getTask(slot.taskId);
-    return task && slot.status !== 'notToday' ? [{ id, slot, task }] : [];
+    const isHidden =
+      slot.status === 'notToday' || (isHolding && slot.status === 'suggested');
+    return task && !isHidden ? [{ id, slot, task }] : [];
   });
   const kept = slots.filter(({ slot }) => slot.status === 'kept');
   const suggested = slots.filter(({ slot }) => slot.status === 'suggested');
-  const { input } = buildPlanInput(sources, dayKey);
+  const overlaps = findOverlaps(input);
   const busyForGaps = [
     ...input.busy,
     ...slots.flatMap(({ slot }) =>
@@ -150,6 +185,10 @@ function DayPlan({
             : null
         }
         isDone={heldIds.has(task.id)}
+        overlapTitle={overlaps[id] ?? null}
+        onAnotherTime={() =>
+          onOpenSuggestion({ dayKey, slotId: id, isMove: true })
+        }
         onOpen={(opened) => onOpenTask(opened.id)}
         onTick={onTick}
         onUndoTick={onUndoTick}
@@ -167,13 +206,13 @@ function DayPlan({
           .filter((part): part is string => part !== null)
           .join(' · ')}
         assistantName={assistantName}
-        onOpen={() => onOpenSuggestion({ dayKey, slotId: id })}
+        onOpen={() => onOpenSuggestion({ dayKey, slotId: id, isMove: false })}
       />
     );
 
   const isPlanned = !needsPlan(day);
   const outcome =
-    suggested.length > 0 || !isPlanned
+    suggested.length > 0 || !isPlanned || isFailing || restDay !== null
       ? null
       : isLate
         ? 'late'
@@ -183,16 +222,26 @@ function DayPlan({
             ? 'nothing'
             : null;
 
-  const planThisDay = () => {
+  const planThisDay = (isRestOverridden: boolean) => {
     setIsPlanning(true);
-    void plan(dayKey).finally(() => setIsPlanning(false));
+    void plan(dayKey, isRestOverridden).finally(() => setIsPlanning(false));
   };
 
   return (
     <>
+      {isFailing && <CalendarFailedLine grants={failingGrants} />}
       <p className='text-muted-foreground text-[15px]'>
-        {getSummary(events.length, kept.length, suggested.length)}
+        {getSummary(events.length, kept.length, suggested.length, isStopped)}
       </p>
+      {restDay !== null && (
+        <RestDayLine
+          kind={restDay}
+          assistantName={assistantName}
+          dayName={formatDayName(dayKey, todayKey)}
+          isPlanning={isPlanning}
+          onPlanAnyway={isReady ? () => planThisDay(true) : null}
+        />
+      )}
       {timeline.length > 0 && (
         <div className='space-y-3'>
           {timeline.map((entry) => {
@@ -237,6 +286,11 @@ function DayPlan({
           )}
         </section>
       )}
+      {isFailing && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.calendarNoSuggestions}
+        </p>
+      )}
       {outcome !== null && (
         <div className='flex items-center gap-3'>
           <p className='text-muted-foreground min-w-0 flex-1 text-[15px] text-pretty'>
@@ -263,12 +317,12 @@ function DayPlan({
           {HELM_COPY.planUnreadable}
         </p>
       )}
-      {!isToday && !isPlanned && isReady && (
+      {!isToday && !isPlanned && isReady && !isFailing && restDay === null && (
         <Button
           type='button'
           variant='outline'
           loading={isPlanning}
-          onClick={planThisDay}
+          onClick={() => planThisDay(false)}
         >
           {HELM_COPY.planThisDay}
         </Button>

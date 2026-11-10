@@ -186,6 +186,13 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
       { ...pottery, id: 'fx-pottery' },
       {
         ...base,
+        id: 'fx-maya',
+        summary: 'Maya in Portland',
+        iCalUID: 'fx-maya@example.com',
+        ...allDay(0),
+      },
+      {
+        ...base,
         id: 'fx-dentist',
         status: 'tentative',
         summary: 'Dentist',
@@ -209,6 +216,14 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
         ...timed(1, '18:00', '20:00'),
       },
       { ...pottery, id: 'fx-pottery-shifts' },
+      {
+        ...base,
+        id: 'fx-night-shift',
+        summary: 'Night shift',
+        iCalUID: 'fx-night-shift@example.com',
+        start: at(0, '19:30'),
+        end: at(1, '07:30'),
+      },
     ],
     'en.usa#holiday@group.v.calendar.google.com': [
       {

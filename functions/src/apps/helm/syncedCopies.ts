@@ -185,10 +185,13 @@ export async function readSyncedEvents(
       }
       seen.add(copy.id);
       const firstOn = toDay(copy.startAt, copy.isAllDay, input.timeZone);
+      // An all-day copy's end is its last day; a timed end is exclusive.
       const lastAt =
-        copy.endAt !== null && copy.endAt > copy.startAt
-          ? copy.endAt - (copy.isAllDay ? DAY_MS : 1)
-          : copy.startAt;
+        copy.endAt === null || copy.endAt <= copy.startAt
+          ? copy.startAt
+          : copy.isAllDay
+            ? copy.endAt
+            : copy.endAt - 1;
       const lastOn = toDay(lastAt, copy.isAllDay, input.timeZone);
       return firstOn < end && lastOn >= input.firstDay;
     })

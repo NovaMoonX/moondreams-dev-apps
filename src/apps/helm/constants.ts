@@ -438,9 +438,22 @@ export const HELM_COPY = {
   calendarOfferReason: (name: string) =>
     `${name} reads each event's title and time, never the details, and can't change anything.`,
   calendarOfferNotNow: 'Not now',
-  calendarReconnectTitle: (account: string) =>
-    `Google stopped sharing ${account}`,
-  calendarReconnectReason: 'Reconnect to bring your events back to Today.',
+  calendarStoppedTitle: 'Google Calendar stopped sharing your events',
+  calendarStoppedReason: (account: string) =>
+    `${account} · Reconnect to bring your events back to Today.`,
+  calendarFailedLine:
+    "Couldn't load your calendar. Your plan is below; check it against your calendar.",
+  calendarTryAgain: 'Try again',
+  calendarNoSuggestions: 'No suggestions until your calendar loads.',
+  planNoCalendar: 'No calendar',
+  planRestShift: (name: string, day: string) =>
+    `Nothing planned after a night shift. Tell ${name} if you want something ${day}.`,
+  planRestLate: (name: string, day: string) =>
+    `Nothing planned after a late night. Tell ${name} if you want something ${day}.`,
+  planRestAnyway: 'Plan my day anyway',
+  planOverlaps: (title: string) => `Now overlaps ${title}`,
+  busyAllDayLabel: 'Keeps me busy all day',
+  busyAllDayFailed: "That didn't save. Try again.",
   syncedTentative: 'Tentative',
   syncedFromAccount: (app: string, account: string) =>
     `From ${app} · ${account}`,

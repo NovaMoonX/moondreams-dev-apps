@@ -74,6 +74,7 @@ export interface SharedRecord {
   subtitle: string | null;
   detail: string | null;
   startAt: number | null;
+  /** An all-day record's last day (UTC midnight), never the day after it. */
   endAt: number | null;
   isAllDay: boolean;
   dueAt: number | null;

@@ -1,4 +1,10 @@
-import { doc, runTransaction, updateDoc } from 'firebase/firestore';
+import {
+  arrayRemove,
+  arrayUnion,
+  doc,
+  runTransaction,
+  updateDoc,
+} from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 import {
@@ -57,6 +63,17 @@ export const setHandsFreeOn = (uid: string, isHandsFreeOn: boolean) =>
 export const setShiftCalendarIds = (uid: string, shiftCalendarIds: string[]) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     shiftCalendarIds,
+    lastEditedAt: Date.now(),
+  });
+
+/** Marks one all-day event as blocking the person's day, or lets it go again. */
+export const setAllDayEventBusy = (
+  uid: string,
+  eventId: string,
+  isBusy: boolean,
+) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    busyAllDayEventRefs: isBusy ? arrayUnion(eventId) : arrayRemove(eventId),
     lastEditedAt: Date.now(),
   });
 

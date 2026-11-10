@@ -196,11 +196,11 @@ const toInstants = (event: CalendarEvent) => {
   const { start, end } = event;
   if (start?.date) {
     const startAt = Date.parse(`${start.date}T00:00:00Z`);
-    return {
-      startAt,
-      endAt: end?.date ? Date.parse(`${end.date}T00:00:00Z`) : startAt + DAY_MS,
-      isAllDay: true,
-    };
+    // Google's all-day end is the day after the last; copies keep the last day.
+    const endAt = end?.date
+      ? Date.parse(`${end.date}T00:00:00Z`) - DAY_MS
+      : startAt;
+    return { startAt, endAt: Math.max(startAt, endAt), isAllDay: true };
   }
   return {
     startAt: start?.dateTime ? Date.parse(start.dateTime) : null,

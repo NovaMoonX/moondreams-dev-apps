@@ -14,6 +14,7 @@ import { formatDayWord, needsPlan, toDayKey } from '@apps/helm/utils/planDays';
 import {
   buildPlanInput,
   findClashes,
+  isFailingCalendar,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
@@ -73,7 +74,7 @@ export function usePlanSources(nowMinute: number) {
 /** Days already tried this session, so a plan that fails or finds nothing never loops. */
 const attempted = new Set<string>();
 
-/** Plans one day now: the planner's slots, reasons and snapshot are written in one batch. Never a past day. */
+/** Plans one day now: the planner's slots, reasons and snapshot are written in one batch. Never a past day, and nothing while the calendar can't be read, since a plan made then would ignore it. `isRestOverridden` plans a rest day anyway. */
 export function usePlanDay() {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
@@ -87,10 +88,13 @@ export function usePlanDay() {
       state.helm.synced.isLoaded,
   );
 
+  const isFailing = grants.some(isFailingCalendar);
+
   const plan = useCallback(
-    async (dayKey: string) => {
+    async (dayKey: string, isRestOverridden = false) => {
       const sources = readPlanSources(grants);
       if (!uid || !sources || dayKey < sources.todayKey) return;
+      if (grants.some(isFailingCalendar)) return;
       try {
         const encryption = await getHelmEncryption(uid);
         await generatePlan(
@@ -99,6 +103,7 @@ export function usePlanDay() {
           buildPlanInput(sources, dayKey),
           sources.planDays[dayKey],
           formatDayWord(dayKey, sources.todayKey),
+          isRestOverridden ? Date.now() : null,
         );
       } catch (error) {
         console.error('Helm day was not planned', error);
@@ -108,7 +113,7 @@ export function usePlanDay() {
     [uid, grants, addToast],
   );
 
-  return { plan, isReady: isReady && isKnown, uid };
+  return { plan, isReady: isReady && isKnown, uid, isFailing };
 }
 
 /** Plans today the first time Today shows it with no plan, once per day for the session. */
@@ -116,7 +121,7 @@ export function useAutoPlanToday(
   isShowingToday: boolean,
   sources: PlanSources | null,
 ) {
-  const { plan, isReady, uid } = usePlanDay();
+  const { plan, isReady, uid, isFailing } = usePlanDay();
   const todayKey = sources?.todayKey ?? null;
   const isUnplanned =
     todayKey !== null && needsPlan(sources?.planDays[todayKey]);
@@ -132,22 +137,31 @@ export function useAutoPlanToday(
     const key = `${uid}|${todayKey}|${clashKey}`;
     const isDue = isUnplanned || clashKey !== '';
     if (!isShowingToday || !isReady || !uid || !todayKey || !isDue) return;
-    if (attempted.has(key)) return;
+    if (isFailing || attempted.has(key)) return;
     attempted.add(key);
     void plan(todayKey);
-  }, [isShowingToday, isReady, uid, isUnplanned, clashKey, todayKey, plan]);
+  }, [
+    isShowingToday,
+    isReady,
+    isFailing,
+    uid,
+    isUnplanned,
+    clashKey,
+    todayKey,
+    plan,
+  ]);
 }
 
 /** Plans the day a sorted turn asked for, on sight, once per turn. */
 export function usePlanOnCapture(uid: string | null) {
-  const { plan, isReady } = usePlanDay();
+  const { plan, isReady, isFailing } = usePlanDay();
   const captures = useAppSelector(
     (state) => state.helm.recentCaptures.captures,
   );
   const planDays = useAppSelector((state) => state.helm.planDays.byId);
 
   useEffect(() => {
-    if (!uid || !isReady) return;
+    if (!uid || !isReady || isFailing) return;
     captures.forEach((capture) => {
       const key = capture.planDayKey ?? null;
       const handledKey = `capture|${uid}|${capture.id}`;
@@ -164,5 +178,5 @@ export function usePlanOnCapture(uid: string | null) {
         needsPlan(day) || (day?.generatedAt ?? 0) < (capture.sortedAt ?? 0);
       if (isStale) void plan(key);
     });
-  }, [uid, isReady, captures, planDays, plan]);
+  }, [uid, isReady, isFailing, captures, planDays, plan]);
 }

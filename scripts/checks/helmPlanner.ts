@@ -56,6 +56,7 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   dayEndTime: '21:00',
   fillPercent: 100,
   hasCalendar: true,
+  restDay: null,
   busy: [],
   slots: {},
   tasks: [],
@@ -375,6 +376,27 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
   };
   const [gap] = findFreeGaps(input, 30);
   assert.equal((gap.endAt - gap.startAt) / MIN, 120);
+}
+
+{
+  const input = base({
+    restDay: 'shift',
+    tasks: [task('a'), task('b')],
+    slots: {
+      s1: slot('k', 'kept', '09:00'),
+      s2: slot('n', 'notToday', '10:00'),
+      s3: slot('x', 'suggested', '11:00'),
+    },
+  });
+  const result = run(input);
+  assert.equal(result.outcome, 'rest');
+  assert.deepEqual(Object.keys(result.slots).sort(), ['s1', 's2']);
+  assert.equal(
+    run({ ...input, restDay: null, slots: {}, tasks: [task('a')] }).outcome,
+    'planned',
+    'once the person asks for a plan anyway the day is planned as usual',
+  );
+  assert.equal(run({ ...input, hasCalendar: false }).outcome, 'rest');
 }
 
 console.log('check:helm-planner: planner rules hold.');

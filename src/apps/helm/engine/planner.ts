@@ -1,5 +1,6 @@
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
 import { PLANNER_COPY } from '@apps/helm/constants';
+import type { RestDayKind } from '@apps/helm/engine/restDay';
 import type { Energy, Importance, PlanSlot, TaskDue } from '@apps/helm/types';
 import {
   DUE_SOON_DAYS,
@@ -33,6 +34,8 @@ export interface PlannerInput {
   dayEndTime: string;
   fillPercent: number;
   hasCalendar: boolean;
+  /** Set when the day follows a night out or a shift and the person hasn't asked for a plan anyway. */
+  restDay: RestDayKind | null;
   busy: BusyBlock[];
   slots: Record<string, PlanSlot>;
   tasks: PlannerTask[];
@@ -41,7 +44,7 @@ export interface PlannerInput {
 export interface PlannerResult {
   slots: Record<string, PlanSlot>;
   reasons: Record<string, string>;
-  outcome: 'planned' | 'full' | 'late' | 'past' | 'nothing';
+  outcome: 'planned' | 'full' | 'late' | 'past' | 'nothing' | 'rest';
 }
 
 interface Span {
@@ -276,7 +279,7 @@ const getCandidates = (input: PlannerInput) => {
   );
 };
 
-/** Suggests a few tasks for a day's gaps; kept and Not today slots come back untouched. */
+/** Suggests a few tasks for a day's gaps; kept and Not today slots come back untouched, and a rest day gets no suggestions. */
 export function planDay(
   input: PlannerInput,
   makeId: (taskId: string) => string,
@@ -291,6 +294,7 @@ export function planDay(
     reasons: {},
     outcome,
   });
+  if (input.restDay !== null) return unchanged('rest');
   const window = getWindow(input);
   if (window.state !== 'open') return unchanged(window.state);
   const candidates = getCandidates(input);
