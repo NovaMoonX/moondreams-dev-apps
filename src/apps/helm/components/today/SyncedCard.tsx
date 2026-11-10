@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -21,7 +21,12 @@ const timeLine = (record: SyncedRecord) => {
 
 /** Another app's event: a plain card with the source's logo, read-only, that opens its source block. */
 export function SyncedCard({ record, onOpen }: SyncedCardProps) {
-  const detail = [timeLine(record), record.sealed.subtitle]
+  const isCalendar = record.connectorId === 'google:calendar';
+  const detail = [
+    timeLine(record),
+    record.sealed.extra.isTentative === true ? HELM_COPY.syncedTentative : null,
+    record.sealed.subtitle,
+  ]
     .filter((part): part is string => !!part)
     .join(' · ');
   return (
@@ -31,10 +36,16 @@ export function SyncedCard({ record, onOpen }: SyncedCardProps) {
       className='helm-card flex h-auto min-h-14 w-full items-center justify-start gap-3 px-4 py-3 text-left'
       onClick={() => onOpen(record)}
     >
-      <AppLogo
-        appId={readConnectorAppId(record.connectorId) ?? ''}
-        className='size-9 rounded-lg'
-      />
+      {isCalendar ? (
+        <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+          <CalendarDays className='size-5' aria-hidden='true' />
+        </span>
+      ) : (
+        <AppLogo
+          appId={readConnectorAppId(record.connectorId) ?? ''}
+          className='size-9 rounded-lg'
+        />
+      )}
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {record.sealed.title}

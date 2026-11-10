@@ -25,6 +25,8 @@ interface DisconnectSheetProps {
   /** How many copies from this app Helm holds. */
   count: number;
   failureLine: (error: unknown) => string;
+  /** One muted line under the explanation, when the connection has more to say. */
+  note?: string | null;
 }
 
 function DisconnectForm({
@@ -33,6 +35,7 @@ function DisconnectForm({
   appName,
   count,
   failureLine,
+  note = null,
 }: Omit<DisconnectSheetProps, 'isOpen'>) {
   const name = useAssistantName();
   const now = useNow(60_000);
@@ -64,6 +67,9 @@ function DisconnectForm({
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.disconnectBody(name, appName)}
       </p>
+      {note && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>{note}</p>
+      )}
       {count > 0 && (
         <div className='flex flex-col gap-1'>
           <label className='flex min-h-12 items-start gap-3 py-2'>

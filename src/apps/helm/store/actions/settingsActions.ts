@@ -21,6 +21,9 @@ export async function ensureHelmProfile(uid: string) {
       dayStartTime: DEFAULT_DAY_START_TIME,
       dayEndTime: DEFAULT_DAY_END_TIME,
       planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+      shiftCalendarIds: [],
+      busyAllDayEventRefs: [],
+      calendarOfferFoldedAt: null,
       hasSeenAiNotice: false,
       voiceMode: 'cloudWhenOnline',
       isWakeWordOn: false,
@@ -48,5 +51,17 @@ export const setWakeWordOn = (uid: string, isWakeWordOn: boolean) =>
 export const setHandsFreeOn = (uid: string, isHandsFreeOn: boolean) =>
   updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
     isHandsFreeOn,
+    lastEditedAt: Date.now(),
+  });
+
+export const setShiftCalendarIds = (uid: string, shiftCalendarIds: string[]) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    shiftCalendarIds,
+    lastEditedAt: Date.now(),
+  });
+
+export const foldCalendarOffer = (uid: string) =>
+  updateDoc(doc(db, 'apps', 'helm', 'users', uid), {
+    calendarOfferFoldedAt: Date.now(),
     lastEditedAt: Date.now(),
   });

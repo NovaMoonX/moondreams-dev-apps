@@ -20,6 +20,9 @@ interface SyncedTodayProps {
   now: number;
 }
 
+const isCalendarEvent = (record: SyncedRecord) =>
+  record.connectorId === 'google:calendar';
+
 const groupKey = (record: SyncedRecord) =>
   `${record.grantId}|${record.category}`;
 
@@ -59,6 +62,23 @@ function SyncedToday({ now }: SyncedTodayProps) {
         ),
     [records, now, timeZone],
   );
+  // An event on two accounts shares a key and shows once, from whichever sorts first.
+  const calendarEvents = useMemo(
+    () =>
+      events.filter(isCalendarEvent).filter((record, index, all) => {
+        const key = record.sealed.extra.sameEventKey;
+        return (
+          typeof key !== 'string' ||
+          all.findIndex((other) => other.sealed.extra.sameEventKey === key) ===
+            index
+        );
+      }),
+    [events],
+  );
+  const appEvents = useMemo(
+    () => events.filter((record) => !isCalendarEvent(record)),
+    [events],
+  );
   const taskGroups = useMemo(
     () =>
       [
@@ -97,74 +117,91 @@ function SyncedToday({ now }: SyncedTodayProps) {
   );
   const openRecord = records.find((record) => record.id === openId) ?? null;
 
-  if (events.length === 0 && taskGroups.length === 0 && staleLines.length === 0)
-    return null;
+  const hasApps =
+    appEvents.length > 0 || taskGroups.length > 0 || staleLines.length > 0;
+  if (calendarEvents.length === 0 && !hasApps) return null;
 
   return (
-    <section className='space-y-3'>
-      <SectionDivider label={HELM_COPY.syncedTodayFromApps} />
-      {events.map((record) => (
-        <SyncedCard
-          key={record.id}
-          record={record}
-          onOpen={(opened) => setOpenId(opened.id)}
-        />
-      ))}
-      {taskGroups.map((group) => {
-        const key = groupKey(group[0]);
-        const isOpen = expanded.includes(key);
-        const shown = isOpen ? group : group.slice(0, TODAY_SYNCED_ROWS);
-        return (
-          <div key={key} className='space-y-2'>
-            <h2 className='text-muted-foreground text-[13px]'>
-              {HELM_COPY.syncedGroup(
-                categoryLabelOf(group[0].connectorId, group[0].category),
-                nameOf(group[0].connectorId),
-              )}
-            </h2>
-            <ul className='helm-card divide-border divide-y overflow-hidden'>
-              {shown.map((record) => (
-                <li key={record.id}>
-                  <SyncedTaskRow
-                    record={record}
-                    onOpen={(opened) => setOpenId(opened.id)}
-                  />
-                </li>
-              ))}
-            </ul>
-            {group.length > TODAY_SYNCED_ROWS && (
-              <ShowMoreButton
-                isOpen={isOpen}
-                onClick={() =>
-                  setExpanded((current) =>
-                    isOpen
-                      ? current.filter((id) => id !== key)
-                      : [...current, key],
-                  )
-                }
-              >
-                {isOpen
-                  ? HELM_COPY.syncedFewer
-                  : HELM_COPY.syncedMore(group.length - TODAY_SYNCED_ROWS)}
-              </ShowMoreButton>
-            )}
-          </div>
-        );
-      })}
-      {staleLines.map((line) => (
-        <StaleSourceLine
-          key={line.key}
-          label={line.label}
-          lastOkAt={line.lastOkAt}
-          now={now}
-        />
-      ))}
+    <>
+      {calendarEvents.length > 0 && (
+        <section className='space-y-3'>
+          <SectionDivider label={HELM_COPY.todayCalendar} />
+          {calendarEvents.map((record) => (
+            <SyncedCard
+              key={record.id}
+              record={record}
+              onOpen={(opened) => setOpenId(opened.id)}
+            />
+          ))}
+        </section>
+      )}
+      {hasApps && (
+        <section className='space-y-3'>
+          <SectionDivider label={HELM_COPY.syncedTodayFromApps} />
+          {appEvents.map((record) => (
+            <SyncedCard
+              key={record.id}
+              record={record}
+              onOpen={(opened) => setOpenId(opened.id)}
+            />
+          ))}
+          {taskGroups.map((group) => {
+            const key = groupKey(group[0]);
+            const isOpen = expanded.includes(key);
+            const shown = isOpen ? group : group.slice(0, TODAY_SYNCED_ROWS);
+            return (
+              <div key={key} className='space-y-2'>
+                <h2 className='text-muted-foreground text-[13px]'>
+                  {HELM_COPY.syncedGroup(
+                    categoryLabelOf(group[0].connectorId, group[0].category),
+                    nameOf(group[0].connectorId),
+                  )}
+                </h2>
+                <ul className='helm-card divide-border divide-y overflow-hidden'>
+                  {shown.map((record) => (
+                    <li key={record.id}>
+                      <SyncedTaskRow
+                        record={record}
+                        onOpen={(opened) => setOpenId(opened.id)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+                {group.length > TODAY_SYNCED_ROWS && (
+                  <ShowMoreButton
+                    isOpen={isOpen}
+                    onClick={() =>
+                      setExpanded((current) =>
+                        isOpen
+                          ? current.filter((id) => id !== key)
+                          : [...current, key],
+                      )
+                    }
+                  >
+                    {isOpen
+                      ? HELM_COPY.syncedFewer
+                      : HELM_COPY.syncedMore(group.length - TODAY_SYNCED_ROWS)}
+                  </ShowMoreButton>
+                )}
+              </div>
+            );
+          })}
+          {staleLines.map((line) => (
+            <StaleSourceLine
+              key={line.key}
+              label={line.label}
+              lastOkAt={line.lastOkAt}
+              now={now}
+            />
+          ))}
+        </section>
+      )}
       <SyncedSheet
         record={openRecord}
         now={now}
         onClose={() => setOpenId(null)}
       />
-    </section>
+    </>
   );
 }
 

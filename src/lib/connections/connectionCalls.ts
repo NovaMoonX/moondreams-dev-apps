@@ -1,8 +1,14 @@
 import { httpsCallable } from 'firebase/functions';
 
 import type {
+  ConnectorOption,
   EndConnectionRequest,
+  FinishGoogleConnectionRequest,
+  FinishGoogleConnectionResult,
   GrantConnectionRequest,
+  ReadConnectorOptionsRequest,
+  StartGoogleConnectionRequest,
+  StartGoogleConnectionResult,
   UpdateConnectionRequest,
 } from '@/lib/connections/contract';
 import { functions } from '@lib/firebase/config';
@@ -27,6 +33,18 @@ const deleteKeptCopiesCallable = httpsCallable<
   { grantId: string },
   { deleted: number }
 >(functions, 'deleteKeptCopies');
+const startGoogleConnectionCallable = httpsCallable<
+  StartGoogleConnectionRequest,
+  StartGoogleConnectionResult
+>(functions, 'startGoogleConnection');
+const finishGoogleConnectionCallable = httpsCallable<
+  FinishGoogleConnectionRequest,
+  FinishGoogleConnectionResult
+>(functions, 'finishGoogleConnection');
+const readConnectorOptionsCallable = httpsCallable<
+  ReadConnectorOptionsRequest,
+  { options: ConnectorOption[] }
+>(functions, 'readConnectorOptions');
 
 /** Refused with `already-exists` while a live grant for the same reader, source and account stands. */
 export const grantConnection = async (request: GrantConnectionRequest) =>
@@ -46,3 +64,18 @@ export const syncConnections = async (request: { grantId?: string } = {}) =>
 
 export const deleteKeptCopies = async (request: { grantId: string }) =>
   (await deleteKeptCopiesCallable(request)).data.deleted;
+
+/** Where to send the person for Google's consent, and the state to check on their return. */
+export const startGoogleConnection = async (
+  request: StartGoogleConnectionRequest,
+) => (await startGoogleConnectionCallable(request)).data;
+
+/** Refused with `permission-denied` when the person didn't tick the permission asked for. */
+export const finishGoogleConnection = async (
+  request: FinishGoogleConnectionRequest,
+) => (await finishGoogleConnectionCallable(request)).data;
+
+/** What a connector lets the person choose among (calendars), read live from the provider. */
+export const readConnectorOptions = async (
+  request: ReadConnectorOptionsRequest,
+) => (await readConnectorOptionsCallable(request)).data.options;

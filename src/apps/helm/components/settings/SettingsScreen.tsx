@@ -5,6 +5,7 @@ import { Eye, History, Link2, Mic } from 'lucide-react';
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
+import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
@@ -73,6 +74,7 @@ function SettingsScreen({
             onClick={onOpenConnectedApps}
             hasChevron
           />
+          <ShiftCalendars onOpenConnectedApps={onOpenConnectedApps} />
         </SettingsGroup>
         <SettingsGroup title={HELM_COPY.settingsVoice}>
           <SettingsRow
