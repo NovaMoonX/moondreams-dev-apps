@@ -37,7 +37,12 @@ export const PINCH_SHARES: SourceShares = {
           addedInVersion: 1,
         },
       ],
-      never: ["Recipes' text", 'prices and costs', 'nutrition', 'cooking history'],
+      never: [
+        "Recipes' text",
+        'prices and costs',
+        'nutrition',
+        'cooking history',
+      ],
       capabilities: { read: true, write: false, backgroundSync: true },
       connect: { kind: 'siteGrant' },
     },

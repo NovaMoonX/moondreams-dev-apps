@@ -39,7 +39,11 @@ const TILES = [
 // More than one lead or three major tiles fails to typecheck here.
 export const BROWSE_TILES = TILES satisfies ValidTiles<typeof TILES>;
 
-export const BROWSE_FOOT: readonly HelmView[] = ['connectedApps', 'settings', 'activity'];
+export const BROWSE_FOOT: readonly HelmView[] = [
+  'connectedApps',
+  'settings',
+  'activity',
+];
 
 /** Where Back from a view lands; a view that is not listed goes home. */
 export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
