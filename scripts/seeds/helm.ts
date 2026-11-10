@@ -44,6 +44,8 @@ import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts
 import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
 import { NINE_LIVES_SHARES } from '../../functions/src/apps/nine-lives/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
+import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
+import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
 import { readEmulatorKeyring } from './runway.ts';
@@ -57,7 +59,7 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place' | 'project' | 'pet';
+  kind: 'event' | 'task' | 'place' | 'project' | 'pet' | 'trip';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -1373,6 +1375,132 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: nineLivesGrantId,
   });
 
+  const waypointConnectorId = toAppConnectorId('waypoint');
+  const waypointGrantId = toGrantId(
+    'helm',
+    waypointConnectorId,
+    SITE_ACCOUNT_ID,
+  );
+  const waypointAnchor = new Date(context.now + 10 * DAY_MS);
+  const waypointTripStart = Date.UTC(
+    waypointAnchor.getUTCFullYear(),
+    waypointAnchor.getUTCMonth(),
+    waypointAnchor.getUTCDate(),
+  );
+  const waypointTripDate = waypointAnchor.toISOString().slice(0, 10);
+  const waypointTripRef = 'trips/seed-waypoint-trip';
+  const waypointCopies: CopyDefinition[] = [
+    {
+      category: 'trips',
+      sourceRef: waypointTripRef,
+      kind: 'trip',
+      title: 'Pacific Northwest Weekend',
+      subtitle: null,
+      startAt: waypointTripStart,
+      endAt: waypointTripStart + 3 * DAY_MS,
+      isAllDay: true,
+      placeLabel: 'Seattle',
+      dueAt: null,
+      deepLink: '/waypoint?trip=seed-waypoint-trip',
+    },
+    {
+      category: 'itinerary',
+      sourceRef: `${waypointTripRef}/events/seed-waypoint-flight`,
+      kind: 'event',
+      title: 'Flight DL 482',
+      subtitle: 'Flight',
+      startAt: zonedDateTimeToEpoch(
+        waypointTripDate,
+        '09:00',
+        'America/New_York',
+      ),
+      endAt: zonedDateTimeToEpoch(waypointTripDate, '11:05', 'America/Chicago'),
+      isAllDay: false,
+      placeLabel: 'John F. Kennedy International Airport',
+      dueAt: null,
+      deepLink: '/waypoint?trip=seed-waypoint-trip',
+    },
+    {
+      category: 'itinerary',
+      sourceRef: `${waypointTripRef}/stays/seed-waypoint-seattle`,
+      kind: 'event',
+      title: 'Pike Place Suites',
+      subtitle: 'Stay',
+      startAt: zonedDateTimeToEpoch(
+        waypointTripDate,
+        '15:00',
+        'America/Los_Angeles',
+      ),
+      endAt: zonedDateTimeToEpoch(
+        new Date(waypointTripStart + 2 * DAY_MS).toISOString().slice(0, 10),
+        '11:00',
+        'America/Los_Angeles',
+      ),
+      isAllDay: false,
+      placeLabel: 'Seattle, WA',
+      dueAt: null,
+      deepLink: '/waypoint?trip=seed-waypoint-trip',
+    },
+    {
+      category: 'myTasks',
+      sourceRef: `${waypointTripRef}/checklist/confirm-passports`,
+      kind: 'task',
+      title: 'Confirm passport expiration dates',
+      subtitle: 'Pacific Northwest Weekend',
+      startAt: null,
+      isAllDay: true,
+      dueAt: waypointTripStart,
+      deepLink: '/waypoint?trip=seed-waypoint-trip',
+    },
+  ];
+  const waypointGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: waypointConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      trips: { isOn: true, changedAt: connectedAt },
+      itinerary: { isOn: true, changedAt: connectedAt },
+      myTasks: { isOn: true, changedAt: connectedAt },
+      tripBalances: { isOn: false, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      WAYPOINT_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          {
+            lastOkAt: syncedAt,
+            lastError: null,
+            count: waypointCopies.filter(
+              (copy) => copy.category === category.id,
+            ).length,
+          },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(waypointGrantId),
+    waypointGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, waypointCopies, null, {
+    connectorId: waypointConnectorId,
+    grantId: waypointGrantId,
+  });
+
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
     provider: 'google',
@@ -1489,7 +1617,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       1 +
       goingOnceCopies.length +
       1 +
-      nineLivesCopies.length,
+      nineLivesCopies.length +
+      1 +
+      waypointCopies.length,
   };
   return result;
 }

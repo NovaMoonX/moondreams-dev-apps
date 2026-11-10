@@ -9,6 +9,7 @@ import { GOING_ONCE_SHARES } from '@apps/going-once/share/manifest';
 import { HELM_SHARES } from '@apps/helm/share/manifest';
 import { NINE_LIVES_SHARES } from '@apps/nine-lives/share/manifest';
 import { PINCH_SHARES } from '@apps/pinch/share/manifest';
+import { WAYPOINT_SHARES } from '@apps/waypoint/share/manifest';
 
 /** Every site app's sharing declaration; an app is added here when it declares what it offers. */
 export const SOURCE_SHARES: SourceShares[] = [
@@ -16,6 +17,7 @@ export const SOURCE_SHARES: SourceShares[] = [
   A_LIST_SHARES,
   GOING_ONCE_SHARES,
   NINE_LIVES_SHARES,
+  WAYPOINT_SHARES,
   HELM_SHARES,
 ];
 

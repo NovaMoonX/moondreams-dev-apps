@@ -8,6 +8,7 @@ import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapte
 import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
 import { createNineLivesAdapter } from '../../functions/src/apps/nine-lives/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
+import { createWaypointAdapter } from '../../functions/src/apps/waypoint/share/adapter.ts';
 import {
   applyCategoryChanges,
   buildNewGrant,
@@ -1148,6 +1149,666 @@ assert.equal(await nineLivesAdapter.status(nineLivesCtx(OTHER)), 'noAccess');
 assert.equal(
   nineLivesAdapter.deepLink('households/home/cats/mochi', nineLivesCtx(OWNER)),
   '/nine-lives',
+);
+
+const TRIP_SECRET = 'SECRET TRIP';
+const TRIP_EXPENSE_AMOUNT = 9000;
+const utc = (...parts: [number, number, number, number?, number?]) =>
+  Date.UTC(parts[0], parts[1], parts[2], parts[3] ?? 0, parts[4] ?? 0);
+
+const trips = firestore.collection('apps/waypoint/trips');
+const member = (uid: string) => ({ uid, role: 'EDITOR', joinedAt: NOW - 99 });
+const tripFields = (fields: Record<string, unknown>) => ({
+  title: 'Trip',
+  coverImageUrl: TRIP_SECRET,
+  inviteCode: TRIP_SECRET,
+  sharedAlbumUrl: 'https://photos.example.test/secret-album',
+  defaultCurrency: 'USD',
+  isArchived: false,
+  timeModel: 'RELATIVE',
+  timezone: 'America/New_York',
+  city: { name: 'New York', region: 'NY', latitude: 1, longitude: 2 },
+  lastEditedAt: NOW - 21,
+  ...fields,
+});
+const planned = (fields: Record<string, unknown>) => ({
+  eventType: 'ACTIVITY',
+  customTypeLabel: null,
+  dayIndex: 0,
+  endDayIndex: 0,
+  startAt: null,
+  endAt: null,
+  startTime: null,
+  endTime: null,
+  timezone: null,
+  endTimezone: null,
+  locationName: 'Somewhere',
+  address: TRIP_SECRET,
+  notes: TRIP_SECRET,
+  eventDetails: { transitDetails: { confirmationCode: TRIP_SECRET } },
+  attendeeTargetType: 'EVERYONE_INCLUDING_FUTURE',
+  assignedMemberIds: [],
+  isArchived: false,
+  lastEditedAt: NOW - 22,
+  ...fields,
+});
+
+const nyc = trips.doc('nyc');
+const spring = trips.doc('spring');
+const absolute = trips.doc('absolute');
+const task = (fields: Record<string, unknown>) => ({
+  category: 'OTHER',
+  note: TRIP_SECRET,
+  completeByDayIndex: null,
+  isCompleted: false,
+  lastEditedAt: NOW - 23,
+  ...fields,
+});
+const expense = (fields: Record<string, unknown>) => ({
+  title: TRIP_SECRET,
+  note: TRIP_SECRET,
+  receiptUrl: 'https://storage.example.test/secret-receipt.jpg',
+  currency: 'USD',
+  amount: null,
+  amountMin: null,
+  amountMax: null,
+  paidAmount: null,
+  isPerPerson: false,
+  payerUid: null,
+  status: 'PAID',
+  targetType: 'EVERYONE_CURRENT',
+  targetMemberIds: [],
+  splitAmounts: null,
+  paidMemberStatus: {},
+  earlyPayments: {},
+  ...fields,
+});
+
+await Promise.all([
+  nyc.set(
+    tripFields({
+      title: 'New York',
+      startDate: utc(2026, 9, 30),
+      endDate: utc(2026, 10, 3),
+      members: { [OWNER]: member(OWNER), [HOUSEMATE]: member(HOUSEMATE) },
+    }),
+  ),
+  nyc
+    .collection('events')
+    .doc('flight')
+    .set(
+      planned({
+        eventType: 'TRAVEL',
+        title: 'Flight DL 1',
+        eventDetails: {
+          transitType: 'FLIGHT',
+          transitDetails: { confirmationCode: TRIP_SECRET },
+        },
+        startTime: '09:00',
+        endTime: '11:05',
+        timezone: 'America/New_York',
+        endTimezone: 'America/Chicago',
+        locationName: 'JFK',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('dinner-before')
+    .set(
+      planned({
+        eventType: 'DINING',
+        title: 'Dinner before',
+        dayIndex: 1,
+        endDayIndex: 1,
+        startTime: '19:00',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('dinner-after')
+    .set(
+      planned({
+        eventType: 'DINING',
+        title: 'Dinner after',
+        dayIndex: 3,
+        endDayIndex: 3,
+        startTime: '19:00',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('clocks-back')
+    .set(
+      planned({
+        title: 'Night walk',
+        dayIndex: 2,
+        endDayIndex: 2,
+        startTime: '01:30',
+        endTime: '02:30',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('spa')
+    .set(
+      planned({
+        eventType: 'OTHER',
+        customTypeLabel: 'Spa day',
+        title: 'Spa',
+        dayIndex: 1,
+        endDayIndex: 1,
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('hers')
+    .set(
+      planned({
+        title: 'Only for the housemate',
+        attendeeTargetType: 'SPECIFIC_MEMBERS',
+        assignedMemberIds: [HOUSEMATE],
+        startTime: '12:00',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('mine')
+    .set(
+      planned({
+        title: 'Only for the owner',
+        attendeeTargetType: 'SPECIFIC_MEMBERS',
+        assignedMemberIds: [OWNER],
+        startTime: '12:00',
+      }),
+    ),
+  nyc
+    .collection('events')
+    .doc('free')
+    .set(
+      planned({ eventType: 'FREE_TIME', title: 'Free', startTime: '13:00' }),
+    ),
+  nyc
+    .collection('events')
+    .doc('archived')
+    .set(planned({ title: 'Archived', isArchived: true, startTime: '13:00' })),
+  nyc
+    .collection('events')
+    .doc('no-day')
+    .set(planned({ title: 'No day', dayIndex: null, endDayIndex: null })),
+  nyc
+    .collection('events')
+    .doc('far-out')
+    .set(planned({ title: 'Far out', dayIndex: 40, endDayIndex: 40 })),
+  nyc
+    .collection('stays')
+    .doc('hotel')
+    .set({
+      name: 'Hotel Hudson',
+      address: '1 Hudson St',
+      confirmationCode: TRIP_SECRET,
+      notes: TRIP_SECRET,
+      linkUrl: 'https://hotel.example.test/secret',
+      checkInDayIndex: 0,
+      checkInTime: '15:00',
+      checkOutDayIndex: 3,
+      checkOutTime: '11:00',
+      checkInTimezone: null,
+      lastEditedAt: NOW - 24,
+    }),
+  nyc
+    .collection('rentals')
+    .doc('car')
+    .set({
+      name: 'Hertz',
+      vehicle: TRIP_SECRET,
+      pickupAddress: 'JFK Rental Center',
+      notes: TRIP_SECRET,
+      confirmationCode: TRIP_SECRET,
+      pickupDayIndex: 0,
+      pickupTime: '10:00',
+      returnDayIndex: 3,
+      returnTime: '10:00',
+      timezone: null,
+      lastEditedAt: NOW - 25,
+    }),
+  nyc
+    .collection('checklist')
+    .doc('passports')
+    .set(
+      task({
+        title: 'Passports',
+        assignedToUids: [OWNER],
+        completeByDayIndex: 0,
+      }),
+    ),
+  nyc
+    .collection('checklist')
+    .doc('shared')
+    .set(task({ title: 'Book dinner', assignedToUids: [OWNER, HOUSEMATE] })),
+  nyc
+    .collection('checklist')
+    .doc('hers')
+    .set(task({ title: 'Housemate only', assignedToUids: [HOUSEMATE] })),
+  nyc
+    .collection('checklist')
+    .doc('done')
+    .set(task({ title: 'Done', assignedToUids: [OWNER], isCompleted: true })),
+  nyc.collection('ideas').doc('idea').set({ title: TRIP_SECRET }),
+  nyc.collection('eventSuggestions').doc('s').set({ title: TRIP_SECRET }),
+  nyc.collection('announcements').doc('a').set({ message: TRIP_SECRET }),
+  nyc.collection('contacts').doc('c').set({
+    name: TRIP_SECRET,
+    phone: '555-0199',
+    email: 'secret-contact@example.test',
+  }),
+  nyc.collection('album').doc('photo').set({
+    imageUrl: 'https://storage.example.test/secret-photo.jpg',
+  }),
+  nyc
+    .collection('expenses')
+    .doc('dinner')
+    .set(
+      expense({
+        payerUid: OWNER,
+        amount: TRIP_EXPENSE_AMOUNT / 100,
+        paidMemberStatus: {},
+      }),
+    ),
+  nyc
+    .collection('expenses')
+    .doc('cab')
+    .set(
+      expense({
+        payerUid: HOUSEMATE,
+        amount: 20.01,
+        targetType: 'SPECIFIC_MEMBERS',
+        targetMemberIds: [OWNER, HOUSEMATE],
+      }),
+    ),
+  nyc
+    .collection('expenses')
+    .doc('planned')
+    .set(expense({ status: 'EXPECTED', amount: 500 })),
+  firestore
+    .doc(`apps/waypoint/personalChecklist/${OWNER}/items/charger`)
+    .set(task({ tripId: 'nyc', title: 'Pack charger', completeByDayIndex: 1 })),
+  firestore
+    .doc(`apps/waypoint/personalChecklist/${OWNER}/items/gone`)
+    .set(task({ tripId: 'left', title: 'Left trip to-do' })),
+  firestore
+    .doc(`apps/waypoint/personalChecklist/${HOUSEMATE}/items/private`)
+    .set(task({ tripId: 'nyc', title: 'HOUSEMATE PRIVATE SECRET' })),
+  spring.set(
+    tripFields({
+      title: 'Seattle spring',
+      startDate: utc(2027, 2, 13),
+      endDate: utc(2027, 2, 15),
+      timezone: 'America/Los_Angeles',
+      city: null,
+      defaultCurrency: null,
+      members: { [OWNER]: member(OWNER) },
+    }),
+  ),
+  spring
+    .collection('events')
+    .doc('gap')
+    .set(
+      planned({
+        title: 'Springs forward',
+        dayIndex: 1,
+        endDayIndex: 1,
+        startTime: '02:30',
+      }),
+    ),
+  spring
+    .collection('events')
+    .doc('after-gap')
+    .set(
+      planned({
+        title: 'After the gap',
+        dayIndex: 1,
+        endDayIndex: 1,
+        startTime: '03:30',
+      }),
+    ),
+  spring.collection('stays').doc('tokyo-time').set({
+    name: 'Booked from Tokyo',
+    address: null,
+    checkInDayIndex: 0,
+    checkInTime: '15:00',
+    checkOutDayIndex: 2,
+    checkOutTime: '11:00',
+    checkInTimezone: 'Asia/Tokyo',
+  }),
+  spring
+    .collection('events')
+    .doc('bad-zone')
+    .set(
+      planned({
+        title: 'Unknown zone',
+        startTime: '09:00',
+        timezone: 'Not/AZone',
+      }),
+    ),
+  absolute.set(
+    tripFields({
+      title: 'Older trip',
+      timeModel: 'ABSOLUTE',
+      timezone: null,
+      city: null,
+      startDate: TODAY + DAY,
+      endDate: TODAY + 3 * DAY,
+      members: { [OWNER]: member(OWNER) },
+    }),
+  ),
+  absolute
+    .collection('events')
+    .doc('old-style')
+    .set(
+      planned({
+        title: 'Old style',
+        dayIndex: 1,
+        endDayIndex: 1,
+        startAt: TODAY + 2 * DAY + 15 * 3_600_000,
+        endAt: TODAY + 2 * DAY + 17 * 3_600_000,
+      }),
+    ),
+  absolute
+    .collection('stays')
+    .doc('old-stay')
+    .set({
+      name: 'Old stay',
+      checkInAt: TODAY + DAY + 20 * 3_600_000,
+      checkOutAt: TODAY + 3 * DAY + 9 * 3_600_000,
+      checkInTimezone: null,
+    }),
+  trips.doc('over').set(
+    tripFields({
+      title: 'Over',
+      startDate: WINDOW_START - 12 * DAY,
+      endDate: WINDOW_START - 10 * DAY,
+      members: { [OWNER]: member(OWNER) },
+    }),
+  ),
+  trips
+    .doc('over')
+    .collection('events')
+    .doc('e')
+    .set(planned({ title: 'Over event', startTime: '09:00' })),
+  trips.doc('shelved').set(
+    tripFields({
+      title: 'Shelved',
+      isArchived: true,
+      startDate: TODAY + DAY,
+      endDate: TODAY + 2 * DAY,
+      members: { [OWNER]: member(OWNER) },
+    }),
+  ),
+  trips.doc('left').set(
+    tripFields({
+      title: 'Left behind',
+      startDate: TODAY + DAY,
+      endDate: TODAY + 2 * DAY,
+      members: { [HOUSEMATE]: member(HOUSEMATE) },
+    }),
+  ),
+  trips
+    .doc('left')
+    .collection('events')
+    .doc('e')
+    .set(planned({ title: 'Left event', startTime: '09:00' })),
+  trips
+    .doc('left')
+    .collection('checklist')
+    .doc('t')
+    .set(task({ title: 'Left task', assignedToUids: [OWNER, HOUSEMATE] })),
+  trips
+    .doc('left')
+    .collection('expenses')
+    .doc('x')
+    .set(expense({ payerUid: HOUSEMATE, amount: 70 })),
+]);
+
+const waypointAdapter = createWaypointAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+const waypointDefaults = waypointAdapter.manifest.categories.filter(
+  (category) => category.isOnAtConnect,
+);
+const waypointCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:waypoint',
+      accountId: 'site',
+      categoryIds: waypointDefaults.map((category) => category.id),
+      options: null,
+    },
+    waypointAdapter.manifest,
+    NOW,
+  ),
+});
+const runWaypoint = async (uid: string, category: string) => {
+  const page = await waypointAdapter.syncPage(waypointCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+assert.deepEqual(
+  waypointDefaults.map((category) => category.id),
+  ['trips', 'itinerary', 'myTasks'],
+);
+const waypointGrant = waypointCtx(OWNER).grant;
+assert.equal(waypointGrant.categories.tripBalances.isOn, false);
+assert.equal(waypointGrant.categories.trips.isOn, true);
+
+const tripRecords = await runWaypoint(OWNER, 'trips');
+assert.deepEqual(refs(tripRecords).sort(), [
+  'trips/absolute',
+  'trips/nyc',
+  'trips/spring',
+]);
+const nycTrip = tripRecords.find((record) => record.sourceRef === 'trips/nyc');
+assert.equal(nycTrip?.kind, 'trip');
+assert.equal(nycTrip?.title, 'New York');
+assert.equal(nycTrip?.startAt, utc(2026, 9, 30));
+assert.equal(nycTrip?.endAt, utc(2026, 10, 3));
+assert.equal(nycTrip?.isAllDay, true);
+assert.equal(nycTrip?.timeZone, 'America/New_York');
+assert.equal(nycTrip?.placeLabel, 'New York');
+assert.equal(
+  tripRecords.find((record) => record.sourceRef === 'trips/spring')?.placeLabel,
+  null,
+);
+
+const plan = await runWaypoint(OWNER, 'itinerary');
+const planBy = (ref: string) => plan.find((record) => record.sourceRef === ref);
+assert.deepEqual(refs(plan).sort(), [
+  'trips/absolute/events/old-style',
+  'trips/absolute/stays/old-stay',
+  'trips/nyc/events/clocks-back',
+  'trips/nyc/events/dinner-after',
+  'trips/nyc/events/dinner-before',
+  'trips/nyc/events/flight',
+  'trips/nyc/events/mine',
+  'trips/nyc/events/spa',
+  'trips/nyc/rentals/car',
+  'trips/nyc/stays/hotel',
+  'trips/spring/events/after-gap',
+  'trips/spring/events/bad-zone',
+  'trips/spring/events/gap',
+  'trips/spring/stays/tokyo-time',
+]);
+assert.ok(plan.every((record) => record.kind === 'event'));
+
+const flight = planBy('trips/nyc/events/flight');
+assert.equal(flight?.title, 'Flight DL 1');
+assert.equal(flight?.subtitle, 'Flight');
+assert.equal(flight?.startAt, utc(2026, 9, 30, 13, 0));
+assert.equal(flight?.endAt, utc(2026, 9, 30, 16, 5));
+assert.equal(flight?.timeZone, 'America/New_York');
+assert.equal(flight?.placeLabel, 'JFK');
+assert.equal(flight?.isAllDay, false);
+assert.equal(flight?.sourceUpdatedAt, NOW - 22);
+
+assert.equal(
+  planBy('trips/nyc/events/dinner-before')?.startAt,
+  utc(2026, 9, 31, 23, 0),
+);
+assert.equal(
+  planBy('trips/nyc/events/dinner-after')?.startAt,
+  utc(2026, 10, 3, 0, 0),
+);
+const clocksBack = planBy('trips/nyc/events/clocks-back');
+assert.equal(clocksBack?.startAt, utc(2026, 10, 1, 5, 30));
+assert.equal(clocksBack?.endAt, utc(2026, 10, 1, 7, 30));
+assert.equal(
+  (clocksBack?.endAt ?? 0) - (clocksBack?.startAt ?? 0),
+  2 * 3_600_000,
+);
+
+const spa = planBy('trips/nyc/events/spa');
+assert.equal(spa?.isAllDay, true);
+assert.equal(spa?.startAt, utc(2026, 9, 31));
+assert.equal(spa?.endAt, null);
+assert.equal(spa?.timeZone, null);
+assert.equal(spa?.subtitle, 'Spa day');
+
+const hotel = planBy('trips/nyc/stays/hotel');
+assert.equal(hotel?.subtitle, 'Stay');
+assert.equal(hotel?.startAt, utc(2026, 9, 30, 19, 0));
+assert.equal(hotel?.endAt, utc(2026, 10, 2, 16, 0));
+assert.equal(hotel?.placeLabel, '1 Hudson St');
+const car = planBy('trips/nyc/rentals/car');
+assert.equal(car?.startAt, utc(2026, 9, 30, 14, 0));
+assert.equal(car?.endAt, utc(2026, 10, 2, 15, 0));
+assert.equal(car?.placeLabel, 'JFK Rental Center');
+
+assert.equal(
+  planBy('trips/spring/events/gap')?.startAt,
+  utc(2027, 2, 14, 10, 30),
+);
+assert.equal(
+  planBy('trips/spring/events/after-gap')?.startAt,
+  utc(2027, 2, 14, 10, 30),
+);
+const tokyo = planBy('trips/spring/stays/tokyo-time');
+assert.equal(tokyo?.startAt, utc(2027, 2, 13, 6, 0));
+assert.equal(tokyo?.endAt, utc(2027, 2, 15, 2, 0));
+assert.equal(tokyo?.timeZone, 'Asia/Tokyo');
+const badZone = planBy('trips/spring/events/bad-zone');
+assert.equal(badZone?.isAllDay, true);
+assert.equal(badZone?.startAt, utc(2027, 2, 13));
+assert.equal(badZone?.timeZone, null);
+
+const oldStyle = planBy('trips/absolute/events/old-style');
+assert.equal(oldStyle?.startAt, TODAY + 2 * DAY + 15 * 3_600_000);
+assert.equal(oldStyle?.endAt, TODAY + 2 * DAY + 17 * 3_600_000);
+assert.equal(oldStyle?.timeZone, null);
+assert.equal(oldStyle?.isAllDay, false);
+
+const tasks = await runWaypoint(OWNER, 'myTasks');
+assert.deepEqual(refs(tasks).sort(), [
+  'trips/nyc/checklist/passports',
+  'trips/nyc/checklist/shared',
+  'trips/nyc/personalChecklist/charger',
+]);
+assert.ok(tasks.every((record) => record.kind === 'task'));
+const passports = tasks.find((record) =>
+  record.sourceRef.endsWith('passports'),
+);
+assert.equal(passports?.title, 'Passports');
+assert.equal(passports?.subtitle, 'New York');
+assert.equal(passports?.dueAt, utc(2026, 9, 30));
+assert.equal(passports?.isAllDay, true);
+const sharedTask = tasks.find((record) => record.sourceRef.endsWith('shared'));
+assert.equal(sharedTask?.dueAt, null);
+assert.equal(sharedTask?.isAllDay, false);
+assert.equal(
+  tasks.find((record) => record.sourceRef.endsWith('charger'))?.dueAt,
+  utc(2026, 9, 31),
+);
+assert.deepEqual(refs(await runWaypoint(HOUSEMATE, 'myTasks')).sort(), [
+  'trips/left/checklist/t',
+  'trips/nyc/checklist/hers',
+  'trips/nyc/checklist/shared',
+  'trips/nyc/personalChecklist/private',
+]);
+
+const balances = await runWaypoint(OWNER, 'tripBalances');
+assert.deepEqual(refs(balances), ['trips/nyc/balance']);
+assert.equal(balances[0].kind, 'moneySummary');
+assert.equal(balances[0].title, 'New York');
+assert.equal(balances[0].subtitle, "You're owed");
+assert.equal(balances[0].amountCents, 3499);
+assert.equal(balances[0].currency, 'USD');
+assert.equal(balances[0].detail, 'You owe 0.00 USD; you are owed 34.99 USD');
+const mateBalances = await runWaypoint(HOUSEMATE, 'tripBalances');
+assert.deepEqual(refs(mateBalances), ['trips/nyc/balance']);
+assert.equal(
+  mateBalances.find((record) => record.sourceRef.includes('nyc'))?.amountCents,
+  -3499,
+);
+assert.equal(
+  mateBalances.find((record) => record.sourceRef.includes('nyc'))?.subtitle,
+  'You owe',
+);
+
+const waypointCategories = ['trips', 'itinerary', 'myTasks', 'tripBalances'];
+await Promise.all(
+  waypointCategories.map(async (category) =>
+    assert.deepEqual(await runWaypoint(OTHER, category), [], category),
+  ),
+);
+const ownerWaypointRefs = (
+  await Promise.all(
+    waypointCategories.map((category) => runWaypoint(OWNER, category)),
+  )
+)
+  .flat()
+  .map((record) => record.sourceRef);
+assert.ok(
+  ownerWaypointRefs.every(
+    (ref) =>
+      !/trips\/(left|over|shelved)\b/.test(ref) &&
+      !ref.includes('hers') &&
+      !ref.includes('private'),
+  ),
+);
+
+const waypointAll = [...tripRecords, ...plan, ...tasks, ...balances];
+assertShape(waypointAll);
+waypointAll.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(!values.includes(TRIP_EXPENSE_AMOUNT), record.sourceRef);
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|secret|example\.test|555-0199|\.jpg/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+await assert.rejects(() => runWaypoint(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await waypointAdapter.status(waypointCtx(OWNER)), 'ok');
+assert.equal(await waypointAdapter.status(waypointCtx(OTHER)), 'noAccess');
+assert.equal(
+  waypointAdapter.deepLink('trips/nyc/events/flight', waypointCtx(OWNER)),
+  '/waypoint?trip=nyc',
+);
+assert.equal(
+  waypointAdapter.deepLink('trips/x/personalChecklist/y', waypointCtx(OWNER)),
+  '/waypoint?trip=x',
 );
 
 console.log('Adapter matrix passed.');
