@@ -1854,7 +1854,7 @@ async function buildPeople(input: {
       questionAnswer: null,
     }),
   };
-  const newPriceText = 'Dana says centerpieces are $2,100 now';
+  const newPriceText = 'Dana just told me centerpieces are $2,100 now';
   const newPriceAt = now - 35 * MINUTE_MS;
   const contradictionQuestionId = 'seed-question-which-is-true';
   const contradictionCapture: Capture = {
