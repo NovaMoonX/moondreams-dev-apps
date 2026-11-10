@@ -297,6 +297,8 @@ export interface CaptureSealed {
   questions?: Record<string, unknown>;
   /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
   questionAnswer?: QuestionAnswerValue | null;
+  /** The line the server wrote for the person to hear and read; absent until it wrote one. */
+  spoken?: { text: string } | null;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -308,6 +310,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   answer: CaptureAnswer | null;
   /** The questions the turn asked, by id, once opened. */
   questions: Record<string, HelmQuestion>;
+  /** The server's line for the turn, read aloud and shown on its card; null until it wrote one, and on one that would not open. */
+  line: string | null;
   isUnreadable: boolean;
   /** The write has not reached the server yet, so it waits for a connection. */
   hasPendingWrites: boolean;

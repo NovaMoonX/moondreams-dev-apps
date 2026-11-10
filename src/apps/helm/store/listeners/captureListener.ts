@@ -191,6 +191,8 @@ async function openCapture(
       reading: normalizeReading(payload.reading),
       answer: normalizeAnswer(payload.answer),
       questions: toQuestions(payload.questions),
+      line:
+        typeof payload.spoken?.text === 'string' ? payload.spoken.text : null,
       isUnreadable: false,
     };
   } catch {
@@ -200,6 +202,7 @@ async function openCapture(
       reading: EMPTY_READING,
       answer: null,
       questions: {},
+      line: null,
       isUnreadable: true,
     };
   }

@@ -28,6 +28,12 @@ export interface QuestionAnswerTurn {
   sttProvider?: string;
 }
 
+const inFlight = new Set<string>();
+
+/** Whether an answer to this question has been sent from this device and not yet failed. */
+export const isAnswerInFlight = (captureId: string, questionId: string) =>
+  inFlight.has(`${captureId}:${questionId}`);
+
 /** Writes the answer to a model-written question as a turn in the open session, with the answer in words as its text; offline it waits in the queue like any turn. The write is handed back unawaited with the turn's id, and a rejected one forgets the turn. */
 export async function sendQuestionAnswer(
   uid: string,
@@ -60,7 +66,12 @@ export async function sendQuestionAnswer(
       ? { sttProvider: turn.sttProvider, interruptedCaptureId: null }
       : undefined,
   });
+  const key = `${turn.captureId}:${turn.questionId}`;
+  inFlight.add(key);
   recordSentTurn(uid, next, id);
-  void write.catch(() => clearSentTurn(uid, id));
+  void write.catch(() => {
+    inFlight.delete(key);
+    clearSentTurn(uid, id);
+  });
   return { write, id };
 }
