@@ -29,6 +29,7 @@ import {
   createDigest,
   planContactImport,
   planContactUpdate,
+  type ContactInput,
   type ExistingWho,
   type ImportedFrom,
   type PhotoSeal,
@@ -279,33 +280,30 @@ export const importHelmContacts = onCall(
     const newId = (collection: 'who' | 'media') =>
       firestore.collection(`${base}/${collection}`).doc().id;
 
+    const planUpdate = (
+      contact: ContactInput | undefined,
+      who: ExistingWho,
+    ) => {
+      if (!contact)
+        throw new HttpsError(
+          'not-found',
+          "That contact isn't in Google Contacts anymore.",
+          { reason: 'goneAtGoogle' },
+        );
+      const change = planContactUpdate({ contact, who, digest, newId });
+      return { changes: change ? [change] : [], alreadyIn: change ? 0 : 1 };
+    };
     const planned =
       input.kind === 'update' && targetWho
-        ? (() => {
-            const contact = fetched[0];
-            if (!contact)
-              throw new HttpsError(
-                'not-found',
-                "That contact isn't in Google Contacts anymore.",
-                { reason: 'goneAtGoogle' },
-              );
-            const change = planContactUpdate({
-              contact,
-              who: targetWho,
-              digest,
-              newId,
-            });
-            return {
-              changes: change ? [change] : [],
-              alreadyIn: change ? 0 : 1,
-            };
-          })()
+        ? planUpdate(fetched[0], targetWho)
         : planContactImport({
             requested,
             fetched,
             existing: (
               await firestore.collection(`${base}/who`).get()
             ).docs.flatMap((snapshot) => toExisting(snapshot, key) ?? []),
+            accountId,
+            digest,
             newId,
           });
     const { changes } = planned;
@@ -421,6 +419,8 @@ export const importHelmContacts = onCall(
     } catch (error) {
       await letGo();
       if (error instanceof HttpsError) throw error;
+      if ((error as { code?: unknown } | null)?.code === 6)
+        throw new HttpsError('aborted', 'That person changed. Try again.');
       logger.error('helm.contacts.writeFailed');
       throw new HttpsError('internal', "That couldn't be saved. Try again.");
     }
@@ -428,6 +428,7 @@ export const importHelmContacts = onCall(
       created: writes.createdCount,
       filled,
       photos: photos.size,
+      photosFailed: photoResults.length - photos.size,
     });
     return {
       executionId: executionRef.id,

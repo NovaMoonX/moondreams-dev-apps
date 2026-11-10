@@ -577,6 +577,25 @@ test('a person a kept task still links stays', () => {
   assert.deepEqual(result.kept, ['Bring Jordan the book']);
 });
 
+test('an import keeps a person who is in use and says so', () => {
+  const result = asWrite(
+    plan(
+      execution([madeWho('w1', 'Priya'), madeWho('w2', 'Sam')], {
+        category: 'import',
+      }),
+      [
+        target('w1', { lastEditedAt: null, lastMentionedAt: NOW }, null),
+        target('w2', { lastEditedAt: null, lastMentionedAt: null }, null),
+      ],
+    ),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['w2'],
+  );
+  assert.deepEqual(result.kept, ['Priya']);
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

@@ -15,6 +15,7 @@ import {
   getLiveRecords,
   isStale,
   isTaskForToday,
+  syncsInBackground,
 } from '@apps/helm/utils/synced';
 
 interface SyncedTodayProps {
@@ -60,23 +61,25 @@ function SyncedToday({ now }: SyncedTodayProps) {
       ),
     [records, now, timeZone],
   );
-  const staleLines = grants.flatMap((grant) =>
-    Object.entries(grant.categories)
-      .filter(
-        ([category, entry]) =>
-          entry.isOn &&
-          grant.status === 'live' &&
-          isStale(grant.categoryState[category]?.lastOkAt ?? null, now),
-      )
-      .map(([category]) => ({
-        key: `${grant.id}|${category}`,
-        label: HELM_COPY.syncedGroup(
-          categoryLabelOf(grant.connectorId, category),
-          nameOf(grant.connectorId),
-        ),
-        lastOkAt: grant.categoryState[category]?.lastOkAt ?? null,
-      })),
-  );
+  const staleLines = grants
+    .filter((grant) => syncsInBackground(grant.connectorId))
+    .flatMap((grant) =>
+      Object.entries(grant.categories)
+        .filter(
+          ([category, entry]) =>
+            entry.isOn &&
+            grant.status === 'live' &&
+            isStale(grant.categoryState[category]?.lastOkAt ?? null, now),
+        )
+        .map(([category]) => ({
+          key: `${grant.id}|${category}`,
+          label: HELM_COPY.syncedGroup(
+            categoryLabelOf(grant.connectorId, category),
+            nameOf(grant.connectorId),
+          ),
+          lastOkAt: grant.categoryState[category]?.lastOkAt ?? null,
+        })),
+    );
   const openRecord = records.find((record) => record.id === openId) ?? null;
 
   if (taskGroups.length === 0 && staleLines.length === 0) return null;

@@ -440,6 +440,7 @@ export const HELM_COPY = {
     'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
   googleContactsName: 'Contacts',
+  contactsRowTitle: 'Google Contacts',
   googleContactsTitle: 'Connect Google Contacts',
   googleContactsReconnectTitle: 'Reconnect Google Contacts',
   googleContactsReadOnly: (name: string) =>
@@ -747,7 +748,7 @@ export const HELM_COPY = {
     `Nobody yet. Tell ${assistant} about someone, a pet or a business and they show up here.`,
   peopleFailed: 'People did not open. Try again in a moment.',
   peopleNoMatch: 'Nobody by that name.',
-  contactsBringIn: 'Bring in people from Google Contacts',
+  contactsBringIn: 'Bring in from Google Contacts',
   contactsTitle: 'Bring in people',
   contactsLead: (name: string) =>
     `Tick the people ${name} should know about. Only the ones you tick are copied, and only their name, email, phone and photo.`,
@@ -756,7 +757,10 @@ export const HELM_COPY = {
   contactsFailed: "Your contacts didn't open. Try again.",
   contactsEmpty: 'No contacts to bring in from this account yet.',
   contactsNoMatch: 'Nobody by that name in your contacts.',
-  contactsCapped: 'Showing the first 2,000 contacts. Search to find the rest.',
+  contactsCapped: 'Showing your first 2,000 contacts.',
+  contactsNeedConnection: 'Opening your contacts needs a connection.',
+  contactsTryAgain: 'Try again',
+  contactsEveryoneIn: 'Everyone here is already in People.',
   contactsAlreadyIn: 'Already in People',
   contactsReconnect:
     'Google stopped sharing your contacts. Reconnect to continue.',
@@ -765,8 +769,6 @@ export const HELM_COPY = {
     count === 0
       ? 'Bring in people'
       : `Bring in ${count} ${count === 1 ? 'person' : 'people'}`,
-  contactsPickedHint: (count: number) =>
-    `${count} of up to 50 at a time ticked`,
   contactsAllIn: 'Everyone you picked is already in People.',
   contactsImportFailed: "Those people didn't come in. Try again.",
   contactsChanged: 'Someone you picked changed just now. Try again.',

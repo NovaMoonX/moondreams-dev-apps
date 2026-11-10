@@ -6,9 +6,11 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -46,8 +48,8 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const { begin } = useGoogleConnect();
+  const isOffline = useNetworkStatus() === 'offline';
   const { reportDone, toFailureLine } = useContactsReport();
-  const importContacts = useImportContacts();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
@@ -55,6 +57,21 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   const [sheet, setSheet] = useState<'edit' | 'tier' | null>(null);
   const who = items.find((entry) => entry.id === whoId) ?? null;
   const name = who && !who.isUnreadable ? who.name : '';
+  const importedAccountId = who?.importedFrom?.accountId ?? null;
+  const importContacts = useImportContacts({
+    onSuccess: (result) => reportDone(result, HELM_COPY.contactsUpToDate),
+    onError: (error) => {
+      console.error('Helm contact was not updated', error);
+      const failure = toFailureLine(error, HELM_COPY.contactsUpdateFailed);
+      if (failure === null && importedAccountId !== null)
+        begin({ accountId: importedAccountId, connectorId: 'google:contacts' });
+      else
+        addToast({
+          title: failure ?? HELM_COPY.contactsUpdateFailed,
+          type: 'error',
+        });
+    },
+  });
 
   const tasks = useMemo(
     () =>
@@ -151,20 +168,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
 
   const updateFromGoogle = () => {
     if (!who?.importedFrom) return;
-    const { accountId } = who.importedFrom;
-    importContacts.mutate(
-      { whoId: who.id },
-      {
-        onSuccess: (result) => reportDone(result, HELM_COPY.contactsUpToDate),
-        onError: (error) => {
-          console.error('Helm contact was not updated', error);
-          const failure = toFailureLine(error, HELM_COPY.contactsUpdateFailed);
-          if (failure === null)
-            begin({ accountId, connectorId: 'google:contacts' });
-          else addToast({ title: failure, type: 'error' });
-        },
-      },
-    );
+    importContacts.mutate({ whoId: who.id });
   };
 
   const menu =
@@ -242,15 +246,25 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                 <p className='text-muted-foreground text-[13px] text-pretty'>
                   {HELM_COPY.contactsUpdateHint}
                 </p>
-                <Button
-                  type='button'
-                  variant='secondary'
-                  size='sm'
-                  loading={importContacts.isPending}
-                  onClick={updateFromGoogle}
-                >
-                  {HELM_COPY.contactsUpdate}
-                </Button>
+                {isOffline ? (
+                  <LockedButton
+                    label={HELM_COPY.contactsUpdate}
+                    title={HELM_COPY.connectionsNeedConnection}
+                    size='sm'
+                  >
+                    <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+                  </LockedButton>
+                ) : (
+                  <Button
+                    type='button'
+                    variant='secondary'
+                    size='sm'
+                    loading={importContacts.isPending}
+                    onClick={updateFromGoogle}
+                  >
+                    {HELM_COPY.contactsUpdate}
+                  </Button>
+                )}
               </section>
             )}
             <PhotosSection

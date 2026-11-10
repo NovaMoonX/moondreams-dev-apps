@@ -5,6 +5,7 @@ import {
   createDigest,
   planContactImport,
   planContactUpdate,
+  toWhoId,
   type ContactInput,
   type ExistingWho,
 } from '../../functions/src/apps/helm/nomos/contactImport.ts';
@@ -57,8 +58,20 @@ const fetched = [
   contact('people/c4', 'Not Ticked'),
 ];
 
-const run = (requested: string[], existing: ExistingWho[]) =>
-  planContactImport({ requested, fetched, existing, newId });
+const run = (
+  requested: string[],
+  existing: ExistingWho[],
+  all: ContactInput[] = fetched,
+  accountId = 'g_1',
+) =>
+  planContactImport({
+    requested,
+    fetched: all,
+    existing,
+    accountId,
+    digest,
+    newId,
+  });
 
 const forged = run(['people/c2', 'people/forged'], []);
 assert.deepEqual(
@@ -85,6 +98,80 @@ assert.deepEqual(
 
 const plainSam = run(['people/c3'], [sam, samPatel]);
 assert.equal(plainSam.changes[0]?.before, null, 'an unsure name is a new who');
+
+const emailConflict = run(
+  ['people/c1'],
+  [who('w-other', 'Sam Rivera', { email: 'other@example.com' })],
+);
+assert.equal(
+  emailConflict.changes[0]?.before,
+  null,
+  'a same name with a different email is a new person',
+);
+
+const sameName = [
+  contact('people/n1', 'Jo Park'),
+  contact('people/n2', 'Jo Park'),
+];
+const batch = run(['people/n1', 'people/n2'], [], sameName);
+assert.equal(batch.changes.length, 2, 'two same-name contacts are two people');
+assert.notEqual(batch.changes[0]?.id, batch.changes[1]?.id);
+
+const laterBatch = run(
+  ['people/n2'],
+  [
+    who('w-jo', 'Jo Park', {
+      importedFrom: {
+        connectorId: 'google:contacts',
+        accountId: 'g_1',
+        resourceName: 'people/n1',
+        importedAt: 1,
+      },
+    }),
+  ],
+  sameName,
+);
+assert.equal(
+  laterBatch.changes[0]?.before,
+  null,
+  'a second same-name contact in a later batch is a new person',
+);
+
+const otherAccount = run(
+  ['people/c2'],
+  [
+    who('w-priya', 'Someone Else', {
+      importedFrom: {
+        connectorId: 'google:contacts',
+        accountId: 'g_2',
+        resourceName: 'people/c2',
+        importedAt: 1,
+      },
+    }),
+  ],
+  fetched,
+  'g_1',
+);
+assert.equal(
+  otherAccount.changes[0]?.before,
+  null,
+  'the same resource name from another account is not a match',
+);
+
+assert.equal(
+  toWhoId(digest, 'g_1', 'people/c2'),
+  toWhoId(digest, 'g_1', 'people/c2'),
+  'the new person id is stable',
+);
+assert.equal(
+  run(['people/c2'], []).changes[0]?.id,
+  toWhoId(digest, 'g_1', 'people/c2'),
+  'a new person takes the derived id',
+);
+assert.notEqual(
+  toWhoId(digest, 'g_1', 'people/c2'),
+  toWhoId(digest, 'g_2', 'people/c2'),
+);
 
 const twice = run(['people/c1', 'people/c1'], [sam]);
 assert.equal(twice.changes.length, 1, 'one contact is one change');

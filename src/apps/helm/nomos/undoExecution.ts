@@ -207,9 +207,13 @@ export async function undoExecution(
       },
     );
     if (result.kind === 'done') {
-      await Promise.allSettled(
+      const deleted = await Promise.allSettled(
         result.objectPaths.map((path) => deleteFile(path)),
       );
+      deleted.forEach((outcome) => {
+        if (outcome.status === 'rejected')
+          console.error('A taken-back photo was not deleted', outcome.reason);
+      });
     }
     return result;
   } catch (error) {

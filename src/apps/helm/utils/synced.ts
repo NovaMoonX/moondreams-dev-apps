@@ -1,5 +1,6 @@
 import type { ConnectionGrant } from '@/lib/connections/contract';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
+import { getConnectorManifest } from '@/lib/connections/sources';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { DAY_MS, SYNC_REFRESH_MS, SYNC_STALE_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
@@ -56,6 +57,11 @@ export const getNewestOkAt = (grant: ConnectionGrant) =>
     null,
   );
 
+/** A connector read only when the person picks from it is never listed as a source that updates by itself. */
+export const syncsInBackground = (
+  connectorId: ConnectionGrant['connectorId'],
+) => getConnectorManifest(connectorId)?.capabilities.backgroundSync !== false;
+
 export const isStale = (lastOkAt: number | null, now: number) =>
   lastOkAt === null || now - lastOkAt > SYNC_STALE_MS;
 
@@ -75,6 +81,7 @@ export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
     grant.categoryState[id]?.lastError == null;
   return (
     grant.status === 'live' &&
+    syncsInBackground(grant.connectorId) &&
     Object.values(grant.categories).some((category) => category.isOn) &&
     (newest === null ||
       now - newest > SYNC_REFRESH_MS ||

@@ -195,10 +195,14 @@ const planRecord = (
   now: number,
   madeAt: number,
   isUsedElsewhere: boolean,
+  isImport: boolean,
 ): RecordOutcome => {
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
   const title = toTitle(target, effects);
+  const left: RecordOutcome = isImport
+    ? { kind: 'kept', title }
+    : { kind: 'skipped' };
   const newestFirst = [...entries].reverse();
   const create = entries.find((entry) => entry.ref.op === 'create');
   const updated = newestFirst
@@ -222,7 +226,7 @@ const planRecord = (
       (target.data.lastEditedAt !== null &&
         target.data.lastEditedAt !== undefined &&
         target.data.lastEditedAt !== madeAt);
-    if (isUsed) return { kind: 'skipped' };
+    if (isUsed) return left;
   }
   if (create) {
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
@@ -239,7 +243,7 @@ const planRecord = (
         }
       : { kind: 'kept', title };
   }
-  if (Object.keys(updated.restored).length === 0) return { kind: 'skipped' };
+  if (Object.keys(updated.restored).length === 0) return left;
   const reseal =
     Object.keys(updated.sealedFields).length > 0 ? updated.opened : null;
   const restoredTitle = toOpenedTitle(updated.opened) || title;
@@ -311,6 +315,7 @@ export function planUndo(input: {
         now,
         original.createdAt,
         false,
+        false,
       ),
     }));
   // A person or place stays while a record this undo keeps still links it.
@@ -335,6 +340,7 @@ export function planUndo(input: {
           now,
           original.createdAt,
           usedIds.has(docId) || keptLinks.has(docId),
+          original.category === 'import',
         ),
       })),
   ];

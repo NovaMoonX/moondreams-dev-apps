@@ -48,14 +48,15 @@ const toTitle = (execution: OpenExecution) =>
     .find((title): title is string => typeof title === 'string' && !!title) ??
   null;
 
-const countRecords = (execution: OpenExecution) =>
+const countRecords = (execution: OpenExecution, isImport = false) =>
   new Set(
     execution.effectRefs
-      .filter(
-        (ref) =>
-          ref.collection !== 'who' &&
-          ref.collection !== 'places' &&
-          ref.collection !== 'media',
+      .filter((ref) =>
+        isImport
+          ? ref.collection === 'who'
+          : ref.collection !== 'who' &&
+            ref.collection !== 'places' &&
+            ref.collection !== 'media',
       )
       .map((ref) => ref.docId),
   ).size;
@@ -74,9 +75,12 @@ export function getTakenBackMark(
   undo: OpenExecution | null,
 ) {
   if (execution.undoneByExecutionId === null) return null;
+  const isImport = execution.category === 'import';
   const isPartial =
     !!undo &&
     (!!undo.goneIds?.length ||
-      undo.effectRefs.length < countRecords(execution));
+      (isImport
+        ? countRecords(undo, true) < countRecords(execution, true)
+        : undo.effectRefs.length < countRecords(execution)));
   return isPartial ? HELM_COPY.partlyTakenBackLabel : HELM_COPY.takenBackLabel;
 }

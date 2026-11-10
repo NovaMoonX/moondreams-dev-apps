@@ -1,4 +1,8 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  type UseMutationOptions,
+} from '@tanstack/react-query';
 import { httpsCallable } from 'firebase/functions';
 
 import { readConnectorOptions } from '@/lib/connections/connectionCalls';
@@ -61,9 +65,15 @@ export function useContactOptions(accountId: string | null) {
 }
 
 /** Brings the ticked contacts in; the server re-reads each one from Google and ignores anything else the request says. */
-export function useImportContacts() {
+export function useImportContacts(
+  handlers: Pick<
+    UseMutationOptions<ContactsImportResult, unknown, ImportRequest>,
+    'onSuccess' | 'onError'
+  > = {},
+) {
   return useMutation({
     mutationFn: async (request: ImportRequest) =>
       (await importHelmContactsCallable(request)).data,
+    ...handlers,
   });
 }
