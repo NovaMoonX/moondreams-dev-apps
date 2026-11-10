@@ -951,7 +951,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       kind: 'event' as const,
       title: 'Oatmeal with berries',
       subtitle: 'Breakfast',
-      startAt: today - 2 * DAY_MS,
+      startAt: today,
       dueAt: null,
       deepLink: '/pinch?tab=calendar',
     },

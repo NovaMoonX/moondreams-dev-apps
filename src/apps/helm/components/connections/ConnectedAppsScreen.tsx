@@ -155,7 +155,7 @@ function ConnectedAppsScreen({
                   logo: <AppLogo appId={row.appId} className={LOGO} />,
                   title: nameOf(row.appId),
                   meta: HELM_COPY.keptFromRow(
-                    nameOf(row.appId),
+                    row.count,
                     row.deleteAfter === null
                       ? null
                       : formatDateShort(row.deleteAfter),

@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import {
   HttpsError,
   onCall,
@@ -26,7 +27,7 @@ import {
 } from './grants.js';
 import { READER_APPS, READER_SINKS, SOURCE_ADAPTERS } from './registry.js';
 import { InProcessSourceClient } from './sourceClient.js';
-import { syncGrant, type SyncDeps } from './syncRunner.js';
+import { errorCause, syncGrant, type SyncDeps } from './syncRunner.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -50,6 +51,7 @@ const SYNC_OPTIONS: CallableOptions = {
 };
 
 export const SYNC_THROTTLE_MS = 15 * 60_000;
+const SYNC_NOW_THROTTLE_MS = 60_000;
 const DAY_MS = 86_400_000;
 
 export const syncDeps = (): SyncDeps => ({
@@ -193,8 +195,14 @@ export const updateConnection = onCall(OPTIONS, async (request) => {
   const sink = sinkFor(grant.current.readerAppId);
   if (sink && grant.turnedOff.length > 0) {
     const session = sink.openSession(firestore, auth.uid);
+    // A copy left by a failed delete goes at the next sync, which drops every category that is off.
     await Promise.all(
       grant.turnedOff.map((id) => session.deleteCategory(req.grantId, id)),
+    ).catch((error: unknown) =>
+      logger.warn('connections.update.deleteFailed', {
+        grantId: req.grantId,
+        cause: errorCause(error),
+      }),
     );
   }
   return { grantId: req.grantId };
@@ -206,37 +214,41 @@ export const endConnection = onCall(OPTIONS, async (request) => {
   const firestore = getFirestore();
   const ref = grantRef(auth.uid, req.grantId);
 
-  const before = await ref.get();
-  if (!before.exists)
-    throw new HttpsError('not-found', "That connection doesn't exist.");
-  const first = readGrant(before.data());
-  if (first.status === 'ended') return { grantId: req.grantId };
-
-  const sink = sinkFor(first.readerAppId);
-  const session = sink?.openSession(firestore, auth.uid);
-  const endedAt = Date.now();
-  const deleteAfter = endedAt + (sink?.keptCopyDays ?? 0) * DAY_MS;
-  const kept = await (async () => {
-    if (!session) return 0;
-    if (req.deleteCopies) {
-      await session.deleteGrant(req.grantId);
-      return 0;
-    }
-    return session.keepGrant(req.grantId, endedAt, deleteAfter);
-  })();
-
-  await firestore.runTransaction(async (transaction) => {
+  // The grant ends before any copy is touched, so a sync still running settles against the ended state and cleans up what it wrote.
+  const ended = await firestore.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists)
       throw new HttpsError('not-found', "That connection doesn't exist.");
-    if (readGrant(snapshot.data()).status === 'ended') return;
+    const grant = readGrant(snapshot.data());
+    if (grant.status === 'ended') return null;
+    const sink = sinkFor(grant.readerAppId);
+    const endedAt = Date.now();
+    const deleteAfter = endedAt + (sink?.keptCopyDays ?? 0) * DAY_MS;
+    const isKeeping = sink !== null && !req.deleteCopies;
     transaction.update(ref, {
       status: 'ended',
       endedAt,
-      keptCopies: kept > 0 ? { count: kept, deleteAfter } : null,
+      keptCopies: isKeeping ? { count: 0, deleteAfter } : null,
       syncLeaseUntil: null,
       updatedAt: endedAt,
     });
+    return { sink, endedAt, deleteAfter, isKeeping };
+  });
+  if (!ended?.sink) return { grantId: req.grantId };
+
+  const session = ended.sink.openSession(firestore, auth.uid);
+  if (!ended.isKeeping) {
+    await session.deleteGrant(req.grantId);
+    return { grantId: req.grantId };
+  }
+  const kept = await session.keepGrant(
+    req.grantId,
+    ended.endedAt,
+    ended.deleteAfter,
+  );
+  await ref.update({
+    keptCopies:
+      kept > 0 ? { count: kept, deleteAfter: ended.deleteAfter } : null,
   });
   return { grantId: req.grantId };
 });
@@ -283,6 +295,11 @@ export const syncConnections = onCall(SYNC_OPTIONS, async (request) => {
         "That connection isn't active.",
       );
     }
+    if (
+      grant.lastSyncAt !== null &&
+      grant.lastSyncAt > deps.now() - SYNC_NOW_THROTTLE_MS
+    )
+      return { synced: 0 };
     const outcome = await syncGrant(deps, auth.uid, grantId);
     return { synced: outcome === 'synced' ? 1 : 0 };
   }

@@ -1,4 +1,4 @@
-import type { Firestore } from 'firebase-admin/firestore';
+import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import {
@@ -12,7 +12,8 @@ import type { ReaderSink, SinkSession } from './sink.js';
 import type { SourceClient } from './sourceClient.js';
 
 export const SYNC_WINDOW_DAYS = 30;
-export const SYNC_LEASE_MS = 120_000;
+// Longer than the slowest run the callable's timeout allows, so two runs never overlap on one grant.
+export const SYNC_LEASE_MS = 300_000;
 const DAY_MS = 86_400_000;
 const MAX_PAGES = 50;
 const READ_FAILED = 'readFailed';
@@ -105,15 +106,26 @@ async function syncCategory(
       },
       failedAt: null,
     };
-  } catch {
+  } catch (error) {
     logger.warn('connections.sync.categoryFailed', {
       connectorId: grant.connectorId,
+      grantId,
       category,
       code: READ_FAILED,
+      cause: errorCause(error),
     });
     return { category, ok: null, failedAt: now };
   }
 }
+
+/** The error's name and code only: never its message, which can carry what was read. */
+export const errorCause = (error: unknown) => ({
+  name: error instanceof Error ? error.name : typeof error,
+  code:
+    typeof error === 'object' && error !== null && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : null,
+});
 
 const sequence = <T>(items: (() => Promise<T>)[]) =>
   items.reduce<Promise<T[]>>(
@@ -134,19 +146,47 @@ export async function syncGrant(
     ? deps.sinks[grant.readerAppId]
     : undefined;
   const ref = grantRef(deps.firestore, uid, grantId);
+  try {
+    return await runLeased(deps, uid, grantId, grant, sink, startedAt);
+  } catch (error) {
+    await releaseLease(deps.firestore, ref).catch(() => undefined);
+    throw error;
+  }
+}
+
+const releaseLease = (
+  firestore: Firestore,
+  ref: DocumentReference,
+  fields: Record<string, unknown> = {},
+) =>
+  firestore.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    if (!snapshot.exists) return;
+    const isEnded = readGrant(snapshot.data()).status === 'ended';
+    transaction.update(ref, {
+      ...(isEnded ? {} : fields),
+      syncLeaseUntil: null,
+    });
+  });
+
+async function runLeased(
+  deps: SyncDeps,
+  uid: string,
+  grantId: string,
+  grant: ConnectionGrant,
+  sink: ReaderSink | undefined,
+  startedAt: number,
+): Promise<SyncOutcome> {
+  const ref = grantRef(deps.firestore, uid, grantId);
   if (!sink) {
-    await ref.update({ syncLeaseUntil: null });
+    await releaseLease(deps.firestore, ref);
     return 'skipped';
   }
 
   const ctx: SourceCtx = { uid, accountId: grant.accountId, grant };
   const status = await deps.source.status(grant.connectorId, ctx);
   if (status !== 'ok') {
-    await ref.update({
-      status,
-      syncLeaseUntil: null,
-      updatedAt: deps.now(),
-    });
+    await releaseLease(deps.firestore, ref, { status, updatedAt: deps.now() });
     logger.info('connections.sync.status', {
       connectorId: grant.connectorId,
       status,

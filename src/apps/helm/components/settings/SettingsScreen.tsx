@@ -27,7 +27,15 @@ function SettingsScreen({
 }: SettingsScreenProps) {
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
-  const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
+  const { grants: allGrants, isKnown } = useConnections({
+    readerAppId: 'helm',
+    includeEnded: true,
+  });
+  const grants = allGrants.filter((grant) => grant.status !== 'ended');
+  const keptCount = allGrants.reduce(
+    (total, grant) => total + (grant.keptCopies?.count ?? 0),
+    0,
+  );
   const now = useNow(60_000);
   const newestOkAt = grants.reduce<number | null>((newest, grant) => {
     const at = getNewestOkAt(grant);
@@ -58,7 +66,9 @@ function SettingsScreen({
                   ? newestOkAt === null
                     ? HELM_COPY.connectedAppsCount(grants.length)
                     : `${HELM_COPY.connectedAppsCount(grants.length)} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`
-                  : HELM_COPY.connectedAppsNone
+                  : keptCount > 0
+                    ? `${HELM_COPY.connectedAppsNone} · ${HELM_COPY.keptCountLine(keptCount)}`
+                    : HELM_COPY.connectedAppsNone
             }
             onClick={onOpenConnectedApps}
             hasChevron

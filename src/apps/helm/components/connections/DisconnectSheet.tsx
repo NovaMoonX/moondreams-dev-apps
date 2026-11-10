@@ -50,7 +50,7 @@ function DisconnectForm({
     try {
       await endConnection({
         grantId,
-        deleteCopies: count > 0 && deletesCopies,
+        deleteCopies: deletesCopies,
       });
     } catch (error) {
       console.error('Helm connection did not end', error);
@@ -61,9 +61,6 @@ function DisconnectForm({
 
   return (
     <div className='flex flex-col gap-4'>
-      <h3 className='helm-serif text-[20px] leading-[26px] font-semibold text-pretty'>
-        {HELM_COPY.disconnectTitle(appName)}
-      </h3>
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.disconnectBody(name, appName)}
       </p>

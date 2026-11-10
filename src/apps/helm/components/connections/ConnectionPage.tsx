@@ -16,13 +16,13 @@ import { useConnections } from '@/lib/connections/useConnections';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
 import DisconnectSheet from '@apps/helm/components/connections/DisconnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import {
   formatUpdatedAt,
+  getGrantCopyCount,
   getNewestOkAt,
   isStale,
 } from '@apps/helm/utils/synced';
@@ -68,13 +68,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFailure, setSyncFailure] = useState<string | null>(null);
-  const copyCount = useAppSelector(
-    (state) =>
-      state.helm.synced.items.filter(
-        (record) =>
-          record.grantId === grantId && record.connectionEndedAt === null,
-      ).length,
-  );
+  const copyCount = grant ? getGrantCopyCount(grant) : 0;
   const hasLeft = useRef(false);
 
   // A grant that is gone or ended shows the list instead; the same lands after Disconnect.
@@ -141,8 +135,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     const state = grant.categoryState[categoryId];
     if (state?.lastError) return HELM_COPY.syncedCouldNot;
     if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;
-    return isStale(state.lastOkAt, now)
-      ? HELM_COPY.syncedStale(formatUpdatedAt(state.lastOkAt, now))
+    if (isStale(state.lastOkAt, now))
+      return HELM_COPY.syncedStale(formatUpdatedAt(state.lastOkAt, now));
+    // The page's own line already says when it was updated; a row repeats it only when its time differs.
+    return state.lastOkAt === newestOkAt
+      ? null
       : HELM_COPY.syncedUpdatedLine(formatUpdatedAt(state.lastOkAt, now));
   };
 
@@ -205,7 +202,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
-                    {isOn && (
+                    {isOn && freshnessLine(category.id) && (
                       <span className='text-muted-foreground block text-[13px] text-pretty'>
                         {freshnessLine(category.id)}
                       </span>

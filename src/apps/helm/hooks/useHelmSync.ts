@@ -78,7 +78,11 @@ function useConnectionsRefresh(uid: string | null) {
     };
     ask();
     document.addEventListener('visibilitychange', ask);
-    return () => document.removeEventListener('visibilitychange', ask);
+    window.addEventListener('online', ask);
+    return () => {
+      document.removeEventListener('visibilitychange', ask);
+      window.removeEventListener('online', ask);
+    };
   }, [uid, isKnown, grants]);
 }
 

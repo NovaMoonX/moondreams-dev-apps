@@ -7,7 +7,7 @@ import { syncDeps } from './callables.js';
 import { expireCopies } from './expire.js';
 import { READER_SINKS } from './registry.js';
 import { readGrant } from './grants.js';
-import { syncGrant } from './syncRunner.js';
+import { errorCause, syncGrant } from './syncRunner.js';
 
 if (getApps().length === 0) {
   initializeApp();
@@ -15,6 +15,7 @@ if (getApps().length === 0) {
 
 const STALE_MS = 50 * 60_000;
 const HOURLY_LIMIT = 200;
+const PARALLEL_GRANTS = 5;
 
 /** Syncs every live grant that has gone 50 minutes without one, never-synced ones first, oldest first, up to 200 a run. */
 export const syncConnectionsHourly = onSchedule(
@@ -41,18 +42,28 @@ export const syncConnectionsHourly = onSchedule(
         Object.hasOwn(READER_SINKS, readGrant(doc.data()).readerAppId),
       )
       .slice(0, HOURLY_LIMIT);
-    const synced = await due.reduce(async (done, doc) => {
-      const total = await done;
+    const runOne = async (doc: (typeof due)[number]): Promise<number> => {
       const uid = doc.ref.parent.parent?.id;
-      if (!uid) return total;
+      if (!uid) return 0;
       try {
-        return (await syncGrant(deps, uid, doc.id)) === 'synced'
-          ? total + 1
-          : total;
-      } catch {
-        logger.error('connections.sync.grantFailed');
-        return total;
+        return (await syncGrant(deps, uid, doc.id)) === 'synced' ? 1 : 0;
+      } catch (error) {
+        logger.error('connections.sync.grantFailed', {
+          grantId: doc.id,
+          cause: errorCause(error),
+        });
+        return 0;
       }
+    };
+    const batches = Array.from(
+      { length: Math.ceil(due.length / PARALLEL_GRANTS) },
+      (_, index) =>
+        due.slice(index * PARALLEL_GRANTS, (index + 1) * PARALLEL_GRANTS),
+    );
+    const synced = await batches.reduce(async (done, batch) => {
+      const total = await done;
+      const counts = await Promise.all(batch.map(runOne));
+      return total + counts.reduce((sum, count) => sum + count, 0);
     }, Promise.resolve(0));
     logger.info('connections.sync.hourly', { due: due.length, synced });
   },

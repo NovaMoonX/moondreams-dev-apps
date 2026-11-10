@@ -326,7 +326,6 @@ export const HELM_COPY = {
   connectionToggleFailed: "That didn't change. Try again.",
   connectionNeverShared: (never: string) => `Never shared: ${never}`,
   connectionDisconnect: (app: string) => `Disconnect ${app}`,
-  disconnectTitle: (app: string) => `Disconnect ${app}?`,
   disconnectBody: (name: string, app: string) =>
     `${name} stops reading ${app}. Everything in ${app} stays as it is. You can connect it again any time.`,
   disconnectConfirm: 'Disconnect',
@@ -335,7 +334,8 @@ export const HELM_COPY = {
     `Also delete the ${count} ${count === 1 ? 'thing' : 'things'} from ${app}`,
   disconnectKeepNote: (date: string) =>
     `They stay, marked no longer updated, until ${date}.`,
-  disconnectDeleteNote: 'Your tasks and notes that mention them stay.',
+  disconnectDeleteNote:
+    "They're removed now and can't be brought back. Your tasks and notes that mention them stay.",
   disconnectCancel: 'Cancel',
   syncedFrom: (app: string) => `From ${app}`,
   syncedUpdated: (when: string, name: string) =>
@@ -355,9 +355,10 @@ export const HELM_COPY = {
   syncedUpdating: 'Updating…',
   syncedCouldNot: "Couldn't update just now.",
   syncedNowFailed: "That didn't update. Try again.",
-  keptFromRow: (app: string, date: string | null) =>
-    date ? `Kept from ${app} · deletes ${date}` : `Kept from ${app}`,
+  keptFromRow: (count: number, date: string | null) =>
+    `${count} ${count === 1 ? 'thing' : 'things'} kept${date ? ` · deletes ${date}` : ''}`,
   keptSection: 'Kept copies',
+  keptCountLine: (count: number) => `${count} kept`,
   keptSheetTitle: (app: string) => `Kept from ${app}`,
   keptSheetBody: (name: string, count: number, date: string | null) =>
     `${name} no longer updates ${count === 1 ? 'this' : 'these'} ${count} ${count === 1 ? 'thing' : 'things'}.${date ? ` ${count === 1 ? "It's" : "They're"} deleted on ${date}.` : ''}`,

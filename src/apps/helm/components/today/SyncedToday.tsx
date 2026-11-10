@@ -23,7 +23,7 @@ interface SyncedTodayProps {
 const groupKey = (record: SyncedRecord) =>
   `${record.grantId}|${record.category}`;
 
-/** Today's events and task lists copied from connected apps, with a line wherever a source is out of date. Kept copies never show here. */
+/** Today's events and task lists copied from connected apps, with a line wherever a source is out of date. Copies kept after a disconnect show too; their sheet says they are no longer updated. */
 function SyncedToday({ now }: SyncedTodayProps) {
   const { nameOf, categoryLabelOf } = useSourceAppName();
   const { grants } = useConnections({ readerAppId: 'helm' });
@@ -33,25 +33,21 @@ function SyncedToday({ now }: SyncedTodayProps) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
 
-  const live = useMemo(
-    () => records.filter((record) => record.connectionEndedAt === null),
-    [records],
-  );
   const events = useMemo(
     () =>
-      live
+      records
         .filter((record) => isEventToday(record, now, timeZone))
         .sort(
           (a, b) =>
             Number(b.isAllDay) - Number(a.isAllDay) ||
             (a.startAt ?? 0) - (b.startAt ?? 0),
         ),
-    [live, now, timeZone],
+    [records, now, timeZone],
   );
   const taskGroups = useMemo(
     () =>
       [
-        ...live
+        ...records
           .filter((record) => isTaskForToday(record, now, timeZone))
           .reduce(
             (groups, record) =>
@@ -65,7 +61,7 @@ function SyncedToday({ now }: SyncedTodayProps) {
       ].map((group) =>
         group.sort((a, b) => a.sealed.title.localeCompare(b.sealed.title)),
       ),
-    [live, now, timeZone],
+    [records, now, timeZone],
   );
   const staleLines = grants.flatMap((grant) =>
     Object.entries(grant.categories)

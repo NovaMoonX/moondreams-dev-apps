@@ -1,4 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -42,6 +43,10 @@ export function SyncedCard({ record, onOpen }: SyncedCardProps) {
           {detail}
         </span>
       </span>
+      <ChevronRight
+        className='text-muted-foreground size-4 shrink-0'
+        aria-hidden='true'
+      />
     </Button>
   );
 }
@@ -65,6 +70,10 @@ export function SyncedTaskRow({ record, onOpen }: SyncedCardProps) {
           </span>
         )}
       </span>
+      <ChevronRight
+        className='text-muted-foreground size-4 shrink-0'
+        aria-hidden='true'
+      />
     </Button>
   );
 }

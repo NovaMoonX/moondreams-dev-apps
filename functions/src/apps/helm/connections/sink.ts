@@ -287,6 +287,9 @@ class HelmSinkSession implements SinkSession {
   }
 }
 
+// An hourly sweep picks up whatever one run leaves.
+const EXPIRE_LIMIT = 2_000;
+
 const toUid = (doc: QueryDocumentSnapshot) => doc.ref.parent.parent?.id ?? '';
 
 const expire = async (
@@ -296,8 +299,11 @@ const expire = async (
   const snapshot = await firestore
     .collectionGroup('synced')
     .where('deleteAfter', '<=', now)
+    .limit(EXPIRE_LIMIT)
     .get();
-  const docs = snapshot.docs.filter((doc) => toUid(doc) !== '');
+  const docs = snapshot.docs.filter(
+    (doc) => doc.ref.path.startsWith('apps/helm/users/') && toUid(doc) !== '',
+  );
   await commitAll(firestore, docs, (batch, doc) => batch.delete(doc.ref));
   const grants = Array.from(
     new Map(
