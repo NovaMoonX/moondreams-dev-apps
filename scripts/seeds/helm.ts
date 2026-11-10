@@ -1320,7 +1320,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       subtitle: 'Preventive due',
       startAt: null,
       isAllDay: true,
-      dueAt: context.now + 30 * DAY_MS,
+      dueAt: Math.floor((context.now + 30 * DAY_MS) / DAY_MS) * DAY_MS,
       deepLink: '/nine-lives',
     },
   ];
