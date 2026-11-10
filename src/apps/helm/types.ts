@@ -28,6 +28,12 @@ export interface HelmProfile {
   dayEndTime: string;
   /** Share of free time the planner may fill. */
   planFillPercent: number;
+  /** "{accountId}/{calendarId}" of each calendar marked as shifts. */
+  shiftCalendarIds: string[];
+  /** Synced ids of all-day events the person said block their day. */
+  busyAllDayEventRefs: string[];
+  /** When the person folded the Today offer to connect a calendar. */
+  calendarOfferFoldedAt: number | null;
   /** The first-capture AI line was shown. */
   hasSeenAiNotice: boolean;
   /** Whether listening may use the cloud voice service while online. */

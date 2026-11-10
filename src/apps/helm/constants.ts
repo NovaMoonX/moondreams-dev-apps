@@ -297,8 +297,6 @@ export const HELM_COPY = {
   notConnectedSection: 'Not connected',
   connectedNothingOn: 'Nothing switched on',
   connectedStopped: 'Stopped sharing',
-  connectedAppsEmpty: (name: string) =>
-    `None of your apps can share with ${name} yet.`,
   connectedAppsFailed:
     "Your connections didn't open. Close this page and open it again.",
   connectedAppsLoading: 'Opening your connections',
@@ -355,6 +353,70 @@ export const HELM_COPY = {
   syncedUpdating: 'Updating…',
   syncedCouldNot: "Couldn't update just now.",
   syncedNowFailed: "That didn't update. Try again.",
+  googleCalendarName: 'Google Calendar',
+  googleAddAccount: 'Add a Google account',
+  googleAddAccountHint: (name: string) =>
+    `Start with Calendar, so ${name} can plan around your events.`,
+  googleAddAnother: 'Add another Google account',
+  googleAddAnotherHint: 'A work or shared calendar, for example.',
+  googleAccountTitle: (email: string, label: string | null) =>
+    label ? `${email} · ${label}` : email,
+  googleConnectTitle: 'Connect Google Calendar',
+  googleConnectReadOnly: (name: string) =>
+    `${name} reads each event's title, time and calendar so it can plan around your day. It can't add, change or delete anything in Google Calendar.`,
+  googleConnectTesting: (name: string) =>
+    `While ${name} is private, Google shows an "unverified app" screen before you agree, and may ask you to reconnect about once a week.`,
+  googleContinue: 'Continue to Google',
+  googleTryAgain: 'Try again',
+  googleReconnected: 'Reconnected',
+  googleNeedsPermission: (name: string) =>
+    `${name} needs permission to see your events to plan around them. Nothing was connected.`,
+  googleConnectFailed: "That didn't connect. Try again.",
+  googleReconnect: 'Reconnect',
+  googleStoppedTitle: 'Google stopped sharing',
+  googleStoppedBody: (lastWorked: string | null) =>
+    `Google stopped sharing this account, which happens about once a week while the app is private.${lastWorked ? ` Last worked ${lastWorked}.` : ''}`,
+  googleReadOnly: (name: string) =>
+    `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
+  googleDisconnectNote:
+    'Disconnecting the last Google service on an account also withdraws its permission at Google.',
+  googleLabelRow: 'Label',
+  googleLabelNone: 'Add a short name, like "work"',
+  googleLabelTitle: 'Account label',
+  googleLabelField: 'Short name',
+  googleLabelHelp: 'Shown beside the email wherever this account is named.',
+  googleLabelSave: 'Save label',
+  googleLabelFailed: "That label didn't save. Try again.",
+  googleWhichCalendars: 'Which calendars',
+  googleCalendarsCount: (count: number) =>
+    `${count} ${count === 1 ? 'calendar' : 'calendars'} counting`,
+  calendarPickerLead: (name: string) =>
+    `Pick the calendars ${name} plans around. Holidays and subscriptions start off.`,
+  calendarPickerLoading: 'Opening your calendars',
+  calendarPickerFailed: "Couldn't load your calendars.",
+  calendarPickerEmpty: "This account doesn't have a calendar to read.",
+  calendarPickerMain: 'Main calendar',
+  calendarPickerShifts: 'These are my shifts',
+  calendarPickerShiftsHint:
+    'The day after a late shift stays free of suggestions.',
+  calendarPickerConnect: 'Connect',
+  calendarPickerSave: 'Save',
+  calendarPickerTickOne: 'Tick at least one calendar',
+  calendarPickerFailedToSave: "That didn't save. Try again.",
+  shiftCalendarsRow: 'Shift calendars',
+  shiftCalendarsNone: 'None marked',
+  shiftCalendarsCount: (count: number) =>
+    `${count} ${count === 1 ? 'calendar' : 'calendars'} marked as shifts`,
+  todayCalendar: 'Calendar',
+  calendarOfferTitle: 'Connect Google Calendar to plan around your events',
+  calendarOfferReason: (name: string) =>
+    `${name} reads each event's title and time, never the details, and can't change anything.`,
+  calendarOfferNotNow: 'Not now',
+  calendarReconnectTitle: 'Google stopped sharing your calendar',
+  calendarReconnectReason: 'Reconnect to bring your events back to Today.',
+  syncedTentative: 'Tentative',
+  syncedFromAccount: (app: string, account: string) =>
+    `From ${app} · ${account}`,
   keptFromRow: (count: number, date: string | null) =>
     `${count} ${count === 1 ? 'thing' : 'things'} kept${date ? ` · deletes ${date}` : ''}`,
   keptSection: 'Kept copies',

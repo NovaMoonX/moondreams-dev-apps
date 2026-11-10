@@ -10,6 +10,7 @@ import AskConversation from '@apps/helm/components/shell/AskConversation';
 import BrowseSheet from '@apps/helm/components/shell/BrowseSheet';
 import HelmShell from '@apps/helm/components/shell/HelmShell';
 import VoiceDock from '@apps/helm/components/shell/VoiceDock';
+import GoogleConnectProvider from '@apps/helm/components/connections/GoogleConnectProvider';
 import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedAppsScreen';
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
@@ -23,7 +24,7 @@ import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
 
-function Helm() {
+function HelmApp() {
   const { user, loading } = useAuth();
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const [isComposing, setIsComposing] = useState(false);
@@ -132,6 +133,14 @@ function Helm() {
         />
       </HelmShell>
     </HelmVoiceContext.Provider>
+  );
+}
+
+function Helm() {
+  return (
+    <GoogleConnectProvider>
+      <HelmApp />
+    </GoogleConnectProvider>
   );
 }
 

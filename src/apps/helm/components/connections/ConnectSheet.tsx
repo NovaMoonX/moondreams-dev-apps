@@ -74,6 +74,7 @@ function ConnectForm({
         connectorId: toAppConnectorId(app.id),
         accountId: SITE_ACCOUNT_ID,
         categoryIds: [...ticked],
+        options: null,
       });
       syncConnections({ grantId }).catch((error: unknown) =>
         console.error('Helm first sync did not run', error),

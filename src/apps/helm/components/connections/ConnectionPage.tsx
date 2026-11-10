@@ -1,25 +1,36 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
+import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import SectionHeader from '@/components/SectionHeader';
+import SettingsGroup from '@/components/SettingsGroup';
+import SettingsRow from '@/components/SettingsRow';
 import {
   syncConnections,
   updateConnection,
 } from '@/lib/connections/connectionCalls';
-import { readConnectorAppId } from '@/lib/connections/contract';
-import { getSourceManifest } from '@/lib/connections/sources';
+import {
+  isOutsideAccount,
+  readConnectorAppId,
+} from '@/lib/connections/contract';
+import { getConnectorManifest } from '@/lib/connections/sources';
+import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
+import AccountLabelSheet from '@apps/helm/components/connections/AccountLabelSheet';
 import DisconnectSheet from '@apps/helm/components/connections/DisconnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import {
   formatUpdatedAt,
   getGrantCopyCount,
@@ -58,7 +69,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const { apps } = useAppCatalog();
   const now = useNow(60_000);
   const isOffline = useNetworkStatus() === 'offline';
+  const { user } = useAuth();
   const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
+  const { accounts } = useConnectionAccounts(user?.uid ?? null);
+  const { begin, openCalendarPicker } = useGoogleConnect();
   const grant = grants.find((entry) => entry.id === grantId) ?? null;
   const [pending, setPending] = useState<
     Record<string, { isOn: boolean; since: number }>
@@ -66,6 +80,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+  const [isLabelOpen, setIsLabelOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncFailure, setSyncFailure] = useState<string | null>(null);
   const copyCount = grant ? getGrantCopyCount(grant) : 0;
@@ -81,8 +96,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   if (!grant) return null;
 
   const appId = readConnectorAppId(grant.connectorId) ?? '';
-  const appName = apps.find((app) => app.id === appId)?.name ?? appId;
-  const manifest = getSourceManifest(appId);
+  const isGoogle = isOutsideAccount(grant.accountId);
+  const account =
+    accounts.find((entry) => entry.id === grant.accountId) ?? null;
+  const appName = isGoogle
+    ? HELM_COPY.googleCalendarName
+    : (apps.find((app) => app.id === appId)?.name ?? appId);
+  const manifest = getConnectorManifest(grant.connectorId);
+  const hasStopped =
+    isGoogle &&
+    (grant.status === 'needsReconnect' || account?.status === 'needsReconnect');
 
   const change = async (categoryId: string, isOn: boolean) => {
     setPending((current) => ({
@@ -162,7 +185,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         showsHome={false}
       />
       <div className='flex items-center gap-3'>
-        <AppLogo appId={appId} className='size-11 rounded-xl' />
+        {isGoogle ? (
+          <span className='bg-muted text-muted-foreground flex size-11 shrink-0 items-center justify-center rounded-xl'>
+            <CalendarDays className='size-6' aria-hidden='true' />
+          </span>
+        ) : (
+          <AppLogo appId={appId} className='size-11 rounded-xl' />
+        )}
         <div className='min-w-0'>
           <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
             {appName}
@@ -172,16 +201,59 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           </p>
         </div>
       </div>
-      <p className='text-[15px]'>
+      {hasStopped && (
+        <div className='flex flex-col items-start gap-3'>
+          <InlineNotice tone='warning' title={HELM_COPY.googleStoppedTitle}>
+            {HELM_COPY.googleStoppedBody(
+              newestOkAt === null ? null : formatUpdatedAt(newestOkAt, now),
+            )}
+          </InlineNotice>
+          {isOffline ? (
+            locked
+          ) : (
+            <Button
+              type='button'
+              onClick={() => begin({ accountId: grant.accountId })}
+            >
+              {HELM_COPY.googleReconnect}
+            </Button>
+          )}
+        </div>
+      )}
+      <p className='text-[15px] break-words'>
         <span className='text-muted-foreground'>
           {HELM_COPY.connectionAccountLabel}
         </span>
         {' · '}
-        {HELM_COPY.connectionAccountValue}
+        {isGoogle
+          ? (account?.email ?? appName)
+          : HELM_COPY.connectionAccountValue}
       </p>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {HELM_COPY.connectReadOnlyPromise(name, appName)}
+        {isGoogle
+          ? HELM_COPY.googleReadOnly(name)
+          : HELM_COPY.connectReadOnlyPromise(name, appName)}
       </p>
+      {isGoogle && !isOffline && (
+        <SettingsGroup title={HELM_COPY.connectionAccountLabel}>
+          <SettingsRow
+            icon={<Tag className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.googleLabelRow}
+            description={account?.label ?? HELM_COPY.googleLabelNone}
+            onClick={() => setIsLabelOpen(true)}
+            hasChevron
+          />
+          <SettingsRow
+            icon={<CalendarCheck className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.googleWhichCalendars}
+            description={HELM_COPY.googleCalendarsCount(
+              grant.options?.calendarIds.length ?? 0,
+            )}
+            onClick={() => openCalendarPicker(grant.accountId)}
+            hasChevron
+          />
+        </SettingsGroup>
+      )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
         <ul className='helm-card divide-border divide-y overflow-hidden'>
@@ -307,10 +379,19 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         grantId={grant.id}
         appName={appName}
         count={copyCount}
+        note={isGoogle ? HELM_COPY.googleDisconnectNote : null}
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }
       />
+      {isGoogle && (
+        <AccountLabelSheet
+          isOpen={isLabelOpen}
+          onClose={() => setIsLabelOpen(false)}
+          grantId={grant.id}
+          label={account?.label ?? null}
+        />
+      )}
     </main>
   );
 }

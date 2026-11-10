@@ -33,9 +33,11 @@ import type {
   TaskSealed,
 } from '../../src/apps/helm/types.ts';
 import {
+  GOOGLE_ACCOUNT_PREFIX,
   SITE_ACCOUNT_ID,
   toAppConnectorId,
   toGrantId,
+  type ConnectionAccount,
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
@@ -57,6 +59,12 @@ const SEED_PROFILES = [
 ];
 
 const SORT_DELAY_MS = 4_000;
+
+// Alex's one fixture Google account: its calendars are the two a fixture read offers, the second marked as shifts.
+const GOOGLE_ACCOUNT_ID = `${GOOGLE_ACCOUNT_PREFIX}${createHash('sha256').update('fixture-personal').digest('hex').slice(0, 16)}`;
+const GOOGLE_PRIMARY_CALENDAR = 'personal@example.com';
+const GOOGLE_SHIFTS_CALENDAR = 'shifts-personal@group.calendar.google.com';
+const CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 
 type HandTask = {
   title: string;
@@ -578,6 +586,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,
+        shiftCalendarIds:
+          user.uid === FIXTURE_USERS.partnerOne.uid
+            ? [`${GOOGLE_ACCOUNT_ID}/${GOOGLE_SHIFTS_CALENDAR}`]
+            : [],
+        busyAllDayEventRefs: [],
+        calendarOfferFoldedAt: null,
         hasSeenAiNotice: false,
         voiceMode: 'cloudWhenOnline',
         isWakeWordOn: false,
@@ -1082,6 +1096,60 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   writeCopies(FIXTURE_USERS.partnerOne.uid, copyDefinitions, null);
 
+  const googleConnectorId = 'google:calendar';
+  const googleAccount: ConnectionAccount = {
+    provider: 'google',
+    email: GOOGLE_PRIMARY_CALENDAR,
+    label: null,
+    grantedScopes: [CALENDAR_READ_SCOPE],
+    status: 'live',
+    connectedAt,
+    lastError: null,
+  };
+  const googleGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: googleConnectorId,
+    accountId: GOOGLE_ACCOUNT_ID,
+    categories: { events: { isOn: true, changedAt: connectedAt } },
+    options: { calendarIds: [GOOGLE_PRIMARY_CALENDAR, GOOGLE_SHIFTS_CALENDAR] },
+    status: 'live',
+    categoryState: { events: { lastOkAt: null, lastError: null, count: 0 } },
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: null,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  const alexConnections = context.firestore
+    .collection('connections')
+    .doc(FIXTURE_USERS.partnerOne.uid);
+  batch.set(
+    alexConnections.collection('accounts').doc(GOOGLE_ACCOUNT_ID),
+    googleAccount,
+  );
+  batch.set(
+    alexConnections
+      .collection('grants')
+      .doc(toGrantId('helm', googleConnectorId, GOOGLE_ACCOUNT_ID)),
+    googleGrant,
+  );
+  batch.set(
+    context.firestore
+      .collection('connectionsServer')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('tokens')
+      .doc(GOOGLE_ACCOUNT_ID),
+    {
+      isFixture: true,
+      grantedScopes: [CALENDAR_READ_SCOPE],
+      createdAt: connectedAt,
+      lastRefreshedAt: null,
+    },
+  );
+
   const endedAt = context.now - 10 * DAY_MS;
   const keptDefinitions = [
     copyDefinitions[0],
@@ -1128,7 +1196,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies; Jamie's ended one with three kept copies.
+  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies and his fixture Google account, its Calendar grant and token; Jamie's ended one with three kept copies.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
@@ -1136,6 +1204,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       turnCounts.reduce((total, count) => total + count, 0) +
       Object.keys(keyring.keys).length +
       2 +
+      3 +
       copyDefinitions.length +
       keptDefinitions.length,
   };
