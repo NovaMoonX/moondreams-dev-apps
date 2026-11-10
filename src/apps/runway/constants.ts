@@ -3509,7 +3509,7 @@ export const SPEND_FILTER_WORDS = {
   cameIn: 'Came in',
   onItsWay: 'On its way',
   onItsWayIntro:
-    'The bank has not settled these yet. They are not in Free to Spend until they clear.',
+    'The bank has not settled these yet, so they don’t count as money in until they clear.',
   onItsWayPending: 'Not counted until it clears',
   waitingFor: (account: string) => `Waiting for ${account} to clear`,
   otherAccount: 'the other account',
