@@ -1111,6 +1111,8 @@ export const HELM_COPY = {
   forgotUndone: (name: string) => `Brought back ${name}`,
   forgotUndoneWithoutPhotos: (name: string) =>
     `Brought back ${name}, but not the photos.`,
+  forgotUndoneWithoutDates: (name: string) =>
+    `Brought back ${name}, but not their dates.`,
   forgotUndoFailed: "That couldn't be brought back.",
   placeEditMenu: 'Change details',
   placeEditTitle: 'Change place',
@@ -1175,7 +1177,22 @@ export const HELM_COPY = {
   keyDateSourceAdded: 'You added this',
   keyDateSheetEdit: 'Edit',
   keyDateSheetRemove: 'Remove',
-  keyDateEditTitle: 'Edit this date',
+  keyDateEditTitle: (title: string) =>
+    `Edit ${title.replace(/^Your /, 'your ')}`,
+  keyDateGoneMeanwhile: 'This date changed meanwhile and is no longer here.',
+  keyDateClose: 'Close',
+  keyDateNoDayHint: "Without a day it won't show on Today.",
+  keyDateDayPlaceholder: '12',
+  keyDateYearPlaceholder: '1990',
+  keyDateLabelSuggestionsLabel: 'Some ideas',
+  keyDateLabelSuggestions: {
+    person: [],
+    pet: ['Gotcha day'],
+    organization: ['Opened', 'Lease renews'],
+  },
+  keyDatesUnreadable: "Couldn't open dates just now.",
+  backGeneric: 'Back',
+  backToday: 'Today',
   keyDateNewTitle: 'Add a date',
   keyDateKindLabel: 'What is it?',
   keyDateMonthLabel: 'Month',

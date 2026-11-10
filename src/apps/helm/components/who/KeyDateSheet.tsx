@@ -3,9 +3,11 @@ import { useEffect, useId, useState } from 'react';
 import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { PillGroup, type PillOption } from '@/components/PillGroup';
+import SuggestionChips from '@/components/SuggestionChips';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -61,8 +63,8 @@ const KIND_OPTIONS: PillOption<KeyDateKind>[] = [
 const toNumber = (text: string) =>
   text.trim() === '' ? null : Number(text.trim());
 
-const toDraft = (date: WhoKeyDate | null, hasBirthday: boolean): Draft => ({
-  kind: date?.kind ?? (hasBirthday ? 'anniversary' : 'birthday'),
+const toDraft = (date: WhoKeyDate | null, canBirthday: boolean): Draft => ({
+  kind: date?.kind ?? (canBirthday ? 'birthday' : 'anniversary'),
   label: date?.label ?? '',
   month: date ? String(date.month) : '',
   day: date?.day != null ? String(date.day) : '',
@@ -90,7 +92,7 @@ interface FormProps {
   hasBirthday: boolean;
   onDirtyChange: (isDirty: boolean) => void;
   onClose: () => void;
-  requestClose: () => void;
+  onCancel: () => void;
 }
 
 function KeyDateForm({
@@ -99,13 +101,14 @@ function KeyDateForm({
   hasBirthday,
   onDirtyChange,
   onClose,
-  requestClose,
+  onCancel,
 }: FormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const fieldId = useId();
   const isOffline = useNetworkStatus() === 'offline';
-  const [initial] = useState(() => toDraft(date, hasBirthday));
+  const canBirthday = !hasBirthday && who.kind !== 'organization';
+  const [initial] = useState(() => toDraft(date, canBirthday));
   const [draft, setDraft] = useState(initial);
   const [note, setNote] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -119,7 +122,7 @@ function KeyDateForm({
   };
 
   const kinds = KIND_OPTIONS.filter(
-    (option) => option.value !== 'birthday' || !hasBirthday,
+    (option) => option.value !== 'birthday' || canBirthday,
   );
 
   const report = (result: KeyDateChange, title: string) => {
@@ -185,6 +188,7 @@ function KeyDateForm({
         kind: input.kind,
         label: input.label,
         whoName: who.name,
+        whoKind: who.kind,
         isSelf: who.isSelf,
       });
       const result = date
@@ -210,12 +214,17 @@ function KeyDateForm({
   return (
     <div className='space-y-4'>
       {isNew && (
-        <PillGroup
-          label={HELM_COPY.keyDateKindLabel}
-          options={kinds}
-          value={draft.kind}
-          onChange={(kind) => change({ kind })}
-        />
+        <div className='space-y-1.5'>
+          <span className='text-sm font-medium'>
+            {HELM_COPY.keyDateKindLabel}
+          </span>
+          <PillGroup
+            label={HELM_COPY.keyDateKindLabel}
+            options={kinds}
+            value={draft.kind}
+            onChange={(kind) => change({ kind })}
+          />
+        </div>
       )}
       {draft.kind === 'custom' && (
         <div className='space-y-1.5'>
@@ -229,6 +238,13 @@ function KeyDateForm({
             placeholder={HELM_COPY.keyDateNamePlaceholder}
             onChange={(event) => change({ label: event.target.value })}
           />
+          {HELM_COPY.keyDateLabelSuggestions[who.kind].length > 0 && (
+            <SuggestionChips
+              label={HELM_COPY.keyDateLabelSuggestionsLabel}
+              suggestions={HELM_COPY.keyDateLabelSuggestions[who.kind]}
+              onPick={(label) => change({ label })}
+            />
+          )}
         </div>
       )}
       <div className='space-y-1.5'>
@@ -238,7 +254,6 @@ function KeyDateForm({
         <Select
           options={MONTHS}
           value={draft.month}
-          placeholder={HELM_COPY.keyDateMonthLabel}
           onChange={(month) => change({ month })}
         />
       </div>
@@ -254,6 +269,8 @@ function KeyDateForm({
             id={`${fieldId}-day`}
             inputMode='numeric'
             maxLength={2}
+            className='h-10 min-h-10'
+            placeholder={HELM_COPY.keyDateDayPlaceholder}
             value={draft.day}
             onChange={(event) =>
               change({ day: event.target.value.replace(/\D/g, '') })
@@ -271,6 +288,8 @@ function KeyDateForm({
             id={`${fieldId}-year`}
             inputMode='numeric'
             maxLength={4}
+            className='h-10 min-h-10'
+            placeholder={HELM_COPY.keyDateYearPlaceholder}
             value={draft.year}
             onChange={(event) =>
               change({ year: event.target.value.replace(/\D/g, '') })
@@ -278,13 +297,18 @@ function KeyDateForm({
           />
         </div>
       </div>
+      {draft.day === '' && (
+        <p className='text-muted-foreground -mt-2 text-[13px] text-pretty'>
+          {HELM_COPY.keyDateNoDayHint}
+        </p>
+      )}
       <ModalFooterActions
         note={note ?? (isOffline ? HELM_COPY.keyDateNeedsConnection : null)}
         cancelAction={
           <Button
             type='button'
             variant='tertiary'
-            onClick={requestClose}
+            onClick={onCancel}
             disabled={isSaving}
           >
             {HELM_COPY.editCancel}
@@ -307,7 +331,7 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
   const { dates } = useKeyDates(who.id);
   const captures = useAppSelector(selectAllCaptures);
   const date = dates.find((entry) => entry.id === openId) ?? null;
-  const [isEditing, setIsEditing] = useState(false);
+  const [editing, setEditing] = useState<{ title: string } | null>(null);
   const [isDirty, setIsDirty] = useState(false);
   const [isRemoving, setIsRemoving] = useState(false);
   const [source, setSource] = useState<{
@@ -317,7 +341,9 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
     captureId: string | null;
   } | null>(null);
   const hasBirthday = dates.some((entry) => entry.kind === 'birthday');
-  const isOpen = isAdding || date !== null;
+  const isEditing = editing !== null;
+  const isGone = isEditing && !isAdding && date === null;
+  const isOpen = isAdding || date !== null || isEditing;
   const isForm = isAdding || isEditing;
 
   useEffect(() => {
@@ -337,11 +363,18 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
   }, [user, openId]);
 
   const close = () => {
-    setIsEditing(false);
+    setEditing(null);
     setIsDirty(false);
     onClose();
   };
   const requestClose = useDiscardGuard({ isDirty, onClose: close });
+  const requestBack = useDiscardGuard({
+    isDirty,
+    onClose: () => {
+      setEditing(null);
+      setIsDirty(false);
+    },
+  });
 
   const remove = async () => {
     if (!user || !date || isRemoving) return;
@@ -356,6 +389,7 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
           kind: date.kind,
           label: date.label,
           whoName: who.name,
+          whoKind: who.kind,
           isSelf: who.isSelf,
         });
         close();
@@ -396,9 +430,15 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
         kind: date.kind,
         label: date.label,
         whoName: who.name,
+        whoKind: who.kind,
         isSelf: who.isSelf,
       })
     : HELM_COPY.keyDateNewTitle;
+  const sheetTitle = editing
+    ? HELM_COPY.keyDateEditTitle(date ? title : editing.title)
+    : isAdding
+      ? HELM_COPY.keyDateNewTitle
+      : title;
   const read = source?.id === openId ? source : null;
   const quote =
     read?.captureId != null
@@ -431,10 +471,16 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
     <DetailSheet
       isOpen={isOpen}
       onClose={requestClose}
-      title={isEditing ? HELM_COPY.keyDateEditTitle : title}
-      viewKey={isForm ? 'form' : 'read'}
+      title={sheetTitle}
+      viewKey={isGone ? 'gone' : isForm ? 'form' : 'read'}
       footer={
-        isForm || !date ? undefined : (
+        isGone ? (
+          <div className='flex justify-end'>
+            <Button type='button' variant='secondary' onClick={close}>
+              {HELM_COPY.keyDateClose}
+            </Button>
+          </div>
+        ) : isForm || !date ? undefined : (
           <div className='flex items-center justify-end gap-2'>
             <Button
               type='button'
@@ -448,7 +494,7 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
               type='button'
               variant='secondary'
               disabled={isRemoving}
-              onClick={() => setIsEditing(true)}
+              onClick={() => setEditing({ title })}
             >
               {HELM_COPY.keyDateSheetEdit}
             </Button>
@@ -456,15 +502,27 @@ function KeyDateSheet({ who, openId, isAdding, onClose }: KeyDateSheetProps) {
         )
       }
     >
-      {isForm ? (
-        <KeyDateForm
-          who={who}
-          date={isAdding ? null : date}
-          hasBirthday={hasBirthday}
-          onDirtyChange={setIsDirty}
-          onClose={close}
-          requestClose={requestClose}
-        />
+      {isGone ? (
+        <p className='text-[15px] text-pretty'>
+          {HELM_COPY.keyDateGoneMeanwhile}
+        </p>
+      ) : isForm ? (
+        <div className='space-y-2'>
+          {!isAdding && (
+            <div className='-mb-1 flex items-center'>
+              <BackLink isChevronOnly onBack={requestBack} />
+            </div>
+          )}
+          <KeyDateForm
+            key={`${openId ?? 'new'}:${isAdding}`}
+            who={who}
+            date={isAdding ? null : date}
+            hasBirthday={hasBirthday}
+            onDirtyChange={setIsDirty}
+            onClose={close}
+            onCancel={isAdding ? requestClose : requestBack}
+          />
+        </div>
       ) : (
         date && (
           <div className='flex flex-col gap-3'>

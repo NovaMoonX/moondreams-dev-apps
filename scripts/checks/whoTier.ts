@@ -42,6 +42,16 @@ assert.equal(
   'a role later',
 );
 assert.equal(
+  readWhoTier({ ...base, hasKeyDate: true }),
+  'regular',
+  'a date that comes back kept for a passing who',
+);
+assert.equal(
+  readWhoTier({ ...base, tierSetBy: 'person', hasKeyDate: true }),
+  'passing',
+  'a tier the person set ignores a date',
+);
+assert.equal(
   readWhoTier({ ...base, tierSetBy: 'person', taskLinkCount: 4 }),
   'passing',
   'a tier the person set stays',

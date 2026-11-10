@@ -254,7 +254,21 @@ export const importHelmContacts = onCall(
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
     const digest = createDigest(key.key);
 
-    const planIndex = await readIndexOnce(firestore, base, key);
+    const readIndex = await readIndexOnce(firestore, base, key).catch(
+      (error: unknown) => {
+        logger.error('helm.contacts.indexUnreadable', {
+          message: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      },
+    );
+    const planIndex: IndexState = readIndex ?? {
+      byWho: {},
+      entryCount: 0,
+      rebuiltAt: null,
+      lastEditedAt: null,
+      existingIds: [],
+    };
     const target =
       input.kind === 'update'
         ? await firestore.doc(`${base}/who/${input.whoId}`).get()
@@ -292,7 +306,7 @@ export const importHelmContacts = onCall(
             );
       },
     );
-    const fetched = await readContacts(token, email, requested).catch(
+    const fetchedAll = await readContacts(token, email, requested).catch(
       (error: unknown) => {
         throw error instanceof GoogleHttpError &&
           (error.status === 401 || error.status === 403)
@@ -303,6 +317,9 @@ export const importHelmContacts = onCall(
             );
       },
     );
+    const fetched = readIndex
+      ? fetchedAll
+      : fetchedAll.map((contact) => ({ ...contact, birthday: null }));
     const now = Date.now();
     const newId = (collection: 'who' | 'media' | 'keyDates') =>
       firestore.collection(`${base}/${collection}`).doc().id;
@@ -423,12 +440,16 @@ export const importHelmContacts = onCall(
             transaction.get(firestore.doc(`${base}/who/${id}`)),
           ),
         );
-        const index = await readIndexIn(transaction, firestore, base, key);
-        const isBirthdayChanged = changes.some(
-          (change) =>
-            JSON.stringify(birthdayOf(index, change.id)) !==
-            JSON.stringify(birthdayOf(planIndex, change.id)),
-        );
+        const index = readIndex
+          ? await readIndexIn(transaction, firestore, base, key)
+          : null;
+        const isBirthdayChanged =
+          index !== null &&
+          changes.some(
+            (change) =>
+              JSON.stringify(birthdayOf(index, change.id)) !==
+              JSON.stringify(birthdayOf(planIndex, change.id)),
+          );
         if (isBirthdayChanged)
           throw new HttpsError('aborted', 'That person changed. Try again.');
         const isChanged = current.some(
@@ -458,7 +479,7 @@ export const importHelmContacts = onCall(
         writes.keyDateUpdates.forEach(({ id, data }) =>
           transaction.update(firestore.doc(`${base}/keyDates/${id}`), data),
         );
-        if (writes.indexChanges.length > 0) {
+        if (index && writes.indexChanges.length > 0) {
           writeIndexIn(transaction, firestore, base, {
             byWho: applyChanges(index.byWho, writes.indexChanges).byWho,
             rebuiltAt: index.rebuiltAt,

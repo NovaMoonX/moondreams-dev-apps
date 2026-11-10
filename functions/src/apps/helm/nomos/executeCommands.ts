@@ -166,6 +166,8 @@ interface PlanInput {
   keyDates?: KeyDateCommand[];
   /** The yearly index as read in the transaction. */
   keyDateIndex?: { byWho: ByWho; entryCount: number };
+  /** The index could not be opened, so the turn's date commands are skipped lines and never written over an index taken for empty. */
+  isKeyDateIndexUnreadable?: boolean;
   /** The key date documents the commands name by id. */
   existingKeyDates?: Map<string, KeyDateRecord>;
   /** `yearlyDateCount` of each who a date is changed for, when it is not one the turn names. */
@@ -841,6 +843,7 @@ export function planWrites(input: PlanInput): WritePlan {
     existing: input.existingKeyDates ?? new Map(),
     index: input.keyDateIndex?.byWho ?? {},
     entryCount: input.keyDateIndex?.entryCount ?? 0,
+    isIndexUnreadable: input.isKeyDateIndexUnreadable === true,
     captureId: input.captureId,
     executionId: input.executionId,
     now,
@@ -921,6 +924,7 @@ export function planWrites(input: PlanInput): WritePlan {
     new Map<string, number>(),
   );
   const newWhoIds = new Set(entities.newWho.map((entry) => entry.id));
+  const hasNewDate = (id: string) => (keyDatePlan.deltas.get(id) ?? 0) > 0;
   const whoCreates = !isFiling
     ? []
     : entities.newWho.map(({ id, mention }) => {
@@ -931,6 +935,7 @@ export function planWrites(input: PlanInput): WritePlan {
           mentionDayKeys: [people?.dayKey ?? ''],
           taskLinkCount: taskLinks.get(id) ?? 0,
           hasRole: false,
+          hasKeyDate: hasNewDate(id),
         });
         record(
           id,
@@ -980,6 +985,7 @@ export function planWrites(input: PlanInput): WritePlan {
             mentionDayKeys: [...state.mentionDayKeys, people.dayKey],
             taskLinkCount: state.taskLinkCount + (taskLinks.get(id) ?? 0),
             hasRole: state.hasRole,
+            hasKeyDate: hasNewDate(id),
           });
           return [
             {
@@ -993,7 +999,7 @@ export function planWrites(input: PlanInput): WritePlan {
         });
 
   const counterOf = (id: string, base: number) =>
-    base + (keyDatePlan.deltas.get(id) ?? 0);
+    Math.max(0, base + (keyDatePlan.deltas.get(id) ?? 0));
   const countedCreates = whoCreates.map((entry) =>
     keyDatePlan.deltas.has(entry.id)
       ? {
@@ -1028,17 +1034,29 @@ export function planWrites(input: PlanInput): WritePlan {
       ? []
       : [...keyDatePlan.deltas.keys()]
           .filter((id) => !newWhoIds.has(id) && !countedIds.has(id))
-          .map((id) => ({
-            id,
-            data: {
-              yearlyDateCount: counterOf(
-                id,
-                people?.known.find((who) => who.id === id)?.yearlyDateCount ??
-                  input.whoCounts?.get(id) ??
-                  0,
-              ),
-            },
-          }))),
+          .map((id) => {
+            const state = people?.known.find((who) => who.id === id);
+            const tier = state
+              ? readWhoTier({
+                  tier: state.tier,
+                  tierSetBy: state.tierSetBy,
+                  mentionDayKeys: state.mentionDayKeys,
+                  taskLinkCount: state.taskLinkCount,
+                  hasRole: state.hasRole,
+                  hasKeyDate: hasNewDate(id),
+                })
+              : null;
+            return {
+              id,
+              data: {
+                yearlyDateCount: counterOf(
+                  id,
+                  state?.yearlyDateCount ?? input.whoCounts?.get(id) ?? 0,
+                ),
+                ...(state && tier !== state.tier && { tier }),
+              },
+            };
+          })),
   ];
 
   const disputeQuestions = !isFiling
@@ -1370,9 +1388,11 @@ export function buildExecution(
         summarize(plan.counts, input.messageCount),
         describeFacts(plan.factCreates.length + plan.factConfirms.length),
         describeKeyDates(
-          plan.keyDateCreates.length +
-            plan.keyDateUpdates.length +
-            plan.keyDateDeletes.length,
+          plan.effectRefs.flatMap((ref, position) =>
+            ref.collection === 'keyDates'
+              ? [String(plan.effects[position].written['sealed.title'] ?? '')]
+              : [],
+          ),
         ),
         ...plan.notKept,
         homeLine,

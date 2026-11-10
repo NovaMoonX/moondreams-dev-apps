@@ -5,6 +5,7 @@ import {
   sealForHelm,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import {
+  INDEX_SPLIT_AT,
   isIndexDrifted,
   planIndexWrite,
   type ByWho,
@@ -249,16 +250,16 @@ const bigIndex = (count: number): ByWho =>
     ]),
   );
 
-test('6,000 entries stay in one document and 6,001 split into twelve by month', () => {
-  const one = planIndexWrite(bigIndex(6000));
+test('INDEX_SPLIT_AT entries stay in one document and one more splits into twelve by month', () => {
+  const one = planIndexWrite(bigIndex(INDEX_SPLIT_AT));
   assert.equal(one.docs.length, 1);
   assert.equal(one.docs[0].id, 'keyDateIndex');
-  const split = planIndexWrite(bigIndex(6001));
+  const split = planIndexWrite(bigIndex(INDEX_SPLIT_AT + 1));
   assert.equal(split.docs.length, 12);
   assert.deepEqual(split.deleteIds, ['keyDateIndex']);
   assert.equal(
     split.docs.reduce((total, doc) => total + doc.entryCount, 0),
-    6001,
+    INDEX_SPLIT_AT + 1,
   );
 });
 
@@ -281,6 +282,7 @@ test('sealing and opening a 4,000-entry index', async () => {
   const opened = await openJson<{ byWho: ByWho }>(sealed, encryption);
   const openMs = performance.now() - openStart;
   assert.equal(Object.values(opened.byWho).flat().length, 4000);
+  assert.ok(JSON.stringify(sealed).length < 900_000);
   console.log(
     `     4,000 entries: seal ${sealMs.toFixed(1)} ms, open ${openMs.toFixed(1)} ms, sealed ${JSON.stringify(sealed).length} bytes`,
   );
@@ -303,7 +305,7 @@ const whoOf = (
   } as OpenWho,
 ];
 
-test('Today shows the week: close and pet before a sooner regular, passing and organizations never', () => {
+test('Today shows the week: today and tomorrow first, then close and pet before a sooner regular, passing and organizations never', () => {
   const whoById = new Map([
     whoOf('reg', 'Regular'),
     whoOf('close', 'Close', { tier: 'close' }),
@@ -328,7 +330,7 @@ test('Today shows the week: close and pet before a sooner regular, passing and o
   const week = orderForToday(list(true, 6));
   assert.deepEqual(
     week.map((date) => date.id),
-    ['b', 'c', 'g', 'f', 'a'],
+    ['a', 'b', 'c', 'g', 'f'],
   );
   assert.equal(week.length - 3, 2, 'three shown and "+2 more this week"');
   assert.equal(HELM_COPY.keyDatesMoreThisWeek(2), '+2 more this week');
@@ -454,6 +456,21 @@ test('nothing readable on a key date or its index holds a day, month, year or ki
     'sealed',
   ]);
   assert.ok(!JSON.stringify(indexFields.sealed).includes('Gotcha'));
+});
+
+test('a named person wins over isAboutMe, an own date has no one named', () => {
+  const result = plan([
+    say({ isAboutMe: true, date: { month: 6, day: 3, year: null } }),
+  ]);
+  assert.equal(result.creates[0].data.whoId, 'who-1');
+  const own = plan([
+    say({
+      isAboutMe: true,
+      whoRefs: [],
+      date: { month: 6, day: 3, year: null },
+    }),
+  ]);
+  assert.equal(own.creates[0].data.whoId, 'self');
 });
 
 const failures: string[] = [];

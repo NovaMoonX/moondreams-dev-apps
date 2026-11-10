@@ -519,7 +519,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             isAboutMe: nullable(
               'boolean',
-              'noteFact: true when it is about the person talking ("I", "my"); false when it is about someone or something else.',
+              'noteFact: true when it is about the person talking ("I", "my"); false when it is about someone or something else. setKeyDate: true only when the date is the person\'s own; "my mum\'s birthday" is about Mum, so false with Mum in whoRefs.',
             ),
             keyDateAlias: nullable(
               'string',

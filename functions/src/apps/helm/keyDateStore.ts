@@ -1,3 +1,4 @@
+import { logger } from 'firebase-functions';
 import type {
   DocumentReference,
   Firestore,
@@ -24,6 +25,7 @@ export interface IndexState {
   byWho: ByWho;
   entryCount: number;
   rebuiltAt: number | null;
+  lastEditedAt: number | null;
   /** The index documents that exist now, so a write can delete the ones it replaces. */
   existingIds: string[];
 }
@@ -32,6 +34,7 @@ const EMPTY: IndexState = {
   byWho: {},
   entryCount: 0,
   rebuiltAt: null,
+  lastEditedAt: null,
   existingIds: [],
 };
 
@@ -67,13 +70,17 @@ const toState = (key: HelmKey, snaps: Snap[]): IndexState => {
   if (present.length === 0) return EMPTY;
   const parts = present.map((snap) => toByWho(key, snap.get('sealed')));
   const byWho = parts.length === 1 ? parts[0] : mergeMonths(parts);
-  const rebuilt = present
-    .map((snap) => snap.get('rebuiltAt'))
-    .filter((value): value is number => typeof value === 'number');
+  const latestOf = (field: string) => {
+    const times = present
+      .map((snap) => snap.get(field))
+      .filter((value): value is number => typeof value === 'number');
+    return times.length > 0 ? Math.max(...times) : null;
+  };
   return {
     byWho,
     entryCount: countEntries(byWho),
-    rebuiltAt: rebuilt.length > 0 ? Math.max(...rebuilt) : null,
+    rebuiltAt: latestOf('rebuiltAt'),
+    lastEditedAt: latestOf('lastEditedAt'),
     existingIds: present.map((snap) => snap.id),
   };
 };
@@ -150,7 +157,7 @@ export interface ContextUpcoming {
 }
 
 const ABOUT_DATES_RE =
-  /birthday|anniversar|gotcha|coming up|upcoming|born|turn(?:s|ing)?\s+\d|this week|next month|\bin\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
+  /birthday|anniversar|gotcha|born on|coming up|upcoming|turn(?:s|ing)?\s+\d/i;
 const ABOUT_UPCOMING_RE =
   /coming up|upcoming|anything|what's|whats|what is|which|who|next|this week|\bin\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i;
 const MAX_NAMED_READS = 300;
@@ -245,7 +252,10 @@ export async function readContextKeyDates(
           .slice(0, MAX_UPCOMING)
       : [];
     return { keyDates, upcoming };
-  } catch {
+  } catch (error) {
+    logger.error('helm.keyDates.contextUnreadable', {
+      message: error instanceof Error ? error.message : String(error),
+    });
     return none;
   }
 }

@@ -136,8 +136,22 @@ export function useHelmUrlState() {
     else if (wasStep) markStep('home');
   };
 
+  const origin: HelmView | null = isStep()
+    ? (window.history.state?.[FROM] ?? null)
+    : null;
+
+  /** Back for a view that can be opened from several doors: pops to the one it was opened from when the history knows it, else goes to its parent. */
+  const goBackToOrigin = () => {
+    if (origin) {
+      navigate(-1);
+      return;
+    }
+    return goBack();
+  };
+
   return {
     view,
+    origin,
     grant,
     item,
     isBrowseOpen,
@@ -149,5 +163,6 @@ export function useHelmUrlState() {
     showView,
     goHome,
     goBack,
+    goBackToOrigin,
   };
 }

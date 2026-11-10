@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ChevronRight } from 'lucide-react';
+import { Cake, CalendarHeart, ChevronRight } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 import { HELM_COPY, TODAY_KEY_DATES } from '@apps/helm/constants';
@@ -35,6 +35,17 @@ function KeyDatesLine({ onOpenWho, onOpenComingUp }: KeyDatesLineProps) {
               className={ROW}
               onClick={() => onOpenWho(date.whoId)}
             >
+              {date.kind === 'birthday' ? (
+                <Cake
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              ) : (
+                <CalendarHeart
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              )}
               <span className='text-foreground min-w-0 flex-1 text-[14px] leading-5 break-words'>
                 {formatTodayLine(date)}
               </span>

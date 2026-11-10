@@ -8,18 +8,21 @@ import {
   runTransaction,
   where,
   type DocumentData,
+  type DocumentSnapshot,
   type Transaction,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
-import { HELM_CAPS } from '@apps/helm/constants';
+import { HELM_CAPS, WHO_LIMIT } from '@apps/helm/constants';
 import {
   readIndexIn,
+  readIndexOnce,
   readYearlyDateDocs,
   writeIndexIn,
   type IndexState,
 } from '@apps/helm/store/actions/keyDateIndexStore';
+import { readWhoTier, type WhoTierValue } from '@apps/helm/engine/whoTier';
 import { openJson, sealJson } from '@apps/helm/security';
 import type {
   HelmEncryption,
@@ -120,6 +123,8 @@ interface Step {
     | { type: 'update'; lastEditedAt: number | null; parts: OpenedDate }
     | { type: 'delete' };
   delta: number;
+  /** A tier the who moves to in the same write. */
+  tier?: WhoTierValue;
 }
 
 /** Writes the date, the person's counter and the index in the one transaction that has already read them. */
@@ -128,7 +133,7 @@ async function applyStep(
   uid: string,
   encryption: HelmEncryption,
   index: IndexState,
-  isWhoHere: boolean,
+  who: DocumentSnapshot | null,
   step: Step,
   now: number,
 ) {
@@ -141,9 +146,15 @@ async function applyStep(
     if (write.type === 'set') transaction.set(ref, { ...write.fields, sealed });
     else transaction.update(ref, { sealed, lastEditedAt: write.lastEditedAt });
   }
-  if (isWhoHere && step.delta !== 0) {
-    transaction.update(doc(userOf(uid), 'who', step.whoId), {
-      yearlyDateCount: increment(step.delta),
+  if (who?.exists() && (step.delta !== 0 || step.tier)) {
+    transaction.update(who.ref, {
+      ...(step.delta !== 0 && {
+        yearlyDateCount: Math.max(
+          0,
+          Number(who.data()?.yearlyDateCount ?? 0) + step.delta,
+        ),
+      }),
+      ...(step.tier && { tier: step.tier }),
     });
   }
   const change: IndexChange =
@@ -191,23 +202,34 @@ export const addKeyDate = (
     const parts = toSealed(input, null);
     const outcome = await runTransaction(
       db,
-      async (transaction): Promise<KeyDateChange | null> => {
+      async (
+        transaction,
+      ): Promise<{ refused: KeyDateChange } | { isRaised: boolean }> => {
         const who = await transaction.get(whoRef);
-        if (!who.exists()) return { kind: 'changed' };
+        if (!who.exists()) return { refused: { kind: 'changed' } };
         const counted = Number(who.data().yearlyDateCount ?? 0);
         if (counted >= HELM_CAPS.yearlyPerWho) {
-          return { kind: 'full', reason: 'who' };
+          return { refused: { kind: 'full', reason: 'who' } };
         }
         const index = await readIndexIn(transaction, uid, encryption);
         if (index.entryCount >= HELM_CAPS.keyDates) {
-          return { kind: 'full', reason: 'all' };
+          return { refused: { kind: 'full', reason: 'all' } };
         }
+        const tier = readWhoTier({
+          tier: who.data().tier,
+          tierSetBy: who.data().tierSetBy ?? 'nomos',
+          mentionDayKeys: [],
+          taskLinkCount: 0,
+          hasRole: false,
+          hasKeyDate: true,
+        });
+        const isRaised = tier !== who.data().tier;
         await applyStep(
           transaction,
           uid,
           encryption,
           index,
-          true,
+          who,
           {
             id: ref.id,
             whoId,
@@ -225,17 +247,19 @@ export const addKeyDate = (
               parts,
             },
             delta: 1,
+            ...(isRaised && { tier }),
           },
           now,
         );
-        return null;
+        return { isRaised };
       },
     );
-    if (outcome) return outcome;
+    if ('refused' in outcome) return outcome.refused;
     return {
       kind: 'done',
       id: ref.id,
-      undo: () => takeBack(uid, encryption, ref.id, whoId, now),
+      undo: () =>
+        takeBack(uid, encryption, ref.id, whoId, now, outcome.isRaised),
     };
   });
 
@@ -246,6 +270,7 @@ async function takeBack(
   id: string,
   whoId: string,
   madeAt: number,
+  isTierRaised: boolean,
 ) {
   const ref = doc(datesOf(uid), id);
   const whoRef = doc(userOf(uid), 'who', whoId);
@@ -262,8 +287,16 @@ async function takeBack(
       uid,
       encryption,
       index,
-      who.exists(),
-      { id, whoId, write: { type: 'delete' }, delta: -1 },
+      who,
+      {
+        id,
+        whoId,
+        write: { type: 'delete' },
+        delta: -1,
+        ...(isTierRaised &&
+          who.data()?.tier === 'regular' &&
+          who.data()?.tierSetBy !== 'person' && { tier: 'passing' as const }),
+      },
       Date.now(),
     );
     return true;
@@ -294,7 +327,7 @@ export const editKeyDate = (
         uid,
         encryption,
         index,
-        true,
+        null,
         {
           id,
           whoId,
@@ -325,7 +358,7 @@ export const editKeyDate = (
             uid,
             encryption,
             index,
-            true,
+            null,
             {
               id,
               whoId,
@@ -364,7 +397,7 @@ export const removeKeyDate = (
         uid,
         encryption,
         index,
-        who.exists(),
+        who,
         { id, whoId, write: { type: 'delete' }, delta: -1 },
         Date.now(),
       );
@@ -513,45 +546,63 @@ export const readWhoDateIds = async (uid: string, whoId: string) =>
 
 const REPAIR_WHO_CAP = 400;
 
-/** Rebuilds the index from the date documents themselves and puts each person's counter right, when the two disagreed and stayed apart. A date of a person who is gone is left out. */
+/** Rebuilds the index from the date documents themselves and puts each person's counter right, when the two disagreed and stayed apart. Gives up when the index changed since it was read, and the next mismatch tries again; a date of a person who is gone is left out, and nothing is repaired once the people list is too long to be read whole. */
 export async function rebuildKeyDateIndex(
   uid: string,
   encryption: HelmEncryption,
   counts: Map<string, number>,
 ) {
+  if (counts.size >= WHO_LIMIT) return;
+  const before = await readIndexOnce(uid, encryption);
   const snapshot = await readYearlyDateDocs(uid);
   const records = (
     await Promise.all(
       snapshot.docs.map(async (entry) => {
         const data = entry.data();
         const opened = await openDate(data, encryption);
-        return opened &&
-          typeof data.whoId === 'string' &&
-          counts.has(data.whoId)
+        return opened && typeof data.whoId === 'string'
           ? [{ whoId: data.whoId, entry: toEntry(entry.id, opened) }]
           : [];
       }),
     )
   ).flat();
-  const byWho = buildByWho(records);
-  const wrong = [...counts.entries()]
-    .filter(([whoId, count]) => (byWho[whoId]?.length ?? 0) !== count)
-    .slice(0, REPAIR_WHO_CAP);
+  const found = buildByWho(records);
+  const wrongIds = [...counts.entries()]
+    .filter(([whoId, count]) => (found[whoId]?.length ?? 0) !== count)
+    .map(([whoId]) => whoId);
+  const readIds = [...new Set([...Object.keys(found), ...wrongIds])];
   const now = Date.now();
   await runTransaction(db, async (transaction) => {
     const [index, owners] = await Promise.all([
       readIndexIn(transaction, uid, encryption),
       Promise.all(
-        wrong.map(([whoId]) => transaction.get(doc(userOf(uid), 'who', whoId))),
+        readIds.map((whoId) => transaction.get(doc(userOf(uid), 'who', whoId))),
       ),
     ]);
-    owners.forEach((owner, position) => {
-      if (owner.exists()) {
+    if (
+      index.entryCount !== before.entryCount ||
+      index.lastEditedAt !== before.lastEditedAt ||
+      index.rebuiltAt !== before.rebuiltAt
+    ) {
+      return;
+    }
+    const here = new Set(
+      owners.filter((owner) => owner.exists()).map((owner) => owner.id),
+    );
+    const byWho = buildByWho(records.filter(({ whoId }) => here.has(whoId)));
+    owners
+      .filter(
+        (owner) =>
+          owner.exists() &&
+          Number(owner.data()?.yearlyDateCount ?? 0) !==
+            (byWho[owner.id]?.length ?? 0),
+      )
+      .slice(0, REPAIR_WHO_CAP)
+      .forEach((owner) =>
         transaction.update(owner.ref, {
-          yearlyDateCount: byWho[wrong[position][0]]?.length ?? 0,
-        });
-      }
-    });
+          yearlyDateCount: byWho[owner.id]?.length ?? 0,
+        }),
+      );
     await writeIndexIn(transaction, uid, encryption, {
       byWho,
       rebuiltAt: now,

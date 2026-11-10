@@ -27,8 +27,17 @@ import { HelmVoiceContext, useHelmVoice } from '@apps/helm/hooks/useHelmVoice';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
 import { useHelmTheme } from '@apps/helm/hooks/useHelmTheme';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
+import { HELM_COPY } from '@apps/helm/constants';
+import type { HelmView } from '@apps/helm/types';
 import { VIEW_KINDS } from '@apps/helm/screen/views';
 import { selectTopScreen } from '@apps/helm/store/screenSlice';
+
+const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
+  home: HELM_COPY.homeTitle,
+  today: HELM_COPY.backToday,
+  comingUp: HELM_COPY.comingUpTitle,
+  people: HELM_COPY.peopleTitle,
+};
 
 function HelmApp() {
   const { user, loading } = useAuth();
@@ -46,6 +55,8 @@ function HelmApp() {
     showView,
     goHome,
     goBack,
+    origin,
+    goBackToOrigin,
   } = useHelmUrlState();
 
   useHelmTheme();
@@ -73,6 +84,10 @@ function HelmApp() {
 
   if (loading) return <Loading />;
 
+  const toBackLabel = (fallback: string) =>
+    origin === null
+      ? fallback
+      : (ORIGIN_LABELS[origin] ?? HELM_COPY.backGeneric);
   const focusComposer = () => composerRef.current?.focus();
   // Without the key nothing opens, so every view gives way to home and its state card, with no dock until typing can be kept.
   const isHome = isLocked || VIEW_KINDS[view] === 'home';
@@ -112,7 +127,8 @@ function HelmApp() {
         )}
         {!isLocked && view === 'comingUp' && (
           <ComingUpView
-            onBack={goBack}
+            backLabel={toBackLabel(HELM_COPY.backToday)}
+            onBack={goBackToOrigin}
             onHome={goHome}
             onOpenWho={(whoId) => showView('who', whoId)}
           />
@@ -149,7 +165,12 @@ function HelmApp() {
           />
         )}
         {!isLocked && view === 'who' && (
-          <WhoDetail whoId={item} onBack={goBack} onHome={goHome} />
+          <WhoDetail
+            whoId={item}
+            backLabel={toBackLabel(HELM_COPY.peopleTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+          />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (
           <HowNomosSeesYou onBack={goBack} onHome={goHome} />

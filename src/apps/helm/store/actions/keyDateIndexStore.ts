@@ -31,6 +31,7 @@ export interface IndexState {
   byWho: ByWho;
   entryCount: number;
   rebuiltAt: number | null;
+  lastEditedAt: number | null;
   /** The index documents that exist now, so a write can delete the ones it replaces. */
   existingIds: string[];
 }
@@ -66,7 +67,13 @@ const toState = async (
 ): Promise<IndexState> => {
   const present = snaps.filter((snap) => snap.exists());
   if (present.length === 0) {
-    return { byWho: {}, entryCount: 0, rebuiltAt: null, existingIds: [] };
+    return {
+      byWho: {},
+      entryCount: 0,
+      rebuiltAt: null,
+      lastEditedAt: null,
+      existingIds: [],
+    };
   }
   const parts = await Promise.all(
     present.map(async (snap) =>
@@ -81,13 +88,17 @@ const toState = async (
     ),
   );
   const byWho = parts.length === 1 ? parts[0] : mergeMonths(parts);
-  const rebuilt = present
-    .map((snap) => snap.data()?.rebuiltAt)
-    .filter((value): value is number => typeof value === 'number');
+  const latestOf = (field: 'rebuiltAt' | 'lastEditedAt') => {
+    const times = present
+      .map((snap) => snap.data()?.[field])
+      .filter((value): value is number => typeof value === 'number');
+    return times.length > 0 ? Math.max(...times) : null;
+  };
   return {
     byWho,
     entryCount: countEntries(byWho),
-    rebuiltAt: rebuilt.length > 0 ? Math.max(...rebuilt) : null,
+    rebuiltAt: latestOf('rebuiltAt'),
+    lastEditedAt: latestOf('lastEditedAt'),
     existingIds: present.map((snap) => snap.id),
   };
 };

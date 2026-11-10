@@ -23,6 +23,7 @@ export function useKeyDates(whoId: string) {
     (state) => state.helm.keyDateIndex.byWho[whoId],
   );
   const isLoaded = useAppSelector((state) => state.helm.keyDateIndex.isLoaded);
+  const isFailed = useAppSelector((state) => state.helm.keyDateIndex.isFailed);
   const dates = useMemo(
     () =>
       (entries ?? [])
@@ -49,5 +50,5 @@ export function useKeyDates(whoId: string) {
         ),
     [entries, todayKey],
   );
-  return { dates, isLoaded };
+  return { dates, isLoaded, isFailed };
 }

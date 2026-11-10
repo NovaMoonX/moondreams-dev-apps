@@ -39,12 +39,13 @@ const { option } = DropdownMenuFactories;
 
 interface WhoDetailProps {
   whoId: string | null;
+  backLabel: string;
   onBack: () => void;
   onHome: () => void;
 }
 
 /** One person, pet or organization: what it is, the facts kept about it, its open tasks and the turns that named it. */
-function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
+function WhoDetail({ whoId, backLabel, onBack, onHome }: WhoDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
@@ -153,7 +154,9 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                   title:
                     outcome === 'withoutPhotos'
                       ? HELM_COPY.forgotUndoneWithoutPhotos(who.name)
-                      : HELM_COPY.forgotUndone(who.name),
+                      : outcome === 'withoutDates'
+                        ? HELM_COPY.forgotUndoneWithoutDates(who.name)
+                        : HELM_COPY.forgotUndone(who.name),
                   type: 'info',
                 }),
               (error: unknown) => {
@@ -213,7 +216,7 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   return (
     <>
       <HelmHeader
-        backLabel={HELM_COPY.peopleTitle}
+        backLabel={backLabel}
         onBack={onBack}
         onHome={onHome}
         menu={menu}
@@ -282,11 +285,11 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
               photoIds={who.mediaIds}
               mainId={who.photoMediaId}
             />
+            <KeyDatesList who={who} />
             <FactsSection
               subject={{ kind: 'who', id: who.id }}
               name={who.name}
             />
-            <KeyDatesList who={who} />
             <section className='space-y-3'>
               <SectionDivider label={HELM_COPY.whoTasksTitle} />
               <LinkedTasks

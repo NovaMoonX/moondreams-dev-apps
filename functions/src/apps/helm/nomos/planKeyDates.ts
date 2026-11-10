@@ -131,6 +131,7 @@ interface PlanInput {
   existing: Map<string, KeyDateRecord>;
   index: ByWho;
   entryCount: number;
+  isIndexUnreadable?: boolean;
   captureId: string;
   executionId: string;
   now: number;
@@ -174,6 +175,9 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
       ...plan,
       notKept: [...plan.notKept, buildKeyDateSkipLine(reason)],
     });
+    if (input.isIndexUnreadable) {
+      return skip("I couldn't open your dates just now");
+    }
     const apply = (
       base: KeyDatePlan,
       change: IndexChange,
@@ -244,9 +248,8 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
       : undefined;
     const whoId =
       existing?.whoId ??
-      (command.isAboutMe
-        ? input.selfWhoId
-        : (input.whoIdOf.get(command.whoRefs[0] ?? '') ?? null));
+      input.whoIdOf.get(command.whoRefs[0] ?? '') ??
+      (command.isAboutMe ? input.selfWhoId : null);
     if (!whoId) return skip("I couldn't tell whose it is");
     const owner = ownerOf(whoId);
     const date = command.date;

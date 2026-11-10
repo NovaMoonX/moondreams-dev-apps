@@ -142,7 +142,8 @@ export class ForgetPartialError extends Error {
   }
 }
 
-export type RestoreOutcome = 'restored' | 'exists' | 'withoutPhotos';
+export type RestoreOutcome =
+  'restored' | 'exists' | 'withoutPhotos' | 'withoutDates';
 
 export interface Forgotten {
   counts: ForgetCounts;
@@ -388,11 +389,18 @@ export async function forgetLinked(
       return true;
     });
     if (!isBack) return 'exists';
-    if (encryption && removed.dates) {
-      await restoreWhoDates(uid, encryption, id, removed.dates);
-    }
+    const areDatesBack =
+      encryption && removed.dates
+        ? await restoreWhoDates(uid, encryption, id, removed.dates).then(
+            () => true,
+            (error: unknown) => {
+              console.error('Helm dates were not put back', error);
+              return false;
+            },
+          )
+        : true;
     await putBack();
-    return 'restored';
+    return areDatesBack ? 'restored' : 'withoutDates';
   };
   return {
     counts: {
