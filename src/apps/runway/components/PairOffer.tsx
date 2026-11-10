@@ -22,7 +22,7 @@ import { getPairSideName } from '@apps/runway/utils/purchaseText';
 interface PairOfferProps {
   purchase: OpenPurchase;
   onDone: () => void;
-  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind "Not a move between my accounts". */
+  /** What to ask instead (the envelope or the pay), shown at once when nothing is offered and otherwise behind the row that says it is not a move or card payment. */
   children: ReactNode;
   /** The row's subtitle: what the other question picks. */
   elseSubtitle: string;
@@ -100,9 +100,22 @@ function PairOffer({
   };
 
   if (!self || offered.length === 0 || isElse) return <>{children}</>;
+  const isCardOffer = offered.every(({ kind }) => kind === 'cardPayment');
+  const selfName = getPairSideName(self, accounts, cardNameOf);
+  const otherNames = Array.from(
+    new Set(
+      offered.map(({ other }) => getPairSideName(other, accounts, cardNameOf)),
+    ),
+  );
+  const otherName = otherNames.length === 1 ? otherNames[0] : null;
+  const title = !isCardOffer
+    ? PAIR_WORDS.whichTitle
+    : isOut
+      ? PAIR_WORDS.cardWhichTitle(otherName, selfName)
+      : PAIR_WORDS.cardWhichTitle(selfName, otherName);
   return (
     <div className='space-y-2'>
-      <p className='text-sm font-medium'>{PAIR_WORDS.whichTitle}</p>
+      <p className='text-sm font-medium'>{title}</p>
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {offered.map(({ other, kind, name }) => {
           const detail = `${PAIR_WORDS.pairVerb} · ${formatDateOrdinalUTC(other.date)}`;
@@ -126,7 +139,7 @@ function PairOffer({
       )}
       <ActionRow
         icon={<X />}
-        label={PAIR_WORDS.unpair}
+        label={isCardOffer ? PAIR_WORDS.notCardPayment : PAIR_WORDS.unpair}
         subtitle={elseSubtitle}
         onClick={() => setIsElse(true)}
       />

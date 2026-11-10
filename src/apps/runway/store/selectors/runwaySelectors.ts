@@ -1861,6 +1861,68 @@ export const selectNeedsHome = createSelector(
   },
 );
 
+export interface NeedsHomeMove {
+  /** The money out; the row opens it. */
+  purchase: OpenPurchase;
+  /** The money in each offered pairing would use, nearest day first. */
+  others: { purchase: OpenPurchase; kind: PurchasePairKind }[];
+  /** Whether either side has more than one candidate, so no account or card name tells the row apart. */
+  isAmbiguous: boolean;
+}
+
+/** `selectNeedsHome` split for the screen, quickest first: moves and card payments (one per money out that has an offer), the money in nothing offers, history that may be in twice, and the remaining charges. Nothing is in two sections. */
+export const selectNeedsHomeSections = createSelector(
+  [selectNeedsHome],
+  ({ spending, moneyIn, maybeTwice }) => {
+    const all = [...spending, ...moneyIn];
+    const { offers } = findAccountPairs(
+      all.map((purchase) => ({
+        ...purchase,
+        needsHome: true,
+        pairedWithId: null,
+        pairKind: null,
+      })),
+      true,
+    );
+    const byId = new Map(all.map((purchase) => [purchase.id, purchase]));
+    const moves = spending.flatMap((purchase): NeedsHomeMove[] => {
+      const others = (offers.get(purchase.id) ?? []).flatMap(
+        ({ otherId, kind }) => {
+          const other = byId.get(otherId);
+          return other ? [{ purchase: other, kind }] : [];
+        },
+      );
+      return others.length === 0
+        ? []
+        : [
+            {
+              purchase,
+              others,
+              isAmbiguous:
+                others.length > 1 ||
+                others.some(
+                  (entry) => (offers.get(entry.purchase.id) ?? []).length > 1,
+                ),
+            },
+          ];
+    });
+    const inMoves = new Set(
+      moves.flatMap(({ others }) => others.map((entry) => entry.purchase.id)),
+    );
+    const movedIds = new Set([
+      ...moves.map(({ purchase }) => purchase.id),
+      ...inMoves,
+    ]);
+    const result = {
+      moves,
+      moneyIn: moneyIn.filter((purchase) => !inMoves.has(purchase.id)),
+      maybeTwice,
+      charges: spending.filter((purchase) => !movedIds.has(purchase.id)),
+    };
+    return result;
+  },
+);
+
 export const selectIsNeedsHomeLoaded = (state: RootState) =>
   state.runway.isNeedsHomeLoaded &&
   state.runway.isLinksLoaded &&
