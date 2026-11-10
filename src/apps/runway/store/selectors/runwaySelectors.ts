@@ -1873,7 +1873,7 @@ export const selectNeedsHome = createSelector(
     );
     const sortable = sorted.filter((purchase) => !isBankMove(purchase));
     const alwaysShown = new Set(lost.map((entry) => entry.id));
-    const pairs = sorting === null ? null : findAccountPairs(sortable, true);
+    const pairs = sorting === null ? null : findAccountPairs(sorted, true);
     const isQuiet = (purchase: OpenPurchase) =>
       sorting !== null &&
       purchase.amountCents > 0 &&

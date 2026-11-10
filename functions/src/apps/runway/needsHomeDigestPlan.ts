@@ -50,7 +50,7 @@ export function readSorting(value: unknown): SortingState | null {
 
 const PAIR_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
 
-/** Counts what waits: money in always, and a charge unless "I'm not sorting yet" quiets it; a quiet charge still counts when money in of its amount waits within three days (a possible move, which the screen keeps; accounts and status are not compared, so it may count one the screen hides). Lost pairs, lost deposits and history that may be in twice are not in the query. */
+/** Counts what waits: money in always, and a charge unless "I'm not sorting yet" quiets it; a quiet charge still counts when money in of its amount waits within three days (a possible move, which the screen keeps; accounts and status are not compared, so it may count one the screen hides). Lost pairs, lost deposits and history that may be in twice are not in the query, and a move the bank flagged (it waits under Account moves) is counted, since its category is sealed. */
 export function countWaiting(
   purchases: { createdAt: number; date: number; amountCents: number }[],
   sorting: SortingState,
