@@ -138,7 +138,7 @@ interface CaptureDoc {
   route?: Route | null;
   joinedCaptureIds?: string[];
   screen?: unknown;
-  interruptedCaptureId?: string | null;
+  interruptedCaptureId: string | null;
   createdAt: number;
   sealed: SealedPayload;
 }

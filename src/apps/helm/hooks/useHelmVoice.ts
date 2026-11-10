@@ -152,9 +152,9 @@ export function useHelmVoice() {
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);
     },
-    onNothingHeard: () => {
+    onNothingHeard: (isAsked) => {
       interruptedCaptureId.current = null;
-      showNote(HELM_COPY.talkHeardNothing);
+      if (isAsked) showNote(HELM_COPY.talkHeardNothing);
     },
     onCloudHeld: () => setShowsPhoneLine(true),
     onBargeIn: () => {
@@ -216,14 +216,20 @@ export function useHelmVoice() {
   }
 
   async function handleUtterance(text: string, sttProvider: string) {
+    const interrupted = interruptedCaptureId.current;
+    interruptedCaptureId.current = null;
     if (isUndoPhrase(text)) {
       await undoLatest();
       return;
     }
-    await sendTurn(text, sttProvider);
+    await sendTurn(text, sttProvider, interrupted);
   }
 
-  async function sendTurn(text: string, sttProvider: string) {
+  async function sendTurn(
+    text: string,
+    sttProvider: string,
+    interrupted: string | null,
+  ) {
     const { helm } = store.getState();
     if (!uid || helm.keyStatus !== 'ready' || !helm.recentCaptures.isLoaded) {
       voice.settle();
@@ -233,8 +239,6 @@ export function useHelmVoice() {
     const timeZone = helm.profile?.timeZone ?? getDeviceTimeZone() ?? 'UTC';
     const turn = { ...getNextTurn(), createdAt: Date.now() };
     const stopsAtSend = stopCount.current;
-    const interrupted = interruptedCaptureId.current;
-    interruptedCaptureId.current = null;
     const fail = (error: unknown) => {
       console.error('Helm spoken turn did not send', error);
       voice.settle();
@@ -396,8 +400,10 @@ export function useHelmVoice() {
     if (isShown || !wasShown) return;
     const { state } = voice;
     queueMicrotask(() => {
-      if (state === 'listening') voice.cancel();
-      else if (state === 'speaking') voice.stop();
+      if (state === 'listening') {
+        interruptedCaptureId.current = null;
+        voice.cancel();
+      } else if (state === 'speaking') voice.stop();
       else if (state === 'thinking') {
         waiting.current.clear();
         voice.settle();

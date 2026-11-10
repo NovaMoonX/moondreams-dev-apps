@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { Lock } from 'lucide-react';
 
 import AppToggle from '@/components/AppToggle';
@@ -42,14 +43,21 @@ function SwitchRow({
   return (
     <div className='flex items-start gap-3'>
       <div className='min-w-0 flex-1 text-pretty'>
-        <p className='text-[15px] leading-[21px] font-medium'>{title}</p>
+        <p
+          className={join(
+            'text-[15px] leading-[21px] font-medium',
+            isLocked && 'text-muted-foreground',
+          )}
+        >
+          {title}
+        </p>
         <p className='text-muted-foreground text-[15px] leading-[21px]'>
           {description}
         </p>
       </div>
       {isLocked ? (
         <Lock
-          className='text-muted-foreground mt-0.5 size-5 shrink-0'
+          className='text-muted-foreground size-5 shrink-0'
           aria-hidden='true'
         />
       ) : (

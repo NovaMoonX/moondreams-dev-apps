@@ -49,8 +49,8 @@ interface VoiceConversationOptions {
   endPhrases: string[];
   /** Gets the finished utterance, never empty, with any end phrase taken off, and which listener heard it ('deepgram' or 'browser'). */
   onUtterance: (text: string, heardBy: { sttProvider: string }) => void;
-  /** Listening ended with nothing heard (not a cancel). */
-  onNothingHeard?: () => void;
+  /** Listening ended with nothing heard (not a cancel). `isAsked` is false when the listen started without a tap (the person's voice opened it after a reply or over a line), where saying so would be a fault the person didn't earn. */
+  onNothingHeard?: (isAsked: boolean) => void;
   /** The opt-in natural voice is downloaded and ready (`useNaturalVoice().isReady`). */
   isNaturalVoiceReady?: boolean;
   /** Silence this long ends the utterance. */
@@ -75,6 +75,7 @@ export type VoiceListeningRoute = 'cloud' | 'device';
 
 const QUIET_MS = 8000;
 const FOLLOW_UP_MS = 8000;
+const WAKE_SETTLE_MS = 400;
 // An end phrase still closing the words this long after it was last heard counts; "that's all I need" keeps going.
 const END_PHRASE_HOLD_MS = 900;
 const TAP_CONFIG = { lockMs: 0 };
@@ -150,6 +151,7 @@ export function useVoiceConversation({
     ((source: FrameSource, isBargeIn: boolean) => void) | null
   >(null);
   const pauseOnHide = useRef<() => void>(() => undefined);
+  const isMicGranted = useRef(false);
   const run = useRef({
     heldDay: null as string | null,
     speechHeldDay: null as string | null,
@@ -162,6 +164,7 @@ export function useVoiceConversation({
     holdId: 0,
     followUpId: 0,
     isFollowUp: false,
+    isUnasked: false,
     gate: null as { close: () => void } | null,
   });
 
@@ -184,7 +187,7 @@ export function useVoiceConversation({
     };
   });
 
-  // Called from event handlers and from effects that call `speak`, so a state change waits a tick rather than land inside an effect body.
+  // A state change waits a tick so it never lands inside an effect body.
   const defer = (apply: () => void) => queueMicrotask(apply);
 
   const queueRef = useRef<ReturnType<typeof createPlaybackQueue> | null>(null);
@@ -271,7 +274,9 @@ export function useVoiceConversation({
     setListeningRoute(null);
     setHeard('');
     if (run.current.isCancelled) return;
-    if (!submit(text, run.current.heardBy)) latest.current.onNothingHeard?.();
+    if (!submit(text, run.current.heardBy)) {
+      latest.current.onNothingHeard?.(!run.current.isUnasked);
+    }
   };
 
   /** Hands the app words heard elsewhere as a finished utterance (end phrase taken off); false when nothing is left. */
@@ -315,6 +320,8 @@ export function useVoiceConversation({
     const cloud = latest.current.cloudListening;
     const wants =
       latest.current.reason === null &&
+      isMicGranted.current &&
+      document.visibilityState !== 'hidden' &&
       !latest.current.isMuted &&
       run.current.mode.phase === 'OFF' &&
       (queueRef.current?.isPlayingThroughWebAudio() ?? false) &&
@@ -340,7 +347,7 @@ export function useVoiceConversation({
     else if (code === 'language') setReason('no-recognition');
     run.current.stopListening?.();
     handleFinal('');
-    if (!isLasting) latest.current.onNothingHeard?.();
+    if (!isLasting) latest.current.onNothingHeard?.(!run.current.isUnasked);
   };
 
   const listen = (options: { source?: FrameSource | null } = {}) => {
@@ -352,10 +359,14 @@ export function useVoiceConversation({
     getQueue().clear();
     send({ type: 'TAP_MIC' });
     run.current.isCancelled = false;
+    run.current.isUnasked = (options.source ?? null) !== null;
     const callbacks = {
       onPartial: handlePartial,
       onFinal: handleFinal,
-      onSpeechStart: () => setReason(null),
+      onSpeechStart: () => {
+        isMicGranted.current = true;
+        setReason(null);
+      },
       onError: handleError,
       preRoll: null,
     };
@@ -419,6 +430,7 @@ export function useVoiceConversation({
       latest.current.reason === null &&
       (run.current.isFollowUp || run.current.mode.phase === 'OFF');
     if (isBargeIn && canListen) latest.current.onBargeIn?.();
+    if (!canListen && run.current.isFollowUp) endFollowUp();
     if (!canListen || !listen({ source })) source.stop();
   };
 
@@ -479,6 +491,7 @@ export function useVoiceConversation({
       canAnswer?: boolean;
     },
   ): Promise<VoiceSpoken> => {
+    if (run.current.isFollowUp) endFollowUp();
     if (latest.current.isMuted || run.current.mode.phase !== 'OFF') {
       return Promise.resolve({ status: 'cancelled', adapterId: null });
     }
@@ -509,6 +522,7 @@ export function useVoiceConversation({
   const checkPermission = () => {
     readMicrophonePermission()
       .then((permission) => {
+        isMicGranted.current = permission === 'granted';
         if (permission === 'denied') setReason('no-permission');
         else
           setReason((current) =>
@@ -560,6 +574,11 @@ export function useVoiceConversation({
     listener.setOptions({
       lang,
       speechLang: lang,
+      onHalt: (error) => {
+        if (error === 'denied' || error === 'no-microphone') {
+          setReason('no-permission');
+        }
+      },
       onFinalTranscript: (alternatives) => {
         const phrase = readWakePhrase(
           alternatives,
@@ -579,8 +598,10 @@ export function useVoiceConversation({
         ? listener.suspend()
         : listener.resume();
     document.addEventListener('visibilitychange', handleVisibility);
-    listener.start();
+    // A follow-up window opens a moment after the last line ends; waiting keeps the phrase listener from starting and stopping in that gap.
+    const startId = window.setTimeout(listener.start, WAKE_SETTLE_MS);
     return () => {
+      window.clearTimeout(startId);
       document.removeEventListener('visibilitychange', handleVisibility);
       listener.teardown();
     };

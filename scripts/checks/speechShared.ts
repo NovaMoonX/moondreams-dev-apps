@@ -454,6 +454,42 @@ console.log('speechShared: all checks passed');
     ]).some((read) => read.isTriggered),
     'hiss outside the voice band never triggers the speech gate',
   );
+  const runAt20 = (
+    signals: { frames: number; make: (sample: number) => number }[],
+  ) => {
+    const gate = createSpeechGate({ frameMs: 20 });
+    const frames = signals.flatMap(({ frames: count, make }) =>
+      Array.from({ length: count }, () => make),
+    );
+    return frames.map((make, index) =>
+      gate.push(
+        Int16Array.from({ length: 320 }, (_, offset) =>
+          Math.round(make(index * 320 + offset) * 32767),
+        ),
+      ),
+    );
+  };
+  const spokenAt20 = runAt20([
+    { frames: 45, make: room },
+    { frames: 10, make: voiced(0.3) },
+  ]);
+  assert.equal(
+    spokenAt20.findIndex((read) => read.isTriggered),
+    54,
+    "with the microphone's 20 ms frames, 200 ms of voice triggers the gate on its tenth frame",
+  );
+  assert.equal(
+    spokenAt20[54]?.preRoll.length,
+    15,
+    'with 20 ms frames the pre-roll holds the last 300 ms',
+  );
+  assert.ok(
+    !runAt20([
+      { frames: 15, make: quiet },
+      { frames: 600, make: hum(0.2) },
+    ]).some((read) => read.isTriggered),
+    'with 20 ms frames a hum after a microphone still starting never triggers it',
+  );
   console.log('speechShared: speech gate checks passed');
 }
 
