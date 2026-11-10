@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
+import { useAuth } from '@/hooks/useAuth';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import { zonedDateTimeToEpoch } from '@/utils/timezoneUtils';
@@ -14,11 +16,19 @@ import SyncedCard from '@apps/helm/components/today/SyncedCard';
 import SyncedSheet from '@apps/helm/components/today/SyncedSheet';
 import type { SuggestionTarget } from '@apps/helm/components/today/SuggestionSheet';
 import { HELM_COPY } from '@apps/helm/constants';
+import {
+  getCurrentPlaceEndsAt,
+  readCurrentPlace,
+} from '@apps/helm/engine/currentPlace';
 import { findFreeGaps } from '@apps/helm/engine/planner';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { usePlanDay } from '@apps/helm/hooks/usePlanDays';
+import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
+import { setCurrentPlace } from '@apps/helm/store/actions/planActions';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { OpenTask, PlanSlot, SyncedRecord } from '@apps/helm/types';
 import {
+  formatClock,
   formatDayName,
   formatLength,
   formatSlotRange,
@@ -89,6 +99,8 @@ function DayPlan({
   onSelectDay,
 }: DayPlanProps) {
   const assistantName = useAssistantName();
+  const { user } = useAuth();
+  const { addToast } = useToast();
   const { plan, isReady } = usePlanDay();
   const [isPlanning, setIsPlanning] = useState(false);
   const [openRecordId, setOpenRecordId] = useState<string | null>(null);
@@ -176,6 +188,21 @@ function DayPlan({
     ({ slot }) => slot.startAt === null,
   );
   const reasonOf = (id: string) => day?.reasons[id] ?? null;
+  const homePlace = sources.places.find((place) => place.isHome) ?? null;
+  const homeTasks =
+    isToday && homePlace
+      ? sources.tasks.filter(
+          (task) =>
+            !task.isUnreadable &&
+            task.placeIds.includes(homePlace.id) &&
+            !slots.some(
+              ({ slot }) =>
+                slot.taskId === task.id && slot.status !== 'notToday',
+            ),
+        )
+      : [];
+  const home = readCurrentPlace(profile, sources.places, now);
+  const isHome = home?.isHome === true;
   const openRecord =
     records.find((record) => record.id === openRecordId) ?? null;
 
@@ -226,6 +253,85 @@ function DayPlan({
           : kept.length === 0
             ? 'nothing'
             : null;
+
+  const sayHome = () => {
+    if (!user || !homePlace) return;
+    const uid = user.uid;
+    void getHelmEncryption(uid)
+      .then((encryption) =>
+        setCurrentPlace(uid, encryption, {
+          id: homePlace.id,
+          name: homePlace.name,
+        }),
+      )
+      .then(({ executionId, committed }) => {
+        addToast({
+          title: HELM_COPY.homeToast,
+          type: 'success',
+          action: {
+            label: HELM_COPY.undo,
+            onClick: () =>
+              void takeBack(uid, executionId).then((result) => {
+                if (result.kind === 'offline') {
+                  addToast({
+                    title: HELM_COPY.undoNeedsConnectionTitle,
+                    description: HELM_COPY.undoNeedsConnectionBody,
+                    type: 'error',
+                  });
+                }
+              }),
+          },
+        });
+        return committed;
+      })
+      .catch((error: unknown) => {
+        console.error('Helm home was not saved', error);
+        addToast({ title: HELM_COPY.homeNotSaved, type: 'error' });
+      });
+  };
+
+  const homeSection = homeTasks.length > 0 && (
+    <section className='space-y-3'>
+      <SectionDivider
+        label={HELM_COPY.planWhenHome}
+        trailing={
+          isHome && profile.currentPlace ? (
+            <span className='text-muted-foreground text-sm'>
+              {HELM_COPY.planHomeTill(
+                formatClock(
+                  getCurrentPlaceEndsAt(profile.currentPlace.saidAt),
+                  timeZone,
+                ),
+              )}
+            </span>
+          ) : (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+              onClick={sayHome}
+            >
+              {HELM_COPY.planImHome}
+            </Button>
+          )
+        }
+      />
+      {homeTasks.map((task) => (
+        <PlannedCard
+          key={task.id}
+          task={task}
+          timeLine={null}
+          isDone={heldIds.has(task.id)}
+          overlapTitle={null}
+          onAnotherTime={() => undefined}
+          onOpen={(opened) => onOpenTask(opened.id)}
+          onTick={onTick}
+          onUndoTick={onUndoTick}
+        />
+      ))}
+    </section>
+  );
 
   const planThisDay = (isRestOverridden: boolean) => {
     setIsPlanning(true);
@@ -286,6 +392,7 @@ function DayPlan({
           })}
         </div>
       )}
+      {isHome && homeSection}
       {untimedKept.length > 0 && (
         <section className='space-y-3'>
           <SectionDivider label={HELM_COPY.planAnyTime} />
@@ -300,6 +407,7 @@ function DayPlan({
           )}
         </section>
       )}
+      {!isHome && homeSection}
       {outcome !== null && (
         <div className='flex items-center gap-3'>
           <p className='text-muted-foreground min-w-0 flex-1 text-[15px] text-pretty'>

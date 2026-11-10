@@ -30,6 +30,7 @@ const task = (id: string, extra: Partial<PlannerTask> = {}): PlannerTask => ({
   isUrgent: false,
   durationMinutes: 30,
   energy: null,
+  placeIds: [],
   ...extra,
 });
 
@@ -57,6 +58,7 @@ const base = (extra: Partial<PlannerInput> = {}): PlannerInput => ({
   fillPercent: 100,
   hasCalendar: true,
   restDay: null,
+  currentPlaceId: null,
   busy: [],
   slots: {},
   tasks: [],
@@ -397,6 +399,45 @@ const run = (input: PlannerInput) => planDay(input, makeIds());
     'once the person asks for a plan anyway the day is planned as usual',
   );
   assert.equal(run({ ...input, hasCalendar: false }).outcome, 'rest');
+}
+
+{
+  const tasks = [
+    task('plain', { importance: 'must' }),
+    task('home', { importance: 'could', placeIds: ['home'] }),
+    task('due', { due: { kind: 'day', date: dayMs(DAY) } }),
+  ];
+  const noCalendar = (currentPlaceId: string | null) =>
+    run(base({ hasCalendar: false, currentPlaceId, tasks }));
+  const order = (result: ReturnType<typeof planDay>) =>
+    Object.values(result.slots).map((entry) => entry.taskId);
+  assert.deepEqual(order(noCalendar(null)), ['due', 'plain', 'home']);
+  assert.deepEqual(
+    order(noCalendar('home')),
+    ['due', 'home', 'plain'],
+    'while home, a task linked to home leads the rest but not one due today',
+  );
+  const homeResult = noCalendar('home');
+  const reasonOf = (taskId: string) =>
+    homeResult.reasons[
+      Object.entries(homeResult.slots).find(
+        ([, entry]) => entry.taskId === taskId,
+      )?.[0] ?? ''
+    ];
+  assert.equal(reasonOf('home'), "You're home");
+  assert.equal(reasonOf('due'), 'Due today');
+  assert.notEqual(reasonOf('plain'), "You're home");
+  assert.deepEqual(
+    order(noCalendar('elsewhere')),
+    ['due', 'plain', 'home'],
+    'a place nothing links to changes nothing',
+  );
+  const timed = run(base({ currentPlaceId: 'home', tasks }));
+  assert.equal(
+    Object.values(timed.slots).find((entry) => entry.taskId === 'home')
+      ?.startAt,
+    at('08:30'),
+  );
 }
 
 console.log('check:helm-planner: planner rules hold.');

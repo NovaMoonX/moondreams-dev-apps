@@ -44,6 +44,10 @@ import {
   NomosReplyError,
 } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { summarize } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import {
+  NO_HOME_LINE,
+  planSetCurrentPlace,
+} from '../../functions/src/apps/helm/nomos/currentPlace.ts';
 
 const UID = 'uid-Zk3p9QwXr7LmNb2VcT5yHd8AeFg1';
 const CAPTURE_ID = 'capture-Qm4Xr8Zk2LpVb7NcTy3HdA5eFg9';
@@ -586,6 +590,93 @@ test('the fixture reading goes through the same checks and the same plan', async
   assert.equal(opened.summary, 'Made 3 tasks and marked 1 done');
   assert.equal((opened.effects as unknown[]).length, 4);
   assert.deepEqual(plan.updates[0].data.status, 'done');
+});
+
+test('"I\'m home" files the home place on the profile with its previous value, and says so', async () => {
+  const reading = { ...READING, people: [], dates: [] };
+  const ask = async (words: string) => {
+    const run = await createFixtureProvider(words, reading).runToolLoop({
+      role: 'quick',
+      messages: [{ role: 'user', content: '' }],
+      mcpClient: {} as never,
+      terminalTool: FILE_RESULTS_TOOL,
+      limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 1000 },
+    });
+    return normalizeNomosReply(run.terminalInput, {
+      reading,
+      aliases: newContext().aliases,
+    });
+  };
+  const said = await ask("I'm home");
+  assert.deepEqual(said.setCurrentPlace, {
+    kind: 'setCurrentPlace',
+    place: 'home',
+  });
+  assert.equal(said.commands.length, 0);
+  assert.ok((await ask('Just got home')).setCurrentPlace);
+  assert.equal((await ask('Home by six, buy milk')).setCurrentPlace, null);
+
+  const NOW = Date.UTC(2026, 10, 10, 22, 0);
+  const previous = { placeId: 'place-old', saidAt: NOW - 5 * 3_600_000 };
+  const home = planSetCurrentPlace({
+    profileId: UID,
+    home: { id: 'place-home', name: 'Home' },
+    previous,
+    now: NOW,
+    timeZone: 'America/Los_Angeles',
+  });
+  assert.ok(home);
+  assert.deepEqual(home.data.currentPlace, {
+    placeId: 'place-home',
+    saidAt: NOW,
+  });
+  assert.deepEqual(home.ref, {
+    op: 'update',
+    collection: 'profile',
+    docId: UID,
+  });
+  assert.deepEqual(home.effect.previous?.currentPlace, previous);
+  assert.equal(home.line, "You're home until 5:00 PM");
+  assert.equal(
+    planSetCurrentPlace({
+      profileId: UID,
+      home: null,
+      previous: null,
+      now: NOW,
+      timeZone: 'America/Los_Angeles',
+    }),
+    null,
+  );
+  assert.equal(NO_HOME_LINE, 'No place is set as home yet.');
+
+  const plan = planWrites({
+    commands: [],
+    existing: new Map(),
+    captureId: CAPTURE_ID,
+    executionId: 'exec-home',
+    now: NOW,
+    seal,
+    newId: createIdCounter(),
+  });
+  const execution = buildExecution(
+    {
+      ...plan,
+      effectRefs: [home.ref],
+      effects: [home.effect],
+    },
+    {
+      commands: [],
+      captureId: CAPTURE_ID,
+      now: NOW,
+      seal,
+      homeLine: home.line,
+      inputMode: 'voice',
+    },
+  );
+  const opened = openForHelm(KEY, execution.sealed as SealedPayload);
+  assert.equal(opened.summary, "You're home until 5:00 PM");
+  assert.equal(opened.spoken, "You're home until 5:00 PM.");
+  assert.deepEqual(execution.effectRefs, [home.ref]);
 });
 
 test('a loop that hits its limit ends as a failed reading, after one ask', async () => {

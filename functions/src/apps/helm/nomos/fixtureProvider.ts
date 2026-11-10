@@ -529,6 +529,15 @@ function readQuestion(text: string, message: string) {
 const PLAN_DAY_RE =
   /^\s*(?:please\s+)?plan\s+(?:my\s+day|today|tomorrow|(?:my\s+)?(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b(?!['’]s)/i;
 
+const AT_HOME_RE =
+  /^\s*(?:i['’]?m|i am|just got|i just got|got)\s+home\b[\s.!]*$/i;
+
+/** The emulator's stand-in for "I'm home" or "just got home": one setCurrentPlace for home. Null for any other words. */
+const readAtHome = (text: string) =>
+  AT_HOME_RE.test(text)
+    ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
+    : null;
+
 /** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
 const readPlanDay = (text: string, reading: CaptureReading) =>
   PLAN_DAY_RE.test(text)
@@ -576,6 +585,17 @@ export function createFixtureProvider(
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const atHome = readAtHome(text);
+      if (atHome) {
+        return {
+          terminalInput: { commands: atHome },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

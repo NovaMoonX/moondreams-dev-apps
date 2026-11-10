@@ -69,7 +69,7 @@ export interface PeopleInput {
 
 export interface EffectRef {
   op: 'create' | 'update';
-  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media';
+  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile';
   docId: string;
 }
 
@@ -777,6 +777,8 @@ export function planAsks(input: {
 export function buildExecution(
   plan: WritePlan,
   input: Pick<PlanInput, 'captureId' | 'now' | 'seal'> & {
+    /** The line saying the person is home, added to the summary and the spoken reply. */
+    homeLine?: string | null;
     questionRef?: { captureId: string; questionId: string } | null;
     commands: NomosCommand[];
     messageCount?: number;
@@ -795,6 +797,17 @@ export function buildExecution(
         ]
       : [];
   });
+  const { homeLine = null } = input;
+  const ack = buildSpokenAck({
+    inputMode: input.inputMode,
+    counts: plan.counts,
+    messageCount: input.messageCount ?? 1,
+    created,
+    timeZone: input.timeZone ?? 'UTC',
+    now: input.now,
+  });
+  const spokenHome =
+    homeLine && input.inputMode === 'voice' ? `${homeLine}.` : null;
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -812,20 +825,15 @@ export function buildExecution(
     decidedAt: input.now,
     finishedAt: input.now,
     sealed: input.seal({
-      summary: summarize(plan.counts, input.messageCount),
+      summary: [summarize(plan.counts, input.messageCount), homeLine]
+        .filter(Boolean)
+        .join('. '),
       commands: input.commands,
       effects: plan.effects,
       undoReport: null,
       goneIds: null,
       spoken: withQuestion(
-        buildSpokenAck({
-          inputMode: input.inputMode,
-          counts: plan.counts,
-          messageCount: input.messageCount ?? 1,
-          created,
-          timeZone: input.timeZone ?? 'UTC',
-          now: input.now,
-        }),
+        [ack, spokenHome].filter(Boolean).join(' ') || null,
         plan.questions[0]?.spoken ?? null,
       ),
     }),
@@ -887,6 +895,8 @@ interface SettleInput {
   mode: 'full' | 'rest';
   filed: number;
   hasPlanDay?: boolean;
+  /** The turn said the person is home, whether or not a home place exists to file it on. */
+  hasHome?: boolean;
   hasMore: boolean;
   executionId: string | null;
   answer?: {
@@ -962,6 +972,7 @@ export function settleCapture(input: SettleInput) {
     !input.hasMore &&
     !input.answer &&
     !input.hasPlanDay &&
+    !input.hasHome &&
     !input.hadAsks &&
     !input.isAnswerTurn;
   const next = isUnread

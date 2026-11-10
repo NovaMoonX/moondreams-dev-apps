@@ -49,6 +49,8 @@ export interface HelmProfile {
   hasSeenVoiceNotice: boolean;
   /** The person's own who, made on first open; null on a profile from before people. */
   selfWhoId: string | null;
+  /** Where the person said they are, for a few hours; read through `readCurrentPlace`, never from the device's location. */
+  currentPlace: { placeId: string; saidAt: number } | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -501,7 +503,7 @@ export type AutonomyLevel = 1 | 2 | 3 | 4;
 export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
-  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media';
+  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile';
   docId: string;
 }
 

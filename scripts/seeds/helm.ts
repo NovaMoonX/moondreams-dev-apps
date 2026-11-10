@@ -1561,6 +1561,11 @@ async function buildPeople(input: {
       3,
     ),
     taskOf('Lunch with Sam', { whoIds: [], placeIds: [] }, 4),
+    taskOf(
+      'Swap the winter coats',
+      { whoIds: [], placeIds: ['seed-place-home'] },
+      5,
+    ),
   ]);
   const questionTaskId = 'seed-task-who-4';
   const questionText = 'Lunch with Sam Friday';
@@ -1840,6 +1845,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         isHandsFreeOn: true,
         hasSeenVoiceNotice: false,
         selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
+        currentPlace: null,
         createdAt,
         lastEditedAt: null,
       });

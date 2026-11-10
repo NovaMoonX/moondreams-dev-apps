@@ -55,10 +55,16 @@ import {
   type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
+  type SetCurrentPlaceCommand,
   type TaskDue,
   DEFAULT_ASSISTANT_NAME,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
+import {
+  NO_HOME_LINE,
+  planSetCurrentPlace,
+  type CurrentPlace,
+} from './nomos/currentPlace.js';
 import { buildAnswer, settleLiveTurn } from './nomos/answerGuards.js';
 import {
   describeAnsweredQuestion,
@@ -129,6 +135,22 @@ const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
 const MAX_OPEN_ASKED_READ = 200;
+
+const readPlaceName = (key: HelmKey, sealed: unknown) => {
+  try {
+    const words = openForHelm(key, sealed as SealedPayload);
+    return typeof words.name === 'string' && words.name ? words.name : 'Home';
+  } catch {
+    return 'Home';
+  }
+};
+
+const toCurrentPlace = (value: unknown): CurrentPlace | null => {
+  const { placeId, saidAt } = (value ?? {}) as Partial<CurrentPlace>;
+  return typeof placeId === 'string' && typeof saidAt === 'number'
+    ? { placeId, saidAt }
+    : null;
+};
 const MAX_FACTS_READ = 20;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 // Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
@@ -790,6 +812,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       answer: null,
       remember: [],
       planDay: null,
+      setCurrentPlace: null,
       asks: [],
       answerTurn,
       mentions: [],
@@ -1099,6 +1122,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answer,
     remember: mode === 'full' ? reply.remember : [],
     planDay: mode === 'full' ? reply.planDay : null,
+    setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
     asks: mode === 'full' ? reply.asks : [],
     answerTurn,
     mentions: reply.mentions,
@@ -1122,6 +1146,7 @@ async function writeResult(
     answer: AnswerCommand | null;
     remember: RememberCommand[];
     planDay: PlanDayCommand | null;
+    setCurrentPlace: SetCurrentPlaceCommand | null;
     asks: AskCommand[];
     answerTurn: AnswerTurn | null;
     mentions: MentionRead[];
@@ -1146,6 +1171,7 @@ async function writeResult(
     answer,
     remember,
     planDay: requestedPlanDay,
+    setCurrentPlace: requestedHome,
     asks,
     answerTurn,
     mentions,
@@ -1202,6 +1228,8 @@ async function writeResult(
       openAskedSnap,
       factsSnap,
       copySnap,
+      homeSnap,
+      profileSnap,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -1224,6 +1252,17 @@ async function writeResult(
         : Promise.resolve(null),
       aboutId
         ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
+        : Promise.resolve(null),
+      requestedHome
+        ? transaction.get(
+            firestore
+              .collection(`${base}/places`)
+              .where('isHome', '==', true)
+              .limit(1),
+          )
+        : Promise.resolve(null),
+      requestedHome
+        ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
       ...targetIds.map((id) =>
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
@@ -1336,7 +1375,23 @@ async function writeResult(
     );
     const executionRef = firestore.collection(`${base}/executions`).doc();
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
-    const plan = planWrites({
+    const homeDoc = homeSnap?.docs[0];
+    const home =
+      requestedHome && !isStale
+        ? planSetCurrentPlace({
+            profileId: firestore.doc(base).id,
+            home: homeDoc
+              ? {
+                  id: homeDoc.id,
+                  name: readPlaceName(key, homeDoc.get('sealed')),
+                }
+              : null,
+            previous: toCurrentPlace(profileSnap?.get('currentPlace')),
+            now,
+            timeZone,
+          })
+        : null;
+    const written = planWrites({
       commands: isStale ? [] : commands,
       existing,
       captureId: captureRef.id,
@@ -1346,6 +1401,19 @@ async function writeResult(
       newId: () => firestore.collection(tasksPath).doc().id,
       people,
     });
+    const plan = home
+      ? {
+          ...written,
+          effectRefs: [...written.effectRefs, home.ref],
+          effects: [...written.effects, home.effect],
+          linkedPlaceIds: [
+            ...new Set([
+              ...written.linkedPlaceIds,
+              ...(homeDoc ? [homeDoc.id] : []),
+            ]),
+          ],
+        }
+      : written;
     const isFiling = plan.effects.length > 0;
     if (
       !isFiling &&
@@ -1388,11 +1456,13 @@ async function writeResult(
       plan.placeCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/places/${id}`), data),
       );
+      if (home) transaction.update(firestore.doc(base), home.data);
       transaction.create(
         executionRef,
         buildExecution(
           { ...plan, questions },
           {
+            homeLine: home?.line ?? null,
             questionRef: answerTurn?.ref ?? null,
             commands,
             captureId: captureRef.id,
@@ -1445,7 +1515,8 @@ async function writeResult(
         ? ASK_DEFERRED_LINE
         : isFiling
           ? null
-          : (firstQuestion ??
+          : ((requestedHome ? NO_HOME_LINE : null) ??
+            firstQuestion ??
             (reply
               ? null
               : answerTurn && commands.length > 0
@@ -1457,6 +1528,7 @@ async function writeResult(
       mode,
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
+      hasHome: requestedHome !== null,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

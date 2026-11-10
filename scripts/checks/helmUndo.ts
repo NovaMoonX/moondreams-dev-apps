@@ -577,6 +577,55 @@ test('a person a kept task still links stays', () => {
   assert.deepEqual(result.kept, ['Bring Jordan the book']);
 });
 
+const sayHome = (previous: { placeId: string; saidAt: number } | null) => {
+  const written = { placeId: 'p1', saidAt: EARLIER };
+  return {
+    ref: { op: 'update', collection: 'profile', docId: 'uid-1' } as EffectRef,
+    effect: {
+      written: { currentPlace: written, 'sealed.title': 'Home' },
+      previous: { currentPlace: previous, 'sealed.title': 'Home' },
+    },
+    written,
+  };
+};
+
+test('"I\'m home" is taken back by putting the profile\'s previous place back', () => {
+  const { ref, effect, written } = sayHome(null);
+  const result = asWrite(
+    plan(execution([{ ref, effect }], { category: 'organize' }), [
+      target('uid-1', { currentPlace: written, lastEditedAt: EARLIER }, null),
+    ]),
+  );
+  assert.deepEqual(result.deletes, []);
+  assert.deepEqual(result.updates, [
+    {
+      docId: 'uid-1',
+      collection: 'profile',
+      fields: { currentPlace: null, lastEditedAt: NOW },
+      reseal: null,
+    },
+  ]);
+  assert.equal(result.report, 'Back to not home.');
+  assert.equal(result.undoSealed.summary, 'Back to not home');
+  assert.deepEqual(result.undoExecution.effectRefs, [
+    { op: 'update', collection: 'profile', docId: 'uid-1' },
+  ]);
+});
+
+test('"I\'m home" said again since is kept, never overwritten', () => {
+  const { ref, effect } = sayHome(null);
+  const result = asRefused(
+    plan(execution([{ ref, effect }]), [
+      target(
+        'uid-1',
+        { currentPlace: { placeId: 'p1', saidAt: NOW }, lastEditedAt: NOW },
+        null,
+      ),
+    ]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

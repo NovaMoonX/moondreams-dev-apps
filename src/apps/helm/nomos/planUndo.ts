@@ -398,9 +398,14 @@ export function planUndo(input: {
     );
   }
 
-  const report = isImport
-    ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
-    : HELM_COPY.undoReport(records.length, kept.length, gone);
+  const isHomeOnly = records.every(
+    ({ docId }) => collectionOf.get(docId) === 'profile',
+  );
+  const report = isHomeOnly
+    ? HELM_COPY.undoReportHome
+    : isImport
+      ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
+      : HELM_COPY.undoReport(records.length, kept.length, gone);
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -444,13 +449,15 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isImport
-        ? kept.length > 0
-          ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
-          : HELM_COPY.tookBackPeople(records.length)
-        : kept.length > 0
-          ? HELM_COPY.tookBackKept(records.length, kept.length)
-          : HELM_COPY.tookBack(records.length),
+      summary: isHomeOnly
+        ? HELM_COPY.tookBackHome
+        : isImport
+          ? kept.length > 0
+            ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
+            : HELM_COPY.tookBackPeople(records.length)
+          : kept.length > 0
+            ? HELM_COPY.tookBackKept(records.length, kept.length)
+            : HELM_COPY.tookBack(records.length),
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,

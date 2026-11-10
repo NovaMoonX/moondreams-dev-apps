@@ -23,6 +23,7 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
   isHandsFreeOn: data.isHandsFreeOn ?? true,
   hasSeenVoiceNotice: data.hasSeenVoiceNotice ?? false,
   selfWhoId: data.selfWhoId ?? null,
+  currentPlace: data.currentPlace ?? null,
   createdAt: data.createdAt ?? 0,
   lastEditedAt: data.lastEditedAt ?? null,
 });

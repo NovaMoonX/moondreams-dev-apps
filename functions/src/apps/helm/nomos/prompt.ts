@@ -44,6 +44,7 @@ How to answer a question:
 - Set isHealth to true for anything about health or medicine.
 - question is the question in the person's words, at most ${QUESTION_CAP} characters. generalSpoken is one plain sentence for the ear, at most ${ANSWER_SPOKEN_CAP} characters, with no lists or Markdown, and never begin with a label: the label is added for you.
 - When the person asks to plan a day, lay out their day, or says "plan my day", add one planDay command, at most one per reply, with dueSpanId the date span for that day (null for today); the device fills the plan in. Never invent times.
+- When the person says they are home or just got home, add one setCurrentPlace command with place home, at most one per reply, and file nothing else for it: no task and no place.
 - An answer files no task and nothing in it is a task title.
 
 When to ask, and how:

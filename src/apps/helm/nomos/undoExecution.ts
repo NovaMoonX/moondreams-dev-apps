@@ -105,6 +105,10 @@ export async function undoExecution(
       : name === 'facts'
         ? facts
         : collection(userOf(uid), name);
+  const docOf = (ref: Pick<EffectRef, 'collection' | 'docId'>) =>
+    ref.collection === 'profile'
+      ? userOf(uid)
+      : doc(collectionOf(ref.collection), ref.docId);
   const undoRef = doc(executions);
   const executionRef = doc(executions, executionId);
   const read = createSealedReader(encryption, openJson);
@@ -130,9 +134,7 @@ export async function undoExecution(
               const { docId } = ref;
               const isOpened =
                 ref.collection === 'tasks' || ref.collection === 'who';
-              const entry = await transaction.get(
-                doc(collectionOf(ref.collection), docId),
-              );
+              const entry = await transaction.get(docOf(ref));
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
@@ -176,16 +178,13 @@ export async function undoExecution(
           encryption,
         );
         plan.deletes.forEach(({ docId, collection: from }) =>
-          transaction.delete(doc(collectionOf(from), docId)),
+          transaction.delete(docOf({ docId, collection: from })),
         );
         plan.updates.forEach((update, index) =>
-          transaction.update(
-            doc(collectionOf(update.collection), update.docId),
-            {
-              ...update.fields,
-              ...resealed[index],
-            },
-          ),
+          transaction.update(docOf(update), {
+            ...update.fields,
+            ...resealed[index],
+          }),
         );
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
         transaction.update(executionRef, { undoneByExecutionId: undoRef.id });

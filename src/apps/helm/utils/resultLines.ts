@@ -27,6 +27,16 @@ export function buildResultLines(
     )
       return [];
     const effect = execution.effects[index];
+    if (ref.collection === 'profile') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title: toText(effect?.written['sealed.title']) ?? HELM_COPY.homeTitle,
+          detail: HELM_COPY.homeRowDetail,
+        },
+      ];
+    }
     const task = tasksById.get(ref.docId);
     const title =
       toText(effect?.written['sealed.title']) ??

@@ -283,6 +283,8 @@ export const HELM_COPY = {
   savedHeldBudget: 'Saved as written. Read once reading is back.',
   turnsFailed: "Your turns didn't open. Close this page and open it again.",
   undoAll: 'Undo all of this',
+  tookBackHome: "Took back I'm home",
+  undoReportHome: "You're no longer marked home.",
   tookBack: (count: number) =>
     `Took back ${count} ${count === 1 ? 'task' : 'tasks'}`,
   tookBackKept: (count: number, other: number) =>
@@ -696,6 +698,13 @@ export const HELM_COPY = {
   planNoSummary: 'Nothing planned yet',
   planFree: (length: string) => `Free · ${length}`,
   planAnyTime: 'Any time today',
+  planWhenHome: 'When you get home',
+  planImHome: "I'm home",
+  planHomeTill: (time: string) => `Home till ${time}`,
+  homeTitle: 'Home',
+  homeRowDetail: 'Where you are now',
+  homeToast: 'Home for the next 3 hours',
+  homeNotSaved: "Couldn't save that you're home",
   planWorthDoing: 'Worth doing today',
   planFull: 'Your day is full. Nothing suggested.',
   planLate: 'Nothing more planned today.',
@@ -999,4 +1008,5 @@ export const PLANNER_COPY = {
   should: 'Should do',
   could: 'Could do',
   worthDoing: 'Worth doing today',
+  home: "You're home",
 } as const;

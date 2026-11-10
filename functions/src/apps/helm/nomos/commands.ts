@@ -32,6 +32,7 @@ export const COMMAND_KINDS = [
   'completeTask',
   'remember',
   'planDay',
+  'setCurrentPlace',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -184,6 +185,12 @@ export interface PlanDayCommand {
   date: Extract<TaskDue, { kind: 'day' }>;
 }
 
+/** The person said they are home; the device's profile holds it for a few hours. Only home can be said so. */
+export interface SetCurrentPlaceCommand {
+  kind: 'setCurrentPlace';
+  place: 'home';
+}
+
 /** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
 export interface AnswerCommand {
   scope: AnswerScope;
@@ -245,6 +252,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'value',
             'whoRefs',
             'placeRefs',
+            'place',
             'shape',
             'prompt',
             'options',
@@ -342,6 +350,12 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             placeRefs: NAMED_BY_REF(
               'createTask and updateTask: the ref ($p1, …) of each entry in places this task happens at or involves; null or empty when none.',
             ),
+            place: {
+              type: ['string', 'null'],
+              enum: ['home', null],
+              description:
+                'setCurrentPlace: home, when the person says they are home or just got home; null for every other kind.',
+            },
             shape: {
               type: ['string', 'null'],
               enum: [...ASK_SHAPES, null],

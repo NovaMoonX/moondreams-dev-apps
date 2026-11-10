@@ -262,3 +262,56 @@ export const bringToToday = (uid: string, todayKey: string, taskId: string) =>
     endAt: null,
     source: 'person',
   });
+
+/** "I'm home": the profile's `currentPlace` and one succeeded execution holding the previous value, so Undo can put it back, in one batch. Handed back unawaited so it queues offline. */
+export async function setCurrentPlace(
+  uid: string,
+  encryption: HelmEncryption,
+  place: { id: string; name: string },
+) {
+  const now = Date.now();
+  const currentPlace = { placeId: place.id, saidAt: now };
+  const previous = store.getState().helm.profile?.currentPlace ?? null;
+  const executionRef = doc(executionsOf(uid));
+  const title = { 'sealed.title': place.name };
+  const execution: Execution = {
+    captureId: null,
+    actor: 'person',
+    category: 'organize',
+    autonomyLevel: 1,
+    state: 'succeeded',
+    effectRefs: [{ op: 'update', collection: 'profile', docId: uid }],
+    linkedWhoIds: [],
+    linkedPlaceIds: [place.id],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: now,
+    decidedAt: now,
+    finishedAt: now,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: HELM_COPY.homeToast,
+        commands: [],
+        effects: [
+          {
+            written: { currentPlace, ...title },
+            previous: { currentPlace: previous, ...title },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+      },
+      encryption,
+    ),
+  };
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'apps', 'helm', 'users', uid), {
+    currentPlace,
+    lastEditedAt: now,
+  });
+  batch.set(executionRef, execution);
+  return { executionId: executionRef.id, committed: batch.commit() };
+}

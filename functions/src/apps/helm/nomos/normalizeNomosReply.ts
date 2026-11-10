@@ -32,6 +32,7 @@ import {
   type MentionRead,
   type PlaceRead,
   type PlanDayCommand,
+  type SetCurrentPlaceCommand,
   type RememberCommand,
   type SourceRef,
   type NomosCommand,
@@ -572,7 +573,14 @@ const readCommand = (
   entities: Entities,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
-  if (!kind || kind === 'remember' || kind === 'planDay') return null;
+  if (
+    !kind ||
+    kind === 'remember' ||
+    kind === 'planDay' ||
+    kind === 'setCurrentPlace'
+  ) {
+    return null;
+  }
   const title = toTitle(item.title);
   const due = toDue(item.dueSpanId, reading);
   const isUrgent = typeof item.isUrgent === 'boolean' ? item.isUrgent : null;
@@ -647,6 +655,7 @@ export function normalizeNomosReply(
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   planDay: PlanDayCommand | null;
+  setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
   askDropped: AskDrop[];
   mentions: MentionRead[];
@@ -712,6 +721,11 @@ export function normalizeNomosReply(
     answer,
     remember,
     planDay,
+    setCurrentPlace: items.some(
+      (item) => item.kind === 'setCurrentPlace' && item.place === 'home',
+    )
+      ? { kind: 'setCurrentPlace', place: 'home' }
+      : null,
     asks,
     askDropped,
     mentions: entities.mentions,
