@@ -11,6 +11,7 @@ import {
   PAIR_WORDS,
 } from '@apps/runway/constants';
 import { DAY_MS, todayAsUtcDate } from '@apps/runway/engine/dates';
+import { toMerchantKey } from '@apps/runway/engine/rules';
 import {
   findAccountPairs,
   findDepositDays,
@@ -18,6 +19,10 @@ import {
 } from '@apps/runway/engine/matching';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
+import {
+  rememberPayer,
+  rememberRoute,
+} from '@apps/runway/store/actions/memoryActions';
 import { setLinesDone } from '@apps/runway/store/actions/moveActions';
 import {
   linkDepositToDay,
@@ -40,6 +45,9 @@ import {
   selectHistoryPurchases,
   selectLinkHistoryRanges,
   selectIsAccountsLoaded,
+  selectIsMemoriesLoaded,
+  selectPayerMemories,
+  selectRouteMemories,
   selectIsDaysLoaded,
   selectIsMovesLoaded,
   selectIsNeedsHomeLoaded,
@@ -375,8 +383,10 @@ export function useMatchDeposits(uid: string | null) {
   const days = useAppSelector((state) =>
     selectDepositDays(state, todayAsUtcDate()),
   );
+  const payers = useAppSelector(selectPayerMemories);
   const isReady = useAppSelector(
     (state) =>
+      selectIsMemoriesLoaded(state) &&
       selectIsNeedsHomeLoaded(state) &&
       state.runway.purchasesFrom !== null &&
       selectIsPlanItemsLoaded(state) &&
@@ -402,17 +412,17 @@ export function useMatchDeposits(uid: string | null) {
     }
     const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
     const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
-    const pairs = [...findDepositDays(waiting, days, purchases).clear].flatMap(
-      ([depositId, dayKey]) => {
-        const deposit = byId.get(depositId);
-        const day = days.find((entry) => entry.dayKey === dayKey);
-        if (!deposit || !day || deposit.date < since) return [];
-        const key = `${deposit.id}:${deposit.updatedAt}:${dayKey}`;
-        return tried.current.has(key)
-          ? []
-          : [{ deposit, dayKey, dayOn: day.expectedOn, key }];
-      },
-    );
+    const pairs = [
+      ...findDepositDays(waiting, days, purchases, payers).clear,
+    ].flatMap(([depositId, dayKey]) => {
+      const deposit = byId.get(depositId);
+      const day = days.find((entry) => entry.dayKey === dayKey);
+      if (!deposit || !day || deposit.date < since) return [];
+      const key = `${deposit.id}:${deposit.updatedAt}:${dayKey}`;
+      return tried.current.has(key)
+        ? []
+        : [{ deposit, dayKey, dayOn: day.expectedOn, key }];
+    });
     if (pairs.length === 0) return;
     pairs.forEach(({ key }) => tried.current.add(key));
     isRunning.current = true;
@@ -432,7 +442,7 @@ export function useMatchDeposits(uid: string | null) {
       }
     };
     void run();
-  }, [uid, waiting, purchases, days, isReady, runs]);
+  }, [uid, waiting, purchases, days, payers, isReady, runs]);
 }
 
 export interface AccountPairInput {
@@ -647,8 +657,10 @@ export function useUnpairAccounts() {
 /** Once Needs a home, the accounts, the cards and the days are read, pairs each recent posted money out with the one money in it clearly is the other side of. Each pair is tried once per version of the two, so a refusal is not retried in a loop. */
 export function useMatchAccountPairs(uid: string | null) {
   const waiting = useAppSelector((state) => state.runway.needsHome);
+  const routes = useAppSelector(selectRouteMemories);
   const isReady = useAppSelector(
     (state) =>
+      selectIsMemoriesLoaded(state) &&
       selectIsNeedsHomeLoaded(state) &&
       state.runway.purchasesFrom !== null &&
       state.runway.isCardsLoaded &&
@@ -677,7 +689,7 @@ export function useMatchAccountPairs(uid: string | null) {
     }
     const since = todayAsUtcDate() - AUTO_MATCH_DAYS * DAY_MS;
     const byId = new Map(waiting.map((purchase) => [purchase.id, purchase]));
-    const pairs = [...findAccountPairs(waiting).clear].flatMap(
+    const pairs = [...findAccountPairs(waiting, false, routes).clear].flatMap(
       ([outId, { inId, kind }]) => {
         const out = byId.get(outId);
         const into = byId.get(inId);
@@ -705,5 +717,54 @@ export function useMatchAccountPairs(uid: string | null) {
       }
     };
     void run();
-  }, [uid, waiting, isReady, runs]);
+  }, [uid, waiting, routes, isReady, runs]);
+}
+
+/** Remembers the route of a move the person paired by hand, so the same move later pairs on its own when two could fit. Never fails the pairing. */
+export async function rememberHandPair(
+  uid: string,
+  out: OpenPurchase,
+  into: OpenPurchase,
+): Promise<void> {
+  try {
+    const cardId = into.paidByCardId ?? null;
+    if (
+      out.accountId === null ||
+      (cardId === null && into.accountId === null)
+    ) {
+      return;
+    }
+    await rememberRoute(
+      uid,
+      await getRunwayEncryption(uid),
+      store.getState().runway.memories,
+      {
+        fromAccountId: out.accountId,
+        toAccountId: cardId === null ? into.accountId : null,
+        toCardId: cardId,
+      },
+    );
+  } catch (error) {
+    console.error('A move was not remembered', error);
+  }
+}
+
+/** Remembers the payer of a deposit the person linked to a pay line by hand. Never fails the link. */
+export async function rememberHandDeposit(
+  uid: string,
+  deposit: OpenPurchase,
+  payLineId: string,
+): Promise<void> {
+  const merchantKey = toMerchantKey(deposit.merchant);
+  if (merchantKey === null) return;
+  try {
+    await rememberPayer(
+      uid,
+      await getRunwayEncryption(uid),
+      store.getState().runway.memories,
+      { merchantKey, merchantName: deposit.merchant ?? merchantKey, payLineId },
+    );
+  } catch (error) {
+    console.error('A payer was not remembered', error);
+  }
 }

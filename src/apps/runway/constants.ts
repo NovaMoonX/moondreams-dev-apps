@@ -4802,6 +4802,25 @@ export const PAIR_WORDS = {
     `You paid ${card} from ${from}.`,
 } as const;
 
+export const MEMORY_WORDS = {
+  movesRow: 'Remembered moves',
+  movesRowSub: 'Moves you paired by hand',
+  payersRow: 'Remembered payers',
+  payersRowSub: 'Deposits you linked to this pay by hand',
+  movesTitle: 'Remembered moves',
+  payersTitle: 'Remembered payers',
+  rowDetail: 'Tap to forget it',
+  moveTo: (account: string) => `To ${account}`,
+  paymentTo: (card: string) => `Payment to ${card}`,
+  payerRow: (name: string) => `Deposits from ${name}`,
+  forgetTitle: 'Forget this?',
+  forgetMessage:
+    'Runway will ask you each time instead. Anything already paired or linked stays as it is.',
+  forgetConfirm: 'Forget it',
+  forgotten: 'Forgotten',
+  failed: 'That was not forgotten.',
+} as const;
+
 export const LINK_WORDS = {
   reconnectTitle: (bank: string) => `${bank} needs you to reconnect`,
   reconnectNote:

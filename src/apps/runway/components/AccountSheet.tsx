@@ -3,6 +3,7 @@ import {
   Archive,
   ListChecks,
   Pencil,
+  Route,
   TriangleAlert,
   Wallet,
 } from 'lucide-react';
@@ -35,6 +36,7 @@ import {
   parseMoneyToCents,
 } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
+import MemoriesSheet from '@apps/runway/components/MemoriesSheet';
 import NeedsALookRow from '@apps/runway/components/NeedsALookRow';
 import { ActionSection } from '@apps/runway/components/ActionSection';
 import { useHoldsUndo } from '@apps/runway/hooks/useHoldsUndo';
@@ -45,6 +47,7 @@ import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
 import {
   ACCOUNT_WORDS,
   MAX_PURCHASE_CENTS,
+  MEMORY_WORDS,
   RUNWAY_SEARCH_THRESHOLD,
   TICK_HIT_CLASS,
 } from '@apps/runway/constants';
@@ -63,13 +66,16 @@ import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import {
   selectAccountHoldings,
   selectAccounts,
+  selectAllCards,
   selectEnvelopes,
   selectGoals,
   selectItemLooks,
   selectItemNames,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenAccount } from '@apps/runway/types';
 import { formatApy } from '@apps/runway/utils/accountText';
+import { getCardNamer } from '@apps/runway/utils/cardText';
 
 const MAX_HOLD_LINES = 4;
 
@@ -120,6 +126,9 @@ function AccountSheet({
   const [isUnfolded, setIsUnfolded] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [isLinking, setIsLinking] = useState(false);
+  const [isShowingMoves, setIsShowingMoves] = useState(false);
+  const routes = useAppSelector(selectRouteMemories);
+  const cardNameOf = getCardNamer(useAppSelector(selectAllCards));
   const [error, setError] = useState<string | null>(null);
 
   const nameOf = (id: string) =>
@@ -165,6 +174,19 @@ function AccountSheet({
     account.isPullAccount ? ACCOUNT_WORDS.pullsFrom : null,
     linkedFact,
   ].filter((fact): fact is string => fact !== null);
+
+  const moveRows = routes
+    .filter((route) => route.fromAccountId === account.id)
+    .map((route) => ({
+      id: route.id,
+      name:
+        route.toCardId !== null
+          ? MEMORY_WORDS.paymentTo(cardNameOf(route.toCardId))
+          : MEMORY_WORDS.moveTo(
+              openAccounts.find((other) => other.id === route.toAccountId)
+                ?.name ?? 'another account',
+            ),
+    }));
 
   const goTo = (next: typeof view) => {
     setError(null);
@@ -612,6 +634,16 @@ function AccountSheet({
             subtitle={ACCOUNT_WORDS.changeSub}
             onClick={onChange}
           />
+          {moveRows.length > 0 && (
+            <ActionRow
+              isGrouped
+              hasChevron
+              icon={<Route />}
+              label={MEMORY_WORDS.movesRow}
+              subtitle={MEMORY_WORDS.movesRowSub}
+              onClick={() => setIsShowingMoves(true)}
+            />
+          )}
           <ActionRow
             isGrouped
             icon={<Archive />}
@@ -642,6 +674,13 @@ function AccountSheet({
       actions={<ValuesEyeButton />}
     >
       {getBody()}
+      {isShowingMoves && moveRows.length > 0 && (
+        <MemoriesSheet
+          title={MEMORY_WORDS.movesTitle}
+          rows={moveRows}
+          onClose={() => setIsShowingMoves(false)}
+        />
+      )}
     </FormSheet>
   );
 }

@@ -1610,6 +1610,7 @@ export const selectDepositDays = createSelector(
       expectedOn: day.on,
       arrivedOn: day.arrivedOn,
       amount,
+      payLineId: day.payLineId,
     });
     return [
       ...listed.open.flatMap((day) =>
@@ -1958,6 +1959,23 @@ export const selectRules = createSelector([selectRuleList], (rules) =>
 
 export const selectIsRulesLoaded = (state: RootState) =>
   state.runway.isRulesLoaded;
+
+export const selectIsMemoriesLoaded = (state: RootState) =>
+  state.runway.isMemoriesLoaded;
+
+/** The moves between accounts the person paired by hand. */
+export const selectRouteMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'route' ? [memory] : [])),
+);
+
+/** The payers the person linked to a pay line by hand. */
+export const selectPayerMemories = createSelector(
+  [(state: RootState) => state.runway.memories],
+  (memories) =>
+    memories.flatMap((memory) => (memory.kind === 'payer' ? [memory] : [])),
+);
 
 /** The cards that can take a new charge, oldest first. */
 export const selectCards = createSelector([selectAllCards], (cards) =>

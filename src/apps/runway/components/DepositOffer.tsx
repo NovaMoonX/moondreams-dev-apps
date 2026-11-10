@@ -10,13 +10,17 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import { DEPOSIT_WORDS, NEEDS_HOME_WORDS } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
 import { findDepositDays } from '@apps/runway/engine/matching';
-import { useLinkDepositsWithUndo } from '@apps/runway/hooks/useBankMatch';
+import {
+  rememberHandDeposit,
+  useLinkDepositsWithUndo,
+} from '@apps/runway/hooks/useBankMatch';
 import {
   selectDepositDays,
   selectListedDays,
   selectLostDeposits,
   selectLostPairs,
   selectLinkWaiting,
+  selectPayerMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase } from '@apps/runway/types';
 
@@ -35,6 +39,7 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const lostPairs = useAppSelector(selectLostPairs);
   const purchases = useAppSelector((state) => state.runway.purchases);
   const days = useAppSelector((state) => selectDepositDays(state, today));
+  const payers = useAppSelector(selectPayerMemories);
   const listed = useAppSelector((state) => selectListedDays(state, today));
   const link = useLinkDepositsWithUndo();
   const [busyKey, setBusyKey] = useState<string | null>(null);
@@ -51,7 +56,8 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
     })),
   ];
   const offered = (
-    findDepositDays(waiting, days, purchases).offers.get(deposit.id) ?? []
+    findDepositDays(waiting, days, purchases, payers).offers.get(deposit.id) ??
+    []
   ).flatMap((dayKey) => {
     const day = days.find((entry) => entry.dayKey === dayKey);
     const named = [...listed.open, ...listed.confirmed].find(
@@ -66,6 +72,8 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
     setError(null);
     try {
       await link(user.uid, [{ deposit, dayKey, dayOn }], 'person', true);
+      const day = days.find((entry) => entry.dayKey === dayKey);
+      if (day) void rememberHandDeposit(user.uid, deposit, day.payLineId);
       onDone();
     } catch (pickError) {
       setError(getErrorMessage(pickError, NEEDS_HOME_WORDS.failed));

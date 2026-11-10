@@ -736,6 +736,39 @@ export interface OpenRule extends RuleSealed {
   updatedAt: number;
 }
 
+/** Something the person confirmed by hand that Runway uses to settle a later match, under `memories`. */
+export interface MemoryDoc {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+  sealed: Sealed;
+}
+
+/** A move the person paired by hand: money out of one account into another account or a card (exactly one of the two is set). */
+export interface RouteMemorySealed {
+  kind: 'route';
+  fromAccountId: string;
+  toAccountId: string | null;
+  toCardId: string | null;
+}
+
+/** A payer the person linked a deposit from to a pay line by hand. */
+export interface PayerMemorySealed {
+  kind: 'payer';
+  /** The merchant in the one comparable form (`toMerchantKey`). */
+  merchantKey: string;
+  merchantName: string;
+  payLineId: string;
+}
+
+export type MemorySealed = RouteMemorySealed | PayerMemorySealed;
+
+export type OpenMemory = MemorySealed & {
+  id: string;
+  createdAt: number;
+  updatedAt: number;
+};
+
 /** A receipt photo on a purchase, under `purchases/{purchaseId}/receiptImages`. The picture itself is sealed bytes in Storage; `bytes` is their size. */
 export interface ReceiptImageDoc {
   id: string;

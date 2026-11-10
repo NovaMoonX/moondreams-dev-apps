@@ -1,10 +1,13 @@
+import { toComparable } from '@/utils/optionMatchUtils';
 import { DAY_MS } from '@apps/runway/engine/dates';
 import type {
   Cents,
   DateOnly,
   MoneyRange,
   OpenPurchase,
+  PayerMemorySealed,
   PurchasePairKind,
+  RouteMemorySealed,
 } from '@apps/runway/types';
 
 const MATCH_DAYS = 3;
@@ -130,6 +133,7 @@ export interface DepositDay {
   expectedOn: DateOnly;
   arrivedOn: DateOnly | null;
   amount: MoneyRange;
+  payLineId: string;
 }
 
 export interface DepositMatches {
@@ -174,11 +178,12 @@ const compareRanks = (a: readonly number[], b: readonly number[]): number =>
 
 const compareKeys = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered (those the amount fits first, none more than half its pay away). A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. The result does not depend on the order of the input. */
+/** Pairs posted deposits waiting in Needs a home with the income day each clearly is: a day within three days, its amount inside the range (or within 15% of an exact one), the nearest day then the closest amount then the earliest expected day. A tie, no candidate, or a day another deposit also picks leaves the deposit asking, with the pay days within two weeks offered (those the amount fits first, none more than half its pay away). A day with a deposit linked to it, a pending deposit and a deposit the person already sent back are never matched on their own. A payer the person linked by hand before settles what the amount or a tie leaves open: when no day is clear, the one free day of that payer's pay line within the same three days and half its pay of the amount is the pick (a raise or a short check is accepted). The result does not depend on the order of the input. */
 export function findDepositDays(
   waiting: readonly OpenPurchase[],
   days: readonly DepositDay[],
   purchases: readonly OpenPurchase[],
+  payers: readonly Pick<PayerMemorySealed, 'merchantKey' | 'payLineId'>[] = [],
 ): DepositMatches {
   const linked = new Set(
     purchases.flatMap((purchase) =>
@@ -217,7 +222,19 @@ export function findDepositDays(
         getRank(cents, deposit, best),
         getRank(cents, deposit, next),
       ) === 0;
-    return best !== undefined && !isTied ? [[deposit.id, best.dayKey]] : [];
+    if (best !== undefined && !isTied) return [[deposit.id, best.dayKey]];
+    const merchantKey = toComparable(deposit.merchant ?? '');
+    const lineIds = payers.flatMap((payer) =>
+      merchantKey !== '' && payer.merchantKey === merchantKey
+        ? [payer.payLineId]
+        : [],
+    );
+    const remembered = nearest(deposit, DEPOSIT_DAYS).filter(
+      (day) =>
+        lineIds.includes(day.payLineId) &&
+        getAmountGap(cents, day.amount) <= day.amount.highCents * OFFER_SHARE,
+    );
+    return remembered.length === 1 ? [[deposit.id, remembered[0].dayKey]] : [];
   });
   const claims = picks.reduce(
     (counts, [, dayKey]) => counts.set(dayKey, (counts.get(dayKey) ?? 0) + 1),
@@ -292,10 +309,11 @@ const getPairKind = (
     : null;
 };
 
-/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out; otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
+/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out, or when each has several but exactly one of its own is on a route the person paired by hand before (so one remembered of two settles it, both or neither leaves it asking); otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
 export function findAccountPairs(
   waiting: readonly OpenPurchase[],
   isOffer = false,
+  routes: readonly RouteMemorySealed[] = [],
 ): AccountPairMatches {
   const candidates = waiting
     .filter((purchase) => isPairCandidate(purchase, isOffer))
@@ -308,14 +326,30 @@ export function findAccountPairs(
       return kind === null ? [] : [{ out, into, kind }];
     }),
   );
-  const clear = new Map(
-    links.flatMap(({ out, into, kind }): [string, AccountPair][] =>
+  const isRouted = ({ out, into }: (typeof links)[number]) =>
+    routes.some(
+      (route) =>
+        route.fromAccountId === out.accountId &&
+        ((into.paidByCardId ?? null) !== null
+          ? route.toCardId === into.paidByCardId
+          : route.toAccountId === into.accountId),
+    );
+  const routed = links.filter(isRouted);
+  const byLinks = links.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
       links.filter((link) => link.out.id === out.id).length === 1 &&
       links.filter((link) => link.into.id === into.id).length === 1
         ? [[out.id, { inId: into.id, kind }]]
         : [],
-    ),
   );
+  const byRoutes = routed.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
+      routed.filter((link) => link.out.id === out.id).length === 1 &&
+      routed.filter((link) => link.into.id === into.id).length === 1
+        ? [[out.id, { inId: into.id, kind }]]
+        : [],
+  );
+  const clear = new Map([...byRoutes, ...byLinks]);
   const taken = new Set([
     ...clear.keys(),
     ...[...clear.values()].map(({ inId }) => inId),

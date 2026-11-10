@@ -10,10 +10,14 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
 import { findAccountPairs } from '@apps/runway/engine/matching';
-import { usePairAccountsWithUndo } from '@apps/runway/hooks/useBankMatch';
+import {
+  rememberHandPair,
+  usePairAccountsWithUndo,
+} from '@apps/runway/hooks/useBankMatch';
 import {
   selectAllCards,
   selectLostPairs,
+  selectRouteMemories,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type { OpenPurchase, PurchasePairKind } from '@apps/runway/types';
 import { getCardNamer } from '@apps/runway/utils/cardText';
@@ -38,6 +42,7 @@ function PairOffer({
   const { user } = useAuth();
   const waitingList = useAppSelector((state) => state.runway.needsHome);
   const lost = useAppSelector(selectLostPairs);
+  const routes = useAppSelector(selectRouteMemories);
   const accounts = useAppSelector((state) => state.runway.accounts);
   const cards = useAppSelector(selectAllCards);
   const pairAccounts = usePairAccountsWithUndo();
@@ -60,7 +65,7 @@ function PairOffer({
   const cardNameOf = getCardNamer(cards);
   const isOut = purchase.amountCents > 0;
   const offered = (
-    findAccountPairs(waiting, true).offers.get(purchase.id) ?? []
+    findAccountPairs(waiting, true, routes).offers.get(purchase.id) ?? []
   )
     .flatMap(({ otherId, kind }) => {
       const other = waiting.find((entry) => entry.id === otherId);
@@ -91,6 +96,11 @@ function PairOffer({
         ],
         'person',
         true,
+      );
+      void rememberHandPair(
+        user.uid,
+        isOut ? self : other,
+        isOut ? other : self,
       );
       onDone();
     } catch (pickError) {
