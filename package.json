@@ -89,6 +89,7 @@
     "check:helm-planner": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPlanner.ts",
     "check:helm-rest-day": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRestDay.ts",
     "check:helm-same-thing": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSameThing.ts",
+    "check:helm-who-tier": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/whoTier.ts",
     "check:helm-task-edits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmTaskEdits.ts",
     "voice:benchmark": "tsx scripts/voice/benchmark.ts",
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",
