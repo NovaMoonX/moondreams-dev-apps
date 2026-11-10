@@ -548,6 +548,7 @@ async function buildBackToBack(input: {
               assistantName: DEFAULT_ASSISTANT_NAME,
             }),
             answer: null,
+            questionAnswer: null,
           },
           encryption,
         ),
@@ -869,6 +870,7 @@ async function buildGmailTurn(input: {
           assistantName: DEFAULT_ASSISTANT_NAME,
         }),
         answer,
+        questionAnswer: null,
       },
       encryption,
     ),
@@ -998,6 +1000,7 @@ async function buildAnswerTurns(input: {
               assistantName: DEFAULT_ASSISTANT_NAME,
             }),
             answer,
+            questionAnswer: null,
           },
           encryption,
         ),
@@ -1612,6 +1615,7 @@ async function buildPeople(input: {
         assistantName: DEFAULT_ASSISTANT_NAME,
       }),
       answer: null,
+      questionAnswer: null,
     }),
   };
   return {
@@ -1732,7 +1736,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             sortedAt: isSorted ? sortedAt : null,
             screen: isMove ? MOVE_SCREEN : null,
             sealed: await sealJson<CaptureSealed>(
-              { text: turn.text, reading, answer: null },
+              { text: turn.text, reading, answer: null, questionAnswer: null },
               encryption,
             ),
           };

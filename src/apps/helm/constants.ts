@@ -1,3 +1,5 @@
+import { formatCentsShort } from '@/utils/moneyUtils';
+
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 
 export const DEFAULT_DAY_START_TIME = '08:00';
@@ -756,8 +758,6 @@ export const HELM_COPY = {
   questionNeedsConnection: 'Answering needs a connection.',
   questionSkip: 'Skip',
   questionSkipped: "Skipped. It's waiting in Needs you.",
-  questionSkippedAbout: (prompt: string) =>
-    `“${prompt}” is skipped and waiting in Needs you.`,
   questionAnswered: 'Done.',
   questionSheetTitle: 'Which one?',
   questionMore: (count: number) =>
@@ -789,12 +789,20 @@ export const HELM_COPY = {
     isPlace ? 'Name of the place' : 'Their name',
   questionAnswerNeedsName: 'A name is needed.',
   questionAnswerNeedsValue: 'Add an answer first.',
-  questionNumberOutOfRange: (min: number | null, max: number | null) =>
-    min !== null && max !== null
-      ? `Pick a number from ${min} to ${max}.`
+  questionNumberOutOfRange: (
+    min: number | null,
+    max: number | null,
+    isMoney = false,
+  ) => {
+    const show = (value: number) =>
+      isMoney ? formatCentsShort(value) : String(value);
+    const noun = isMoney ? 'an amount' : 'a number';
+    return min !== null && max !== null
+      ? `Pick ${noun} from ${show(min)} to ${show(max)}.`
       : min !== null
-        ? `The smallest is ${min}.`
-        : `The largest is ${max}.`,
+        ? `The smallest is ${show(min)}.`
+        : `The largest is ${max === null ? '' : show(max)}.`;
+  },
   questionAskAgain: (choices: string) => `Sorry, which one? ${choices}`,
   answerNoted: 'Got it.',
   answerNone: 'None of these',
@@ -808,7 +816,7 @@ export const HELM_COPY = {
   answerYouWrote: (words: string) => `You wrote: ${words}`,
   questionAsked: (prompt: string) => `Asked: ${prompt}`,
   questionSent: 'Sent.',
-  questionSkippedNote: "You skipped this. It's still waiting.",
+  questionSavedOffline: "Saved. It goes when you're back online.",
   questionOptionAria: (label: string, detail: string | null) =>
     detail ? `${label}, ${detail}` : label,
   whoEditMenu: 'Change details',

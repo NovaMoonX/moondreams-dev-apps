@@ -35,15 +35,17 @@ function QuestionSheet({ item, onClose }: QuestionSheetProps) {
               {HELM_COPY.unreadable}
             </p>
           )}
-          {questions.map((entry, index) => (
-            <QuestionCard
-              key={entry.id}
-              captureId={item.capture.id}
-              item={entry}
-              isInSheet
-              isPromptHidden={index === 0}
-            />
-          ))}
+          <div className='space-y-8'>
+            {questions.map((entry, index) => (
+              <QuestionCard
+                key={entry.id}
+                captureId={item.capture.id}
+                item={entry}
+                isInSheet
+                isPromptHidden={index === 0}
+              />
+            ))}
+          </div>
         </div>
       )}
     </DetailSheet>

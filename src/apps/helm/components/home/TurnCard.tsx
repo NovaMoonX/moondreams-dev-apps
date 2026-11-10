@@ -107,7 +107,11 @@ function TurnCard({
     if (uid && missingKey) void loadExecutionsById(uid, missingKey.split(','));
   }, [uid, missingKey]);
   const openQuestions = capture.isUnreadable ? [] : getOpenQuestions(capture);
-  const questions = openQuestions.slice(0, QUESTIONS_PER_TURN);
+  const unskipped = openQuestions.filter((entry) => entry.skippedAt === null);
+  const questions = [
+    ...unskipped,
+    ...openQuestions.filter((entry) => entry.skippedAt !== null),
+  ].slice(0, QUESTIONS_PER_TURN);
   const answered = capture.isUnreadable ? [] : getAnsweredQuestions(capture);
   const planLine = getPlanLine();
   const lastMessage = joined.at(-1) ?? capture;
@@ -118,6 +122,19 @@ function TurnCard({
     capture.executionIds.length === 0 &&
     !capture.answer &&
     !capture.planDayKey;
+  const hasNothingShown =
+    !capture.isUnreadable &&
+    (isSorted || capture.status === 'needsYou') &&
+    capture.executionIds.length === 0 &&
+    !capture.answer &&
+    !capture.planDayKey &&
+    heldLine === null &&
+    openQuestions.length === 0;
+  const quietLine = isQuietAnswer
+    ? (capture.line ?? HELM_COPY.answerNoted)
+    : hasNothingShown
+      ? capture.line
+      : null;
   const hasLost =
     hasResults && missingKey.split(',').some((id) => failedIds.includes(id));
   function getPlanLine() {
@@ -212,9 +229,9 @@ function TurnCard({
           <AssistantLine>{planLine}</AssistantLine>
         </div>
       )}
-      {isQuietAnswer && (
+      {quietLine !== null && (
         <div className='flex w-full flex-col items-start gap-2' role='status'>
-          <AssistantLine>{HELM_COPY.answerNoted}</AssistantLine>
+          <AssistantLine>{quietLine}</AssistantLine>
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (
@@ -238,14 +255,18 @@ function TurnCard({
           answer={entry.answer}
         />
       ))}
-      {questions.map((entry) => (
-        <QuestionCard
-          key={entry.id}
-          captureId={capture.id}
-          item={entry}
-          isInSheet={false}
-        />
-      ))}
+      {questions.length > 0 && (
+        <div className='mt-2 flex w-full flex-col items-start gap-8'>
+          {questions.map((entry) => (
+            <QuestionCard
+              key={entry.id}
+              captureId={capture.id}
+              item={entry}
+              isInSheet={false}
+            />
+          ))}
+        </div>
+      )}
       {openQuestions.length > questions.length && (
         <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
           {HELM_COPY.questionMore(openQuestions.length - questions.length)}

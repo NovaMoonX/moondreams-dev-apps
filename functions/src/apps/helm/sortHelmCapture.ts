@@ -65,7 +65,12 @@ import {
   planAnswerTurn,
   type AskedCapture,
 } from './nomos/answerTurn.js';
-import { ALREADY_ANSWERED_LINE, ASK_DEFERRED_LINE } from './nomos/summaries.js';
+import {
+  ALREADY_ANSWERED_LINE,
+  ASK_DEFERRED_LINE,
+  NOTHING_CHANGED_LINE,
+  buildAnswerKeptLine,
+} from './nomos/summaries.js';
 import {
   buildAnswerExecution,
   buildExecution,
@@ -1440,7 +1445,14 @@ async function writeResult(
         ? ASK_DEFERRED_LINE
         : isFiling
           ? null
-          : firstQuestion;
+          : (firstQuestion ??
+            (reply
+              ? null
+              : answerTurn && commands.length > 0
+                ? NOTHING_CHANGED_LINE
+                : answerTurn && turn?.kind === 'apply'
+                  ? buildAnswerKeptLine(answerTurn.words)
+                  : null));
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,

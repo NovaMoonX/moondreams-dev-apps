@@ -8,7 +8,7 @@ import type { AnswerPartProps } from '@apps/helm/components/home/AnswerPartProps
 import { HELM_COPY } from '@apps/helm/constants';
 
 /** A day, a time or both, by the question's mode; Send waits until every field it asks for is filled. */
-function DateTimeAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
+function DateTimeAnswer({ question, isBusy, skip, onAnswer }: AnswerPartProps) {
   const [day, setDay] = useState('');
   const [time, setTime] = useState('');
   const mode = question.dateMode ?? 'dateTime';
@@ -43,21 +43,24 @@ function DateTimeAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
           />
         )}
       </div>
-      <Button
-        type='button'
-        variant='primary'
-        className='self-end'
-        disabled={!canSend}
-        onClick={() =>
-          onAnswer({
-            shape: 'dateTime',
-            date,
-            time: needsTime ? time : null,
-          })
-        }
-      >
-        {HELM_COPY.questionSend}
-      </Button>
+      <div className='flex items-center justify-between gap-3'>
+        {skip}
+        <Button
+          type='button'
+          variant='primary'
+          className='ml-auto'
+          disabled={!canSend}
+          onClick={() =>
+            onAnswer({
+              shape: 'dateTime',
+              date,
+              time: needsTime ? time : null,
+            })
+          }
+        >
+          {HELM_COPY.questionSend}
+        </Button>
+      </div>
     </div>
   );
 }

@@ -200,6 +200,10 @@ export const ASK_DEFERRED_LINE =
 
 export const ALREADY_ANSWERED_LINE = 'That was already answered.';
 
+export const NOTHING_CHANGED_LINE = 'Nothing changed.';
+
+export const buildAnswerKeptLine = (words: string) => `Got it: ${words}.`;
+
 /** The sealed half of a model-written question: no held commands, and no answer until one is given. */
 export const buildAskedQuestion = (ask: AskCommand) => ({
   kind: 'asked' as const,

@@ -19,7 +19,10 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import { skipQuestion } from '@apps/helm/store/actions/captureActions';
-import { sendQuestionAnswer } from '@apps/helm/store/actions/questionActions';
+import {
+  isAnswerInFlight,
+  sendQuestionAnswer,
+} from '@apps/helm/store/actions/questionActions';
 import type { QuestionAnswerValue, QuestionShape } from '@apps/helm/types';
 import type { OpenQuestion } from '@apps/helm/utils/heldCaptures';
 
@@ -42,6 +45,9 @@ const PARTS: Record<QuestionShape, ComponentType<AnswerPartProps>> = {
   number: NumberAnswer,
 };
 
+/** The shapes that draw their own primary button, which Skip shares a row with. */
+const OWN_PRIMARY: QuestionShape[] = ['pickSeveral', 'number', 'dateTime'];
+
 /** One open question in the shape that fits it, with Skip. A code-built question (which person or place) is answered on the server and needs a connection; one the assistant wrote is answered as a turn, which waits offline like any other. */
 function QuestionCard({
   captureId,
@@ -62,8 +68,8 @@ function QuestionCard({
 
   if (isSkipped && !isInSheet) {
     return (
-      <p className='text-muted-foreground self-start pl-[30px] text-[13px] text-pretty'>
-        {HELM_COPY.questionSkippedAbout(question.prompt)}
+      <p className='text-muted-foreground self-start pl-[30px] text-left text-[13px] text-pretty'>
+        {HELM_COPY.questionSkipped}
       </p>
     );
   }
@@ -114,7 +120,7 @@ function QuestionCard({
     value: QuestionAnswerValue,
     recordName: string | null = null,
   ) => {
-    if (isWorking || isSent) return;
+    if (isWorking || isSent || isAnswerInFlight(captureId, id)) return;
     setNote(null);
     void (isModelWritten
       ? answerAsTurn(value, recordName)
@@ -129,6 +135,19 @@ function QuestionCard({
     });
   };
 
+  const skipButton = (
+    <Button
+      type='button'
+      variant='tertiary'
+      size='sm'
+      className={join(QUIET_CLASS, 'text-muted-foreground!')}
+      disabled={isWorking}
+      onClick={skip}
+    >
+      {HELM_COPY.questionSkip}
+    </Button>
+  );
+
   const message =
     isOffline && !isModelWritten ? HELM_COPY.questionNeedsConnection : note;
 
@@ -142,32 +161,30 @@ function QuestionCard({
         )}
       >
         {isSkipped && isInSheet && (
-          <p className='text-muted-foreground text-[13px] text-pretty'>
-            {HELM_COPY.questionSkippedNote}
+          <p className='text-muted-foreground text-left text-[13px] text-pretty'>
+            {HELM_COPY.questionSkipped}
           </p>
         )}
-        {isSent ? (
+        {isSent || isAnswerInFlight(captureId, id) ? (
           <p
             className='text-muted-foreground text-[13px] text-pretty'
             role='status'
           >
-            {HELM_COPY.questionSent}
+            {isOffline
+              ? HELM_COPY.questionSavedOffline
+              : HELM_COPY.questionSent}
           </p>
         ) : (
           <>
-            <Part question={question} isBusy={isWorking} onAnswer={answer} />
-            {!isSkipped && (
+            <Part
+              question={question}
+              isBusy={isWorking}
+              skip={isSkipped ? null : skipButton}
+              onAnswer={answer}
+            />
+            {!isSkipped && !OWN_PRIMARY.includes(question.shape) && (
               <div className='flex flex-wrap items-center gap-x-3 gap-y-3'>
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  size='sm'
-                  className={join(QUIET_CLASS, 'text-muted-foreground!')}
-                  disabled={isWorking}
-                  onClick={skip}
-                >
-                  {HELM_COPY.questionSkip}
-                </Button>
+                {skipButton}
               </div>
             )}
           </>

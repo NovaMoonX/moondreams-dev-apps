@@ -9,7 +9,12 @@ import { HELM_COPY } from '@apps/helm/constants';
 const NONE_ID = 'none';
 
 /** Tall choices that tick on and off; "None of these" clears the others and any tick clears it, and Done sends what is ticked. */
-function PickSeveralAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
+function PickSeveralAnswer({
+  question,
+  isBusy,
+  skip,
+  onAnswer,
+}: AnswerPartProps) {
   const [picked, setPicked] = useState<string[]>([]);
   const [hint, setHint] = useState<string | null>(null);
   const choices = question.options.filter((option) => option.id !== NONE_ID);
@@ -55,17 +60,20 @@ function PickSeveralAnswer({ question, isBusy, onAnswer }: AnswerPartProps) {
           }}
         />
       )}
-      <Button
-        type='button'
-        variant='primary'
-        className='self-end'
-        disabled={isBusy}
-        onClick={done}
-      >
-        {picked.length > 0 && !picked.includes(NONE_ID)
-          ? HELM_COPY.questionDoneCount(picked.length)
-          : HELM_COPY.questionDone}
-      </Button>
+      <div className='flex items-center justify-between gap-3'>
+        {skip}
+        <Button
+          type='button'
+          variant='primary'
+          className='ml-auto'
+          disabled={isBusy}
+          onClick={done}
+        >
+          {picked.length > 0 && !picked.includes(NONE_ID)
+            ? HELM_COPY.questionDoneCount(picked.length)
+            : HELM_COPY.questionDone}
+        </Button>
+      </div>
       {hint && (
         <p
           className='text-muted-foreground text-[13px] text-pretty'

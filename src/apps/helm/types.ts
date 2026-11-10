@@ -296,7 +296,7 @@ export interface CaptureSealed {
   /** The questions the turn asked, by id; only the readable ones carry words here. */
   questions?: Record<string, unknown>;
   /** On a turn that answers a question, the structured answer; null when a spoken one could not be placed. A turn made before answers had shapes reads as null. */
-  questionAnswer?: QuestionAnswerValue | null;
+  questionAnswer: QuestionAnswerValue | null;
   /** The line the server wrote for the person to hear and read; absent until it wrote one. */
   spoken?: { text: string } | null;
 }
