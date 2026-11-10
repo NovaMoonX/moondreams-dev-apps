@@ -103,6 +103,12 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     ? HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
+  const kinds = new Set(
+    (manifest?.categories ?? [])
+      .filter((category) => grant.categories[category.id]?.isOn)
+      .map((category) => category.kind),
+  );
+  const countKind = kinds.size === 1 ? ([...kinds][0] ?? null) : null;
   const hasStopped =
     isGoogle &&
     (grant.status === 'needsReconnect' || account?.status === 'needsReconnect');
@@ -202,23 +208,27 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         </div>
       </div>
       {hasStopped && (
-        <div className='flex flex-col items-start gap-3'>
-          <InlineNotice tone='warning' title={HELM_COPY.googleStoppedTitle}>
+        <InlineNotice tone='warning' title={HELM_COPY.googleStoppedTitle}>
+          <p>
             {HELM_COPY.googleStoppedBody(
               newestOkAt === null ? null : formatUpdatedAt(newestOkAt, now),
             )}
-          </InlineNotice>
-          {isOffline ? (
-            locked
-          ) : (
-            <Button
-              type='button'
-              onClick={() => begin({ accountId: grant.accountId })}
-            >
-              {HELM_COPY.googleReconnect}
-            </Button>
-          )}
-        </div>
+          </p>
+          <div className='mt-3 flex'>
+            {isOffline ? (
+              locked
+            ) : (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => begin({ accountId: grant.accountId })}
+              >
+                {HELM_COPY.googleReconnect}
+              </Button>
+            )}
+          </div>
+        </InlineNotice>
       )}
       <p className='text-[15px] break-words'>
         <span className='text-muted-foreground'>
@@ -243,15 +253,17 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             onClick={() => setIsLabelOpen(true)}
             hasChevron
           />
-          <SettingsRow
-            icon={<CalendarCheck className='size-5' aria-hidden='true' />}
-            title={HELM_COPY.googleWhichCalendars}
-            description={HELM_COPY.googleCalendarsCount(
-              grant.options?.calendarIds.length ?? 0,
-            )}
-            onClick={() => openCalendarPicker(grant.accountId)}
-            hasChevron
-          />
+          {!hasStopped && (
+            <SettingsRow
+              icon={<CalendarCheck className='size-5' aria-hidden='true' />}
+              title={HELM_COPY.googleWhichCalendars}
+              description={HELM_COPY.googleCalendarsCount(
+                grant.options?.calendarIds.length ?? 0,
+              )}
+              onClick={() => openCalendarPicker(grant.accountId)}
+              hasChevron
+            />
+          )}
         </SettingsGroup>
       )}
       <section className='flex flex-col gap-3'>
@@ -318,30 +330,32 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             );
           })}
         </ul>
-        <div className='flex items-center justify-between gap-3'>
-          <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
-            {newestOkAt === null
-              ? HELM_COPY.syncedWaiting
-              : HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}
-          </p>
-          {isOffline ? (
-            locked
-          ) : (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              loading={isSyncing}
-              onClick={() => void syncNow()}
-            >
-              {isSyncing
-                ? HELM_COPY.syncedUpdating
-                : hasError
-                  ? HELM_COPY.syncedTryNow
-                  : HELM_COPY.syncedNow}
-            </Button>
-          )}
-        </div>
+        {!hasStopped && (
+          <div className='flex items-center justify-between gap-3'>
+            <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
+              {newestOkAt === null
+                ? HELM_COPY.syncedWaiting
+                : HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}
+            </p>
+            {isOffline ? (
+              locked
+            ) : (
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                loading={isSyncing}
+                onClick={() => void syncNow()}
+              >
+                {isSyncing
+                  ? HELM_COPY.syncedUpdating
+                  : hasError
+                    ? HELM_COPY.syncedTryNow
+                    : HELM_COPY.syncedNow}
+              </Button>
+            )}
+          </div>
+        )}
         {syncFailure && (
           <p className='text-destructive text-[13px]' role='alert'>
             {syncFailure}
@@ -379,7 +393,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         grantId={grant.id}
         appName={appName}
         count={copyCount}
-        note={isGoogle ? HELM_COPY.googleDisconnectNote : null}
+        accountName={isGoogle && account ? account.email : null}
+        countKind={countKind}
+        note={
+          isGoogle
+            ? {
+                title: HELM_COPY.googleDisconnectNoteTitle,
+                text: HELM_COPY.googleDisconnectNote,
+              }
+            : null
+        }
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }

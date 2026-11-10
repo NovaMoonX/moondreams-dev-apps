@@ -1,11 +1,6 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+
+import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -23,7 +18,9 @@ import {
   handOffGoogleAuthReturn,
   readGoogleAuthReturn,
   requestGoogleAuthCode,
+  takeGoogleAuthState,
 } from '@/lib/google/requestGoogleAuthCode';
+import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import CalendarPicker, {
@@ -43,6 +40,9 @@ interface Intro {
   /** A line already known when the sheet opens, such as a refusal on the way back from Google. */
   failure: string | null;
 }
+
+const isPopupPage = () =>
+  window.opener !== null && (window.opener as Window) !== window;
 
 const toFailureLine = (error: unknown, name: string) =>
   (error as { code?: string } | null)?.code === 'functions/permission-denied'
@@ -75,10 +75,13 @@ const stripReturnQuery = () => {
 
 function IntroForm({
   intro,
+  accountName,
   onClose,
   onFinished,
 }: {
   intro: Intro;
+  /** The account being reconnected, named so the person knows which one Google will ask about. */
+  accountName: string | null;
   onClose: () => void;
   onFinished: (finished: FinishGoogleConnectionResult) => void;
 }) {
@@ -104,6 +107,11 @@ function IntroForm({
 
   return (
     <div className='flex flex-col gap-4'>
+      {accountName && (
+        <p className='text-foreground text-[15px] break-words'>
+          {HELM_COPY.googleReconnectAccount(accountName)}
+        </p>
+      )}
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.googleConnectReadOnly(name)}
       </p>
@@ -155,9 +163,26 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const { addToast } = useToast();
   const { grants } = useConnections({ readerAppId: 'helm' });
-  const [intro, setIntro] = useState<Intro | null>(null);
+  const { accounts } = useConnectionAccounts(user?.uid ?? null);
+  const [returned] = useState(() =>
+    readGoogleAuthReturn(window.location.search),
+  );
+  const [intro, setIntro] = useState<Intro | null>(() =>
+    returned && 'error' in returned && !isPopupPage()
+      ? {
+          accountId: null,
+          isAnotherAccount: false,
+          failure:
+            returned.error === 'access_denied'
+              ? HELM_COPY.googleNeedsPermission(name)
+              : HELM_COPY.googleConnectFailed,
+        }
+      : null,
+  );
   const [picker, setPicker] = useState<CalendarPickerTarget | null>(null);
-  const hasHandledReturn = useRef(false);
+  const introAccount = intro?.accountId
+    ? (accounts.find((entry) => entry.id === intro.accountId) ?? null)
+    : null;
 
   const value = useMemo<GoogleConnectValue>(
     () => ({
@@ -187,32 +212,46 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     setPicker({ accountId: finished.accountId, mode: 'connect' });
   };
 
-  const onReturnFinished = useEffectEvent(handleFinished);
-  const onReturnFailed = useEffectEvent((error: unknown) => {
+  const onReturnFailed = (error: unknown) => {
     console.error('Helm Google connection did not finish', error);
     setIntro({
       accountId: null,
       isAnotherAccount: false,
       failure: toFailureLine(error, name),
     });
-  });
+  };
 
   useEffect(() => {
-    if (hasHandledReturn.current) return;
-    const returned = readGoogleAuthReturn(window.location.search);
-    if (!returned) return;
-    if (handOffGoogleAuthReturn()) {
-      hasHandledReturn.current = true;
-      return;
-    }
-    if (loading || !user) return;
-    hasHandledReturn.current = true;
-    stripReturnQuery();
-    if ('code' in returned)
-      finishGoogleConnection(returned)
-        .then(onReturnFinished)
-        .catch(onReturnFailed);
-  }, [loading, user]);
+    if (!returned || handOffGoogleAuthReturn()) return;
+    if ('error' in returned) stripReturnQuery();
+  }, [returned]);
+
+  const isReturningWithCode =
+    returned !== null && 'code' in returned && !isPopupPage();
+  useQuery({
+    queryKey: [
+      'helm',
+      'googleReturn',
+      returned && 'code' in returned ? returned.state : null,
+    ],
+    enabled: isReturningWithCode && !loading && !!user,
+    retry: false,
+    gcTime: 0,
+    staleTime: Infinity,
+    queryFn: async () => {
+      if (!returned || !('code' in returned)) return false;
+      stripReturnQuery();
+      const kept = takeGoogleAuthState();
+      try {
+        if (kept !== null && kept !== returned.state)
+          throw new Error('Google sign-in state did not match');
+        handleFinished(await finishGoogleConnection(returned));
+      } catch (error) {
+        onReturnFailed(error);
+      }
+      return true;
+    },
+  });
 
   return (
     <GoogleConnectContext.Provider value={value}>
@@ -220,11 +259,23 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       <FormSheet
         isOpen={intro !== null}
         onClose={() => setIntro(null)}
-        title={HELM_COPY.googleConnectTitle}
+        title={
+          intro?.accountId
+            ? HELM_COPY.googleReconnectTitle
+            : HELM_COPY.googleConnectTitle
+        }
       >
         {intro && (
           <IntroForm
             intro={intro}
+            accountName={
+              introAccount
+                ? HELM_COPY.googleAccountTitle(
+                    introAccount.email,
+                    introAccount.label,
+                  )
+                : null
+            }
             onClose={() => setIntro(null)}
             onFinished={handleFinished}
           />

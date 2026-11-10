@@ -1,5 +1,6 @@
 import { useState } from 'react';
 
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarDays } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
@@ -20,6 +21,7 @@ import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 import { formatDateShort } from '@/utils/formatUtils';
@@ -34,7 +36,10 @@ const GOOGLE_ADD_ID = 'google-add';
 
 const googleLogo = (
   <span
-    className={`${LOGO} bg-muted text-muted-foreground flex shrink-0 items-center justify-center`}
+    className={join(
+      LOGO,
+      'bg-muted text-muted-foreground flex shrink-0 items-center justify-center',
+    )}
   >
     <CalendarDays className='size-5' aria-hidden='true' />
   </span>
@@ -60,13 +65,22 @@ function ConnectedAppsScreen({
     includeEnded: true,
   });
   const grants = everyGrant.filter((grant) => grant.status !== 'ended');
+  const { nameOf: sourceNameOf } = useSourceAppName();
   const kept = everyGrant.flatMap((grant) => {
-    const appId = readConnectorAppId(grant.connectorId);
+    const account = accounts.find((entry) => entry.id === grant.accountId);
     return grant.status === 'ended' &&
-      appId &&
       grant.keptCopies &&
       grant.keptCopies.count > 0
-      ? [{ grantId: grant.id, appId, ...grant.keptCopies }]
+      ? [
+          {
+            grantId: grant.id,
+            connectorId: grant.connectorId,
+            appName: account
+              ? HELM_COPY.googleAccountTitle(account.email, account.label)
+              : sourceNameOf(grant.connectorId),
+            ...grant.keptCopies,
+          },
+        ]
       : [];
   });
   const [openKeptId, setOpenKeptId] = useState<string | null>(null);
@@ -196,8 +210,16 @@ function ConnectedAppsScreen({
               <ConnectedSourcesList
                 rows={kept.map((row) => ({
                   id: row.grantId,
-                  logo: <AppLogo appId={row.appId} className={LOGO} />,
-                  title: nameOf(row.appId),
+                  logo:
+                    readConnectorAppId(row.connectorId) === null ? (
+                      googleLogo
+                    ) : (
+                      <AppLogo
+                        appId={readConnectorAppId(row.connectorId) ?? ''}
+                        className={LOGO}
+                      />
+                    ),
+                  title: row.appName,
                   meta: HELM_COPY.keptFromRow(
                     row.count,
                     row.deleteAfter === null
@@ -247,11 +269,7 @@ function ConnectedAppsScreen({
         )}
       </main>
       <KeptCopiesSheet
-        kept={
-          kept
-            .filter((row) => row.grantId === openKeptId)
-            .map((row) => ({ ...row, appName: nameOf(row.appId) }))[0] ?? null
-        }
+        kept={kept.filter((row) => row.grantId === openKeptId)[0] ?? null}
         onClose={() => setOpenKeptId(null)}
       />
       <ConnectSheet app={connecting} onClose={() => setConnecting(null)} />

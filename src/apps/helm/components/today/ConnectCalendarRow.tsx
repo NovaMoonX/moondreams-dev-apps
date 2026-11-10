@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { CalendarDays, ChevronRight } from 'lucide-react';
 
+import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -49,6 +50,7 @@ function ConnectCalendarRow() {
   const { user } = useAuth();
   const { begin } = useGoogleConnect();
   const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
+  const { accounts } = useConnectionAccounts(user?.uid ?? null);
   const profile = useAppSelector((state) => state.helm.profile);
   const calendars = grants.filter(
     (grant) => grant.connectorId === 'google:calendar',
@@ -62,15 +64,24 @@ function ConnectCalendarRow() {
   if (stopped.length > 0)
     return (
       <div className='space-y-2'>
-        {stopped.map((grant) => (
-          <div key={grant.id} className='helm-card overflow-hidden'>
-            <CalendarRow
-              title={HELM_COPY.calendarReconnectTitle}
-              reason={HELM_COPY.calendarReconnectReason}
-              onOpen={() => begin({ accountId: grant.accountId })}
-            />
-          </div>
-        ))}
+        {stopped.map((grant) => {
+          const account = accounts.find(
+            (entry) => entry.id === grant.accountId,
+          );
+          return (
+            <div key={grant.id} className='helm-card overflow-hidden'>
+              <CalendarRow
+                title={HELM_COPY.calendarReconnectTitle(
+                  account
+                    ? (account.label ?? account.email)
+                    : HELM_COPY.googleCalendarName,
+                )}
+                reason={HELM_COPY.calendarReconnectReason}
+                onOpen={() => begin({ accountId: grant.accountId })}
+              />
+            </div>
+          );
+        })}
       </div>
     );
 
@@ -89,6 +100,7 @@ function ConnectCalendarRow() {
           type='button'
           variant='tertiary'
           size='sm'
+          className="relative after:absolute after:-inset-x-2 after:-inset-y-1.5 after:content-['']"
           onClick={() => {
             if (user)
               foldCalendarOffer(user.uid).catch((error: unknown) =>

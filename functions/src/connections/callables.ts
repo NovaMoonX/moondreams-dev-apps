@@ -295,6 +295,22 @@ export const endConnection = onCall(END_OPTIONS, async (request) => {
   return result;
 });
 
+const ACCOUNT_ID = /^g_[0-9a-f]{16}$/;
+
+/** Forgets an outside account the person backed out of before any grant was written; refused quietly while a live grant uses it. */
+export const releaseUnusedAccount = onCall(END_OPTIONS, async (request) => {
+  const auth = requireAuth(request);
+  const data: unknown = request.data;
+  const accountId =
+    typeof data === 'object' && data !== null
+      ? (data as { accountId?: unknown }).accountId
+      : null;
+  if (typeof accountId !== 'string' || !ACCOUNT_ID.test(accountId))
+    throw new HttpsError('invalid-argument', "That account isn't valid.");
+  await revokeUnusedGoogleAccount(getFirestore(), auth.uid, accountId);
+  return { accountId };
+});
+
 /** An outside account no live grant uses any more is signed out at Google and forgotten; a failure here is logged and never blocks. */
 const revokeUnusedAccount = async (uid: string, grantId: string) => {
   try {

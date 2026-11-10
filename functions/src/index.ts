@@ -17,6 +17,7 @@ export { updateConnection } from './connections/callables.js';
 export { endConnection } from './connections/callables.js';
 export { syncConnections } from './connections/callables.js';
 export { deleteKeptCopies } from './connections/callables.js';
+export { releaseUnusedAccount } from './connections/callables.js';
 export { startGoogleConnection } from './connections/google/oauth.js';
 export { finishGoogleConnection } from './connections/google/oauth.js';
 export { verifyConnectionKeys } from './connections/verifyConnectionKeys.js';

@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useQuery } from '@tanstack/react-query';
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -9,12 +10,14 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import {
   grantConnection,
   readConnectorOptions,
+  releaseUnusedAccount,
   syncConnections,
   updateConnection,
 } from '@/lib/connections/connectionCalls';
 import type { ConnectorOption } from '@/lib/connections/contract';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAuth } from '@/hooks/useAuth';
+import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -40,9 +43,15 @@ const failureLine = (error: unknown) => {
 function PickerForm({
   target,
   onClose,
+  onDismiss,
+  registerClose,
 }: {
   target: CalendarPickerTarget;
+  /** The picker is finished: what was staged is applied. */
   onClose: () => void;
+  /** The person leaves without applying anything. */
+  onDismiss: () => void;
+  registerClose: (close: (() => void) | null) => void;
 }) {
   const { accountId, mode } = target;
   const name = useAssistantName();
@@ -52,7 +61,7 @@ function PickerForm({
   const shiftIds = useAppSelector(
     (state) => state.helm.profile?.shiftCalendarIds ?? [],
   );
-  const { grants } = useConnections({ readerAppId: 'helm' });
+  const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
   const grant =
     grants.find(
       (entry) =>
@@ -60,32 +69,24 @@ function PickerForm({
         entry.accountId === accountId &&
         entry.status !== 'ended',
     ) ?? null;
-  const [attempt, setAttempt] = useState(0);
-  const [loaded, setLoaded] = useState<{
-    attempt: number;
-    options: ConnectorOption[] | null;
-  } | null>(null);
   const [tickEdits, setTickEdits] = useState<Record<string, boolean>>({});
   const [shiftEdits, setShiftEdits] = useState<Record<string, boolean>>({});
   const [isTouched, setIsTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isCurrent = true;
-    readConnectorOptions({ connectorId: CONNECTOR_ID, accountId })
-      .then((options) => isCurrent && setLoaded({ attempt, options }))
-      .catch((error: unknown) => {
-        console.error('Helm calendars did not load', error);
-        if (isCurrent) setLoaded({ attempt, options: null });
-      });
-    return () => {
-      isCurrent = false;
-    };
-  }, [accountId, attempt]);
-
-  const current = loaded?.attempt === attempt ? loaded : null;
-  const options = current?.options ?? [];
+  const calendars = useQuery({
+    queryKey: ['helm', 'calendarOptions', accountId],
+    queryFn: () =>
+      readConnectorOptions({ connectorId: CONNECTOR_ID, accountId }),
+    retry: false,
+    gcTime: 0,
+    refetchOnWindowFocus: false,
+  });
+  const isGrantPending = mode === 'edit' && !grant;
+  const hasFailed = calendars.isError;
+  const options = calendars.data ?? [];
+  const isReady = calendars.isSuccess && !isGrantPending;
   const shiftKey = (option: ConnectorOption) => `${accountId}/${option.id}`;
   const isTicked = (option: ConnectorOption) =>
     tickEdits[option.id] ??
@@ -97,10 +98,31 @@ function PickerForm({
     (shiftEdits[option.id] ?? shiftIds.includes(shiftKey(option)));
   const calendarIds = options.filter(isTicked).map((option) => option.id);
   const isNoneTicked = calendarIds.length === 0;
+  const firstShiftId = options.find(isShift)?.id ?? null;
+  const isDirty =
+    mode === 'edit' &&
+    isReady &&
+    options.some(
+      (option) =>
+        isTicked(option) !==
+          (grant?.options?.calendarIds.includes(option.id) ?? false) ||
+        isShift(option) !==
+          ((grant?.options?.calendarIds.includes(option.id) ?? false) &&
+            shiftIds.includes(shiftKey(option))),
+    );
+  const requestClose = useDiscardGuard({
+    isDirty,
+    onClose: onDismiss,
+    isBusy: isSaving,
+  });
+  useEffect(() => {
+    registerClose(requestClose);
+    return () => registerClose(null);
+  });
 
   const save = async () => {
     setIsTouched(true);
-    if (isNoneTicked || isSaving || !user) return;
+    if (!isReady || isNoneTicked || isSaving || !user) return;
     setIsSaving(true);
     setFailure(null);
     try {
@@ -154,12 +176,14 @@ function PickerForm({
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.calendarPickerLead(name)}
       </p>
-      {!current && (
+      {!hasFailed && !isReady && (
         <p className='text-muted-foreground text-[13px]' role='status'>
-          {HELM_COPY.calendarPickerLoading}
+          {isGrantPending && isKnown
+            ? HELM_COPY.connectionGone
+            : HELM_COPY.calendarPickerLoading}
         </p>
       )}
-      {current && current.options === null && (
+      {hasFailed && (
         <div className='flex flex-col items-start gap-2'>
           <p className='text-destructive text-sm text-pretty' role='alert'>
             {HELM_COPY.calendarPickerFailed}
@@ -168,18 +192,18 @@ function PickerForm({
             type='button'
             variant='secondary'
             size='sm'
-            onClick={() => setAttempt((count) => count + 1)}
+            onClick={() => void calendars.refetch()}
           >
             {HELM_COPY.googleTryAgain}
           </Button>
         </div>
       )}
-      {current?.options && options.length === 0 && (
+      {isReady && options.length === 0 && (
         <p className='text-muted-foreground text-[15px] text-pretty'>
           {HELM_COPY.calendarPickerEmpty}
         </p>
       )}
-      {options.length > 0 && (
+      {isReady && options.length > 0 && (
         <ul className='divide-border flex flex-col divide-y'>
           {options.map((option) => (
             <li key={option.id} className='py-1'>
@@ -193,7 +217,7 @@ function PickerForm({
                 />
                 <span
                   aria-hidden='true'
-                  className='bg-muted-foreground size-3 shrink-0 rounded-full'
+                  className='bg-muted-foreground border-border size-3 shrink-0 rounded-full border'
                   style={
                     option.colour
                       ? { backgroundColor: option.colour }
@@ -212,7 +236,7 @@ function PickerForm({
                 </span>
               </label>
               {isTicked(option) && (
-                <label className='flex min-h-10 items-center gap-3 pb-2 pl-9'>
+                <label className='flex min-h-10 items-center gap-3 pl-14'>
                   <Checkbox
                     aria-label={`${HELM_COPY.calendarPickerShifts}: ${option.name}`}
                     checked={isShift(option)}
@@ -228,14 +252,14 @@ function PickerForm({
                   </span>
                 </label>
               )}
+              {option.id === firstShiftId && (
+                <p className='text-muted-foreground pb-2 pl-14 text-[13px] text-pretty'>
+                  {HELM_COPY.calendarPickerShiftsHint}
+                </p>
+              )}
             </li>
           ))}
         </ul>
-      )}
-      {calendarIds.length > 0 && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.calendarPickerShiftsHint}
-        </p>
       )}
       {isTouched && isNoneTicked && options.length > 0 && (
         <p className='text-destructive text-sm' role='alert'>
@@ -252,7 +276,7 @@ function PickerForm({
           <Button
             type='button'
             variant='tertiary'
-            onClick={onClose}
+            onClick={requestClose}
             disabled={isSaving}
           >
             {mode === 'connect'
@@ -272,7 +296,7 @@ function PickerForm({
             <Button
               type='button'
               loading={isSaving}
-              disabled={!current?.options || options.length === 0}
+              disabled={!isReady || options.length === 0}
               onClick={() => void save()}
             >
               {confirmLabel}
@@ -284,7 +308,7 @@ function PickerForm({
   );
 }
 
-/** Which of an account's calendars count, and which are shifts: staged on the sheet and applied together. A calendar added in Google later shows unticked; one deleted there is gone from the list. */
+/** Which of an account's calendars count, and which are shifts: staged on the sheet and applied together. A calendar added in Google later shows unticked; one deleted there is gone from the list. Backing out of a first connection forgets the account, since nothing was connected. */
 function CalendarPicker({
   target,
   onClose,
@@ -292,10 +316,21 @@ function CalendarPicker({
   target: CalendarPickerTarget | null;
   onClose: () => void;
 }) {
+  const closeRef = useRef<(() => void) | null>(null);
+
+  const dismiss = () => {
+    if (target?.mode === 'connect')
+      releaseUnusedAccount({ accountId: target.accountId }).catch(
+        (error: unknown) =>
+          console.error('Helm unused account was not released', error),
+      );
+    onClose();
+  };
+
   return (
     <FormSheet
       isOpen={target !== null}
-      onClose={onClose}
+      onClose={() => (closeRef.current ?? dismiss)()}
       title={HELM_COPY.googleWhichCalendars}
     >
       {target && (
@@ -303,6 +338,10 @@ function CalendarPicker({
           key={`${target.accountId}|${target.mode}`}
           target={target}
           onClose={onClose}
+          onDismiss={dismiss}
+          registerClose={(run) => {
+            closeRef.current = run;
+          }}
         />
       )}
     </FormSheet>

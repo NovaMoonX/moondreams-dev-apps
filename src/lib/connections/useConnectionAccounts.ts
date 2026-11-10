@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 
 import { collection, onSnapshot } from 'firebase/firestore';
 
@@ -28,43 +28,80 @@ const toAccount = (
 });
 
 interface Loaded {
-  uid: string;
   accounts: ConnectionAccountWithId[];
   error: Error | null;
   isServerKnown: boolean;
 }
 
+interface Shared {
+  loaded: Loaded | null;
+  watchers: Set<() => void>;
+  stop: () => void;
+}
+
+const shared = new Map<string, Shared>();
+
+const start = (uid: string, entry: Shared) => {
+  const publish = (loaded: Loaded) => {
+    entry.loaded = loaded;
+    entry.watchers.forEach((notify) => notify());
+  };
+  return onSnapshot(
+    collection(db, 'connections', uid, 'accounts'),
+    { includeMetadataChanges: true },
+    (snapshot) =>
+      publish({
+        accounts: snapshot.docs
+          .map((doc) =>
+            toAccount(doc.id, doc.data() as Partial<ConnectionAccount>),
+          )
+          .filter((account) => account.status !== 'revoked'),
+        error: null,
+        isServerKnown: !(snapshot.empty && snapshot.metadata.fromCache),
+      }),
+    (error) => {
+      console.error('Connection accounts failed', error);
+      publish({ accounts: [], error, isServerKnown: false });
+    },
+  );
+};
+
+/** One listener per person however many screens watch it; it stops with its last watcher. */
+const subscribeTo = (uid: string, notify: () => void) => {
+  const entry: Shared = shared.get(uid) ?? {
+    loaded: null,
+    watchers: new Set(),
+    stop: () => {},
+  };
+  if (!shared.has(uid)) {
+    shared.set(uid, entry);
+    entry.stop = start(uid, entry);
+  }
+  entry.watchers.add(notify);
+  return () => {
+    entry.watchers.delete(notify);
+    if (entry.watchers.size > 0) return;
+    entry.stop();
+    shared.delete(uid);
+  };
+};
+
+const NO_ACCOUNTS: ConnectionAccountWithId[] = [];
+
 /** The person's connected outside accounts (Google), live, revoked ones left out. */
 export function useConnectionAccounts(uid: string | null) {
-  const [loaded, setLoaded] = useState<Loaded | null>(null);
-
-  useEffect(() => {
-    if (!uid) return;
-    return onSnapshot(
-      collection(db, 'connections', uid, 'accounts'),
-      { includeMetadataChanges: true },
-      (snapshot) =>
-        setLoaded({
-          uid,
-          accounts: snapshot.docs
-            .map((entry) =>
-              toAccount(entry.id, entry.data() as Partial<ConnectionAccount>),
-            )
-            .filter((account) => account.status !== 'revoked'),
-          error: null,
-          isServerKnown: !(snapshot.empty && snapshot.metadata.fromCache),
-        }),
-      (error) => {
-        console.error('Connection accounts failed', error);
-        setLoaded({ uid, accounts: [], error, isServerKnown: false });
-      },
-    );
-  }, [uid]);
-
-  const current = loaded?.uid === uid ? loaded : null;
+  const subscribe = useCallback(
+    (notify: () => void) => (uid ? subscribeTo(uid, notify) : () => {}),
+    [uid],
+  );
+  const current = useSyncExternalStore(
+    subscribe,
+    () => (uid ? (shared.get(uid)?.loaded ?? null) : null),
+    () => null,
+  );
 
   return {
-    accounts: current?.accounts ?? [],
+    accounts: current?.accounts ?? NO_ACCOUNTS,
     isLoading: uid !== null && !current,
     error: current?.error ?? null,
     isKnown: !!current && !current.error && current.isServerKnown,

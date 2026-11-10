@@ -328,8 +328,8 @@ export const HELM_COPY = {
     `${name} stops reading ${app}. Everything in ${app} stays as it is. You can connect it again any time.`,
   disconnectConfirm: 'Disconnect',
   disconnectFailed: "That didn't disconnect. Try again.",
-  disconnectDeleteBox: (count: number, app: string) =>
-    `Also delete the ${count} ${count === 1 ? 'thing' : 'things'} from ${app}`,
+  disconnectDeleteBox: (count: number, app: string, kind: string | null) =>
+    `Also delete the ${count} ${kind === 'event' ? (count === 1 ? 'event' : 'events') : count === 1 ? 'thing' : 'things'} from ${app}`,
   disconnectKeepNote: (date: string) =>
     `They stay, marked no longer updated, until ${date}.`,
   disconnectDeleteNote:
@@ -362,6 +362,8 @@ export const HELM_COPY = {
   googleAccountTitle: (email: string, label: string | null) =>
     label ? `${email} · ${label}` : email,
   googleConnectTitle: 'Connect Google Calendar',
+  googleReconnectTitle: 'Reconnect Google Calendar',
+  googleReconnectAccount: (account: string) => `Reconnecting ${account}.`,
   googleConnectReadOnly: (name: string) =>
     `${name} reads each event's title, time and calendar so it can plan around your day. It can't add, change or delete anything in Google Calendar.`,
   googleConnectTesting: (name: string) =>
@@ -374,12 +376,12 @@ export const HELM_COPY = {
   googleConnectFailed: "That didn't connect. Try again.",
   googleReconnect: 'Reconnect',
   googleStoppedTitle: 'Google stopped sharing',
-  googleStoppedBody: (lastWorked: string | null) =>
-    `Google stopped sharing this account, which happens about once a week while the app is private.${lastWorked ? ` Last worked ${lastWorked}.` : ''}`,
+  googleStoppedBody: (lastUpdated: string | null) =>
+    `Google stopped sharing this account. While the app is private this can happen about once a week.${lastUpdated ? ` Last updated ${lastUpdated}.` : ''}`,
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
-  googleDisconnectNote:
-    'Disconnecting the last Google service on an account also withdraws its permission at Google.',
+  googleDisconnectNote: 'Google also forgets this access to the account.',
+  googleDisconnectNoteTitle: 'Access at Google',
   googleLabelRow: 'Label',
   googleLabelNone: 'Add a short name, like "work"',
   googleLabelTitle: 'Account label',
@@ -412,7 +414,8 @@ export const HELM_COPY = {
   calendarOfferReason: (name: string) =>
     `${name} reads each event's title and time, never the details, and can't change anything.`,
   calendarOfferNotNow: 'Not now',
-  calendarReconnectTitle: 'Google stopped sharing your calendar',
+  calendarReconnectTitle: (account: string) =>
+    `Google stopped sharing ${account}`,
   calendarReconnectReason: 'Reconnect to bring your events back to Today.',
   syncedTentative: 'Tentative',
   syncedFromAccount: (app: string, account: string) =>

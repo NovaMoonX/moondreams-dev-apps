@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 
 import FormSheet from '@/components/FormSheet';
+import HelpTip from '@/components/HelpTip';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { endConnection } from '@/lib/connections/connectionCalls';
@@ -25,8 +26,12 @@ interface DisconnectSheetProps {
   /** How many copies from this app Helm holds. */
   count: number;
   failureLine: (error: unknown) => string;
-  /** One muted line under the explanation, when the connection has more to say. */
-  note?: string | null;
+  /** The account's own name when the connection is one of several of the same service; it names the sheet. */
+  accountName?: string | null;
+  /** What the copies are, from the kind of thing the connection reads; null reads as "things". */
+  countKind?: string | null;
+  /** A small explanation beside the sentence, when the connection has more to say. */
+  note?: { title: string; text: string } | null;
 }
 
 function DisconnectForm({
@@ -35,6 +40,7 @@ function DisconnectForm({
   appName,
   count,
   failureLine,
+  countKind = null,
   note = null,
 }: Omit<DisconnectSheetProps, 'isOpen'>) {
   const name = useAssistantName();
@@ -66,10 +72,15 @@ function DisconnectForm({
     <div className='flex flex-col gap-4'>
       <p className='text-muted-foreground text-[15px] text-pretty'>
         {HELM_COPY.disconnectBody(name, appName)}
+        {note && (
+          <>
+            {' '}
+            <HelpTip title={note.title} placement='top'>
+              <p>{note.text}</p>
+            </HelpTip>
+          </>
+        )}
       </p>
-      {note && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>{note}</p>
-      )}
       {count > 0 && (
         <div className='flex flex-col gap-1'>
           <label className='flex min-h-12 items-start gap-3 py-2'>
@@ -80,7 +91,7 @@ function DisconnectForm({
               onCheckedChange={setDeletesCopies}
             />
             <span className='text-foreground text-[15px] text-pretty'>
-              {HELM_COPY.disconnectDeleteBox(count, appName)}
+              {HELM_COPY.disconnectDeleteBox(count, appName, countKind)}
             </span>
           </label>
           <p className='text-muted-foreground text-[13px] text-pretty'>
@@ -138,7 +149,7 @@ function DisconnectSheet({ isOpen, ...form }: DisconnectSheetProps) {
     <FormSheet
       isOpen={isOpen}
       onClose={form.onClose}
-      title={HELM_COPY.connectionDisconnect(form.appName)}
+      title={HELM_COPY.connectionDisconnect(form.accountName ?? form.appName)}
     >
       {isOpen && <DisconnectForm {...form} />}
     </FormSheet>

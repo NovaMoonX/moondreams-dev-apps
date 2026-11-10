@@ -31,7 +31,7 @@ function ConnectedSourcesList({ rows, onOpen }: ConnectedSourcesListProps) {
           >
             {row.logo}
             <span className='min-w-0 flex-1'>
-              <span className='text-foreground block text-[15px] leading-[21px] break-words'>
+              <span className='text-foreground block truncate text-[15px] leading-[21px]'>
                 {row.title}
               </span>
               <span className='text-muted-foreground flex items-start gap-1 text-[13px]'>

@@ -45,6 +45,10 @@ const readConnectorOptionsCallable = httpsCallable<
   ReadConnectorOptionsRequest,
   { options: ConnectorOption[] }
 >(functions, 'readConnectorOptions');
+const releaseUnusedAccountCallable = httpsCallable<
+  { accountId: string },
+  { accountId: string }
+>(functions, 'releaseUnusedAccount');
 
 /** Refused with `already-exists` while a live grant for the same reader, source and account stands. */
 export const grantConnection = async (request: GrantConnectionRequest) =>
@@ -79,3 +83,8 @@ export const finishGoogleConnection = async (
 export const readConnectorOptions = async (
   request: ReadConnectorOptionsRequest,
 ) => (await readConnectorOptionsCallable(request)).data.options;
+
+/** Forgets an account the person backed out of before connecting anything; the server leaves it alone while a live grant uses it. */
+export const releaseUnusedAccount = async (request: { accountId: string }) => {
+  await releaseUnusedAccountCallable(request);
+};

@@ -33,7 +33,22 @@ export function readGoogleAuthReturn(search: string): GoogleAuthReturn | null {
   return code && state ? { code, state } : null;
 }
 
-/** Asks Google for consent in a popup, or in this tab when the popup is blocked. Browser sign-in only. */
+const isStandaloneDisplay = () =>
+  window.matchMedia('(display-mode: standalone)').matches ||
+  (navigator as { standalone?: boolean }).standalone === true;
+
+/** The state kept when this tab left for Google, removed as it is read; null when none was kept. */
+export function takeGoogleAuthState(): string | null {
+  try {
+    const kept = sessionStorage.getItem(STATE_KEY);
+    sessionStorage.removeItem(STATE_KEY);
+    return kept;
+  } catch {
+    return null;
+  }
+}
+
+/** Asks Google for consent in a popup, or in this tab when the popup is blocked or the page is an installed app, where a popup would leave the app. Browser sign-in only. */
 export function requestGoogleAuthCode({
   authUrl,
   state,
@@ -49,11 +64,13 @@ export function requestGoogleAuthCode({
     0,
     window.screenY + (window.outerHeight - POPUP_HEIGHT) / 2,
   );
-  const popup = window.open(
-    authUrl,
-    'google-auth',
-    `popup=yes,width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
-  );
+  const popup = isStandaloneDisplay()
+    ? null
+    : window.open(
+        authUrl,
+        'google-auth',
+        `popup=yes,width=${POPUP_WIDTH},height=${POPUP_HEIGHT},left=${left},top=${top}`,
+      );
 
   if (!popup) {
     try {
