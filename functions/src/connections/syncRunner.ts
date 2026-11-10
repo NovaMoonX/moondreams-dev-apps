@@ -29,7 +29,7 @@ export type SyncOutcome = 'synced' | 'skipped';
 
 interface CategoryResult {
   category: string;
-  ok: { state: CategoryState; keptCount: number } | null;
+  ok: { state: CategoryState } | null;
   failedAt: number | null;
 }
 
@@ -102,7 +102,6 @@ async function syncCategory(
       category,
       ok: {
         state: { lastOkAt: now, lastError: null, count: totals.count },
-        keptCount: totals.keptCount,
       },
       failedAt: null,
     };
@@ -236,6 +235,7 @@ async function settle(
 ) {
   const ref = grantRef(deps.firestore, uid, grantId);
   const now = deps.now();
+  const keptCount = await session.countKept(grantId);
   const fresh = await deps.firestore.runTransaction(async (transaction) => {
     const current = readGrant((await transaction.get(ref)).data());
     if (current.status === 'ended') return current;
@@ -259,11 +259,7 @@ async function settle(
           !stillOn.some((result) => result.category === error.category),
       ),
     ].slice(0, MAX_GRANT_ERRORS);
-    const keptCopies = toKeptCopies(
-      current,
-      stillOn,
-      stillOn.reduce((total, result) => total + (result.ok?.keptCount ?? 0), 0),
-    );
+    const keptCopies = toKeptCopies(current, stillOn, keptCount);
     transaction.update(ref, {
       ...Object.fromEntries(
         stillOn.map((result) => [
@@ -295,9 +291,16 @@ async function settle(
       : session.deleteGrant(grantId));
     return;
   }
+  const categoryIds = Array.from(
+    new Set([
+      ...Object.keys(fresh.categories),
+      ...Object.keys(fresh.categoryState),
+      ...results.map((result) => result.category),
+    ]),
+  );
   await Promise.all(
-    results
-      .filter((result) => fresh.categories[result.category]?.isOn !== true)
-      .map((result) => session.deleteCategory(grantId, result.category)),
+    categoryIds
+      .filter((id) => fresh.categories[id]?.isOn !== true)
+      .map((id) => session.deleteCategory(grantId, id)),
   );
 }

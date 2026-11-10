@@ -278,24 +278,35 @@ class HelmSinkSession implements SinkSession {
     );
   }
 
+  async countKept(grantId: string) {
+    return (
+      await toCategoryDocs(this.firestore, this.uid, grantId, null)
+    ).filter((doc) => doc.get('deleteAfter') !== null).length;
+  }
+
   async keepGrant(grantId: string, endedAt: number, deleteAfter: number) {
     const docs = await toCategoryDocs(this.firestore, this.uid, grantId, null);
-    await commitAll(this.firestore, docs, (batch, doc) =>
-      batch.update(doc.ref, { connectionEndedAt: endedAt, deleteAfter }),
-    );
+    await commitAll(this.firestore, docs, (batch, doc) => {
+      const stored = doc.get('deleteAfter');
+      const isKept = typeof stored === 'number';
+      batch.update(doc.ref, {
+        connectionEndedAt: isKept ? doc.get('connectionEndedAt') : endedAt,
+        deleteAfter: isKept ? Math.min(stored, deleteAfter) : deleteAfter,
+      });
+    });
     return docs.length;
   }
 }
 
-// An hourly sweep picks up whatever one run leaves.
+// A page of the sweep; it keeps going until a page comes back short.
 const EXPIRE_LIMIT = 2_000;
 
 const toUid = (doc: QueryDocumentSnapshot) => doc.ref.parent.parent?.id ?? '';
 
-const expire = async (
+const expirePages = async (
   firestore: Firestore,
   now: number,
-): Promise<ExpiredGrant[]> => {
+): Promise<QueryDocumentSnapshot[]> => {
   const snapshot = await firestore
     .collectionGroup('synced')
     .where('deleteAfter', '<=', now)
@@ -305,6 +316,15 @@ const expire = async (
     (doc) => doc.ref.path.startsWith('apps/helm/users/') && toUid(doc) !== '',
   );
   await commitAll(firestore, docs, (batch, doc) => batch.delete(doc.ref));
+  if (snapshot.size < EXPIRE_LIMIT || docs.length === 0) return docs;
+  return [...docs, ...(await expirePages(firestore, now))];
+};
+
+const expire = async (
+  firestore: Firestore,
+  now: number,
+): Promise<ExpiredGrant[]> => {
+  const docs = await expirePages(firestore, now);
   const grants = Array.from(
     new Map(
       docs.map((doc) => [

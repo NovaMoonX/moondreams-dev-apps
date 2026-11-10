@@ -51,7 +51,6 @@ export const getNewestOkAt = (grant: ConnectionGrant) =>
 export const isStale = (lastOkAt: number | null, now: number) =>
   lastOkAt === null || now - lastOkAt > SYNC_STALE_MS;
 
-/** Whether a live grant asks for an update: its newest read is over 15 minutes old, or it has none. */
 /** How many copies the platform holds for a live connection, from the grant itself rather than what this device has loaded. */
 export const getGrantCopyCount = (grant: ConnectionGrant) =>
   Object.values(grant.categoryState).reduce(
@@ -59,11 +58,18 @@ export const getGrantCopyCount = (grant: ConnectionGrant) =>
     0,
   );
 
+/** Whether a live grant asks for an update: its newest read is over 15 minutes old, or a category that is on was never read. */
 export const isDueForRefresh = (grant: ConnectionGrant, now: number) => {
   const newest = getNewestOkAt(grant);
+  const isOnAndUnread = (id: string) =>
+    grant.categories[id].isOn &&
+    grant.categoryState[id]?.lastOkAt == null &&
+    grant.categoryState[id]?.lastError == null;
   return (
     grant.status === 'live' &&
     Object.values(grant.categories).some((category) => category.isOn) &&
-    (newest === null || now - newest > SYNC_REFRESH_MS)
+    (newest === null ||
+      now - newest > SYNC_REFRESH_MS ||
+      Object.keys(grant.categories).some(isOnAndUnread))
   );
 };

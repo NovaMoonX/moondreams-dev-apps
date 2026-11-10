@@ -59,6 +59,7 @@ const isOfflineError = (error: unknown) =>
 function useConnectionsRefresh(uid: string | null) {
   const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
   const lastAskedAt = useRef(0);
+  const isAsking = useRef(false);
 
   useEffect(() => {
     if (!uid || !isKnown) return;
@@ -67,14 +68,22 @@ function useConnectionsRefresh(uid: string | null) {
       if (
         document.visibilityState !== 'visible' ||
         !navigator.onLine ||
+        isAsking.current ||
         now - lastAskedAt.current < SYNC_REFRESH_MS ||
         !grants.some((grant) => isDueForRefresh(grant, now))
       )
         return;
-      lastAskedAt.current = now;
-      syncConnections({}).catch((error: unknown) =>
-        console.error('Helm connections were not updated', error),
-      );
+      isAsking.current = true;
+      syncConnections({})
+        .then(() => {
+          lastAskedAt.current = now;
+        })
+        .catch((error: unknown) =>
+          console.error('Helm connections were not updated', error),
+        )
+        .finally(() => {
+          isAsking.current = false;
+        });
     };
     ask();
     document.addEventListener('visibilitychange', ask);

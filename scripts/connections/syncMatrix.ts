@@ -414,6 +414,63 @@ const main = async () => {
 
   {
     const t = await setup();
+    t.source.records.shoppingList = [record('a'), record('b')];
+    await t.run();
+    const request = asCaller(t.uid, { grantId: GRANT_ID, deleteCopies: false });
+    await endConnection.run(request);
+    const first = await t.grant();
+    const docs = await t.copies();
+    await Promise.all(docs.map((doc) => doc.ref.update({ deleteAfter: null })));
+    await t.grantRef.update({
+      keptCopies: { count: 0, deleteAfter: first.endedAt },
+    });
+    await endConnection.run(request);
+    const again = await t.grant();
+    assert.equal(again.endedAt, first.endedAt, 'a second end changes no date');
+    assert.equal(
+      again.keptCopies?.count,
+      2,
+      'a second end re-runs the cleanup',
+    );
+  }
+
+  {
+    const t = await setup();
+    t.source.records.shoppingList = [record('a')];
+    await t.run();
+    const stray = firestore.doc(`apps/helm/users/${t.uid}/synced/stray`);
+    const [copy] = await t.copies();
+    await stray.set({
+      ...copy.data(),
+      category: 'plannedMeals',
+      sourceRef: 'x',
+    });
+    await t.run();
+    assert.deepEqual(
+      refs(await t.copies()),
+      ['a'],
+      'the next sync clears copies of a category that is off',
+    );
+  }
+
+  {
+    const t = await setup();
+    const session = READER_SINKS.helm.openSession(firestore, t.uid);
+    t.source.records.shoppingList = [record('a')];
+    await t.run();
+    await session.keepGrant(GRANT_ID, NOW, NOW + 10 * DAY);
+    await session.keepGrant(GRANT_ID, NOW + DAY, NOW + 90 * DAY);
+    const [kept] = await t.copies();
+    assert.equal(
+      kept.get('deleteAfter'),
+      NOW + 10 * DAY,
+      'a second keep never moves the date later',
+    );
+    assert.equal(await session.countKept(GRANT_ID), 1);
+  }
+
+  {
+    const t = await setup();
     t.source.records.shoppingList = [record('a')];
     await t.run();
     await endConnection.run(

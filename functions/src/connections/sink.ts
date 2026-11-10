@@ -43,6 +43,8 @@ export interface SinkSession {
   deleteCategory(grantId: string, category: string): Promise<number>;
   deleteGrant(grantId: string): Promise<number>;
   deleteKept(grantId: string): Promise<number>;
+  /** How many copies of the connection are kept after it ended, whichever category they sit in. */
+  countKept(grantId: string): Promise<number>;
   keepGrant(
     grantId: string,
     endedAt: number,

@@ -23,16 +23,31 @@ interface SyncedTodayProps {
 const groupKey = (record: SyncedRecord) =>
   `${record.grantId}|${record.category}`;
 
-/** Today's events and task lists copied from connected apps, with a line wherever a source is out of date. Copies kept after a disconnect show too; their sheet says they are no longer updated. */
+/** Today's events and task lists copied from connected apps, with a line wherever a source is out of date. A copy shows only while its connection is live with that category on, or as a kept copy of an ended one; its sheet says it is no longer updated. */
 function SyncedToday({ now }: SyncedTodayProps) {
   const { nameOf, categoryLabelOf } = useSourceAppName();
-  const { grants } = useConnections({ readerAppId: 'helm' });
-  const records = useAppSelector((state) => state.helm.synced.items);
+  const { grants } = useConnections({
+    readerAppId: 'helm',
+    includeEnded: true,
+  });
+  const stored = useAppSelector((state) => state.helm.synced.items);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const [openId, setOpenId] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string[]>([]);
 
+  const records = useMemo(
+    () =>
+      stored.filter((record) => {
+        const grant = grants.find((entry) => entry.id === record.grantId);
+        if (!grant) return false;
+        return grant.status === 'ended'
+          ? record.connectionEndedAt !== null
+          : grant.categories[record.category]?.isOn === true &&
+              record.connectionEndedAt === null;
+      }),
+    [stored, grants],
+  );
   const events = useMemo(
     () =>
       records

@@ -6,7 +6,10 @@ import AppLogo from '@/components/AppLogo';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import LockedButton from '@/components/LockedButton';
-import { grantConnection } from '@/lib/connections/connectionCalls';
+import {
+  grantConnection,
+  syncConnections,
+} from '@/lib/connections/connectionCalls';
 import { SITE_ACCOUNT_ID, toAppConnectorId } from '@/lib/connections/contract';
 import { getSourceManifest } from '@/lib/connections/sources';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -66,12 +69,15 @@ function ConnectForm({
     setIsConnecting(true);
     setFailure(null);
     try {
-      await grantConnection({
+      const grantId = await grantConnection({
         readerAppId: 'helm',
         connectorId: toAppConnectorId(app.id),
         accountId: SITE_ACCOUNT_ID,
         categoryIds: [...ticked],
       });
+      syncConnections({ grantId }).catch((error: unknown) =>
+        console.error('Helm first sync did not run', error),
+      );
       onClose();
     } catch (error) {
       console.error('Helm connection did not start', error);

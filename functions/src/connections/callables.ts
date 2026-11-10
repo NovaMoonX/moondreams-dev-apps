@@ -220,35 +220,51 @@ export const endConnection = onCall(OPTIONS, async (request) => {
     if (!snapshot.exists)
       throw new HttpsError('not-found', "That connection doesn't exist.");
     const grant = readGrant(snapshot.data());
-    if (grant.status === 'ended') return null;
     const sink = sinkFor(grant.readerAppId);
+    if (grant.status === 'ended') {
+      return {
+        sink,
+        endedAt: grant.endedAt ?? Date.now(),
+        keptCopies: grant.keptCopies,
+      };
+    }
     const endedAt = Date.now();
     const deleteAfter = endedAt + (sink?.keptCopyDays ?? 0) * DAY_MS;
-    const isKeeping = sink !== null && !req.deleteCopies;
+    const keptCopies =
+      sink !== null && !req.deleteCopies ? { count: 0, deleteAfter } : null;
     transaction.update(ref, {
       status: 'ended',
       endedAt,
-      keptCopies: isKeeping ? { count: 0, deleteAfter } : null,
+      keptCopies,
       syncLeaseUntil: null,
       updatedAt: endedAt,
     });
-    return { sink, endedAt, deleteAfter, isKeeping };
+    return { sink, endedAt, keptCopies };
   });
-  if (!ended?.sink) return { grantId: req.grantId };
+  if (!ended.sink) return { grantId: req.grantId };
 
   const session = ended.sink.openSession(firestore, auth.uid);
-  if (!ended.isKeeping) {
+  if (ended.keptCopies === null) {
     await session.deleteGrant(req.grantId);
     return { grantId: req.grantId };
   }
+  const { deleteAfter } = ended.keptCopies;
   const kept = await session.keepGrant(
     req.grantId,
     ended.endedAt,
-    ended.deleteAfter,
+    deleteAfter ?? ended.endedAt,
   );
-  await ref.update({
-    keptCopies:
-      kept > 0 ? { count: kept, deleteAfter: ended.deleteAfter } : null,
+  await firestore.runTransaction(async (transaction) => {
+    const current = await transaction.get(ref);
+    if (!current.exists) return;
+    const grant = readGrant(current.data());
+    if (grant.status !== 'ended' || grant.endedAt !== ended.endedAt) return;
+    transaction.update(ref, {
+      keptCopies:
+        kept > 0
+          ? { count: kept, deleteAfter: deleteAfter ?? ended.endedAt }
+          : null,
+    });
   });
   return { grantId: req.grantId };
 });
@@ -295,9 +311,17 @@ export const syncConnections = onCall(SYNC_OPTIONS, async (request) => {
         "That connection isn't active.",
       );
     }
+    const hasUnreadCategory = Object.entries(grant.categories).some(
+      ([id, category]) =>
+        category.isOn &&
+        grant.categoryState[id]?.lastOkAt == null &&
+        grant.categoryState[id]?.lastError == null,
+    );
     if (
       grant.lastSyncAt !== null &&
-      grant.lastSyncAt > deps.now() - SYNC_NOW_THROTTLE_MS
+      grant.lastSyncAt > deps.now() - SYNC_NOW_THROTTLE_MS &&
+      grant.updatedAt <= grant.lastSyncAt &&
+      !hasUnreadCategory
     )
       return { synced: 0 };
     const outcome = await syncGrant(deps, auth.uid, grantId);
