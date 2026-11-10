@@ -41,8 +41,10 @@ import {
   type ConnectionGrant,
 } from '../../src/lib/connections/contract.ts';
 import { A_LIST_SHARES } from '../../functions/src/apps/a-list/share/manifest.ts';
+import { GOING_ONCE_SHARES } from '../../functions/src/apps/going-once/share/manifest.ts';
 import { PINCH_SHARES } from '../../functions/src/apps/pinch/share/manifest.ts';
 import { getShowtime } from './aList.ts';
+import { getSeedPickupOn } from './goingOnce.ts';
 import { readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
@@ -54,7 +56,7 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place';
+  kind: 'event' | 'task' | 'place' | 'project';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -63,7 +65,7 @@ interface CopyDefinition {
   endAt?: number;
   isAllDay?: boolean;
   placeLabel?: string;
-  extra?: Record<string, string>;
+  extra?: Record<string, string | number>;
 }
 
 const DAY_MS = 86_400_000;
@@ -1214,6 +1216,83 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     grantId: aListGrantId,
   });
 
+  const goingOnceConnectorId = toAppConnectorId('going-once');
+  const goingOnceGrantId = toGrantId(
+    'helm',
+    goingOnceConnectorId,
+    SITE_ACCOUNT_ID,
+  );
+  const goingOnceSaleRef = 'sales/seed-going-once-fall-clear-out';
+  const goingOnceCopies: CopyDefinition[] = [
+    {
+      category: 'pickups',
+      sourceRef: `${goingOnceSaleRef}/items/seed-go-oak-desk`,
+      kind: 'event',
+      title: 'Oak desk',
+      subtitle: 'Fall clear-out',
+      startAt: getSeedPickupOn(context.now, 'saturday'),
+      isAllDay: true,
+      dueAt: null,
+      deepLink: '/going-once',
+    },
+    {
+      category: 'sales',
+      sourceRef: goingOnceSaleRef,
+      kind: 'project',
+      title: 'Fall clear-out',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      extra: { available: 8, pending: 2, sold: 3 },
+      deepLink: '/going-once',
+    },
+  ];
+  const goingOnceGrant: ConnectionGrant = {
+    readerAppId: 'helm',
+    connectorId: goingOnceConnectorId,
+    accountId: SITE_ACCOUNT_ID,
+    categories: {
+      pickups: { isOn: true, changedAt: connectedAt },
+      sales: { isOn: true, changedAt: connectedAt },
+    },
+    options: null,
+    status: 'live',
+    categoryState: Object.fromEntries(
+      GOING_ONCE_SHARES.shares.flatMap((share) =>
+        share.categories.map((category) => [
+          category.id,
+          {
+            lastOkAt: syncedAt,
+            lastError: null,
+            count: goingOnceCopies.filter(
+              (copy) => copy.category === category.id,
+            ).length,
+          },
+        ]),
+      ),
+    ),
+    errors: [],
+    newCategoryIds: [],
+    lastSyncAt: syncedAt,
+    syncLeaseUntil: null,
+    keptCopies: null,
+    createdAt: connectedAt,
+    updatedAt: connectedAt,
+    endedAt: null,
+  };
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerOne.uid)
+      .collection('grants')
+      .doc(goingOnceGrantId),
+    goingOnceGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, goingOnceCopies, null, {
+    connectorId: goingOnceConnectorId,
+    grantId: goingOnceGrantId,
+  });
+
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
     provider: 'google',
@@ -1326,7 +1405,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       copyDefinitions.length +
       keptDefinitions.length +
       1 +
-      aListCopies.length,
+      aListCopies.length +
+      goingOnceCopies.length,
   };
   return result;
 }

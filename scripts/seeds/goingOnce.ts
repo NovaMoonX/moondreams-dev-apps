@@ -117,20 +117,32 @@ export function buildSeedInquiry(saleId: string, seed: SeedInquiry) {
   };
 }
 
+/** A seeded hold's pickup day as the date-only value a date picker writes, counted from the seed's "now". */
+export function getSeedPickupOn(
+  now: number,
+  pickup: number | 'saturday' | null,
+) {
+  if (pickup === null) return null;
+  const today = new Date(now);
+  const untilSaturday = (6 - today.getDay() + 7) % 7 || 7;
+  // The person's calendar day (local getters), stored as UTC midnight.
+  return Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate() + (pickup === 'saturday' ? untilSaturday : pickup),
+  );
+}
+
 /** Builds a thing's status fields relative to the seed's "now", so the sale reads the same on any day. */
 export function buildSeedStatus(
   status: SeedStatus,
   now: number,
 ): SeedStatusFields {
   const today = new Date(now);
-  // The person's calendar day (local getters), stored as the date-only value a date picker writes (UTC midnight).
   const dayOnly = (offset: number) =>
     Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + offset);
-  const untilSaturday = (6 - today.getDay() + 7) % 7 || 7;
-  const getPickupOn = (pickup: number | 'saturday' | null) => {
-    if (pickup === null) return null;
-    return dayOnly(pickup === 'saturday' ? untilSaturday : pickup);
-  };
+  const getPickupOn = (pickup: number | 'saturday' | null) =>
+    getSeedPickupOn(now, pickup);
   if (status.kind === 'AVAILABLE')
     return {
       status: 'AVAILABLE',
@@ -672,8 +684,11 @@ export async function seedGoingOnce(context: SeedContext): Promise<SeedResult> {
     timeZone: 'America/Los_Angeles',
     ownerUid: maya.uid,
     createdBy: maya.uid,
-    members: [maya.uid, theo.uid],
-    memberJoinedAt: { [theo.uid]: context.now - 5 * DAY_MS },
+    members: [maya.uid, theo.uid, FIXTURE_USERS.partnerOne.uid],
+    memberJoinedAt: {
+      [theo.uid]: context.now - 5 * DAY_MS,
+      [FIXTURE_USERS.partnerOne.uid]: context.now - 3 * DAY_MS,
+    },
     publicLinkId: SEED_SALE_LINK_ID,
     publicLinkChangedAt: context.now - 4 * DAY_MS,
     ...OPEN_SALE_FIELDS,

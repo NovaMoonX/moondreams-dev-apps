@@ -5,6 +5,7 @@ import { getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
 import { createAListAdapter } from '../../functions/src/apps/a-list/share/adapter.ts';
+import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
 import {
   applyCategoryChanges,
@@ -657,5 +658,202 @@ assert.equal(
   '/a-list',
 );
 assert.equal(aListAdapter.deepLink('???', aListCtx(OWNER)), '/a-list');
+
+const CO_SELLER = 'co-seller-uid';
+const BUYER_NAME = 'SECRET BUYER NAME';
+const BUYER_CONTACT = 'secret-buyer@example.test';
+const BUYER_MESSAGE = 'SECRET BUYER MESSAGE';
+const FLOOR_PRICE = 3131;
+const SALE_PRICE = 5252;
+const ITEM_NOTE = 'SECRET ITEM NOTE';
+
+const sale = (
+  members: string[],
+  name: string,
+  status: string,
+  lastEditedAt: number,
+) => ({
+  members,
+  name,
+  status,
+  priceCents: SALE_PRICE,
+  notesForBuyers: ITEM_NOTE,
+  lastEditedAt,
+});
+
+const saleItem = (
+  title: string,
+  status: string,
+  extra: Record<string, unknown> = {},
+) => ({
+  title,
+  status,
+  isDraft: false,
+  askingPriceCents: 4000,
+  photos: [{ id: 'photo-1', path: 'secret/photo.jpg' }],
+  floorPriceCents: FLOOR_PRICE,
+  priceCents: SALE_PRICE,
+  notes: ITEM_NOTE,
+  pending: null,
+  lastEditedAt: NOW - 5,
+  ...extra,
+});
+
+const pendingFor = (pickupOn: number | null) => ({
+  pickupOn,
+  buyerName: BUYER_NAME,
+  buyerContact: BUYER_CONTACT,
+});
+
+const goingOnceSales = firestore.collection('apps/going-once/sales');
+const fallSale = goingOnceSales.doc('fall');
+await Promise.all([
+  fallSale.set(sale([OWNER, CO_SELLER], 'Fall clear-out', 'OPEN', NOW - 7)),
+  fallSale
+    .collection('items')
+    .doc('sofa')
+    .set(saleItem('Gray sofa', 'AVAILABLE')),
+  fallSale
+    .collection('items')
+    .doc('lamp')
+    .set(saleItem('Floor lamp', 'AVAILABLE')),
+  fallSale
+    .collection('items')
+    .doc('unpriced')
+    .set(saleItem('No price yet', 'AVAILABLE', { askingPriceCents: null })),
+  fallSale
+    .collection('items')
+    .doc('draft')
+    .set(saleItem('Draft thing', 'AVAILABLE', { isDraft: true })),
+  fallSale
+    .collection('items')
+    .doc('gone')
+    .set(saleItem('Withdrawn thing', 'WITHDRAWN')),
+  fallSale
+    .collection('items')
+    .doc('desk')
+    .set(
+      saleItem('Oak desk', 'PENDING', { pending: pendingFor(TODAY + 2 * DAY) }),
+    ),
+  fallSale
+    .collection('items')
+    .doc('bike')
+    .set(
+      saleItem('Road bike', 'PENDING', {
+        pending: pendingFor(TODAY - 60 * DAY),
+      }),
+    ),
+  fallSale
+    .collection('items')
+    .doc('nodate')
+    .set(saleItem('No day yet', 'PENDING', { pending: pendingFor(null) })),
+  fallSale
+    .collection('items')
+    .doc('pan')
+    .set(saleItem('Cast iron pan', 'SOLD', { pending: null })),
+  fallSale.collection('inquiries').doc('q1').set({
+    buyerName: BUYER_NAME,
+    contact: BUYER_CONTACT,
+    message: BUYER_MESSAGE,
+  }),
+  goingOnceSales
+    .doc('spring')
+    .set(sale([OWNER], 'Spring garage sale', 'FINISHED', NOW - 8)),
+  goingOnceSales
+    .doc('spring')
+    .collection('items')
+    .doc('bench')
+    .set(
+      saleItem('Garden bench', 'PENDING', { pending: pendingFor(TODAY + DAY) }),
+    ),
+  goingOnceSales
+    .doc('elsewhere')
+    .set(sale(['someone-else'], 'Not yours', 'OPEN', NOW - 9)),
+]);
+
+const goingOnceAdapter = createGoingOnceAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+});
+
+const goingOnceCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:going-once',
+      accountId: 'site',
+      categoryIds: ['pickups', 'sales'],
+      options: null,
+    },
+    goingOnceAdapter.manifest,
+    NOW,
+  ),
+});
+
+const runGoingOnce = async (uid: string, category: string) => {
+  const page = await goingOnceAdapter.syncPage(goingOnceCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+const goingOnceSalesRead = await runGoingOnce(OWNER, 'sales');
+assert.deepEqual(refs(goingOnceSalesRead), ['sales/fall']);
+assert.equal(goingOnceSalesRead[0].kind, 'project');
+assert.equal(goingOnceSalesRead[0].title, 'Fall clear-out');
+assert.equal(goingOnceSalesRead[0].sourceUpdatedAt, NOW - 7);
+assert.deepEqual(goingOnceSalesRead[0].extra, {
+  available: 2,
+  pending: 3,
+  sold: 1,
+});
+
+const pickups = await runGoingOnce(OWNER, 'pickups');
+assert.deepEqual(refs(pickups), ['sales/fall/items/desk']);
+assert.equal(pickups[0].kind, 'event');
+assert.equal(pickups[0].title, 'Oak desk');
+assert.equal(pickups[0].subtitle, 'Fall clear-out');
+assert.equal(pickups[0].startAt, TODAY + 2 * DAY);
+assert.equal(pickups[0].isAllDay, true);
+assert.equal(pickups[0].timeZone, null);
+
+assert.deepEqual(refs(await runGoingOnce(CO_SELLER, 'sales')), ['sales/fall']);
+assert.deepEqual(refs(await runGoingOnce(CO_SELLER, 'pickups')), [
+  'sales/fall/items/desk',
+]);
+assert.deepEqual(await runGoingOnce(OTHER, 'sales'), []);
+assert.deepEqual(await runGoingOnce(OTHER, 'pickups'), []);
+
+const goingOnceAll = [...goingOnceSalesRead, ...pickups];
+assertShape(goingOnceAll);
+goingOnceAll.forEach((record) => {
+  const values = flatten(record);
+  assert.ok(
+    ![FLOOR_PRICE, SALE_PRICE].some((secret) => values.includes(secret)),
+    record.sourceRef,
+  );
+  assert.ok(
+    !values.some(
+      (value) =>
+        typeof value === 'string' &&
+        /SECRET|secret|buyer@|example\.test/.test(value),
+    ),
+    record.sourceRef,
+  );
+});
+await assert.rejects(() => runGoingOnce(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await goingOnceAdapter.status(goingOnceCtx(OWNER)), 'ok');
+assert.equal(await goingOnceAdapter.status(goingOnceCtx(OTHER)), 'noAccess');
+assert.equal(
+  goingOnceAdapter.deepLink('sales/fall', goingOnceCtx(OWNER)),
+  '/going-once',
+);
 
 console.log('Adapter matrix passed.');

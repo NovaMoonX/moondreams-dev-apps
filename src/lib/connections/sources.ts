@@ -5,6 +5,7 @@ import {
 } from '@/lib/connections/contract';
 import { GOOGLE_CALENDAR_MANIFEST } from '@/lib/connections/google/calendarManifest';
 import { A_LIST_SHARES } from '@apps/a-list/share/manifest';
+import { GOING_ONCE_SHARES } from '@apps/going-once/share/manifest';
 import { HELM_SHARES } from '@apps/helm/share/manifest';
 import { PINCH_SHARES } from '@apps/pinch/share/manifest';
 
@@ -12,6 +13,7 @@ import { PINCH_SHARES } from '@apps/pinch/share/manifest';
 export const SOURCE_SHARES: SourceShares[] = [
   PINCH_SHARES,
   A_LIST_SHARES,
+  GOING_ONCE_SHARES,
   HELM_SHARES,
 ];
 
