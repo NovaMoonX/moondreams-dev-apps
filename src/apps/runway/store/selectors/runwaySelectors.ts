@@ -1610,16 +1610,18 @@ export const selectSpendPurchases = createSelector(
   },
 );
 
-/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts. Spend's Money in and Free to Spend's "Money in this month" both read it. */
+/** Money that came in, newest first: deposits (linked to a pay or not), refunds and money in left out, never a move between the person's own accounts, paired or likely (a waiting side with a pair offer). Spend's Money in and Free to Spend's "Money in this month" both read it. */
 export const selectMoneyIn = createSelector(
-  [selectKnownPurchases],
-  (purchases) => {
+  [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
+  (purchases, waiting) => {
+    const { offers } = findAccountPairs(waiting, true);
     const result = purchases
       .filter(
         (purchase) =>
           purchase.amountCents < 0 &&
           purchase.pairedWithId === null &&
-          !isBankMove(purchase),
+          !isBankMove(purchase) &&
+          !(purchase.needsHome && (offers.get(purchase.id)?.length ?? 0) > 0),
       )
       .sort(byNewest);
     return result;

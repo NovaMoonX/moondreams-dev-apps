@@ -102,10 +102,11 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
     (sum, purchase) => sum - purchase.amountCents,
     0,
   );
-  const openMoneyIn = () => {
+  // The tab's own history entry is written first, so the filter lands on it rather than on Home's.
+  const openMoneyIn = async () => {
+    await leaveViewForTab('spend');
     showSpendKind('moneyIn');
     showSpendPeriod(DEFAULT_SPEND_PERIOD);
-    leaveViewForTab('spend');
   };
   const isChecking = view === 'checkAmount';
   const isCheckingBalance = view === 'checkBalance';
@@ -412,7 +413,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
                         ),
                       )
                 }
-                onClick={openMoneyIn}
+                onClick={() => void openMoneyIn()}
               />
             </LevelGate>
           </ActionGroup>
