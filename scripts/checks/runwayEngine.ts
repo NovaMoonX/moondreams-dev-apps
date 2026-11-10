@@ -6,6 +6,7 @@ import {
   listPlanChangeDays,
 } from '../../src/apps/runway/engine/planChanges.ts';
 import { parseAmountDraft } from '../../src/apps/runway/utils/rangeInput.ts';
+import { cleanBankName } from '../../src/apps/runway/utils/accountText.ts';
 import {
   createSealedReader,
   sealJson,
@@ -32,6 +33,7 @@ import { DAY_MS as LINK_DAY_MS } from '../../src/apps/runway/engine/dates.ts';
 import {
   findAccountPairs,
   findLostPairs,
+  isBankMove,
   findDepositDays,
   findPurchaseMatches,
   type DepositDay,
@@ -10998,6 +11000,66 @@ const version = (
   const onCard = { accountId: null, paidByCardId: 'venture' };
   const none = (matches: ReturnType<typeof findAccountPairs>) =>
     matches.clear.size + matches.offers.size;
+
+  (
+    [
+      ['Venture X - Credit Holder XXXXXXX3153', 'Venture X'],
+      ['Savings (…4321)', 'Savings'],
+      ['Freedom x1234', 'Freedom'],
+      ['Boxx 1234 Savings', 'Boxx 1234 Savings'],
+      ['Plus - Account Owner', 'Plus - Account Owner'],
+      ['T-Mobile Card', 'T-Mobile Card'],
+      ['Venture X 2024', 'Venture X 2024'],
+      ['Card X 500', 'Card X 500'],
+      ['Money Market .05 Plus', 'Money Market .05 Plus'],
+      ['Checking .... 1234', 'Checking'],
+      ['Total Checking ...5678 - Joint Owner', 'Total Checking'],
+      ['Card ••3153', 'Card'],
+      ['Gold XX-1234', 'Gold'],
+    ] as const
+  ).forEach(([name, cleaned]) =>
+    assert.equal(cleanBankName(name), cleaned, `bank name ${name}`),
+  );
+  const cardPay = side('pay', 45_524, 0, {
+    category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+  });
+  assert.equal(
+    isBankMove(cardPay),
+    true,
+    'a waiting charge the bank calls a card payment is a move, not spending',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, needsHome: false }),
+    false,
+    'once the person places it, it is spending again',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, pairedWithId: 'in' }),
+    false,
+    'a paired side is already an account move',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, assignedBy: 'person' }),
+    false,
+    'a side the person unpaired goes back to Needs a home, not back to waiting',
+  );
+  assert.equal(
+    isBankMove({ ...cardPay, source: 'manual' }),
+    false,
+    'a purchase typed by hand is never judged by a bank category',
+  );
+  assert.equal(
+    isBankMove(
+      side('zelle', 4_000, 0, { category: 'TRANSFER_OUT_OTHER_TRANSFER_OUT' }),
+    ),
+    false,
+    'money sent to a person still counts as spending',
+  );
+  assert.equal(
+    isBankMove(side('atm', 6_000, 0, { category: 'TRANSFER_OUT_WITHDRAWAL' })),
+    false,
+    'a cash withdrawal still counts as spending',
+  );
 
   const transfer = findAccountPairs([
     side('out', 25_000, 0),

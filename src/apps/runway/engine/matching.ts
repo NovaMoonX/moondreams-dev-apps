@@ -248,6 +248,28 @@ export function findDepositDays(
   return { clear, offers };
 }
 
+// The bank's detailed kinds for money that only moves between a person's own accounts or pays their card; a payment to a person or a cash withdrawal is not one.
+const OWN_MOVE_CATEGORIES = new Set([
+  'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT',
+  'TRANSFER_IN_ACCOUNT_TRANSFER',
+  'TRANSFER_OUT_ACCOUNT_TRANSFER',
+  'TRANSFER_IN_SAVINGS',
+  'TRANSFER_OUT_SAVINGS',
+  'TRANSFER_IN_INVESTMENT_AND_RETIREMENT_FUNDS',
+  'TRANSFER_OUT_INVESTMENT_AND_RETIREMENT_FUNDS',
+]);
+
+/** A synced purchase the bank calls a card payment or a move between the person's own accounts, still waiting and unpaired: not spending until the person says it is. */
+export const isBankMove = (purchase: OpenPurchase) =>
+  purchase.source === 'link' &&
+  // Once the person has answered (unpaired it, undone a choice), their answer wins over the bank's.
+  purchase.assignedBy !== 'person' &&
+  purchase.needsHome &&
+  purchase.pairedWithId === null &&
+  purchase.incomeDayId === null &&
+  (purchase.billRef ?? null) === null &&
+  OWN_MOVE_CATEGORIES.has(purchase.category ?? '');
+
 /** The two sides of a move between the person's own accounts are paired only this close in date. */
 export const PAIR_DAYS = 3;
 

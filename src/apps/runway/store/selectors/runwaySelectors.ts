@@ -82,7 +82,11 @@ import {
   DAY_MS,
   toDayKey,
 } from '@apps/runway/engine/dates';
-import { findLostPairs, type DepositDay } from '@apps/runway/engine/matching';
+import {
+  findLostPairs,
+  isBankMove,
+  type DepositDay,
+} from '@apps/runway/engine/matching';
 import { readHomePins } from '@apps/runway/utils/homePins';
 import type {
   BillFundedBy,
@@ -1571,27 +1575,50 @@ const selectPurchases = (state: RootState) => state.runway.purchases;
 const selectPeriodPurchases = (state: RootState) =>
   state.runway.periodPurchases;
 
-/** The recent window's purchases and those of the period Spend is showing, newest day first and, within a day, the last one added first. */
-export const selectSpendPurchases = createSelector(
+const byNewest = (a: OpenPurchase, b: OpenPurchase) =>
+  b.date - a.date ||
+  b.createdAt - a.createdAt ||
+  (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+const selectKnownPurchases = createSelector(
   [selectPurchases, selectPeriodPurchases],
   (purchases, periodPurchases) => {
     const known = new Set(purchases.map((purchase) => purchase.id));
-    const result = [
+    return [
       ...purchases,
       ...periodPurchases.filter((purchase) => !known.has(purchase.id)),
-    ]
+    ];
+  },
+);
+
+/** The recent window's purchases and those of the period Spend is showing, newest day first and, within a day, the last one added first. A card payment or move the bank flagged waits under Account moves instead. */
+export const selectSpendPurchases = createSelector(
+  [selectKnownPurchases],
+  (purchases) => {
+    const result = purchases
       .filter(
         (purchase) =>
           purchase.incomeDayId === null &&
           purchase.pairedWithId === null &&
-          !(purchase.needsHome && purchase.amountCents < 0),
+          !(purchase.needsHome && purchase.amountCents < 0) &&
+          !isBankMove(purchase),
       )
-      .sort(
-        (a, b) =>
-          b.date - a.date ||
-          b.createdAt - a.createdAt ||
-          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
-      );
+      .sort(byNewest);
+    return result;
+  },
+);
+
+/** Card payments and moves the bank flagged that are not paired yet, newest first: they wait under Account moves rather than in spending. */
+export const selectWaitingBankMoves = createSelector(
+  [selectKnownPurchases, (state: RootState) => state.runway.needsHome],
+  (purchases, waiting) => {
+    const known = new Set(purchases.map((purchase) => purchase.id));
+    const result = [
+      ...purchases,
+      ...waiting.filter((purchase) => !known.has(purchase.id)),
+    ]
+      .filter(isBankMove)
+      .sort(byNewest);
     return result;
   },
 );
@@ -1803,7 +1830,7 @@ export const selectLostPairs = createSelector(
         ),
 );
 
-/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. */
+/** What waits in Needs a home, newest day first: charges to send to an envelope, money in set apart under its own heading (lost deposits with it), and history the person placed by hand that may be counted twice. A card payment or move the bank flagged waits under Account moves instead. */
 export const selectNeedsHome = createSelector(
   [
     selectWaitingList,
@@ -1828,8 +1855,9 @@ export const selectNeedsHome = createSelector(
         b.createdAt - a.createdAt ||
         (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
     );
-    const spending = sorted.filter((purchase) => purchase.amountCents >= 0);
-    const moneyIn = sorted.filter((purchase) => purchase.amountCents < 0);
+    const sortable = sorted.filter((purchase) => !isBankMove(purchase));
+    const spending = sortable.filter((purchase) => purchase.amountCents >= 0);
+    const moneyIn = sortable.filter((purchase) => purchase.amountCents < 0);
     const listed = new Set(sorted.map((purchase) => purchase.id));
     const maybeTwice = historyPurchases
       .filter(

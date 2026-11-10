@@ -31,6 +31,9 @@ interface LeaveOutRowProps {
   onDone: () => void;
   /** Keeps a charge counted in Free to Spend with no envelope, instead of taking it out of spending. */
   isKeepFree?: boolean;
+  /** The row's own words where the usual ones would not fit the question asked. */
+  label?: string;
+  subtitle?: string;
 }
 
 /** Takes a waiting purchase out of spending, whether it is money in or a charge, or keeps a charge in Free to Spend; a failure reads in the row's own subtitle. */
@@ -38,6 +41,8 @@ function LeaveOutRow({
   purchase,
   onDone,
   isKeepFree = false,
+  label,
+  subtitle,
 }: LeaveOutRowProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -118,8 +123,11 @@ function LeaveOutRow({
       isGrouped
       isRoomy
       icon={isKeepFree ? <Wallet /> : <Ban />}
-      label={isKeepFree ? NEEDS_HOME_WORDS.keepFree : NEEDS_HOME_WORDS.leaveOut}
-      subtitle={error ?? getSubtitle(purchase, isKeepFree)}
+      label={
+        label ??
+        (isKeepFree ? NEEDS_HOME_WORDS.keepFree : NEEDS_HOME_WORDS.leaveOut)
+      }
+      subtitle={error ?? subtitle ?? getSubtitle(purchase, isKeepFree)}
       isDisabled={isBusy}
       onClick={() => void leaveOut()}
     />

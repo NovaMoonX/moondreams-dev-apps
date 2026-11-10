@@ -1,4 +1,5 @@
 import {
+  parseAsArrayOf,
   parseAsBoolean,
   parseAsInteger,
   parseAsString,
@@ -17,6 +18,7 @@ import {
   DEFAULT_CHANGE_LOG_SPAN,
   DEFAULT_PLAN_SECTION,
   DEFAULT_SPEND_PERIOD,
+  SPEND_KINDS,
   SPEND_PERIODS,
   MAX_CHANGE_LOG_PAGE,
   DEFAULT_RUNWAY_TAB,
@@ -96,6 +98,22 @@ export function useRunwayUrlState() {
   const [requestedSpendEnvelope, setRequestedSpendEnvelope] = useQueryState(
     'spendEnvelope',
     parseAsString,
+  );
+  const [requestedSpendKind, setRequestedSpendKind] = useQueryState(
+    'spendKind',
+    parseAsStringLiteral(SPEND_KINDS),
+  );
+  const [requestedSpendFrom, setRequestedSpendFrom] = useQueryState(
+    'spendFrom',
+    parseAsArrayOf(parseAsString),
+  );
+  const [requestedSpendMin, setRequestedSpendMin] = useQueryState(
+    'spendMin',
+    parseAsInteger,
+  );
+  const [requestedSpendMax, setRequestedSpendMax] = useQueryState(
+    'spendMax',
+    parseAsInteger,
   );
 
   const [requestedPurchase, setRequestedPurchase] = useQueryState(
@@ -289,6 +307,16 @@ export function useRunwayUrlState() {
   };
   const showSpendEnvelope = (envelopeId: string | null) =>
     setRequestedSpendEnvelope(envelopeId, { history: 'replace' });
+  const showSpendKind = (kind: (typeof SPEND_KINDS)[number] | null) =>
+    setRequestedSpendKind(kind, { history: 'replace' });
+  const showSpendFrom = (sourceIds: string[]) =>
+    setRequestedSpendFrom(sourceIds.length > 0 ? sourceIds : null, {
+      history: 'replace',
+    });
+  const showSpendAmount = (min: number | null, max: number | null) => {
+    void setRequestedSpendMin(min, { history: 'replace' });
+    void setRequestedSpendMax(max, { history: 'replace' });
+  };
 
   const planSection: PlanSection = requestedSection ?? DEFAULT_PLAN_SECTION;
   const showPlanSection = (section: PlanSection) => {
@@ -384,6 +412,10 @@ export function useRunwayUrlState() {
     showTab,
     showSpend,
     spendEnvelope: requestedSpendEnvelope,
+    spendKind: requestedSpendKind,
+    spendFrom: requestedSpendFrom ?? [],
+    spendMin: requestedSpendMin,
+    spendMax: requestedSpendMax,
     purchaseId: requestedPurchase,
     checkEnvelope: requestedCheckEnvelope,
     isCheckFromFreeToSpend: requestedCheckFrom === true,
@@ -396,6 +428,9 @@ export function useRunwayUrlState() {
     openPurchase,
     closePurchase,
     showSpendEnvelope,
+    showSpendKind,
+    showSpendFrom,
+    showSpendAmount,
     planSection,
     showPlanSection,
     openDayKey: requestedDay,
@@ -444,6 +479,10 @@ export function useRunwayUrlState() {
     view: null,
     startMethod: null,
     spendEnvelope: null,
+    spendKind: null,
+    spendFrom: [],
+    spendMin: null,
+    spendMax: null,
     purchaseId: null,
     checkEnvelope: null,
     isCheckFromFreeToSpend: false,

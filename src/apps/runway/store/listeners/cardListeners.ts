@@ -9,6 +9,7 @@ import type {
   OpenCard,
   RunwayEncryption,
 } from '@apps/runway/types';
+import { cleanBankName } from '@apps/runway/utils/accountText';
 
 const toError = (error: unknown) =>
   error instanceof Error ? error : new Error('The plan did not open.');
@@ -41,7 +42,7 @@ export function startCardsListener(
               archivedAt: data.archivedAt ?? null,
               linkId: data.linkId ?? null,
               issuer: payload.issuer,
-              name: payload.name ?? null,
+              name: payload.name ? cleanBankName(payload.name) : null,
               dueDay: payload.dueDay ?? null,
               lastFour: payload.lastFour ?? null,
               payFromAccountId: payload.payFromAccountId ?? null,
