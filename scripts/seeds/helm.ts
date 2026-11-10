@@ -1406,6 +1406,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       keptDefinitions.length +
       1 +
       aListCopies.length +
+      1 +
       goingOnceCopies.length,
   };
   return result;
