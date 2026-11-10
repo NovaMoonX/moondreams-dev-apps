@@ -26,7 +26,7 @@ function ConnectedAppsScreen({
 }: ConnectedAppsScreenProps) {
   const name = useAssistantName();
   const { apps } = useAppCatalog();
-  const { grants, isLoading, isKnown, error } = useConnections({
+  const { grants, isKnown, error } = useConnections({
     readerAppId: 'helm',
   });
   const [connecting, setConnecting] = useState<{
@@ -94,7 +94,7 @@ function ConnectedAppsScreen({
             {HELM_COPY.connectedAppsFailed}
           </p>
         )}
-        {isLoading && (
+        {!isKnown && !error && (
           <p className='text-muted-foreground text-[13px]' role='status'>
             {HELM_COPY.connectedAppsLoading}
           </p>

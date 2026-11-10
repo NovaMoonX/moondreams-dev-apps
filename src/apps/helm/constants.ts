@@ -301,7 +301,7 @@ export const HELM_COPY = {
   connectFailed: "That didn't connect. Try again.",
   connectNotAllowed: (app: string) =>
     `You can't open ${app}, so it can't be connected.`,
-  connectNotActive: "That connection isn't active any more.",
+  connectNotActive: "That connection isn't available right now.",
   connectionGone: 'That app was already disconnected.',
   connectionConnectedOn: (date: string) => `Connected ${date}`,
   connectionAccountLabel: 'Account',
