@@ -30,7 +30,7 @@ function QuestionSheet({ item, onClose }: QuestionSheetProps) {
               ? HELM_COPY.unreadable
               : item.capture.text}
           </p>
-          {questions.length === 0 && (
+          {questions.length === 0 && !item.capture.isUnreadable && (
             <p className='text-muted-foreground text-[15px] text-pretty'>
               {HELM_COPY.unreadable}
             </p>

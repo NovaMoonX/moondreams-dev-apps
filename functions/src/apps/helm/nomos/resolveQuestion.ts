@@ -38,8 +38,12 @@ export interface ResolveInput {
   opened: Record<string, unknown>;
   /** The tasks that still exist and open, by id. */
   tasks: Map<string, ResolveTask>;
-  /** The who or place the option names, or null when it is gone; only its tier is read. */
-  chosen: { tier: WhoTierValue; tierSetBy: 'person' | 'nomos' } | null;
+  /** The who or place the option names, or null when it is gone; its tier and last mention are read. */
+  chosen: {
+    tier: WhoTierValue;
+    tierSetBy: 'person' | 'nomos';
+    lastMentionedAt: number | null;
+  } | null;
   newId: () => string;
   seal: (fields: Record<string, unknown>) => SealedPayload;
 }
@@ -235,7 +239,10 @@ export function planResolve(
       ? {
           id: targetId,
           data: {
-            lastMentionedAt: capture.createdAt,
+            lastMentionedAt: Math.max(
+              capture.createdAt,
+              chosen.lastMentionedAt ?? 0,
+            ),
             ...(tier && tier !== chosen.tier && { tier }),
           },
         }

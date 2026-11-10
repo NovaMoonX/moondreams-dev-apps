@@ -58,7 +58,7 @@ function QuestionBlock({
     });
     setIsWorking(false);
     if (result.kind === 'offline') setNote(HELM_COPY.questionNeedsConnection);
-    if (result.kind === 'gone') setNote(result.message ?? HELM_COPY.editGone);
+    if (result.kind === 'gone') setNote(HELM_COPY.questionGone(question.kind));
     if (result.kind === 'failed') setNote(HELM_COPY.heldActionFailed);
   };
 

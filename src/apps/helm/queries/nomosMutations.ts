@@ -119,7 +119,6 @@ export interface QuestionAnswerInput {
 export interface ResolveOutcome {
   kind: 'done' | 'answered' | 'gone' | 'offline' | 'failed';
   executionId: string | null;
-  message: string | null;
 }
 
 const resolveHelmQuestionCallable = httpsCallable<
@@ -135,8 +134,12 @@ const toErrorCode = (error: unknown) =>
 const resolved = (
   kind: ResolveOutcome['kind'],
   executionId: string | null = null,
-  message: string | null = null,
-): ResolveOutcome => ({ kind, executionId, message });
+): ResolveOutcome => ({ kind, executionId });
+
+const isGoneRefusal = (error: unknown) =>
+  error instanceof Error &&
+  'details' in error &&
+  (error.details as { reason?: unknown } | null)?.reason === 'gone';
 
 /** Answers one open which-person or which-place question on the server. The answer needs a connection and is never queued. */
 export async function resolveQuestion(
@@ -154,12 +157,8 @@ export async function resolveQuestion(
   } catch (error) {
     const code = toErrorCode(error);
     if (code === 'functions/already-exists') return resolved('answered');
-    if (code === 'functions/failed-precondition') {
-      return resolved(
-        'gone',
-        null,
-        error instanceof Error ? error.message : null,
-      );
+    if (code === 'functions/failed-precondition' && isGoneRefusal(error)) {
+      return resolved('gone');
     }
     if (isConnectionError(error)) return resolved('offline');
     console.error('Helm could not answer a question', error);

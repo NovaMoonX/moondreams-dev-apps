@@ -267,7 +267,8 @@ export function useHelmVoice() {
     });
     if (result.kind === 'done') say(HELM_COPY.questionAnswered);
     else if (result.kind === 'offline') say(HELM_COPY.questionNeedsConnection);
-    else if (result.kind === 'gone') say(result.message ?? HELM_COPY.editGone);
+    else if (result.kind === 'gone')
+      say(HELM_COPY.questionGone(asked.question.kind));
     else if (result.kind === 'failed') say(HELM_COPY.heldActionFailed);
     else voice.settle();
     return true;

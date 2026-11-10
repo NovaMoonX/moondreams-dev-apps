@@ -339,7 +339,7 @@ const resolveInput = (
     ['t1', { title: 'Lunch with Sam', whoIds: [], placeIds: [] }],
     ['t2', { title: 'Call Sam', whoIds: ['x'], placeIds: [] }],
   ]),
-  chosen: { tier: 'passing', tierSetBy: 'nomos' },
+  chosen: { tier: 'passing', tierSetBy: 'nomos', lastMentionedAt: null },
   newId: () => 'made-1',
   seal,
   ...extra,
@@ -391,7 +391,7 @@ test('a pick links each held task, raises a passing tier and answers the questio
 test('a tier the person set is never raised, and a task already linked is left alone', () => {
   const result = planned(
     resolveInput('w1', {
-      chosen: { tier: 'passing', tierSetBy: 'person' },
+      chosen: { tier: 'passing', tierSetBy: 'person', lastMentionedAt: null },
       tasks: new Map([
         ['t1', { title: 'Lunch with Sam', whoIds: ['w1'], placeIds: [] }],
       ]),
@@ -400,6 +400,15 @@ test('a tier the person set is never raised, and a task already linked is left a
   assert.deepEqual(result.whoUpdate?.data, { lastMentionedAt: 4000 });
   assert.equal(result.taskUpdates.length, 0);
   assert.equal(result.execution, null);
+});
+
+test('answering an old question never moves a later mention back', () => {
+  const result = planned(
+    resolveInput('w1', {
+      chosen: { tier: 'regular', tierSetBy: 'nomos', lastMentionedAt: 8000 },
+    }),
+  );
+  assert.equal(result.whoUpdate?.data.lastMentionedAt, 8000);
 });
 
 test('new makes the who like a turn does and links it; none links nothing', () => {

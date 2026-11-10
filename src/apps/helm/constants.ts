@@ -783,6 +783,10 @@ export const HELM_COPY = {
   editNeedsConnection: 'Saving changes needs a connection.',
   editFailed: "That didn't save. Try again.",
   editGone: 'This page is gone.',
+  questionGone: (kind: string) =>
+    kind === 'whichPlace'
+      ? 'That place was removed.'
+      : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>

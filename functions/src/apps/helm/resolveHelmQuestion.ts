@@ -41,6 +41,7 @@ const toRefusal = (refusal: ResolveRefusal, isPlace: boolean) =>
       : new HttpsError(
           'failed-precondition',
           isPlace ? 'That place was removed.' : 'That person was removed.',
+          { reason: 'gone' },
         );
 
 const openOrRefuse = (
@@ -186,6 +187,11 @@ export const resolveHelmQuestion = onCall(
             ? {
                 tier: chosenSnap.get('tier') ?? 'passing',
                 tierSetBy: chosenSnap.get('tierSetBy') ?? 'nomos',
+                lastMentionedAt: Number.isFinite(
+                  chosenSnap.get('lastMentionedAt'),
+                )
+                  ? Number(chosenSnap.get('lastMentionedAt'))
+                  : null,
               }
             : null,
         newId: () =>
