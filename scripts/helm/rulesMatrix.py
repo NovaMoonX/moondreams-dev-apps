@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and tasks follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks and noted facts follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -132,6 +132,19 @@ def main():
         check(f'tasks delete [{a}]', commit(tok, [rm(tk)]), a == 'o')
         admin([rm(tk + '-new-' + a)])
     check('tasks create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/tasks/t', task)]), False)
+
+    # A noted fact is the owner's alone, like a task.
+    fact = dict(status='inferred', stated='nomosInferred', syncedIds=['s1'], subjectIds=['s1'], createdAt=NOW, sealed=SEAL)
+    fk = f'{path}/facts/fact-1'
+    for a, tok in actors.items():
+        admin([put(fk, fact)])
+        check(f'facts read [{a}]', get(fk, tok), a == 'o')
+        check(f'facts list [{a}]', get(f'{path}/facts', tok), a == 'o')
+        check(f'facts create [{a}]', commit(tok, [put_new(fk + '-new-' + a, fact)]), a == 'o')
+        check(f'facts update [{a}]', commit(tok, [put(fk, dict(fact, status='superseded'))]), a == 'o')
+        check(f'facts delete [{a}]', commit(tok, [rm(fk)]), a == 'o')
+        admin([rm(fk + '-new-' + a)])
+    check('facts create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/facts/f', fact)]), False)
 
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
