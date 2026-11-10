@@ -138,6 +138,8 @@ export interface Capture {
   quotedSourceKeys: string[];
   createdAt: number;
   sortedAt: number | null;
+  /** Set when the assistant was asked to plan a day: "YYYY-MM-DD", which the device plans on sight. */
+  planDayKey: string | null;
   /** The page it was asked from; null from home and on turns made before pages could be asked about. */
   screen: ScreenContext | null;
   sealed: Sealed;
@@ -451,4 +453,45 @@ export interface OpenFact extends Omit<Fact, 'sealed'> {
   statement: string;
   quote: string | null;
   value: string | null;
+}
+
+export type PlanSlotStatus = 'suggested' | 'kept' | 'notToday';
+
+export interface PlanSlot {
+  taskId: string;
+  /** Instant; null means "any time today", as planned with no calendar. */
+  startAt: number | null;
+  endAt: number | null;
+  status: PlanSlotStatus;
+  source: 'nomos' | 'person';
+  decidedAt: number | null;
+}
+
+export interface PlanCalendarEntry {
+  eventRef: string;
+  title: string;
+  startAt: number;
+  endAt: number;
+  isAllDay: boolean;
+}
+
+export interface PlanDaySealed {
+  /** Slot id to its rule-built reason ("20 min · fits before the tasting"). */
+  reasons: Record<string, string>;
+  calendarSnapshot: PlanCalendarEntry[];
+}
+
+/** One local day's plan; its id is "YYYY-MM-DD" in the profile's zone. */
+export interface PlanDay {
+  id: string;
+  /** Date-only, UTC midnight. */
+  date: number;
+  slots: Record<string, PlanSlot>;
+  isRestDay: boolean;
+  restDayOverriddenAt: number | null;
+  generatedAt: number | null;
+  calendarReadAt: number | null;
+  reasons: Record<string, string>;
+  calendarSnapshot: PlanCalendarEntry[];
+  isUnreadable: boolean;
 }
