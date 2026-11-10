@@ -82,19 +82,19 @@ function PlannedCard({
         </Button>
       </div>
       {overlapTitle !== null && !isDone && (
-        <div className='flex items-center gap-3 px-4 pb-3'>
+        <div className='flex flex-wrap items-center gap-x-3 gap-y-2 px-4 pb-3'>
           <TriangleAlert
             className='size-3.5 shrink-0 text-[var(--helm-overdue)]'
             aria-hidden='true'
           />
-          <p className='min-w-0 flex-1 text-[13px] break-words text-[var(--helm-overdue)]'>
+          <p className='line-clamp-2 min-w-0 flex-1 text-[13px] break-words text-[var(--helm-overdue)] max-[359px]:basis-[calc(100%-1.625rem)]'>
             {HELM_COPY.planOverlaps(overlapTitle)}
           </p>
           <Button
             type='button'
             variant='outline'
             size='sm'
-            className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+            className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[''] max-[359px]:ml-[26px]"
             onClick={onAnotherTime}
           >
             {HELM_COPY.planAnotherTime}

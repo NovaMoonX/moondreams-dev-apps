@@ -14,7 +14,7 @@ import { formatDayWord, needsPlan, toDayKey } from '@apps/helm/utils/planDays';
 import {
   buildPlanInput,
   findClashes,
-  isFailingCalendar,
+  isCalendarHeld,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
 import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
@@ -88,13 +88,13 @@ export function usePlanDay() {
       state.helm.synced.isLoaded,
   );
 
-  const isFailing = grants.some(isFailingCalendar);
+  const isFailing = isCalendarHeld(grants);
 
   const plan = useCallback(
     async (dayKey: string, isRestOverridden = false) => {
       const sources = readPlanSources(grants);
       if (!uid || !sources || dayKey < sources.todayKey) return;
-      if (grants.some(isFailingCalendar)) return;
+      if (isCalendarHeld(grants)) return;
       try {
         const encryption = await getHelmEncryption(uid);
         await generatePlan(

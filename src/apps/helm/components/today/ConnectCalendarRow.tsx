@@ -71,29 +71,30 @@ function ConnectCalendarRow() {
           return (
             <div
               key={grant.id}
-              className='helm-card bg-primary/5 flex items-center gap-3 px-4 py-3'
+              className='helm-card bg-primary/5 flex items-center gap-3 px-4 py-3 max-[359px]:flex-wrap'
             >
               <CalendarX
                 className='text-muted-foreground size-5 shrink-0'
                 aria-hidden='true'
               />
-              <div className='min-w-0 flex-1'>
-                <p className='text-foreground text-[15px] leading-[21px] break-words'>
+              <div className='min-w-0 flex-1 max-[359px]:basis-[calc(100%-2rem)]'>
+                <p className='text-foreground text-[15px] leading-[21px] text-pretty'>
                   {HELM_COPY.calendarStoppedTitle}
                 </p>
-                <p className='text-muted-foreground text-[13px] text-pretty break-words'>
-                  {HELM_COPY.calendarStoppedReason(
-                    account
-                      ? (account.label ?? account.email)
-                      : HELM_COPY.googleCalendarName,
-                  )}
+                <p className='text-muted-foreground truncate text-[13px]'>
+                  {account
+                    ? (account.label ?? account.email)
+                    : HELM_COPY.googleCalendarName}
+                </p>
+                <p className='text-muted-foreground text-[13px] text-pretty'>
+                  {HELM_COPY.calendarStoppedReason}
                 </p>
               </div>
               <Button
                 type='button'
                 variant='outline'
                 size='sm'
-                className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
+                className="relative shrink-0 after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[''] max-[359px]:ml-8"
                 onClick={() => begin({ accountId: grant.accountId })}
               >
                 {HELM_COPY.googleReconnect}

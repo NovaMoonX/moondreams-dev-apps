@@ -149,4 +149,14 @@ assert.equal(read(D, []), null);
   assert.equal(read(D, [late], { zone: 'Pacific/Auckland' }), null);
 }
 
+{
+  assert.equal(
+    read(D, [event(LA, [P, '09:00'], ['2026-11-16', '09:00'])]),
+    null,
+    'a week away is not a night out',
+  );
+  assert.equal(read(D, [event(LA, [P, '21:00'], [D, '11:59'])]), 'late');
+  assert.equal(read(D, [event(LA, [P, '21:00'], [D, '12:30'])]), null);
+}
+
 console.log('check:helm-rest-day: rest day rules hold.');

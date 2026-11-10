@@ -55,6 +55,14 @@ export const isFailingCalendar = (grant: ConnectionGrantWithId) =>
     );
   });
 
+/** A calendar Google stopped sharing, until it is reconnected. */
+export const isStoppedCalendar = (grant: ConnectionGrantWithId) =>
+  grant.connectorId === 'google:calendar' && grant.status === 'needsReconnect';
+
+/** Whether planning waits: a calendar that can't be read would be planned around as if it were empty. */
+export const isCalendarHeld = (grants: ConnectionGrantWithId[]) =>
+  grants.some((grant) => isFailingCalendar(grant) || isStoppedCalendar(grant));
+
 export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   id: task.id,
   title: task.title,

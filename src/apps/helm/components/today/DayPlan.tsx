@@ -31,6 +31,7 @@ import {
   buildPlanInput,
   findOverlaps,
   isFailingCalendar,
+  isStoppedCalendar,
   isLiveCalendar,
   type PlanSources,
 } from '@apps/helm/utils/planInput';
@@ -124,8 +125,9 @@ function DayPlan({
         grant.status === 'needsReconnect',
     );
   const { input } = buildPlanInput(sources, dayKey);
-  const restDay = isFailing ? null : input.restDay;
-  const isHolding = isFailing || restDay !== null;
+  const isHeld = isFailing || grants.some(isStoppedCalendar);
+  const restDay = isHeld ? null : input.restDay;
+  const isHolding = isHeld || restDay !== null;
   const slots = sortSlots(day?.slots ?? {}).flatMap(({ id, slot }) => {
     const task = getTask(slot.taskId);
     const isHidden =
@@ -212,7 +214,7 @@ function DayPlan({
 
   const isPlanned = !needsPlan(day);
   const outcome =
-    suggested.length > 0 || !isPlanned || isFailing || restDay !== null
+    suggested.length > 0 || !isPlanned || isHolding
       ? null
       : isLate
         ? 'late'
@@ -229,10 +231,17 @@ function DayPlan({
 
   return (
     <>
-      {isFailing && <CalendarFailedLine grants={failingGrants} />}
+      {isFailing && (
+        <CalendarFailedLine grants={failingGrants} hasPlan={kept.length > 0} />
+      )}
       <p className='text-muted-foreground text-[15px]'>
         {getSummary(events.length, kept.length, suggested.length, isStopped)}
       </p>
+      {isHeld && !isFailing && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.calendarStoppedNoSuggestions}
+        </p>
+      )}
       {restDay !== null && (
         <RestDayLine
           kind={restDay}
@@ -286,11 +295,6 @@ function DayPlan({
           )}
         </section>
       )}
-      {isFailing && (
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.calendarNoSuggestions}
-        </p>
-      )}
       {outcome !== null && (
         <div className='flex items-center gap-3'>
           <p className='text-muted-foreground min-w-0 flex-1 text-[15px] text-pretty'>
@@ -317,7 +321,7 @@ function DayPlan({
           {HELM_COPY.planUnreadable}
         </p>
       )}
-      {!isToday && !isPlanned && isReady && !isFailing && restDay === null && (
+      {!isToday && !isPlanned && isReady && !isHolding && (
         <Button
           type='button'
           variant='outline'

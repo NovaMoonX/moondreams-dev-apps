@@ -12,6 +12,8 @@ export interface RestDayEvent {
 
 const DAY_MS = 86_400_000;
 const REST_UNTIL = '02:00';
+// A longer event (a conference, a week away) is not a night out.
+const LATEST_END = '12:00';
 
 const getPreviousKey = (dayKey: string) =>
   new Date(Date.parse(`${dayKey}T00:00:00Z`) - DAY_MS)
@@ -33,6 +35,7 @@ export function readRestDay(input: {
   );
   const dayStart = zonedDateTimeToEpoch(dayKey, '00:00', timeZone);
   const restUntil = zonedDateTimeToEpoch(dayKey, REST_UNTIL, timeZone);
+  const latestEnd = zonedDateTimeToEpoch(dayKey, LATEST_END, timeZone);
   const isShift = shiftCalendarIds.length > 0;
   const hasOvernight = events.some(
     (event) =>
@@ -43,6 +46,7 @@ export function readRestDay(input: {
       event.startAt >= previousStart &&
       event.startAt < dayStart &&
       event.endAt > restUntil &&
+      event.endAt <= latestEnd &&
       (!isShift ||
         (event.calendarKey !== null &&
           shiftCalendarIds.includes(event.calendarKey))),
