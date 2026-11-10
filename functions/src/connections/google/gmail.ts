@@ -189,7 +189,7 @@ export async function readMail(
   };
 }
 
-/** Mail is read when asked, so this source has nothing to copy and the sync runner never calls it. */
+/** Mail is read when asked, so this source has nothing to copy. */
 export function createGoogleMailAdapter(): SourceAdapter {
   return {
     manifest: GOOGLE_GMAIL_MANIFEST,

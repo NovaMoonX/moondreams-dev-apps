@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { useTrackAppUsage } from '@/hooks/useTrackAppUsage';
+import { useLoadFeatureGates } from '@/hooks/useFeatureGates';
 import Loading from '@/ui/Loading';
 import HomeSurface from '@apps/helm/components/home/HomeSurface';
 import InboxView from '@apps/helm/components/inbox/InboxView';
@@ -43,6 +44,7 @@ function HelmApp() {
 
   useHelmTheme();
   useTrackAppUsage('helm', user?.uid ?? null);
+  useLoadFeatureGates('helm', user?.uid ?? null);
   useHelmSync(user?.uid ?? null);
   const voice = useHelmVoice();
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
