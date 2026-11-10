@@ -30,9 +30,16 @@ export const COMMAND_KINDS = [
   'completeTask',
 ] as const;
 
+export const ANSWER_SCOPES = ['yourThings', 'theWorld', 'both'] as const;
+
+export type AnswerScope = (typeof ANSWER_SCOPES)[number];
+
 export const MAX_COMMANDS = 20;
 export const MAX_EFFECTS = 40;
 export const TITLE_CAP = 200;
+export const QUESTION_CAP = 200;
+export const ANSWER_TEXT_CAP = 1_200;
+export const ANSWER_SPOKEN_CAP = 200;
 
 /** A command whose every reference is settled: a task id from the context, a `$new` ref made in the same reply, or a due the reading made. */
 export type NomosCommand =
@@ -52,6 +59,29 @@ export type NomosCommand =
       isUrgent: boolean | null;
     }
   | { kind: 'completeTask'; taskId: string };
+
+/** A record an answer rests on, as stored with the answer. */
+export type SourceRef =
+  | { kind: 'task'; id: string }
+  | {
+      kind: 'synced';
+      id: string;
+      connectorId: string;
+      title: string | null;
+      startAt: number | null;
+    };
+
+/** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
+export interface AnswerCommand {
+  scope: AnswerScope;
+  question: string;
+  isHealth: boolean;
+  fromRecordsText: string | null;
+  sources: SourceRef[];
+  generalText: string | null;
+  generalSpoken: string | null;
+  recordsSpoken: string | null;
+}
 
 const nullable = (type: string, description: string) => ({
   type: [type, 'null'],
@@ -80,9 +110,17 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'title',
             'dueSpanId',
             'isUrgent',
+            'scope',
+            'question',
+            'isHealth',
+            'fromRecordsText',
+            'sourceAliases',
+            'generalText',
+            'generalSpoken',
+            'recordsSpoken',
           ],
           properties: {
-            kind: { type: 'string', enum: [...COMMAND_KINDS] },
+            kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer'] },
             ref: nullable(
               'string',
               'createTask: a name for the new task such as $new1, so a later command can point at it; null otherwise.',
@@ -102,6 +140,40 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             isUrgent: nullable(
               'boolean',
               'true when the capture marks this task urgent; null to leave it as it is.',
+            ),
+            scope: nullable(
+              'string',
+              `answer: yourThings when the question is about the person's own plans, people, tasks or things; theWorld when it asks about the world; both when the records answer part and the world the rest. null for every other kind.`,
+            ),
+            question: nullable(
+              'string',
+              `answer: the question in the person's words, at most ${QUESTION_CAP} characters.`,
+            ),
+            isHealth: nullable(
+              'boolean',
+              'answer: true when the question is about health or medicine.',
+            ),
+            fromRecordsText: nullable(
+              'string',
+              `answer: what the person's records say, at most ${ANSWER_TEXT_CAP} characters; null when they say nothing about it.`,
+            ),
+            sourceAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description:
+                'answer: the alias of every record fromRecordsText rests on, from the open tasks, the synced records or a tool result.',
+            },
+            generalText: nullable(
+              'string',
+              `answer: general knowledge about the world, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and never about the person's own plans, people or things.`,
+            ),
+            generalSpoken: nullable(
+              'string',
+              `answer: generalText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
+            ),
+            recordsSpoken: nullable(
+              'string',
+              `answer: fromRecordsText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
             ),
           },
         },

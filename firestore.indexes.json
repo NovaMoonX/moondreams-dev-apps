@@ -111,6 +111,22 @@
         { "fieldPath": "status", "order": "ASCENDING" },
         { "fieldPath": "lastSyncAt", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "synced",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "startAt", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "synced",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "kind", "order": "ASCENDING" },
+        { "fieldPath": "dueAt", "order": "ASCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

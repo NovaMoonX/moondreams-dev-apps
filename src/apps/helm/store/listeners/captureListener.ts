@@ -24,6 +24,7 @@ import type {
   OpenCapture,
   ScreenContext,
 } from '@apps/helm/types';
+import { normalizeAnswer } from '@apps/helm/utils/captureAnswer';
 import {
   EMPTY_READING,
   normalizeReading,
@@ -110,10 +111,17 @@ async function openCapture(
       ...base,
       text: payload.text ?? '',
       reading: normalizeReading(payload.reading),
+      answer: normalizeAnswer(payload.answer),
       isUnreadable: false,
     };
   } catch {
-    return { ...base, text: '', reading: EMPTY_READING, isUnreadable: true };
+    return {
+      ...base,
+      text: '',
+      reading: EMPTY_READING,
+      answer: null,
+      isUnreadable: true,
+    };
   }
 }
 

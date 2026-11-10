@@ -27,7 +27,8 @@ interface ResultLinesProps {
   showsNotice: boolean;
 }
 
-const toSentence = (summary: string) => summary.replace(/[.!]*$/, '.');
+const toSentence = (summary: string) =>
+  /[?]$/.test(summary) ? summary : summary.replace(/[.!]*$/, '.');
 
 function AiNotice() {
   const name = useAssistantName();

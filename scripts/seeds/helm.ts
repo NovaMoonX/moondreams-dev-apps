@@ -26,6 +26,7 @@ import type {
   CaptureSealed,
   Execution,
   ExecutionSealed,
+  CaptureAnswer,
   ScreenContext,
   HelmEncryption,
   Task,
@@ -508,6 +509,7 @@ async function buildBackToBack(input: {
               timeZone,
               assistantName: DEFAULT_ASSISTANT_NAME,
             }),
+            answer: null,
           },
           encryption,
         ),
@@ -591,6 +593,241 @@ async function buildBackToBack(input: {
     ),
   };
   return { captures, tasks, execution, executionId };
+}
+
+const PINCH_CONNECTOR_ID = toAppConnectorId('pinch');
+const PINCH_GRANT_ID = toGrantId('helm', PINCH_CONNECTOR_ID, SITE_ACCOUNT_ID);
+
+// Date-only meals land on the person's own day, which can differ from the UTC day.
+const getSeedToday = (now: number) =>
+  Date.parse(
+    `${new Date(now).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })}T00:00:00Z`,
+  );
+
+const getCopyId = (category: string, sourceRef: string) =>
+  createHash('sha256')
+    .update(`${PINCH_GRANT_ID}|${category}|${sourceRef}`)
+    .digest('hex')
+    .slice(0, 40);
+
+const ANSWER_TASKS = [
+  {
+    id: 'seed-task-answer-cake',
+    title: 'Cake tasting at Sweet Layer Bakery',
+    dueDays: 3,
+  },
+  {
+    id: 'seed-task-answer-dinner',
+    title: "Ask Dana's parents about the rehearsal dinner",
+    dueDays: 9,
+  },
+  {
+    id: 'seed-task-answer-refill',
+    title: "Refill Mom's metoprolol",
+    dueDays: 1,
+  },
+];
+
+const EMPTY_ANSWER = {
+  sources: [],
+  general: null,
+  isHealth: false,
+  generalDiffersFrom: null,
+  suggestedTopicId: null,
+  quotes: [],
+  searched: [],
+} satisfies Partial<CaptureAnswer>;
+
+/** One turn of each kind of answer, asked in a session of their own: records from a task, from a synced copy, both parts, nothing in the records (the person's own things, then the world's), and a health question. */
+const buildAnswers = (now: number): CaptureAnswer[] => {
+  const today = getSeedToday(now);
+  const cakeDay = new Date(
+    today + ANSWER_TASKS[0].dueDays * DAY_MS,
+  ).toLocaleDateString('en-US', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  return [
+    {
+      ...EMPTY_ANSWER,
+      question: 'When is the cake tasting?',
+      scope: 'yourThings',
+      fromRecords: `The cake tasting is on ${cakeDay}, at Sweet Layer Bakery.`,
+      sources: [{ kind: 'task', id: ANSWER_TASKS[0].id }],
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: "What's for dinner tomorrow?",
+      scope: 'yourThings',
+      fromRecords: 'Lemon pasta is planned for dinner tomorrow.',
+      sources: [
+        {
+          kind: 'synced',
+          id: getCopyId('plannedMeals', 'plannedMeals/seed-meal-1'),
+          connectorId: PINCH_CONNECTOR_ID,
+          title: 'Lemon pasta',
+          startAt: today + DAY_MS,
+        },
+      ],
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: 'Who pays for the rehearsal dinner?',
+      scope: 'both',
+      fromRecords:
+        "Nobody has settled it yet: there's a task to ask Dana's parents about the rehearsal dinner.",
+      sources: [{ kind: 'task', id: ANSWER_TASKS[1].id }],
+      general:
+        "Traditionally the groom's family hosts it, but many couples now share it between both families or host it themselves.",
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: "What's Dana's number?",
+      scope: 'yourThings',
+      fromRecords: null,
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: 'How long does cake keep?',
+      scope: 'theWorld',
+      fromRecords: null,
+      general:
+        'A frosted cake usually keeps 3 to 4 days in the fridge, covered. Cream or fresh fruit fillings are best within 2 days.',
+    },
+    {
+      ...EMPTY_ANSWER,
+      question: 'Can Mom take ibuprofen with her metoprolol?',
+      scope: 'both',
+      fromRecords:
+        "There's a task to refill Mom's metoprolol, and nothing about ibuprofen.",
+      sources: [{ kind: 'task', id: ANSWER_TASKS[2].id }],
+      general:
+        'Ibuprofen and similar pain relievers can raise blood pressure and may make metoprolol work less well.',
+      isHealth: true,
+    },
+  ];
+};
+
+async function buildAnswerTurns(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const today = getDueDay({ kind: 'moment', at: now }, timeZone);
+  const answers = buildAnswers(now);
+  const turns = await Promise.all(
+    answers.map(async (answer, order) => {
+      const createdAt = now - (45 - order * 3) * MINUTE_MS;
+      const sortedAt = createdAt + SORT_DELAY_MS;
+      const captureId = `seed-turn-answer-${order + 1}`;
+      const executionId = `seed-execution-answer-${order + 1}`;
+      const capture: Capture = {
+        inputMode: 'typed',
+        sttProvider: null,
+        interruptedCaptureId: null,
+        ttsProvider: null,
+        medium: 'web',
+        sessionId: `seed-${uid}-answers`,
+        turnIndex: order,
+        route: 'quick',
+        status: 'sorted',
+        heldReason: null,
+        claimId: null,
+        claimedAt: null,
+        attempts: 0,
+        lastErrorCode: null,
+        questionState: {},
+        executionIds: [executionId],
+        turnLeadId: null,
+        joinedCaptureIds: [],
+        seenAt: createdAt + MINUTE_MS,
+        createdAt,
+        sortedAt,
+        screen: null,
+        sealed: await sealJson<CaptureSealed>(
+          {
+            text: answer.question,
+            reading: readCapture(answer.question, {
+              now: createdAt,
+              timeZone,
+              assistantName: DEFAULT_ASSISTANT_NAME,
+            }),
+            answer,
+          },
+          encryption,
+        ),
+      };
+      const execution: Execution = {
+        captureId,
+        actor: 'nomos',
+        category: 'answer',
+        autonomyLevel: 1,
+        state: 'succeeded',
+        effectRefs: [],
+        undoesExecutionId: null,
+        undoneByExecutionId: null,
+        questionRef: null,
+        errorCode: null,
+        createdAt: sortedAt,
+        decidedAt: sortedAt,
+        finishedAt: sortedAt,
+        sealed: await sealJson<ExecutionSealed>(
+          {
+            summary:
+              answer.fromRecords === null && answer.general !== null
+                ? `Answered from general knowledge: ${answer.question}`
+                : `Answered: ${answer.question}`,
+            commands: [{ kind: 'answer', question: answer.question }],
+            effects: [],
+            undoReport: null,
+            spoken: null,
+            goneIds: null,
+          },
+          encryption,
+        ),
+      };
+      return { captureId, capture, executionId, execution };
+    }),
+  );
+  const tasks = await Promise.all(
+    ANSWER_TASKS.map(async (entry, order) => {
+      const made = now - (order + 4) * 60 * MINUTE_MS;
+      const task: Task = {
+        status: 'open',
+        importance: null,
+        isUrgent: false,
+        due: { kind: 'day', date: today + entry.dueDays * DAY_MS },
+        durationMinutes: null,
+        energy: null,
+        context: null,
+        projectId: null,
+        milestoneId: null,
+        whoIds: [],
+        placeIds: [],
+        notUntil: null,
+        waitsOnTaskIds: [],
+        waitsOnWhoId: null,
+        stepState: {},
+        mediaIds: [],
+        createdBy: 'person',
+        sourceCaptureId: null,
+        executionId: null,
+        createdAt: made,
+        lastEditedAt: null,
+        completedAt: null,
+        sealed: await sealJson<TaskSealed>(
+          { title: entry.title, notes: null, steps: {} },
+          encryption,
+        ),
+      };
+      return { id: entry.id, task };
+    }),
+  );
+  return { turns, tasks };
 }
 
 export async function seedHelm(context: SeedContext): Promise<SeedResult> {
@@ -695,7 +932,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             sortedAt: isSorted ? sortedAt : null,
             screen: isMove ? MOVE_SCREEN : null,
             sealed: await sealJson<CaptureSealed>(
-              { text: turn.text, reading },
+              { text: turn.text, reading, answer: null },
               encryption,
             ),
           };
@@ -938,8 +1175,34 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         person.collection('executions').doc(backToBack.executionId),
         backToBack.execution,
       );
+      const answerTurns =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildAnswerTurns({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : { turns: [], tasks: [] };
+      answerTurns.turns.forEach((entry) => {
+        batch.set(
+          person.collection('captures').doc(entry.captureId),
+          entry.capture,
+        );
+        batch.set(
+          person.collection('executions').doc(entry.executionId),
+          entry.execution,
+        );
+      });
+      answerTurns.tasks.forEach((entry) =>
+        batch.set(person.collection('tasks').doc(entry.id), entry.task),
+      );
       const backToBackCount =
-        backToBack.captures.length + backToBack.tasks.length + 1;
+        backToBack.captures.length +
+        backToBack.tasks.length +
+        1 +
+        answerTurns.turns.length * 2 +
+        answerTurns.tasks.length;
       return (
         backToBackCount +
         turns.reduce(
@@ -957,12 +1220,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
 
   const connectedAt = context.now - 3 * DAY_MS;
   const syncedAt = context.now - 2 * 60 * MINUTE_MS;
-  const pinchConnectorId = toAppConnectorId('pinch');
-  const pinchGrantId = toGrantId('helm', pinchConnectorId, SITE_ACCOUNT_ID);
-  // Date-only meals land on the person's own day, which can differ from the UTC day.
-  const today = Date.parse(
-    `${new Date(context.now).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' })}T00:00:00Z`,
-  );
+  const pinchConnectorId = PINCH_CONNECTOR_ID;
+  const pinchGrantId = PINCH_GRANT_ID;
+  const today = getSeedToday(context.now);
 
   const copyDefinitions: CopyDefinition[] = [
     {

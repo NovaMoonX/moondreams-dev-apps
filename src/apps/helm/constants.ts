@@ -476,6 +476,16 @@ export const HELM_COPY = {
   keptRow: 'Kept: you changed it since',
   deletedRow: 'Deleted since',
   sheetChanged: 'What it changed',
+  answerNothingInRecords: 'Nothing in your records answers this.',
+  answerNotFromRecords: 'Not from your records',
+  answerGeneralHeading: 'General knowledge',
+  answerGeneralCaution: (name: string) =>
+    `From general knowledge, not checked against anything you've told ${name}. It may be out of date.`,
+  answerHealthCaution:
+    'General information, not medical advice. Check with a doctor or pharmacist before acting on it.',
+  answerSourcesLabel: 'Where it came from',
+  answerTaskGone: 'A task that is done or removed',
+  answerOpenSource: (title: string) => `Open ${title}`,
   sheetDayTime: (day: string, time: string) => `${day} ${time}`,
   whatTheAiSees: 'What the AI sees',
   whatTheAiSeesRowHint: 'What is sent and kept',

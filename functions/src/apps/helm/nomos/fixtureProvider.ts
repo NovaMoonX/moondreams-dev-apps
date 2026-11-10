@@ -112,6 +112,139 @@ function readFollowUp(text: string, reading: CaptureReading, message: string) {
       : null;
 }
 
+interface ListedRecord {
+  alias: string;
+  title: string;
+  due?: string | null;
+  start?: string | null;
+  isAllDay?: boolean;
+}
+
+const QUESTION_WORDS = new Set(
+  'when whens is are the a an my our of for to who pays should i how long what do does it that this'.split(
+    ' ',
+  ),
+);
+
+/** "Friday, November 13 at 2 PM" from a day, a local "YYYY-MM-DD HH:mm" or an ISO instant. */
+const toWhen = (record: ListedRecord, timeZone: string) => {
+  const value = record.start ?? record.due ?? null;
+  if (!value) return null;
+  const isDay = value.length === 10;
+  const isInstant = !isDay && value.endsWith('Z');
+  const at = new Date(
+    isDay
+      ? `${value}T00:00:00Z`
+      : isInstant
+        ? value
+        : `${value.replace(' ', 'T')}:00Z`,
+  );
+  if (Number.isNaN(at.getTime())) return null;
+  const zone = isInstant ? timeZone : 'UTC';
+  const day = at.toLocaleDateString('en-US', {
+    timeZone: zone,
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
+  if (isDay) return day;
+  const time = at
+    .toLocaleTimeString('en-US', {
+      timeZone: zone,
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    .replace(':00', '');
+  return `${day} at ${time}`;
+};
+
+const describeRecord = (record: ListedRecord, timeZone: string) => {
+  const when = toWhen(record, timeZone);
+  return when
+    ? `${record.title} is on ${when}.`
+    : `${record.title} is on your list with no day set.`;
+};
+
+const GENERAL_STAND_IN = {
+  text: 'As a rule of thumb it depends on the details, so check a reliable source for the specifics. This is a stand-in answer from the emulator.',
+  spoken: 'As a rule of thumb it depends on the details.',
+};
+
+const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
+  kind: 'answer',
+  ref: null,
+  taskAlias: null,
+  title: null,
+  dueSpanId: null,
+  isUrgent: null,
+  scope: null,
+  question: null,
+  isHealth: false,
+  fromRecordsText: null,
+  sourceAliases: [],
+  generalText: null,
+  generalSpoken: null,
+  recordsSpoken: null,
+  ...fields,
+});
+
+/** The answers the emulator can give to a question, read from the records in the context: a match on a title is a source, a "when is" with no match has no records part, a "how long" is general only, "who pays" and "should I" with a match are both, and health words are a general health answer. Null when the text is not a question this knows. */
+function readQuestion(text: string, message: string) {
+  const question = text.trim();
+  if (!question.endsWith('?')) return null;
+  const lower = question.toLowerCase();
+  const timeZone =
+    readBlock<{ timeZone?: string }>(message, 'context')?.timeZone ?? 'UTC';
+  const records = [
+    ...(readBlock<ListedRecord[]>(message, 'open_tasks') ?? []),
+    ...(readBlock<ListedRecord[]>(message, 'synced_records') ?? []),
+  ];
+  const words = lower
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
+  const scored = records.map((record) => ({
+    record,
+    score: words.filter((word) => record.title.toLowerCase().includes(word))
+      .length,
+  }));
+  const best = Math.max(0, ...scored.map((entry) => entry.score));
+  const matches =
+    best > 0 && best >= words.length / 2
+      ? scored
+          .filter((entry) => entry.score === best)
+          .map((entry) => entry.record)
+      : [];
+  const [match] = matches;
+  const fromRecords = match ? describeRecord(match, timeZone) : null;
+  const sourced = {
+    fromRecordsText: fromRecords,
+    recordsSpoken: fromRecords,
+    sourceAliases: match ? matches.map((record) => record.alias) : [],
+  };
+  const general = {
+    generalText: GENERAL_STAND_IN.text,
+    generalSpoken: GENERAL_STAND_IN.spoken,
+  };
+  if (/\b(ibuprofen|medicine|dose|doctor)\b/.test(lower)) {
+    return toAnswer({
+      scope: 'theWorld',
+      question,
+      isHealth: true,
+      ...general,
+    });
+  }
+  if (/\b(who pays|should i)\b/.test(lower) && match) {
+    return toAnswer({ scope: 'both', question, ...sourced, ...general });
+  }
+  if (/^(when is|when's|whens)\b/.test(lower)) {
+    return toAnswer({ scope: 'yourThings', question, ...sourced });
+  }
+  if (/^(how long|what is|how do)\b/.test(lower)) {
+    return toAnswer({ scope: 'theWorld', question, ...general });
+  }
+  return null;
+}
+
 /** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
 export function createFixtureProvider(
   text: string,
@@ -135,6 +268,17 @@ export function createFixtureProvider(
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const answer = readQuestion(text, messages[0]?.content ?? '');
+      if (answer) {
+        return {
+          terminalInput: { commands: [answer] },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

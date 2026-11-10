@@ -141,9 +141,68 @@ export interface Capture {
   sealed: Sealed;
 }
 
+export type SourceRef =
+  | {
+      kind:
+        | 'fact'
+        | 'note'
+        | 'task'
+        | 'project'
+        | 'who'
+        | 'place'
+        | 'procedure'
+        | 'media'
+        | 'topic';
+      id: string;
+    }
+  | { kind: 'event'; eventRef: string; title: string; startAt: number }
+  | {
+      kind: 'synced';
+      id: string;
+      connectorId: string;
+      title: string | null;
+      startAt: number | null;
+    };
+
+export interface AnswerQuote {
+  id: string;
+  connectorId: string;
+  accountId: string;
+  sourceLabel: string;
+  text: string | null;
+  deepLink: string | null;
+  deletedAt: number | null;
+}
+
+export interface SearchedSource {
+  connectorId: string;
+  accountId: string;
+  label: string;
+  at: number;
+  found: number;
+  failed: string | null;
+}
+
+export type AnswerScope = 'yourThings' | 'theWorld' | 'both';
+
+/** What a question was answered with: the records part and its sources, and general knowledge kept apart. */
+export interface CaptureAnswer {
+  question: string;
+  scope: AnswerScope;
+  fromRecords: string | null;
+  sources: SourceRef[];
+  general: string | null;
+  isHealth: boolean;
+  generalDiffersFrom: { noteId: string; says: string } | null;
+  suggestedTopicId: string | null;
+  quotes: AnswerQuote[];
+  searched: SearchedSource[];
+}
+
 export interface CaptureSealed {
   text: string;
   reading: CaptureReading;
+  answer: CaptureAnswer | null;
 }
 
 /** A turn after its words are opened; one that would not open keeps `isUnreadable` and empty words. */
@@ -151,6 +210,8 @@ export interface OpenCapture extends Omit<Capture, 'sealed'> {
   id: string;
   text: string;
   reading: CaptureReading;
+  /** Null on a turn that asked nothing, and on one made before answers were kept. */
+  answer: CaptureAnswer | null;
   isUnreadable: boolean;
   /** The write has not reached the server yet, so it waits for a connection. */
   hasPendingWrites: boolean;

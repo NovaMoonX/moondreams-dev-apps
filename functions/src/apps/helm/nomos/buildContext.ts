@@ -1,4 +1,10 @@
-import { createAliasBook, type AliasBook } from './aliases.js';
+import {
+  createAliasBook,
+  createSyncedBook,
+  type AliasBook,
+  type SyncedBook,
+} from './aliases.js';
+import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
 import type { CaptureReading, TaskDue, Token } from './commands.js';
 import { withoutAddress } from './joinedTurn.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
@@ -17,6 +23,7 @@ export interface ContextInput {
   createdAt: number;
   timeZone: string;
   tasks: ContextTask[];
+  synced?: SyncedCopy[];
   alreadyMade?: string[];
   screen?: {
     view: string;
@@ -46,15 +53,6 @@ export const describeDue = (due: TaskDue | null) => {
     : new Date(due.at).toISOString();
 };
 
-const toKnownZone = (timeZone: string) => {
-  try {
-    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions()
-      .timeZone;
-  } catch {
-    return 'UTC';
-  }
-};
-
 const describeNow = (at: number, timeZone: string) => {
   const zone = toKnownZone(timeZone);
   const local = new Intl.DateTimeFormat('en-US', {
@@ -75,8 +73,14 @@ const toTokenView = (token: Token) => ({ id: token.id, text: token.text });
 export function buildContext(input: ContextInput): {
   message: string;
   aliases: AliasBook;
+  synced: SyncedBook;
 } {
   const aliases = createAliasBook('t');
+  const synced = createSyncedBook();
+  const syncedRecords = (input.synced ?? []).map((copy) => ({
+    alias: synced.add(copy),
+    ...toSyncedView(copy, toKnownZone(input.timeZone)),
+  }));
   const tasks = input.tasks.slice(0, MAX_CONTEXT_TASKS).map((task) => ({
     alias: aliases.add(task.id),
     title: task.title,
@@ -116,6 +120,9 @@ export function buildContext(input: ContextInput): {
       })),
     })}</reading>`,
     `<open_tasks>${toDataJson(tasks)}</open_tasks>`,
+    ...(syncedRecords.length
+      ? [`<synced_records>${toDataJson(syncedRecords)}</synced_records>`]
+      : []),
     ...(screen && (screen.focus || screen.visible.length)
       ? [`<screen>${toDataJson(screen)}</screen>`]
       : []),
@@ -131,7 +138,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases };
+  return { message, aliases, synced };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */

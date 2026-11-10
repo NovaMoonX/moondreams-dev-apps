@@ -1,5 +1,6 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import { MAX_EFFECTS, type NomosCommand, type TaskDue } from './commands.js';
+import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { buildSpokenAck } from './spoken.js';
 import {
@@ -266,6 +267,39 @@ export function buildExecution(
   };
 }
 
+/** An answer writes nothing but the capture's sealed answer: no effects and nothing to undo. */
+export function buildAnswerExecution(input: {
+  captureId: string;
+  answer: CaptureAnswer;
+  spoken: string | null;
+  now: number;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}): Record<string, unknown> {
+  return {
+    captureId: input.captureId,
+    actor: 'nomos',
+    category: 'answer',
+    autonomyLevel: AUTOMATIC_LEVEL,
+    state: 'succeeded',
+    effectRefs: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: input.now,
+    decidedAt: input.now,
+    finishedAt: input.now,
+    sealed: input.seal({
+      summary: summarizeAnswer(input.answer),
+      commands: [],
+      effects: [],
+      undoReport: null,
+      goneIds: null,
+      spoken: input.spoken,
+    }),
+  };
+}
+
 export interface QuestionStateEntry {
   kind: string;
   shape: string;
@@ -279,6 +313,11 @@ interface SettleInput {
   filed: number;
   hasMore: boolean;
   executionId: string | null;
+  answer?: {
+    executionId: string;
+    sealed: CaptureAnswer;
+    spoken: { text: string; priority: 'reply'; builtBy: 'code' } | null;
+  } | null;
   now: number;
   newId: () => string;
   opened: Record<string, unknown>;
@@ -331,7 +370,8 @@ export function settleCapture(input: SettleInput) {
       },
     ]),
   );
-  const isUnread = mode === 'full' && input.filed === 0 && !input.hasMore;
+  const isUnread =
+    mode === 'full' && input.filed === 0 && !input.hasMore && !input.answer;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore
@@ -348,9 +388,15 @@ export function settleCapture(input: SettleInput) {
       sortedThrough: input.hasMore
         ? previous + input.filed
         : (opened.sortedThrough ?? null),
+      ...(input.answer && {
+        answer: input.answer.sealed,
+        spoken: input.answer.spoken,
+      }),
     },
-    executionIds: input.executionId
-      ? [...input.executionIds, input.executionId]
-      : input.executionIds,
+    executionIds: [
+      ...input.executionIds,
+      ...(input.executionId ? [input.executionId] : []),
+      ...(input.answer ? [input.answer.executionId] : []),
+    ],
   };
 }

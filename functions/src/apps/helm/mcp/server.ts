@@ -37,7 +37,7 @@ export async function createHelmMcpServer(scope: HelmToolScope) {
     server.registerTool(
       tool.name,
       { description: tool.description, inputSchema: tool.shape },
-      async (input) => {
+      async (input: Record<string, unknown>) => {
         const result = await tool.run(input as never);
         return {
           content: [

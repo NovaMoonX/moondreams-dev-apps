@@ -6,6 +6,7 @@ import { formatTime } from '@/utils/formatUtils';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import AssistantLine from '@apps/helm/components/activity/AssistantLine';
+import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ResultLines from '@apps/helm/components/home/ResultLines';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -164,6 +165,9 @@ function TurnCard({
             />
           ))}
         </div>
+      )}
+      {capture.answer && !capture.isUnreadable && (
+        <AnswerCard answer={capture.answer} isInset />
       )}
       {hasLost && (
         <LostResult

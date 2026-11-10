@@ -6,17 +6,18 @@ import { useAppSelector } from '@/store';
 import { formatDate, formatTime } from '@/utils/formatUtils';
 import ActorMark from '@apps/helm/components/activity/ActorMark';
 import UndoButton from '@apps/helm/components/activity/UndoButton';
+import AnswerCard from '@apps/helm/components/home/AnswerCard';
 import ResultRows from '@apps/helm/components/home/ResultRows';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useResultLines } from '@apps/helm/hooks/useResultLines';
 import { useUndoOf } from '@apps/helm/hooks/useUndoOf';
 import { canUndo } from '@apps/helm/nomos/planUndo';
-import { loadCaptureText } from '@apps/helm/store/actions/activityActions';
+import { loadCaptureWords } from '@apps/helm/store/actions/activityActions';
 import {
   selectAllCaptures,
   selectExecutionsById,
 } from '@apps/helm/store/selectors/captureSelectors';
-import type { OpenExecution } from '@apps/helm/types';
+import type { CaptureAnswer, OpenExecution } from '@apps/helm/types';
 import { getActivityLine } from '@apps/helm/utils/activity';
 import { getJoinedOf } from '@apps/helm/utils/sessions';
 
@@ -26,14 +27,14 @@ interface ExecutionSheetProps {
   onClose: () => void;
 }
 
-/** The words the execution was made from (every message of a joined turn), from the store or fetched; empty when they are gone or won't open. */
+/** The words the execution was made from (every message of a joined turn) and the answer it gave, from the store or fetched; empty when they are gone or won't open. */
 function useCaptureTexts(captureId: string | null) {
   const { user } = useAuth();
   const captures = useAppSelector(selectAllCaptures);
   const stored = captures.find((capture) => capture.id === captureId);
   const [fetched, setFetched] = useState<{
     id: string;
-    text: string | null;
+    words: { text: string; answer: CaptureAnswer | null } | null;
   } | null>(null);
   const uid = user?.uid;
   const needsFetch = captureId !== null && !stored;
@@ -41,9 +42,9 @@ function useCaptureTexts(captureId: string | null) {
   useEffect(() => {
     if (!uid || !captureId || !needsFetch) return;
     let isCurrent = true;
-    loadCaptureText(uid, captureId)
-      .then((text) => {
-        if (isCurrent) setFetched({ id: captureId, text });
+    loadCaptureWords(uid, captureId)
+      .then((words) => {
+        if (isCurrent) setFetched({ id: captureId, words });
       })
       .catch((error: unknown) => {
         console.error('Helm turn did not load', error);
@@ -54,17 +55,21 @@ function useCaptureTexts(captureId: string | null) {
   }, [uid, captureId, needsFetch]);
 
   if (stored) {
-    return [stored, ...getJoinedOf(stored, captures)].flatMap((message) =>
-      message.isUnreadable || !message.text ? [] : [message.text],
-    );
+    return {
+      texts: [stored, ...getJoinedOf(stored, captures)].flatMap((message) =>
+        message.isUnreadable || !message.text ? [] : [message.text],
+      ),
+      answer: stored.answer,
+    };
   }
-  return fetched?.id === captureId && fetched.text ? [fetched.text] : [];
+  const words = fetched?.id === captureId ? fetched.words : null;
+  return { texts: words ? [words.text] : [], answer: words?.answer ?? null };
 }
 
 function SheetBody({ execution }: { execution: OpenExecution }) {
   const lines = useResultLines(execution);
   const { undo } = useUndoOf(execution);
-  const texts = useCaptureTexts(execution.captureId);
+  const { texts, answer } = useCaptureTexts(execution.captureId);
 
   return (
     <div className='space-y-4'>
@@ -85,6 +90,9 @@ function SheetBody({ execution }: { execution: OpenExecution }) {
           {text}
         </blockquote>
       ))}
+      {execution.category === 'answer' && answer && (
+        <AnswerCard answer={answer} />
+      )}
       {lines.length > 0 && (
         <section className='space-y-1'>
           <h3 className='text-[13px] font-medium'>{HELM_COPY.sheetChanged}</h3>

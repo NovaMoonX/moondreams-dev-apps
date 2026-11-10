@@ -1,9 +1,15 @@
-import type { AliasBook } from './aliases.js';
+import type { AliasBook, SyncedBook } from './aliases.js';
 import {
+  ANSWER_SCOPES,
+  ANSWER_SPOKEN_CAP,
+  ANSWER_TEXT_CAP,
   COMMAND_KINDS,
   MAX_COMMANDS,
+  QUESTION_CAP,
   TITLE_CAP,
+  type AnswerCommand,
   type CaptureReading,
+  type SourceRef,
   type NomosCommand,
   type TaskDue,
 } from './commands.js';
@@ -25,6 +31,14 @@ const KNOWN_KEYS = new Set([
   'title',
   'dueSpanId',
   'isUrgent',
+  'scope',
+  'question',
+  'isHealth',
+  'fromRecordsText',
+  'sourceAliases',
+  'generalText',
+  'generalSpoken',
+  'recordsSpoken',
 ]);
 const DATE_KEY_RE = /due|date|time|when|deadline|day/i;
 const NEW_REF_RE = /^\$new\d+$/;
@@ -54,12 +68,7 @@ const toDue = (value: unknown, reading: CaptureReading): TaskDue | null => {
   return span.due;
 };
 
-const readCommand = (
-  item: Record<string, unknown>,
-  state: { refs: Set<string> },
-  reading: CaptureReading,
-  aliases: AliasBook,
-): NomosCommand | null => {
+const assertNoDateKeys = (item: Record<string, unknown>) => {
   if (
     Object.keys(item).some(
       (key) => !KNOWN_KEYS.has(key) && DATE_KEY_RE.test(key),
@@ -67,6 +76,63 @@ const readCommand = (
   ) {
     throw new NomosReplyError('badDate');
   }
+};
+
+const toText = (value: unknown, cap: number) =>
+  typeof value === 'string'
+    ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
+    : null;
+
+const toSource = (
+  alias: unknown,
+  aliases: AliasBook,
+  synced: SyncedBook | undefined,
+): SourceRef | null => {
+  if (typeof alias !== 'string') return null;
+  const taskId = aliases.idOf(alias);
+  if (taskId) return { kind: 'task', id: taskId };
+  const copy = synced?.get(alias);
+  return copy
+    ? {
+        kind: 'synced',
+        id: copy.id,
+        connectorId: copy.connectorId,
+        title: copy.title,
+        startAt: copy.startAt,
+      }
+    : null;
+};
+
+const readAnswer = (
+  item: Record<string, unknown>,
+  aliases: AliasBook,
+  synced: SyncedBook | undefined,
+): AnswerCommand | null => {
+  const scope = ANSWER_SCOPES.find((entry) => entry === item.scope);
+  const question = toText(item.question, QUESTION_CAP);
+  if (!scope || !question) return null;
+  const listed = Array.isArray(item.sourceAliases) ? item.sourceAliases : [];
+  return {
+    scope,
+    question,
+    isHealth: item.isHealth === true,
+    fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
+    sources: listed.flatMap((alias: unknown) => {
+      const source = toSource(alias, aliases, synced);
+      return source ? [source] : [];
+    }),
+    generalText: toText(item.generalText, ANSWER_TEXT_CAP),
+    generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
+    recordsSpoken: toText(item.recordsSpoken, ANSWER_SPOKEN_CAP),
+  };
+};
+
+const readCommand = (
+  item: Record<string, unknown>,
+  state: { refs: Set<string> },
+  reading: CaptureReading,
+  aliases: AliasBook,
+): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
   if (!kind) return null;
   const title = toTitle(item.title);
@@ -121,24 +187,36 @@ const hasEveryToken = (
     );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. An answer's text is cut at a word and each source alias resolved to a task or a synced copy (an unknown one is dropped); only the first answer is kept. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {
     reading: CaptureReading;
     aliases: AliasBook;
+    synced?: SyncedBook;
     alreadyMade?: string[];
   },
-): { commands: NomosCommand[]; hasMore: boolean } {
+): {
+  commands: NomosCommand[];
+  hasMore: boolean;
+  answer: AnswerCommand | null;
+} {
   if (!isRecord(raw) || !Array.isArray(raw.commands)) {
     throw new NomosReplyError('badShape');
   }
   const state = { refs: new Set<string>() };
   const made = new Set((context.alreadyMade ?? []).map(toKey));
-  const read = raw.commands.flatMap((item: unknown) => {
-    const command = isRecord(item)
-      ? readCommand(item, state, context.reading, context.aliases)
-      : null;
+  const items = raw.commands.filter(isRecord);
+  items.forEach(assertNoDateKeys);
+  const answer =
+    items
+      .filter((item) => item.kind === 'answer')
+      .flatMap((item) => {
+        const read = readAnswer(item, context.aliases, context.synced);
+        return read ? [read] : [];
+      })[0] ?? null;
+  const read = items.flatMap((item) => {
+    const command = readCommand(item, state, context.reading, context.aliases);
     return command ? [command] : [];
   });
   const fresh = read.filter(
@@ -151,5 +229,6 @@ export function normalizeNomosReply(
   return {
     commands: fresh.slice(0, MAX_COMMANDS),
     hasMore: fresh.length > MAX_COMMANDS,
+    answer,
   };
 }

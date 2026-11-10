@@ -92,7 +92,7 @@ export async function sendCapture(
     throw new Error('A turn is 1 to 4,000 characters.');
   }
   const sealed = await sealJson<CaptureSealed>(
-    { text, reading: turn.reading },
+    { text, reading: turn.reading, answer: null },
     encryption,
   );
   const { createdAt } = turn;

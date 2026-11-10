@@ -40,11 +40,14 @@ import {
 import {
   FILE_RESULTS_TOOL,
   toReading,
+  type AnswerCommand,
   type CaptureReading,
   type NomosCommand,
   type TaskDue,
 } from './nomos/commands.js';
+import { buildAnswer } from './nomos/answerGuards.js';
 import {
+  buildAnswerExecution,
   buildExecution,
   hasOpenMoreToSort,
   planWrites,
@@ -52,6 +55,7 @@ import {
   type ExistingTask,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
+import { readContextSynced, toKnownZone } from './syncedCopies.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
 import {
   combineMessages,
@@ -106,13 +110,19 @@ interface SortResult {
   status: 'sorted' | 'received' | 'failed' | 'needsYou';
   executionId: string | null;
   releasedIds: string[];
+  hasAnswer: boolean;
+  spoken: string | null;
 }
 
 const toResult = (
   status: SortResult['status'],
   executionId: string | null = null,
   releasedIds: string[] = [],
-): SortResult => ({ status, executionId, releasedIds });
+  answer: Pick<SortResult, 'hasAnswer' | 'spoken'> = {
+    hasAnswer: false,
+    spoken: null,
+  },
+): SortResult => ({ status, executionId, releasedIds, ...answer });
 
 const readAnswered = (stored: unknown, captureId: string) => {
   const answered = readStoredResult<Partial<SortResult> & SortResult>(
@@ -120,7 +130,12 @@ const readAnswered = (stored: unknown, captureId: string) => {
     captureId,
   );
   return answered
-    ? { ...answered, releasedIds: answered.releasedIds ?? [] }
+    ? {
+        ...answered,
+        releasedIds: answered.releasedIds ?? [],
+        hasAnswer: answered.hasAnswer ?? false,
+        spoken: answered.spoken ?? null,
+      }
     : null;
 };
 
@@ -525,9 +540,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     reading: toReading(opened.reading),
   };
 
-  const [profile, openTasks, alreadyMade, screen, earlierTurns] =
+  const profileRead = firestore.doc(base).get();
+  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
     await Promise.all([
-      firestore.doc(base).get(),
+      profileRead,
       firestore
         .collection(`${base}/tasks`)
         .where('status', '==', 'open')
@@ -539,6 +555,17 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         : Promise.resolve(undefined),
       readScreenTasks(firestore, base, key, sanitizeScreen(capture.screen)),
       readEarlierTurns(firestore, base, key, capture),
+      profileRead.then((snapshot) =>
+        readContextSynced(
+          firestore,
+          uid,
+          key,
+          capture.createdAt,
+          toKnownZone(
+            (snapshot.data()?.timeZone as string | undefined) ?? 'UTC',
+          ),
+        ),
+      ),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -616,6 +643,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       createdAt: capture.createdAt,
       timeZone,
       tasks,
+      synced,
       alreadyMade,
       screen,
       earlierTurns,
@@ -636,6 +664,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         uid,
         key,
         aliases: context.aliases,
+        synced: context.synced,
+        timeZone,
         firestore,
       });
       const maxMillis = canHandOver ? QUICK_LOOP_MILLIS : LOOP_LIMITS.maxMillis;
@@ -750,8 +780,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   const reply = normalizeNomosReply(loop.terminalInput, {
     reading: combined.reading,
     aliases: context.aliases,
+    synced: context.synced,
     alreadyMade,
   });
+  const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
   );
@@ -760,6 +792,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ...claimed,
     key,
     commands,
+    answer,
     hasMore: reply.hasMore,
     base,
     joinedIds: read.ids,
@@ -774,6 +807,7 @@ async function writeResult(
   input: Claimed & {
     key: HelmKey;
     commands: NomosCommand[];
+    answer: AnswerCommand | null;
     hasMore: boolean;
     base: string;
     joinedIds: string[];
@@ -790,6 +824,7 @@ async function writeResult(
     claimId,
     key,
     commands,
+    answer,
     hasMore,
     base,
     mode,
@@ -800,6 +835,12 @@ async function writeResult(
     isSpoken,
   } = input;
   const tasksPath = `${base}/tasks`;
+  const built = answer
+    ? buildAnswer(answer, (code) =>
+        logger.info('helm.answer.dropped', { code }),
+      )
+    : null;
+  const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
     ...new Set(
       commands.flatMap((command) =>
@@ -885,7 +926,7 @@ async function writeResult(
       newId: () => firestore.collection(tasksPath).doc().id,
     });
     const isFiling = plan.effects.length > 0;
-    if (!isFiling && commands.length > 0 && mode === 'full') {
+    if (!isFiling && commands.length > 0 && mode === 'full' && !built) {
       throw new SortFailure('nothingToFile');
     }
 
@@ -909,11 +950,36 @@ async function writeResult(
         }),
       );
     }
+    const answerExecutionRef = built
+      ? firestore.collection(`${base}/executions`).doc()
+      : null;
+    if (built && answerExecutionRef) {
+      transaction.create(
+        answerExecutionRef,
+        buildAnswerExecution({
+          captureId: captureRef.id,
+          answer: built.answer,
+          spoken: spokenLine,
+          now,
+          seal,
+        }),
+      );
+    }
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
+      answer:
+        built && answerExecutionRef
+          ? {
+              executionId: answerExecutionRef.id,
+              sealed: built.answer,
+              spoken: spokenLine
+                ? { text: spokenLine, priority: 'reply', builtBy: 'code' }
+                : null,
+            }
+          : null,
       now,
       newId: () => crypto.randomUUID(),
       opened: openForHelm(key, capture.sealed),
@@ -951,8 +1017,9 @@ async function writeResult(
     });
     const sorted = toResult(
       settled.status,
-      isFiling ? executionRef.id : null,
+      isFiling ? executionRef.id : (answerExecutionRef?.id ?? null),
       releasedJoined.map((snapshot) => snapshot.id),
+      { hasAnswer: built !== null, spoken: spokenLine },
     );
     transaction.set(requestRef, {
       result: sorted,
@@ -964,6 +1031,7 @@ async function writeResult(
       status: settled.status,
       commands: commands.length,
       effects: plan.effects.length,
+      hasAnswer: built !== null,
       ...plan.counts,
     });
     return sorted;

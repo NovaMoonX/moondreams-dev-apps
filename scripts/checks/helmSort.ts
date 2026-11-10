@@ -156,8 +156,14 @@ test('every tool answers with aliases only, through the in-process server', asyn
   });
   const listed = await server.client.listTools();
   assert.deepEqual(
-    listed.tools.map((tool) => tool.name),
-    ['search_tasks'],
+    listed.tools.map((tool) => tool.name).sort(),
+    [
+      'connection_status',
+      'get_calendar',
+      'list_connections',
+      'search_synced',
+      'search_tasks',
+    ],
   );
   const reply = await server.client.callTool({
     name: 'search_tasks',
