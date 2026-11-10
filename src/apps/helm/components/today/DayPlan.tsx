@@ -111,10 +111,13 @@ function DayPlan({
       ),
     [stored, grants],
   );
-  const events = useMemo(
-    () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).events,
+  const merged = useMemo(
+    () => getDayEvents(records, getDayNoon(dayKey, timeZone), timeZone).merged,
     [records, dayKey, timeZone],
   );
+  const events = merged.map(({ record }) => record);
+  const alsoInOf = (id: string | null) =>
+    merged.find(({ record }) => record.id === id)?.alsoIn ?? [];
   const failingGrants = grants.filter(isFailingCalendar);
   const isFailing = failingGrants.length > 0;
   const isStopped =
@@ -259,6 +262,7 @@ function DayPlan({
                 <SyncedCard
                   key={entry.record.id}
                   record={entry.record}
+                  alsoIn={alsoInOf(entry.record.id)}
                   onOpen={(opened) => setOpenRecordId(opened.id)}
                 />
               );
@@ -333,6 +337,7 @@ function DayPlan({
       )}
       <SyncedSheet
         record={openRecord}
+        alsoIn={alsoInOf(openRecordId)}
         now={now}
         onClose={() => setOpenRecordId(null)}
       />

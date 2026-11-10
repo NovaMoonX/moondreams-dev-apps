@@ -8,6 +8,7 @@ import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import SyncedSourceBlock from '@apps/helm/components/connections/SyncedSourceBlock';
 import { DiscrepancyBlock } from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
+import { findOtherTime, findPlace } from '@apps/helm/engine/authority';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { setAllDayEventBusy } from '@apps/helm/store/actions/settingsActions';
 import type { SyncedRecord } from '@apps/helm/types';
@@ -21,6 +22,8 @@ import { isCalendarEvent } from '@apps/helm/utils/synced';
 
 interface SyncedSheetProps {
   record: SyncedRecord | null;
+  /** The same event's copies from other sources, each with its own source block. */
+  alsoIn?: SyncedRecord[];
   now: number;
   onClose: () => void;
 }
@@ -97,11 +100,12 @@ function BusyAllDayRow({ eventId }: { eventId: string }) {
 }
 
 /** A copied record, read-only: its words, then where it came from. A calendar event also says when it is, and an all-day one can be marked as keeping the person busy. */
-function SyncedSheet({ record, now, onClose }: SyncedSheetProps) {
+function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
   const { nameOf } = useSourceAppName();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const isCalendar = record !== null && isCalendarEvent(record);
+  const other = record && findOtherTime(record, alsoIn);
   return (
     <DetailSheet
       isOpen={record !== null}
@@ -112,8 +116,14 @@ function SyncedSheet({ record, now, onClose }: SyncedSheetProps) {
         <div className='flex flex-col gap-4'>
           {[
             isCalendar ? getEventFacts(record, now, timeZone) : null,
+            other && other.startAt !== null
+              ? HELM_COPY.sameThingTime(
+                  nameOf(other.connectorId),
+                  formatClock(other.startAt, timeZone),
+                )
+              : null,
             record.sealed.subtitle,
-            record.sealed.placeLabel,
+            findPlace(record, alsoIn),
           ]
             .filter((line): line is string => !!line)
             .map((line) => (
@@ -130,11 +140,14 @@ function SyncedSheet({ record, now, onClose }: SyncedSheetProps) {
             <BusyAllDayRow key={record.id} eventId={record.id} />
           )}
           <DiscrepancyBlock record={record} />
-          <SyncedSourceBlock
-            record={record}
-            appName={nameOf(record.connectorId)}
-            now={now}
-          />
+          {[record, ...alsoIn].map((copy) => (
+            <SyncedSourceBlock
+              key={copy.id}
+              record={copy}
+              appName={nameOf(copy.connectorId)}
+              now={now}
+            />
+          ))}
         </div>
       )}
     </DetailSheet>

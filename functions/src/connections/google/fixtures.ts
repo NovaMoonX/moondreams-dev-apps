@@ -206,6 +206,13 @@ const eventsFor = (calendarId: string): FixtureEvent[] | null => {
         iCalUID: 'fx-cake-tasting@example.com',
         ...timed(3, '15:00', '16:00'),
       },
+      {
+        ...base,
+        id: 'fx-starlight',
+        summary: 'Starlight Harbor',
+        iCalUID: 'fx-starlight@example.com',
+        ...timed(4, '18:50', '21:30'),
+      },
     ],
     'shifts-personal@group.calendar.google.com': [
       {

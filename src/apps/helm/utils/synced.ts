@@ -3,6 +3,7 @@ import type { ConnectionGrantWithId } from '@/lib/connections/useConnections';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { DAY_MS, SYNC_REFRESH_MS, SYNC_STALE_MS } from '@apps/helm/constants';
 import { getDueDay } from '@apps/helm/utils/captureReading';
+import { mergeSameThings } from '@apps/helm/utils/sameThing';
 import type { SyncedRecord } from '@apps/helm/types';
 
 const getDay = (at: number, timeZone: string) =>
@@ -99,32 +100,25 @@ export const getLiveRecords = (
           record.connectionEndedAt === null;
   });
 
-/** The events of the day `at` falls on, all-day first then by start; an event on two accounts shares a key and shows once, from whichever sorts first. */
+/** The events of the day `at` falls on, all-day first then by start, each thing once (`mergeSameThings`): one event on two accounts, or on a calendar and in an app, shows the authority's copy. */
 export function getDayEvents(
   records: SyncedRecord[],
   at: number,
   timeZone: string,
 ) {
-  const events = records
-    .filter((record) => isEventToday(record, at, timeZone))
-    .sort(
-      (a, b) =>
-        Number(b.isAllDay) - Number(a.isAllDay) ||
-        (a.startAt ?? 0) - (b.startAt ?? 0),
-    );
-  const shown = events.filter((record, index, all) => {
-    const key = record.sealed.extra.sameEventKey;
-    return (
-      !isCalendarEvent(record) ||
-      typeof key !== 'string' ||
-      all.findIndex(
-        (other) =>
-          isCalendarEvent(other) && other.sealed.extra.sameEventKey === key,
-      ) === index
-    );
-  });
+  const merged = mergeSameThings(
+    records
+      .filter((record) => isEventToday(record, at, timeZone))
+      .sort(
+        (a, b) =>
+          Number(b.isAllDay) - Number(a.isAllDay) ||
+          (a.startAt ?? 0) - (b.startAt ?? 0),
+      ),
+  );
+  const shown = merged.map(({ record }) => record);
   return {
     events: shown,
+    merged,
     calendarEvents: shown.filter(isCalendarEvent),
     appEvents: shown.filter((record) => !isCalendarEvent(record)),
   };

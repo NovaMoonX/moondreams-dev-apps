@@ -457,6 +457,7 @@ export const HELM_COPY = {
   busyAllDayLabel: 'Keeps me busy all day',
   busyAllDayFailed: "That didn't save. Try again.",
   syncedTentative: 'Tentative',
+  sameThingTime: (appName: string, time: string) => `${appName} says ${time}`,
   syncedFromAccount: (app: string, account: string) =>
     `From ${app} · ${account}`,
   keptFromRow: (count: number, date: string | null) =>
