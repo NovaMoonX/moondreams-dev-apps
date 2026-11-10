@@ -102,7 +102,15 @@ const accountPath = (uid: string, accountId: string) =>
 
 const toCacheKey = (input: LiveInput, op: string, args: unknown[]) =>
   createHash('sha256')
-    .update(JSON.stringify([input.uid, input.accountId, op, ...args]))
+    .update(
+      JSON.stringify([
+        input.uid,
+        input.connectorId,
+        input.accountId,
+        op,
+        ...args,
+      ]),
+    )
     .digest('hex');
 
 const remember = (key: string, value: unknown, now: number) => {

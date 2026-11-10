@@ -1,4 +1,5 @@
 import { getFirestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 import { extractText, getDocumentProxy } from 'unpdf';
 
 import { GOOGLE_DRIVE_MANIFEST } from './driveManifest.js';
@@ -40,6 +41,7 @@ interface DriveFile {
   mimeType?: string;
   size?: string;
   modifiedTime?: string;
+  trashed?: boolean;
 }
 
 export const isDocumentRef = (ref: string) => REF_PATTERN.test(ref);
@@ -81,7 +83,10 @@ export const readPdfText = async (bytes: Uint8Array) => {
     });
     const { text } = await extractText(pdf, { mergePages: true });
     return squash(text);
-  } catch {
+  } catch (error) {
+    logger.warn('connections.live.pdfUnreadable', {
+      error: error instanceof Error ? error.name : 'unknown',
+    });
     return null;
   }
 };
@@ -120,10 +125,11 @@ export async function readDocument(
 ): Promise<DocumentContent> {
   const file = await googleGet<DriveFile>(
     token,
-    `${FILES_API}/${ref}?${new URLSearchParams({ fields: 'id,name,mimeType,size,modifiedTime' })}`,
+    `${FILES_API}/${ref}?${new URLSearchParams({ fields: 'id,name,mimeType,size,modifiedTime,trashed' })}`,
     fixtureFor(email),
   );
   const summary = toSummary(file, ref);
+  if (file.trashed === true) return { ...summary, kind: 'other', text: null };
   const decode = (bytes: Uint8Array) =>
     squash(Buffer.from(bytes).toString('utf8')).slice(0, MAX_DOCUMENT_TEXT);
   if (summary.kind === 'doc') {
@@ -179,41 +185,59 @@ const windowEnd = (text: string, start: number, hit: number) => {
   return space > 0 ? start + space : limit;
 };
 
-/** Up to five separate stretches of the text around the words of `find`; the first paragraphs when it names nothing in the text. */
+const FIND_STOPWORDS = new Set(
+  'the and for are was were what when where which who whom whose does did has have had say says said about with from that this these those into onto than then there their they them our your you its not but can could would should will shall how why any all'.split(
+    ' ',
+  ),
+);
+
+/** Up to five separate stretches of the text around the words of `find`, rarest words first, in reading order; the first paragraphs when it names nothing in the text. */
 export const findPassages = (text: string, find: string): string[] => {
-  const lower = text.toLowerCase();
   const words = Array.from(
     new Set(
       find
         .slice(0, MAX_FIND)
         .toLowerCase()
         .split(/[^\p{L}\p{N}]+/u)
-        .filter((word) => word.length >= MIN_FIND_WORD),
+        .filter(
+          (word) => word.length >= MIN_FIND_WORD && !FIND_STOPWORDS.has(word),
+        ),
     ),
   );
   const hits = words
-    .flatMap((word) =>
+    .map((word) =>
       Array.from(
-        lower.matchAll(new RegExp(escapeRegExp(word), 'g')),
+        text.matchAll(new RegExp(escapeRegExp(word), 'giu')),
         (m) => m.index,
       ),
     )
-    .sort((a, b) => a - b);
-  const found = hits.reduce<{ passages: string[]; end: number }>(
-    (state, hit) => {
-      if (hit < state.end || state.passages.length >= MAX_PASSAGES) {
-        return state;
+    .filter((found) => found.length > 0)
+    .sort((a, b) => a.length - b.length)
+    .flat();
+  const chosen = hits.reduce<{ start: number; end: number }[]>(
+    (windows, hit) => {
+      if (
+        windows.length >= MAX_PASSAGES ||
+        windows.some((window) => hit >= window.start && hit < window.end)
+      ) {
+        return windows;
       }
       const start = sentenceStart(text, hit);
       const end = windowEnd(text, start, hit);
-      const passage = text.slice(start, end).trim();
-      return passage === ''
-        ? state
-        : { passages: [...state.passages, passage], end };
+      const overlaps = windows.some(
+        (window) => start < window.end && end > window.start,
+      );
+      return overlaps || text.slice(start, end).trim() === ''
+        ? windows
+        : [...windows, { start, end }];
     },
-    { passages: [], end: 0 },
+    [],
   );
-  if (found.passages.length > 0) return found.passages;
+  if (chosen.length > 0) {
+    return [...chosen]
+      .sort((a, b) => a.start - b.start)
+      .map((window) => text.slice(window.start, window.end).trim());
+  }
   return text
     .split(/\n+/)
     .map((paragraph) => paragraph.trim())

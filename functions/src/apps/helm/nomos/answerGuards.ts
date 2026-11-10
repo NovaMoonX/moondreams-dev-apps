@@ -182,10 +182,19 @@ export function buildAnswer(
 }
 
 /** The Activity line for an answer: from general knowledge only when no record part was kept. */
+const toQuotedSources = (quotes: CaptureAnswer['quotes']) => {
+  const isDocument = quotes.some(
+    (quote) => quote.connectorId === 'google:drive',
+  );
+  const isEmail = quotes.some((quote) => quote.connectorId !== 'google:drive');
+  if (isDocument && isEmail) return 'an email and a document';
+  return isDocument ? 'a document' : 'an email';
+};
+
 export const summarizeAnswer = (answer: CaptureAnswer) => {
   if (answer.fromRecords !== null) {
     return answer.quotes.length > 0
-      ? `Answered from ${answer.quotes.every((quote) => quote.connectorId === 'google:drive') ? 'a document' : 'an email'}: ${answer.question}`
+      ? `Answered from ${toQuotedSources(answer.quotes)}: ${answer.question}`
       : `Answered: ${answer.question}`;
   }
   return answer.general !== null

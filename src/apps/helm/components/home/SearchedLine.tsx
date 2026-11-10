@@ -65,7 +65,10 @@ function SearchedLine({ searched, canReconnect }: SearchedLineProps) {
             onClick={() =>
               begin({
                 accountId: searched.accountId,
-                connectorId: 'google:gmail',
+                connectorId:
+                  searched.connectorId === 'google:drive'
+                    ? 'google:drive'
+                    : 'google:gmail',
               })
             }
           >

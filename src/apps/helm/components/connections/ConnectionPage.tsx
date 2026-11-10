@@ -318,7 +318,16 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 variant='outline'
                 size='sm'
                 className='relative after:absolute after:inset-x-0 after:-inset-y-1.5'
-                onClick={() => begin({ accountId: grant.accountId })}
+                onClick={() =>
+                  begin({
+                    accountId: grant.accountId,
+                    connectorId: isGmailGrant
+                      ? 'google:gmail'
+                      : isDriveGrant
+                        ? 'google:drive'
+                        : 'google:calendar',
+                  })
+                }
               >
                 {HELM_COPY.googleReconnect}
               </Button>
@@ -336,9 +345,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           : HELM_COPY.connectionAccountValue}
       </p>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {isGoogle
-          ? HELM_COPY.googleReadOnly(name)
-          : HELM_COPY.connectReadOnlyPromise(name, appName)}
+        {!isGoogle
+          ? HELM_COPY.connectReadOnlyPromise(name, appName)
+          : isGmailGrant
+            ? HELM_COPY.googleGmailReadOnly(name)
+            : isDriveGrant
+              ? HELM_COPY.googleDriveReadOnly(name)
+              : HELM_COPY.googleReadOnly(name)}
       </p>
       {isGoogle && !isOffline && (
         <SettingsGroup title={HELM_COPY.connectionAccountLabel}>

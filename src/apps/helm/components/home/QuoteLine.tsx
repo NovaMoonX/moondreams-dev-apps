@@ -25,7 +25,7 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
   const link = quote.deepLink?.startsWith('https://') ? quote.deepLink : null;
   return (
     <div className='flex flex-col gap-1.5 py-2.5'>
-      <p className='text-muted-foreground text-[13px] break-words'>
+      <p className='text-muted-foreground text-[13px] text-pretty break-words'>
         {HELM_COPY.quoteFrom(
           quote.sourceLabel,
           quote.at === null ? null : formatQuoteDay(quote.at),

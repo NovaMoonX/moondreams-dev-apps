@@ -280,7 +280,38 @@ async function readMailAnswer(
   ];
 }
 
-const DOCUMENT_QUESTION_RE = /\b(contract|deposit|venue)\b/i;
+interface DocumentAsk {
+  question: RegExp;
+  query: string;
+  title: RegExp;
+  find: string;
+  toText: (title: string) => string | null;
+}
+
+const DOCUMENT_ASKS: DocumentAsk[] = [
+  {
+    question: /\b(floor plan|seat|seats|seating)\b/i,
+    query: 'floor plan',
+    title: /floor plan/i,
+    find: 'seats',
+    toText: (title: string) => `The ${title} says the main hall seats 120.`,
+  },
+  {
+    question: /\bbudget\b/i,
+    query: 'budget',
+    title: /budget/i,
+    find: '',
+    toText: () => null,
+  },
+  {
+    question: /\b(contract|deposit|venue)\b/i,
+    query: 'venue contract',
+    title: /contract/i,
+    find: 'deposit',
+    toText: (title: string) =>
+      `The ${title} says the deposit is due 30 days before the event.`,
+  },
+];
 
 interface DocumentResult {
   alias: string;
@@ -288,39 +319,41 @@ interface DocumentResult {
   kind: string;
 }
 
-/** The emulator's stand-in for a model that reaches for the document tools: searches, opens the one Google Doc or PDF the question names, looks for the deposit and files an answer quoting the passage by its alias. Null when documents are not offered or nothing fits. */
+/** The emulator's stand-in for a model that reaches for the document tools: searches for the file the question names, reads a Google Doc or PDF around the words it is about and files an answer quoting the passage, or says a spreadsheet can't be read. Null when documents are not offered or nothing fits. */
 async function readDocumentAnswer(
   text: string,
   client: ToolLoopRequest['mcpClient'] | undefined,
   toolCalls: string[],
 ) {
   const question = text.trim();
-  if (!client || !DOCUMENT_QUESTION_RE.test(question)) return null;
+  const ask = DOCUMENT_ASKS.find((entry) => entry.question.test(question));
+  if (!client || !ask) return null;
   const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
   if (!offered.some((tool) => tool.name === 'search_documents')) return null;
   const found = await callJson<{ files?: DocumentResult[] }>(
     client,
     toolCalls,
     'search_documents',
-    { query: 'venue contract' },
+    { query: ask.query },
   );
-  const file = found?.files?.find(
-    (entry) => entry.kind === 'doc' && /contract/i.test(entry.title),
-  );
+  const file = found?.files?.find((entry) => ask.title.test(entry.title));
   if (!file) return null;
+  if (file.kind === 'other') {
+    return [toAnswer({ scope: 'yourThings', question })];
+  }
   const read = await callJson<{ passages?: { quote: string; text: string }[] }>(
     client,
     toolCalls,
     'read_document',
-    { alias: file.alias, find: 'deposit' },
+    { alias: file.alias, find: ask.find },
   );
-  const passage = read?.passages?.find((entry) => /deposit/i.test(entry.text));
+  const passage = read?.passages?.[0];
   if (!passage) return null;
   return [
     toAnswer({
       scope: 'yourThings',
       question,
-      fromRecordsText: `The ${file.title} says the deposit is due 30 days before the event.`,
+      fromRecordsText: ask.toText(file.title),
       quoteAliases: [passage.quote],
     }),
   ];

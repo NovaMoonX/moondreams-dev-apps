@@ -512,7 +512,7 @@ export const HELM_COPY = {
   answerSyncedGone: 'Something from a connected app that is no longer there',
   answerOpenSource: (title: string) => `Open ${title}`,
   quoteFrom: (label: string, day: string | null) =>
-    day === null ? label : `${label} · ${day}`,
+    day === null ? label : `${label}\u00a0· ${day}`,
   quoteOpen: 'Open in Gmail',
   quoteOpenDrive: 'Open in Drive',
   quoteDisconnected: 'This email was disconnected',

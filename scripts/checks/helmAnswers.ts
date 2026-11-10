@@ -970,6 +970,32 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
+    'a remember that cites a document quote is refused',
+    async () => {
+      const { reply, searched } = await mailTurn([
+        { kind: 'answer' },
+        rememberItem(),
+      ]);
+      const built = reply.answer
+        ? buildAnswer(reply.answer, undefined, searched.entries())
+        : null;
+      const remember = reply.remember.map((item) => ({
+        ...item,
+        quote: item.quote && { ...item.quote, connectorId: 'google:drive' },
+      }));
+      assert.deepEqual(
+        settleRemember({
+          remember,
+          built,
+          timeZone: 'UTC',
+          existingFacts: [],
+          contentHash: null,
+        }).refused,
+        ['remember-quote-not-email'],
+      );
+    },
+  ],
+  [
     'a turn that searched live mail drops every command but its answer',
     () => {
       const dropped = settleLiveTurn([{ kind: 'completeTask' }], 1);
@@ -1221,6 +1247,20 @@ const tests: [string, () => void | Promise<void>][] = [
       );
       assert.ok(many.length <= 5);
       assert.ok(many.every((passage) => passage.length <= 300));
+      const clauses = Array.from(
+        { length: 12 },
+        (_, index) => `Clause ${index + 1}: what the venue does with the hall.`,
+      ).join('\n');
+      const asked = findPassages(
+        `${clauses}\nThe security deposit is $5,000.`,
+        'what does the contract say about the deposit',
+      );
+      assert.ok(asked.some((passage) => passage.includes('$5,000')));
+      const drifted = findPassages(
+        `${'\u0130'.repeat(45)}\nThe deposit is $5,000 due on signing.\nBalance later.`,
+        'deposit',
+      );
+      assert.deepEqual(drifted, ['The deposit is $5,000 due on signing.']);
       const none = findPassages('One.\n\nTwo.\nThree.\nFour.', 'zebra');
       assert.deepEqual(none, ['One.', 'Two.', 'Three.']);
       assert.deepEqual(findPassages('One.\nTwo.', ''), ['One.', 'Two.']);

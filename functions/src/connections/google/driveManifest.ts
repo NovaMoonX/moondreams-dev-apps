@@ -12,7 +12,7 @@ export const GOOGLE_DRIVE_MANIFEST: ConnectorManifest = {
       kind: 'knowledge',
       label: 'Documents',
       detail:
-        'Google Docs and PDFs, searched when you ask. Only what an answer quotes is kept.',
+        'Docs and PDFs, searched when you ask. Only what an answer quotes is kept.',
       mode: 'live',
       isOnAtConnect: true,
       addedInVersion: 1,
