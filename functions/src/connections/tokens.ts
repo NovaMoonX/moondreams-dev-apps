@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import type { SecretParam } from 'firebase-functions/params';
 
 /** Thrown when the provider no longer honours the account's sign-in; the account and its grants then read as needing Reconnect. */
 export class ReconnectNeeded extends Error {
@@ -16,3 +17,4 @@ export const getGoogleAccessToken = async (
 ): Promise<string> => {
   throw new Error('Not built yet.');
 };
+export const GOOGLE_SECRETS: SecretParam[] = [];

@@ -22,15 +22,24 @@ import {
   buildNewGrant,
   readGrant,
 } from '../../functions/src/connections/grants.ts';
+import { toSyncedId } from '../../functions/src/apps/helm/connections/sink.ts';
+import {
+  FIXTURE_CANCELLED_REF,
+  FIXTURE_GONE_TOKEN,
+} from '../../functions/src/connections/google/fixtures.ts';
 import {
   READER_SINKS,
   SOURCE_ADAPTERS,
 } from '../../functions/src/connections/registry.ts';
-import type { SourceClient } from '../../functions/src/connections/sourceClient.ts';
+import {
+  InProcessSourceClient,
+  type SourceClient,
+} from '../../functions/src/connections/sourceClient.ts';
 import {
   syncGrant,
   type SyncDeps,
 } from '../../functions/src/connections/syncRunner.ts';
+import { ReconnectNeeded } from '../../functions/src/connections/tokens.ts';
 import {
   toGrantId,
   type SharedRecord,
@@ -72,6 +81,7 @@ const record = (
 class FakeSource implements SourceClient {
   records: Record<string, SharedRecord[]> = {};
   failing = new Set<string>();
+  needsReconnect = false;
   isFull = true;
   sourceStatus: 'ok' | 'noAccess' = 'ok';
   async status() {
@@ -82,6 +92,7 @@ class FakeSource implements SourceClient {
     _ctx: unknown,
     req: { category: string },
   ) {
+    if (this.needsReconnect) throw new ReconnectNeeded();
     if (this.failing.has(req.category)) throw new Error('boom');
     return {
       records: this.records[req.category] ?? [],
@@ -89,6 +100,7 @@ class FakeSource implements SourceClient {
       cursor: null,
       isFull: this.isFull,
       isDone: true,
+      resumeState: null,
     };
   }
   deepLink(_connectorId: string, ref: string) {
@@ -110,6 +122,7 @@ const setup = async (categories = ['plannedMeals', 'shoppingList']) => {
       connectorId: 'app:pinch',
       accountId: 'site',
       categoryIds: categories,
+      options: null,
     },
     manifest,
     NOW - DAY,
@@ -149,6 +162,88 @@ const refs = (docs: { get(field: string): unknown }[]) =>
 
 const rejects = (promise: Promise<unknown>, code: string) =>
   assert.rejects(promise, (error: { code?: string }) => error.code === code);
+
+const CALENDAR_CONNECTOR = 'google:calendar';
+const PERSONAL = {
+  accountId: 'g_0000000000000001',
+  email: 'personal@example.com',
+  calendars: [
+    'personal@example.com',
+    'shifts-personal@group.calendar.google.com',
+  ],
+};
+const WORK = {
+  accountId: 'g_0000000000000002',
+  email: 'work@example.com',
+  calendars: ['work@example.com', 'team-work@group.calendar.google.com'],
+};
+
+const setupCalendar = async (account: typeof PERSONAL) => {
+  counter += 1;
+  const uid = `sync-cal-${counter}-${Date.now()}`;
+  const grantId = toGrantId('helm', CALENDAR_CONNECTOR, account.accountId);
+  await firestore
+    .doc(wrappedKeyPath(uid))
+    .set(
+      wrapDataKey(DEV_KEYRING, uid, deriveSeedDataKey(DEV_KEYRING, uid), NOW),
+    );
+  const accountRef = firestore.doc(
+    `connections/${uid}/accounts/${account.accountId}`,
+  );
+  await accountRef.set({
+    provider: 'google',
+    email: account.email,
+    label: null,
+    grantedScopes: ['https://www.googleapis.com/auth/calendar.readonly'],
+    status: 'live',
+    connectedAt: NOW,
+    lastError: null,
+  });
+  await firestore
+    .doc(`connectionsServer/${uid}/tokens/${account.accountId}`)
+    .set({ isFixture: true });
+  const adapter = SOURCE_ADAPTERS[CALENDAR_CONNECTOR];
+  const grantRef = firestore.doc(`connections/${uid}/grants/${grantId}`);
+  await grantRef.set({
+    ...buildNewGrant(
+      {
+        readerAppId: 'helm',
+        connectorId: CALENDAR_CONNECTOR,
+        accountId: account.accountId,
+        categoryIds: ['events'],
+        options: { calendarIds: account.calendars },
+      },
+      adapter.manifest,
+      Date.now() - DAY,
+    ),
+    options: { calendarIds: account.calendars },
+  });
+  const deps: SyncDeps = {
+    firestore,
+    source: new InProcessSourceClient(),
+    sinks: READER_SINKS,
+    now: () => Date.now(),
+  };
+  const cursorRef = firestore.doc(
+    `connectionsServer/${uid}/cursors/${grantId}__events`,
+  );
+  return {
+    uid,
+    grantId,
+    accountRef,
+    grantRef,
+    cursorRef,
+    run: () => syncGrant(deps, uid, grantId),
+    copies: async () =>
+      (await firestore.collection(`apps/helm/users/${uid}/synced`).get()).docs,
+    grant: async () => readGrant((await grantRef.get()).data()),
+    ctx: async () => ({
+      uid,
+      accountId: account.accountId,
+      grant: await (async () => readGrant((await grantRef.get()).data()))(),
+    }),
+  };
+};
 
 const main = async () => {
   {
@@ -386,6 +481,7 @@ const main = async () => {
         connectorId: 'app:pinch',
         accountId: 'site',
         categoryIds: ['shoppingList'],
+        options: null,
       },
       manifest,
       NOW,
@@ -569,6 +665,208 @@ const main = async () => {
         data: { grantId: GRANT_ID, deleteCopies: true },
       } as unknown as CallRequest),
       'unauthenticated',
+    );
+  }
+
+  {
+    const t = await setupCalendar(PERSONAL);
+    const [personal, shifts] = PERSONAL.calendars;
+    await t.run();
+    const first = await t.copies();
+    assert.deepEqual(
+      refs(first),
+      [
+        `${personal}|fx-dentist`,
+        `${personal}|fx-lunch`,
+        `${personal}|fx-pottery`,
+        `${shifts}|fx-dinner-shift`,
+      ],
+      'a full read copies each event once, the same event on two calendars once',
+    );
+    const lunch = first.find(
+      (doc) => doc.get('sourceRef') === `${personal}|fx-lunch`,
+    );
+    assert.equal(
+      lunch?.get('calendarKey'),
+      `${PERSONAL.accountId}/${personal}`,
+    );
+    assert.equal(lunch?.get('isBusy'), true);
+    assert.equal(lunch?.get('isAllDay'), false);
+    assert.equal((await t.grant()).categoryState.events.count, 4);
+    const saved = (await t.cursorRef.get()).get('state') as string;
+    assert.ok(saved.includes('fixture-sync'), 'the sync token is saved');
+
+    const stray = firestore.doc(`apps/helm/users/${t.uid}/synced/stray`);
+    await stray.set({ ...first[0].data(), sourceRef: 'stray' });
+    const before = Object.fromEntries(
+      first.map((doc) => [doc.id, doc.updateTime.toMillis()]),
+    );
+    await t.run();
+    const second = await t.copies();
+    assert.equal(
+      second.length,
+      5,
+      'a second run is incremental: the unseen copy is kept',
+    );
+    assert.ok(
+      first.every(
+        (doc) =>
+          before[doc.id] ===
+          second.find((c) => c.id === doc.id)?.updateTime.toMillis(),
+      ),
+      'nothing is rewritten',
+    );
+
+    await t.cursorRef.set({
+      state: saved.replaceAll('fixture-sync', FIXTURE_GONE_TOKEN),
+      updatedAt: NOW,
+    });
+    await t.run();
+    assert.equal(
+      (await t.copies()).length,
+      4,
+      'a gone token drops to a full re-read, which clears the unseen',
+    );
+
+    await t.grantRef.update({ options: { calendarIds: [personal] } });
+    await t.run();
+    assert.deepEqual(
+      refs(await t.copies()),
+      [
+        `${personal}|fx-dentist`,
+        `${personal}|fx-lunch`,
+        `${personal}|fx-pottery`,
+      ],
+      'dropping a calendar drops its copies',
+    );
+
+    await t.grantRef.update({ options: { calendarIds: [] } });
+    await t.run();
+    assert.deepEqual(
+      await t.copies(),
+      [],
+      'no calendars chosen leaves nothing',
+    );
+  }
+
+  {
+    const t = await setupCalendar(WORK);
+    const [work, team] = WORK.calendars;
+    await t.run();
+    const docs = await t.copies();
+    assert.deepEqual(
+      refs(docs),
+      [`${team}|fx-team-lunch`, `${work}|fx-ooo`, `${work}|fx-standup`],
+      'declined events are not copied',
+    );
+    const ooo = docs.find((doc) => doc.get('sourceRef') === `${work}|fx-ooo`);
+    assert.equal(ooo?.get('isBusy'), false, 'a free event blocks nothing');
+    assert.equal(ooo?.get('isAllDay'), true);
+    assert.equal(
+      Number(ooo?.get('startAt')) % DAY,
+      0,
+      'an all-day event is UTC midnight',
+    );
+    const state = JSON.parse((await t.cursorRef.get()).get('state') as string);
+    assert.equal(state.tokens[work], 'fixture-sync');
+    assert.equal(
+      state.tokens[team],
+      null,
+      'a calendar with no token is read by update time',
+    );
+
+    await t.run();
+    assert.equal(
+      (await t.copies()).length,
+      3,
+      'the update-time read changes nothing',
+    );
+
+    const [standup] = docs.filter(
+      (doc) => doc.get('sourceRef') === `${work}|fx-standup`,
+    );
+    await firestore
+      .doc(
+        `apps/helm/users/${t.uid}/synced/${toSyncedId(t.grantId, 'events', FIXTURE_CANCELLED_REF)}`,
+      )
+      .set({ ...standup.data(), sourceRef: FIXTURE_CANCELLED_REF });
+    await t.cursorRef.set({
+      state: JSON.stringify({
+        ...state,
+        tokens: { ...state.tokens, [work]: 'fixture-changes' },
+      }),
+      updatedAt: NOW,
+    });
+    await t.run();
+    assert.equal(
+      (await t.copies()).some(
+        (doc) => doc.get('sourceRef') === FIXTURE_CANCELLED_REF,
+      ),
+      false,
+      'a cancelled event deletes its copy',
+    );
+    assert.equal((await t.copies()).length, 3);
+
+    const adapter = SOURCE_ADAPTERS[CALENDAR_CONNECTOR];
+    const ctx = await t.ctx();
+    assert.equal(await adapter.status(ctx), 'ok');
+    await t.accountRef.update({ status: 'needsReconnect' });
+    assert.equal(await adapter.status(ctx), 'needsReconnect');
+    await t.run();
+    assert.equal((await t.grant()).status, 'needsReconnect');
+    await t.accountRef.update({ status: 'revoked' });
+    assert.equal(await adapter.status(ctx), 'noAccess');
+    await t.accountRef.delete();
+    assert.equal(await adapter.status(ctx), 'noAccess');
+    assert.equal(
+      adapter.deepLink(`${work}|fx-standup`, ctx),
+      `https://www.google.com/calendar/event?eid=${Buffer.from(`fx-standup ${work}`).toString('base64url')}`,
+    );
+  }
+
+  {
+    const adapter = SOURCE_ADAPTERS[CALENDAR_CONNECTOR];
+    const read = async (account: typeof PERSONAL) => {
+      const t = await setupCalendar(account);
+      return adapter.readOptions?.({
+        firestore,
+        uid: t.uid,
+        accountId: account.accountId,
+      });
+    };
+    const personal = await read(PERSONAL);
+    assert.deepEqual(
+      personal?.map((option) => [option.id, option.isOnByDefault]),
+      [
+        ['personal@example.com', true],
+        ['en.usa#holiday@group.v.calendar.google.com', false],
+        ['shifts-personal@group.calendar.google.com', true],
+      ],
+    );
+    assert.equal(personal?.[0].isPrimary, true);
+    const work = await read(WORK);
+    assert.deepEqual(
+      work?.map((option) => [option.name, option.isOnByDefault]),
+      [
+        ['Work', true],
+        ['Team', false],
+      ],
+    );
+  }
+
+  {
+    const t = await setup();
+    t.source.needsReconnect = true;
+    t.source.records.shoppingList = [record('a')];
+    await t.run();
+    const grant = await t.grant();
+    assert.deepEqual(grant.errors, [
+      { category: 'plannedMeals', code: 'needsReconnect', at: NOW },
+    ]);
+    assert.equal(
+      grant.categoryState.shoppingList.lastOkAt,
+      null,
+      'a reconnect error skips the other categories',
     );
   }
 

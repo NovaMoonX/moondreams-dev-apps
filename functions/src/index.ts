@@ -17,6 +17,7 @@ export { updateConnection } from './connections/callables.js';
 export { endConnection } from './connections/callables.js';
 export { syncConnections } from './connections/callables.js';
 export { deleteKeptCopies } from './connections/callables.js';
+export { readConnectorOptions } from './connections/options.js';
 export { syncConnectionsHourly } from './connections/scheduled.js';
 export { expireKeptCopies } from './connections/scheduled.js';
 export { getHelmKey } from './apps/helm/getHelmKey.js';

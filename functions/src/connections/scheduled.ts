@@ -5,7 +5,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 
 import { syncDeps } from './callables.js';
 import { expireCopies } from './expire.js';
-import { READER_SINKS } from './registry.js';
+import { READER_SINKS, SOURCE_SECRETS } from './registry.js';
 import { readGrant } from './grants.js';
 import { errorCause, syncGrant } from './syncRunner.js';
 
@@ -22,7 +22,10 @@ export const syncConnectionsHourly = onSchedule(
   {
     schedule: 'every 60 minutes',
     timeoutSeconds: 540,
-    secrets: Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+    secrets: [
+      ...Object.values(READER_SINKS).flatMap((sink) => sink.secrets),
+      ...SOURCE_SECRETS,
+    ],
   },
   async () => {
     const deps = syncDeps();

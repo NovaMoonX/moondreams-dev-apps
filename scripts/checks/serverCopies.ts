@@ -27,6 +27,13 @@ const COPIES: Copy[] = [
       '@/lib/connections/contract': '../../../vendor/connectionsContract.js',
     },
   },
+  {
+    src: 'src/lib/connections/google/calendarManifest.ts',
+    dest: 'functions/src/connections/google/calendarManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
 ];
 
 interface Generated {
