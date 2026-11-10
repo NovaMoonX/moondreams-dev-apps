@@ -23,7 +23,8 @@ function ShiftCalendars({ onOpenConnectedApps }: ShiftCalendarsProps) {
   );
 
   if (calendars.length === 0) return null;
-  const firstLive = calendars.find((grant) => grant.status === 'live') ?? null;
+  const live = calendars.filter((grant) => grant.status === 'live');
+  const onlyLive = live.length === 1 ? live[0] : null;
 
   return (
     <SettingsRow
@@ -35,8 +36,8 @@ function ShiftCalendars({ onOpenConnectedApps }: ShiftCalendarsProps) {
           : HELM_COPY.shiftCalendarsCount(shiftCount)
       }
       onClick={() =>
-        firstLive
-          ? openCalendarPicker(firstLive.accountId)
+        onlyLive
+          ? openCalendarPicker(onlyLive.accountId)
           : onOpenConnectedApps()
       }
       hasChevron

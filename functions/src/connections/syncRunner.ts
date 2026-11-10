@@ -95,7 +95,6 @@ async function syncCategory(
     const run = async (
       cursor: string | null,
       pages: number,
-      isFull: boolean,
     ): Promise<{ isFull: boolean; resumeState: string | null }> => {
       const page = await deps.source.syncPage(grant.connectorId, ctx, {
         category,
@@ -116,16 +115,17 @@ async function syncCategory(
       });
       if (page.deletedRefs.length > 0)
         await session.deleteRefs(grantId, category, page.deletedRefs);
-      const isStillFull = isFull && page.isFull;
+      // A gone token restarts the read from its first page, so the last page
+      // alone says whether the read was complete.
       if (page.isDone || page.cursor === null)
         return {
-          isFull: isStillFull && page.isDone,
+          isFull: page.isFull && page.isDone,
           resumeState: page.isDone ? page.resumeState : null,
         };
       if (pages + 1 >= MAX_PAGES) return { isFull: false, resumeState: null };
-      return run(page.cursor, pages + 1, isStillFull);
+      return run(page.cursor, pages + 1);
     };
-    const { isFull, resumeState } = await run(null, 0, true);
+    const { isFull, resumeState } = await run(null, 0);
     const totals = await session.finishCategory({
       grantId,
       category,

@@ -882,6 +882,10 @@ const main = async () => {
       }),
       updatedAt: NOW,
     });
+    const [kept] = await t.copies();
+    await firestore
+      .doc(`apps/helm/users/${t.uid}/synced/stray`)
+      .set({ ...kept.data(), sourceRef: 'stray' });
     await t.run();
     const after = JSON.parse((await t.cursorRef.get()).get('state') as string);
     assert.equal(
@@ -890,7 +894,11 @@ const main = async () => {
       'a gone token on a later page restarts the read in full',
     );
     assert.deepEqual((await t.grant()).errors, []);
-    assert.equal((await t.copies()).length, 3);
+    assert.equal(
+      (await t.copies()).length,
+      3,
+      'a restarted read removes the copy the source no longer has',
+    );
   }
 
   {

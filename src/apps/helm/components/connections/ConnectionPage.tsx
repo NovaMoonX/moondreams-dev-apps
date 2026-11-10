@@ -220,8 +220,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             ) : (
               <Button
                 type='button'
-                variant='secondary'
+                variant='outline'
                 size='sm'
+                className='relative after:absolute after:inset-x-0 after:-inset-y-1.5'
                 onClick={() => begin({ accountId: grant.accountId })}
               >
                 {HELM_COPY.googleReconnect}
