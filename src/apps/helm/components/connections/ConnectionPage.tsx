@@ -19,6 +19,7 @@ import {
   isOutsideAccount,
   readConnectorAppId,
 } from '@/lib/connections/contract';
+import { GOOGLE_CONTACTS_MANIFEST } from '@/lib/connections/google/contactsManifest';
 import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import { getConnectorManifest } from '@/lib/connections/sources';
@@ -97,6 +98,8 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [isLabelOpen, setIsLabelOpen] = useState(false);
   const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
   const [isDriveDisconnectOpen, setIsDriveDisconnectOpen] = useState(false);
+  const [isContactsDisconnectOpen, setIsContactsDisconnectOpen] =
+    useState(false);
   const [isDriveWorking, setIsDriveWorking] = useState(false);
   const [driveFailure, setDriveFailure] = useState<string | null>(null);
   const [isGmailWorking, setIsGmailWorking] = useState(false);
@@ -137,6 +140,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     ) ?? null;
   const driveCategory = GOOGLE_DRIVE_MANIFEST.categories[0];
   const isContactsGrant = grant.connectorId === 'google:contacts';
+  const contactsGrant =
+    grants.find(
+      (entry) =>
+        entry.connectorId === 'google:contacts' &&
+        entry.accountId === grant.accountId,
+    ) ?? null;
+  const contactsCategory = GOOGLE_CONTACTS_MANIFEST.categories[0];
   const appName = isGoogle
     ? isGmailGrant
       ? HELM_COPY.googleGmailName
@@ -168,6 +178,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     !isContactsGrant &&
     !hasStopped &&
     (driveGrant !== null || isGmailOpen);
+  const showsContactsRow = isGoogle && !isContactsGrant && !hasStopped;
 
   const change = async (categoryId: string, isOn: boolean) => {
     setPending((current) => ({
@@ -407,7 +418,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
-                    {isOn && freshnessLine(category.id) && (
+                    {isOn && !isContactsGrant && freshnessLine(category.id) && (
                       <span className='text-muted-foreground block text-[13px] text-pretty'>
                         {freshnessLine(category.id)}
                       </span>
@@ -512,8 +523,38 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               )}
             </li>
           )}
+          {showsContactsRow && (
+            <li className='flex flex-col gap-1 px-4 py-3'>
+              <label className='flex min-h-11 items-center gap-3'>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block text-[15px]'>
+                    {HELM_COPY.contactsRowTitle}
+                  </span>
+                  <span className='text-muted-foreground block text-[13px] text-pretty'>
+                    {contactsCategory?.detail}
+                  </span>
+                </span>
+                {isOffline ? (
+                  locked
+                ) : (
+                  <AppToggle
+                    aria-label={HELM_COPY.contactsRowTitle}
+                    checked={contactsGrant !== null}
+                    onCheckedChange={(next) =>
+                      next
+                        ? begin({
+                            accountId: grant.accountId,
+                            connectorId: 'google:contacts',
+                          })
+                        : setIsContactsDisconnectOpen(true)
+                    }
+                  />
+                )}
+              </label>
+            </li>
+          )}
         </ul>
-        {!hasStopped && (
+        {!hasStopped && !isContactsGrant && (
           <div className='flex items-center justify-between gap-3'>
             <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
               {newestOkAt === null
@@ -638,6 +679,24 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             failureLine(
               error,
               HELM_COPY.googleDriveName,
+              HELM_COPY.disconnectFailed,
+            )
+          }
+        />
+      )}
+      {contactsGrant && showsContactsRow && (
+        <DisconnectSheet
+          isOpen={isContactsDisconnectOpen}
+          onClose={() => setIsContactsDisconnectOpen(false)}
+          grantId={contactsGrant.id}
+          appName={HELM_COPY.googleContactsName}
+          count={0}
+          accountName={account?.email ?? null}
+          extraLine={HELM_COPY.contactsDisconnectNote}
+          failureLine={(error) =>
+            failureLine(
+              error,
+              HELM_COPY.googleContactsName,
               HELM_COPY.disconnectFailed,
             )
           }

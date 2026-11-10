@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { UserPlus } from 'lucide-react';
+import { ChevronRight, UserPlus } from 'lucide-react';
 
+import LockedButton from '@/components/LockedButton';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import WhoRow from '@apps/helm/components/who/WhoRow';
@@ -31,6 +33,7 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
   );
   const assistant = useAssistantName();
   const { openContacts } = useGoogleConnect();
+  const isOffline = useNetworkStatus() === 'offline';
   const [search, setSearch] = useState('');
   const [isOthersOpen, setIsOthersOpen] = useState(false);
   const groups = useMemo(() => groupWho(items, search), [items, search]);
@@ -68,15 +71,6 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.peopleTitle}
         </h1>
-        <Button
-          type='button'
-          variant='secondary'
-          className='w-full justify-start gap-2'
-          onClick={openContacts}
-        >
-          <UserPlus className='size-4 shrink-0' aria-hidden='true' />
-          {HELM_COPY.contactsBringIn}
-        </Button>
         {isFailed && !isLoaded && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.peopleFailed}
@@ -93,6 +87,33 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
             onChange={setSearch}
             placeholder={HELM_COPY.peopleSearch}
           />
+        )}
+        {isOffline ? (
+          <LockedButton
+            label={HELM_COPY.contactsBringIn}
+            title={HELM_COPY.connectionsNeedConnection}
+            className='h-10 w-full justify-start rounded-xl'
+          >
+            <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
+          </LockedButton>
+        ) : (
+          <Button
+            type='button'
+            variant='tertiary'
+            onClick={openContacts}
+            className='border-border text-foreground! h-10 w-full min-w-0 justify-between! gap-2 rounded-xl border px-3! text-sm font-normal'
+          >
+            <span className='text-muted-foreground flex min-w-0 items-center gap-2'>
+              <UserPlus className='size-4 shrink-0' aria-hidden='true' />
+              <span className='text-foreground truncate'>
+                {HELM_COPY.contactsBringIn}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
         )}
         {isNoMatch && (
           <p className='text-muted-foreground text-[15px] text-pretty'>

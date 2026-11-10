@@ -8,8 +8,10 @@ import LazyMount from '@/components/LazyMount';
 import SearchInput from '@/components/SearchInput';
 import SelectionBar from '@/components/SelectionBar';
 import Subview from '@/components/Subview';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import type { ConnectorOption } from '@/lib/connections/contract';
 import { useAppSelector } from '@/store';
+import { toComparable } from '@/utils/optionMatchUtils';
 import WhoMark from '@apps/helm/components/who/WhoMark';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -51,7 +53,7 @@ function ContactRow({
     <div className='border-border border-b last:border-b-0'>
       <label className='flex min-h-16 items-center gap-3 px-4 py-2'>
         <Checkbox
-          checked={isIn || isTicked}
+          checked={isTicked}
           disabled={isIn || (isFull && !isTicked)}
           onCheckedChange={() => onToggle(option.id)}
           aria-label={option.name}
@@ -67,7 +69,9 @@ function ContactRow({
           mark
         )}
         <span className='min-w-0 flex-1'>
-          <span className='block truncate text-[15px]'>{option.name}</span>
+          <span className='line-clamp-2 text-[15px] break-words'>
+            {option.name}
+          </span>
           <span className='text-muted-foreground block truncate text-[13px]'>
             {isIn ? HELM_COPY.contactsAlreadyIn : option.detail}
           </span>
@@ -87,37 +91,57 @@ function ContactsPicker({
   const { addToast } = useToast();
   const { reportDone, toFailureLine } = useContactsReport();
   const contacts = useContactOptions(accountId);
-  const importContacts = useImportContacts();
+  const isOffline = useNetworkStatus() === 'offline';
   const who = useAppSelector((state) => state.helm.who.items);
   const [search, setSearch] = useState('');
   const [ticked, setTicked] = useState<string[]>([]);
   const [needsReconnect, setNeedsReconnect] = useState(false);
 
+  const importContacts = useImportContacts({
+    onSuccess: (result) => {
+      reportDone(result, HELM_COPY.contactsAllIn);
+      onClose();
+    },
+    onError: (error) => {
+      console.error('Helm contacts were not brought in', error);
+      const line = toFailureLine(error, HELM_COPY.contactsImportFailed);
+      if (line === null) setNeedsReconnect(true);
+      else addToast({ title: line, type: 'error' });
+    },
+  });
+
   const alreadyIn = useMemo(
     () =>
       new Set(
         who.flatMap((entry) =>
-          entry.importedFrom ? [entry.importedFrom.resourceName] : [],
+          entry.importedFrom && entry.importedFrom.accountId === accountId
+            ? [entry.importedFrom.resourceName]
+            : [],
         ),
       ),
-    [who],
+    [who, accountId],
   );
   const options = useMemo(
-    () => (contacts.data ?? []).slice(0, CONTACTS_SHOWN_MAX),
-    [contacts.data],
+    () =>
+      [...(contacts.data ?? [])].sort(
+        (a, b) => Number(alreadyIn.has(a.id)) - Number(alreadyIn.has(b.id)),
+      ),
+    [contacts.data, alreadyIn],
   );
-  const isCapped = (contacts.data?.length ?? 0) > CONTACTS_SHOWN_MAX;
-  const query = search.trim().toLowerCase();
+  const isCapped = options.length >= CONTACTS_SHOWN_MAX;
+  const isEveryoneIn =
+    options.length > 0 && options.every((option) => alreadyIn.has(option.id));
+  const query = toComparable(search);
   const shown = useMemo(
     () =>
       query === ''
         ? options
-        : (contacts.data ?? []).filter((option) =>
-            `${option.name} ${option.detail ?? ''}`
-              .toLowerCase()
-              .includes(query),
+        : options.filter((option) =>
+            toComparable(`${option.name} ${option.detail ?? ''}`).includes(
+              query,
+            ),
           ),
-    [contacts.data, options, query],
+    [options, query],
   );
   const isFull = ticked.length >= CONTACTS_PER_CALL;
   const isReconnect =
@@ -135,21 +159,7 @@ function ContactsPicker({
 
   const bringIn = () => {
     if (accountId === null || ticked.length === 0) return;
-    importContacts.mutate(
-      { accountId, resourceNames: ticked },
-      {
-        onSuccess: (result) => {
-          reportDone(result, HELM_COPY.contactsAllIn);
-          onClose();
-        },
-        onError: (error) => {
-          console.error('Helm contacts were not brought in', error);
-          const line = toFailureLine(error, HELM_COPY.contactsImportFailed);
-          if (line === null) setNeedsReconnect(true);
-          else addToast({ title: line, type: 'error' });
-        },
-      },
-    );
+    importContacts.mutate({ accountId, resourceNames: ticked });
   };
 
   const renderBody = () => {
@@ -164,11 +174,26 @@ function ContactsPicker({
           </Button>
         </div>
       );
+    if (isOffline && contacts.data === undefined)
+      return (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {HELM_COPY.contactsNeedConnection}
+        </p>
+      );
     if (contacts.isError)
       return (
-        <p className='text-destructive text-[15px] text-pretty' role='alert'>
-          {HELM_COPY.contactsFailed}
-        </p>
+        <div className='flex flex-col items-start gap-3'>
+          <p className='text-destructive text-[15px] text-pretty' role='alert'>
+            {HELM_COPY.contactsFailed}
+          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            onClick={() => void contacts.refetch()}
+          >
+            {HELM_COPY.contactsTryAgain}
+          </Button>
+        </div>
       );
     if (contacts.isPending)
       return (
@@ -180,6 +205,12 @@ function ContactsPicker({
       return (
         <p className='text-muted-foreground text-[15px] text-pretty'>
           {HELM_COPY.contactsEmpty}
+        </p>
+      );
+    if (isEveryoneIn)
+      return (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {HELM_COPY.contactsEveryoneIn}
         </p>
       );
     return (
@@ -236,7 +267,7 @@ function ContactsPicker({
           key: 'bring-in',
           label: HELM_COPY.contactsPick(ticked.length),
           onClick: bringIn,
-          isDisabled: ticked.length === 0 || isReconnect,
+          isDisabled: ticked.length === 0 || isReconnect || isOffline,
           isLoading: importContacts.isPending,
         }}
       />

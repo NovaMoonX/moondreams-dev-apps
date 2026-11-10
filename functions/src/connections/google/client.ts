@@ -1,3 +1,4 @@
+import { ReconnectNeeded } from '../tokens.js';
 import { answerFixture, type FixtureContext } from './fixtures.js';
 
 /** Google answered with a failure; only the status is kept, never the body or the address. */
@@ -9,6 +10,14 @@ export class GoogleHttpError extends Error {
     this.code = `http-${status}`;
   }
 }
+
+/** Google refusing the sign-in means the account needs Reconnect; any other failure passes through. */
+export const toReconnectOnRefusal = (error: unknown): never => {
+  throw error instanceof GoogleHttpError &&
+    (error.status === 401 || error.status === 403)
+    ? new ReconnectNeeded()
+    : error;
+};
 
 /** The saved sync token is no longer valid, so the calendar needs a full read. */
 export class SyncTokenGone extends Error {
@@ -84,6 +93,8 @@ export async function googleGetPublicBytes(
     signal: AbortSignal.timeout(PUBLIC_TIMEOUT_MS),
   });
   if (!response.ok) throw new GoogleHttpError(response.status);
+  const declared = Number(response.headers.get('content-length'));
+  if (declared > MAX_PUBLIC_BYTES) throw new GoogleHttpError(413);
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length > MAX_PUBLIC_BYTES) throw new GoogleHttpError(413);
   return bytes;

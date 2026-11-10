@@ -1,7 +1,11 @@
 import { getFirestore } from 'firebase-admin/firestore';
 
 import { GOOGLE_CONTACTS_MANIFEST } from './contactsManifest.js';
-import { googleGet, googleGetPublicBytes } from './client.js';
+import {
+  googleGet,
+  googleGetPublicBytes,
+  toReconnectOnRefusal,
+} from './client.js';
 import type { ConnectorOption } from '../../vendor/connectionsContract.js';
 import type { SourceAdapter } from '../registry.js';
 import { GOOGLE_SECRETS, getGoogleAccessToken } from '../tokens.js';
@@ -221,7 +225,7 @@ export function createGoogleContactsAdapter(): SourceAdapter {
       const contacts = await listContacts(
         token,
         typeof email === 'string' ? email : null,
-      );
+      ).catch(toReconnectOnRefusal);
       return contacts.map(toContactOption);
     },
   };

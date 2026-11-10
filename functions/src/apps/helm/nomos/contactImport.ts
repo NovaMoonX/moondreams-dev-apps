@@ -64,6 +64,13 @@ export const createDigest =
   (field, value) =>
     createHmac('sha256', key).update(`${field}\n${value}`).digest('hex');
 
+/** A who id derived from the contact, so two imports of one contact cannot both create it. */
+export const toWhoId = (
+  digest: Digest,
+  accountId: string,
+  resourceName: string,
+) => digest('whoId', `${accountId}\n${resourceName}`).slice(0, 20);
+
 const emailKey = (email: string) => email.trim().toLowerCase();
 
 const phoneKey = (phone: string) => {
@@ -71,15 +78,30 @@ const phoneKey = (phone: string) => {
   return digits.length >= 7 ? digits.slice(-10) : null;
 };
 
-const findMatch = (contact: ContactInput, known: ExistingWho[]) => {
+const findMatch = (
+  contact: ContactInput,
+  known: ExistingWho[],
+  accountId: string,
+) => {
   const people = known.filter((who) => who.kind === 'person' && !who.isSelf);
   const emails = new Set(contact.emails.map(emailKey));
   const phones = new Set(
     contact.phones.flatMap((phone) => phoneKey(phone) ?? []),
   );
+  const isSameContact = (who: ExistingWho) =>
+    who.importedFrom?.accountId === accountId &&
+    who.importedFrom.resourceName === contact.resourceName;
+  const isNameCandidate = (who: ExistingWho) => {
+    const phone = who.phone === null ? null : phoneKey(who.phone);
+    return (
+      who.importedFrom === null &&
+      (who.email === null || emails.has(emailKey(who.email))) &&
+      (phone === null || phones.has(phone))
+    );
+  };
   const byName = matchWho({
     mentions: [{ name: contact.name, kind: 'person' }],
-    known: people.map((who) => ({
+    known: people.filter(isNameCandidate).map((who) => ({
       id: who.id,
       kind: who.kind,
       name: who.name,
@@ -89,9 +111,7 @@ const findMatch = (contact: ContactInput, known: ExistingWho[]) => {
     assistantName: null,
   })[0];
   return (
-    people.find(
-      (who) => who.importedFrom?.resourceName === contact.resourceName,
-    ) ??
+    people.find(isSameContact) ??
     people.find(
       (who) => who.email !== null && emails.has(emailKey(who.email)),
     ) ??
@@ -120,6 +140,8 @@ export function planContactImport(input: {
   requested: string[];
   fetched: ContactInput[];
   existing: ExistingWho[];
+  accountId: string;
+  digest: Digest;
   newId: NewId;
 }): { changes: WhoChange[]; alreadyIn: number } {
   const byName = new Map(
@@ -135,11 +157,17 @@ export function planContactImport(input: {
     alreadyIn: number;
   }>(
     (state, contact) => {
-      const match = findMatch(contact, state.known);
+      const match = findMatch(contact, state.known, input.accountId);
+      const importedFrom: ImportedFrom = {
+        connectorId: 'google:contacts',
+        accountId: input.accountId,
+        resourceName: contact.resourceName,
+        importedAt: 0,
+      };
       if (match && state.touched.has(match.id))
         return { ...state, alreadyIn: state.alreadyIn + 1 };
       if (!match) {
-        const id = input.newId('who');
+        const id = toWhoId(input.digest, input.accountId, contact.resourceName);
         const made: ExistingWho = {
           id,
           kind: 'person',
@@ -150,7 +178,7 @@ export function planContactImport(input: {
           phone: contact.phones[0] ?? null,
           photoMediaId: null,
           mediaIds: [],
-          importedFrom: null,
+          importedFrom,
           importedFields: {},
           lastMentionedAt: null,
           sealed: {},
@@ -192,6 +220,7 @@ export function planContactImport(input: {
         return { ...state, alreadyIn: state.alreadyIn + 1 };
       const filled: ExistingWho = {
         ...match,
+        importedFrom: match.importedFrom ?? importedFrom,
         email: fields.email ?? match.email,
         phone: fields.phone ?? match.phone,
         photoMediaId: photo ? photo.mediaId : match.photoMediaId,
