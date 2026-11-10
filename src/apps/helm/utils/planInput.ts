@@ -51,7 +51,10 @@ export const toPlannerTask = (task: OpenTask): PlannerTask => ({
   energy: task.energy,
 });
 
-/** A day's events that block time: calendar events not marked free and apps' events, an all-day one only when the person said it keeps them busy. */
+// A stay or rental runs for days and says where the person is, not time it takes.
+const SPAN_MS = 12 * 60 * 60 * 1000;
+
+/** A day's events that block time: calendar events not marked free and apps' events of half a day or less, an all-day one only when the person said it keeps them busy. */
 export function getBusyEvents(
   sources: PlanSources,
   dayKey: string,
@@ -68,7 +71,9 @@ export function getBusyEvents(
   );
   return [...calendarEvents, ...appEvents].filter(
     (record) =>
-      (!isCalendarEvent(record) || record.isBusy !== false) &&
+      (isCalendarEvent(record)
+        ? record.isBusy !== false
+        : (record.endAt ?? 0) - (record.startAt ?? 0) <= SPAN_MS) &&
       (!record.isAllDay || profile.busyAllDayEventRefs.includes(record.id)),
   );
 }
