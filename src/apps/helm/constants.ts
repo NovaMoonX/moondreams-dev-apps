@@ -67,6 +67,19 @@ export const OPEN_TASKS_LIMIT = 150;
 
 export const EARLIER_SESSIONS_PAGE = 20;
 
+/** Whether Disconnect's "also delete" box starts ticked. */
+export const DISCONNECT_DELETES_BY_DEFAULT = true;
+/** How long a kept copy stays after its connection ends. */
+export const KEPT_COPY_DAYS = 90;
+/** A category's copies older than this are said to be out of date. */
+export const SYNC_STALE_MS = DAY_MS;
+/** Opening or returning to the tab asks for an update when the newest one is older than this. */
+export const SYNC_REFRESH_MS = 15 * 60 * 1000;
+/** The most synced copies the app keeps listening to. */
+export const SYNCED_LIMIT = 2_000;
+/** Rows a synced task group shows on Today before the fold. */
+export const TODAY_SYNCED_ROWS = 5;
+
 /** How many executions Activity lists at first and each time it nears its foot. */
 export const ACTIVITY_PAGE = 30;
 
@@ -307,7 +320,8 @@ export const HELM_COPY = {
   connectionAccountLabel: 'Account',
   connectionAccountValue: 'Your moondreams account',
   connectionReads: (name: string) => `What ${name} reads`,
-  connectionSwitchedOff: (label: string) => `${label} switched off.`,
+  connectionSwitchedOff: (label: string) =>
+    `${label} switched off. Its copies were removed.`,
   connectionUndo: 'Undo',
   connectionToggleFailed: "That didn't change. Try again.",
   connectionNeverShared: (never: string) => `Never shared: ${never}`,
@@ -317,6 +331,41 @@ export const HELM_COPY = {
     `${name} stops reading ${app}. Everything in ${app} stays as it is. You can connect it again any time.`,
   disconnectConfirm: 'Disconnect',
   disconnectFailed: "That didn't disconnect. Try again.",
+  disconnectDeleteBox: (count: number, app: string) =>
+    `Also delete the ${count} ${count === 1 ? 'thing' : 'things'} from ${app}`,
+  disconnectKeepNote: (date: string) =>
+    `They stay, marked no longer updated, until ${date}.`,
+  disconnectDeleteNote: 'Your tasks and notes that mention them stay.',
+  disconnectCancel: 'Cancel',
+  syncedFrom: (app: string) => `From ${app}`,
+  syncedUpdated: (when: string, name: string) =>
+    `Updated ${when} · read only in ${name}`,
+  syncedKept: (date: string) => `No longer updated · deletes ${date}`,
+  syncedOpenIn: (app: string) => `Open in ${app}`,
+  syncedGroup: (category: string, app: string) => `${category} · ${app}`,
+  syncedTodayFromApps: 'From your apps',
+  syncedMore: (count: number) => `${count} more`,
+  syncedFewer: 'Show fewer',
+  syncedWaiting: 'Waiting for the first update',
+  syncedStale: (when: string) => `Last updated ${when} · may be out of date`,
+  syncedAllDay: 'All day',
+  syncedUpdatedLine: (when: string) => `Updated ${when}`,
+  syncedNow: 'Sync now',
+  syncedTryNow: 'Try now',
+  syncedUpdating: 'Updating…',
+  syncedCouldNot: "Couldn't update just now.",
+  syncedNowFailed: "That didn't update. Try again.",
+  keptFromRow: (app: string, date: string | null) =>
+    date ? `Kept from ${app} · deletes ${date}` : `Kept from ${app}`,
+  keptSection: 'Kept copies',
+  keptSheetTitle: (app: string) => `Kept from ${app}`,
+  keptSheetBody: (name: string, count: number, date: string | null) =>
+    `${name} no longer updates ${count === 1 ? 'this' : 'these'} ${count} ${count === 1 ? 'thing' : 'things'}.${date ? ` ${count === 1 ? "It's" : "They're"} deleted on ${date}.` : ''}`,
+  keptDeleteNow: 'Delete now',
+  keptDeleteTitle: (app: string) => `Delete what was kept from ${app}?`,
+  keptDeleteBody: "They're removed now and can't be brought back.",
+  keptDeleteFailed: "That didn't delete. Try again.",
+  keptClose: 'Not now',
   connectionsNeedConnection: 'Needs a connection',
   connectionsNeedConnectionBody:
     "Changing a connection checks it with the server, so it waits until you're back online.",

@@ -1,5 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
+import { syncConnections } from '@/lib/connections/connectionCalls';
+import { useConnections } from '@/lib/connections/useConnections';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
 import { createSealedReader } from '@lib/security';
@@ -24,6 +26,8 @@ import {
   setRecentCapturesFailed,
   setRecentExecutions,
   setRecentExecutionsFailed,
+  setSynced,
+  setSyncedFailed,
   setUnseenCaptures,
   setUnseenCapturesFailed,
   setWaitingCaptures,
@@ -35,10 +39,13 @@ import {
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
+import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
+import { SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
+import { isDueForRefresh } from '@apps/helm/utils/synced';
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
 
@@ -47,6 +54,33 @@ const isOfflineError = (error: unknown) =>
   (error instanceof Error &&
     'code' in error &&
     OFFLINE_CODES.includes(String(error.code)));
+
+/** Asks the platform to update the connections that are due, on open and on coming back to the tab, at most once per window; never offline. */
+function useConnectionsRefresh(uid: string | null) {
+  const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
+  const lastAskedAt = useRef(0);
+
+  useEffect(() => {
+    if (!uid || !isKnown) return;
+    const ask = () => {
+      const now = Date.now();
+      if (
+        document.visibilityState !== 'visible' ||
+        !navigator.onLine ||
+        now - lastAskedAt.current < SYNC_REFRESH_MS ||
+        !grants.some((grant) => isDueForRefresh(grant, now))
+      )
+        return;
+      lastAskedAt.current = now;
+      syncConnections({}).catch((error: unknown) =>
+        console.error('Helm connections were not updated', error),
+      );
+    };
+    ask();
+    document.addEventListener('visibilitychange', ask);
+    return () => document.removeEventListener('visibilitychange', ask);
+  }, [uid, isKnown, grants]);
+}
 
 /** Keeps the signed-in person's Helm profile in the store and makes it the first time they open Helm; once the data key is here, keeps their turns there too. */
 export function useHelmSync(uid: string | null) {
@@ -83,6 +117,7 @@ export function useHelmSync(uid: string | null) {
   }, [uid, dispatch]);
 
   useCaptureSweep(uid);
+  useConnectionsRefresh(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
 
@@ -141,6 +176,15 @@ export function useHelmSync(uid: string | null) {
             (error) => {
               console.error('Helm tasks listener failed', error);
               dispatch(setOpenTasksFailed());
+            },
+          ),
+          startSyncedListener(
+            uid,
+            read,
+            (records) => dispatch(setSynced(records)),
+            (error) => {
+              console.error('Helm synced things listener failed', error);
+              dispatch(setSyncedFailed());
             },
           ),
           startRecentExecutionsListener(

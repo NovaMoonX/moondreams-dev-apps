@@ -86,6 +86,20 @@ export function readEndConnectionRequest(data: unknown): EndConnectionRequest {
   return { grantId: data.grantId, deleteCopies: data.deleteCopies };
 }
 
+export function readSyncRequest(data: unknown): { grantId: string | null } {
+  if (data === undefined || data === null) return { grantId: null };
+  if (!isRecord(data)) throw badRequest();
+  if (data.grantId === undefined || data.grantId === null)
+    return { grantId: null };
+  if (!isGrantId(data.grantId)) throw badRequest();
+  return { grantId: data.grantId };
+}
+
+export function readDeleteKeptRequest(data: unknown): { grantId: string } {
+  if (!isRecord(data) || !isGrantId(data.grantId)) throw badRequest();
+  return { grantId: data.grantId };
+}
+
 const isDeclared = (manifest: ConnectorManifest, id: string) =>
   manifest.categories.some((category) => category.id === id);
 
@@ -102,6 +116,7 @@ export function buildNewGrant(
   req: GrantConnectionRequest,
   manifest: ConnectorManifest,
   now: number,
+  keptCopies: ConnectionGrant['keptCopies'] = null,
 ): ConnectionGrant {
   return {
     readerAppId: req.readerAppId,
@@ -125,7 +140,7 @@ export function buildNewGrant(
     newCategoryIds: [],
     lastSyncAt: null,
     syncLeaseUntil: null,
-    keptCopies: null,
+    keptCopies,
     createdAt: now,
     updatedAt: now,
     endedAt: null,

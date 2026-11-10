@@ -95,6 +95,7 @@
     "connections:vendor": "tsx scripts/checks/serverCopies.ts --write",
     "check:connections-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/connections/rulesMatrix.py\"",
     "check:adapters": "firebase emulators:exec --only firestore --project demo-adapters \"tsx scripts/connections/adapterMatrix.ts\"",
+    "check:connection-sync": "firebase emulators:exec --only firestore --project demo-sync \"tsx scripts/connections/syncMatrix.ts\"",
     "check:connection-boundaries": "tsx scripts/connections/boundaries.ts",
     "check:helm-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/helm/rulesMatrix.py\"",
     "check:runway-rules": "firebase emulators:exec --only auth,firestore --project demo-rules-matrix \"python3 scripts/runway/rulesMatrix.py && python3 scripts/runway/linkRules.py\"",

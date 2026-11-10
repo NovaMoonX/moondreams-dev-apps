@@ -7,10 +7,14 @@ import { readConnectorAppId } from '@/lib/connections/contract';
 import { getSourceManifest } from '@/lib/connections/sources';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
+import { useNow } from '@/hooks/useNow';
+import KeptCopiesSheet from '@apps/helm/components/connections/KeptCopiesSheet';
 import ConnectSheet from '@apps/helm/components/connections/ConnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
+import { formatDateShort } from '@/utils/formatUtils';
 
 interface ConnectedAppsScreenProps {
   onBack: () => void;
@@ -26,9 +30,26 @@ function ConnectedAppsScreen({
 }: ConnectedAppsScreenProps) {
   const name = useAssistantName();
   const { apps } = useAppCatalog();
-  const { grants, isKnown, error } = useConnections({
+  const now = useNow(60_000);
+  const {
+    grants: everyGrant,
+    isKnown,
+    error,
+  } = useConnections({
     readerAppId: 'helm',
+    includeEnded: true,
   });
+  const grants = everyGrant.filter((grant) => grant.status !== 'ended');
+  const kept = everyGrant.flatMap((grant) => {
+    const appId = readConnectorAppId(grant.connectorId);
+    return grant.status === 'ended' &&
+      appId &&
+      grant.keptCopies &&
+      grant.keptCopies.count > 0
+      ? [{ grantId: grant.id, appId, ...grant.keptCopies }]
+      : [];
+  });
+  const [openKeptId, setOpenKeptId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<{
     id: string;
     name: string;
@@ -45,15 +66,18 @@ function ConnectedAppsScreen({
         .filter((category) => grant.categories[category.id]?.isOn)
         .map((category) => category.label);
       const isTrouble = grant.status !== 'live';
+      const newestOkAt = getNewestOkAt(grant);
+      const readLine =
+        labels.length > 0 ? labels.join(', ') : HELM_COPY.connectedNothingOn;
       return {
         id: grant.id,
         appName: nameOf(appId),
         logo: <AppLogo appId={appId} className={LOGO} />,
         meta: isTrouble
           ? HELM_COPY.connectedStopped
-          : labels.length > 0
-            ? labels.join(', ')
-            : HELM_COPY.connectedNothingOn,
+          : newestOkAt === null
+            ? readLine
+            : `${readLine} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`,
         isTrouble,
       };
     })
@@ -121,6 +145,28 @@ function ConnectedAppsScreen({
             </div>
           </section>
         )}
+        {kept.length > 0 && (
+          <section className='flex flex-col gap-3'>
+            <SectionHeader title={HELM_COPY.keptSection} />
+            <div className='helm-card overflow-hidden'>
+              <ConnectedSourcesList
+                rows={kept.map((row) => ({
+                  id: row.grantId,
+                  logo: <AppLogo appId={row.appId} className={LOGO} />,
+                  title: nameOf(row.appId),
+                  meta: HELM_COPY.keptFromRow(
+                    nameOf(row.appId),
+                    row.deleteAfter === null
+                      ? null
+                      : formatDateShort(row.deleteAfter),
+                  ),
+                  isTrouble: false,
+                }))}
+                onOpen={setOpenKeptId}
+              />
+            </div>
+          </section>
+        )}
         {isKnown && available.length > 0 && (
           <section className='flex flex-col gap-3'>
             <SectionHeader title={HELM_COPY.notConnectedSection} />
@@ -141,6 +187,14 @@ function ConnectedAppsScreen({
           </section>
         )}
       </main>
+      <KeptCopiesSheet
+        kept={
+          kept
+            .filter((row) => row.grantId === openKeptId)
+            .map((row) => ({ ...row, appName: nameOf(row.appId) }))[0] ?? null
+        }
+        onClose={() => setOpenKeptId(null)}
+      />
       <ConnectSheet app={connecting} onClose={() => setConnecting(null)} />
     </>
   );

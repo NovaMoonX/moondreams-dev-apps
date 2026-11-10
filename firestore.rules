@@ -246,6 +246,11 @@ service cloud.firestore {
         && collection in ['captures', 'tasks'];
     }
 
+    // Copies of what another app shares are read by their owner and written only by the platform's functions; `synced` stays out of the list above on purpose.
+    match /apps/helm/users/{uid}/synced/{syncedId} {
+      allow read: if isHelmOwner(uid);
+    }
+
     // Activity never loses a line: the owner reads, writes and marks an execution undone, and nothing deletes one.
     match /apps/helm/users/{uid}/executions/{executionId} {
       allow read, create, update: if isHelmOwner(uid);

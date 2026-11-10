@@ -8,8 +8,10 @@ import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
+import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { HELM_COPY } from '@apps/helm/constants';
+import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -26,6 +28,11 @@ function SettingsScreen({
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
+  const now = useNow(60_000);
+  const newestOkAt = grants.reduce<number | null>((newest, grant) => {
+    const at = getNewestOkAt(grant);
+    return at !== null && (newest === null || at > newest) ? at : newest;
+  }, null);
   const voiceMode = useAppSelector((state) => state.helm.profile?.voiceMode);
 
   return (
@@ -48,7 +55,9 @@ function SettingsScreen({
               !isKnown
                 ? undefined
                 : grants.length > 0
-                  ? HELM_COPY.connectedAppsCount(grants.length)
+                  ? newestOkAt === null
+                    ? HELM_COPY.connectedAppsCount(grants.length)
+                    : `${HELM_COPY.connectedAppsCount(grants.length)} · ${HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}`
                   : HELM_COPY.connectedAppsNone
             }
             onClick={onOpenConnectedApps}

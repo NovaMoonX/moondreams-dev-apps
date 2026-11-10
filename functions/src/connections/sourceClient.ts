@@ -13,6 +13,7 @@ export interface SourceClient {
     ctx: SourceCtx,
     req: SyncPageRequest,
   ): Promise<SyncPageResult>;
+  deepLink(connectorId: string, ref: string, ctx: SourceCtx): string | null;
 }
 
 const getAdapter = (connectorId: string) => {
@@ -30,5 +31,9 @@ export class InProcessSourceClient implements SourceClient {
 
   syncPage(connectorId: string, ctx: SourceCtx, req: SyncPageRequest) {
     return getAdapter(connectorId).syncPage(ctx, req);
+  }
+
+  deepLink(connectorId: string, ref: string, ctx: SourceCtx) {
+    return getAdapter(connectorId).deepLink(ref, ctx);
   }
 }

@@ -3,7 +3,9 @@ import type {
   ConnectorManifest,
   SharedRecord,
 } from '../vendor/connectionsContract.js';
+import { createHelmSink } from '../apps/helm/connections/sink.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
+import type { ReaderSink } from './sink.js';
 
 export interface SourceCtx {
   uid: string;
@@ -47,4 +49,8 @@ export const READER_APPS: Record<
     grantPagePath: (grantId) =>
       `/helm?view=connection&grant=${encodeURIComponent(grantId)}`,
   },
+};
+
+export const READER_SINKS: Record<string, ReaderSink> = {
+  helm: createHelmSink(),
 };

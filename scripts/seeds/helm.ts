@@ -1,9 +1,12 @@
+import { createHash } from 'node:crypto';
+
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   deriveSeedDataKey,
   keyCheckPath,
   makeKeyCheck,
+  sealForHelm,
   wrappedKeyPath,
 } from '../../functions/src/apps/helm/helmKey.ts';
 import {
@@ -916,9 +919,124 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
 
   const connectedAt = context.now - 3 * DAY_MS;
+  const syncedAt = context.now - 2 * 60 * MINUTE_MS;
+  const pinchConnectorId = toAppConnectorId('pinch');
+  const pinchGrantId = toGrantId('helm', pinchConnectorId, SITE_ACCOUNT_ID);
+  const today = Math.floor(context.now / DAY_MS) * DAY_MS;
+
+  const copyDefinitions = [
+    {
+      category: 'plannedMeals',
+      sourceRef: 'plannedMeals/seed-meal-1',
+      kind: 'event' as const,
+      title: 'Lemon pasta',
+      subtitle: 'Dinner',
+      startAt: today + DAY_MS,
+      dueAt: null,
+      deepLink: '/pinch?tab=calendar',
+    },
+    {
+      category: 'plannedMeals',
+      sourceRef: 'plannedMeals/seed-meal-2',
+      kind: 'event' as const,
+      title: 'Taco night',
+      subtitle: 'Dinner',
+      startAt: today + 2 * DAY_MS,
+      dueAt: null,
+      deepLink: '/pinch?tab=calendar',
+    },
+    {
+      category: 'plannedMeals',
+      sourceRef: 'plannedMeals/seed-meal-3',
+      kind: 'event' as const,
+      title: 'Oatmeal with berries',
+      subtitle: 'Breakfast',
+      startAt: today - 2 * DAY_MS,
+      dueAt: null,
+      deepLink: '/pinch?tab=calendar',
+    },
+    {
+      category: 'shoppingList',
+      sourceRef: 'shoppingItems/seed-line-1',
+      kind: 'task' as const,
+      title: 'Lemons',
+      subtitle: '4',
+      startAt: null,
+      dueAt: null,
+      deepLink: '/pinch?tab=shopping',
+    },
+    {
+      category: 'shoppingList',
+      sourceRef: 'shoppingItems/seed-line-2',
+      kind: 'task' as const,
+      title: 'Spaghetti',
+      subtitle: '500 g',
+      startAt: null,
+      dueAt: null,
+      deepLink: '/pinch?tab=shopping',
+    },
+    {
+      category: 'shoppingList',
+      sourceRef: 'shoppingItems/seed-line-3',
+      kind: 'task' as const,
+      title: 'Tortillas',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      deepLink: '/pinch?tab=shopping',
+    },
+  ];
+
+  const writeCopies = (
+    uid: string,
+    copies: typeof copyDefinitions,
+    endedAt: number | null,
+  ) => {
+    const data = deriveSeedDataKey(keyring, uid);
+    copies.forEach((copy) => {
+      const id = createHash('sha256')
+        .update(`${pinchGrantId}|${copy.category}|${copy.sourceRef}`)
+        .digest('hex')
+        .slice(0, 40);
+      batch.set(users.doc(uid).collection('synced').doc(id), {
+        connectorId: pinchConnectorId,
+        accountId: SITE_ACCOUNT_ID,
+        grantId: pinchGrantId,
+        category: copy.category,
+        kind: copy.kind,
+        sourceRef: copy.sourceRef,
+        startAt: copy.startAt,
+        endAt: null,
+        isAllDay: copy.startAt !== null,
+        dueAt: copy.dueAt,
+        calendarKey: null,
+        isBusy: null,
+        sourceUpdatedAt: syncedAt - DAY_MS,
+        contentHash: `seed-${id}`,
+        syncedAt: endedAt ?? syncedAt,
+        transformVersion: 1,
+        connectionEndedAt: endedAt,
+        deleteAfter: endedAt === null ? null : endedAt + 90 * DAY_MS,
+        sealed: sealForHelm(
+          { ...data, keyVersion: 1 },
+          {
+            title: copy.title,
+            subtitle: copy.subtitle,
+            detail: null,
+            placeLabel: null,
+            amountCents: null,
+            currency: null,
+            deepLink: copy.deepLink,
+            extra: {},
+          },
+        ),
+      });
+    });
+  };
+
   const pinchGrant: ConnectionGrant = {
     readerAppId: 'helm',
-    connectorId: toAppConnectorId('pinch'),
+    connectorId: pinchConnectorId,
     accountId: SITE_ACCOUNT_ID,
     categories: {
       plannedMeals: { isOn: true, changedAt: connectedAt },
@@ -929,15 +1047,22 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     status: 'live',
     categoryState: Object.fromEntries(
       PINCH_SHARES.shares.flatMap((share) =>
-        share.categories.map((category) => [
-          category.id,
-          { lastOkAt: null, lastError: null, count: 0 },
-        ]),
+        share.categories.map((category) => {
+          const count = copyDefinitions.filter(
+            (copy) => copy.category === category.id,
+          ).length;
+          return [
+            category.id,
+            count > 0
+              ? { lastOkAt: syncedAt, lastError: null, count }
+              : { lastOkAt: null, lastError: null, count: 0 },
+          ];
+        }),
       ),
     ),
     errors: [],
     newCategoryIds: [],
-    lastSyncAt: null,
+    lastSyncAt: syncedAt,
     syncLeaseUntil: null,
     keptCopies: null,
     createdAt: connectedAt,
@@ -949,9 +1074,48 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       .collection('connections')
       .doc(FIXTURE_USERS.partnerOne.uid)
       .collection('grants')
-      .doc(toGrantId('helm', toAppConnectorId('pinch'), SITE_ACCOUNT_ID)),
+      .doc(pinchGrantId),
     pinchGrant,
   );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, copyDefinitions, null);
+
+  const endedAt = context.now - 10 * DAY_MS;
+  const keptDefinitions = [
+    copyDefinitions[0],
+    copyDefinitions[1],
+    copyDefinitions[3],
+  ];
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(pinchGrantId),
+    {
+      ...pinchGrant,
+      status: 'ended',
+      categoryState: Object.fromEntries(
+        Object.entries(pinchGrant.categoryState).map(([id, state]) => [
+          id,
+          {
+            ...state,
+            lastOkAt: state.lastOkAt === null ? null : endedAt,
+            count: keptDefinitions.filter((copy) => copy.category === id)
+              .length,
+          },
+        ]),
+      ),
+      lastSyncAt: endedAt,
+      keptCopies: {
+        count: keptDefinitions.length,
+        deleteAfter: endedAt + 90 * DAY_MS,
+      },
+      createdAt: endedAt - 3 * DAY_MS,
+      updatedAt: endedAt,
+      endedAt,
+    } satisfies ConnectionGrant,
+  );
+  writeCopies(FIXTURE_USERS.partnerTwo.uid, keptDefinitions, endedAt);
 
   Object.keys(keyring.keys).forEach((masterKeyId) =>
     batch.set(
@@ -961,14 +1125,16 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   );
   await batch.commit();
 
-  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection.
+  // Per person: the profile and the wrapped key, then their turns with what was made of them (tasks and executions); one canary per master key; Alex's Pinch connection with its six copies; Jamie's ended one with three kept copies.
   const result = {
     ...EMPTY_SEED_RESULT,
     firestoreDocuments:
       SEED_PROFILES.length * 2 +
       turnCounts.reduce((total, count) => total + count, 0) +
       Object.keys(keyring.keys).length +
-      1,
+      2 +
+      copyDefinitions.length +
+      keptDefinitions.length,
   };
   return result;
 }

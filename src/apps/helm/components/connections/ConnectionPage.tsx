@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
 import LockedButton from '@/components/LockedButton';
 import SectionHeader from '@/components/SectionHeader';
 import {
-  endConnection,
+  syncConnections,
   updateConnection,
 } from '@/lib/connections/connectionCalls';
 import { readConnectorAppId } from '@/lib/connections/contract';
@@ -16,9 +15,17 @@ import { getSourceManifest } from '@/lib/connections/sources';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppCatalog } from '@/hooks/useAppCatalog';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useNow } from '@/hooks/useNow';
+import { useAppSelector } from '@/store';
+import DisconnectSheet from '@apps/helm/components/connections/DisconnectSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import {
+  formatUpdatedAt,
+  getNewestOkAt,
+  isStale,
+} from '@apps/helm/utils/synced';
 
 interface ConnectionPageProps {
   grantId: string | null;
@@ -49,7 +56,7 @@ const formatDay = (timestamp: number) =>
 function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const name = useAssistantName();
   const { apps } = useAppCatalog();
-  const { confirm } = useActionModal();
+  const now = useNow(60_000);
   const isOffline = useNetworkStatus() === 'offline';
   const { grants, isKnown } = useConnections({ readerAppId: 'helm' });
   const grant = grants.find((entry) => entry.id === grantId) ?? null;
@@ -58,9 +65,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   >({});
   const [failures, setFailures] = useState<Record<string, string>>({});
   const [switchedOff, setSwitchedOff] = useState<Record<string, boolean>>({});
-  const [isDisconnecting, setIsDisconnecting] = useState(false);
-  const [disconnectFailure, setDisconnectFailure] = useState<string | null>(
-    null,
+  const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncFailure, setSyncFailure] = useState<string | null>(null);
+  const copyCount = useAppSelector(
+    (state) =>
+      state.helm.synced.items.filter(
+        (record) =>
+          record.grantId === grantId && record.connectionEndedAt === null,
+      ).length,
   );
   const hasLeft = useRef(false);
 
@@ -89,6 +102,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         categories: { [categoryId]: isOn },
       });
       setSwitchedOff((current) => ({ ...current, [categoryId]: !isOn }));
+      if (isOn) {
+        syncConnections({ grantId: grant.id }).catch((error: unknown) =>
+          console.error('Helm connection was not updated', error),
+        );
+      }
     } catch (error) {
       console.error('Helm connection did not change', error);
       setPending((current) => without(current, categoryId));
@@ -103,25 +121,29 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     }
   };
 
-  const disconnect = async () => {
-    const isConfirmed = await confirm({
-      title: HELM_COPY.disconnectTitle(appName),
-      message: HELM_COPY.disconnectBody(name, appName),
-      confirmText: HELM_COPY.disconnectConfirm,
-      destructive: true,
-    });
-    if (!isConfirmed) return;
-    setIsDisconnecting(true);
-    setDisconnectFailure(null);
+  const syncNow = async () => {
+    setIsSyncing(true);
+    setSyncFailure(null);
     try {
-      await endConnection({ grantId: grant.id, deleteCopies: true });
+      await syncConnections({ grantId: grant.id });
     } catch (error) {
-      console.error('Helm connection did not end', error);
-      setDisconnectFailure(
-        failureLine(error, appName, HELM_COPY.disconnectFailed),
-      );
-      setIsDisconnecting(false);
+      console.error('Helm connection was not updated', error);
+      setSyncFailure(HELM_COPY.syncedNowFailed);
     }
+    setIsSyncing(false);
+  };
+
+  const newestOkAt = getNewestOkAt(grant);
+  const hasError = Object.values(grant.categoryState).some(
+    (state) => state.lastError !== null,
+  );
+  const freshnessLine = (categoryId: string) => {
+    const state = grant.categoryState[categoryId];
+    if (state?.lastError) return HELM_COPY.syncedCouldNot;
+    if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;
+    return isStale(state.lastOkAt, now)
+      ? HELM_COPY.syncedStale(formatUpdatedAt(state.lastOkAt, now))
+      : HELM_COPY.syncedUpdatedLine(formatUpdatedAt(state.lastOkAt, now));
   };
 
   const locked = (
@@ -183,6 +205,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
+                    {isOn && (
+                      <span className='text-muted-foreground block text-[13px] text-pretty'>
+                        {freshnessLine(category.id)}
+                      </span>
+                    )}
                   </span>
                   {isOffline ? (
                     locked
@@ -222,17 +249,41 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             );
           })}
         </ul>
+        <div className='flex items-center justify-between gap-3'>
+          <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
+            {newestOkAt === null
+              ? HELM_COPY.syncedWaiting
+              : HELM_COPY.syncedUpdatedLine(formatUpdatedAt(newestOkAt, now))}
+          </p>
+          {isOffline ? (
+            locked
+          ) : (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              loading={isSyncing}
+              onClick={() => void syncNow()}
+            >
+              {isSyncing
+                ? HELM_COPY.syncedUpdating
+                : hasError
+                  ? HELM_COPY.syncedTryNow
+                  : HELM_COPY.syncedNow}
+            </Button>
+          )}
+        </div>
+        {syncFailure && (
+          <p className='text-destructive text-[13px]' role='alert'>
+            {syncFailure}
+          </p>
+        )}
         {manifest && manifest.never.length > 0 && (
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {HELM_COPY.connectionNeverShared(manifest.never.join(', '))}
           </p>
         )}
       </section>
-      {disconnectFailure && (
-        <p className='text-destructive text-sm text-pretty' role='alert'>
-          {disconnectFailure}
-        </p>
-      )}
       {isOffline ? (
         <LockedButton
           label={HELM_COPY.connectionDisconnect(appName)}
@@ -247,13 +298,22 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             type='button'
             variant='tertiary'
             className='text-destructive! min-h-12 w-full justify-start rounded-none px-4'
-            loading={isDisconnecting}
-            onClick={() => void disconnect()}
+            onClick={() => setIsDisconnectOpen(true)}
           >
             {HELM_COPY.connectionDisconnect(appName)}
           </Button>
         </div>
       )}
+      <DisconnectSheet
+        isOpen={isDisconnectOpen}
+        onClose={() => setIsDisconnectOpen(false)}
+        grantId={grant.id}
+        appName={appName}
+        count={copyCount}
+        failureLine={(error) =>
+          failureLine(error, appName, HELM_COPY.disconnectFailed)
+        }
+      />
     </main>
   );
 }

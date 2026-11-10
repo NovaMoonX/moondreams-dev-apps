@@ -1,4 +1,7 @@
+import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
+
+export type { SharedKind };
 
 /** The views that have a screen so far; each later issue adds its own. */
 export type HelmView =
@@ -284,3 +287,40 @@ export type TaskPlainFields = Partial<
     | 'waitsOnWhoId'
   >
 >;
+
+/** What a synced copy's sealed payload holds once opened (the contract's shared record minus its readable fields). */
+export interface SyncedContent {
+  title: string;
+  subtitle: string | null;
+  detail: string | null;
+  placeLabel: string | null;
+  amountCents: number | null;
+  currency: string | null;
+  /** An internal route in the source app. */
+  deepLink: string | null;
+  extra: Record<string, ExtraValue>;
+}
+
+/** A copy of another app's record, written only by the platform's Helm sink and opened on the device. */
+export interface SyncedRecord {
+  id: string;
+  connectorId: string;
+  accountId: string;
+  grantId: string;
+  category: string;
+  kind: SharedKind;
+  sourceRef: string;
+  startAt: number | null;
+  endAt: number | null;
+  isAllDay: boolean;
+  dueAt: number | null;
+  calendarKey: string | null;
+  isBusy: boolean | null;
+  sourceUpdatedAt: number | null;
+  syncedAt: number;
+  transformVersion: number;
+  /** Set when the connection ended and the copy was kept. */
+  connectionEndedAt: number | null;
+  deleteAfter: number | null;
+  sealed: SyncedContent;
+}

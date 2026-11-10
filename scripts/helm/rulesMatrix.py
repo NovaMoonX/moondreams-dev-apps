@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and tasks follow the same rule, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, and tasks follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -145,6 +145,20 @@ def main():
         check(f'executions delete [{a}]', commit(tok, [rm(ex)]), False)
         admin([rm(ex + '-new-' + a)])
     check('executions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/executions/e', run)]), False)
+
+    # A synced copy is the owner's to read and list; only the platform's functions write one.
+    admin([put(path, profile)])
+    copy = dict(grantId='g', category='c', kind='task', sourceRef='r', contentHash='h', syncedAt=NOW, transformVersion=1, connectionEndedAt=None, deleteAfter=None, sealed=SEAL)
+    sy = f'{path}/synced/copy-1'
+    for a, tok in actors.items():
+        admin([put(sy, copy)])
+        check(f'synced read [{a}]', get(sy, tok), a == 'o')
+        check(f'synced list [{a}]', get(f'{path}/synced', tok), a == 'o')
+        check(f'synced create [{a}]', commit(tok, [put_new(sy + '-new-' + a, copy)]), False)
+        check(f'synced update [{a}]', commit(tok, [put(sy, dict(copy, syncedAt=NOW + 1))]), False)
+        check(f'synced delete [{a}]', commit(tok, [rm(sy)]), False)
+        admin([rm(sy + '-new-' + a)])
+    check('synced read at another uid [o]', get(f'apps/helm/users/{x_uid}/synced/c', o_tok), False)
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])

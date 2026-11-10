@@ -15,6 +15,7 @@ import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
+import SyncedToday from '@apps/helm/components/today/SyncedToday';
 import NewTaskSheet from '@apps/helm/components/tasks/NewTaskSheet';
 import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
@@ -140,6 +141,7 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
             {HELM_COPY.todayFirstRun(assistantName)}
           </p>
         )}
+        <SyncedToday now={now} />
         {isLoaded && (tasks.length > 0 || held.size > 0) && (
           <section className='space-y-3'>
             <SectionDivider label={HELM_COPY.todayDueSoon} />
