@@ -1292,6 +1292,93 @@ const tests: [string, () => void | Promise<void>][] = [
       );
     },
   ],
+  [
+    'a planDay is read for today, tomorrow and a day span, dropped past or beyond six days, and only the first is kept',
+    () => {
+      const NOW = Date.UTC(2026, 10, 10, 22);
+      const ZONE = 'Pacific/Auckland';
+      const DAY = 86_400_000;
+      const todayUtc = Date.UTC(2026, 10, 11);
+      const span = (id: string, offset: number) => ({
+        id,
+        text: id,
+        start: 0,
+        end: 1,
+        due: { kind: 'day' as const, date: todayUtc + offset * DAY },
+      });
+      const reading = {
+        ...READING,
+        dates: [
+          span('d0', 0),
+          span('d1', 1),
+          span('d6', 6),
+          span('d7', 7),
+          span('dPast', -1),
+        ],
+      };
+      const read = (commands: Record<string, unknown>[]) =>
+        normalizeNomosReply(
+          { commands },
+          {
+            reading,
+            aliases: createAliasBook('t'),
+            now: NOW,
+            timeZone: ZONE,
+          },
+        );
+      const plan = (dueSpanId: string | null) => ({
+        kind: 'planDay',
+        dueSpanId,
+      });
+      assert.deepEqual(read([plan(null)]).planDay, {
+        kind: 'planDay',
+        date: { kind: 'day', date: todayUtc },
+      });
+      assert.equal(read([plan('d1')]).planDay?.date.date, todayUtc + DAY);
+      assert.equal(read([plan('d6')]).planDay?.date.date, todayUtc + 6 * DAY);
+      assert.equal(
+        read([plan('d1'), plan('d0')]).planDay?.date.date,
+        todayUtc + DAY,
+      );
+      assert.deepEqual(read([plan('d1')]).commands, []);
+      assert.equal(read([]).planDay, null);
+      ['d7', 'dPast'].forEach((id) =>
+        assert.equal(read([plan(id)]).planDay, null),
+      );
+    },
+  ],
+  [
+    'the emulator answers "plan my day" and "plan tomorrow" with one planDay',
+    async () => {
+      const ask = async (text: string, ids: string[]) => {
+        const reading = {
+          ...READING,
+          dates: ids.map((id) => ({
+            id,
+            text: id,
+            start: 0,
+            end: 1,
+            due: { kind: 'day' as const, date: Date.UTC(2026, 10, 11) },
+          })),
+        };
+        const loop = await createFixtureProvider(text, reading).runToolLoop({
+          role: 'quick',
+          messages: [{ role: 'user', content: '' }],
+          limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 5_000 },
+        } as never);
+        return (loop.terminalInput as { commands: Record<string, unknown>[] })
+          .commands;
+      };
+      const mine = await ask('Plan my day', []);
+      assert.equal(mine.length, 1);
+      assert.equal(mine[0].kind, 'planDay');
+      assert.equal(mine[0].dueSpanId, null);
+      const tomorrow = await ask('plan tomorrow', ['s1']);
+      assert.equal(tomorrow[0].kind, 'planDay');
+      assert.equal(tomorrow[0].dueSpanId, 's1');
+      assert.equal((await ask('Buy milk', []))[0].kind, 'createTask');
+    },
+  ],
 ];
 
 const failures: string[] = [];

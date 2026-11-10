@@ -118,6 +118,7 @@ export async function sendCapture(
     joinedCaptureIds: [],
     seenAt: createdAt,
     quotedSourceKeys: [],
+    planDayKey: null,
     createdAt,
     sortedAt: null,
     screen: turn.screen,

@@ -101,6 +101,7 @@ async function openCapture(
     joinedCaptureIds: toIds(data.joinedCaptureIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
+    planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,
     createdAt: data.createdAt ?? 0,
     sortedAt: data.sortedAt ?? null,
     screen: toScreen(data.screen ?? null),

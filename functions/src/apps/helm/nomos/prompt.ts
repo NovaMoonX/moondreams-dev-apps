@@ -34,6 +34,7 @@ How to answer a question:
 - generalText is general knowledge, at most ${ANSWER_TEXT_CAP} characters, only for what the records do not say and only about the world: never about the person's own plans, people or things, and never for a yourThings question, which stays empty when the records hold nothing. Never mix the two in one sentence: facts from records go in fromRecordsText and general knowledge in generalText, and generalText never repeats or guesses a record.
 - Set isHealth to true for anything about health or medicine.
 - question is the question in the person's words, at most ${QUESTION_CAP} characters. generalSpoken is one plain sentence for the ear, at most ${ANSWER_SPOKEN_CAP} characters, with no lists or Markdown, and never begin with a label: the label is added for you.
+- When the person asks to plan a day, lay out their day, or says "plan my day", add one planDay command, at most one per reply, with dueSpanId the date span for that day (null for today); the device fills the plan in. Never invent times.
 - An answer files no task and nothing in it is a task title.`;
 
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;

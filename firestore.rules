@@ -240,10 +240,10 @@ service cloud.firestore {
       allow read, create, update: if isHelmOwner(uid);
     }
 
-    // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list; `facts` holds what an answer noted from a live lookup, which its owner may undo or correct.
+    // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list; `facts` holds what an answer noted from a live lookup, which its owner may undo or correct, and `planDays` one plan per day, written by the owner's device.
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures', 'tasks', 'facts'];
+        && collection in ['captures', 'tasks', 'facts', 'planDays'];
     }
 
     // Copies of what another app shares are read by their owner and written only by the platform's functions; `synced` stays out of the list above on purpose.

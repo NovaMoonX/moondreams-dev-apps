@@ -316,6 +316,7 @@ export interface QuestionStateEntry {
 interface SettleInput {
   mode: 'full' | 'rest';
   filed: number;
+  hasPlanDay?: boolean;
   hasMore: boolean;
   executionId: string | null;
   answer?: {
@@ -376,7 +377,11 @@ export function settleCapture(input: SettleInput) {
     ]),
   );
   const isUnread =
-    mode === 'full' && input.filed === 0 && !input.hasMore && !input.answer;
+    mode === 'full' &&
+    input.filed === 0 &&
+    !input.hasMore &&
+    !input.answer &&
+    !input.hasPlanDay;
   const next = isUnread
     ? asked('couldNotRead', input.newId(), now)
     : input.hasMore

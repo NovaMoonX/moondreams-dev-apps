@@ -6,6 +6,7 @@ import {
   COMMAND_KINDS,
   MAX_COMMANDS,
   MAX_QUOTES,
+  PLAN_DAY_AHEAD,
   QUESTION_CAP,
   REMEMBER_FIELDS,
   STATEMENT_CAP,
@@ -13,11 +14,15 @@ import {
   VALUE_CAP,
   type AnswerCommand,
   type CaptureReading,
+  type PlanDayCommand,
   type RememberCommand,
   type SourceRef,
   type NomosCommand,
   type TaskDue,
 } from './commands.js';
+import { getDayIn, toKnownZone } from './spoken.js';
+
+const DAY_MS = 86_400_000;
 
 export type NomosReplyErrorCode =
   'badShape' | 'unknownAlias' | 'droppedToken' | 'badDate';
@@ -168,6 +173,24 @@ const readRemember = (
   value: toText(item.value, VALUE_CAP),
 });
 
+const readPlanDay = (
+  item: Record<string, unknown>,
+  reading: CaptureReading,
+  now: number,
+  timeZone: string,
+): PlanDayCommand | null => {
+  const due = toDue(item.dueSpanId, reading);
+  const today = getDayIn(now, toKnownZone(timeZone));
+  const date = due
+    ? due.kind === 'day'
+      ? due.date
+      : getDayIn(due.at, toKnownZone(timeZone))
+    : today;
+  return date < today || date > today + PLAN_DAY_AHEAD * DAY_MS
+    ? null
+    : { kind: 'planDay', date: { kind: 'day', date } };
+};
+
 const readCommand = (
   item: Record<string, unknown>,
   state: { refs: Set<string> },
@@ -175,7 +198,7 @@ const readCommand = (
   aliases: AliasBook,
 ): NomosCommand | null => {
   const kind = COMMAND_KINDS.find((entry) => entry === item.kind);
-  if (!kind || kind === 'remember') return null;
+  if (!kind || kind === 'remember' || kind === 'planDay') return null;
   const title = toTitle(item.title);
   const due = toDue(item.dueSpanId, reading);
   const isUrgent = typeof item.isUrgent === 'boolean' ? item.isUrgent : null;
@@ -228,7 +251,7 @@ const hasEveryToken = (
     );
 };
 
-/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
+/** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; a `planDay` for today through six days ahead is passed on as one day (a past or farther day is dropped and the rest of the reply kept, a second one is ignored); one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export function normalizeNomosReply(
   raw: unknown,
   context: {
@@ -237,12 +260,15 @@ export function normalizeNomosReply(
     synced?: SyncedBook;
     quotes?: QuoteBook;
     alreadyMade?: string[];
+    now?: number;
+    timeZone?: string;
   },
 ): {
   commands: NomosCommand[];
   hasMore: boolean;
   answer: AnswerCommand | null;
   remember: RememberCommand[];
+  planDay: PlanDayCommand | null;
 } {
   if (!isRecord(raw) || !Array.isArray(raw.commands)) {
     throw new NomosReplyError('badShape');
@@ -266,6 +292,15 @@ export function normalizeNomosReply(
   const remember = items
     .filter((item) => item.kind === 'remember')
     .map((item) => readRemember(item, context.synced, context.quotes));
+  const planItem = items.find((item) => item.kind === 'planDay');
+  const planDay = planItem
+    ? readPlanDay(
+        planItem,
+        context.reading,
+        context.now ?? Date.now(),
+        context.timeZone ?? 'UTC',
+      )
+    : null;
   const read = items.flatMap((item) => {
     const command = readCommand(item, state, context.reading, context.aliases);
     return command ? [command] : [];
@@ -282,5 +317,6 @@ export function normalizeNomosReply(
     hasMore: fresh.length > MAX_COMMANDS,
     answer,
     remember,
+    planDay,
   };
 }

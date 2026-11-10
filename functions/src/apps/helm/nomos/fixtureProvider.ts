@@ -415,6 +415,21 @@ function readQuestion(text: string, message: string) {
   return null;
 }
 
+const PLAN_DAY_RE =
+  /^\s*(?:please\s+)?plan\s+(?:my\s+day|today|tomorrow|(?:my\s+)?(?:mon|tues|wednes|thurs|fri|satur|sun)day)\b/i;
+
+/** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
+const readPlanDay = (text: string, reading: CaptureReading) =>
+  PLAN_DAY_RE.test(text)
+    ? [
+        toAnswer({
+          kind: 'planDay',
+          dueSpanId: reading.dates[0]?.id ?? null,
+          isHealth: null,
+        }),
+      ]
+    : null;
+
 /** Emulator stand-in with no key: one createTask per comma (not one inside a number), "and" or line, each carrying the date span that lies inside it; a piece of only filler words or no letters makes none. */
 export function createFixtureProvider(
   text: string,
@@ -438,6 +453,17 @@ export function createFixtureProvider(
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const planDay = readPlanDay(text, reading);
+      if (planDay) {
+        return {
+          terminalInput: { commands: planDay },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

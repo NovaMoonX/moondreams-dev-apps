@@ -31,6 +31,7 @@ export const COMMAND_KINDS = [
   'updateTask',
   'completeTask',
   'remember',
+  'planDay',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -42,6 +43,7 @@ export const ANSWER_SCOPES = ['yourThings', 'theWorld', 'both'] as const;
 export type AnswerScope = (typeof ANSWER_SCOPES)[number];
 
 export const MAX_COMMANDS = 20;
+export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
@@ -96,6 +98,12 @@ export interface RememberCommand {
   about: SyncedCopy | null;
   aboutField: RememberField | null;
   value: string | null;
+}
+
+/** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
+export interface PlanDayCommand {
+  kind: 'planDay';
+  date: Extract<TaskDue, { kind: 'day' }>;
 }
 
 /** The model's answer to a question, every source alias already resolved; the guards decide what of it is kept. */
@@ -168,7 +176,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             dueSpanId: nullable(
               'string',
-              'The id of a date span from the reading that gives this task its day. Never write a date yourself.',
+              'The id of a date span from the reading that gives this task its day, or the day to plan for planDay (null means today). Never write a date yourself.',
             ),
             isUrgent: nullable(
               'boolean',

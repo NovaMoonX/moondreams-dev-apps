@@ -86,6 +86,7 @@
     "check:helm-screen": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmScreen.ts",
     "check:helm-undo": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmUndo.ts",
     "check:helm-activation": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmActivation.ts",
+    "check:helm-planner": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPlanner.ts",
     "check:helm-task-edits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmTaskEdits.ts",
     "voice:benchmark": "tsx scripts/voice/benchmark.ts",
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",

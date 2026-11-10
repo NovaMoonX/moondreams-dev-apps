@@ -49,6 +49,7 @@ import {
   type AnswerCommand,
   type CaptureReading,
   type NomosCommand,
+  type PlanDayCommand,
   type RememberCommand,
   type TaskDue,
 } from './nomos/commands.js';
@@ -818,6 +819,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     synced: context.synced,
     quotes,
     alreadyMade,
+    timeZone,
   });
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
@@ -830,6 +832,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     commands,
     answer,
     remember: mode === 'full' ? reply.remember : [],
+    planDay: mode === 'full' ? reply.planDay : null,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -847,6 +850,7 @@ async function writeResult(
     commands: NomosCommand[];
     answer: AnswerCommand | null;
     remember: RememberCommand[];
+    planDay: PlanDayCommand | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -865,6 +869,7 @@ async function writeResult(
     key,
     answer,
     remember,
+    planDay: requestedPlanDay,
     searched,
     hasMore,
     base,
@@ -887,6 +892,10 @@ async function writeResult(
     input.commands,
     searched.entries().length,
   );
+  const planDayKey =
+    searched.entries().length === 0 && requestedPlanDay
+      ? new Date(requestedPlanDay.date.date).toISOString().slice(0, 10)
+      : null;
   const aboutId = remember[0]?.about?.id ?? null;
   const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
@@ -1058,6 +1067,7 @@ async function writeResult(
     const settled = settleCapture({
       mode,
       filed: isFiling ? commands.length : 0,
+      hasPlanDay: planDayKey !== null,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:
@@ -1095,6 +1105,7 @@ async function writeResult(
             joinedCaptureIds: joinedIds,
             turnLeadId: null,
             quotedSourceKeys: built?.quotedSourceKeys ?? [],
+            planDayKey,
           }
         : {}),
       status: settled.status,
