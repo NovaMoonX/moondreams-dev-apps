@@ -681,6 +681,7 @@ const main = async () => {
     assert.deepEqual(
       refs(first),
       [
+        `${personal}|fx-cake-tasting`,
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
         `${personal}|fx-pottery`,
@@ -697,7 +698,7 @@ const main = async () => {
     );
     assert.equal(lunch?.get('isBusy'), true);
     assert.equal(lunch?.get('isAllDay'), false);
-    assert.equal((await t.grant()).categoryState.events.count, 4);
+    assert.equal((await t.grant()).categoryState.events.count, 5);
     const saved = (await t.cursorRef.get()).get('state') as string;
     assert.ok(saved.includes('fixture-sync'), 'the sync token is saved');
 
@@ -710,7 +711,7 @@ const main = async () => {
     const second = await t.copies();
     assert.equal(
       second.length,
-      5,
+      6,
       'a second run is incremental: the unseen copy is kept',
     );
     assert.ok(
@@ -729,7 +730,7 @@ const main = async () => {
     await t.run();
     assert.equal(
       (await t.copies()).length,
-      4,
+      5,
       'a gone token drops to a full re-read, which clears the unseen',
     );
 
@@ -738,6 +739,7 @@ const main = async () => {
     assert.deepEqual(
       refs(await t.copies()),
       [
+        `${personal}|fx-cake-tasting`,
         `${personal}|fx-dentist`,
         `${personal}|fx-lunch`,
         `${personal}|fx-pottery`,
@@ -896,7 +898,7 @@ const main = async () => {
     assert.deepEqual((await t.grant()).errors, []);
     assert.equal(
       (await t.copies()).length,
-      3,
+      4,
       'a restarted read removes the copy the source no longer has',
     );
   }

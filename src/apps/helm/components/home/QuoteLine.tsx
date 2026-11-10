@@ -2,6 +2,15 @@ import ExternalLinkText from '@/components/ExternalLinkText';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { AnswerQuote } from '@apps/helm/types';
 
+const QUOTE_DAY = new Intl.DateTimeFormat('en-US', {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+});
+
+/** The day with no-break spaces, so "Sun, Nov 8" never splits across lines. */
+const formatQuoteDay = (at: number) => QUOTE_DAY.format(at).replace(/ /g, ' ');
+
 /** One quote an answer kept from the person's mail: who it was from, the words, and the way to the email. */
 function QuoteLine({ quote }: { quote: AnswerQuote }) {
   if (quote.deletedAt !== null || quote.text === null) {
@@ -17,13 +26,7 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
       <p className='text-muted-foreground text-[13px] break-words'>
         {HELM_COPY.quoteFrom(
           quote.sourceLabel,
-          quote.at === null
-            ? null
-            : new Date(quote.at).toLocaleDateString('en-US', {
-                weekday: 'short',
-                month: 'short',
-                day: 'numeric',
-              }),
+          quote.at === null ? null : formatQuoteDay(quote.at),
         )}
       </p>
       <blockquote className='border-border border-l-2 pl-3 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
@@ -33,7 +36,7 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
         <ExternalLinkText
           href={link}
           label={HELM_COPY.quoteOpen}
-          className='text-[13px]'
+          className='relative text-[13px] after:absolute after:inset-x-0 after:-inset-y-3'
         />
       )}
     </div>

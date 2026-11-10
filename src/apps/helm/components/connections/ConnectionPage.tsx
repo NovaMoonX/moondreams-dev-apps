@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { CalendarCheck, CalendarDays, Mail, Tag } from 'lucide-react';
+import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
 import AppToggle from '@/components/AppToggle';
@@ -47,7 +47,10 @@ interface ConnectionPageProps {
   onBack: () => void;
 }
 
-const GMAIL_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const GMAIL_SCOPE =
+  GOOGLE_GMAIL_MANIFEST.connect.kind === 'oauth'
+    ? (GOOGLE_GMAIL_MANIFEST.connect.scopesByCategory.mail?.[0] ?? '')
+    : '';
 
 const without = <T,>(record: Record<string, T>, key: string) =>
   Object.fromEntries(Object.entries(record).filter(([id]) => id !== key));
@@ -131,6 +134,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const hasStopped =
     isGoogle &&
     (grant.status === 'needsReconnect' || account?.status === 'needsReconnect');
+  const showsGmailRow =
+    isGoogle &&
+    !isGmailGrant &&
+    !hasStopped &&
+    (gmailGrant !== null || isGmailOpen);
 
   const change = async (categoryId: string, isOn: boolean) => {
     setPending((current) => ({
@@ -308,41 +316,6 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           )}
         </SettingsGroup>
       )}
-      {isGoogle && !isGmailGrant && isGmailOpen && !hasStopped && (
-        <section className='flex flex-col gap-2'>
-          <label className='helm-card flex min-h-14 items-center gap-3 px-4 py-3'>
-            <Mail
-              className='text-muted-foreground size-5 shrink-0'
-              aria-hidden='true'
-            />
-            <span className='min-w-0 flex-1'>
-              <span className='text-foreground block text-[15px]'>
-                {HELM_COPY.gmailRowTitle}
-              </span>
-              <span className='text-muted-foreground block text-[13px] text-pretty'>
-                {gmailCategory?.detail}
-              </span>
-            </span>
-            {isOffline ? (
-              locked
-            ) : (
-              <AppToggle
-                aria-label={HELM_COPY.gmailRowTitle}
-                checked={gmailGrant !== null}
-                disabled={isGmailWorking}
-                onCheckedChange={(next) =>
-                  next ? void turnGmailOn() : setIsGmailDisconnectOpen(true)
-                }
-              />
-            )}
-          </label>
-          {gmailFailure && (
-            <p className='text-destructive text-[13px]' role='alert'>
-              {gmailFailure}
-            </p>
-          )}
-        </section>
-      )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />
         <ul className='helm-card divide-border divide-y overflow-hidden'>
@@ -406,6 +379,37 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               </li>
             );
           })}
+          {showsGmailRow && (
+            <li className='flex flex-col gap-1 px-4 py-3'>
+              <label className='flex min-h-11 items-center gap-3'>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block text-[15px]'>
+                    {HELM_COPY.gmailRowTitle}
+                  </span>
+                  <span className='text-muted-foreground block text-[13px] text-pretty'>
+                    {gmailCategory?.detail}
+                  </span>
+                </span>
+                {isOffline ? (
+                  locked
+                ) : (
+                  <AppToggle
+                    aria-label={HELM_COPY.gmailRowTitle}
+                    checked={gmailGrant !== null}
+                    disabled={isGmailWorking}
+                    onCheckedChange={(next) =>
+                      next ? void turnGmailOn() : setIsGmailDisconnectOpen(true)
+                    }
+                  />
+                )}
+              </label>
+              {gmailFailure && (
+                <p className='text-destructive text-[13px]' role='alert'>
+                  {gmailFailure}
+                </p>
+              )}
+            </li>
+          )}
         </ul>
         {!hasStopped && (
           <div className='flex items-center justify-between gap-3'>
@@ -494,6 +498,10 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
           count={0}
           accountName={account?.email ?? null}
           extraLine={HELM_COPY.gmailDisconnectNote}
+          wording={{
+            title: HELM_COPY.gmailStopTitle,
+            confirm: HELM_COPY.gmailStopConfirm,
+          }}
           failureLine={(error) =>
             failureLine(
               error,

@@ -3,12 +3,14 @@ import { createHash } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
+import { isGateOpenForUid } from '../gates/assertGateOpen.js';
 import { toGrantId, type ConnectorId } from '../vendor/connectionsContract.js';
 import { toMailLink, isLiveDeepLink } from './deepLinks.js';
 import { GoogleHttpError } from './google/client.js';
 import { isMailRef, readMail, searchMail } from './google/gmail.js';
 import { GOOGLE_GMAIL_MANIFEST } from './google/gmailManifest.js';
 import { readGrant } from './grants.js';
+import { READER_APPS } from './registry.js';
 import { ReconnectNeeded, getGoogleAccessToken } from './tokens.js';
 
 export { isLiveDeepLink };
@@ -58,6 +60,17 @@ const NOT_GRANTED: LiveFailure = { ok: false, reason: 'notGranted' };
 
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
 
+const isGateOpen = async (
+  uid: string,
+  readerAppId: string,
+  connectorId: string,
+) => {
+  const gates = READER_APPS[readerAppId]?.restrictedGates ?? {};
+  if (!Object.hasOwn(gates, connectorId)) return true;
+  const { gateId, defaultRollout } = gates[connectorId];
+  return isGateOpenForUid(uid, readerAppId, gateId, defaultRollout);
+};
+
 const liveManifest = (connectorId: string) =>
   LIVE_MANIFESTS.find((manifest) => manifest.id === connectorId);
 
@@ -101,12 +114,18 @@ export const listLiveGrants = async (
           (id) => grant.categories[id]?.isOn === true,
         ),
     );
-  const accounts = await Promise.all(
-    grants.map((grant) =>
-      firestore.doc(accountPath(uid, grant.accountId)).get(),
+  const [accounts, isOpen] = await Promise.all([
+    Promise.all(
+      grants.map((grant) =>
+        firestore.doc(accountPath(uid, grant.accountId)).get(),
+      ),
     ),
-  );
+    Promise.all(
+      grants.map((grant) => isGateOpen(uid, readerAppId, grant.connectorId)),
+    ),
+  ]);
   return grants.flatMap((grant, index): LiveGrant[] => {
+    if (!isOpen[index]) return [];
     const email = accounts[index].get('email');
     const status = accounts[index].get('status');
     const label = accounts[index].get('label');
@@ -128,6 +147,9 @@ export const listLiveGrants = async (
 /** The account's email when the grant is live, not ended and has a live category on; otherwise a refusal. */
 const checkGrant = async (firestore: Firestore, input: LiveInput) => {
   if (!liveManifest(input.connectorId)) return NOT_GRANTED;
+  if (!(await isGateOpen(input.uid, input.readerAppId, input.connectorId))) {
+    return NOT_GRANTED;
+  }
   const [grantSnapshot, account] = await Promise.all([
     firestore
       .doc(
@@ -164,7 +186,8 @@ const checkGrant = async (firestore: Firestore, input: LiveInput) => {
 const toFailure = (error: unknown, op: string): LiveFailure => {
   const isReconnect =
     error instanceof ReconnectNeeded ||
-    (error instanceof GoogleHttpError && error.status === 401);
+    (error instanceof GoogleHttpError &&
+      (error.status === 401 || error.status === 403));
   logger.warn('connections.live.failed', {
     op,
     code: error instanceof GoogleHttpError ? error.code : 'error',

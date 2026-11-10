@@ -386,6 +386,8 @@ export const HELM_COPY = {
   googleGmailReadOnly: (name: string) =>
     `${name} searches your Gmail only when a question needs it, and keeps only what an answer quotes. It can't send, label, archive or delete mail.`,
   gmailRowTitle: 'Gmail',
+  gmailStopTitle: 'Stop reading Gmail?',
+  gmailStopConfirm: 'Stop reading Gmail',
   gmailDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
   gmailFailed: "Gmail didn't turn on. Try again.",

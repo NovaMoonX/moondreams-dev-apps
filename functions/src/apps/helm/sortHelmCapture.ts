@@ -53,7 +53,7 @@ import {
   type TaskDue,
 } from './nomos/commands.js';
 import { buildFactWrite, settleRemember } from './nomos/remember.js';
-import { buildAnswer } from './nomos/answerGuards.js';
+import { buildAnswer, settleLiveTurn } from './nomos/answerGuards.js';
 import {
   buildAnswerExecution,
   buildExecution,
@@ -105,6 +105,7 @@ const EARLIER_EXECUTIONS = 3;
 const EARLIER_RECORDS = 10;
 const MAX_JOINED = 9;
 const MAX_LISTED = 50;
+const MAX_FACTS_READ = 20;
 const LOOP_LIMITS = { maxTurns: 6, maxToolCalls: 12, maxMillis: 40_000 };
 // Leaves the rest of the call for a hand-over; a restart with less than this plus a full run's minimum left skips the quick route.
 const QUICK_LOOP_MILLIS = 15_000;
@@ -221,7 +222,12 @@ const readApiKey = () => {
 const readLiveGrants = (firestore: Firestore, uid: string) =>
   import('../../connections/liveRouter.js')
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
-    .catch((): LiveGrant[] => []);
+    .catch((error): LiveGrant[] => {
+      logger.warn('helm.live.grantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
 
 function pickProvider(text: string, reading: CaptureReading): ModelProvider {
   const apiKey = readApiKey();
@@ -857,7 +863,6 @@ async function writeResult(
     requestRef,
     claimId,
     key,
-    commands,
     answer,
     remember,
     searched,
@@ -878,8 +883,11 @@ async function writeResult(
         searched.entries(),
       )
     : null;
-  const noted = settleRemember({ remember, built, timeZone });
-  noted.refused.forEach((code) => logger.info('helm.answer.dropped', { code }));
+  const { commands, refused: liveRefused } = settleLiveTurn(
+    input.commands,
+    searched.entries().length,
+  );
+  const aboutId = remember[0]?.about?.id ?? null;
   const spokenLine = built && isSpoken ? built.spoken : null;
   const targetIds = [
     ...new Set(
@@ -891,15 +899,43 @@ async function writeResult(
     ),
   ];
   const result = await firestore.runTransaction(async (transaction) => {
-    const [captureSnap, requestSnap, ...targetSnaps] = await Promise.all([
-      transaction.get(captureRef),
-      transaction.get(requestRef),
-      ...targetIds.map((id) =>
-        transaction.get(firestore.doc(`${tasksPath}/${id}`)),
-      ),
-    ]);
+    const [captureSnap, requestSnap, factsSnap, copySnap, ...targetSnaps] =
+      await Promise.all([
+        transaction.get(captureRef),
+        transaction.get(requestRef),
+        aboutId
+          ? transaction.get(
+              firestore
+                .collection(`${base}/facts`)
+                .where('syncedIds', 'array-contains', aboutId)
+                .limit(MAX_FACTS_READ),
+            )
+          : Promise.resolve(null),
+        aboutId
+          ? transaction.get(firestore.doc(`${base}/synced/${aboutId}`))
+          : Promise.resolve(null),
+        ...targetIds.map((id) =>
+          transaction.get(firestore.doc(`${tasksPath}/${id}`)),
+        ),
+      ]);
     const answered = readAnswered(requestSnap.data(), captureRef.id);
     if (answered) return answered;
+    const copyHash: unknown = copySnap?.get('contentHash');
+    const noted = settleRemember({
+      remember,
+      built,
+      timeZone,
+      existingFacts: (factsSnap?.docs ?? []).map((doc) => ({
+        status: String(doc.get('status')),
+        aboutField: (doc.get('aboutField') as string | null) ?? null,
+        keptOverSource: doc.get('keptOverSource') ?? null,
+      })),
+      contentHash: typeof copyHash === 'string' ? copyHash : null,
+    });
+    noted.refused.forEach((code) =>
+      logger.info('helm.answer.dropped', { code }),
+    );
+    liveRefused.forEach((code) => logger.info('helm.answer.dropped', { code }));
     const capture = captureSnap.data() as CaptureDoc | undefined;
     if (
       !capture ||
@@ -1015,7 +1051,7 @@ async function writeResult(
           now,
           seal,
           fact: factWrite,
-          notDone: noted.refused,
+          notDone: [...noted.refused, ...liveRefused],
         }),
       );
     }

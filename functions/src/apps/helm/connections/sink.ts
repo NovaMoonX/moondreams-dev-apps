@@ -352,6 +352,7 @@ class HelmSinkSession implements SinkSession {
         const opened = openForHelm(key, doc.get('sealed') as SealedPayload);
         const answer = opened.answer;
         if (!isRecord(answer) || !Array.isArray(answer.quotes)) return [];
+        if (!answer.quotes.some(isQuoteOfIt)) return [];
         const quotes = answer.quotes.map((quote: unknown) =>
           isQuoteOfIt(quote)
             ? {

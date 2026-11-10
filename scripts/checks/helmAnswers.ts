@@ -13,12 +13,14 @@ import {
 import {
   buildFactWrite,
   settleRemember,
+  type ExistingFact,
 } from '../../functions/src/apps/helm/nomos/remember.ts';
 import { buildAnswerExecution } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
 import {
   buildAnswer,
   GENERAL_LABEL,
   HEALTH_CAUTION_SPOKEN,
+  settleLiveTurn,
   summarizeAnswer,
 } from '../../functions/src/apps/helm/nomos/answerGuards.ts';
 import { buildContext } from '../../functions/src/apps/helm/nomos/buildContext.ts';
@@ -82,7 +84,8 @@ const fakeLive = (failure: 'reconnect' | 'failed' | null): LiveReads => ({
               title: 'Your cake tasting',
               from: '"Sweet Layer Bakery" <hello@sweetlayer.example>',
               at: MAIL_AT,
-              snippet: 'See you at 2:00 PM on Friday.',
+              snippet:
+                'Moved from 2:00 PM to 3:30 PM on Friday at Sweet Layer Bakery.',
               deepLink: OWN_LINK,
             },
             {
@@ -156,6 +159,7 @@ const rememberItem = (fields: Record<string, unknown> = {}) => ({
 const settle = async (
   items: Record<string, unknown>[],
   answerFields: Record<string, unknown> = {},
+  existing: { facts?: ExistingFact[]; contentHash?: string | null } = {},
 ) => {
   const { reply, searched } = await mailTurn([
     { kind: 'answer', ...answerFields },
@@ -166,7 +170,13 @@ const settle = async (
     : null;
   return {
     built,
-    ...settleRemember({ remember: reply.remember, built, timeZone: 'UTC' }),
+    ...settleRemember({
+      remember: reply.remember,
+      built,
+      timeZone: 'UTC',
+      existingFacts: existing.facts ?? [],
+      contentHash: existing.contentHash ?? null,
+    }),
   };
 };
 
@@ -590,7 +600,10 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.equal(built.answer.fromRecords, 'The bakery emailed a time.');
       const [mine, other] = built.answer.quotes;
       assert.equal(mine.text, quotes.get('q1')?.snippet);
-      assert.equal(mine.text, 'See you at 2:00 PM on Friday.');
+      assert.equal(
+        mine.text,
+        'Moved from 2:00 PM to 3:30 PM on Friday at Sweet Layer Bakery.',
+      );
       assert.equal(mine.sourceLabel, 'Email from Sweet Layer Bakery');
       assert.equal(mine.deepLink, OWN_LINK);
       assert.equal(mine.deletedAt, null);
@@ -776,9 +789,114 @@ const tests: [string, () => void | Promise<void>][] = [
           remember: reply.remember,
           built: null,
           timeZone: 'UTC',
+          existingFacts: [],
+          contentHash: null,
         }).refused,
         ['remember-no-answer'],
       );
+    },
+  ],
+  [
+    'a remember is refused when the same field was already noted',
+    async () => {
+      const inferred: ExistingFact = {
+        status: 'inferred',
+        aboutField: 'startAt',
+        keptOverSource: null,
+      };
+      const confirmed = (contentHash: string): ExistingFact => ({
+        status: 'confirmed',
+        aboutField: 'startAt',
+        keptOverSource: { syncedId: 'synced-1', contentHash },
+      });
+      assert.deepEqual(
+        (await settle([rememberItem()], {}, { facts: [inferred] })).refused,
+        ['remember-already-noted'],
+      );
+      assert.deepEqual(
+        (
+          await settle(
+            [rememberItem()],
+            {},
+            { facts: [confirmed('h1')], contentHash: 'h1' },
+          )
+        ).refused,
+        ['remember-already-noted'],
+      );
+      const other = await settle(
+        [rememberItem()],
+        {},
+        { facts: [confirmed('h0')], contentHash: 'h1' },
+      );
+      assert.equal(other.fact?.value, '3:30 PM');
+      assert.deepEqual(other.refused, []);
+      const otherField = await settle(
+        [rememberItem()],
+        {},
+        { facts: [{ ...inferred, aboutField: 'place' }] },
+      );
+      assert.equal(otherField.fact?.value, '3:30 PM');
+    },
+  ],
+  [
+    'a remember whose value is not in the quote is refused',
+    async () => {
+      assert.deepEqual(
+        (await settle([rememberItem({ value: '4:15 PM' })])).refused,
+        ['remember-not-in-quote'],
+      );
+      assert.deepEqual(
+        (await settle([rememberItem({ value: 'afternoon' })])).refused,
+        ['remember-incomplete'],
+      );
+      assert.deepEqual(
+        (
+          await settle([
+            rememberItem({ aboutField: 'place', value: 'Harbor Pier' }),
+          ])
+        ).refused,
+        ['remember-not-in-quote'],
+      );
+      const place = await settle([
+        rememberItem({ aboutField: 'place', value: 'Sweet Layer Bakery' }),
+      ]);
+      assert.equal(place.fact?.value, 'Sweet Layer Bakery');
+    },
+  ],
+  [
+    'a turn that searched live mail drops every command but its answer',
+    () => {
+      const dropped = settleLiveTurn([{ kind: 'completeTask' }], 1);
+      assert.deepEqual(dropped.commands, []);
+      assert.deepEqual(dropped.refused, ['live-turn-command']);
+      const kept = settleLiveTurn([{ kind: 'completeTask' }], 0);
+      assert.equal(kept.commands.length, 1);
+      assert.deepEqual(kept.refused, []);
+    },
+  ],
+  [
+    'a quote cut to fit ends with an ellipsis within the cap',
+    () => {
+      const long = 'word '.repeat(100);
+      const entry = {
+        alias: 'q1',
+        connectorId: 'google:gmail',
+        accountId: 'acct-1',
+        ref: 'm1',
+        title: 't',
+        from: 'a@b.example',
+        at: MAIL_AT,
+        snippet: long,
+        deepLink: OWN_LINK,
+      };
+      const built = buildAnswer(answer({ quotes: [entry] }));
+      const text = built.answer.quotes[0].text ?? '';
+      assert.ok(text.endsWith('…'));
+      assert.ok(text.length <= 300);
+      const short = buildAnswer(
+        answer({ quotes: [{ ...entry, snippet: 'Hi.' }] }),
+      );
+      assert.equal(short.answer.quotes[0].text, 'Hi.');
     },
   ],
   [

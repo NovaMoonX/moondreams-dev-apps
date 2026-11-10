@@ -34,6 +34,8 @@ interface DisconnectSheetProps {
   note?: { title: string; text: string } | null;
   /** One more plain line under the sentence, for what this connection's end does to what was kept from it. */
   extraLine?: string | null;
+  /** Replaces the sheet's title and its confirm button when ending is a narrower step than disconnecting. */
+  wording?: { title: string; confirm: string } | null;
 }
 
 function DisconnectForm({
@@ -45,6 +47,7 @@ function DisconnectForm({
   countKind = null,
   note = null,
   extraLine = null,
+  wording = null,
 }: Omit<DisconnectSheetProps, 'isOpen'>) {
   const name = useAssistantName();
   const now = useNow(60_000);
@@ -131,7 +134,7 @@ function DisconnectForm({
         rightActions={
           isOffline ? (
             <LockedButton
-              label={HELM_COPY.disconnectConfirm}
+              label={wording?.confirm ?? HELM_COPY.disconnectConfirm}
               title={HELM_COPY.connectionsNeedConnection}
             >
               <p>{HELM_COPY.connectionsNeedConnectionBody}</p>
@@ -143,7 +146,7 @@ function DisconnectForm({
               loading={isEnding}
               onClick={() => void disconnect()}
             >
-              {HELM_COPY.disconnectConfirm}
+              {wording?.confirm ?? HELM_COPY.disconnectConfirm}
             </Button>
           )
         }
@@ -158,7 +161,10 @@ function DisconnectSheet({ isOpen, ...form }: DisconnectSheetProps) {
     <FormSheet
       isOpen={isOpen}
       onClose={form.onClose}
-      title={HELM_COPY.connectionDisconnect(form.accountName ?? form.appName)}
+      title={
+        form.wording?.title ??
+        HELM_COPY.connectionDisconnect(form.accountName ?? form.appName)
+      }
     >
       {isOpen && <DisconnectForm {...form} />}
     </FormSheet>

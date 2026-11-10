@@ -9,6 +9,7 @@ import {
 } from 'firebase-functions/v2/https';
 
 import { canOpenApp } from '../appAccess.js';
+import { assertGateOpen } from '../gates/assertGateOpen.js';
 import {
   SITE_ACCOUNT_ID,
   type EndConnectionRequest,
@@ -131,6 +132,17 @@ export const grantConnection = onCall(OPTIONS, async (request) => {
     );
   }
   assertDeclaredCategories(manifest, req.categoryIds);
+  const { restrictedGates } = READER_APPS[req.readerAppId];
+  if (isKnown(restrictedGates, req.connectorId)) {
+    const { gateId, defaultRollout } = restrictedGates[req.connectorId];
+    await assertGateOpen(
+      request,
+      req.readerAppId,
+      gateId,
+      defaultRollout,
+      "That source isn't open to you yet.",
+    );
+  }
 
   const firestore = getFirestore();
   const canOpen = await Promise.all(
@@ -360,7 +372,11 @@ const endAndClean = async (uid: string, req: EndConnectionRequest) => {
   if (!ended.sink) return { grantId: req.grantId };
 
   const session = ended.sink.openSession(firestore, uid);
-  await session.blankQuoted?.(req.grantId, ended.endedAt);
+  try {
+    await session.blankQuoted?.(req.grantId, ended.endedAt);
+  } catch (error) {
+    logger.error('connections.end.blankFailed', { cause: errorCause(error) });
+  }
   if (ended.keptCopies === null) {
     await session.deleteGrant(req.grantId);
     return { grantId: req.grantId };

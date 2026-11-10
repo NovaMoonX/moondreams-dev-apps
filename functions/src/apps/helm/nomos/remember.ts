@@ -11,7 +11,16 @@ export type RememberRefusal =
   | 'remember-general-kept'
   | 'remember-not-an-event'
   | 'remember-incomplete'
-  | 'remember-same-as-calendar';
+  | 'remember-same-as-calendar'
+  | 'remember-not-in-quote'
+  | 'remember-already-noted';
+
+/** A fact already kept about the same copy, as far as a repeat check reads it. */
+export interface ExistingFact {
+  status: string;
+  aboutField: string | null;
+  keptOverSource: { syncedId: string; contentHash: string } | null;
+}
 
 /** A remember that passed every guard, its words and records settled. */
 export interface AcceptedFact {
@@ -29,6 +38,33 @@ const toClock = (text: string) => {
     ? `${Number(match[1])}:${match[2] ?? '00'} ${match[3].toUpperCase()}M`
     : null;
 };
+
+const CLOCK_IN_TEXT = /\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?/gi;
+
+const isValueInQuote = (field: RememberField, value: string, text: string) =>
+  field === 'place'
+    ? (value.match(/\p{L}{3,}/gu) ?? []).every((word) =>
+        text.toLowerCase().includes(word.toLowerCase()),
+      )
+    : (text.match(CLOCK_IN_TEXT) ?? []).some(
+        (token) => toClock(token) === toClock(value),
+      );
+
+const isAlreadyNoted = (
+  facts: ExistingFact[],
+  field: RememberField,
+  copyId: string,
+  contentHash: string | null,
+) =>
+  facts.some(
+    (fact) =>
+      fact.aboutField === field &&
+      (fact.status === 'inferred' ||
+        (fact.status === 'confirmed' &&
+          contentHash !== null &&
+          fact.keptOverSource?.syncedId === copyId &&
+          fact.keptOverSource.contentHash === contentHash)),
+  );
 
 const toComparable = (field: RememberField, text: string) =>
   (field === 'place' ? null : toClock(text)) ??
@@ -58,6 +94,8 @@ export function settleRemember(input: {
   remember: RememberCommand[];
   built: { answer: CaptureAnswer; quoteIds: Record<string, string> } | null;
   timeZone: string;
+  existingFacts: ExistingFact[];
+  contentHash: string | null;
 }): { fact: AcceptedFact | null; refused: RememberRefusal[] } {
   const [first, ...later] = input.remember;
   const refusedLater = later.map((): RememberRefusal => 'remember-second');
@@ -76,12 +114,28 @@ export function settleRemember(input: {
   }
   const { statement, value, aboutField } = first;
   if (!statement || !value || !aboutField) return refuse('remember-incomplete');
+  if (aboutField !== 'place' && toClock(value) === null) {
+    return refuse('remember-incomplete');
+  }
+  if (!isValueInQuote(aboutField, value, first.quote.snippet)) {
+    return refuse('remember-not-in-quote');
+  }
   const own = toCopyValue(first.about, aboutField, input.timeZone);
   if (
     own !== null &&
     toComparable(aboutField, own) === toComparable(aboutField, value)
   ) {
     return refuse('remember-same-as-calendar');
+  }
+  if (
+    isAlreadyNoted(
+      input.existingFacts,
+      aboutField,
+      first.about.id,
+      input.contentHash,
+    )
+  ) {
+    return refuse('remember-already-noted');
   }
   return {
     fact: {

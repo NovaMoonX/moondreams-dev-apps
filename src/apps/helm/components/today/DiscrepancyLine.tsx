@@ -7,7 +7,10 @@ import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { HELM_COPY } from '@apps/helm/constants';
-import { useDiscrepancy } from '@apps/helm/hooks/useDiscrepancy';
+import {
+  useCopyTimeZone,
+  useDiscrepancy,
+} from '@apps/helm/hooks/useDiscrepancy';
 import {
   confirmCalendarRight,
   undoCalendarRight,
@@ -42,6 +45,7 @@ export function DiscrepancyBlock({ record }: { record: SyncedRecord }) {
   const { addToast } = useToast();
   const isOffline = useNetworkStatus() === 'offline';
   const discrepancy = useDiscrepancy(record);
+  const timeZone = useCopyTimeZone();
   const [confirmed, setConfirmed] = useState<Confirmed | null>(null);
   const [isWorking, setIsWorking] = useState(false);
   const [note, setNote] = useState<string | null>(null);
@@ -53,7 +57,7 @@ export function DiscrepancyBlock({ record }: { record: SyncedRecord }) {
 
   const confirm = async () => {
     if (!user || !discrepancy || isWorking) return;
-    const value = getCopyValue(record, discrepancy.field);
+    const value = getCopyValue(record, discrepancy.field, timeZone);
     if (value === null) return;
     setIsWorking(true);
     setNote(null);
@@ -146,6 +150,7 @@ export function DiscrepancyBlock({ record }: { record: SyncedRecord }) {
           type='button'
           variant='outline'
           size='sm'
+          className='relative after:absolute after:inset-x-0 after:-inset-y-2'
           disabled={isWorking}
           onClick={() => void confirm()}
         >

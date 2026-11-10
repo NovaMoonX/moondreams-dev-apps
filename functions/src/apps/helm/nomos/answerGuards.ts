@@ -70,6 +70,11 @@ export const toSenderName = (from: string) => {
   return name || from.trim();
 };
 
+const toQuoteText = (snippet: string) =>
+  snippet.length > QUOTE_CAP
+    ? `${snippet.slice(0, QUOTE_CAP - 1).trimEnd()}…`
+    : snippet;
+
 const toSpoken = (input: {
   records: string | null;
   general: string | null;
@@ -149,7 +154,7 @@ export function buildAnswer(
     accountId: quote.accountId,
     sourceLabel: `Email from ${toSenderName(quote.from)}`,
     at: quote.at,
-    text: quote.snippet.slice(0, QUOTE_CAP),
+    text: toQuoteText(quote.snippet),
     deepLink: quote.deepLink,
     deletedAt: null,
   }));
@@ -184,3 +189,10 @@ export const summarizeAnswer = (answer: CaptureAnswer) => {
     ? `Answered from general knowledge: ${answer.question}`
     : `No answer in your records: ${answer.question}`;
 };
+
+/** A turn that searched live mail writes only its answer and its fact; every other command is refused. */
+export function settleLiveTurn<T>(commands: T[], searchedCount: number) {
+  return searchedCount > 0
+    ? { commands: [] as T[], refused: commands.map(() => 'live-turn-command') }
+    : { commands, refused: [] as string[] };
+}

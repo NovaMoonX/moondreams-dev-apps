@@ -45,6 +45,27 @@ interface Intro {
   failure: string | null;
 }
 
+const CONNECTOR_KEY = 'helm-google-connector';
+
+const keepConnector = (connectorId: GoogleConnectorId | null) => {
+  try {
+    if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
+    else sessionStorage.setItem(CONNECTOR_KEY, connectorId);
+  } catch {
+    // Private browsing can refuse storage; a return then falls back to the calendar.
+  }
+};
+
+const readKeptConnector = (): GoogleConnectorId => {
+  try {
+    return sessionStorage.getItem(CONNECTOR_KEY) === 'google:gmail'
+      ? 'google:gmail'
+      : 'google:calendar';
+  } catch {
+    return 'google:calendar';
+  }
+};
+
 const isPopupPage = () =>
   window.opener !== null && (window.opener as Window) !== window;
 
@@ -66,7 +87,9 @@ const connectGoogle = async ({
     accountId,
     isAnotherAccount,
   });
+  keepConnector(connectorId);
   const result = await requestGoogleAuthCode({ authUrl, state });
+  if (result !== 'redirected') keepConnector(null);
   return typeof result === 'string' ? result : finishGoogleConnection(result);
 };
 
@@ -174,10 +197,11 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const [returned] = useState(() =>
     readGoogleAuthReturn(window.location.search),
   );
+  const [returnedConnector] = useState(readKeptConnector);
   const [intro, setIntro] = useState<Intro | null>(() =>
     returned && 'error' in returned && !isPopupPage()
       ? {
-          connectorId: 'google:calendar',
+          connectorId: returnedConnector,
           accountId: null,
           isAnotherAccount: false,
           failure:
@@ -237,7 +261,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
   const onReturnFailed = (error: unknown) => {
     console.error('Helm Google connection did not finish', error);
     setIntro({
-      connectorId: 'google:calendar',
+      connectorId: returnedConnector,
       accountId: null,
       isAnotherAccount: false,
       failure: toFailureLine(error, name),
@@ -246,7 +270,10 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!returned || handOffGoogleAuthReturn()) return;
-    if ('error' in returned) stripReturnQuery();
+    if ('error' in returned) {
+      stripReturnQuery();
+      keepConnector(null);
+    }
   }, [returned]);
 
   const isReturningWithCode =
@@ -264,6 +291,7 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
     queryFn: async () => {
       if (!returned || !('code' in returned)) return false;
       stripReturnQuery();
+      keepConnector(null);
       const kept = takeGoogleAuthState();
       try {
         if (kept !== null && kept !== returned.state)
