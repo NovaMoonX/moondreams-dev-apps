@@ -51,7 +51,12 @@ const toTitle = (execution: OpenExecution) =>
 const countRecords = (execution: OpenExecution) =>
   new Set(
     execution.effectRefs
-      .filter((ref) => ref.collection !== 'who' && ref.collection !== 'places')
+      .filter(
+        (ref) =>
+          ref.collection !== 'who' &&
+          ref.collection !== 'places' &&
+          ref.collection !== 'media',
+      )
       .map((ref) => ref.docId),
   ).size;
 

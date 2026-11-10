@@ -89,6 +89,7 @@
     "check:helm-planner": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmPlanner.ts",
     "check:helm-rest-day": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmRestDay.ts",
     "check:helm-same-thing": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSameThing.ts",
+    "check:helm-contact-import": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmContactImport.ts",
     "check:helm-match-entities": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmMatchEntities.ts",
     "check:helm-questions": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmQuestions.ts",
     "check:helm-asks": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmAsks.ts",

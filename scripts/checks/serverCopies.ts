@@ -84,6 +84,13 @@ const COPIES: Copy[] = [
     },
   },
   {
+    src: 'src/lib/connections/google/contactsManifest.ts',
+    dest: 'functions/src/connections/google/contactsManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
+  {
     src: 'src/utils/stringUtils.ts',
     dest: 'functions/src/vendor/stringUtils.ts',
     importRewrites: {},

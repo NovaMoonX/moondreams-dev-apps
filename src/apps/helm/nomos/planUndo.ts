@@ -6,6 +6,7 @@ import type {
   ExecutionSealed,
   OpenExecution,
   TaskSealed,
+  WhoSealed,
 } from '@apps/helm/types';
 
 /** Whether an Undo is offered: a readable, succeeded execution that is not itself an Undo, not yet undone, and changed something. */
@@ -21,7 +22,7 @@ export interface UndoTarget {
   /** The document as it is now; null when it is gone. */
   data: Record<string, unknown> | null;
   /** Its sealed words; null when they won't open. */
-  opened: TaskSealed | null;
+  opened: TaskSealed | WhoSealed | null;
 }
 
 export type UndoRefusal =
@@ -35,7 +36,7 @@ export type UndoPlan =
         docId: string;
         fields: Record<string, unknown>;
         collection: EffectRef['collection'];
-        reseal: TaskSealed | null;
+        reseal: TaskSealed | WhoSealed | null;
       }[];
       undoExecution: Omit<Execution, 'sealed'>;
       undoSealed: ExecutionSealed;
@@ -56,8 +57,9 @@ type Values = Record<string, unknown>;
 
 const SEALED_PREFIX = 'sealed.';
 
-/** An undo reads every record in one transaction, and no execution makes more effects than this. */
+/** An undo reads every record in one transaction, and no execution makes more effects than this; an import of 50 people with their photos is the largest. */
 const MAX_EFFECTS = 40;
+const MAX_IMPORT_EFFECTS = 120;
 
 const isSame = (a: unknown, b: unknown): boolean => {
   if (a === b) return true;
@@ -87,7 +89,7 @@ const refuse = (
 
 interface Step {
   data: Values | null;
-  opened: TaskSealed | null;
+  opened: TaskSealed | WhoSealed | null;
   fields: Values;
   sealedFields: Values;
   restored: Values;
@@ -104,12 +106,15 @@ type RecordOutcome =
       kind: 'restored';
       title: string;
       fields: Values;
-      reseal: TaskSealed | null;
+      reseal: TaskSealed | WhoSealed | null;
       effect: ExecutionEffect;
     };
 
+const toOpenedTitle = (opened: UndoTarget['opened']) =>
+  opened === null ? '' : 'title' in opened ? opened.title : opened.name;
+
 const toTitle = (target: UndoTarget, effects: ExecutionEffect[]) =>
-  target.opened?.title ||
+  toOpenedTitle(target.opened) ||
   effects
     .map(
       (effect) =>
@@ -237,7 +242,7 @@ const planRecord = (
   if (Object.keys(updated.restored).length === 0) return { kind: 'skipped' };
   const reseal =
     Object.keys(updated.sealedFields).length > 0 ? updated.opened : null;
-  const restoredTitle = updated.opened?.title || title;
+  const restoredTitle = toOpenedTitle(updated.opened) || title;
   return {
     kind: 'restored',
     title: restoredTitle,
@@ -282,7 +287,8 @@ export function planUndo(input: {
   }
   if (
     original.isUnreadable ||
-    original.effectRefs.length > MAX_EFFECTS ||
+    original.effectRefs.length >
+      (original.category === 'import' ? MAX_IMPORT_EFFECTS : MAX_EFFECTS) ||
     original.effects.length !== original.effectRefs.length
   ) {
     return refuse('unreadable');
@@ -292,10 +298,11 @@ export function planUndo(input: {
   const groups = [...groupByDoc(original)];
   const isEntityDoc = (docId: string) =>
     isEntity(collectionOf.get(docId) ?? 'tasks');
+  const isMediaDoc = (docId: string) => collectionOf.get(docId) === 'media';
   const targetOf = (docId: string) =>
     targets.get(docId) ?? { docId, data: null, opened: null };
   const recordOutcomes = groups
-    .filter(([docId]) => !isEntityDoc(docId))
+    .filter(([docId]) => !isEntityDoc(docId) && !isMediaDoc(docId))
     .map(([docId, entries]) => ({
       docId,
       outcome: planRecord(
@@ -331,6 +338,40 @@ export function planUndo(input: {
         ),
       })),
   ];
+  // A photo an import added goes with its person: when the person is taken back or restored, or already gone.
+  const photoOutcomes = groups
+    .filter(([docId]) => isMediaDoc(docId))
+    .map(([docId]) => {
+      const attached = targetOf(docId).data?.attachedTo;
+      const ownerIds = Array.isArray(attached)
+        ? attached.flatMap((entry: { id?: unknown }) =>
+            typeof entry.id === 'string' ? [entry.id] : [],
+          )
+        : [];
+      const isOwnerTakenBack = ownerIds.every((ownerId) => {
+        const owner = outcomes.find((entry) => entry.docId === ownerId);
+        return (
+          !owner ||
+          owner.outcome.kind === 'deleted' ||
+          owner.outcome.kind === 'restored' ||
+          owner.outcome.kind === 'gone'
+        );
+      });
+      const outcome: RecordOutcome =
+        targetOf(docId).data === null
+          ? { kind: 'gone' }
+          : isOwnerTakenBack
+            ? {
+                kind: 'deleted',
+                title: HELM_COPY.resultPhotoFallback,
+                effect: {
+                  written: { 'sealed.title': HELM_COPY.resultPhotoFallback },
+                  previous: { attachedTo: attached },
+                },
+              }
+            : { kind: 'skipped' };
+      return { docId, outcome };
+    });
   const kept = outcomes.flatMap(({ outcome }) =>
     outcome.kind === 'kept' ? [outcome.title] : [],
   );
@@ -338,13 +379,16 @@ export function planUndo(input: {
     outcome.kind === 'gone' ? [docId] : [],
   );
   const gone = goneIds.length;
-  const done = outcomes.flatMap(({ docId, outcome }) =>
+  const done = [...outcomes, ...photoOutcomes].flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted' || outcome.kind === 'restored'
       ? [{ docId, outcome }]
       : [],
   );
-  const records = done.filter(
-    ({ docId }) => !isEntity(collectionOf.get(docId) ?? 'tasks'),
+  const isImport = original.category === 'import';
+  const records = done.filter(({ docId }) =>
+    isImport
+      ? collectionOf.get(docId) === 'who'
+      : !isEntity(collectionOf.get(docId) ?? 'tasks') && !isMediaDoc(docId),
   );
   if (records.length === 0) {
     return refuse(
@@ -354,7 +398,9 @@ export function planUndo(input: {
     );
   }
 
-  const report = HELM_COPY.undoReport(records.length, kept.length, gone);
+  const report = isImport
+    ? HELM_COPY.undoReportPeople(records.length, kept.length, gone)
+    : HELM_COPY.undoReport(records.length, kept.length, gone);
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -398,8 +444,11 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary:
-        kept.length > 0
+      summary: isImport
+        ? kept.length > 0
+          ? HELM_COPY.tookBackPeopleKept(records.length, kept.length)
+          : HELM_COPY.tookBackPeople(records.length)
+        : kept.length > 0
           ? HELM_COPY.tookBackKept(records.length, kept.length)
           : HELM_COPY.tookBack(records.length),
       commands: [],

@@ -20,7 +20,12 @@ export function buildResultLines(
   now: number,
 ): ResultLine[] {
   return execution.effectRefs.flatMap((ref, index): ResultLine[] => {
-    if (ref.collection === 'who' || ref.collection === 'places') return [];
+    if (
+      ref.collection === 'who' ||
+      ref.collection === 'places' ||
+      ref.collection === 'media'
+    )
+      return [];
     const effect = execution.effects[index];
     const task = tasksById.get(ref.docId);
     const title =

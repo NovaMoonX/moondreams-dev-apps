@@ -10,9 +10,11 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { deleteFile } from '@lib/firebase/storage';
 import { createSealedReader } from '@lib/security';
 
 import { openJson, sealJson } from '@apps/helm/security';
+import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
   planUndo,
@@ -25,10 +27,17 @@ import type {
   HelmEncryption,
   Sealed,
   TaskSealed,
+  WhoSealed,
 } from '@apps/helm/types';
 
 export type UndoResult =
-  | { kind: 'done'; undoExecutionId: string; report: string }
+  | {
+      kind: 'done';
+      undoExecutionId: string;
+      report: string;
+      /** Sealed photo objects the undo left without a document; deleted once it commits. */
+      objectPaths: string[];
+    }
   | { kind: 'refused'; reason: UndoRefusal | 'missing'; report: string | null }
   | { kind: 'offline' };
 
@@ -102,7 +111,7 @@ export async function undoExecution(
 
   try {
     const usedIds = await readUsedIds(uid, executionId);
-    return await runTransaction(
+    const result = await runTransaction(
       db,
       async (transaction): Promise<UndoResult> => {
         const snapshot = await transaction.get(executionRef);
@@ -119,17 +128,21 @@ export async function undoExecution(
           await Promise.all(
             refs.map(async (ref): Promise<[string, UndoTarget]> => {
               const { docId } = ref;
-              const isTask = ref.collection === 'tasks';
+              const isOpened =
+                ref.collection === 'tasks' || ref.collection === 'who';
               const entry = await transaction.get(
                 doc(collectionOf(ref.collection), docId),
               );
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
-              if (!isTask) return [docId, { docId, data, opened: null }];
+              if (!isOpened) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
-                  ? openJson<TaskSealed>(data.sealed as Sealed, encryption)
+                  ? openJson<TaskSealed | WhoSealed>(
+                      data.sealed as Sealed,
+                      encryption,
+                    )
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);
               return [docId, { docId, data, opened }];
@@ -150,7 +163,10 @@ export async function undoExecution(
           plan.updates.map(async (update) =>
             update.reseal
               ? {
-                  sealed: await sealJson<TaskSealed>(update.reseal, encryption),
+                  sealed: await sealJson<TaskSealed | WhoSealed>(
+                    update.reseal,
+                    encryption,
+                  ),
                 }
               : {},
           ),
@@ -177,9 +193,25 @@ export async function undoExecution(
           kind: 'done',
           undoExecutionId: undoRef.id,
           report: plan.report,
+          objectPaths: plan.deletes.flatMap(({ docId, collection: from }) =>
+            from === 'media'
+              ? [
+                  getMediaObjectPath(uid, docId, false),
+                  ...(targets.get(docId)?.data?.hasThumb === true
+                    ? [getMediaObjectPath(uid, docId, true)]
+                    : []),
+                ]
+              : [],
+          ),
         };
       },
     );
+    if (result.kind === 'done') {
+      await Promise.allSettled(
+        result.objectPaths.map((path) => deleteFile(path)),
+      );
+    }
+    return result;
   } catch (error) {
     if (isUnavailable(error)) return { kind: 'offline' };
     throw error;

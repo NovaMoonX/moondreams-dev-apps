@@ -306,6 +306,19 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackPeople: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'person' : 'people'}`,
+  tookBackPeopleKept: (count: number, other: number) =>
+    `Took back ${count} ${count === 1 ? 'person' : 'people'}, kept ${other}`,
+  undoReportPeople: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'person' : 'people'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  resultPhotoFallback: 'A photo',
   undoFailed: "That couldn't be taken back. Try again.",
   undoNeedsConnectionTitle: 'Undo needs a connection',
   undoNeedsConnectionBody:
@@ -426,6 +439,14 @@ export const HELM_COPY = {
   driveDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its documents are blanked.',
   driveFailed: "Drive didn't turn on. Try again.",
+  googleContactsName: 'Contacts',
+  googleContactsTitle: 'Connect Google Contacts',
+  googleContactsReconnectTitle: 'Reconnect Google Contacts',
+  googleContactsReadOnly: (name: string) =>
+    `${name} lists your contacts only when you open the list, and copies just the people you tick: name, email, phone and photo. It can't add, change or delete anything in Google Contacts.`,
+  contactsDisconnectNote:
+    'People you brought in stay in People, just as they are.',
+  googleContactsFailed: "Google Contacts didn't connect. Try again.",
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
@@ -726,6 +747,37 @@ export const HELM_COPY = {
     `Nobody yet. Tell ${assistant} about someone, a pet or a business and they show up here.`,
   peopleFailed: 'People did not open. Try again in a moment.',
   peopleNoMatch: 'Nobody by that name.',
+  contactsBringIn: 'Bring in people from Google Contacts',
+  contactsTitle: 'Bring in people',
+  contactsLead: (name: string) =>
+    `Tick the people ${name} should know about. Only the ones you tick are copied, and only their name, email, phone and photo.`,
+  contactsSearch: 'Search your contacts',
+  contactsLoading: 'Opening your contacts',
+  contactsFailed: "Your contacts didn't open. Try again.",
+  contactsEmpty: 'No contacts to bring in from this account yet.',
+  contactsNoMatch: 'Nobody by that name in your contacts.',
+  contactsCapped: 'Showing the first 2,000 contacts. Search to find the rest.',
+  contactsAlreadyIn: 'Already in People',
+  contactsReconnect:
+    'Google stopped sharing your contacts. Reconnect to continue.',
+  contactsReconnectAction: 'Reconnect Google',
+  contactsPick: (count: number) =>
+    count === 0
+      ? 'Bring in people'
+      : `Bring in ${count} ${count === 1 ? 'person' : 'people'}`,
+  contactsPickedHint: (count: number) =>
+    `${count} of up to 50 at a time ticked`,
+  contactsAllIn: 'Everyone you picked is already in People.',
+  contactsImportFailed: "Those people didn't come in. Try again.",
+  contactsChanged: 'Someone you picked changed just now. Try again.',
+  contactsTooMany: (limit: number) => `Pick up to ${limit} at a time.`,
+  contactsFromGoogle: 'From Google Contacts',
+  contactsUpdate: 'Update from Google',
+  contactsUpdateHint:
+    "Brings in what changed in Google. Anything you've edited here stays as you left it.",
+  contactsUpToDate: 'Already up to date with Google.',
+  contactsGoneAtGoogle: "That contact isn't in Google Contacts anymore.",
+  contactsUpdateFailed: "That didn't update. Try again.",
   tierClose: 'Close',
   tierRegular: 'Regular',
   othersDivider: 'Others',

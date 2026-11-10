@@ -136,12 +136,15 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         entry.accountId === grant.accountId,
     ) ?? null;
   const driveCategory = GOOGLE_DRIVE_MANIFEST.categories[0];
+  const isContactsGrant = grant.connectorId === 'google:contacts';
   const appName = isGoogle
     ? isGmailGrant
       ? HELM_COPY.googleGmailName
       : isDriveGrant
         ? HELM_COPY.googleDriveName
-        : HELM_COPY.googleCalendarName
+        : isContactsGrant
+          ? HELM_COPY.googleContactsName
+          : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
   const kinds = new Set(
@@ -156,11 +159,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const showsGmailRow =
     isGoogle &&
     !isGmailGrant &&
+    !isContactsGrant &&
     !hasStopped &&
     (gmailGrant !== null || isGmailOpen);
   const showsDriveRow =
     isGoogle &&
     !isDriveGrant &&
+    !isContactsGrant &&
     !hasStopped &&
     (driveGrant !== null || isGmailOpen);
 
@@ -325,7 +330,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                       ? 'google:gmail'
                       : isDriveGrant
                         ? 'google:drive'
-                        : 'google:calendar',
+                        : isContactsGrant
+                          ? 'google:contacts'
+                          : 'google:calendar',
                   })
                 }
               >
@@ -351,7 +358,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             ? HELM_COPY.googleGmailReadOnly(name)
             : isDriveGrant
               ? HELM_COPY.googleDriveReadOnly(name)
-              : HELM_COPY.googleReadOnly(name)}
+              : isContactsGrant
+                ? HELM_COPY.googleContactsReadOnly(name)
+                : HELM_COPY.googleReadOnly(name)}
       </p>
       {isGoogle && !isOffline && (
         <SettingsGroup title={HELM_COPY.connectionAccountLabel}>
@@ -362,17 +371,20 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             onClick={() => setIsLabelOpen(true)}
             hasChevron
           />
-          {!hasStopped && !isGmailGrant && !isDriveGrant && (
-            <SettingsRow
-              icon={<CalendarCheck className='size-5' aria-hidden='true' />}
-              title={HELM_COPY.googleWhichCalendars}
-              description={HELM_COPY.googleCalendarsCount(
-                grant.options?.calendarIds.length ?? 0,
-              )}
-              onClick={() => openCalendarPicker(grant.accountId)}
-              hasChevron
-            />
-          )}
+          {!hasStopped &&
+            !isGmailGrant &&
+            !isDriveGrant &&
+            !isContactsGrant && (
+              <SettingsRow
+                icon={<CalendarCheck className='size-5' aria-hidden='true' />}
+                title={HELM_COPY.googleWhichCalendars}
+                description={HELM_COPY.googleCalendarsCount(
+                  grant.options?.calendarIds.length ?? 0,
+                )}
+                onClick={() => openCalendarPicker(grant.accountId)}
+                hasChevron
+              />
+            )}
         </SettingsGroup>
       )}
       <section className='flex flex-col gap-3'>
@@ -579,7 +591,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             ? HELM_COPY.gmailDisconnectNote
             : isDriveGrant
               ? HELM_COPY.driveDisconnectNote
-              : null
+              : isContactsGrant
+                ? HELM_COPY.contactsDisconnectNote
+                : null
         }
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)

@@ -62,3 +62,29 @@ export async function googleGetBytes(
   if (!response.ok) throw new GoogleHttpError(response.status);
   return new Uint8Array(await response.arrayBuffer());
 }
+
+const MAX_PUBLIC_BYTES = 5 * 1024 * 1024;
+const PUBLIC_TIMEOUT_MS = 8000;
+
+/** Fetches a public file without the account's token, never following a redirect, and refuses one over 5 MB. */
+export async function googleGetPublicBytes(
+  token: string,
+  url: string,
+  fixture: FixtureContext = { email: null },
+): Promise<Uint8Array> {
+  if (isFixtureToken(token)) {
+    const answer = answerFixture(url, fixture);
+    if (answer.status < 200 || answer.status > 299) {
+      throw new GoogleHttpError(answer.status);
+    }
+    return Buffer.from(answer.body as Uint8Array);
+  }
+  const response = await fetch(url, {
+    redirect: 'error',
+    signal: AbortSignal.timeout(PUBLIC_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new GoogleHttpError(response.status);
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.length > MAX_PUBLIC_BYTES) throw new GoogleHttpError(413);
+  return bytes;
+}

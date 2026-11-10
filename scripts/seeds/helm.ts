@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { deflateSync } from 'node:zlib';
 
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
+import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   deriveSeedDataKey,
@@ -103,6 +104,7 @@ const GOOGLE_SHIFTS_CALENDAR = 'shifts-personal@group.calendar.google.com';
 const CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const DRIVE_READ_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
+const CONTACTS_READ_SCOPE = 'https://www.googleapis.com/auth/contacts.readonly';
 const GOOGLE_CALENDAR_GRANT_ID = toGrantId(
   'helm',
   'google:calendar',
@@ -1374,6 +1376,7 @@ async function buildPeople(input: {
   const { uid, displayName, now, timeZone, encryption } = input;
   const madeAt = now - 6 * DAY_MS;
   const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const digest = createDigest(Buffer.from(encryption.key, 'hex'));
   const misoPhoto = await buildSeedPhoto({
     uid,
     id: 'seed-media-miso',
@@ -1420,8 +1423,39 @@ async function buildPeople(input: {
           lastMentionedAt: now - 3 * DAY_MS,
         },
         madeAt,
-        await seal(wordsOf('Sam Rivera', { relation: 'work friend' })),
+        await seal(
+          wordsOf('Sam Rivera', {
+            relation: 'work friend',
+            email: 'sam.rivera@example.com',
+          }),
+        ),
       ),
+    },
+    {
+      id: 'seed-who-priya-raman',
+      who: {
+        ...toWho(
+          {
+            kind: 'person',
+            tier: 'regular',
+            tierSetBy: 'person',
+            isSelf: false,
+            createdBy: 'person',
+          },
+          now - DAY_MS,
+          await seal(wordsOf('Priya Raman', { email: 'priya@example.com' })),
+        ),
+        importedFrom: {
+          connectorId: 'google:contacts',
+          accountId: GOOGLE_ACCOUNT_ID,
+          resourceName: 'people/c1000000004',
+          importedAt: now - DAY_MS,
+        },
+        importedFields: {
+          name: digest('name', 'Priya Raman'),
+          email: digest('email', 'priya@example.com'),
+        },
+      },
     },
     {
       id: 'seed-who-sam-patel',
@@ -2855,7 +2889,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     provider: 'google',
     email: GOOGLE_PRIMARY_CALENDAR,
     label: null,
-    grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE, DRIVE_READ_SCOPE],
+    grantedScopes: [
+      CALENDAR_READ_SCOPE,
+      GMAIL_READ_SCOPE,
+      DRIVE_READ_SCOPE,
+      CONTACTS_READ_SCOPE,
+    ],
     status: 'live',
     connectedAt,
     lastError: null,
@@ -2916,6 +2955,21 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       options: null,
       categoryState: {
         documents: { lastOkAt: null, lastError: null, count: 0 },
+      },
+      lastSyncAt: null,
+    } satisfies ConnectionGrant,
+  );
+  batch.set(
+    alexConnections
+      .collection('grants')
+      .doc(toGrantId('helm', 'google:contacts', GOOGLE_ACCOUNT_ID)),
+    {
+      ...googleGrant,
+      connectorId: 'google:contacts',
+      categories: { contacts: { isOn: true, changedAt: connectedAt } },
+      options: null,
+      categoryState: {
+        contacts: { lastOkAt: null, lastError: null, count: 0 },
       },
       lastSyncAt: null,
     } satisfies ConnectionGrant,
@@ -3033,7 +3087,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       .doc(GOOGLE_ACCOUNT_ID),
     {
       isFixture: true,
-      grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE, DRIVE_READ_SCOPE],
+      grantedScopes: [
+        CALENDAR_READ_SCOPE,
+        GMAIL_READ_SCOPE,
+        DRIVE_READ_SCOPE,
+        CONTACTS_READ_SCOPE,
+      ],
       createdAt: connectedAt,
       lastRefreshedAt: null,
     },
@@ -3105,7 +3164,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       1 +
       waypointCopies.length +
       1 +
-      5,
+      6,
   };
   return result;
 }

@@ -69,7 +69,7 @@ export interface PeopleInput {
 
 export interface EffectRef {
   op: 'create' | 'update';
-  collection: 'tasks' | 'facts' | 'who' | 'places';
+  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media';
   docId: string;
 }
 

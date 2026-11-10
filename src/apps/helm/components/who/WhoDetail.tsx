@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 
-import { DropdownMenuFactories } from '@moondreamsdev/dreamer-ui/components';
+import {
+  Button,
+  DropdownMenuFactories,
+} from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import SectionDivider from '@/components/SectionDivider';
@@ -15,6 +18,8 @@ import PhotosSection from '@apps/helm/components/media/PhotosSection';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import WhoTierSheet from '@apps/helm/components/who/WhoTierSheet';
 import { HELM_COPY, MENTIONS_SHOWN } from '@apps/helm/constants';
+import { useContactsReport } from '@apps/helm/hooks/useContactsReport';
+import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
@@ -22,6 +27,7 @@ import {
   ForgetPartialError,
   forgetWho,
 } from '@apps/helm/store/actions/whoActions';
+import { useImportContacts } from '@apps/helm/queries/contactsQueries';
 import { selectAllCaptures } from '@apps/helm/store/selectors/captureSelectors';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
 
@@ -39,6 +45,9 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
+  const { begin } = useGoogleConnect();
+  const { reportDone, toFailureLine } = useContactsReport();
+  const importContacts = useImportContacts();
   const { items, isLoaded } = useAppSelector((state) => state.helm.who);
   const openTasks = useAppSelector((state) => state.helm.openTasks.items);
   const captures = useAppSelector(selectAllCaptures);
@@ -140,6 +149,24 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
     }
   };
 
+  const updateFromGoogle = () => {
+    if (!who?.importedFrom) return;
+    const { accountId } = who.importedFrom;
+    importContacts.mutate(
+      { whoId: who.id },
+      {
+        onSuccess: (result) => reportDone(result, HELM_COPY.contactsUpToDate),
+        onError: (error) => {
+          console.error('Helm contact was not updated', error);
+          const failure = toFailureLine(error, HELM_COPY.contactsUpdateFailed);
+          if (failure === null)
+            begin({ accountId, connectorId: 'google:contacts' });
+          else addToast({ title: failure, type: 'error' });
+        },
+      },
+    );
+  };
+
   const menu =
     who && !who.isUnreadable
       ? {
@@ -209,6 +236,23 @@ function WhoDetail({ whoId, onBack, onHome }: WhoDetailProps) {
                 )}
               </div>
             </div>
+            {who.importedFrom && (
+              <section className='helm-card space-y-2 p-4'>
+                <p className='text-[15px]'>{HELM_COPY.contactsFromGoogle}</p>
+                <p className='text-muted-foreground text-[13px] text-pretty'>
+                  {HELM_COPY.contactsUpdateHint}
+                </p>
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  loading={importContacts.isPending}
+                  onClick={updateFromGoogle}
+                >
+                  {HELM_COPY.contactsUpdate}
+                </Button>
+              </section>
+            )}
             <PhotosSection
               owner={{ kind: 'who', id: who.id }}
               name={who.name}

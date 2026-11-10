@@ -717,7 +717,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] "Ask about this" on every content page, the same control in the same place, opening the conversation about that page and returning to it (O, C)
 - [x] People, pets and organizations, each with a page, a photo and a level (close, regular, passing); passing ones out of the way until they matter (O, C)
 - [ ] Projects with an objective, milestones, tasks, people in roles (key, involved, mentioned) and health from evidence (O, C)
-- [ ] Add people from Google Contacts, picking each one (O)
+- [x] Add people from Google Contacts, picking each one (O)
 - [x] Places with photos (O)
 - [ ] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)
 - [ ] Your preferences, favorites and who you are, kept as facts about you (O)

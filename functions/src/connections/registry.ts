@@ -15,6 +15,7 @@ import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
 import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
+import { createGoogleContactsAdapter } from './google/contacts.js';
 import { createGoogleDriveAdapter } from './google/drive.js';
 import { createGoogleMailAdapter } from './google/gmail.js';
 import type { ReaderSink } from './sink.js';
@@ -71,6 +72,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'google:calendar': createGoogleCalendarAdapter(),
   'google:gmail': createGoogleMailAdapter(),
   'google:drive': createGoogleDriveAdapter(),
+  'google:contacts': createGoogleContactsAdapter(),
 };
 
 export const SOURCE_SECRETS: SecretParam[] = Array.from(

@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
 
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { UserPlus } from 'lucide-react';
+
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
@@ -7,6 +10,7 @@ import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import WhoRow from '@apps/helm/components/who/WhoRow';
 import { HELM_COPY } from '@apps/helm/constants';
+import { useGoogleConnect } from '@apps/helm/hooks/useGoogleConnect';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import type { OpenWho } from '@apps/helm/types';
@@ -26,6 +30,7 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
     (state) => state.helm.who,
   );
   const assistant = useAssistantName();
+  const { openContacts } = useGoogleConnect();
   const [search, setSearch] = useState('');
   const [isOthersOpen, setIsOthersOpen] = useState(false);
   const groups = useMemo(() => groupWho(items, search), [items, search]);
@@ -63,6 +68,15 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.peopleTitle}
         </h1>
+        <Button
+          type='button'
+          variant='secondary'
+          className='w-full justify-start gap-2'
+          onClick={openContacts}
+        >
+          <UserPlus className='size-4 shrink-0' aria-hidden='true' />
+          {HELM_COPY.contactsBringIn}
+        </Button>
         {isFailed && !isLoaded && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.peopleFailed}

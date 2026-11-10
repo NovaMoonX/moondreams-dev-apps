@@ -486,7 +486,14 @@ export type ExecutionState =
   | 'verificationRequired';
 
 export type ActionCategory =
-  'organize' | 'remember' | 'plan' | 'draft' | 'answer' | 'undo' | 'outbound';
+  | 'organize'
+  | 'remember'
+  | 'plan'
+  | 'draft'
+  | 'answer'
+  | 'undo'
+  | 'outbound'
+  | 'import';
 
 /** 1 and 2 act inside Helm; 3 and 4 (acting outside without asking) are not built. */
 export type AutonomyLevel = 1 | 2 | 3 | 4;
@@ -494,7 +501,7 @@ export type AutonomyLevel = 1 | 2 | 3 | 4;
 export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
-  collection: 'tasks' | 'facts' | 'who' | 'places';
+  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media';
   docId: string;
 }
 

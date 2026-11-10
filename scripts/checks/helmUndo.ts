@@ -348,7 +348,12 @@ test('two effects on one task are undone newest first', () => {
     completedAt: null,
     lastEditedAt: NOW,
   });
-  assert.equal(result.updates[0].reseal?.title, 'Call Dana');
+  assert.deepEqual(
+    result.updates[0].reseal && 'title' in result.updates[0].reseal
+      ? result.updates[0].reseal.title
+      : null,
+    'Call Dana',
+  );
   const partial = asRefused(
     plan(execution([first, second]), [
       target(

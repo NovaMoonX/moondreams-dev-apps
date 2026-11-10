@@ -588,11 +588,182 @@ const answerFiles = (
   };
 };
 
+interface FixtureContact {
+  id: string;
+  name: string | null;
+  emails: string[];
+  phones: string[];
+  hasPhoto: boolean;
+}
+
+const PEOPLE_LIST_PATH = '/v1/people/me/connections';
+const PEOPLE_BATCH_PATH = '/v1/people:batchGet';
+const PHOTO_HOST = 'lh3.googleusercontent.com';
+const PHOTO_COLOURS = ['#6b8cae', '#c27a4d', '#7a9a6b', '#a06b9a'];
+
+const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
+  'personal@example.com': [
+    {
+      id: 'c1000000001',
+      name: 'Dana Whitfield',
+      emails: ['dana.whitfield@example.com'],
+      phones: ['+1 415 555 0142'],
+      hasPhoto: true,
+    },
+    {
+      id: 'c1000000002',
+      name: 'Sam Rivera',
+      emails: ['sam.rivera@example.com'],
+      phones: ['+1 206 555 0177'],
+      hasPhoto: true,
+    },
+    {
+      id: 'c1000000003',
+      name: 'Sam',
+      emails: [],
+      phones: ['+1 206 555 0109'],
+      hasPhoto: false,
+    },
+    {
+      id: 'c1000000004',
+      name: 'Priya Raman',
+      emails: ['priya@example.com'],
+      phones: [],
+      hasPhoto: true,
+    },
+    {
+      id: 'c1000000005',
+      name: 'Marcus Webb',
+      emails: [],
+      phones: ['+1 503 555 0121'],
+      hasPhoto: false,
+    },
+    {
+      id: 'c1000000006',
+      name: 'Lena Fischer',
+      emails: ['lena.fischer@example.com'],
+      phones: ['+49 30 5550 1188'],
+      hasPhoto: true,
+    },
+    {
+      id: 'c1000000007',
+      name: 'Tomás Herrera',
+      emails: ['tomas@example.com'],
+      phones: [],
+      hasPhoto: false,
+    },
+    {
+      id: 'c1000000008',
+      name: 'Greta Lindqvist',
+      emails: [],
+      phones: ['+46 8 555 010 20'],
+      hasPhoto: false,
+    },
+  ],
+  'work@example.com': [
+    {
+      id: 'c2000000001',
+      name: 'Jordan Ellis',
+      emails: ['jordan.ellis@example.com'],
+      phones: [],
+      hasPhoto: false,
+    },
+  ],
+};
+
+const photoUrlOf = (contact: FixtureContact) =>
+  `https://${PHOTO_HOST}/fixture/${contact.id}=s100`;
+
+const toPerson = (contact: FixtureContact) => ({
+  resourceName: `people/${contact.id}`,
+  ...(contact.name && {
+    names: [
+      {
+        displayName: contact.name,
+        metadata: { primary: true },
+      },
+    ],
+  }),
+  emailAddresses: contact.emails.map((value) => ({
+    value,
+    metadata: { primary: true },
+  })),
+  phoneNumbers: contact.phones.map((value) => ({ value })),
+  photos: [
+    contact.hasPhoto
+      ? { url: photoUrlOf(contact), metadata: { primary: true } }
+      : {
+          url: `https://${PHOTO_HOST}/fixture/default=s100`,
+          default: true,
+          metadata: { primary: true },
+        },
+  ],
+});
+
+const contactsFor = (email: string | null) =>
+  email !== null && Object.hasOwn(CONTACTS_BY_EMAIL, email)
+    ? CONTACTS_BY_EMAIL[email]
+    : [];
+
+const answerContacts = (
+  pathname: string,
+  params: URLSearchParams,
+  email: string | null,
+): FixtureAnswer => {
+  const contacts = contactsFor(email);
+  if (pathname === PEOPLE_LIST_PATH)
+    return {
+      status: 200,
+      body: {
+        connections: contacts.map(toPerson),
+        totalPeople: contacts.length,
+      },
+    };
+  return {
+    status: 200,
+    body: {
+      responses: params.getAll('resourceNames').map((name) => {
+        const found = contacts.find(
+          (contact) => `people/${contact.id}` === name,
+        );
+        return found
+          ? {
+              httpStatusCode: 200,
+              requestedResourceName: name,
+              person: toPerson(found),
+            }
+          : { httpStatusCode: 404, requestedResourceName: name };
+      }),
+    },
+  };
+};
+
+const answerPhoto = (pathname: string): FixtureAnswer => {
+  const id = pathname.split('/').pop()?.split('=')[0] ?? '';
+  const initial = Object.values(CONTACTS_BY_EMAIL)
+    .flat()
+    .find((contact) => contact.id === id)?.name?.[0];
+  if (!initial) return { status: 404, body: {} };
+  const colour = PHOTO_COLOURS[id.charCodeAt(id.length - 1) % 4];
+  return {
+    status: 200,
+    body: Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="${colour}"/><text x="128" y="170" font-size="120" text-anchor="middle" fill="#fff" font-family="sans-serif">${initial}</text></svg>`,
+    ),
+  };
+};
+
 export const answerFixture = (
   url: string,
   context: FixtureContext,
 ): FixtureAnswer => {
   const parsed = new URL(url);
+  if (parsed.hostname === PHOTO_HOST) return answerPhoto(parsed.pathname);
+  if (
+    parsed.pathname === PEOPLE_LIST_PATH ||
+    parsed.pathname === PEOPLE_BATCH_PATH
+  )
+    return answerContacts(parsed.pathname, parsed.searchParams, context.email);
   const events = /^\/calendar\/v3\/calendars\/([^/]+)\/events$/.exec(
     parsed.pathname,
   );

@@ -438,6 +438,8 @@ const toOption = (entry: CalendarListEntry): ConnectorOption => ({
   id: entry.id,
   name: entry.summaryOverride ?? entry.summary ?? entry.id,
   colour: entry.backgroundColor ?? null,
+  detail: null,
+  photoUrl: null,
   isPrimary: entry.primary === true,
   isOnByDefault: isOnByDefault(entry),
 });

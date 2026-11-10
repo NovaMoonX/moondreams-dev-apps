@@ -17,6 +17,14 @@ import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter
 import { createWaypointAdapter } from '../../functions/src/apps/waypoint/share/adapter.ts';
 import { createWorthTheWaitAdapter } from '../../functions/src/apps/worth-the-wait/share/adapter.ts';
 import {
+  createGoogleContactsAdapter,
+  isContactRef,
+  isGooglePhotoUrl,
+  listContacts,
+  readContacts,
+  toContactOption,
+} from '../../functions/src/connections/google/contacts.ts';
+import {
   applyCategoryChanges,
   buildNewGrant,
   readGrant,
@@ -2039,5 +2047,67 @@ await firestore
   .get();
 assert.equal(itemReads.length, 1, 'the spy sees an item query');
 unwatch.forEach((restore) => restore());
+
+// Google Contacts: a live, pick-only source that copies nothing on its own.
+process.env.FUNCTIONS_EMULATOR = 'true';
+const contactsAdapter = createGoogleContactsAdapter();
+assert.deepEqual(
+  contactsAdapter.manifest.categories.map((category) => category.mode),
+  ['live'],
+);
+const contactPage = await contactsAdapter.syncPage(waitCtx(OWNER), {
+  category: 'contacts',
+  cursor: null,
+  resumeState: null,
+  windowStart: WINDOW_START,
+});
+assert.deepEqual(contactPage.records, []);
+assert.equal(contactPage.isDone, true);
+
+const personal = await listContacts('fixture', 'personal@example.com');
+assert.ok(personal.length > 1);
+assert.ok(
+  personal.every((contact) => isContactRef(contact.resourceName)),
+  'every listed contact has a well-formed name',
+);
+const picked = personal[0];
+assert.ok(picked);
+assert.deepEqual(
+  (
+    await readContacts('fixture', 'personal@example.com', [
+      picked.resourceName,
+      'people/../../etc',
+      'people/not-a-real-contact',
+    ])
+  ).map((contact) => contact.resourceName),
+  [picked.resourceName],
+  'a forged name is ignored and only the real one is read',
+);
+assert.notDeepEqual(
+  (await listContacts('fixture', 'work@example.com')).map(
+    (contact) => contact.resourceName,
+  ),
+  personal.map((contact) => contact.resourceName),
+  'each account lists its own contacts',
+);
+const option = toContactOption(picked);
+assert.deepEqual(Object.keys(option).sort(), [
+  'colour',
+  'detail',
+  'id',
+  'isOnByDefault',
+  'isPrimary',
+  'name',
+  'photoUrl',
+]);
+assert.ok(isGooglePhotoUrl('https://lh3.googleusercontent.com/a/photo=s100'));
+[
+  'http://lh3.googleusercontent.com/a',
+  'https://evil.example.com/a',
+  'https://lh3.googleusercontent.com.evil.com/a',
+  'https://lh3.googleusercontent.com:8443/a',
+  'https://169.254.169.254/latest',
+  'not a url',
+].forEach((url) => assert.equal(isGooglePhotoUrl(url), false, url));
 
 console.log('Adapter matrix passed.');
