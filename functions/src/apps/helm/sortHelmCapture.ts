@@ -42,7 +42,7 @@ import {
   KEY_DATE_PRECISIONS,
   MAX_MOMENTS_PER_WHO,
 } from './nomos/commands.js';
-import type { KeyDateRecord } from './nomos/planKeyDates.js';
+import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   createQuoteBook,
@@ -673,6 +673,7 @@ async function readKeyDateState(
     keyDates: KeyDateCommand[];
     selfWhoId: string | null;
     candidateWhoIds: string[];
+    momentWhoIds: string[];
   },
 ) {
   const index = await readIndexIn(transaction, firestore, base, key).catch(
@@ -688,6 +689,7 @@ async function readKeyDateState(
       index: null,
       existing: new Map<string, KeyDateRecord>(),
       kept: new Map<string, { id: string; record: KeyDateRecord }>(),
+      moments: new Map<string, { id: string; record: KeyDateRecord }[]>(),
       whoCounts: new Map<string, number>(),
       momentCounts: new Map<string, number>(),
     };
@@ -726,17 +728,19 @@ async function readKeyDateState(
           ...ids.map((id) => firestore.doc(`${base}/keyDates/${id}`)),
         )
       : [],
-    setKinds.includes('passedAway')
+    input.momentWhoIds.length > 0
       ? Promise.all(
-          candidates.map((whoId) =>
-            transaction.get(
-              firestore
-                .collection(`${base}/keyDates`)
-                .where('whoId', '==', whoId)
-                .where('shape', '==', 'moment')
-                .limit(MAX_MOMENTS_PER_WHO),
+          input.momentWhoIds
+            .slice(0, MAX_KEPT_READS)
+            .map((whoId) =>
+              transaction.get(
+                firestore
+                  .collection(`${base}/keyDates`)
+                  .where('whoId', '==', whoId)
+                  .where('shape', '==', 'moment')
+                  .limit(MAX_MOMENTS_PER_WHO),
+              ),
             ),
-          ),
         )
       : [],
   ]);
@@ -746,19 +750,28 @@ async function readKeyDateState(
       return opened ? [opened] : [];
     }),
   );
+  const storedMoments = momentSnaps
+    .flatMap((result) => result.docs)
+    .flatMap((snap) => {
+      const opened = openKeyDate(key, snap);
+      return opened ? [{ id: opened[0], record: opened[1] }] : [];
+    });
+  const moments = storedMoments.reduce(
+    (byWho, entry) =>
+      byWho.set(entry.record.whoId, [
+        ...(byWho.get(entry.record.whoId) ?? []),
+        entry,
+      ]),
+    new Map<string, { id: string; record: KeyDateRecord }[]>(),
+  );
   const kept = new Map(
     [
       ...[...existing.entries()].filter(
         ([, record]) => record.sealed.kind === 'birthday',
       ),
-      ...momentSnaps
-        .flatMap((result) => result.docs)
-        .flatMap((snap) => {
-          const opened = openKeyDate(key, snap);
-          return opened && opened[1].sealed.kind === 'passedAway'
-            ? [opened]
-            : [];
-        }),
+      ...storedMoments
+        .filter(({ record }) => record.sealed.kind === 'passedAway')
+        .map(({ id, record }): [string, KeyDateRecord] => [id, record]),
     ].map(([id, record]): [string, { id: string; record: KeyDateRecord }] => [
       `${record.whoId}:${record.sealed.kind}`,
       { id, record },
@@ -793,6 +806,7 @@ async function readKeyDateState(
     index,
     existing,
     kept,
+    moments,
     whoCounts: countsOf('yearlyDateCount'),
     momentCounts: countsOf('momentCount'),
   };
@@ -1160,6 +1174,28 @@ const toAskedCapture = (
         opened: words.sealed,
       }
     : null;
+};
+
+/** The key dates the open "which is true now?" questions of one capture ask about. */
+const openClashIdsOf = (asked: AskedCapture | null): string[] => {
+  const questions = asked?.opened.questions;
+  return !asked || typeof questions !== 'object' || questions === null
+    ? []
+    : Object.entries(questions).flatMap(([id, question]) => {
+        const held: unknown = (question as { heldCommands?: unknown })
+          .heldCommands;
+        const first: unknown = Array.isArray(held) ? held[0] : null;
+        const keyDateId =
+          typeof first === 'object' &&
+          first !== null &&
+          (first as { kind?: unknown }).kind === 'settleKeyDate'
+            ? (first as { keyDateId?: unknown }).keyDateId
+            : null;
+        return asked.questionState[id]?.answeredAt === null &&
+          typeof keyDateId === 'string'
+          ? [keyDateId]
+          : [];
+      });
 };
 
 async function sortClaimed(claimed: Claimed): Promise<SortResult> {
@@ -1656,6 +1692,11 @@ async function writeResult(
       ),
     ),
   ];
+  const isClashable = keyDates.some(
+    (command) =>
+      command.kind === 'setKeyDate' &&
+      (command.keyKind === 'birthday' || command.keyKind === 'passedAway'),
+  );
   const askedRef = answerTurn
     ? captureRef.parent.doc(answerTurn.ref.captureId)
     : null;
@@ -1674,7 +1715,7 @@ async function writeResult(
       transaction.get(captureRef),
       transaction.get(requestRef),
       askedRef ? transaction.get(askedRef) : Promise.resolve(null),
-      asks.length > 0
+      asks.length > 0 || isClashable
         ? transaction.get(
             captureRef.parent
               .where('status', '==', 'needsYou')
@@ -1777,6 +1818,23 @@ async function writeResult(
             keyDates,
             selfWhoId,
             candidateWhoIds: (people?.known ?? []).map((who) => who.id),
+            momentWhoIds: namedMomentWhoIds({
+              commands: keyDates,
+              whoIdOf: new Map(
+                people
+                  ? matchWho({
+                      mentions: people.mentions,
+                      known: people.known,
+                      assistantName: people.assistantName,
+                    }).flatMap((match, index): [string, string][] =>
+                      match.kind === 'match'
+                        ? [[people.mentions[index].ref, match.id]]
+                        : [],
+                    )
+                  : [],
+              ),
+              selfWhoId,
+            }),
           })
         : null;
     const joinedRefs = (ids: string[]) =>
@@ -1869,6 +1927,12 @@ async function writeResult(
       whoCounts: keyDateRead?.whoCounts,
       momentCounts: keyDateRead?.momentCounts,
       keptKeyDates: keyDateRead?.kept,
+      storedMoments: keyDateRead?.moments,
+      openClashIds: new Set(
+        (openAskedSnap?.docs ?? []).flatMap((doc) =>
+          openClashIdsOf(toAskedCapture(key, doc.data() as CaptureDoc)),
+        ),
+      ),
     });
     const plan = home
       ? {

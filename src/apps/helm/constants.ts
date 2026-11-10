@@ -1086,7 +1086,7 @@ export const HELM_COPY = {
   editGone: 'This page is gone.',
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
-      ? 'That fact changed since.'
+      ? 'That changed since.'
       : kind === 'whichPlace'
         ? 'That place was removed.'
         : 'That person was removed.',
@@ -1194,15 +1194,17 @@ export const HELM_COPY = {
   momentKindPassedAway: 'Passed away',
   momentsHeading: 'Moments',
   momentAdd: 'Add a moment',
-  momentSeeAll: (count: number) => `See all ${count}`,
+  momentSeeAll: (count: number) => `See all ${count} moments`,
   momentsScreenTitle: (name: string) => `${name}'s moments`,
-  momentsEmpty: (name: string) =>
-    `No moments yet. Tell ${name} when something happened, or add one.`,
+  momentsEmpty: (assistant: string) =>
+    `No moments yet. Tell ${assistant} when something happened, or add one.`,
   momentsLoading: 'Opening moments',
   momentsFailed: "The moments didn't open. Close this page and open it again.",
   momentDecade: (decade: string) => `Sometime in ${decade}`,
   momentNewTitle: 'Add a moment',
-  momentEditTitle: (title: string) => `Edit ${title}`,
+  momentEditTitle: 'Edit moment',
+  momentAddSave: 'Add moment',
+  momentOnce: "Happened once. It won't show on Today.",
   momentAdded: (title: string) => `Added ${title}`,
   momentRemoved: (title: string) => `Removed ${title}`,
   momentPrecisionLabel: 'How well do you know when?',
@@ -1210,12 +1212,15 @@ export const HELM_COPY = {
   momentPrecisionMonth: 'Month',
   momentPrecisionYear: 'Year',
   momentPrecisionDecade: 'Decade',
+  momentPrecisionHelpDay: 'The exact day',
+  momentPrecisionHelpMonth: 'Just the month and year',
+  momentPrecisionHelpYear: 'Just the year',
+  momentPrecisionHelpDecade: 'Just the decade',
   momentDecadeLabel: 'Decade',
   momentYearNeeded: 'Add the year.',
   momentMonthNeeded: 'Pick the month.',
   momentFull: (name: string) =>
     `${name} has ${HELM_CAPS.momentsPerWho} moments, the most that are kept.`,
-  momentOneTime: 'One time',
   keyDateYearUnknown: 'Year not known',
   keyDateAddYear: 'Add year',
   keyDateDayUnknown: 'Day not known, so not on Today',
@@ -1231,6 +1236,9 @@ export const HELM_COPY = {
   keyDateSheetRemove: 'Remove',
   keyDateEditTitle: (title: string) =>
     `Edit ${title.replace(/^Your /, 'your ')}`,
+  keyDateEditUnknown: 'Edit date',
+  keyDateReadFailed: "Couldn't open this date just now.",
+  keyDateWhichIsRight: 'Which date is right? Change it here.',
   keyDateGoneMeanwhile: 'This date changed meanwhile and is no longer here.',
   keyDateClose: 'Close',
   keyDateNoDayHint: "Without a day it won't show on Today.",

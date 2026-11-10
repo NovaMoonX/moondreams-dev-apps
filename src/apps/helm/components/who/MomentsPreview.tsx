@@ -7,6 +7,7 @@ import SectionDivider from '@/components/SectionDivider';
 import KeyDateSheet from '@apps/helm/components/who/KeyDateSheet';
 import MomentsScreen from '@apps/helm/components/who/MomentsScreen';
 import { HELM_COPY, MOMENTS_PREVIEW } from '@apps/helm/constants';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useMoments } from '@apps/helm/hooks/useKeyDates';
 import type { OpenWho } from '@apps/helm/types';
 import { formatMomentRow } from '@apps/helm/utils/keyDateText';
@@ -17,6 +18,7 @@ interface MomentsPreviewProps {
 
 /** A who's newest moments, "See all N" from the count the who already carries, and "Add a moment" in the header. The moments are read while this page is open. */
 function MomentsPreview({ who }: MomentsPreviewProps) {
+  const assistant = useAssistantName();
   const { moments, isLoaded, hasFailed } = useMoments(who.id);
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -43,7 +45,7 @@ function MomentsPreview({ who }: MomentsPreviewProps) {
         isLoaded &&
         who.momentCount === 0 && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
-            {HELM_COPY.momentsEmpty(who.name)}
+            {HELM_COPY.momentsEmpty(assistant)}
           </p>
         )
       ) : (
@@ -77,10 +79,16 @@ function MomentsPreview({ who }: MomentsPreviewProps) {
         <Button
           type='button'
           variant='tertiary'
-          size='sm'
+          className='helm-card flex h-auto min-h-10 w-full min-w-0 items-center justify-between gap-3 px-4 py-2.5 text-left'
           onClick={() => setIsAll(true)}
         >
-          {HELM_COPY.momentSeeAll(who.momentCount)}
+          <span className='text-foreground min-w-0 flex-1 text-[15px]'>
+            {HELM_COPY.momentSeeAll(who.momentCount)}
+          </span>
+          <ChevronRight
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
         </Button>
       )}
       {isAll && (

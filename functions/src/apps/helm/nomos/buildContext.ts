@@ -147,7 +147,8 @@ export function buildContext(input: ContextInput): {
       isUrgent: reading.isUrgent,
       dates: reading.dates.map((span) => ({
         ...toTokenView(span),
-        due: describeDue(span.due),
+        due: span.precision ? null : describeDue(span.due),
+        precision: span.precision,
       })),
     })}</reading>`,
     `<open_tasks>${toDataJson(tasks)}</open_tasks>`,

@@ -177,6 +177,10 @@ interface PlanInput {
   momentCounts?: Map<string, number>;
   /** The birthday or passed-away date each who keeps, by `whoId:kind`. */
   keptKeyDates?: Map<string, { id: string; record: KeyDateRecord }>;
+  /** The moments each named who keeps. */
+  storedMoments?: Map<string, { id: string; record: KeyDateRecord }[]>;
+  /** The key dates an open "which is true now?" question already asks about. */
+  openClashIds?: Set<string>;
 }
 
 interface Draft {
@@ -854,6 +858,8 @@ export function planWrites(input: PlanInput): WritePlan {
     ]),
     existing: input.existingKeyDates ?? new Map(),
     kept: input.keptKeyDates ?? new Map(),
+    moments: input.storedMoments,
+    openClashIds: input.openClashIds,
     timeZone: zone,
     questionRoom: Math.max(0, MAX_PICK_QUESTIONS - factSteps.disputes.length),
     index: input.keyDateIndex?.byWho ?? {},

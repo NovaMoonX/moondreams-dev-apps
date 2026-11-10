@@ -64,6 +64,7 @@ export function checkMomentParts(
   if (!Number.isInteger(year) || year < 1900 || year > thisYear) {
     return 'badYear';
   }
+  if (precision === 'decade' && year % 10 !== 0) return 'badYear';
   const hasMonth = precision === 'month' || precision === 'day';
   if (hasMonth !== (month !== null)) return 'badDay';
   if (month !== null && (!Number.isInteger(month) || month < 1 || month > 12)) {

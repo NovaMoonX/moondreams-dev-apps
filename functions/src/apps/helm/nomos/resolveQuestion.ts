@@ -95,7 +95,7 @@ export interface ResolveInput {
   seal: (fields: Record<string, unknown>) => SealedPayload;
 }
 
-export type ResolveRefusal = 'answered' | 'unknown' | 'gone';
+export type ResolveRefusal = 'answered' | 'unknown' | 'gone' | 'changed';
 
 export interface ResolvePlan {
   taskUpdates: { id: string; data: Record<string, unknown> }[];
@@ -474,6 +474,14 @@ function planSettleKeyDate(
   const { record } = target;
   const heldParts = isRecord(held.parts) ? held.parts : null;
   const num = (value: unknown) => (typeof value === 'number' ? value : null);
+  const keptParts = isRecord(held.keptParts) ? held.keptParts : null;
+  const hasKeptChanged =
+    keptParts !== null &&
+    (num(keptParts.month) !== record.sealed.month ||
+      num(keptParts.day) !== record.sealed.day ||
+      num(keptParts.year) !== record.sealed.year ||
+      (keptParts.precision ?? null) !== (record.sealed.precision ?? null));
+  if (hasKeptChanged) return { refused: 'changed' };
   const precision =
     KEY_DATE_PRECISIONS.find((entry) => entry === heldParts?.precision) ?? null;
   const next = {

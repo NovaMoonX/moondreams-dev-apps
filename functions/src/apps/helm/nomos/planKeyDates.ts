@@ -76,6 +76,28 @@ export interface KeyDateRecord {
 
 export type KeyDateRefusal = 'monthAlone' | 'badDay' | 'badYear' | 'needsLabel';
 
+/** The people the turn's moment commands name: the only ones whose stored moments the turn reads. */
+export function namedMomentWhoIds(input: {
+  commands: KeyDateCommand[];
+  whoIdOf: Map<string, string>;
+  selfWhoId: string | null;
+}): string[] {
+  return [
+    ...new Set(
+      input.commands.flatMap((command) => {
+        if (command.kind !== 'setKeyDate' || command.keyDateId) return [];
+        const isMoment =
+          isMomentKind(command.keyKind) ||
+          (command.keyKind === 'custom' && command.comesBack === false);
+        const whoId =
+          input.whoIdOf.get(command.whoRefs[0] ?? '') ??
+          (command.isAboutMe ? input.selfWhoId : null);
+        return isMoment && whoId ? [whoId] : [];
+      }),
+    ),
+  ];
+}
+
 const DAYS_IN_MONTH = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 const isLeapYear = (year: number) =>
@@ -120,6 +142,7 @@ export function checkMomentParts(
   if (!Number.isInteger(year) || year < 1900 || year > thisYear) {
     return 'badYear';
   }
+  if (precision === 'decade' && year % 10 !== 0) return 'badYear';
   const hasMonth = precision === 'month' || precision === 'day';
   if (hasMonth !== (month !== null)) return 'badDay';
   if (month !== null && (!Number.isInteger(month) || month < 1 || month > 12)) {
@@ -213,6 +236,8 @@ export interface KeyDatePlan {
   momentDeltas: Map<string, number>;
   /** A "which is true now?" question for each date the turn did not write because it clashes with one kept. */
   questions: { id: string; sealed: Record<string, unknown>; spoken: string }[];
+  /** The key dates a question of this turn asks about, so the same clash is asked once. */
+  askedKeyDateIds: string[];
   /** The moments this turn made, by who and kind (and what it was), so one said twice is made once. */
   made: Map<string, { id: string; parts: MomentParts }>;
   /** One line for each date the turn did not write. */
@@ -234,6 +259,10 @@ interface PlanInput {
   existing: Map<string, KeyDateRecord>;
   /** The birthday or passed-away date a who keeps now, by `whoId:kind`. */
   kept: Map<string, { id: string; record: KeyDateRecord }>;
+  /** The moments each named who keeps. */
+  moments?: Map<string, { id: string; record: KeyDateRecord }[]>;
+  /** The key dates an open "which is true now?" question already asks about. */
+  openClashIds?: Set<string>;
   timeZone: string;
   /** How many more questions the turn can ask. */
   questionRoom: number;
@@ -259,6 +288,7 @@ const empty = (input: PlanInput): KeyDatePlan => ({
   deltas: new Map(),
   momentDeltas: new Map(),
   questions: [],
+  askedKeyDateIds: [],
   made: new Map(),
   notKept: [],
   linkedWhoIds: [],
@@ -334,9 +364,21 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
         year: number | null;
         precision: MomentPrecision | null;
       };
+      keptParts: {
+        month: number | null;
+        day: number | null;
+        year: number | null;
+        precision: MomentPrecision | null;
+      };
     },
   ): KeyDatePlan => {
     const noun = nounOf(clash.owner, clash.kind, clash.label);
+    if (
+      plan.askedKeyDateIds.includes(clash.keyDateId) ||
+      input.openClashIds?.has(clash.keyDateId)
+    ) {
+      return plan;
+    }
     if (plan.questions.length >= input.questionRoom) {
       return skipWith(plan, `${noun} is already ${clash.kept.when}`);
     }
@@ -353,9 +395,11 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
         detail: `You said · ${dayOf(input.now)}`,
       },
       parts: clash.parts,
+      keptParts: clash.keptParts,
     });
     return {
       ...plan,
+      askedKeyDateIds: [...plan.askedKeyDateIds, clash.keyDateId],
       questions: [
         ...plan.questions,
         {
@@ -414,6 +458,17 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
         ? skip(`${noun} is already ${momentWhenOf(madeBefore.parts)}`)
         : plan;
     }
+    const isStored = (input.moments?.get(whoId) ?? []).some(
+      ({ record }) =>
+        record.sealed.kind === parts.kind &&
+        (record.sealed.label ?? '').toLowerCase() ===
+          (label ?? '').toLowerCase() &&
+        record.sealed.precision === parts.precision &&
+        record.sealed.year === parts.year &&
+        record.sealed.month === parts.month &&
+        record.sealed.day === parts.day,
+    );
+    if (isStored) return plan;
     const keptRecord =
       parts.kind === 'passedAway'
         ? input.kept.get(`${whoId}:passedAway`)
@@ -436,6 +491,7 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
           kept: { when: momentWhenOf(before), record: keptRecord.record },
           next: { when },
           parts,
+          keptParts: before,
         });
       }
       const next = { ...parts, captureId: before.captureId };
@@ -700,10 +756,11 @@ export function planKeyDates(input: PlanInput): KeyDatePlan {
           keyDateId: id,
           kept: {
             when: whenOf(toPartsOfEntry(sameThing[0])),
-            record: input.kept.get(`${whoId}:birthday`)?.record,
+            record: input.existing.get(id),
           },
           next: { when: whenOf(parts) },
           parts: { ...parts, precision: null },
+          keptParts: { month, day, year, precision: null },
         });
       }
       if (year !== null || parts.year === null) return plan;

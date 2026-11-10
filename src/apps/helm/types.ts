@@ -1,3 +1,4 @@
+import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
 
@@ -426,8 +427,7 @@ export type KeyDateKind =
 
 export type KeyDateShape = 'yearly' | 'moment';
 
-/** How exactly a moment is known: its day, month, year, or only its decade (stored as the decade's first year). */
-export type MomentPrecision = 'day' | 'month' | 'year' | 'decade';
+export type { MomentPrecision } from '@/utils/yearlyDateUtils';
 
 /** `apps/helm/users/{uid}/keyDates/{id}`: only `whoId` and `shape` are readable; the date itself is sealed. */
 export interface KeyDate {

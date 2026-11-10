@@ -13,6 +13,7 @@ import {
 } from '../../functions/src/apps/helm/keyDateIndex.ts';
 import type { SetKeyDateCommand } from '../../functions/src/apps/helm/nomos/commands.ts';
 import {
+  namedMomentWhoIds,
   planKeyDates,
   type KeyDateRecord,
 } from '../../functions/src/apps/helm/nomos/planKeyDates.ts';
@@ -76,6 +77,8 @@ const plan = (
     counts?: Map<string, number>;
     momentCounts?: Map<string, number>;
     kept?: Map<string, { id: string; record: KeyDateRecord }>;
+    moments?: Map<string, { id: string; record: KeyDateRecord }[]>;
+    openClashIds?: Set<string>;
     questionRoom?: number;
   } = {},
 ) => {
@@ -88,6 +91,8 @@ const plan = (
     whoCounts: state.counts ?? new Map(),
     momentCounts: state.momentCounts ?? new Map(),
     kept: state.kept ?? new Map(),
+    moments: state.moments,
+    openClashIds: state.openClashIds,
     timeZone: 'UTC',
     questionRoom: state.questionRoom ?? 3,
     existing: state.existing ?? new Map(),
@@ -530,6 +535,7 @@ test('a moment needs its precision parts and a year in range; custom with comesB
   refused(momentSay('day', { month: 3, day: null, year: 2015 }));
   refused(momentSay('year', { month: null, day: null, year: 1800 }));
   refused(momentSay('year', { month: null, day: null, year: THIS_YEAR + 1 }));
+  refused(momentSay('decade', { month: null, day: null, year: 1985 }));
   const custom = plan([
     momentSay(
       'decade',
@@ -704,6 +710,7 @@ const settleInput = (
   optionId: string,
   record: ReturnType<typeof keptRecord>['record'] | null,
   parts: Record<string, unknown>,
+  keptParts?: Record<string, unknown>,
 ) => {
   const questions = plan([say({ date: { month: 6, day: 4, year: null } })], {
     index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
@@ -729,6 +736,7 @@ const settleInput = (
         keyDateId: 'd0',
         whoId: 'who-1',
         parts,
+        ...(keptParts ? { keptParts } : {}),
       },
     ],
   };
@@ -817,6 +825,161 @@ test('a date removed since the question was asked is refused as gone', () => {
   assert.equal(
     planResolve(settleInput('incoming', null, NEW_PARTS)).refused,
     'gone',
+  );
+});
+
+test('a kept date that changed since the question was asked is refused, and a held question without its parts is not compared', () => {
+  const asked = { month: 6, day: 3, year: null, precision: null };
+  assert.equal(
+    planResolve(settleInput('incoming', birthdayRecord, NEW_PARTS, asked))
+      .refused,
+    null,
+  );
+  assert.equal(
+    planResolve(
+      settleInput('incoming', birthdayRecord, NEW_PARTS, { ...asked, day: 2 }),
+    ).refused,
+    'changed',
+  );
+  assert.equal(
+    planResolve(
+      settleInput('incoming', birthdayRecord, NEW_PARTS, {
+        ...asked,
+        year: 1960,
+      }),
+    ).refused,
+    'changed',
+  );
+  assert.equal(
+    planResolve(settleInput('incoming', birthdayRecord, NEW_PARTS)).refused,
+    null,
+  );
+});
+
+test('the question holds the kept date as it was asked', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const result = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] },
+    existing: new Map([['d0', kept.record]]),
+  });
+  const held = (
+    result.questions[0].sealed as { heldCommands: { keptParts: unknown }[] }
+  ).heldCommands[0];
+  assert.deepEqual(held.keptParts, {
+    month: 6,
+    day: 3,
+    year: null,
+    precision: null,
+  });
+});
+
+test('the same clash said twice in a turn asks once, and a key date with an open question asks nothing new', () => {
+  const kept = keptRecord(
+    'd0',
+    'birthday',
+    { month: 6, day: 3, year: null },
+    null,
+  );
+  const state = {
+    index: { 'who-1': [['d0', 'birthday', 6, 3, null, null]] } as ByWho,
+    existing: new Map([['d0', kept.record]]),
+  };
+  const twice = plan(
+    [
+      say({ date: { month: 6, day: 4, year: null } }),
+      say({ date: { month: 6, day: 5, year: null } }),
+    ],
+    state,
+  );
+  assert.equal(twice.questions.length, 1);
+  assert.equal(twice.notKept.length, 0);
+  const open = plan([say({ date: { month: 6, day: 4, year: null } })], {
+    ...state,
+    openClashIds: new Set(['d0']),
+  });
+  assert.equal(open.questions.length, 0);
+  assert.equal(open.notKept.length, 0);
+  assert.equal(open.creates.length + open.updates.length, 0);
+});
+
+test('a moment said again in a later turn is not written twice', () => {
+  const stored = keptRecord(
+    'm0',
+    'passedAway',
+    { month: null, day: null, year: 2016 },
+    null,
+  );
+  const met = {
+    id: 'm1',
+    record: {
+      ...stored.record,
+      sealed: {
+        ...stored.record.sealed,
+        kind: 'met' as const,
+        month: 3,
+        year: 2015,
+        precision: 'month' as never,
+      },
+    },
+  };
+  const moments = new Map([['who-1', [met]]]);
+  const again = plan(
+    [momentSay('month', { month: 3, day: null, year: 2015 })],
+    {
+      moments,
+    },
+  );
+  assert.equal(again.creates.length, 0);
+  assert.equal(again.updates.length, 0);
+  assert.equal(again.momentDeltas.size, 0);
+  assert.equal(again.notKept.length, 0);
+  const other = plan(
+    [momentSay('month', { month: 4, day: null, year: 2015 })],
+    {
+      moments,
+    },
+  );
+  assert.equal(other.creates.length, 1);
+});
+
+test('the moments read are those of the people the turn names', () => {
+  const whoIdOf = new Map([
+    ['w1', 'who-1'],
+    ['w2', 'who-2'],
+  ]);
+  assert.deepEqual(
+    namedMomentWhoIds({
+      commands: [
+        momentSay('year', { month: null, day: null, year: 2001 }),
+        momentSay(
+          'year',
+          { month: null, day: null, year: 2002 },
+          { whoRefs: ['w2'], keyKind: 'passedAway' },
+        ),
+        momentSay(
+          'year',
+          { month: null, day: null, year: 2003 },
+          { whoRefs: [], isAboutMe: true },
+        ),
+        say({ date: { month: 6, day: 3, year: null } }),
+      ],
+      whoIdOf,
+      selfWhoId: 'self',
+    }),
+    ['who-1', 'who-2', 'self'],
+  );
+  assert.deepEqual(
+    namedMomentWhoIds({
+      commands: [say({ date: { month: 6, day: 3, year: null } })],
+      whoIdOf,
+      selfWhoId: 'self',
+    }),
+    [],
   );
 });
 

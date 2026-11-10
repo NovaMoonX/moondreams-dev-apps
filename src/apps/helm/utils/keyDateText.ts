@@ -35,7 +35,18 @@ export const toKeyDateTitleWord = (kind: KeyDateKind, label: string | null) =>
       ? HELM_COPY.keyDateKindAnniversary
       : (MOMENT_WORDS[kind] ?? (label?.trim() || HELM_COPY.keyDateKindCustom));
 
-/** A moment's row: "Met · Mar 2015", "Lived in Lisbon · the 1980s". */
+/** A moment's date as the person reads it: its parts, or "Sometime in the 1980s" for a decade. */
+export const describeMomentWhen = (entry: {
+  precision: MomentPrecision;
+  month: number | null;
+  day: number | null;
+  year: number;
+}) =>
+  entry.precision === 'decade'
+    ? HELM_COPY.momentDecade(formatMoment(entry))
+    : formatMoment(entry);
+
+/** A moment's row: "Met · Mar 2015", "Lived in Lisbon · Sometime in the 1980s". */
 export const formatMomentRow = (entry: {
   kind: KeyDateKind;
   label: string | null;
@@ -43,7 +54,8 @@ export const formatMomentRow = (entry: {
   month: number | null;
   day: number | null;
   year: number;
-}) => `${toKeyDateTitleWord(entry.kind, entry.label)} · ${formatMoment(entry)}`;
+}) =>
+  `${toKeyDateTitleWord(entry.kind, entry.label)} · ${describeMomentWhen(entry)}`;
 
 /** A moment's title: "Dana · Met", "You · Moved". */
 export const describeMoment = (input: {

@@ -6,8 +6,11 @@ import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   buildFactSource,
+  buildKeyDateClashQuestion,
   buildWhichIsTrueQuestion,
+  toKeyDateName,
 } from '../../functions/src/apps/helm/nomos/summaries.ts';
+import { formatYearlyDate } from '../../src/utils/yearlyDateUtils.ts';
 import {
   deriveSeedDataKey,
   keyCheckPath,
@@ -1499,6 +1502,21 @@ async function buildPeople(input: {
       ),
     },
     {
+      id: 'seed-who-grandpa',
+      who: toWho(
+        {
+          kind: 'person',
+          tier: 'regular',
+          tierSetBy: 'nomos',
+          isSelf: false,
+          createdBy: 'nomos',
+          lastMentionedAt: now - 3 * DAY_MS,
+        },
+        now - 3 * DAY_MS,
+        await seal(wordsOf('Grandpa Joe', { relation: 'grandfather' })),
+      ),
+    },
+    {
       id: 'seed-who-miso',
       who: toWho(
         {
@@ -2229,6 +2247,12 @@ async function buildPeople(input: {
       precision: 'year',
       year: 2019,
     }),
+    momentOf('seed-moment-grandpa-passed', 'seed-who-grandpa', {
+      kind: 'passedAway',
+      label: null,
+      precision: 'year',
+      year: 2016,
+    }),
     momentOf('seed-moment-patel-lisbon', 'seed-who-sam-patel', {
       kind: 'custom',
       label: 'Lived in Lisbon',
@@ -2318,6 +2342,61 @@ async function buildPeople(input: {
     lastEditedAt: now,
     sealed: await seal({ byWho }),
   };
+  const clashText = "Dana's birthday is June 4";
+  const clashAt = now - 20 * MINUTE_MS;
+  const clashQuestionId = 'seed-question-date-clash';
+  const clashKept = dayParts(2);
+  const clashDay = new Date(clashAt).toLocaleDateString('en-US', {
+    timeZone,
+    month: 'short',
+    day: 'numeric',
+  });
+  const clashHeading = `Dana's ${toKeyDateName('birthday', null)}`;
+  const clashCapture: Capture = {
+    ...capture,
+    sessionId: 'seed-alex-date-clash',
+    turnIndex: 0,
+    status: 'needsYou',
+    questionState: {
+      [clashQuestionId]: {
+        kind: 'whichIsTrue',
+        shape: 'pickOne',
+        askedAt: clashAt + SORT_DELAY_MS,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    seenAt: null,
+    whoIds: ['seed-who-dana'],
+    createdAt: clashAt,
+    sortedAt: clashAt + SORT_DELAY_MS,
+    sealed: await seal({
+      text: clashText,
+      reading: readCapture(clashText, {
+        now: clashAt,
+        timeZone,
+        assistantName: DEFAULT_ASSISTANT_NAME,
+      }),
+      answer: null,
+      questionAnswer: null,
+      questions: {
+        [clashQuestionId]: buildKeyDateClashQuestion({
+          whoId: 'seed-who-dana',
+          keyDateId: 'seed-date-dana-birthday',
+          kept: {
+            label: `${clashHeading} · ${formatYearlyDate({ ...clashKept, year: null })}`,
+            detail: 'You added this',
+          },
+          next: {
+            label: `${clashHeading} · ${formatYearlyDate({ month: 6, day: 4, year: null })}`,
+            detail: `You said · ${clashDay}`,
+          },
+          parts: { month: 6, day: 4, year: null, precision: null },
+          keptParts: { ...clashKept, year: null, precision: null },
+        }),
+      },
+    }),
+  };
   const withDates = (entry: { id: string; who: Who }) => ({
     ...entry,
     who: {
@@ -2378,6 +2457,7 @@ async function buildPeople(input: {
     },
     questionCapture: { id: 'seed-turn-question', capture: questionCapture },
     askedCapture: { id: 'seed-turn-asked', capture: askedCapture },
+    clashCapture: { id: 'seed-turn-date-clash', capture: clashCapture },
   };
 }
 
@@ -2861,6 +2941,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           person.collection('captures').doc(people.askedCapture.id),
           people.askedCapture.capture,
         );
+        batch.set(
+          person.collection('captures').doc(people.clashCapture.id),
+          people.clashCapture.capture,
+        );
       }
       const peopleCount = people
         ? people.who.length +
@@ -2870,7 +2954,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.facts.length +
           people.keyDates.length +
           1 +
-          6
+          7
         : 0;
       const backToBackCount =
         peopleCount +

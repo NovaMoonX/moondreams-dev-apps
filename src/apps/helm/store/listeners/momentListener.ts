@@ -32,7 +32,8 @@ async function openMoment(
     const sealed = await read<Partial<KeyDateSealed>>(data.sealed);
     const moment = toMoment(entry.id, data, sealed);
     return moment ? [moment] : [];
-  } catch {
+  } catch (error) {
+    console.error('Helm moment did not open', entry.id, error);
     return [];
   }
 }

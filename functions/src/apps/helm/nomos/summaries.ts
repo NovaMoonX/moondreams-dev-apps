@@ -430,6 +430,13 @@ export const buildMomentLine = (input: {
 /** The option id of the newly said date in a clash, apart from the 'new' a pick-one question keeps for making one. */
 export const KEY_DATE_INCOMING_ID = 'incoming';
 
+interface ClashParts {
+  month: number | null;
+  day: number | null;
+  year: number | null;
+  precision: string | null;
+}
+
 export interface KeyDateClashSide {
   label: string;
   detail: string;
@@ -441,12 +448,9 @@ export const buildKeyDateClashQuestion = (input: {
   keyDateId: string;
   kept: KeyDateClashSide;
   next: KeyDateClashSide;
-  parts: {
-    month: number | null;
-    day: number | null;
-    year: number | null;
-    precision: string | null;
-  };
+  parts: ClashParts;
+  /** The kept date as it was when asked, so an answer after it changed is refused. */
+  keptParts: ClashParts;
 }) => ({
   kind: 'whichIsTrue' as const,
   builtBy: 'code' as const,
@@ -483,6 +487,7 @@ export const buildKeyDateClashQuestion = (input: {
       keyDateId: input.keyDateId,
       whoId: input.whoId,
       parts: input.parts,
+      keptParts: input.keptParts,
     },
   ],
   aboutRef: { collection: 'who', id: input.whoId },

@@ -48,17 +48,21 @@ const toRefusal = (
     ? new HttpsError('already-exists', 'This was already answered.')
     : refusal === 'unknown'
       ? new HttpsError('invalid-argument', 'That answer is not valid.')
-      : new HttpsError(
-          'failed-precondition',
-          subject === 'fact'
-            ? 'That fact changed since.'
-            : subject === 'date'
-              ? 'That date was removed.'
-              : subject === 'place'
-                ? 'That place was removed.'
-                : 'That person was removed.',
-          { reason: 'gone' },
-        );
+      : refusal === 'changed'
+        ? new HttpsError('failed-precondition', 'That date changed since.', {
+            reason: 'gone',
+          })
+        : new HttpsError(
+            'failed-precondition',
+            subject === 'fact'
+              ? 'That fact changed since.'
+              : subject === 'date'
+                ? 'That date was removed.'
+                : subject === 'place'
+                  ? 'That place was removed.'
+                  : 'That person was removed.',
+            { reason: 'gone' },
+          );
 
 const isStringList = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');

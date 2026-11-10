@@ -7,6 +7,7 @@ import Subview from '@/components/Subview';
 import { formatMoment } from '@/utils/yearlyDateUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { OpenWho } from '@apps/helm/types';
+import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { toKeyDateTitleWord } from '@apps/helm/utils/keyDateText';
 import { groupMoments, type WhoMoment } from '@apps/helm/utils/moments';
 
@@ -22,6 +23,18 @@ interface MomentsScreenProps {
 
 const ROW_HEIGHT = 60;
 
+/** The month and day under a year's heading: "Jan 15", "Mar"; none for a moment known only to the year. */
+const rowDate = (moment: WhoMoment) =>
+  moment.month === null
+    ? null
+    : new Date(
+        Date.UTC(2000, moment.month - 1, moment.day ?? 1),
+      ).toLocaleDateString('en-US', {
+        month: 'short',
+        day: moment.precision === 'day' ? 'numeric' : undefined,
+        timeZone: 'UTC',
+      });
+
 function MomentRow({
   moment,
   onOpen,
@@ -29,7 +42,7 @@ function MomentRow({
   moment: WhoMoment;
   onOpen: (id: string) => void;
 }) {
-  const when = formatMoment(moment);
+  const when = rowDate(moment);
   return (
     <li>
       <Button
@@ -42,11 +55,11 @@ function MomentRow({
           <span className='text-foreground block text-[15px] leading-[21px] break-words'>
             {toKeyDateTitleWord(moment.kind, moment.label)}
           </span>
-          <span className='text-muted-foreground block text-[13px] break-words'>
-            {moment.precision === 'decade'
-              ? HELM_COPY.momentDecade(when)
-              : when}
-          </span>
+          {when && (
+            <span className='text-muted-foreground block text-[13px] break-words'>
+              {when}
+            </span>
+          )}
         </span>
         <ChevronRight
           className='text-muted-foreground size-4 shrink-0'
@@ -66,10 +79,13 @@ function MomentsScreen({
   onOpen,
   onClose,
 }: MomentsScreenProps) {
+  const assistant = useAssistantName();
   const groups = groupMoments(moments);
+  const isEmpty = isLoaded && moments.length === 0 && who.momentCount === 0;
   return (
     <Subview
       overlay
+      isTitleWrapped
       title={HELM_COPY.momentsScreenTitle(who.name)}
       onClose={onClose}
     >
@@ -78,14 +94,14 @@ function MomentsScreen({
           {HELM_COPY.momentsFailed}
         </p>
       )}
-      {!hasFailed && !isLoaded && (
+      {!hasFailed && !isEmpty && moments.length === 0 && (
         <p className='text-muted-foreground text-[15px]'>
           {HELM_COPY.momentsLoading}
         </p>
       )}
-      {isLoaded && moments.length === 0 && (
+      {isEmpty && (
         <p className='text-muted-foreground text-[15px] text-pretty'>
-          {HELM_COPY.momentsEmpty(who.name)}
+          {HELM_COPY.momentsEmpty(assistant)}
         </p>
       )}
       <div className='space-y-4'>
@@ -121,15 +137,27 @@ function MomentsScreen({
                   </div>
                 ))}
                 {group.sometime.length > 0 && (
-                  <ul className='helm-card divide-border divide-y overflow-hidden'>
-                    {group.sometime.map((moment) => (
-                      <MomentRow
-                        key={moment.id}
-                        moment={moment}
-                        onOpen={onOpen}
-                      />
-                    ))}
-                  </ul>
+                  <div className='space-y-1'>
+                    <h2 className='text-muted-foreground text-[13px] font-medium'>
+                      {HELM_COPY.momentDecade(
+                        formatMoment({
+                          precision: 'decade',
+                          month: null,
+                          day: null,
+                          year: group.decade,
+                        }),
+                      )}
+                    </h2>
+                    <ul className='helm-card divide-border divide-y overflow-hidden'>
+                      {group.sometime.map((moment) => (
+                        <MomentRow
+                          key={moment.id}
+                          moment={moment}
+                          onOpen={onOpen}
+                        />
+                      ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             </LazyMount>
