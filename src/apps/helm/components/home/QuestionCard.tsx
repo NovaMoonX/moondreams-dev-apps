@@ -62,8 +62,8 @@ function QuestionCard({
 
   if (isSkipped && !isInSheet) {
     return (
-      <p className='text-muted-foreground pl-[30px] text-[13px] text-pretty'>
-        {HELM_COPY.questionSkipped}
+      <p className='text-muted-foreground self-start pl-[30px] text-[13px] text-pretty'>
+        {HELM_COPY.questionSkippedAbout(question.prompt)}
       </p>
     );
   }

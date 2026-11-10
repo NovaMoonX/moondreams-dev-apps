@@ -756,6 +756,8 @@ export const HELM_COPY = {
   questionNeedsConnection: 'Answering needs a connection.',
   questionSkip: 'Skip',
   questionSkipped: "Skipped. It's waiting in Needs you.",
+  questionSkippedAbout: (prompt: string) =>
+    `“${prompt}” is skipped and waiting in Needs you.`,
   questionAnswered: 'Done.',
   questionSheetTitle: 'Which one?',
   questionMore: (count: number) =>
