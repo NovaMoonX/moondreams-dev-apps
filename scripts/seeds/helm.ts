@@ -57,7 +57,7 @@ import {
 interface CopyDefinition {
   category: string;
   sourceRef: string;
-  kind: 'event' | 'task' | 'place' | 'project';
+  kind: 'event' | 'task' | 'place' | 'project' | 'pet';
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -1300,6 +1300,30 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     nineLivesConnectorId,
     SITE_ACCOUNT_ID,
   );
+  const nineLivesHouseholdRef = 'households/seed-nine-lives-other-household';
+  const nineLivesCopies: CopyDefinition[] = [
+    {
+      category: 'cats',
+      sourceRef: `${nineLivesHouseholdRef}/cats/seed-cat-other-household`,
+      kind: 'pet',
+      title: 'Pixel',
+      subtitle: null,
+      startAt: null,
+      dueAt: null,
+      deepLink: '/nine-lives',
+    },
+    {
+      category: 'dueCare',
+      sourceRef: `${nineLivesHouseholdRef}/preventives/seed-preventive-other-household`,
+      kind: 'task',
+      title: 'Pixel: Advantage Multi',
+      subtitle: 'Preventive due',
+      startAt: null,
+      isAllDay: true,
+      dueAt: context.now + 30 * DAY_MS,
+      deepLink: '/nine-lives',
+    },
+  ];
   const nineLivesGrant: ConnectionGrant = {
     readerAppId: 'helm',
     connectorId: nineLivesConnectorId,
@@ -1317,13 +1341,19 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       NINE_LIVES_SHARES.shares.flatMap((share) =>
         share.categories.map((category) => [
           category.id,
-          { lastOkAt: null, lastError: null, count: 0 },
+          {
+            lastOkAt: syncedAt,
+            lastError: null,
+            count: nineLivesCopies.filter(
+              (copy) => copy.category === category.id,
+            ).length,
+          },
         ]),
       ),
     ),
     errors: [],
     newCategoryIds: [],
-    lastSyncAt: null,
+    lastSyncAt: syncedAt,
     syncLeaseUntil: null,
     keptCopies: null,
     createdAt: connectedAt,
@@ -1338,6 +1368,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       .doc(nineLivesGrantId),
     nineLivesGrant,
   );
+  writeCopies(FIXTURE_USERS.partnerOne.uid, nineLivesCopies, null, {
+    connectorId: nineLivesConnectorId,
+    grantId: nineLivesGrantId,
+  });
 
   const googleConnectorId = 'google:calendar';
   const googleAccount: ConnectionAccount = {
@@ -1452,8 +1486,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       keptDefinitions.length +
       1 +
       aListCopies.length +
+      1 +
       goingOnceCopies.length +
-      2,
+      1 +
+      nineLivesCopies.length,
   };
   return result;
 }
