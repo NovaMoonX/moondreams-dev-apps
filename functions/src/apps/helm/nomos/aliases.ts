@@ -83,13 +83,13 @@ export interface QuoteBook {
   get: (alias: string) => QuoteEntry | null;
 }
 
-/** Aliases for the results of a live search: q1, q2, … One alias per message, however often it is found. */
+/** Aliases for the results of a live search: q1, q2, … One alias per message or passage, however often it is found. */
 export function createQuoteBook(): QuoteBook {
   const byAlias = new Map<string, QuoteEntry>();
   const byKey = new Map<string, string>();
   return {
     add: (entry) => {
-      const key = `${entry.connectorId}|${entry.accountId}|${entry.ref}`;
+      const key = `${entry.connectorId}|${entry.accountId}|${entry.ref}|${entry.snippet}`;
       const known = byKey.get(key);
       if (known) return known;
       const alias = `q${byAlias.size + 1}`;

@@ -19,6 +19,7 @@ import {
   isOutsideAccount,
   readConnectorAppId,
 } from '@/lib/connections/contract';
+import { GOOGLE_DRIVE_MANIFEST } from '@/lib/connections/google/driveManifest';
 import { GOOGLE_GMAIL_MANIFEST } from '@/lib/connections/google/gmailManifest';
 import { getConnectorManifest } from '@/lib/connections/sources';
 import { useConnectionAccounts } from '@/lib/connections/useConnectionAccounts';
@@ -50,6 +51,11 @@ interface ConnectionPageProps {
 const GMAIL_SCOPE =
   GOOGLE_GMAIL_MANIFEST.connect.kind === 'oauth'
     ? (GOOGLE_GMAIL_MANIFEST.connect.scopesByCategory.mail?.[0] ?? '')
+    : '';
+
+const DRIVE_SCOPE =
+  GOOGLE_DRIVE_MANIFEST.connect.kind === 'oauth'
+    ? (GOOGLE_DRIVE_MANIFEST.connect.scopesByCategory.documents?.[0] ?? '')
     : '';
 
 const without = <T,>(record: Record<string, T>, key: string) =>
@@ -90,6 +96,9 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const [isDisconnectOpen, setIsDisconnectOpen] = useState(false);
   const [isLabelOpen, setIsLabelOpen] = useState(false);
   const [isGmailDisconnectOpen, setIsGmailDisconnectOpen] = useState(false);
+  const [isDriveDisconnectOpen, setIsDriveDisconnectOpen] = useState(false);
+  const [isDriveWorking, setIsDriveWorking] = useState(false);
+  const [driveFailure, setDriveFailure] = useState<string | null>(null);
   const [isGmailWorking, setIsGmailWorking] = useState(false);
   const [gmailFailure, setGmailFailure] = useState<string | null>(null);
   const isGmailOpen = useIsGateOpen('helm', 'google-mail-and-drive');
@@ -119,10 +128,20 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
         entry.accountId === grant.accountId,
     ) ?? null;
   const gmailCategory = GOOGLE_GMAIL_MANIFEST.categories[0];
+  const isDriveGrant = grant.connectorId === 'google:drive';
+  const driveGrant =
+    grants.find(
+      (entry) =>
+        entry.connectorId === 'google:drive' &&
+        entry.accountId === grant.accountId,
+    ) ?? null;
+  const driveCategory = GOOGLE_DRIVE_MANIFEST.categories[0];
   const appName = isGoogle
     ? isGmailGrant
       ? HELM_COPY.googleGmailName
-      : HELM_COPY.googleCalendarName
+      : isDriveGrant
+        ? HELM_COPY.googleDriveName
+        : HELM_COPY.googleCalendarName
     : (apps.find((app) => app.id === appId)?.name ?? appId);
   const manifest = getConnectorManifest(grant.connectorId);
   const kinds = new Set(
@@ -139,6 +158,11 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
     !isGmailGrant &&
     !hasStopped &&
     (gmailGrant !== null || isGmailOpen);
+  const showsDriveRow =
+    isGoogle &&
+    !isDriveGrant &&
+    !hasStopped &&
+    (driveGrant !== null || isGmailOpen);
 
   const change = async (categoryId: string, isOn: boolean) => {
     setPending((current) => ({
@@ -191,6 +215,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
       setGmailFailure(HELM_COPY.gmailFailed);
     }
     setIsGmailWorking(false);
+  };
+
+  const turnDriveOn = async () => {
+    setDriveFailure(null);
+    if (!account?.grantedScopes.includes(DRIVE_SCOPE)) {
+      begin({ accountId: grant.accountId, connectorId: 'google:drive' });
+      return;
+    }
+    setIsDriveWorking(true);
+    try {
+      await grantConnection({
+        readerAppId: 'helm',
+        connectorId: 'google:drive',
+        accountId: grant.accountId,
+        categoryIds: ['documents'],
+        options: null,
+      });
+    } catch (error) {
+      console.error('Helm Drive was not connected', error);
+      setDriveFailure(HELM_COPY.driveFailed);
+    }
+    setIsDriveWorking(false);
   };
 
   const syncNow = async () => {
@@ -303,7 +349,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             onClick={() => setIsLabelOpen(true)}
             hasChevron
           />
-          {!hasStopped && !isGmailGrant && (
+          {!hasStopped && !isGmailGrant && !isDriveGrant && (
             <SettingsRow
               icon={<CalendarCheck className='size-5' aria-hidden='true' />}
               title={HELM_COPY.googleWhichCalendars}
@@ -410,6 +456,37 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               )}
             </li>
           )}
+          {showsDriveRow && (
+            <li className='flex flex-col gap-1 px-4 py-3'>
+              <label className='flex min-h-11 items-center gap-3'>
+                <span className='min-w-0 flex-1'>
+                  <span className='text-foreground block text-[15px]'>
+                    {HELM_COPY.driveRowTitle}
+                  </span>
+                  <span className='text-muted-foreground block text-[13px] text-pretty'>
+                    {driveCategory?.detail}
+                  </span>
+                </span>
+                {isOffline ? (
+                  locked
+                ) : (
+                  <AppToggle
+                    aria-label={HELM_COPY.driveRowTitle}
+                    checked={driveGrant !== null}
+                    disabled={isDriveWorking}
+                    onCheckedChange={(next) =>
+                      next ? void turnDriveOn() : setIsDriveDisconnectOpen(true)
+                    }
+                  />
+                )}
+              </label>
+              {driveFailure && (
+                <p className='text-destructive text-[13px]' role='alert'>
+                  {driveFailure}
+                </p>
+              )}
+            </li>
+          )}
         </ul>
         {!hasStopped && (
           <div className='flex items-center justify-between gap-3'>
@@ -484,7 +561,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
               }
             : null
         }
-        extraLine={isGmailGrant ? HELM_COPY.gmailDisconnectNote : null}
+        extraLine={
+          isGmailGrant
+            ? HELM_COPY.gmailDisconnectNote
+            : isDriveGrant
+              ? HELM_COPY.driveDisconnectNote
+              : null
+        }
         failureLine={(error) =>
           failureLine(error, appName, HELM_COPY.disconnectFailed)
         }
@@ -506,6 +589,28 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             failureLine(
               error,
               HELM_COPY.googleGmailName,
+              HELM_COPY.disconnectFailed,
+            )
+          }
+        />
+      )}
+      {driveGrant && (
+        <DisconnectSheet
+          isOpen={isDriveDisconnectOpen}
+          onClose={() => setIsDriveDisconnectOpen(false)}
+          grantId={driveGrant.id}
+          appName={HELM_COPY.googleDriveName}
+          count={0}
+          accountName={account?.email ?? null}
+          extraLine={HELM_COPY.driveDisconnectNote}
+          wording={{
+            title: HELM_COPY.driveStopTitle,
+            confirm: HELM_COPY.driveStopConfirm,
+          }}
+          failureLine={(error) =>
+            failureLine(
+              error,
+              HELM_COPY.googleDriveName,
               HELM_COPY.disconnectFailed,
             )
           }

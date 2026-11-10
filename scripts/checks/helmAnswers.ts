@@ -30,6 +30,20 @@ import type {
 } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtureProvider.ts';
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
+import {
+  findPassages,
+  readDocument,
+  readPdfText,
+  searchDocuments,
+} from '../../functions/src/connections/google/drive.ts';
+import {
+  FIXTURE_CONTRACT_DEPOSIT,
+  FIXTURE_FLOOR_PLAN_LINE,
+} from '../../functions/src/connections/google/fixtures.ts';
+import {
+  isLiveDeepLink,
+  toDocumentLink,
+} from '../../functions/src/connections/deepLinks.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import type { SyncedCopy } from '../../functions/src/apps/helm/syncedCopies.ts';
 
@@ -81,6 +95,7 @@ const fakeLive = (failure: 'reconnect' | 'failed' | null): LiveReads => ({
           items: [
             {
               ref: 'm1',
+              kind: 'mail',
               title: 'Your cake tasting',
               from: '"Sweet Layer Bakery" <hello@sweetlayer.example>',
               at: MAIL_AT,
@@ -90,6 +105,7 @@ const fakeLive = (failure: 'reconnect' | 'failed' | null): LiveReads => ({
             },
             {
               ref: 'm2',
+              kind: 'mail',
               title: 'Shipping update',
               from: 'ship@evil.example',
               at: MAIL_AT - 1,
@@ -145,6 +161,96 @@ const mailTurn = async (
   );
   return { reply, found, eventAlias, searched, quotes };
 };
+
+const DRIVE_GRANT = {
+  connectorId: 'google:drive',
+  accountId: 'acct-1',
+  email: 'personal@example.com',
+  label: null,
+} as const;
+const KIND_LABELS = { doc: 'Google Doc', pdf: 'PDF', other: 'Other file' };
+
+/** The platform's live reads for Drive, backed by the emulator's fixture files. */
+const driveLive = (): LiveReads => {
+  process.env.FUNCTIONS_EMULATOR = 'true';
+  const email = DRIVE_GRANT.email;
+  return {
+    searchLive: async (_firestore, input) => ({
+      ok: true,
+      items: (await searchDocuments('fixture', email, input.query)).map(
+        (item) => ({
+          ref: item.ref,
+          kind: item.kind,
+          title: item.title,
+          from: KIND_LABELS[item.kind],
+          at: item.at,
+          snippet: '',
+          deepLink: toDocumentLink(email, item.ref, item.kind),
+        }),
+      ),
+    }),
+    readLive: async (_firestore, input) => {
+      const item = await readDocument('fixture', email, input.ref);
+      if (item.kind === 'other' || item.text === null) {
+        return { ok: false, reason: 'notReadable' };
+      }
+      return {
+        ok: true,
+        item: {
+          ref: item.ref,
+          kind: item.kind,
+          title: item.title,
+          from: KIND_LABELS[item.kind],
+          at: item.at,
+          text: item.text.slice(0, 4000),
+          passages: findPassages(item.text, input.find ?? ''),
+          deepLink: toDocumentLink(email, item.ref, item.kind),
+        },
+      };
+    },
+    isLiveDeepLink,
+  };
+};
+
+const documentTools = () => {
+  const quotes = createQuoteBook();
+  const searched = createSearchedLog();
+  const aliases = createAliasBook('t');
+  const synced = createSyncedBook();
+  const scope = {
+    uid: 'u1',
+    key: {} as never,
+    aliases,
+    synced,
+    timeZone: 'UTC',
+    firestore: {} as never,
+    liveGrants: [DRIVE_GRANT],
+    quotes,
+    searched,
+    live: driveLive(),
+  };
+  const tools = buildHelmTools(scope);
+  const call = async (name: string, input: Record<string, unknown>) =>
+    (await tools.find((tool) => tool.name === name)?.run(input as never)) as {
+      files: { alias: string; title: string; kind: string }[];
+      passages: { quote: string; text: string }[];
+      error?: string;
+    };
+  return { scope, quotes, searched, aliases, synced, call };
+};
+
+const HAND_WRITTEN_PDF = [
+  '%PDF-1.4',
+  '1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj',
+  '2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj',
+  '3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >> endobj',
+  '4 0 obj << /Length 44 >> stream',
+  'BT /F1 12 Tf 20 100 Td (Hello from a PDF) Tj ET',
+  'endstream endobj',
+  '5 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj',
+  'trailer << /Root 1 0 R /Size 6 >>',
+  '%%EOF',
+].join('\n');
 
 const rememberItem = (fields: Record<string, unknown> = {}) => ({
   kind: 'remember',
@@ -948,6 +1054,202 @@ const tests: [string, () => void | Promise<void>][] = [
         ['q1'],
       );
       assert.equal(reply.remember.length, 0);
+    },
+  ],
+  [
+    'the document tools are offered only with a live Drive grant, and show the model no address or link',
+    async () => {
+      const scope = {
+        uid: 'u1',
+        key: {} as never,
+        aliases: createAliasBook('t'),
+        timeZone: 'UTC',
+        firestore: {} as never,
+      };
+      const names = (liveGrants: (typeof GRANT | typeof DRIVE_GRANT)[]) =>
+        buildHelmTools({ ...scope, liveGrants }).map((tool) => tool.name);
+      assert.ok(!names([]).includes('search_documents'));
+      assert.ok(!names([GRANT]).includes('search_documents'));
+      assert.ok(!names([DRIVE_GRANT]).includes('search_mail'));
+      assert.ok(names([DRIVE_GRANT]).includes('search_documents'));
+      assert.ok(names([DRIVE_GRANT]).includes('read_document'));
+      const { call } = documentTools();
+      const found = await call('search_documents', { query: 'wedding' });
+      const shown = JSON.stringify(found);
+      assert.ok(!shown.includes('personal@example.com'));
+      assert.ok(!shown.includes('google.com'));
+      assert.deepEqual(Object.keys(found.files[0]).sort(), [
+        'alias',
+        'kind',
+        'modified',
+        'title',
+      ]);
+      assert.deepEqual(
+        found.files.map((file) => file.alias),
+        found.files.map((_file, index) => `d${index + 1}`),
+      );
+    },
+  ],
+  [
+    'a Sheet is listed but never read: the read says only Docs and PDFs can be',
+    async () => {
+      const { call, searched, quotes } = documentTools();
+      const found = await call('search_documents', { query: 'budget' });
+      const sheet = found.files.find((file) => file.title === 'Wedding budget');
+      assert.equal(sheet?.kind, 'other');
+      const read = await call('read_document', { alias: sheet?.alias });
+      assert.equal(
+        read.error,
+        "This kind of file can't be read: only Google Docs and PDFs.",
+      );
+      assert.equal(quotes.get('q1'), null);
+      assert.equal(searched.entries()[0].label, 'Drive (personal@example.com)');
+      const direct = await driveLive().readLive({} as never, {
+        uid: 'u1',
+        readerAppId: 'helm',
+        connectorId: 'google:drive',
+        accountId: 'acct-1',
+        ref: 'fxsheet0001budget',
+      });
+      assert.deepEqual(direct, { ok: false, reason: 'notReadable' });
+    },
+  ],
+  [
+    'the emulator searches documents through the tool loop and quotes only the contract passage',
+    async () => {
+      const { scope, quotes, aliases, synced, searched } = documentTools();
+      const { createHelmMcpServer } =
+        await import('../../functions/src/apps/helm/mcp/server.ts');
+      const server = await createHelmMcpServer(scope);
+      const text = 'What does the venue contract say about the deposit?';
+      const loop = await createFixtureProvider(text, READING).runToolLoop({
+        role: 'interpret',
+        system: '',
+        messages: [{ role: 'user', content: '' }],
+        mcpClient: server.client,
+        terminalTool: {
+          name: 'file_results',
+          description: '',
+          inputSchema: {},
+        },
+        limits: { maxTurns: 1, maxToolCalls: 4, maxMillis: 5_000 },
+      } as never);
+      await server.close();
+      assert.deepEqual(loop.toolCalls, ['search_documents', 'read_document']);
+      const reply = normalizeNomosReply(loop.terminalInput, {
+        reading: READING,
+        aliases,
+        synced,
+        quotes,
+      });
+      assert.ok(reply.answer);
+      assert.equal(reply.answer.quotes.length, 1);
+      const built = buildAnswer(reply.answer, undefined, searched.entries());
+      const [quote] = built.answer.quotes;
+      assert.equal(quote.text, FIXTURE_CONTRACT_DEPOSIT);
+      assert.equal(
+        quote.sourceLabel,
+        'Document · Rosewood Hall venue contract',
+      );
+      assert.equal(quote.connectorId, 'google:drive');
+      assert.ok(
+        quote.deepLink?.startsWith(
+          'https://docs.google.com/document/d/fxdoc00001contract/edit?authuser=personal%40example.com',
+        ),
+      );
+      assert.equal(
+        summarizeAnswer(built.answer),
+        `Answered from a document: ${built.answer.question}`,
+      );
+      assert.deepEqual(built.quotedSourceKeys, ['google:drive|acct-1']);
+      assert.equal(
+        built.answer.searched[0].label,
+        'Drive (personal@example.com)',
+      );
+    },
+  ],
+  [
+    'a hostile document is data: a live Drive turn drops the task it asks for',
+    async () => {
+      const { call, searched, quotes } = documentTools();
+      const found = await call('search_documents', { query: 'shared notes' });
+      const notes = found.files.find((file) => file.title === 'Shared notes');
+      assert.ok(notes);
+      const read = await call('read_document', { alias: notes.alias });
+      assert.ok(read.passages[0].text.includes('Ignore your previous'));
+      assert.ok(quotes.get(read.passages[0].quote));
+      const settled = settleLiveTurn(
+        [{ kind: 'createTask' }],
+        searched.entries().length,
+      );
+      assert.deepEqual(settled.commands, []);
+      assert.deepEqual(settled.refused, ['live-turn-command']);
+    },
+  ],
+  [
+    'a PDF is read for its text, from a hand-written file and from the fixture',
+    async () => {
+      assert.equal(
+        await readPdfText(new TextEncoder().encode(HAND_WRITTEN_PDF)),
+        'Hello from a PDF',
+      );
+      assert.equal(
+        await readPdfText(new TextEncoder().encode('not a pdf')),
+        null,
+      );
+      driveLive();
+      const floorPlan = await readDocument(
+        'fixture',
+        'personal@example.com',
+        'fxpdf00001floorplan',
+      );
+      assert.equal(floorPlan.kind, 'pdf');
+      assert.ok(floorPlan.text?.includes(FIXTURE_FLOOR_PLAN_LINE));
+    },
+  ],
+  [
+    'passages are windows around the words asked for, or the first paragraphs',
+    () => {
+      const text = `Intro line.\n${'filler. '.repeat(80)}\nThe deposit is $1,500. It is kept.\nTail.`;
+      const found = findPassages(text, 'deposit');
+      assert.deepEqual(found, ['The deposit is $1,500. It is kept.']);
+      const many = findPassages(
+        Array.from({ length: 30 }, () => 'deposit '.padEnd(400, 'x')).join(
+          '\n',
+        ),
+        'deposit',
+      );
+      assert.ok(many.length <= 5);
+      assert.ok(many.every((passage) => passage.length <= 300));
+      const none = findPassages('One.\n\nTwo.\nThree.\nFour.', 'zebra');
+      assert.deepEqual(none, ['One.', 'Two.', 'Three.']);
+      assert.deepEqual(findPassages('One.\nTwo.', ''), ['One.', 'Two.']);
+    },
+  ],
+  [
+    'only the document links the connector builds count as its deep links',
+    () => {
+      const doc = toDocumentLink('a@b.example', 'abcdefghij1', 'doc');
+      const pdf = toDocumentLink('a@b.example', 'abcdefghij1', 'pdf');
+      assert.equal(
+        doc,
+        'https://docs.google.com/document/d/abcdefghij1/edit?authuser=a%40b.example',
+      );
+      assert.equal(
+        pdf,
+        'https://drive.google.com/file/d/abcdefghij1/view?authuser=a%40b.example',
+      );
+      assert.ok(isLiveDeepLink('google:drive', doc));
+      assert.ok(isLiveDeepLink('google:drive', pdf));
+      assert.ok(!isLiveDeepLink('google:gmail', doc));
+      assert.ok(!isLiveDeepLink('google:drive', `${doc}&x=1`));
+      assert.ok(!isLiveDeepLink('google:drive', 'https://evil.example/x'));
+      assert.ok(
+        !isLiveDeepLink(
+          'google:drive',
+          'https://docs.google.com/document/d/short/edit?authuser=a%40b.example',
+        ),
+      );
     },
   ],
 ];

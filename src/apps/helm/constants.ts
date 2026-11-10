@@ -391,6 +391,17 @@ export const HELM_COPY = {
   gmailDisconnectNote:
     'Answers that quoted this account keep their words, and the quotes from its email are blanked. What was noted from it stays.',
   gmailFailed: "Gmail didn't turn on. Try again.",
+  googleDriveName: 'Drive',
+  googleDriveTitle: 'Connect Drive',
+  googleDriveReconnectTitle: 'Reconnect Drive',
+  googleDriveReadOnly: (name: string) =>
+    `${name} searches your Drive only when a question needs it, and reads only Google Docs and PDFs. It keeps only what an answer quotes, and can't create, change, share or delete files.`,
+  driveRowTitle: 'Drive',
+  driveStopTitle: 'Stop reading Drive?',
+  driveStopConfirm: 'Stop reading Drive',
+  driveDisconnectNote:
+    'Answers that quoted this account keep their words, and the quotes from its documents are blanked. What was noted from it stays.',
+  driveFailed: "Drive didn't turn on. Try again.",
   googleReadOnly: (name: string) =>
     `${name} can read your events. It can't add, change or delete anything in Google Calendar.`,
   googleDisconnectNote: 'Google also forgets this access to the account.',
@@ -503,7 +514,9 @@ export const HELM_COPY = {
   quoteFrom: (label: string, day: string | null) =>
     day === null ? label : `${label} · ${day}`,
   quoteOpen: 'Open in Gmail',
+  quoteOpenDrive: 'Open in Drive',
   quoteDisconnected: 'This email was disconnected',
+  quoteDocumentDisconnected: 'This document was disconnected',
   searchedLine: (where: string, when: string) =>
     `Looked in ${where} ${when}. Only what this answer quotes is kept.`,
   searchedJustNow: 'just now',

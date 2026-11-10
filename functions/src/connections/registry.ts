@@ -15,6 +15,7 @@ import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
 import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
+import { createGoogleDriveAdapter } from './google/drive.js';
 import { createGoogleMailAdapter } from './google/gmail.js';
 import type { ReaderSink } from './sink.js';
 
@@ -69,6 +70,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:worth-the-wait': createWorthTheWaitAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),
   'google:gmail': createGoogleMailAdapter(),
+  'google:drive': createGoogleDriveAdapter(),
 };
 
 export const SOURCE_SECRETS: SecretParam[] = Array.from(
@@ -93,6 +95,10 @@ export const READER_APPS: Record<
   helm: {
     restrictedGates: {
       'google:gmail': {
+        gateId: 'google-mail-and-drive',
+        defaultRollout: 'testing',
+      },
+      'google:drive': {
         gateId: 'google-mail-and-drive',
         defaultRollout: 'testing',
       },

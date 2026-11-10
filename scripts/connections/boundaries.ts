@@ -57,6 +57,18 @@ interface Allowed extends Hit {
 /** Hits that exist today and are intended or not yet fixed; a hit not listed fails, and an entry that no longer matches fails too. */
 const ALLOWED: Allowed[] = [
   {
+    file: 'functions/src/connections/google/fixtures.ts',
+    kind: 'word',
+    match: 'budget',
+    why: "A fixture file's name, as a person would name a spreadsheet in their Drive.",
+  },
+  {
+    file: 'functions/src/connections/google/fixtures.ts',
+    kind: 'word',
+    match: 'box',
+    why: "The PDF format's own page-size key, in the fixture's hand-built file.",
+  },
+  {
     file: 'src/lib/connections/contract.ts',
     kind: 'word',
     match: 'trip',

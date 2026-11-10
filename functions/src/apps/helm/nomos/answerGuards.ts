@@ -152,7 +152,10 @@ export function buildAnswer(
     id: quoteIds[quote.alias],
     connectorId: quote.connectorId,
     accountId: quote.accountId,
-    sourceLabel: `Email from ${toSenderName(quote.from)}`,
+    sourceLabel:
+      quote.connectorId === 'google:drive'
+        ? `Document · ${quote.title}`
+        : `Email from ${toSenderName(quote.from)}`,
     at: quote.at,
     text: toQuoteText(quote.snippet),
     deepLink: quote.deepLink,
@@ -182,7 +185,7 @@ export function buildAnswer(
 export const summarizeAnswer = (answer: CaptureAnswer) => {
   if (answer.fromRecords !== null) {
     return answer.quotes.length > 0
-      ? `Answered from an email: ${answer.question}`
+      ? `Answered from ${answer.quotes.every((quote) => quote.connectorId === 'google:drive') ? 'a document' : 'an email'}: ${answer.question}`
       : `Answered: ${answer.question}`;
   }
   return answer.general !== null
@@ -190,7 +193,7 @@ export const summarizeAnswer = (answer: CaptureAnswer) => {
     : `No answer in your records: ${answer.question}`;
 };
 
-/** A turn that searched live mail writes only its answer and its fact; every other command is refused. */
+/** A turn that searched live mail or documents writes only its answer and its fact; every other command is refused. */
 export function settleLiveTurn<T>(commands: T[], searchedCount: number) {
   return searchedCount > 0
     ? { commands: [] as T[], refused: commands.map(() => 'live-turn-command') }

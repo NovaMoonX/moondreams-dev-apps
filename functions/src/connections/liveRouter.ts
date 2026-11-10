@@ -5,8 +5,16 @@ import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../gates/assertGateOpen.js';
 import { toGrantId, type ConnectorId } from '../vendor/connectionsContract.js';
-import { toMailLink, isLiveDeepLink } from './deepLinks.js';
+import { toDocumentLink, toMailLink, isLiveDeepLink } from './deepLinks.js';
 import { GoogleHttpError } from './google/client.js';
+import {
+  findPassages,
+  isDocumentRef,
+  readDocument,
+  searchDocuments,
+  type DocumentKind,
+} from './google/drive.js';
+import { GOOGLE_DRIVE_MANIFEST } from './google/driveManifest.js';
 import { isMailRef, readMail, searchMail } from './google/gmail.js';
 import { GOOGLE_GMAIL_MANIFEST } from './google/gmailManifest.js';
 import { readGrant } from './grants.js';
@@ -16,7 +24,7 @@ import { ReconnectNeeded, getGoogleAccessToken } from './tokens.js';
 export { isLiveDeepLink };
 
 export interface LiveGrant {
-  connectorId: 'google:gmail';
+  connectorId: 'google:gmail' | 'google:drive';
   accountId: string;
   email: string;
   label: string | null;
@@ -24,6 +32,7 @@ export interface LiveGrant {
 
 export interface LiveSearchItem {
   ref: string;
+  kind: 'mail' | DocumentKind;
   title: string;
   from: string;
   at: number;
@@ -33,16 +42,18 @@ export interface LiveSearchItem {
 
 export interface LiveReadItem {
   ref: string;
+  kind: 'mail' | 'doc' | 'pdf';
   title: string;
   from: string;
   at: number;
   text: string;
+  passages: string[];
   deepLink: string;
 }
 
 export type LiveFailure = {
   ok: false;
-  reason: 'reconnect' | 'notGranted' | 'failed';
+  reason: 'reconnect' | 'notGranted' | 'failed' | 'notReadable';
 };
 
 interface LiveInput {
@@ -52,10 +63,17 @@ interface LiveInput {
   accountId: string;
 }
 
-const LIVE_MANIFESTS = [GOOGLE_GMAIL_MANIFEST];
+const LIVE_MANIFESTS = [GOOGLE_GMAIL_MANIFEST, GOOGLE_DRIVE_MANIFEST];
 const CACHE_MS = 15 * 60_000;
 const MAX_CACHED = 200;
 const MAX_QUERY = 200;
+const MAX_FIND = 100;
+const MAX_READ_TEXT = 4000;
+const KIND_LABELS: Record<DocumentKind, string> = {
+  doc: 'Google Doc',
+  pdf: 'PDF',
+  other: 'Other file',
+};
 const NOT_GRANTED: LiveFailure = { ok: false, reason: 'notGranted' };
 
 const cache = new Map<string, { expiresAt: number; value: unknown }>();
@@ -131,7 +149,8 @@ export const listLiveGrants = async (
     const label = accounts[index].get('label');
     return typeof email === 'string' &&
       (status === 'live' || status === 'needsReconnect') &&
-      grant.connectorId === 'google:gmail'
+      (grant.connectorId === 'google:gmail' ||
+        grant.connectorId === 'google:drive')
       ? [
           {
             connectorId: grant.connectorId,
@@ -234,40 +253,77 @@ export const searchLive = async (
     input,
     'search',
     [query],
-    async (token, email) =>
-      (await searchMail(token, email, query)).map((item) => ({
-        ref: item.ref,
-        title: item.title,
-        from: item.from,
-        at: item.at,
-        snippet: item.snippet,
-        deepLink: toMailLink(email, item.ref),
-      })),
+    async (token, email): Promise<LiveSearchItem[]> =>
+      input.connectorId === 'google:drive'
+        ? (await searchDocuments(token, email, query)).map((item) => ({
+            ref: item.ref,
+            kind: item.kind,
+            title: item.title,
+            from: KIND_LABELS[item.kind],
+            at: item.at,
+            snippet: '',
+            deepLink: toDocumentLink(email, item.ref, item.kind),
+          }))
+        : (await searchMail(token, email, query)).map((item) => ({
+            ref: item.ref,
+            kind: 'mail',
+            title: item.title,
+            from: item.from,
+            at: item.at,
+            snippet: item.snippet,
+            deepLink: toMailLink(email, item.ref),
+          })),
   );
   return result.ok ? { ok: true, items: result.value } : result;
 };
 
+type ReadValue = LiveReadItem | 'notReadable';
+
+/** Reads one message or document; `find` picks the passages of a document and is ignored for mail. */
 export const readLive = async (
   firestore: Firestore,
-  input: LiveInput & { ref: string },
+  input: LiveInput & { ref: string; find?: string },
 ): Promise<{ ok: true; item: LiveReadItem } | LiveFailure> => {
-  if (!isMailRef(input.ref)) return { ok: false, reason: 'failed' };
+  const isDrive = input.connectorId === 'google:drive';
+  if (!(isDrive ? isDocumentRef(input.ref) : isMailRef(input.ref))) {
+    return { ok: false, reason: 'failed' };
+  }
+  const find = isDrive ? (input.find ?? '').trim().slice(0, MAX_FIND) : '';
   const result = await run(
     firestore,
     input,
     'read',
-    [input.ref],
-    async (token, email): Promise<LiveReadItem> => {
+    [input.ref, find],
+    async (token, email): Promise<ReadValue> => {
+      if (isDrive) {
+        const item = await readDocument(token, email, input.ref);
+        if (item.kind === 'other' || item.text === null) return 'notReadable';
+        return {
+          ref: item.ref,
+          kind: item.kind,
+          title: item.title,
+          from: KIND_LABELS[item.kind],
+          at: item.at,
+          text: item.text.slice(0, MAX_READ_TEXT),
+          passages: findPassages(item.text, find),
+          deepLink: toDocumentLink(email, item.ref, item.kind),
+        };
+      }
       const item = await readMail(token, email, input.ref);
       return {
         ref: item.ref,
+        kind: 'mail',
         title: item.title,
         from: item.from,
         at: item.at,
         text: item.text,
+        passages: [],
         deepLink: toMailLink(email, item.ref),
       };
     },
   );
-  return result.ok ? { ok: true, item: result.value } : result;
+  if (!result.ok) return result;
+  return result.value === 'notReadable'
+    ? { ok: false, reason: 'notReadable' }
+    : { ok: true, item: result.value };
 };

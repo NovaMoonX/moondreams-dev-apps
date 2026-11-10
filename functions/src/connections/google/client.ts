@@ -42,3 +42,23 @@ export async function googleGet<T>(
   });
   return toBody<T>(response.status, () => response.json());
 }
+
+/** Fetches a file's bytes: an export or a download, not JSON. */
+export async function googleGetBytes(
+  token: string,
+  url: string,
+  fixture: FixtureContext = { email: null },
+): Promise<Uint8Array> {
+  if (isFixtureToken(token)) {
+    const answer = answerFixture(url, fixture);
+    if (answer.status < 200 || answer.status > 299) {
+      throw new GoogleHttpError(answer.status);
+    }
+    return Buffer.from(answer.body as string | Uint8Array);
+  }
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) throw new GoogleHttpError(response.status);
+  return new Uint8Array(await response.arrayBuffer());
+}

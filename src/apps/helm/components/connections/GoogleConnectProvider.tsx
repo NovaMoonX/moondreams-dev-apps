@@ -47,6 +47,37 @@ interface Intro {
 
 const CONNECTOR_KEY = 'helm-google-connector';
 
+/** The category a restricted connector switches on at connect, the one its row in the account's page offers. */
+const toRestrictedCategory = (connectorId: string) =>
+  connectorId === 'google:gmail'
+    ? 'mail'
+    : connectorId === 'google:drive'
+      ? 'documents'
+      : null;
+
+const toReadOnlyLine = (connectorId: GoogleConnectorId, name: string) =>
+  connectorId === 'google:gmail'
+    ? HELM_COPY.googleGmailReadOnly(name)
+    : connectorId === 'google:drive'
+      ? HELM_COPY.googleDriveReadOnly(name)
+      : HELM_COPY.googleConnectReadOnly(name);
+
+const toIntroTitle = (connectorId: GoogleConnectorId, isReconnect: boolean) => {
+  if (connectorId === 'google:gmail') {
+    return isReconnect
+      ? HELM_COPY.googleGmailReconnectTitle
+      : HELM_COPY.googleGmailTitle;
+  }
+  if (connectorId === 'google:drive') {
+    return isReconnect
+      ? HELM_COPY.googleDriveReconnectTitle
+      : HELM_COPY.googleDriveTitle;
+  }
+  return isReconnect
+    ? HELM_COPY.googleReconnectTitle
+    : HELM_COPY.googleConnectTitle;
+};
+
 const keepConnector = (connectorId: GoogleConnectorId | null) => {
   try {
     if (connectorId === null) sessionStorage.removeItem(CONNECTOR_KEY);
@@ -58,8 +89,9 @@ const keepConnector = (connectorId: GoogleConnectorId | null) => {
 
 const readKeptConnector = (): GoogleConnectorId => {
   try {
-    return sessionStorage.getItem(CONNECTOR_KEY) === 'google:gmail'
-      ? 'google:gmail'
+    const kept = sessionStorage.getItem(CONNECTOR_KEY);
+    return kept === 'google:gmail' || kept === 'google:drive'
+      ? kept
       : 'google:calendar';
   } catch {
     return 'google:calendar';
@@ -141,9 +173,7 @@ function IntroForm({
         </p>
       )}
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {intro.connectorId === 'google:gmail'
-          ? HELM_COPY.googleGmailReadOnly(name)
-          : HELM_COPY.googleConnectReadOnly(name)}
+        {toReadOnlyLine(intro.connectorId, name)}
       </p>
       <p className='text-muted-foreground text-[13px] text-pretty'>
         {HELM_COPY.googleConnectTesting(name)}
@@ -242,16 +272,21 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
       addToast({ title: HELM_COPY.googleReconnected, type: 'success' });
       return;
     }
-    if (finished.connectorId === 'google:gmail') {
+    const restrictedCategory = toRestrictedCategory(finished.connectorId);
+    if (restrictedCategory) {
+      const isDrive = finished.connectorId === 'google:drive';
       grantConnection({
         readerAppId: 'helm',
-        connectorId: 'google:gmail',
+        connectorId: finished.connectorId,
         accountId: finished.accountId,
-        categoryIds: ['mail'],
+        categoryIds: [restrictedCategory],
         options: null,
       }).catch((error: unknown) => {
-        console.error('Helm Gmail was not connected', error);
-        addToast({ title: HELM_COPY.gmailFailed, type: 'error' });
+        console.error('Helm restricted connector was not connected', error);
+        addToast({
+          title: isDrive ? HELM_COPY.driveFailed : HELM_COPY.gmailFailed,
+          type: 'error',
+        });
       });
       return;
     }
@@ -311,13 +346,9 @@ function GoogleConnectProvider({ children }: { children: ReactNode }) {
         isOpen={intro !== null}
         onClose={() => setIntro(null)}
         title={
-          intro?.connectorId === 'google:gmail'
-            ? intro.accountId
-              ? HELM_COPY.googleGmailReconnectTitle
-              : HELM_COPY.googleGmailTitle
-            : intro?.accountId
-              ? HELM_COPY.googleReconnectTitle
-              : HELM_COPY.googleConnectTitle
+          intro
+            ? toIntroTitle(intro.connectorId, !!intro.accountId)
+            : HELM_COPY.googleConnectTitle
         }
       >
         {intro && (

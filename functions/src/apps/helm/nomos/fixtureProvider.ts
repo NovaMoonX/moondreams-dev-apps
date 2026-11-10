@@ -280,6 +280,52 @@ async function readMailAnswer(
   ];
 }
 
+const DOCUMENT_QUESTION_RE = /\b(contract|deposit|venue)\b/i;
+
+interface DocumentResult {
+  alias: string;
+  title: string;
+  kind: string;
+}
+
+/** The emulator's stand-in for a model that reaches for the document tools: searches, opens the one Google Doc or PDF the question names, looks for the deposit and files an answer quoting the passage by its alias. Null when documents are not offered or nothing fits. */
+async function readDocumentAnswer(
+  text: string,
+  client: ToolLoopRequest['mcpClient'] | undefined,
+  toolCalls: string[],
+) {
+  const question = text.trim();
+  if (!client || !DOCUMENT_QUESTION_RE.test(question)) return null;
+  const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
+  if (!offered.some((tool) => tool.name === 'search_documents')) return null;
+  const found = await callJson<{ files?: DocumentResult[] }>(
+    client,
+    toolCalls,
+    'search_documents',
+    { query: 'venue contract' },
+  );
+  const file = found?.files?.find(
+    (entry) => entry.kind === 'doc' && /contract/i.test(entry.title),
+  );
+  if (!file) return null;
+  const read = await callJson<{ passages?: { quote: string; text: string }[] }>(
+    client,
+    toolCalls,
+    'read_document',
+    { alias: file.alias, find: 'deposit' },
+  );
+  const passage = read?.passages?.find((entry) => /deposit/i.test(entry.text));
+  if (!passage) return null;
+  return [
+    toAnswer({
+      scope: 'yourThings',
+      question,
+      fromRecordsText: `The ${file.title} says the deposit is due 30 days before the event.`,
+      quoteAliases: [passage.quote],
+    }),
+  ];
+}
+
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
   const question = text.trim();
@@ -371,6 +417,19 @@ export function createFixtureProvider(
       if (mail) {
         return {
           terminalInput: { commands: mail },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls,
+        };
+      }
+      const document = mail
+        ? null
+        : await readDocumentAnswer(text, mcpClient, toolCalls);
+      if (document) {
+        return {
+          terminalInput: { commands: document },
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

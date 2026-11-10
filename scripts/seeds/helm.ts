@@ -92,6 +92,7 @@ const GOOGLE_PRIMARY_CALENDAR = 'personal@example.com';
 const GOOGLE_SHIFTS_CALENDAR = 'shifts-personal@group.calendar.google.com';
 const CALENDAR_READ_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+const DRIVE_READ_SCOPE = 'https://www.googleapis.com/auth/drive.readonly';
 const GOOGLE_CALENDAR_GRANT_ID = toGrantId(
   'helm',
   'google:calendar',
@@ -2027,7 +2028,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     provider: 'google',
     email: GOOGLE_PRIMARY_CALENDAR,
     label: null,
-    grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE],
+    grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE, DRIVE_READ_SCOPE],
     status: 'live',
     connectedAt,
     lastError: null,
@@ -2074,6 +2075,21 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       categories: { mail: { isOn: true, changedAt: connectedAt } },
       options: null,
       categoryState: { mail: { lastOkAt: null, lastError: null, count: 0 } },
+      lastSyncAt: null,
+    } satisfies ConnectionGrant,
+  );
+  batch.set(
+    alexConnections
+      .collection('grants')
+      .doc(toGrantId('helm', 'google:drive', GOOGLE_ACCOUNT_ID)),
+    {
+      ...googleGrant,
+      connectorId: 'google:drive',
+      categories: { documents: { isOn: true, changedAt: connectedAt } },
+      options: null,
+      categoryState: {
+        documents: { lastOkAt: null, lastError: null, count: 0 },
+      },
       lastSyncAt: null,
     } satisfies ConnectionGrant,
   );
@@ -2131,7 +2147,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           rollout: 'testing',
           alwaysOnUids: [FIXTURE_USERS.partnerOne.uid],
           alwaysOffUids: [],
-          reason: 'Seeded: Alex tests Gmail',
+          reason: 'Seeded: Alex tests Gmail and Drive',
           updatedAt: context.now,
         },
       },
@@ -2146,7 +2162,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       .doc(GOOGLE_ACCOUNT_ID),
     {
       isFixture: true,
-      grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE],
+      grantedScopes: [CALENDAR_READ_SCOPE, GMAIL_READ_SCOPE, DRIVE_READ_SCOPE],
       createdAt: connectedAt,
       lastRefreshedAt: null,
     },
@@ -2218,7 +2234,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       1 +
       waypointCopies.length +
       1 +
-      3,
+      4,
   };
   return result;
 }

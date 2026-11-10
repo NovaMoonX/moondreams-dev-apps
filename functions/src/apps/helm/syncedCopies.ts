@@ -37,6 +37,7 @@ const CONNECTOR_LABELS: Record<string, string> = {
   'app:worth-the-wait': 'Worth the Wait',
   'google:calendar': 'Google Calendar',
   'google:gmail': 'Gmail',
+  'google:drive': 'Google Drive',
 };
 
 /** The name a person knows a source by, never its id. */

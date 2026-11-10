@@ -11,12 +11,14 @@ const QUOTE_DAY = new Intl.DateTimeFormat('en-US', {
 /** The day with no-break spaces, so "Sun, Nov 8" never splits across lines. */
 const formatQuoteDay = (at: number) => QUOTE_DAY.format(at).replace(/ /g, ' ');
 
-/** One quote an answer kept from the person's mail: who it was from, the words, and the way to the email. */
+/** One quote an answer kept from the person's mail or documents: where it is from, the words, and the way to the original. */
 function QuoteLine({ quote }: { quote: AnswerQuote }) {
   if (quote.deletedAt !== null || quote.text === null) {
     return (
       <p className='text-muted-foreground py-2.5 text-[13px]'>
-        {HELM_COPY.quoteDisconnected}
+        {quote.connectorId === 'google:drive'
+          ? HELM_COPY.quoteDocumentDisconnected
+          : HELM_COPY.quoteDisconnected}
       </p>
     );
   }
@@ -35,7 +37,11 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
       {link && (
         <ExternalLinkText
           href={link}
-          label={HELM_COPY.quoteOpen}
+          label={
+            quote.connectorId === 'google:drive'
+              ? HELM_COPY.quoteOpenDrive
+              : HELM_COPY.quoteOpen
+          }
           className='relative text-[13px] after:absolute after:inset-x-0 after:-inset-y-3'
         />
       )}

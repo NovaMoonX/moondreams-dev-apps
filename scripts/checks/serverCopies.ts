@@ -76,6 +76,13 @@ const COPIES: Copy[] = [
       '@/lib/connections/contract': '../../vendor/connectionsContract.js',
     },
   },
+  {
+    src: 'src/lib/connections/google/driveManifest.ts',
+    dest: 'functions/src/connections/google/driveManifest.ts',
+    importRewrites: {
+      '@/lib/connections/contract': '../../vendor/connectionsContract.js',
+    },
+  },
 ];
 
 interface Generated {
