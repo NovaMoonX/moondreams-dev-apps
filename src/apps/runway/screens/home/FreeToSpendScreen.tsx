@@ -111,7 +111,7 @@ function FreeToSpendScreen({ onClose }: FreeToSpendScreenProps) {
       .reduce((sum, purchase) => sum - purchase.amountCents, 0);
     return cents === 0 ? null : formatCents(cents);
   };
-  // The tab's own history entry is written first, so the filter lands on it rather than on Home's; Money in splits by sign, so amounts show first.
+  // The tab's own history entry is written first, so the filter lands on it rather than on Home's; a hidden total opens to a list it can be checked against, so amounts show first.
   const openMoneyIn = async () => {
     if (isHidden) toggleHidden();
     await leaveViewForTab('spend');
