@@ -1163,7 +1163,8 @@ async function buildPlanDays(input: {
       {
         reasons: {
           'seed-slot-today-1': '15 min · due in 2 days',
-          'seed-slot-today-2': 'about 30 min · estimate · fits after Lunch with Sam',
+          'seed-slot-today-2':
+            'about 30 min · estimate · fits after Lunch with Sam',
         },
         calendarSnapshot: [],
       },
