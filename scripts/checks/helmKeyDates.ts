@@ -606,7 +606,7 @@ test('a different birthday writes nothing and asks which is true, holding the ne
   assert.equal(question.prompt, 'Which is true now?');
   assert.deepEqual(
     question.options.map((option) => option.id),
-    ['d0', 'new', 'none'],
+    ['d0', 'incoming', 'none'],
   );
   assert.equal(question.options[0].label, "Mum's birthday · June 3");
   assert.equal(question.options[1].label, "Mum's birthday · June 4");
@@ -778,7 +778,9 @@ const birthdayRecord = keptRecord(
 const NEW_PARTS = { month: 6, day: 4, year: null, precision: null };
 
 test('picking the new date rewrites the parts and the index entry, with an effect Undo reverses', () => {
-  const result = planResolve(settleInput('new', birthdayRecord, NEW_PARTS));
+  const result = planResolve(
+    settleInput('incoming', birthdayRecord, NEW_PARTS),
+  );
   assert.equal(result.refused, null);
   if (result.refused !== null) return;
   const { keyDateUpdate, execution } = result.plan;
@@ -813,7 +815,7 @@ test('picking the kept date, or Neither, writes nothing but answers the question
 
 test('a date removed since the question was asked is refused as gone', () => {
   assert.equal(
-    planResolve(settleInput('new', null, NEW_PARTS)).refused,
+    planResolve(settleInput('incoming', null, NEW_PARTS)).refused,
     'gone',
   );
 });
@@ -830,7 +832,7 @@ test('a moment settled to a new date keeps its shape and leaves the index alone'
     sealed: { ...record.sealed, precision: 'year' as never },
   };
   const result = planResolve(
-    settleInput('new', moment, {
+    settleInput('incoming', moment, {
       month: null,
       day: null,
       year: 2021,

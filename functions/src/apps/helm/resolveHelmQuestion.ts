@@ -10,6 +10,7 @@ import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import { openKeyDate } from './sortHelmCapture.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
 import { applyChanges } from './keyDateIndex.js';
+import { KEY_DATE_INCOMING_ID } from './nomos/summaries.js';
 import {
   FACT_TEXT_MAX,
   planResolve,
@@ -215,7 +216,7 @@ export const resolveHelmQuestion = onCall(
       const openedDate =
         keyDateSnap?.exists === true ? openKeyDate(key, keyDateSnap) : null;
       const isYearlySettle =
-        optionId === 'new' && openedDate?.[1].shape === 'yearly';
+        optionId === KEY_DATE_INCOMING_ID && openedDate?.[1].shape === 'yearly';
       const dateIndex = isYearlySettle
         ? await readIndexIn(transaction, firestore, base, key)
         : null;

@@ -427,6 +427,9 @@ export const buildMomentLine = (input: {
 }) =>
   `Moment · ${input.owner ?? 'You'} · ${toMomentWord(input.kind, input.label)} · ${input.when}`;
 
+/** The option id of the newly said date in a clash, apart from the 'new' a pick-one question keeps for making one. */
+export const KEY_DATE_INCOMING_ID = 'incoming';
+
 export interface KeyDateClashSide {
   label: string;
   detail: string;
@@ -457,7 +460,7 @@ export const buildKeyDateClashQuestion = (input: {
       ref: { collection: 'keyDates', id: input.keyDateId },
     },
     {
-      id: 'new',
+      id: KEY_DATE_INCOMING_ID,
       label: input.next.label,
       detail: `${input.next.detail} · ${WHICH_IS_TRUE_WORDS.newest}`,
       ref: null,

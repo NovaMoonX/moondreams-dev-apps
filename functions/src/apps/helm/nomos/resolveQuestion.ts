@@ -13,6 +13,7 @@ import {
   buildSettledDateLine,
   buildSettledLine,
   buildSettledNoneLine,
+  KEY_DATE_INCOMING_ID,
   SETTLE_LINES,
 } from './summaries.js';
 import {
@@ -502,7 +503,7 @@ function planSettleKeyDate(
           thisYear,
         ) === null);
   if (!isValid) return { refused: 'unknown' };
-  const isNew = optionId === 'new';
+  const isNew = optionId === KEY_DATE_INCOMING_ID;
   const label = options.find((option) => option.id === optionId)?.label ?? '';
   const effect: Effect = {
     written: { 'sealed.title': label, ...partsPaths(next) },
