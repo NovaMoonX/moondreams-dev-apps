@@ -605,8 +605,8 @@ test('"I\'m home" is taken back by putting the profile\'s previous place back', 
       reseal: null,
     },
   ]);
-  assert.equal(result.report, 'Back to not home.');
-  assert.equal(result.undoSealed.summary, 'Back to not home');
+  assert.equal(result.report, "You're no longer marked home.");
+  assert.equal(result.undoSealed.summary, "Took back I'm home");
   assert.deepEqual(result.undoExecution.effectRefs, [
     { op: 'update', collection: 'profile', docId: 'uid-1' },
   ]);
