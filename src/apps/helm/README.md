@@ -30,6 +30,7 @@ Built:
 - Online, what you say is heard by the cloud listener (Deepgram) as you speak; past 60 minutes a day, or once the site's $5 voice cap is reached, the phone's own listening takes over with one quiet line, and Settings → Voice keeps listening in the browser.
 - The assistant's own voice is ready for answers: a reply or a long read is spoken by the site's cloud voice online and within 30,000 characters a day, and by this phone's voice otherwise or when the cloud voice is slow to start; the quick "Got it" lines stay on this phone's voice so they start at once. Spoken answers arrive with questions in a later issue, so for now every line you hear is this phone's.
 - Short, plain turns ("add milk", "done with the dentist", "thanks") are sorted by a quick, light model; a question, a longer turn or "sort the rest" goes to the fuller one, and the quick one can hand a turn over once. Each route has its own allowance.
+- Ask a question and the answer comes from your tasks and what your connected apps and calendars share, with each source one tap away; what they don't say comes from general knowledge, below "Not from your records" with a caution (a bold one on health), and a question about your own things with nothing behind it says "Nothing in your records answers this." Activity lists each answer.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase
