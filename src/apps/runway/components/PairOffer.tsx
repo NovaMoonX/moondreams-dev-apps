@@ -10,10 +10,7 @@ import { formatCents } from '@/utils/moneyUtils';
 import ItemRow from '@apps/runway/components/ItemRow';
 import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
 import { findAccountPairs } from '@apps/runway/engine/matching';
-import {
-  rememberHandPair,
-  usePairAccountsWithUndo,
-} from '@apps/runway/hooks/useBankMatch';
+import { usePairAccountsWithUndo } from '@apps/runway/hooks/useBankMatch';
 import {
   selectAllCards,
   selectLostPairs,
@@ -96,11 +93,6 @@ function PairOffer({
         ],
         'person',
         true,
-      );
-      void rememberHandPair(
-        user.uid,
-        isOut ? self : other,
-        isOut ? other : self,
       );
       onDone();
     } catch (pickError) {

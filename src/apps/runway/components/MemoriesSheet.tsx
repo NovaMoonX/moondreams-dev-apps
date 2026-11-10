@@ -55,6 +55,7 @@ function MemoriesSheet({ title, rows, onClose }: MemoriesSheetProps) {
             detail={MEMORY_WORDS.rowDetail}
             ariaLabel={`${row.name}, ${MEMORY_WORDS.rowDetail}`}
             isAction
+            isPrivate={false}
             onOpen={() => void forget(row)}
           />
         ))}

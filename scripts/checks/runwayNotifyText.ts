@@ -69,13 +69,36 @@ assert.equal(
 
 // Sorting switch: money in always counts, a charge only after the switch's moment and while it is off.
 const rows = [
-  { createdAt: 100, amountCents: 500 },
-  { createdAt: 300, amountCents: 700 },
-  { createdAt: 100, amountCents: -900 },
+  { createdAt: 100, date: 0, amountCents: 500 },
+  { createdAt: 300, date: 0, amountCents: 700 },
+  { createdAt: 100, date: 0, amountCents: -900 },
 ];
+const DAY = 24 * 60 * 60 * 1000;
 assert.equal(readSorting(undefined), null);
 assert.equal(readSorting({ isPaused: 'yes', from: 1 }), null);
 assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 1);
 assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 2);
+const paused = { isPaused: true, from: 200 };
+// A quiet charge that money in of its amount may pair with (within three days) still counts, as the screen keeps it.
+assert.equal(
+  countWaiting(
+    [...rows, { createdAt: 100, date: 2 * DAY, amountCents: 900 }],
+    paused,
+  ),
+  2,
+);
+// The same amount weeks apart is no move, so the quiet charge stays quiet.
+assert.equal(
+  countWaiting(
+    [...rows, { createdAt: 100, date: 40 * DAY, amountCents: 900 }],
+    paused,
+  ),
+  1,
+);
+// An unreadable document reads as 0 cents and counts.
+assert.equal(
+  countWaiting([{ createdAt: 100, date: 0, amountCents: 0 }], paused),
+  1,
+);
 
 console.log('runwayNotifyText: ok');

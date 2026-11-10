@@ -90,16 +90,17 @@ async function digestForPlan(
     sorting === null
       ? (await waitingPurchases.count().get()).data().count
       : countWaiting(
-          (await waitingPurchases.select('createdAt', 'sealed').get()).docs.map(
-            (purchase) => {
-              const { createdAt, sealed: payload } = purchase.data();
-              const created = typeof createdAt === 'number' ? createdAt : now;
-              return {
-                createdAt: created,
-                amountCents: readAmount(planKey.key, payload),
-              };
-            },
-          ),
+          (
+            await waitingPurchases.select('createdAt', 'date', 'sealed').get()
+          ).docs.map((purchase) => {
+            const { createdAt, date: day, sealed: payload } = purchase.data();
+            const created = typeof createdAt === 'number' ? createdAt : now;
+            return {
+              createdAt: created,
+              date: typeof day === 'number' ? day : created,
+              amountCents: readAmount(planKey.key, payload),
+            };
+          }),
           sorting,
         );
   if (waiting === 0) return 'empty';

@@ -22,21 +22,22 @@ const isSameRoute = (memory: OpenMemory, route: RouteMemorySealed) =>
   memory.toAccountId === route.toAccountId &&
   memory.toCardId === route.toCardId;
 
-/** Remembers a move the person paired by hand, unless it is already remembered. */
+/** Remembers a move the person paired by hand, unless it is already remembered; resolves with the new memory's id, or null when none was written. */
 export async function rememberRoute(
   uid: string,
   encryption: RunwayEncryption,
   memories: readonly OpenMemory[],
   route: Omit<RouteMemorySealed, 'kind'>,
-): Promise<void> {
+): Promise<string | null> {
   const payload: RouteMemorySealed = {
     kind: 'route',
     fromAccountId: route.fromAccountId,
     toAccountId: route.toAccountId,
     toCardId: route.toCardId,
   };
-  if (memories.some((memory) => isSameRoute(memory, payload))) return;
-  const id = generateUuid();
+  if (memories.some((memory) => isSameRoute(memory, payload))) return null;
+  // One id per route: a second quick pairing before the listener catches up is refused as an update.
+  const id = `route_${payload.fromAccountId}_${payload.toCardId === null ? payload.toAccountId : `card_${payload.toCardId}`}`;
   const now = Date.now();
   await writeBatch(db)
     .set(memoryRef(uid, id), {
@@ -46,15 +47,16 @@ export async function rememberRoute(
       sealed: await sealJson(payload satisfies MemorySealed, encryption),
     } satisfies MemoryDoc)
     .commit();
+  return id;
 }
 
-/** Remembers a payer the person linked to a pay line by hand. The same payer on another pay line replaces the older memory in one batch. */
+/** Remembers a payer the person linked to a pay line by hand. The same payer on another pay line replaces the older memory in one batch. Resolves with the new memory's id, or null when none was written. */
 export async function rememberPayer(
   uid: string,
   encryption: RunwayEncryption,
   memories: readonly OpenMemory[],
   payer: Omit<PayerMemorySealed, 'kind'>,
-): Promise<void> {
+): Promise<string | null> {
   const payload: PayerMemorySealed = {
     kind: 'payer',
     merchantKey: payer.merchantKey,
@@ -71,7 +73,7 @@ export async function rememberPayer(
         memory.kind === 'payer' && memory.payLineId === payload.payLineId,
     )
   ) {
-    return;
+    return null;
   }
   const id = generateUuid();
   const now = Date.now();
@@ -84,6 +86,7 @@ export async function rememberPayer(
     sealed: await sealJson(payload satisfies MemorySealed, encryption),
   } satisfies MemoryDoc);
   await batch.commit();
+  return id;
 }
 
 /** Forgets one memory; matches that ask today ask again. */

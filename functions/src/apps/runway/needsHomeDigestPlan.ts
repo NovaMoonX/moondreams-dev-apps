@@ -48,20 +48,24 @@ export function readSorting(value: unknown): SortingState | null {
     : null;
 }
 
-/** Counts what waits: money in always, and a charge unless "I'm not sorting yet" quiets it; a quiet charge still counts when money in of its amount waits (a possible move, which the screen keeps). Lost pairs and lost deposits are not in the query. */
+const PAIR_WINDOW_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Counts what waits: money in always, and a charge unless "I'm not sorting yet" quiets it; a quiet charge still counts when money in of its amount waits within three days (a possible move, which the screen keeps; accounts and status are not compared, so it may count one the screen hides). Lost pairs, lost deposits and history that may be in twice are not in the query. */
 export function countWaiting(
-  purchases: { createdAt: number; amountCents: number }[],
+  purchases: { createdAt: number; date: number; amountCents: number }[],
   sorting: SortingState,
 ) {
-  const moneyIn = new Set(
-    purchases
-      .filter(({ amountCents }) => amountCents < 0)
-      .map(({ amountCents }) => -amountCents),
-  );
+  const moneyIn = purchases.filter(({ amountCents }) => amountCents < 0);
+  const mayPair = (amountCents: number, date: number) =>
+    moneyIn.some(
+      (entry) =>
+        -entry.amountCents === amountCents &&
+        Math.abs(entry.date - date) <= PAIR_WINDOW_MS,
+    );
   return purchases.filter(
-    ({ createdAt, amountCents }) =>
+    ({ createdAt, date, amountCents }) =>
       amountCents <= 0 ||
       (!sorting.isPaused && createdAt >= sorting.from) ||
-      moneyIn.has(amountCents),
+      mayPair(amountCents, date),
   ).length;
 }
