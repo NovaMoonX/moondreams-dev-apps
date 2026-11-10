@@ -79,7 +79,7 @@ const deleteObjects = async (paths: string[]) =>
 
 interface HeldObject {
   path: string;
-  /** Null when the bytes could not be read, so Undo cannot put the object back. */
+  /** Null when the object was already gone, so there is nothing for Undo to put back. */
   bytes: Uint8Array | null;
 }
 
@@ -87,18 +87,28 @@ const holdObjects = (paths: string[]): Promise<HeldObject[]> =>
   Promise.all(
     paths.map(async (path) => ({
       path,
-      bytes: new Uint8Array(await getBytes(ref(storage, path))),
+      bytes: await getBytes(ref(storage, path)).then(
+        (sealed) => new Uint8Array(sealed),
+        (error: unknown) => {
+          if ((error as { code?: string }).code === 'storage/object-not-found')
+            return null;
+          throw error;
+        },
+      ),
     })),
   );
 
-/** Deletes the held objects, then the document once every object is gone; answers which objects are gone. A document left behind is already marked to be swept. */
+/** Deletes the held objects, then the document once every object is gone; answers which objects are gone. A document left behind is already marked discarded and stays until a sweep exists. */
 const eraseObjects = async (
   mediaRef: ReturnType<typeof doc>,
   held: HeldObject[],
 ) => {
   const gone = await deleteObjects(held.map((entry) => entry.path));
-  if (gone.length === held.length) await deleteDoc(mediaRef);
-  else console.error('A removed photo is left to be swept', mediaRef.id);
+  if (gone.length === held.length) {
+    await deleteDoc(mediaRef).catch((error: unknown) => {
+      console.error('A removed photo document was left behind', error);
+    });
+  } else console.error('A removed photo is left to be swept', mediaRef.id);
   return gone;
 };
 

@@ -314,18 +314,18 @@ export async function forgetWithPhotos(
   const listedIds = await getPhotoIdsOf(uid, owner);
   const forgotten = await forgetLinked(uid, target, id);
   // A photo added from another device during the forget is only found after it.
-  const photoIds = Array.from(
-    new Set([...listedIds, ...(await getPhotoIdsOf(uid, owner))]),
-  );
-  if (photoIds.length === 0) return forgotten;
-  const photos = await removeMediaOf(uid, photoIds).catch(
-    async (error: unknown) => {
+  const photos = await getPhotoIdsOf(uid, owner)
+    .then((later) => {
+      const photoIds = Array.from(new Set([...listedIds, ...later]));
+      return photoIds.length > 0 ? removeMediaOf(uid, photoIds) : null;
+    })
+    .catch(async (error: unknown) => {
       await forgotten.restore().catch((restoreError: unknown) => {
         console.error('Helm forgotten record was not put back', restoreError);
       });
       throw error;
-    },
-  );
+    });
+  if (!photos) return forgotten;
   return {
     ...forgotten,
     restore: async () => {
