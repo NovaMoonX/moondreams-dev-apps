@@ -5,6 +5,7 @@ import type {
   Execution,
   ExecutionEffect,
   ExecutionSealed,
+  KeyDateSealed,
   OpenExecution,
   TaskSealed,
   WhoSealed,
@@ -23,7 +24,9 @@ export interface UndoTarget {
   /** The document as it is now; null when it is gone. */
   data: Record<string, unknown> | null;
   /** Its sealed words; null when they won't open. */
-  opened: TaskSealed | WhoSealed | null;
+  opened: TaskSealed | WhoSealed | KeyDateSealed | null;
+  /** For a date that was removed: whether the person it belonged to is still there. */
+  isOwnerHere?: boolean;
 }
 
 export type UndoRefusal =
@@ -37,7 +40,14 @@ export type UndoPlan =
         docId: string;
         fields: Record<string, unknown>;
         collection: EffectRef['collection'];
-        reseal: TaskSealed | WhoSealed | null;
+        reseal: TaskSealed | WhoSealed | KeyDateSealed | null;
+      }[];
+      /** Dates the assistant removed, written back under the same ids. */
+      creates: {
+        docId: string;
+        collection: EffectRef['collection'];
+        fields: Values;
+        seal: KeyDateSealed;
       }[];
       undoExecution: Omit<Execution, 'sealed'>;
       undoSealed: ExecutionSealed;
@@ -90,7 +100,7 @@ const refuse = (
 
 interface Step {
   data: Values | null;
-  opened: TaskSealed | WhoSealed | null;
+  opened: TaskSealed | WhoSealed | KeyDateSealed | null;
   fields: Values;
   sealedFields: Values;
   restored: Values;
@@ -107,12 +117,28 @@ type RecordOutcome =
       kind: 'restored';
       title: string;
       fields: Values;
-      reseal: TaskSealed | WhoSealed | null;
+      reseal: TaskSealed | WhoSealed | KeyDateSealed | null;
+      effect: ExecutionEffect;
+    }
+  | {
+      kind: 'recreated';
+      title: string;
+      fields: Values;
+      seal: KeyDateSealed;
       effect: ExecutionEffect;
     };
 
 const toOpenedTitle = (opened: UndoTarget['opened']) =>
-  opened === null ? '' : 'title' in opened ? opened.title : opened.name;
+  opened === null
+    ? ''
+    : 'title' in opened
+      ? opened.title
+      : 'name' in opened
+        ? opened.name
+        : '';
+
+const toText = (value: unknown) =>
+  typeof value === 'string' && value.length > 0 ? value : null;
 
 const toTitle = (target: UndoTarget, effects: ExecutionEffect[]) =>
   toOpenedTitle(target.opened) ||
@@ -197,6 +223,51 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
 const isEntity = (name: EffectRef['collection']) =>
   name === 'who' || name === 'places';
 
+const toNumber = (value: unknown) => (typeof value === 'number' ? value : null);
+
+const toKeyKind = (value: unknown): KeyDateSealed['kind'] =>
+  value === 'anniversary' || value === 'custom' ? value : 'birthday';
+
+/** A removed date comes back under its id from what the removal sealed; it is not brought back for a person who is gone. */
+const planRecreate = (
+  target: UndoTarget,
+  effect: ExecutionEffect,
+): RecordOutcome => {
+  const previous = effect.previous;
+  const title =
+    toText(effect.written['sealed.title']) ?? HELM_COPY.resultKeyDateFallback;
+  if (!previous || target.data !== null) return { kind: 'skipped' };
+  if (target.isOwnerHere === false || typeof previous.whoId !== 'string') {
+    return { kind: 'gone' };
+  }
+  const seal: KeyDateSealed = {
+    kind: toKeyKind(previous['sealed.kind']),
+    label: toText(previous['sealed.label']),
+    month: toNumber(previous['sealed.month']),
+    day: toNumber(previous['sealed.day']),
+    year: toNumber(previous['sealed.year']),
+    captureId: toText(previous['sealed.captureId']),
+  };
+  return {
+    kind: 'recreated',
+    title,
+    seal,
+    fields: {
+      whoId: previous.whoId,
+      shape: 'yearly',
+      source: toText(previous.source) ?? 'person',
+      createdBy: previous.source === 'nomos' ? 'nomos' : 'person',
+      executionId: null,
+      createdAt: toNumber(previous.createdAt) ?? 0,
+      lastEditedAt: null,
+    },
+    effect: {
+      written: { 'sealed.title': title, ...previous },
+      previous: null,
+    },
+  };
+};
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -205,6 +276,8 @@ const planRecord = (
   isUsedElsewhere: boolean,
   isImport: boolean,
 ): RecordOutcome => {
+  const removal = entries.find((entry) => entry.ref.op === 'delete');
+  if (removal) return planRecreate(target, removal.effect);
   if (target.data === null) return { kind: 'gone' };
   const effects = entries.map((entry) => entry.effect);
   const title = toTitle(target, effects);
@@ -333,7 +406,8 @@ export function planUndo(input: {
       const data = targetOf(docId).data;
       const idsOf = (field: string) =>
         Array.isArray(data?.[field]) ? (data[field] as string[]) : [];
-      return [...idsOf('whoIds'), ...idsOf('placeIds')];
+      const ownerId = typeof data?.whoId === 'string' ? [data.whoId] : [];
+      return [...idsOf('whoIds'), ...idsOf('placeIds'), ...ownerId];
     }),
   );
   const outcomes = [
@@ -394,21 +468,31 @@ export function planUndo(input: {
   );
   const gone = goneIds.length;
   const done = [...outcomes, ...photoOutcomes].flatMap(({ docId, outcome }) =>
-    outcome.kind === 'deleted' || outcome.kind === 'restored'
+    outcome.kind === 'deleted' ||
+    outcome.kind === 'restored' ||
+    outcome.kind === 'recreated'
       ? [{ docId, outcome }]
       : [],
   );
   const isImport = original.category === 'import';
   const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
+  const isKeyDateDoc = (docId: string) =>
+    collectionOf.get(docId) === 'keyDates';
   const factsDone = done.filter(({ docId }) => isFactDoc(docId));
+  const datesDone = done.filter(({ docId }) => isKeyDateDoc(docId));
   const records = done.filter(({ docId }) =>
     isImport
       ? collectionOf.get(docId) === 'who'
       : !isEntity(collectionOf.get(docId) ?? 'tasks') &&
         !isMediaDoc(docId) &&
-        !isFactDoc(docId),
+        !isFactDoc(docId) &&
+        !isKeyDateDoc(docId),
   );
-  if (records.length === 0 && factsDone.length === 0) {
+  if (
+    records.length === 0 &&
+    factsDone.length === 0 &&
+    datesDone.length === 0
+  ) {
     return refuse(
       'nothingToTakeBack',
       kept,
@@ -425,9 +509,16 @@ export function planUndo(input: {
   const isHomeRestored = isStillHome(homeEffect?.written.currentPlace, now);
   const wasLeaving = homeEffect?.previous?.currentPlace === null;
   const factCount = factsDone.length;
+  const dateCount = datesDone.length;
+  const datesToo =
+    dateCount > 0 ? HELM_COPY.undoReportKeyDatesToo(dateCount) : '';
   const report =
     records.length === 0
-      ? HELM_COPY.undoReportFacts(factCount, kept.length, gone)
+      ? factCount === 0
+        ? HELM_COPY.undoReportKeyDates(dateCount, kept.length, gone)
+        : [HELM_COPY.undoReportFacts(factCount, kept.length, gone), datesToo]
+            .filter(Boolean)
+            .join(' ')
       : [
           counted.length === 0
             ? isHomeRestored
@@ -437,6 +528,7 @@ export function planUndo(input: {
               ? HELM_COPY.undoReportPeople(counted.length, kept.length, gone)
               : HELM_COPY.undoReport(counted.length, kept.length, gone),
           factCount > 0 ? HELM_COPY.undoReportFactsToo(factCount) : '',
+          datesToo,
         ]
           .filter(Boolean)
           .join(' ');
@@ -457,10 +549,23 @@ export function planUndo(input: {
         ]
       : [],
   );
+  const creates = done.flatMap(({ docId, outcome }) =>
+    outcome.kind === 'recreated'
+      ? [
+          {
+            docId,
+            collection: collectionOf.get(docId) ?? 'keyDates',
+            fields: outcome.fields,
+            seal: outcome.seal,
+          },
+        ]
+      : [],
+  );
   return {
     kind: 'write',
     deletes,
     updates,
+    creates,
     undoExecution: {
       captureId: original.captureId,
       actor: 'person',
@@ -485,7 +590,9 @@ export function planUndo(input: {
     undoSealed: {
       summary:
         records.length === 0
-          ? HELM_COPY.tookBackFacts(factCount)
+          ? factCount === 0
+            ? HELM_COPY.tookBackKeyDates(dateCount)
+            : HELM_COPY.tookBackFacts(factCount)
           : counted.length === 0
             ? wasLeaving
               ? HELM_COPY.tookBackNotHome
@@ -503,7 +610,9 @@ export function planUndo(input: {
       spoken: null,
       goneIds,
     },
-    takenBack: [...records, ...factsDone].map(({ outcome }) => outcome.title),
+    takenBack: [...records, ...factsDone, ...datesDone].map(
+      ({ outcome }) => outcome.title,
+    ),
     kept,
     gone,
     goneIds,

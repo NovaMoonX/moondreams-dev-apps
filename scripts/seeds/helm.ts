@@ -31,6 +31,10 @@ import {
 import type {
   Capture,
   CaptureSealed,
+  KeyDate,
+  KeyDateIndex,
+  KeyDateIndexEntry,
+  KeyDateSealed,
   Execution,
   ExecutionSealed,
   CaptureAnswer,
@@ -2097,19 +2101,173 @@ async function buildPeople(input: {
       { whoIds: ['self'], placeIds: [] },
     ),
   ]);
-  return {
-    who: who.map((entry) =>
-      entry.id === 'seed-who-miso'
-        ? {
-            ...entry,
-            who: {
-              ...entry.who,
-              photoMediaId: misoPhoto.id,
-              mediaIds: [misoPhoto.id],
-            },
-          }
-        : entry,
+  const dayParts = (daysAhead: number) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      month: 'numeric',
+      day: 'numeric',
+    }).formatToParts(now + daysAhead * DAY_MS);
+    const read = (type: string) =>
+      Number(parts.find((part) => part.type === type)?.value);
+    return { month: read('month'), day: read('day') };
+  };
+  const dateOf = (
+    id: string,
+    whoId: string,
+    words: Pick<KeyDateSealed, 'kind' | 'label' | 'year'> &
+      ({ daysAhead: number } | { month: number; day: number | null }),
+    source: KeyDate['source'] = 'person',
+  ) => ({
+    id,
+    whoId,
+    source,
+    words: {
+      kind: words.kind,
+      label: words.label,
+      year: words.year,
+      captureId: null,
+      ...('daysAhead' in words
+        ? dayParts(words.daysAhead)
+        : { month: words.month, day: words.day }),
+    },
+  });
+  const dateSeeds = [
+    dateOf('seed-date-sam-rivera-birthday', 'seed-who-sam-rivera', {
+      kind: 'birthday',
+      label: null,
+      year: 1990,
+      daysAhead: 1,
+    }),
+    dateOf('seed-date-dana-birthday', 'seed-who-dana', {
+      kind: 'birthday',
+      label: null,
+      year: null,
+      daysAhead: 2,
+    }),
+    dateOf('seed-date-miso-gotcha', 'seed-who-miso', {
+      kind: 'custom',
+      label: 'Gotcha day',
+      year: 2021,
+      daysAhead: 3,
+    }),
+    dateOf('seed-date-sam-rivera-work', 'seed-who-sam-rivera', {
+      kind: 'custom',
+      label: 'Work anniversary',
+      year: 2019,
+      daysAhead: 5,
+    }),
+    dateOf('seed-date-dana-anniversary', 'seed-who-dana', {
+      kind: 'anniversary',
+      label: null,
+      year: 2015,
+      daysAhead: 6,
+    }),
+    dateOf('seed-date-sam-patel-birthday', 'seed-who-sam-patel', {
+      kind: 'birthday',
+      label: null,
+      year: null,
+      daysAhead: 31,
+    }),
+    dateOf('seed-date-self-birthday', 'self', {
+      kind: 'birthday',
+      label: null,
+      year: 1988,
+      daysAhead: 45,
+    }),
+    dateOf(
+      'seed-date-priya-birthday',
+      'seed-who-priya-raman',
+      { kind: 'birthday', label: null, year: null, month: 4, day: 22 },
+      'google:contacts',
     ),
+    dateOf('seed-date-bakery-leap', 'seed-who-acme-bakery', {
+      kind: 'anniversary',
+      label: null,
+      year: 2016,
+      month: 2,
+      day: 29,
+    }),
+    dateOf('seed-date-miso-birthday', 'seed-who-miso', {
+      kind: 'birthday',
+      label: null,
+      year: 2020,
+      month: 6,
+      day: null,
+    }),
+  ];
+  const keyDates: { id: string; keyDate: KeyDate }[] = await Promise.all(
+    dateSeeds.map(async (entry) => ({
+      id: entry.id,
+      keyDate: {
+        whoId: entry.whoId,
+        shape: 'yearly' as const,
+        source: entry.source,
+        createdBy: entry.source === 'person' ? 'person' : 'nomos',
+        executionId: null,
+        createdAt: now - 2 * DAY_MS,
+        lastEditedAt: null,
+        sealed: await seal<KeyDateSealed>(entry.words),
+      },
+    })),
+  );
+  const byWho = dateSeeds.reduce<Record<string, KeyDateIndexEntry[]>>(
+    (all, entry) => ({
+      ...all,
+      [entry.whoId]: [
+        ...(all[entry.whoId] ?? []),
+        [
+          entry.id,
+          entry.words.kind,
+          entry.words.month,
+          entry.words.day,
+          entry.words.year,
+          entry.words.kind === 'custom' ? entry.words.label : null,
+        ],
+      ],
+    }),
+    {},
+  );
+  const keyDateIndex: KeyDateIndex = {
+    entryCount: dateSeeds.length,
+    rebuiltAt: null,
+    lastEditedAt: now,
+    sealed: await seal({ byWho }),
+  };
+  const withDates = (entry: { id: string; who: Who }) => ({
+    ...entry,
+    who: { ...entry.who, yearlyDateCount: byWho[entry.id]?.length ?? 0 },
+  });
+  const withPriyaBirthday = (entry: { id: string; who: Who }) =>
+    entry.id === 'seed-who-priya-raman'
+      ? {
+          ...entry,
+          who: {
+            ...entry.who,
+            importedFields: {
+              ...entry.who.importedFields,
+              birthday: digest('birthday', '4-22-'),
+            },
+          },
+        }
+      : entry;
+  return {
+    keyDates,
+    keyDateIndex,
+    who: who
+      .map(withPriyaBirthday)
+      .map(withDates)
+      .map((entry) =>
+        entry.id === 'seed-who-miso'
+          ? {
+              ...entry,
+              who: {
+                ...entry.who,
+                photoMediaId: misoPhoto.id,
+                mediaIds: [misoPhoto.id],
+              },
+            }
+          : entry,
+      ),
     places: [
       {
         id: 'seed-place-home',
@@ -2567,6 +2725,13 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         people.places.forEach((entry) =>
           batch.set(person.collection('places').doc(entry.id), entry.place),
         );
+        people.keyDates.forEach((entry) =>
+          batch.set(person.collection('keyDates').doc(entry.id), entry.keyDate),
+        );
+        batch.set(
+          person.collection('meta').doc('keyDateIndex'),
+          people.keyDateIndex,
+        );
         people.media.forEach((entry) =>
           batch.set(person.collection('media').doc(entry.id), entry.media),
         );
@@ -2614,6 +2779,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.media.length +
           people.tasks.length +
           people.facts.length +
+          people.keyDates.length +
+          1 +
           6
         : 0;
       const backToBackCount =

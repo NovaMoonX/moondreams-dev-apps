@@ -12,7 +12,7 @@ import {
 
 const digest = createDigest(Buffer.from('a'.repeat(64), 'hex'));
 let counter = 0;
-const newId = (collection: 'who' | 'media') =>
+const newId = (collection: 'who' | 'media' | 'keyDates') =>
   `${collection}-${(counter += 1)}`;
 
 const contact = (
@@ -41,6 +41,8 @@ const who = (id: string, name: string, extra: Partial<ExistingWho> = {}) => ({
   importedFrom: null,
   importedFields: {},
   lastMentionedAt: null,
+  yearlyDateCount: 0,
+  birthday: null,
   sealed: { name },
   sealedNonce: 'nonce',
   ...extra,
@@ -247,5 +249,62 @@ const readable = JSON.stringify(
 assert.equal(writes.createdCount, 1);
 assert.equal(writes.whoCreates[0]?.data.createdBy, 'person');
 assert.equal(writes.whoCreates[0]?.data.lastMentionedAt, null);
+
+const withBirthday = contact('people/c9', 'Priya Raman', {
+  emails: ['priya@example.com'],
+  birthday: { month: 4, day: 22, year: null },
+});
+const birthdayImport = run(['people/c9'], [], [withBirthday]);
+assert.equal(birthdayImport.changes[0]?.birthday?.kind, 'add');
+assert.deepEqual(birthdayImport.changes[0]?.birthday?.value, {
+  month: 4,
+  day: 22,
+  year: null,
+});
+
+const fromGoogle = { month: 4, day: 22, year: null };
+const withDate = (
+  held: { month: number; day: number | null; year: number | null },
+  imported: boolean,
+) =>
+  who('w-priya', 'Priya Raman', {
+    birthday: { id: 'k-1', ...held },
+    yearlyDateCount: 1,
+    importedFields: imported ? { birthday: digest('birthday', '4-22-') } : {},
+  });
+const moved = { ...withBirthday, birthday: { month: 4, day: 23, year: null } };
+const replaced = planContactUpdate({
+  contact: moved,
+  who: withDate(fromGoogle, true),
+  digest,
+  newId,
+});
+assert.equal(
+  replaced?.birthday?.kind,
+  'replace',
+  'a birthday still as imported follows Google',
+);
+const editedByPerson = planContactUpdate({
+  contact: moved,
+  who: withDate({ month: 4, day: 22, year: 1990 }, true),
+  digest,
+  newId,
+});
+assert.equal(
+  editedByPerson?.birthday ?? null,
+  null,
+  'Update from Google keeps a birthday the person edited',
+);
+const saidByPerson = planContactUpdate({
+  contact: moved,
+  who: withDate(fromGoogle, false),
+  digest,
+  newId,
+});
+assert.equal(
+  saidByPerson?.birthday ?? null,
+  null,
+  'a birthday that was never imported is never replaced',
+);
 
 console.log('Helm contact import: all checks passed');

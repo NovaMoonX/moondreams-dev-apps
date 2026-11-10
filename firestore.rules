@@ -240,10 +240,10 @@ service cloud.firestore {
       allow read, create, update: if isHelmOwner(uid);
     }
 
-    // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list; `facts` holds what an answer noted from a live lookup, which its owner may undo or correct, and `planDays` one plan per day, written by the owner's device.
+    // The person's own content, one collection name at a time: a condition on the wildcard keeps every other path out, and later collections join this list; `facts` holds what an answer noted from a live lookup, which its owner may undo or correct, and `planDays` one plan per day, written by the owner's device, `keyDates` the dates that come back and `meta` the sealed index of them, both kept in step by one transaction.
     match /apps/helm/users/{uid}/{collection}/{docId} {
       allow read, create, update, delete: if isHelmOwner(uid)
-        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places'];
+        && collection in ['captures', 'tasks', 'facts', 'planDays', 'who', 'places', 'keyDates', 'meta'];
     }
 
     // A medium's document names sealed bytes in Storage and what they show on; the words in it stay sealed, so the shape checked here is the readable part.

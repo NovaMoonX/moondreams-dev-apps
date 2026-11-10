@@ -32,6 +32,12 @@ import {
   settleAttempts,
 } from './sortAttempts.js';
 import type { LiveGrant } from '../../connections/liveRouter.js';
+import {
+  readContextKeyDates,
+  readIndexIn,
+  writeIndexIn,
+} from './keyDateStore.js';
+import type { KeyDateRecord } from './nomos/planKeyDates.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   createQuoteBook,
@@ -55,6 +61,7 @@ import {
   type CaptureReading,
   type MentionRead,
   type NoteFactCommand,
+  type KeyDateCommand,
   type NomosCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -531,6 +538,9 @@ async function readPeople(
         mentionDayKeys: [],
         taskLinkCount: 0,
         hasRole: false,
+        yearlyDateCount: Number.isFinite(doc.get('yearlyDateCount'))
+          ? Number(doc.get('yearlyDateCount'))
+          : 0,
       },
     ];
   });
@@ -598,6 +608,101 @@ async function readPeople(
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
   };
+}
+
+/** The yearly index, the key date documents the commands name and the counters of the people they belong to, read in the turn's transaction. */
+async function readKeyDateState(
+  transaction: Transaction,
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  input: { keyDates: KeyDateCommand[]; selfWhoId: string | null },
+) {
+  const index = await readIndexIn(transaction, firestore, base, key);
+  const ids = [
+    ...new Set(
+      input.keyDates.flatMap((command) =>
+        command.kind === 'removeKeyDate'
+          ? [command.keyDateId]
+          : command.keyDateId
+            ? [command.keyDateId]
+            : [],
+      ),
+    ),
+  ];
+  const snaps =
+    ids.length > 0
+      ? await transaction.getAll(
+          ...ids.map((id) => firestore.doc(`${base}/keyDates/${id}`)),
+        )
+      : [];
+  const existing = new Map(
+    snaps.flatMap((snap): [string, KeyDateRecord][] => {
+      if (!snap.exists) return [];
+      try {
+        const words = openForHelm(key, snap.get('sealed') as SealedPayload);
+        const kind = words.kind;
+        if (
+          typeof snap.get('whoId') !== 'string' ||
+          (kind !== 'birthday' &&
+            kind !== 'anniversary' &&
+            kind !== 'custom') ||
+          typeof words.month !== 'number'
+        ) {
+          return [];
+        }
+        return [
+          [
+            snap.id,
+            {
+              whoId: snap.get('whoId') as string,
+              shape: snap.get('shape') === 'moment' ? 'moment' : 'yearly',
+              source: snap.get('source'),
+              createdAt: Number(snap.get('createdAt') ?? 0),
+              sealed: {
+                kind,
+                label: typeof words.label === 'string' ? words.label : null,
+                month: words.month,
+                day: typeof words.day === 'number' ? words.day : null,
+                year: typeof words.year === 'number' ? words.year : null,
+                captureId:
+                  typeof words.captureId === 'string' ? words.captureId : null,
+              },
+            },
+          ],
+        ];
+      } catch {
+        return [];
+      }
+    }),
+  );
+  const whoIds = [
+    ...new Set([
+      ...[...existing.values()].map((record) => record.whoId),
+      ...(input.selfWhoId ? [input.selfWhoId] : []),
+    ]),
+  ];
+  const whoSnaps =
+    whoIds.length > 0
+      ? await transaction.getAll(
+          ...whoIds.map((id) => firestore.doc(`${base}/who/${id}`)),
+        )
+      : [];
+  const whoCounts = new Map(
+    whoSnaps.flatMap((snap): [string, number][] =>
+      snap.exists
+        ? [
+            [
+              snap.id,
+              Number.isFinite(snap.get('yearlyDateCount'))
+                ? Number(snap.get('yearlyDateCount'))
+                : 0,
+            ],
+          ]
+        : [],
+    ),
+  );
+  return { index, existing, whoCounts };
 }
 
 const MAX_CONTEXT_FACTS = 20;
@@ -1011,6 +1116,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       answer: null,
       remember: [],
       noteFacts: [],
+      keyDates: [],
       captureText: '',
       planDay: null,
       setCurrentPlace: null,
@@ -1154,6 +1260,20 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             combined.text,
             (profile.data()?.selfWhoId as string | null | undefined) ?? null,
           );
+    const selfWhoId =
+      (profile.data()?.selfWhoId as string | null | undefined) ?? null;
+    const { keyDates: contextKeyDates, upcoming } =
+      mode === 'rest'
+        ? { keyDates: [], upcoming: [] }
+        : await readContextKeyDates(firestore, base, key, {
+            text: combined.text,
+            selfWhoId,
+            todayKey: new Date(
+              getDayIn(capture.createdAt, toKnownZone(timeZone)),
+            )
+              .toISOString()
+              .slice(0, 10),
+          });
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -1168,6 +1288,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       answeredQuestion,
       facts,
       selfFacts,
+      keyDates: contextKeyDates,
+      upcoming,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1319,6 +1441,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     aliases: context.aliases,
     synced: context.synced,
     facts: context.facts,
+    keyDates: context.keyDates,
     quotes,
     alreadyMade,
     timeZone,
@@ -1336,6 +1459,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answer,
     remember: mode === 'full' ? reply.remember : [],
     noteFacts: mode === 'full' ? reply.noteFacts : [],
+    keyDates: mode === 'full' ? reply.keyDates : [],
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
@@ -1362,6 +1486,7 @@ async function writeResult(
     answer: AnswerCommand | null;
     remember: RememberCommand[];
     noteFacts: NoteFactCommand[];
+    keyDates: KeyDateCommand[];
     captureText: string;
     planDay: PlanDayCommand | null;
     setCurrentPlace: SetCurrentPlaceCommand | null;
@@ -1389,6 +1514,7 @@ async function writeResult(
     answer,
     remember,
     noteFacts,
+    keyDates,
     captureText,
     planDay: requestedPlanDay,
     setCurrentPlace: requestedHome,
@@ -1481,7 +1607,7 @@ async function writeResult(
               .limit(1),
           )
         : Promise.resolve(null),
-      requestedHome || noteFacts.length > 0
+      requestedHome || noteFacts.length > 0 || keyDates.length > 0
         ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
       ...targetIds.map((id) =>
@@ -1533,7 +1659,8 @@ async function writeResult(
     const reply = isStale ? null : built;
     const asksNow = isStale ? [] : asks;
     const people =
-      (commands.length > 0 || noteFacts.length > 0) && !isStale
+      (commands.length > 0 || noteFacts.length > 0 || keyDates.length > 0) &&
+      !isStale
         ? await readPeople(transaction, {
             firestore,
             base,
@@ -1550,6 +1677,14 @@ async function writeResult(
       noteFacts.length > 0 && !isStale
         ? await readSubjectFacts(transaction, firestore, base, key)
         : [];
+    const selfWhoId = (profileSnap?.get('selfWhoId') as string | null) ?? null;
+    const keyDateRead =
+      keyDates.length > 0 && !isStale
+        ? await readKeyDateState(transaction, firestore, base, key, {
+            keyDates,
+            selfWhoId,
+          })
+        : null;
     const joinedRefs = (ids: string[]) =>
       ids.map((id) => captureRef.parent.doc(id));
     const listedNow = [
@@ -1631,7 +1766,11 @@ async function writeResult(
       captureText,
       existingFacts,
       timeZone,
-      selfWhoId: (profileSnap?.get('selfWhoId') as string | null) ?? null,
+      selfWhoId,
+      keyDates: isStale ? [] : keyDates,
+      keyDateIndex: keyDateRead?.index,
+      existingKeyDates: keyDateRead?.existing,
+      whoCounts: keyDateRead?.whoCounts,
     });
     const plan = home
       ? {
@@ -1688,6 +1827,24 @@ async function writeResult(
       [...plan.factConfirms, ...plan.factDisputes].forEach(({ id, data }) =>
         transaction.update(firestore.doc(`${base}/facts/${id}`), data),
       );
+      plan.keyDateCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/keyDates/${id}`), data),
+      );
+      plan.keyDateUpdates.forEach(({ id, data }) =>
+        transaction.update(firestore.doc(`${base}/keyDates/${id}`), data),
+      );
+      plan.keyDateDeletes.forEach((id) =>
+        transaction.delete(firestore.doc(`${base}/keyDates/${id}`)),
+      );
+      if (plan.keyDateIndex && keyDateRead) {
+        writeIndexIn(transaction, firestore, base, {
+          byWho: plan.keyDateIndex.byWho,
+          rebuiltAt: keyDateRead.index.rebuiltAt,
+          existingIds: keyDateRead.index.existingIds,
+          now,
+          seal,
+        });
+      }
       if (home) transaction.update(firestore.doc(base), home.data);
       transaction.create(
         executionRef,
@@ -1763,7 +1920,7 @@ async function writeResult(
       filed: isFiling ? commands.length : 0,
       hasPlanDay: planDayKey !== null,
       hasHome: requestedHome !== null,
-      hasFacts: noteFacts.length > 0 && !isStale,
+      hasFacts: noteFacts.length + keyDates.length > 0 && !isStale,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

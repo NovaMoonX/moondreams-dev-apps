@@ -18,6 +18,7 @@ import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import ConnectCalendarRow from '@apps/helm/components/today/ConnectCalendarRow';
 import DayPlan from '@apps/helm/components/today/DayPlan';
 import DayStrip from '@apps/helm/components/today/DayStrip';
+import KeyDatesLine from '@apps/helm/components/today/KeyDatesLine';
 import PastDay from '@apps/helm/components/today/PastDay';
 import SuggestionSheet, {
   type SuggestionTarget,
@@ -48,10 +49,18 @@ interface TodayViewProps {
   onBack: () => void;
   onHome: () => void;
   onOpenTasks: () => void;
+  onOpenComingUp: () => void;
+  onOpenWho: (whoId: string) => void;
 }
 
 /** Today: a strip of days with each day's events and plan (what was kept and what is suggested), and on today the open tasks that are awake and overdue or due in the next week, soonest first, with a door to all of them; its first-run line until there is a task. */
-function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
+function TodayView({
+  onBack,
+  onHome,
+  onOpenTasks,
+  onOpenComingUp,
+  onOpenWho,
+}: TodayViewProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const assistantName = useAssistantName();
@@ -156,6 +165,9 @@ function TodayView({ onBack, onHome, onOpenTasks }: TodayViewProps) {
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
             {HELM_COPY.todayFirstRun(assistantName)}
           </p>
+        )}
+        {isToday && (
+          <KeyDatesLine onOpenWho={onOpenWho} onOpenComingUp={onOpenComingUp} />
         )}
         {sources && (
           <DayStrip

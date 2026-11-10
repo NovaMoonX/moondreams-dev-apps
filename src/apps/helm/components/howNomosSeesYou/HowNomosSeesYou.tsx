@@ -5,6 +5,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import FactKindGroup from '@apps/helm/components/howNomosSeesYou/FactKindGroup';
+import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import SelfFactAddSheet from '@apps/helm/components/howNomosSeesYou/SelfFactAddSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -34,6 +35,9 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
   const facts = useAppSelector(selectSelfFacts);
   const selfWhoId = useAppSelector((state) => state.helm.profile?.selfWhoId);
   const isLoaded = useAppSelector((state) => state.helm.facts.isLoaded);
+  const selfWho = useAppSelector((state) =>
+    state.helm.who.items.find((entry) => entry.isSelf && !entry.isUnreadable),
+  );
   const [openId, setOpenId] = useState<string | null>(null);
   const [isAdding, setIsAdding] = useState(false);
   const topicsByKind = useMemo(
@@ -89,6 +93,7 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
           now={now}
           onOpen={setOpenId}
         />
+        {selfWho && <KeyDatesList who={selfWho} />}
         <FactKindGroup
           label={HELM_COPY.seesYouPreferences}
           facts={ofKind('preference')}

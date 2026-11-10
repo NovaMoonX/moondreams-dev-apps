@@ -64,6 +64,7 @@ const who = (
   tierSetBy: 'nomos',
   mentionDayKeys: [],
   taskLinkCount: 0,
+  yearlyDateCount: 0,
   hasRole: false,
   ...extra,
 });

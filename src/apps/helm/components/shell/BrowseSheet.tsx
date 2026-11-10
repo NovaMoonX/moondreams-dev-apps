@@ -5,6 +5,7 @@ import {
   selectNewSinceLooked,
 } from '@apps/helm/store/selectors/captureSelectors';
 import { BROWSE_FOOT, BROWSE_TILES } from '@apps/helm/screen/views';
+import { selectHasKeyDates } from '@apps/helm/store/selectors/keyDateSelectors';
 import type { HelmView } from '@apps/helm/types';
 
 import BrowseTile from '@apps/helm/components/shell/BrowseTile';
@@ -15,20 +16,23 @@ interface BrowseSheetProps {
   onOpenView: (view: HelmView) => void;
 }
 
-const SINGLE_TILES = BROWSE_TILES.filter((tile) => tile.importance !== 'lead');
-
 /** Every view as a bento of tiles by importance: the lead is wide, and a last small tile that would sit alone fills its row, so the grid has no holes. */
 function BrowseSheet({ isOpen, onClose, onOpenView }: BrowseSheetProps) {
   const unseenCount = useAppSelector(selectNewSinceLooked).length;
   const needsYouCount = useAppSelector(selectHeldItems).needsYou.length;
-  const lastSingleView =
-    SINGLE_TILES.length % 2 === 1 ? SINGLE_TILES.at(-1)?.view : null;
+  const hasKeyDates = useAppSelector(selectHasKeyDates);
+  // Coming up has a tile once there is a date to show.
+  const tiles = BROWSE_TILES.filter(
+    (tile) => tile.view !== 'comingUp' || hasKeyDates,
+  );
+  const singles = tiles.filter((tile) => tile.importance !== 'lead');
+  const lastSingleView = singles.length % 2 === 1 ? singles.at(-1)?.view : null;
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title='Browse' showCloseButton>
       <div className='space-y-4 pb-4'>
         <div className='grid [grid-auto-flow:dense] grid-cols-2 gap-3'>
-          {BROWSE_TILES.map((tile) => (
+          {tiles.map((tile) => (
             <BrowseTile
               key={tile.view}
               view={tile.view}

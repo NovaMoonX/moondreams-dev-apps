@@ -21,6 +21,8 @@ import {
   retryKey,
   setFacts,
   setFactsFailed,
+  setKeyDateIndex,
+  setKeyDateIndexFailed,
   setKeyStatus,
   setPlaces,
   setPlacesFailed,
@@ -51,6 +53,7 @@ import {
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
+import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
 import { startMediaListener } from '@apps/helm/store/listeners/mediaListener';
 import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
@@ -59,6 +62,7 @@ import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListene
 import { startProfileListener } from '@apps/helm/store/listeners/profileListener';
 import { startOpenTasksListener } from '@apps/helm/store/listeners/taskListener';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
+import { useKeyDateRepair } from '@apps/helm/hooks/useKeyDateRepair';
 import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
 import { HELM_COPY, SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
@@ -185,6 +189,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
   useSelfWho(uid, displayName);
+  useKeyDateRepair(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
 
@@ -271,6 +276,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm people listener failed', error);
               dispatch(setWhoFailed());
+            },
+          ),
+          startKeyDateIndexListener(
+            uid,
+            read,
+            (index) => dispatch(setKeyDateIndex(index)),
+            (error) => {
+              console.error('Helm dates listener failed', error);
+              dispatch(setKeyDateIndexFailed());
             },
           ),
           startPlacesListener(

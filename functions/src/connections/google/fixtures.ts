@@ -594,6 +594,7 @@ interface FixtureContact {
   emails: string[];
   phones: string[];
   hasPhoto: boolean;
+  birthday?: { month: number; day: number; year?: number };
 }
 
 const PEOPLE_LIST_PATH = '/v1/people/me/connections';
@@ -609,6 +610,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['dana.whitfield@example.com'],
       phones: ['+1 415 555 0142'],
       hasPhoto: true,
+      birthday: { month: 6, day: 3 },
     },
     {
       id: 'c1000000002',
@@ -630,6 +632,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['priya@example.com'],
       phones: [],
       hasPhoto: true,
+      birthday: { month: 4, day: 22 },
     },
     {
       id: 'c1000000005',
@@ -644,6 +647,7 @@ const CONTACTS_BY_EMAIL: Record<string, FixtureContact[]> = {
       emails: ['lena.fischer@example.com'],
       phones: ['+49 30 5550 1188'],
       hasPhoto: true,
+      birthday: { month: 3, day: 14, year: 1988 },
     },
     {
       id: 'c1000000007',
@@ -689,6 +693,9 @@ const toPerson = (contact: FixtureContact) => ({
     metadata: { primary: true },
   })),
   phoneNumbers: contact.phones.map((value) => ({ value })),
+  ...(contact.birthday && {
+    birthdays: [{ date: contact.birthday, metadata: { primary: true } }],
+  }),
   photos: [
     contact.hasPhoto
       ? { url: photoUrlOf(contact), metadata: { primary: true } }

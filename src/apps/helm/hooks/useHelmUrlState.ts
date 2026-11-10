@@ -14,6 +14,7 @@ const URL_VIEWS = [
   'today',
   'inbox',
   'tasks',
+  'comingUp',
   'settings',
   'activity',
   'connectedApps',

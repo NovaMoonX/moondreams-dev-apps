@@ -7,6 +7,7 @@ import {
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
 import type { CaptureReading, TaskDue, Token } from './commands.js';
 import { withoutAddress } from './joinedTurn.js';
+import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
 
 export interface ContextTask {
@@ -53,6 +54,10 @@ export interface ContextInput {
   answeredQuestion?: string | null;
   facts?: ContextFact[];
   selfFacts?: ContextSelfFact[];
+  /** The dates that come back of the people the turn names. */
+  keyDates?: ContextKeyDate[];
+  /** The next dates that come back, when the turn asks what is coming up. */
+  upcoming?: ContextUpcoming[];
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -97,9 +102,11 @@ export function buildContext(input: ContextInput): {
   aliases: AliasBook;
   synced: SyncedBook;
   facts: AliasBook;
+  keyDates: AliasBook;
 } {
   const aliases = createAliasBook('t');
   const facts = createAliasBook('f');
+  const keyDates = createAliasBook('k');
   const synced = createSyncedBook();
   const syncedRecords = (input.synced ?? []).map((copy) => ({
     alias: synced.add(copy),
@@ -178,6 +185,19 @@ export function buildContext(input: ContextInput): {
           )}</about_you>`,
         ]
       : []),
+    ...(input.keyDates?.length
+      ? [
+          `<key_dates>${toDataJson(
+            input.keyDates.map(({ id, ...date }) => ({
+              alias: keyDates.add(id),
+              ...date,
+            })),
+          )}</key_dates>`,
+        ]
+      : []),
+    ...(input.upcoming?.length
+      ? [`<upcoming_dates>${toDataJson(input.upcoming)}</upcoming_dates>`]
+      : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
       : []),
@@ -187,7 +207,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced, facts };
+  return { message, aliases, synced, facts, keyDates };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */

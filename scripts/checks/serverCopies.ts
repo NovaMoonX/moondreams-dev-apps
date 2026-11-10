@@ -105,6 +105,16 @@ const COPIES: Copy[] = [
     dest: 'functions/src/apps/helm/nomos/whoTier.ts',
     importRewrites: {},
   },
+  {
+    src: 'src/apps/helm/utils/keyDateIndex.ts',
+    dest: 'functions/src/apps/helm/keyDateIndex.ts',
+    importRewrites: {},
+  },
+  {
+    src: 'src/utils/yearlyDateUtils.ts',
+    dest: 'functions/src/vendor/yearlyDateUtils.ts',
+    importRewrites: {},
+  },
 ];
 
 interface Generated {

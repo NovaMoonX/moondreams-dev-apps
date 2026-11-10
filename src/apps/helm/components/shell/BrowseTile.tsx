@@ -1,6 +1,7 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
   CalendarDays,
+  CalendarHeart,
   History,
   Inbox,
   Link2,
@@ -27,6 +28,7 @@ const VIEW_ENTRIES: Record<
   today: { label: 'Today', icon: CalendarDays },
   inbox: { label: 'Needs you', icon: Inbox },
   tasks: { label: HELM_COPY.tasksTitle, icon: ListChecks },
+  comingUp: { label: HELM_COPY.comingUpTile, icon: CalendarHeart },
   settings: { label: HELM_COPY.settingsTitle, icon: Settings2 },
   activity: { label: HELM_COPY.activityTitle, icon: History },
   connectedApps: { label: HELM_COPY.connectedAppsRowTitle, icon: Link2 },

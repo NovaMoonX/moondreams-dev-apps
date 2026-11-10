@@ -390,3 +390,31 @@ export const buildSpokenQuestion = (question: {
   }
   return prompt;
 };
+
+const lowerFirst = (text: string) =>
+  /^[A-Z][a-z]/.test(text)
+    ? text.charAt(0).toLowerCase() + text.slice(1)
+    : text;
+
+/** What a date that comes back is called: "birthday", "anniversary", or the person's own label ("gotcha day"). */
+export const toKeyDateName = (kind: string, label: string | null) =>
+  kind === 'birthday' || kind === 'anniversary'
+    ? kind
+    : lowerFirst(label ?? 'date');
+
+/** The result line of a date: "Added Mum's birthday: June 3", "Added your birthday: June 3". */
+export const buildKeyDateLine = (input: {
+  verb: 'Added' | 'Changed' | 'Removed';
+  owner: string | null;
+  kind: string;
+  label: string | null;
+  when: string | null;
+}) =>
+  `${input.verb} ${input.owner ? `${input.owner}'s` : 'your'} ${toKeyDateName(input.kind, input.label)}${input.when ? `: ${input.when}` : ''}`;
+
+/** The skipped line for a date the code did not write. */
+export const buildKeyDateSkipLine = (reason: string) => `Not added · ${reason}`;
+
+/** "Noted a date" or "Noted 2 dates", for the summary of a turn that noted some. */
+export const describeKeyDates = (count: number) =>
+  count === 0 ? null : plural(count, 'Noted a date', `Noted ${count} dates`);

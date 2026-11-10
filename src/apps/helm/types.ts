@@ -16,7 +16,8 @@ export type HelmView =
   | 'people'
   | 'who'
   | 'place'
-  | 'howNomosSeesYou';
+  | 'howNomosSeesYou'
+  | 'comingUp';
 
 export type Sealed = EncryptedFieldPayload;
 
@@ -407,6 +408,61 @@ export interface OpenWho extends Omit<Who, 'sealed'>, WhoSealed {
   isUnreadable: boolean;
 }
 
+export type KeyDateKind = 'birthday' | 'anniversary' | 'custom';
+
+/** `moment` is kept in the type for a later issue; nothing writes it yet. */
+export type KeyDateShape = 'yearly' | 'moment';
+
+/** `apps/helm/users/{uid}/keyDates/{id}`: only `whoId` and `shape` are readable; the date itself is sealed. */
+export interface KeyDate {
+  whoId: string;
+  shape: KeyDateShape;
+  source: 'person' | 'nomos' | 'google:contacts';
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface KeyDateSealed {
+  kind: KeyDateKind;
+  /** Required for `custom` (up to 60); otherwise an optional note. */
+  label: string | null;
+  month: number | null;
+  day: number | null;
+  /** The first year; null when unknown. */
+  year: number | null;
+  captureId: string | null;
+}
+
+export interface OpenKeyDate extends Omit<KeyDate, 'sealed'>, KeyDateSealed {
+  id: string;
+}
+
+/** `[keyDateId, kind, month, day, year, label]`: a tuple keeps the document small; label for custom only. */
+export type KeyDateIndexEntry = [
+  keyDateId: string,
+  kind: KeyDateKind,
+  month: number,
+  day: number | null,
+  year: number | null,
+  label: string | null,
+];
+
+export interface KeyDateIndexSealed {
+  byWho: Record<string, KeyDateIndexEntry[]>;
+}
+
+/** `apps/helm/users/{uid}/meta/keyDateIndex` (or `keyDateIndex-01` to `-12` once split). */
+export interface KeyDateIndex {
+  /** Readable: the cap check and a repair's comparison, nothing else. */
+  entryCount: number;
+  rebuiltAt: number | null;
+  lastEditedAt: number;
+  sealed: Sealed;
+}
+
 /** `apps/helm/users/{uid}/places/{placeId}`: a place named in a turn; never coordinates. */
 export interface Place {
   isHome: boolean;
@@ -508,7 +564,8 @@ export type AutonomyLevel = 1 | 2 | 3 | 4;
 export interface EffectRef {
   /** `delete` appears only in the executions an undo writes. */
   op: 'create' | 'update' | 'delete';
-  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile';
+  collection:
+    'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile' | 'keyDates';
   docId: string;
 }
 

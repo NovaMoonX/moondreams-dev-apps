@@ -8,6 +8,7 @@ import {
   MAX_EFFECTS,
   MAX_OPEN_ASKED,
   type AskCommand,
+  type KeyDateCommand,
   type MentionRead,
   type NomosCommand,
   type NoteFactCommand,
@@ -22,6 +23,8 @@ import {
   type KnownWho,
 } from './matchEntities.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
+import { planKeyDates, type KeyDateRecord } from './planKeyDates.js';
+import type { ByWho } from '../keyDateIndex.js';
 import { summarizeAnswer, type CaptureAnswer } from './answerGuards.js';
 import { AUTOMATIC_LEVEL } from './policy.js';
 import { shouldKeepSensitive } from './sensitive.js';
@@ -38,6 +41,7 @@ import {
   buildSpokenWhichIsTrue,
   buildWhichIsTrueQuestion,
   describeFacts,
+  describeKeyDates,
   summarize,
   type CodeQuestionKind,
   type EffectCounts,
@@ -66,6 +70,7 @@ export interface KnownWhoState extends KnownWho {
   mentionDayKeys: string[];
   taskLinkCount: number;
   hasRole: boolean;
+  yearlyDateCount: number;
 }
 
 /** The people and places a turn names, with what the person already has to match them against. */
@@ -95,8 +100,9 @@ export interface ExistingFact {
 }
 
 export interface EffectRef {
-  op: 'create' | 'update';
-  collection: 'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile';
+  op: 'create' | 'update' | 'delete';
+  collection:
+    'tasks' | 'facts' | 'who' | 'places' | 'media' | 'profile' | 'keyDates';
   docId: string;
 }
 
@@ -115,6 +121,11 @@ export interface WritePlan {
   factConfirms: { id: string; data: Record<string, unknown> }[];
   /** Each kept fact a new one disagrees with, marked as in dispute with it. */
   factDisputes: { id: string; data: Record<string, unknown> }[];
+  keyDateCreates: { id: string; data: Record<string, unknown> }[];
+  keyDateUpdates: { id: string; data: Record<string, unknown> }[];
+  keyDateDeletes: string[];
+  /** The yearly index after the turn's dates, null when it did not change. */
+  keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
   notKept: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
@@ -152,6 +163,13 @@ interface PlanInput {
   /** The person's own who record, which a fact about them is filed under. */
   selfWhoId?: string | null;
   timeZone?: string;
+  keyDates?: KeyDateCommand[];
+  /** The yearly index as read in the transaction. */
+  keyDateIndex?: { byWho: ByWho; entryCount: number };
+  /** The key date documents the commands name by id. */
+  existingKeyDates?: Map<string, KeyDateRecord>;
+  /** `yearlyDateCount` of each who a date is changed for, when it is not one the turn names. */
+  whoCounts?: Map<string, number>;
 }
 
 interface Draft {
@@ -808,7 +826,40 @@ export function planWrites(input: PlanInput): WritePlan {
     id: older.id,
     data: { disputedWithId: newerId },
   }));
-  const notKept = [...new Set(factSteps.notKept)];
+  const keyDatePlan = planKeyDates({
+    commands: input.keyDates ?? [],
+    whoIdOf: entities.whoIdOf,
+    selfWhoId,
+    nameOf,
+    whoCounts: new Map([
+      ...(input.people?.known ?? []).map((who): [string, number] => [
+        who.id,
+        who.yearlyDateCount,
+      ]),
+      ...(input.whoCounts ?? []),
+    ]),
+    existing: input.existingKeyDates ?? new Map(),
+    index: input.keyDateIndex?.byWho ?? {},
+    entryCount: input.keyDateIndex?.entryCount ?? 0,
+    captureId: input.captureId,
+    executionId: input.executionId,
+    now,
+    thisYear: new Date(now).getUTCFullYear(),
+    seal,
+    newId: input.newId,
+    room: Math.max(
+      0,
+      MAX_EFFECTS -
+        (effects.length +
+          drafts.size +
+          entities.newWho.length +
+          entities.newPlaces.length),
+    ),
+  });
+  keyDatePlan.effects.forEach(({ ref, effect }) =>
+    record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
+  );
+  const notKept = [...new Set([...factSteps.notKept, ...keyDatePlan.notKept])];
 
   const creates = [...drafts.values()].map((draft) => {
     const isDone = draft.status === 'done';
@@ -941,6 +992,55 @@ export function planWrites(input: PlanInput): WritePlan {
           ];
         });
 
+  const counterOf = (id: string, base: number) =>
+    base + (keyDatePlan.deltas.get(id) ?? 0);
+  const countedCreates = whoCreates.map((entry) =>
+    keyDatePlan.deltas.has(entry.id)
+      ? {
+          ...entry,
+          data: {
+            ...entry.data,
+            yearlyDateCount: counterOf(entry.id, 0),
+          },
+        }
+      : entry,
+  );
+  const countedIds = new Set(whoUpdates.map((entry) => entry.id));
+  const countedUpdates = [
+    ...whoUpdates.map((entry) =>
+      keyDatePlan.deltas.has(entry.id)
+        ? {
+            ...entry,
+            data: {
+              ...entry.data,
+              yearlyDateCount: counterOf(
+                entry.id,
+                people?.known.find((who) => who.id === entry.id)
+                  ?.yearlyDateCount ??
+                  input.whoCounts?.get(entry.id) ??
+                  0,
+              ),
+            },
+          }
+        : entry,
+    ),
+    ...(!isFiling
+      ? []
+      : [...keyDatePlan.deltas.keys()]
+          .filter((id) => !newWhoIds.has(id) && !countedIds.has(id))
+          .map((id) => ({
+            id,
+            data: {
+              yearlyDateCount: counterOf(
+                id,
+                people?.known.find((who) => who.id === id)?.yearlyDateCount ??
+                  input.whoCounts?.get(id) ??
+                  0,
+              ),
+            },
+          }))),
+  ];
+
   const disputeQuestions = !isFiling
     ? []
     : factSteps.disputes.map(
@@ -998,14 +1098,26 @@ export function planWrites(input: PlanInput): WritePlan {
   return {
     creates,
     updates: [...patches.entries()].map(([id, data]) => ({ id, data })),
-    whoCreates,
-    whoUpdates,
+    whoCreates: countedCreates,
+    whoUpdates: countedUpdates,
     placeCreates,
     factCreates,
     factConfirms,
     factDisputes,
+    keyDateCreates: keyDatePlan.creates,
+    keyDateUpdates: keyDatePlan.updates,
+    keyDateDeletes: keyDatePlan.deletes,
+    keyDateIndex:
+      isFiling && keyDatePlan.changes.length > 0
+        ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
+        : null,
     notKept,
-    linkedWhoIds: isFiling ? union([], [...entities.whoIdOf.values()]) : [],
+    linkedWhoIds: isFiling
+      ? union(
+          [...entities.whoIdOf.values()],
+          keyDatePlan.linkedWhoIds.filter((id) => id !== selfWhoId),
+        )
+      : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
     effectRefs,
     effects,
@@ -1232,7 +1344,12 @@ export function buildExecution(
     captureId: input.captureId,
     actor: 'nomos',
     category:
-      plan.factCreates.length + plan.factConfirms.length > 0 &&
+      plan.factCreates.length +
+        plan.factConfirms.length +
+        plan.keyDateCreates.length +
+        plan.keyDateUpdates.length +
+        plan.keyDateDeletes.length >
+        0 &&
       plan.counts.made + plan.counts.updated + plan.counts.completed === 0
         ? 'remember'
         : 'organize',
@@ -1252,6 +1369,11 @@ export function buildExecution(
       summary: [
         summarize(plan.counts, input.messageCount),
         describeFacts(plan.factCreates.length + plan.factConfirms.length),
+        describeKeyDates(
+          plan.keyDateCreates.length +
+            plan.keyDateUpdates.length +
+            plan.keyDateDeletes.length,
+        ),
         ...plan.notKept,
         homeLine,
       ]

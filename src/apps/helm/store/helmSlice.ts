@@ -2,6 +2,7 @@ import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { ACTIVITY_PAGE } from '@apps/helm/constants';
 import { resetAllState } from '@/store/actions/globalActions';
+import type { OpenKeyDateIndex } from '@apps/helm/store/listeners/keyDateIndexListener';
 import type {
   HelmProfile,
   OpenCapture,
@@ -25,6 +26,11 @@ export interface CaptureSet {
 
 export interface LoadedSet<T> {
   items: T[];
+  isLoaded: boolean;
+  isFailed: boolean;
+}
+
+export interface KeyDateIndexSet extends OpenKeyDateIndex {
   isLoaded: boolean;
   isFailed: boolean;
 }
@@ -65,6 +71,8 @@ export interface HelmState {
   facts: LoadedSet<OpenFact>;
   /** The people, pets and organizations the person knows. */
   who: LoadedSet<OpenWho>;
+  /** The sealed index of the dates that come back each year, opened. */
+  keyDateIndex: KeyDateIndexSet;
   /** The places the person has named. */
   places: LoadedSet<OpenPlace>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
@@ -98,6 +106,14 @@ const emptyPlanDays: PlanDaySet = {
   isFailed: false,
 };
 
+const emptyKeyDateIndex: KeyDateIndexSet = {
+  byWho: {},
+  entryCount: 0,
+  rebuiltAt: null,
+  isLoaded: false,
+  isFailed: false,
+};
+
 const initialState: HelmState = {
   keyStatus: 'loading',
   keyAttempt: 0,
@@ -113,6 +129,7 @@ const initialState: HelmState = {
   planDays: emptyPlanDays,
   facts: emptyLoadedSet,
   who: emptyLoadedSet,
+  keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
   media: emptyLoadedSet,
   synced: emptyLoadedSet,
@@ -217,6 +234,16 @@ const helmSlice = createSlice({
     },
     setWhoFailed: (state) => {
       state.who.isFailed = true;
+    },
+    setKeyDateIndex: (state, action: PayloadAction<OpenKeyDateIndex>) => {
+      state.keyDateIndex = {
+        ...action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setKeyDateIndexFailed: (state) => {
+      state.keyDateIndex.isFailed = true;
     },
     setPlaces: (state, action: PayloadAction<OpenPlace[]>) => {
       state.places = {
@@ -340,6 +367,8 @@ export const {
   setFactsFailed,
   setWho,
   setWhoFailed,
+  setKeyDateIndex,
+  setKeyDateIndexFailed,
   setPlaces,
   setPlacesFailed,
   setMedia,

@@ -738,6 +738,7 @@ test("a noted fact is confirmed only when stated with the person's own words, an
     tierSetBy: 'person' as const,
     mentionDayKeys: [],
     taskLinkCount: 0,
+    yearlyDateCount: 0,
     hasRole: false,
   };
   const mention = {
@@ -944,6 +945,7 @@ test('a fact that contradicts a kept one keeps both, marks both and asks which i
     tierSetBy: 'person' as const,
     mentionDayKeys: [],
     taskLinkCount: 0,
+    yearlyDateCount: 0,
     hasRole: false,
   };
   const older: ExistingFact = {

@@ -40,6 +40,19 @@ export function buildResultLines(
         },
       ];
     }
+    if (ref.collection === 'keyDates') {
+      return [
+        {
+          key: `${ref.docId}:${index}`,
+          docId: ref.docId,
+          title:
+            toText(effect?.written['sealed.title']) ??
+            toText(effect?.previous?.['sealed.title']) ??
+            HELM_COPY.resultKeyDateFallback,
+          detail: null,
+        },
+      ];
+    }
     const task = tasksById.get(ref.docId);
     const title =
       toText(effect?.written['sealed.title']) ??

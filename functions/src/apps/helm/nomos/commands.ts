@@ -35,6 +35,8 @@ export const COMMAND_KINDS = [
   'planDay',
   'setCurrentPlace',
   'noteFact',
+  'setKeyDate',
+  'removeKeyDate',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -67,6 +69,11 @@ export const STATEMENT_CAP = 500;
 export const FACT_QUOTE_CAP = 280;
 export const MAX_NOTED_FACTS = 5;
 export const TOPIC_CAP = 40;
+export const MAX_KEY_DATES = 5;
+export const KEY_DATE_LABEL_CAP = 60;
+export const KEY_DATE_KINDS = ['birthday', 'anniversary', 'custom'] as const;
+
+export type KeyDateKind = (typeof KEY_DATE_KINDS)[number];
 export const FACT_KINDS = [
   'world',
   'preference',
@@ -208,6 +215,27 @@ export interface NoteFactCommand {
   contradicts: string | null;
 }
 
+/** A date that comes back each year for someone or the person, its month, day and year settled from a resolved date span by code. */
+export interface SetKeyDateCommand {
+  kind: 'setKeyDate';
+  whoRefs: string[];
+  isAboutMe: boolean;
+  /** The date being changed, settled from its alias; null adds one. */
+  keyDateId: string | null;
+  keyKind: KeyDateKind;
+  label: string | null;
+  date: { month: number; day: number; year: number | null } | null;
+  comesBack: boolean | null;
+  quote: string | null;
+}
+
+export interface RemoveKeyDateCommand {
+  kind: 'removeKeyDate';
+  keyDateId: string;
+}
+
+export type KeyDateCommand = SetKeyDateCommand | RemoveKeyDateCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -300,6 +328,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'isSensitive',
             'isAboutMe',
             'contradicts',
+            'keyDateAlias',
+            'keyDateKind',
+            'keyDateLabel',
+            'dateSpanId',
+            'comesBack',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -487,6 +520,28 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             isAboutMe: nullable(
               'boolean',
               'noteFact: true when it is about the person talking ("I", "my"); false when it is about someone or something else.',
+            ),
+            keyDateAlias: nullable(
+              'string',
+              'setKeyDate: the alias of a date in <key_dates> being changed; null to add a new one. removeKeyDate: the alias of the date to remove.',
+            ),
+            keyDateKind: {
+              type: ['string', 'null'],
+              enum: [...KEY_DATE_KINDS, null],
+              description:
+                'setKeyDate: birthday, anniversary, or custom for any other date that comes back each year ("gotcha day"); null for every other kind.',
+            },
+            keyDateLabel: nullable(
+              'string',
+              `setKeyDate: the name of a custom date ("Gotcha day"), at most ${KEY_DATE_LABEL_CAP} characters; null otherwise.`,
+            ),
+            dateSpanId: nullable(
+              'string',
+              'setKeyDate: the id of the date span in the reading that gives the date. Never write a date yourself.',
+            ),
+            comesBack: nullable(
+              'boolean',
+              'setKeyDate custom only: true when the date comes back each year; false for a one-time date.',
             ),
             contradicts: nullable(
               'string',

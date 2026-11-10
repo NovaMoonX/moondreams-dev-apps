@@ -103,6 +103,34 @@ export const TODAY_SYNCED_ROWS = 5;
 /** How many executions Activity lists at first and each time it nears its foot. */
 export const ACTIVITY_PAGE = 30;
 
+/** What a person's dates can hold: the whole set, the yearly ones for one who, and where the sealed index splits into month documents. */
+export const HELM_CAPS = {
+  keyDates: 20_000,
+  yearlyPerWho: 20,
+  indexSplit: 6_000,
+} as const;
+
+/** The kinds of date that come back each year, in the order the add sheet offers them. */
+export const KEY_DATE_KINDS = ['birthday', 'anniversary', 'custom'] as const;
+
+/** Today's dates look this many days ahead, today included. */
+export const TODAY_WINDOW_DAYS = 7;
+
+/** Coming up looks this far ahead. */
+export const COMING_UP_DAYS = 365;
+
+/** Lines of dates shown on Today before "+N more this week". */
+export const TODAY_KEY_DATES = 3;
+
+/** Dates one month of Coming up shows before its "Show N more". */
+export const COMING_UP_MONTH_ROWS = 20;
+
+/** Coming up shows a search box from this many rows. */
+export const COMING_UP_SEARCH_FROM = 8;
+
+/** A person's own words for a date, kept to this many characters. */
+export const KEY_DATE_LABEL_MAX = 60;
+
 const joinTitles = (titles: string[]) =>
   titles.length < 2
     ? (titles[0] ?? '')
@@ -130,6 +158,11 @@ const forgetFactsLine = (facts: number) =>
   facts === 0
     ? ''
     : ` ${facts === 1 ? 'Its fact is' : `Its ${facts} facts are`} forgotten too.`;
+
+const forgetDatesLine = (dates: number) =>
+  dates === 0
+    ? ''
+    : ` ${dates === 1 ? 'Its date is' : `Its ${dates} dates are`} deleted too.`;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -1050,12 +1083,13 @@ export const HELM_COPY = {
     tasks: number,
     photos: number,
     facts: number,
+    dates: number,
   ) =>
     `${
       tasks === 0
         ? `Forget ${name}? No tasks are linked to them.`
         : `Forget ${name}? ${tasks === 1 ? '1 task stays' : `${tasks} tasks stay`}, with no person.`
-    }${forgetFactsLine(facts)}${forgetPhotosLine(photos)}`,
+    }${forgetFactsLine(facts)}${forgetDatesLine(dates)}${forgetPhotosLine(photos)}`,
   forgetConfirmPlace: (
     name: string,
     tasks: number,
@@ -1121,6 +1155,100 @@ export const HELM_COPY = {
   photoRestoreFailed: "That photo couldn't be put back.",
   photoUnreadable: "This photo can't be opened here.",
   photoViewerLabel: 'Photos',
+  keyDatesHeading: 'Key dates',
+  keyDateAdd: 'Add a date',
+  keyDatesEmpty: (name: string) =>
+    `No key dates yet. Tell ${name} a birthday, or add one.`,
+  keyDateKindBirthday: 'Birthday',
+  keyDateKindAnniversary: 'Anniversary',
+  keyDateKindCustom: 'Something else',
+  keyDateYearUnknown: 'Year not known',
+  keyDateAddYear: 'Add year',
+  keyDateDayUnknown: 'Day not known, so not on Today',
+  keyDateAddDay: 'Add day',
+  keyDateTurns: (age: number, weekday: string) => `turns ${age} on ${weekday}`,
+  keyDateYearsOn: (years: number, day: string) =>
+    `${years} ${years === 1 ? 'year' : 'years'} on ${day}`,
+  keyDateComesBack: 'Comes back each year',
+  keyDateSourceSaid: (day: string) => `You said · ${day}`,
+  keyDateSourceGoogle: (day: string) => `From Google Contacts, ${day}`,
+  keyDateSourceAdded: 'You added this',
+  keyDateSheetEdit: 'Edit',
+  keyDateSheetRemove: 'Remove',
+  keyDateEditTitle: 'Edit this date',
+  keyDateNewTitle: 'Add a date',
+  keyDateKindLabel: 'What is it?',
+  keyDateMonthLabel: 'Month',
+  keyDateDayLabel: 'Day',
+  keyDateYearLabel: 'Year',
+  keyDateOptional: 'Optional',
+  keyDateNameLabel: 'What it is called',
+  keyDateNamePlaceholder: 'Gotcha day',
+  keyDateSave: 'Save',
+  keyDateAddSave: 'Add date',
+  keyDateNeedsConnection: 'Needs a connection to save',
+  keyDateMonthAlone: 'Add a day or a year too.',
+  keyDateBadDay: "That day isn't in that month.",
+  keyDateBadYear: "That year doesn't look right.",
+  keyDateNeedsName: `Give it a name, up to ${KEY_DATE_LABEL_MAX} characters.`,
+  keyDateHasBirthday: 'There is already a birthday. Edit that one.',
+  keyDateFull: (name: string) =>
+    `${name} has ${HELM_CAPS.yearlyPerWho} dates, the most that are kept.`,
+  keyDateTooMany: `${HELM_CAPS.keyDates.toLocaleString('en-US')} dates are kept, the most there can be.`,
+  keyDateFailed: "That didn't save. Try again.",
+  keyDateChangedMeanwhile:
+    'That date changed on another device. Close this and open it again.',
+  keyDateAdded: (title: string) => `Added ${title}`,
+  keyDateSaved: 'Date saved',
+  keyDateRemoved: (title: string) => `Removed ${title}`,
+  keyDateUndone: 'Put back',
+  keyDateUndoFailed: "That couldn't be put back.",
+  keyDateUndoChanged: 'That changed since, so it was left alone.',
+  keyDateRemoveFailed: "That wasn't removed. Try again.",
+  keyDateYours: 'Your',
+  keyDateOwn: (name: string) => `${name}'s`,
+  keyDateWith: (name: string) => ` with ${name}`,
+  keyDateTodayWord: 'today',
+  keyDateTomorrowWord: 'tomorrow',
+  keyDateTurnsLine: (name: string, age: number) => `${name} turns ${age}`,
+  keyDatesMoreThisWeek: (count: number) => `+${count} more this week`,
+  keyDatesWeekLabel: 'Dates this week',
+  comingUpTitle: 'Coming up',
+  comingUpSubtitle:
+    'Birthdays, anniversaries and other dates that come back, for the next 12 months.',
+  comingUpEmpty: (name: string) =>
+    `No birthdays or anniversaries yet. Tell ${name} one, or add it on someone's page.`,
+  comingUpShowEveryone: 'Show everyone',
+  comingUpPassingHint: (count: number) =>
+    `${count} more ${count === 1 ? 'date' : 'dates'} from people you only mention in passing. Turn on Show everyone to see ${count === 1 ? 'it' : 'them'}.`,
+  comingUpFailed: "Your dates didn't open. Close this page and open it again.",
+  comingUpToday: 'Today',
+  comingUpTomorrow: 'Tomorrow',
+  comingUpShowMore: (count: number, month: string) =>
+    `Show ${count} more in ${month}`,
+  comingUpSearchLabel: 'Search dates',
+  comingUpSearchNone: 'No date matches that.',
+  comingUpAge: (age: number) => `turns ${age}`,
+  comingUpYears: (years: number) =>
+    `${years} ${years === 1 ? 'year' : 'years'}`,
+  comingUpNoneShown: 'Nothing coming up for the people shown.',
+  comingUpTile: 'Coming up',
+  askComingUp: 'Ask about what is coming up',
+  chipComingUp: 'About what is coming up',
+  backToComingUp: 'Back to Coming up',
+  resultKeyDateFallback: 'A date',
+  tookBackKeyDates: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'date' : 'dates'}`,
+  undoReportKeyDates: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'date' : 'dates'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportKeyDatesToo: (count: number) =>
+    `${count === 1 ? '1 date' : `${count} dates`} too.`,
 } as const;
 
 export const PLANNER_COPY = {

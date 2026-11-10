@@ -26,6 +26,7 @@ const dana = {
   tierSetBy: 'person' as const,
   mentionDayKeys: [],
   taskLinkCount: 0,
+  yearlyDateCount: 0,
   hasRole: false,
 };
 const mention = {

@@ -21,6 +21,7 @@ import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
 import WhoDetail from '@apps/helm/components/who/WhoDetail';
 import WhoView from '@apps/helm/components/who/WhoView';
 import TasksView from '@apps/helm/components/tasks/TasksView';
+import ComingUpView from '@apps/helm/components/comingUp/ComingUpView';
 import TodayView from '@apps/helm/components/today/TodayView';
 import { HelmVoiceContext, useHelmVoice } from '@apps/helm/hooks/useHelmVoice';
 import { useHelmSync } from '@apps/helm/hooks/useHelmSync';
@@ -105,6 +106,15 @@ function HelmApp() {
             onBack={goHome}
             onHome={goHome}
             onOpenTasks={() => showView('tasks')}
+            onOpenComingUp={() => showView('comingUp')}
+            onOpenWho={(whoId) => showView('who', whoId)}
+          />
+        )}
+        {!isLocked && view === 'comingUp' && (
+          <ComingUpView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenWho={(whoId) => showView('who', whoId)}
           />
         )}
         {!isLocked && view === 'tasks' && (

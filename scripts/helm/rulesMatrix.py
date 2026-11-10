@@ -217,6 +217,21 @@ def main():
             admin([rm(dk + '-new-' + a)])
         check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
 
+    # A key date and the sealed index of them are the owner's alone, like a task; the index is written in the same transaction as the date.
+    kd = dict(whoId='who-1', shape='yearly', source='person', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    ix = dict(entryCount=1, rebuiltAt=None, lastEditedAt=NOW, sealed=SEAL)
+    for name, doc, field, changed, docId in (('keyDates', kd, 'lastEditedAt', NOW + 1, 'date-1'), ('meta', ix, 'entryCount', 2, 'keyDateIndex')):
+        dk = f'{path}/{name}/{docId}'
+        for a, tok in actors.items():
+            admin([put(dk, doc)])
+            check(f'{name} read [{a}]', get(dk, tok), a == 'o')
+            check(f'{name} list [{a}]', get(f'{path}/{name}', tok), a == 'o')
+            check(f'{name} create [{a}]', commit(tok, [put_new(dk + '-new-' + a, doc)]), a == 'o')
+            check(f'{name} update [{a}]', commit(tok, [put(dk, dict(doc, **{field: changed}))]), a == 'o')
+            check(f'{name} delete [{a}]', commit(tok, [rm(dk)]), a == 'o')
+            admin([rm(dk + '-new-' + a)])
+        check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
+
     # A medium's document is the owner's alone, and the owner may only write a photo's shape.
     photo = dict(kind='photo', role='photo', status='kept', mimeType='image/webp', hasThumb=True, attachedTo=[dict(kind='who', id='who-1')], decidedBy='person', createdAt=NOW, decidedAt=NOW, deleteAfter=None, sealed=SEAL)
     mk = f'{path}/media/media-1'
@@ -262,7 +277,7 @@ def main():
 
     # No other collection is opened yet, and the server-only paths refuse everyone.
     admin([put(path, profile)])
-    for p in (f'{path}/meta/keyDateIndex', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
+    for p in (f'{path}/other/anything', 'apps/helm/server/keyring', 'apps/helm/keyChecks/latest', f'voiceUsage/{uid}/days/2026-11-09', 'voiceBudget/2026-11-09'):
         admin([put(p, {'x': 1})])
         label = p.split("/")[0] if p.startswith('voice') else p.split("/")[-2]
         for a, tok in actors.items():

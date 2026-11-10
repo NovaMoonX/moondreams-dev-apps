@@ -5,7 +5,9 @@ import {
   getDocs,
   limit,
   query,
+  increment,
   runTransaction,
+  type Transaction,
   where,
 } from 'firebase/firestore';
 
@@ -14,11 +16,21 @@ import { deleteFile } from '@lib/firebase/storage';
 import { createSealedReader } from '@lib/security';
 
 import { openJson, sealJson } from '@apps/helm/security';
+import {
+  readIndexIn,
+  writeIndexIn,
+} from '@apps/helm/store/actions/keyDateIndexStore';
+import {
+  applyChanges,
+  type IndexChange,
+  type IndexEntry,
+} from '@apps/helm/utils/keyDateIndex';
 import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
   planReopen,
   planUndo,
+  type UndoPlan,
   type UndoRefusal,
   type UndoTarget,
 } from '@apps/helm/nomos/planUndo';
@@ -26,6 +38,7 @@ import type {
   EffectRef,
   ExecutionSealed,
   HelmEncryption,
+  KeyDateSealed,
   Sealed,
   TaskSealed,
   WhoSealed,
@@ -85,6 +98,166 @@ async function readUsedIds(
   return new Set(checks.flat());
 }
 
+type WritePlan = Extract<UndoPlan, { kind: 'write' }>;
+
+const toKeyEntry = (id: string, sealed: KeyDateSealed): IndexEntry => [
+  id,
+  sealed.kind,
+  sealed.month ?? 1,
+  sealed.day,
+  sealed.year,
+  sealed.kind === 'custom' ? sealed.label : null,
+];
+
+/** What an undo does to dates, as the index's changes and each person's counter. */
+const toDateChanges = (
+  plan: WritePlan,
+  targets: Map<string, UndoTarget>,
+): { changes: IndexChange[]; deltas: Map<string, number> } => {
+  const whoOf = (docId: string) => {
+    const whoId = targets.get(docId)?.data?.whoId;
+    return typeof whoId === 'string' ? whoId : null;
+  };
+  const removed = plan.deletes.flatMap(({ docId, collection: from }) => {
+    const whoId = from === 'keyDates' ? whoOf(docId) : null;
+    return whoId
+      ? [
+          {
+            whoId,
+            change: { op: 'remove', whoId, keyDateId: docId } as IndexChange,
+            delta: -1,
+          },
+        ]
+      : [];
+  });
+  const restored = plan.updates.flatMap((update) => {
+    const whoId = update.collection === 'keyDates' ? whoOf(update.docId) : null;
+    const sealed = update.reseal as KeyDateSealed | null;
+    return whoId && sealed
+      ? [
+          {
+            whoId,
+            change: {
+              op: 'upsert',
+              whoId,
+              entry: toKeyEntry(update.docId, sealed),
+            } as IndexChange,
+            delta: 0,
+          },
+        ]
+      : [];
+  });
+  const recreated = plan.creates.flatMap((entry) => {
+    const whoId = entry.fields.whoId;
+    return typeof whoId === 'string'
+      ? [
+          {
+            whoId,
+            change: {
+              op: 'upsert',
+              whoId,
+              entry: toKeyEntry(entry.docId, entry.seal),
+            } as IndexChange,
+            delta: 1,
+          },
+        ]
+      : [];
+  });
+  const all = [...removed, ...restored, ...recreated];
+  return {
+    changes: all.map(({ change }) => change),
+    deltas: all.reduce(
+      (sums, { whoId, delta }) =>
+        sums.set(whoId, (sums.get(whoId) ?? 0) + delta),
+      new Map<string, number>(),
+    ),
+  };
+};
+
+interface DatesRead {
+  changes: IndexChange[];
+  deltas: Map<string, number>;
+  index: Awaited<ReturnType<typeof readIndexIn>> | null;
+  whoHere: Set<string>;
+}
+
+/** Reads the index and the people whose counters move, before anything is written. */
+async function readDatesIn(
+  transaction: Transaction,
+  uid: string,
+  encryption: HelmEncryption,
+  plan: UndoPlan,
+  targets: Map<string, UndoTarget>,
+): Promise<DatesRead> {
+  if (plan.kind !== 'write') {
+    return { changes: [], deltas: new Map(), index: null, whoHere: new Set() };
+  }
+  const { changes, deltas } = toDateChanges(plan, targets);
+  if (changes.length === 0) {
+    return { changes, deltas, index: null, whoHere: new Set() };
+  }
+  const index = await readIndexIn(transaction, uid, encryption);
+  const owners = await Promise.all(
+    [...deltas.entries()]
+      .filter(([, delta]) => delta !== 0)
+      .map(async ([whoId]) => ({
+        whoId,
+        snapshot: await transaction.get(doc(userOf(uid), 'who', whoId)),
+      })),
+  );
+  return {
+    changes,
+    deltas,
+    index,
+    whoHere: new Set(
+      owners.flatMap(({ whoId, snapshot }) =>
+        snapshot.exists() ? [whoId] : [],
+      ),
+    ),
+  };
+}
+
+/** Moves each counter by the dates taken back or put back and rewrites the index, in the undo's own transaction. */
+async function writeDatesIn(
+  transaction: Transaction,
+  uid: string,
+  encryption: HelmEncryption,
+  plan: UndoPlan,
+  dates: DatesRead,
+) {
+  if (plan.kind !== 'write' || !dates.index) return;
+  const deletedWho = new Set(
+    plan.deletes
+      .filter(({ collection: from }) => from === 'who')
+      .map(({ docId }) => docId),
+  );
+  await Promise.all(
+    plan.creates.map(async ({ docId, collection: from, fields, seal }) =>
+      transaction.set(doc(collection(userOf(uid), from), docId), {
+        ...fields,
+        sealed: await sealJson<KeyDateSealed>(seal, encryption),
+      }),
+    ),
+  );
+  [...dates.deltas.entries()]
+    .filter(
+      ([whoId, delta]) =>
+        delta !== 0 && dates.whoHere.has(whoId) && !deletedWho.has(whoId),
+    )
+    .forEach(([whoId, delta]) =>
+      transaction.update(doc(userOf(uid), 'who', whoId), {
+        yearlyDateCount: increment(delta),
+      }),
+    );
+  const next = applyChanges(dates.index.byWho, dates.changes);
+  await writeIndexIn(transaction, uid, encryption, {
+    byWho: next.byWho,
+    rebuiltAt: dates.index.rebuiltAt,
+    existingIds: dates.index.existingIds,
+    now: Date.now(),
+  });
+}
+
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
   error !== null &&
@@ -134,15 +307,37 @@ export async function undoExecution(
             refs.map(async (ref): Promise<[string, UndoTarget]> => {
               const { docId } = ref;
               const isOpened =
-                ref.collection === 'tasks' || ref.collection === 'who';
+                ref.collection === 'tasks' ||
+                ref.collection === 'who' ||
+                ref.collection === 'keyDates';
               const entry = await transaction.get(docOf(ref));
+              if (ref.collection === 'keyDates' && ref.op === 'delete') {
+                const whoId =
+                  original.effects[original.effectRefs.indexOf(ref)]?.previous
+                    ?.whoId;
+                const owner =
+                  typeof whoId === 'string'
+                    ? await transaction.get(doc(userOf(uid), 'who', whoId))
+                    : null;
+                return [
+                  docId,
+                  {
+                    docId,
+                    data: entry.exists()
+                      ? (entry.data() as Record<string, unknown>)
+                      : null,
+                    opened: null,
+                    isOwnerHere: owner?.exists() ?? false,
+                  },
+                ];
+              }
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
               if (!isOpened) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
-                  ? openJson<TaskSealed | WhoSealed>(
+                  ? openJson<TaskSealed | WhoSealed | KeyDateSealed>(
                       data.sealed as Sealed,
                       encryption,
                     )
@@ -162,6 +357,13 @@ export async function undoExecution(
         if (plan.kind === 'refused') {
           return { kind: 'refused', reason: plan.reason, report: plan.report };
         }
+        const dates = await readDatesIn(
+          transaction,
+          uid,
+          encryption,
+          plan,
+          targets,
+        );
         const questionCaptureId = original.questionRef?.captureId ?? null;
         const captureRef = questionCaptureId
           ? doc(userOf(uid), 'captures', questionCaptureId)
@@ -185,10 +387,9 @@ export async function undoExecution(
           plan.updates.map(async (update) =>
             update.reseal
               ? {
-                  sealed: await sealJson<TaskSealed | WhoSealed>(
-                    update.reseal,
-                    encryption,
-                  ),
+                  sealed: await sealJson<
+                    TaskSealed | WhoSealed | KeyDateSealed
+                  >(update.reseal, encryption),
                 }
               : {},
           ),
@@ -206,6 +407,7 @@ export async function undoExecution(
             ...resealed[index],
           }),
         );
+        await writeDatesIn(transaction, uid, encryption, plan, dates);
         if (captureRef && reopen) transaction.update(captureRef, reopen);
         transaction.set(undoRef, { ...plan.undoExecution, sealed });
         transaction.update(executionRef, { undoneByExecutionId: undoRef.id });

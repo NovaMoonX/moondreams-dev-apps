@@ -755,6 +755,129 @@ test('taking back a settle reopens its question and the turn; no other answer do
   assert.equal(planReopen({ questionRef: null }, null), null);
 });
 
+const dateWords = {
+  kind: 'birthday' as const,
+  label: null,
+  month: 6,
+  day: 3,
+  year: null,
+  captureId: 'turn-1',
+};
+
+const dateTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  isOwnerHere = true,
+): [string, UndoTarget] => [
+  docId,
+  { docId, data, opened: data ? dateWords : null, isOwnerHere },
+];
+
+const dateRef = (op: EffectRef['op'], docId: string) =>
+  ({ op, collection: 'keyDates', docId }) as EffectRef;
+
+test('a date the turn made is deleted by its undo, and says dates', () => {
+  const result = asWrite(
+    plan(
+      execution([
+        {
+          ref: dateRef('create', 'k1'),
+          effect: {
+            written: { 'sealed.title': "Added Mum's birthday: June 3" },
+            previous: null,
+          },
+        },
+      ]),
+      [dateTarget('k1', { lastEditedAt: null })],
+    ),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => [entry.docId, entry.collection]),
+    [['k1', 'keyDates']],
+  );
+  assert.equal(result.undoSealed.summary, 'Took back 1 date');
+});
+
+test('a year the turn filled in goes back to none, and is kept once the person edited the date', () => {
+  const fill = execution([
+    {
+      ref: dateRef('update', 'k1'),
+      effect: {
+        written: { 'sealed.title': 'Changed', 'sealed.year': 1960 },
+        previous: { 'sealed.title': 'Changed', 'sealed.year': null },
+      },
+    },
+  ]);
+  const restored = asWrite(
+    plan(fill, [
+      [
+        'k1',
+        {
+          docId: 'k1',
+          data: { lastEditedAt: null },
+          opened: { ...dateWords, year: 1960 },
+        },
+      ],
+    ]),
+  );
+  assert.ok(restored.updates[0].reseal);
+  assert.deepEqual(
+    { ...restored.updates[0].reseal },
+    { ...dateWords, year: null },
+  );
+  const kept = plan(fill, [
+    [
+      'k1',
+      {
+        docId: 'k1',
+        data: { lastEditedAt: null },
+        opened: { ...dateWords, year: 1961 },
+      },
+    ],
+  ]);
+  assert.equal(kept.kind === 'write' ? kept.updates.length : 0, 0);
+});
+
+const removal = execution([
+  {
+    ref: dateRef('delete', 'k1'),
+    effect: {
+      written: { 'sealed.title': "Removed Mum's birthday: June 3" },
+      previous: {
+        'sealed.title': "Removed Mum's birthday: June 3",
+        whoId: 'w1',
+        shape: 'yearly',
+        source: 'person',
+        createdAt: 7,
+        'sealed.kind': 'birthday',
+        'sealed.label': null,
+        'sealed.month': 6,
+        'sealed.day': 3,
+        'sealed.year': 1960,
+        'sealed.captureId': null,
+      },
+    },
+  },
+]);
+
+test('a removed date is written back under its id, with its words', () => {
+  const result = asWrite(plan(removal, [dateTarget('k1', null)]));
+  assert.equal(result.creates.length, 1);
+  assert.equal(result.creates[0].docId, 'k1');
+  assert.equal(result.creates[0].fields.whoId, 'w1');
+  assert.equal(result.creates[0].seal.year, 1960);
+  assert.equal(result.creates[0].seal.month, 6);
+  assert.deepEqual(
+    result.undoExecution.effectRefs.map((ref) => ref.op),
+    ['update'],
+  );
+});
+
+test('a removed date is not brought back for a person who is gone', () => {
+  const result = plan(removal, [dateTarget('k1', null, false)]);
+  assert.equal(result.kind === 'write' ? result.creates.length : 0, 0);
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

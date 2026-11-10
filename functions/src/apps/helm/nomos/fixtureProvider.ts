@@ -822,6 +822,92 @@ const readSelfFact = (text: string) => {
   };
 };
 
+const KEY_DATE_RE =
+  /^\s*(?:(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)['’]s|(my|our))\s+(birthday|anniversary|gotcha day)\s+is\s+(.+?)\s*[.!]?\s*$/u;
+const REMOVE_KEY_DATE_RE =
+  /^\s*(?:remove|delete)\s+(@?[A-Z][\p{L}'’.-]*)['’]s\s+(birthday|anniversary|gotcha day)\s*[.!]?\s*$/iu;
+
+interface ListedKeyDate {
+  alias: string;
+  who: string;
+  kind: string;
+  label: string | null;
+}
+
+const KEY_DATE_LABELS: Record<string, string> = {
+  'gotcha day': 'Gotcha day',
+};
+
+/** The emulator's stand-in for "Dana's birthday is June 3", "our anniversary is June 20" or "Miso's gotcha day is Dec 3": one setKeyDate on the date span the words end with, about the name that starts them or the person. "Remove Dana's birthday" removes the one in context. Null for any other words. */
+const readKeyDate = (
+  text: string,
+  reading: CaptureReading,
+  message: string,
+) => {
+  const removal = REMOVE_KEY_DATE_RE.exec(text);
+  if (removal) {
+    const name = removal[1].replace(/^@/, '');
+    const word = removal[2].toLowerCase();
+    const listed = readBlock<ListedKeyDate[]>(message, 'key_dates') ?? [];
+    const found = listed.find(
+      (entry) =>
+        entry.who === name &&
+        (entry.kind === word || entry.label?.toLowerCase() === word),
+    );
+    return found
+      ? {
+          commands: [
+            toAnswer({
+              kind: 'removeKeyDate',
+              isHealth: null,
+              keyDateAlias: found.alias,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  const match = KEY_DATE_RE.exec(text);
+  if (!match) return null;
+  const [, handle, owner, word, said] = match;
+  const name = handle?.replace(/^@/, '');
+  if (name && NOT_NAMES.has(name)) return null;
+  const start = text.lastIndexOf(said);
+  const span = reading.dates.find((entry) => entry.start >= start);
+  if (!span) return null;
+  const lower = word.toLowerCase();
+  const known = KNOWN_MENTIONS.find((entry) => entry.name === name);
+  return {
+    commands: [
+      toAnswer({
+        kind: 'setKeyDate',
+        isHealth: null,
+        whoRefs: name ? ['$w1'] : [],
+        isAboutMe: owner !== undefined,
+        keyDateKind: lower === 'gotcha day' ? 'custom' : lower,
+        keyDateLabel: KEY_DATE_LABELS[lower] ?? null,
+        dateSpanId: span.id,
+        comesBack: lower === 'gotcha day' ? true : null,
+        quote: text.trim().replace(/[.!]$/, ''),
+      }),
+    ],
+    mentions: name
+      ? [
+          {
+            ref: '$w1',
+            name,
+            kind: known?.kind ?? 'person',
+            relation: null,
+            species: known?.species ?? null,
+            organizationKind: known?.organizationKind ?? null,
+          },
+        ]
+      : [],
+    places: [],
+  };
+};
+
 /** The emulator's stand-in for "plan my day" or "plan tomorrow": one planDay on the day span the reading found, or today when it found none. Null for any other words. */
 const readPlanDay = (text: string, reading: CaptureReading) =>
   PLAN_DAY_RE.test(text)
@@ -880,6 +966,17 @@ export function createFixtureProvider(
       if (atHome) {
         return {
           terminalInput: { commands: atHome },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const keyDate = readKeyDate(text, reading, messages[0]?.content ?? '');
+      if (keyDate) {
+        return {
+          terminalInput: keyDate,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

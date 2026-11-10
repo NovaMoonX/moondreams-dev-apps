@@ -19,6 +19,10 @@ import {
   FACT_QUOTE_CAP,
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
+  MAX_KEY_DATES,
+  KEY_DATE_KINDS,
+  KEY_DATE_LABEL_CAP,
+  type KeyDateCommand,
   MAX_MENTIONS,
   MAX_PLACES,
   MAX_QUOTES,
@@ -86,6 +90,11 @@ const KNOWN_KEYS = new Set([
   'isSensitive',
   'isAboutMe',
   'contradicts',
+  'keyDateAlias',
+  'keyDateKind',
+  'keyDateLabel',
+  'dateSpanId',
+  'comesBack',
   'shape',
   'prompt',
   'options',
@@ -245,6 +254,65 @@ const readNoteFact = (
       typeof item.contradicts === 'string'
         ? (facts?.idOf(item.contradicts) ?? null)
         : null,
+  };
+};
+
+const MONTH_WORD_RE =
+  /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
+const YEAR_WORD_RE = /(?<!\d)(?:19|20)\d{2}(?!\d)/;
+
+/** A key date's month, day and year come only from a span that names a month; the year only when the words said one. */
+const readKeyDateSpan = (
+  value: unknown,
+  reading: CaptureReading,
+  timeZone: string,
+) => {
+  if (value === null || value === undefined) return null;
+  const span =
+    typeof value === 'string'
+      ? reading.dates.find((entry) => entry.id === value)
+      : undefined;
+  if (!span) throw new NomosReplyError('badDate');
+  if (!MONTH_WORD_RE.test(span.text)) return null;
+  const day =
+    span.due.kind === 'day'
+      ? span.due.date
+      : getDayIn(span.due.at, toKnownZone(timeZone));
+  const at = new Date(day);
+  const year = YEAR_WORD_RE.exec(span.text);
+  return {
+    month: at.getUTCMonth() + 1,
+    day: at.getUTCDate(),
+    year: year ? Number(year[0]) : null,
+  };
+};
+
+const readKeyDate = (
+  item: Record<string, unknown>,
+  entities: Entities,
+  reading: CaptureReading,
+  keyDates: AliasBook | undefined,
+  timeZone: string,
+): KeyDateCommand | null => {
+  const keyDateId =
+    typeof item.keyDateAlias === 'string'
+      ? (keyDates?.idOf(item.keyDateAlias) ?? null)
+      : null;
+  if (item.kind === 'removeKeyDate') {
+    return keyDateId ? { kind: 'removeKeyDate', keyDateId } : null;
+  }
+  const keyKind = KEY_DATE_KINDS.find((entry) => entry === item.keyDateKind);
+  if (!keyKind) return null;
+  return {
+    kind: 'setKeyDate',
+    whoRefs: toRefs(item.whoRefs, entities.whoRefs).slice(0, 1),
+    isAboutMe: item.isAboutMe === true,
+    keyDateId,
+    keyKind,
+    label: toText(item.keyDateLabel, KEY_DATE_LABEL_CAP),
+    date: readKeyDateSpan(item.dateSpanId, reading, timeZone),
+    comesBack: typeof item.comesBack === 'boolean' ? item.comesBack : null,
+    quote: toText(item.quote, FACT_QUOTE_CAP),
   };
 };
 
@@ -622,7 +690,9 @@ const readCommand = (
     kind === 'remember' ||
     kind === 'planDay' ||
     kind === 'setCurrentPlace' ||
-    kind === 'noteFact'
+    kind === 'noteFact' ||
+    kind === 'setKeyDate' ||
+    kind === 'removeKeyDate'
   ) {
     return null;
   }
@@ -689,6 +759,7 @@ export function normalizeNomosReply(
     aliases: AliasBook;
     synced?: SyncedBook;
     facts?: AliasBook;
+    keyDates?: AliasBook;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -701,6 +772,7 @@ export function normalizeNomosReply(
   answer: AnswerCommand | null;
   remember: RememberCommand[];
   noteFacts: NoteFactCommand[];
+  keyDates: KeyDateCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -739,6 +811,21 @@ export function normalizeNomosReply(
       return fact ? [fact] : [];
     })
     .slice(0, MAX_NOTED_FACTS);
+  const keyDates = items
+    .filter(
+      (item) => item.kind === 'setKeyDate' || item.kind === 'removeKeyDate',
+    )
+    .flatMap((item) => {
+      const read = readKeyDate(
+        item,
+        entities,
+        context.reading,
+        context.keyDates,
+        context.timeZone ?? 'UTC',
+      );
+      return read ? [read] : [];
+    })
+    .slice(0, MAX_KEY_DATES);
   const { asks, dropped: askDropped } = readAsks(
     items,
     context.aliases,
@@ -776,6 +863,7 @@ export function normalizeNomosReply(
     answer,
     remember,
     noteFacts,
+    keyDates,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

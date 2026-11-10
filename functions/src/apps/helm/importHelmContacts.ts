@@ -1,5 +1,9 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
-import { getFirestore, type Firestore } from 'firebase-admin/firestore';
+import {
+  FieldValue,
+  getFirestore,
+  type Firestore,
+} from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -21,6 +25,13 @@ import {
 import { toWebpCopy } from '../../share/imageCopies.js';
 import { toGrantId } from '../../vendor/connectionsContract.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
+import { applyChanges } from './keyDateIndex.js';
+import {
+  readIndexIn,
+  readIndexOnce,
+  writeIndexIn,
+  type IndexState,
+} from './keyDateStore.js';
 import { openForHelm, sealForHelm, unwrapHelmKey } from './helmKey.js';
 import {
   buildImportExecution,
@@ -30,6 +41,7 @@ import {
   planContactImport,
   planContactUpdate,
   type ContactInput,
+  type BirthdayOf,
   type ExistingWho,
   type ImportedFrom,
   type PhotoSeal,
@@ -104,9 +116,19 @@ const readImportedFrom = (value: unknown): ImportedFrom | null => {
 
 const text = (value: unknown) => (typeof value === 'string' ? value : null);
 
+const birthdayOf = (index: IndexState, whoId: string): BirthdayOf | null => {
+  const found = (index.byWho[whoId] ?? []).find(
+    (entry) => entry[1] === 'birthday',
+  );
+  return found
+    ? { id: found[0], month: found[2], day: found[3], year: found[4] }
+    : null;
+};
+
 const toExisting = (
   snapshot: FirebaseFirestore.DocumentSnapshot,
   key: Parameters<typeof openForHelm>[0],
+  index: IndexState,
 ): ExistingWho | null => {
   const data = snapshot.data();
   if (!data || !data.sealed) return null;
@@ -146,6 +168,10 @@ const toExisting = (
         typeof data.lastMentionedAt === 'number' ? data.lastMentionedAt : null,
       sealed: words,
       sealedNonce: (data.sealed as SealedPayload).nonce,
+      yearlyDateCount: Number.isFinite(data.yearlyDateCount)
+        ? Number(data.yearlyDateCount)
+        : 0,
+      birthday: birthdayOf(index, snapshot.id),
     };
   } catch {
     return null;
@@ -228,11 +254,12 @@ export const importHelmContacts = onCall(
     const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
     const digest = createDigest(key.key);
 
+    const planIndex = await readIndexOnce(firestore, base, key);
     const target =
       input.kind === 'update'
         ? await firestore.doc(`${base}/who/${input.whoId}`).get()
         : null;
-    const targetWho = target ? toExisting(target, key) : null;
+    const targetWho = target ? toExisting(target, key, planIndex) : null;
     if (input.kind === 'update' && !targetWho?.importedFrom)
       throw new HttpsError(
         'failed-precondition',
@@ -277,7 +304,7 @@ export const importHelmContacts = onCall(
       },
     );
     const now = Date.now();
-    const newId = (collection: 'who' | 'media') =>
+    const newId = (collection: 'who' | 'media' | 'keyDates') =>
       firestore.collection(`${base}/${collection}`).doc().id;
 
     const planUpdate = (
@@ -301,7 +328,9 @@ export const importHelmContacts = onCall(
             fetched,
             existing: (
               await firestore.collection(`${base}/who`).get()
-            ).docs.flatMap((snapshot) => toExisting(snapshot, key) ?? []),
+            ).docs.flatMap(
+              (snapshot) => toExisting(snapshot, key, planIndex) ?? [],
+            ),
             accountId,
             digest,
             newId,
@@ -394,6 +423,14 @@ export const importHelmContacts = onCall(
             transaction.get(firestore.doc(`${base}/who/${id}`)),
           ),
         );
+        const index = await readIndexIn(transaction, firestore, base, key);
+        const isBirthdayChanged = changes.some(
+          (change) =>
+            JSON.stringify(birthdayOf(index, change.id)) !==
+            JSON.stringify(birthdayOf(planIndex, change.id)),
+        );
+        if (isBirthdayChanged)
+          throw new HttpsError('aborted', 'That person changed. Try again.');
         const isChanged = current.some(
           (snapshot) =>
             !snapshot.exists ||
@@ -406,8 +443,30 @@ export const importHelmContacts = onCall(
           transaction.create(firestore.doc(`${base}/who/${id}`), data),
         );
         writes.whoUpdates.forEach(({ id, data }) =>
-          transaction.update(firestore.doc(`${base}/who/${id}`), data),
+          transaction.update(firestore.doc(`${base}/who/${id}`), {
+            ...data,
+            ...(writes.counterDeltas.has(id) && {
+              yearlyDateCount: FieldValue.increment(
+                writes.counterDeltas.get(id) ?? 0,
+              ),
+            }),
+          }),
         );
+        writes.keyDateCreates.forEach(({ id, data }) =>
+          transaction.create(firestore.doc(`${base}/keyDates/${id}`), data),
+        );
+        writes.keyDateUpdates.forEach(({ id, data }) =>
+          transaction.update(firestore.doc(`${base}/keyDates/${id}`), data),
+        );
+        if (writes.indexChanges.length > 0) {
+          writeIndexIn(transaction, firestore, base, {
+            byWho: applyChanges(index.byWho, writes.indexChanges).byWho,
+            rebuiltAt: index.rebuiltAt,
+            existingIds: index.existingIds,
+            now,
+            seal,
+          });
+        }
         writes.media.forEach(({ id, data }) =>
           transaction.create(firestore.doc(`${base}/media/${id}`), data),
         );

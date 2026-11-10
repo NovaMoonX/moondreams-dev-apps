@@ -377,6 +377,7 @@ const state = (
   tierSetBy: 'nomos',
   mentionDayKeys: [],
   taskLinkCount: 0,
+  yearlyDateCount: 0,
   hasRole: false,
   ...extra,
 });
