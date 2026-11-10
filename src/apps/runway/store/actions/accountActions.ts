@@ -5,10 +5,7 @@ import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils/idUtils';
 import { ACCOUNT_WORDS } from '@apps/runway/constants';
 import { openJson, sealJson } from '@apps/runway/security';
-import {
-  cleanBankName,
-  describeAccountBalance,
-} from '@apps/runway/utils/accountText';
+import { describeAccountBalance } from '@apps/runway/utils/accountText';
 import type {
   AccountDoc,
   AccountSealed,
@@ -69,7 +66,7 @@ const openSealed = async (
     encryption,
   );
   return toSealed({
-    name: cleanBankName(payload.name ?? ''),
+    name: payload.name ?? '',
     institution: payload.institution ?? '',
     kind: payload.kind ?? 'checking',
     countedTowardTotal: payload.countedTowardTotal ?? false,
