@@ -9,7 +9,11 @@ import {
 import { createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { keepEntryFor } from '@/hooks/useBackHistory';
+import {
+  isHistoryStep,
+  keepEntryFor,
+  markHistoryStep,
+} from '@/hooks/useBackHistory';
 
 import {
   CHANGE_LOG_SPANS,
@@ -260,7 +264,7 @@ export function useRunwayUrlState() {
     const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
     void backLayerKey;
     void backLayerSeq;
-    window.history.replaceState({ ...entry, runwayTabStep: true }, '');
+    markHistoryStep('runwayTabStep', entry);
   };
   const showTab = async (tab: RunwayTab) => {
     if (tab === activeTab) return;
@@ -270,7 +274,7 @@ export function useRunwayUrlState() {
     if (requestedUndatedBills !== null) closeUndatedBills();
     if (requestedAllDue !== null) closeAllDue();
     if (tab === DEFAULT_RUNWAY_TAB) {
-      if (window.history.state?.runwayTabStep) {
+      if (isHistoryStep('runwayTabStep')) {
         navigate(-1);
         return;
       }

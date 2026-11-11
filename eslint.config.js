@@ -45,6 +45,12 @@ export default defineConfig([
           message:
             "Use '@/components/DateInput': an empty native date input draws as a blank box on phones, and DateInput shows the format or a placeholder.",
         },
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(replaceState|pushState)$/] > ObjectExpression > Property > Literal[value=true]",
+          message:
+            "Mark a Back step with markHistoryStep/isHistoryStep ('@/hooks/useBackHistory'): history.state outlives a reload, so a `true` mark from an earlier load pops onto the old page and loads the app again.",
+        },
       ],
     },
   },

@@ -185,6 +185,40 @@ await [1, 6].reduce(
   (done, cpuRate) => done.then(() => runAddForm(cpuRate)),
   Promise.resolve(),
 );
+// A step mark counts only in the load that wrote it: after a reload (or a phone restoring the page) Back must not pop onto the old page.
+const runStepMark = async () => {
+  const page = await browser.newPage();
+  await page.goto(`${origin}/home`);
+  const isStep = () =>
+    page.evaluate(() =>
+      (
+        window as unknown as { isHistoryStep: (flag: string) => boolean }
+      ).isHistoryStep('tabStep'),
+    );
+  await page.evaluate(() =>
+    (
+      window as unknown as { markHistoryStep: (flag: string) => void }
+    ).markHistoryStep('tabStep'),
+  );
+  const isSameLoad = await isStep();
+  await page.reload();
+  const isAfterReload = await isStep();
+  await page.evaluate(() => {
+    const oldMark = { tabStep: true };
+    window.history.replaceState({ ...window.history.state, ...oldMark }, '');
+  });
+  const isOldTrue = await isStep();
+  const isRight = isSameLoad && !isAfterReload && !isOldTrue;
+  const label = 'step mark: same load, after a reload, an old `true` mark';
+  if (!isRight)
+    failures.push(
+      `${label}: ${isSameLoad}, ${isAfterReload}, ${isOldTrue} (want true, false, false)`,
+    );
+  console.log(
+    `${isRight ? 'ok  ' : 'FAIL'} ${label} → ${isSameLoad}, ${isAfterReload}, ${isOldTrue}`,
+  );
+};
+await runStepMark();
 await browser.close();
 server.close();
 assert.deepEqual(
