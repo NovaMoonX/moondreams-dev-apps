@@ -6,6 +6,7 @@ import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
 import type {
+  LiveQueryResult,
   SourceAdapter,
   SourceCtx,
   SyncPageResult,
@@ -25,6 +26,7 @@ import {
   type SealedPayload,
 } from '../planKey.js';
 import { RUNWAY_SHARES } from './manifest.js';
+import { readTransactions } from './transactions.js';
 
 const readManifest = () => {
   const [declared] = RUNWAY_SHARES.shares;
@@ -309,6 +311,9 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
   }
 };
 
+const toTransactionRef = (id: string) =>
+  `purchases/${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
+
 export interface RunwayAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
@@ -361,6 +366,34 @@ export function createRunwayAdapter(
         cursor: null,
         isDone: true,
         resumeState: null,
+      };
+    },
+    query: async (ctx, req): Promise<LiveQueryResult> => {
+      if (req.category !== 'transactions') throw new Error('Unknown category.');
+      const read = await readTransactions(
+        deps.firestore(),
+        deps.keyring(),
+        ctx.uid,
+        req.args,
+        deps.now(),
+      );
+      return {
+        records: read.rows.map((row) =>
+          toRecord({
+            sourceRef: toTransactionRef(row.id),
+            kind: 'transaction',
+            title: row.payee,
+            startAt: row.date,
+            isAllDay: true,
+            amountCents: row.amountCents,
+            currency: read.currency,
+            extra: { category: row.category },
+          }),
+        ),
+        matchedCount: read.matchedCount,
+        totalCents: read.totalCents,
+        currency: read.currency,
+        isPartial: read.isPartial,
       };
     },
     deepLink: () => '/runway',

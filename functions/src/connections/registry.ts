@@ -45,6 +45,23 @@ export interface SyncPageResult {
   resumeState: string | null;
 }
 
+export interface LiveQueryRequest {
+  category: string;
+  /** Checked by the adapter; anything it cannot read falls back to its defaults. */
+  args: unknown;
+}
+
+export interface LiveQueryResult {
+  /** The newest few matches, already shaped for a reader. */
+  records: SharedRecord[];
+  matchedCount: number;
+  /** Signed sum over every match, not only the records; null when the category has no amounts. */
+  totalCents: number | null;
+  currency: string | null;
+  /** True when the source stopped looking before it reached every match. */
+  isPartial: boolean;
+}
+
 export type SourceStatus = 'ok' | 'noAccess' | 'needsReconnect';
 
 export interface SourceAdapter {
@@ -53,6 +70,8 @@ export interface SourceAdapter {
   secrets?: SecretParam[];
   status(ctx: SourceCtx): Promise<SourceStatus>;
   syncPage(ctx: SourceCtx, req: SyncPageRequest): Promise<SyncPageResult>;
+  /** Answers one question about a live category from the source itself, in the function and with no token; writes nothing. */
+  query?(ctx: SourceCtx, req: LiveQueryRequest): Promise<LiveQueryResult>;
   /** A site path under the source's own route, or null. */
   deepLink(ref: string, ctx: SourceCtx): string | null;
   /** The choices the account offers (calendars), read live. */

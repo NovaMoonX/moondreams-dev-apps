@@ -1583,6 +1583,168 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
+    'search_app_records is offered only while an app grant has a live category on, and logs, quotes and links as the app',
+    async () => {
+      const SITE = [
+        {
+          connectorId: 'app:runway',
+          categories: [{ id: 'transactions', label: 'Transactions' }],
+        },
+      ];
+      const calls: unknown[] = [];
+      const record = (day: number, cents: number, category: string) => ({
+        sourceRef: `purchases/${day}`,
+        kind: 'transaction' as const,
+        title: 'Costco',
+        subtitle: null,
+        detail: null,
+        startAt: Date.UTC(2026, 9, day),
+        endAt: null,
+        isAllDay: true,
+        dueAt: null,
+        timeZone: null,
+        placeLabel: null,
+        amountCents: cents,
+        currency: 'USD',
+        sourceUpdatedAt: null,
+        extra: { category },
+      });
+      const live: LiveReads = {
+        searchLive: async () => ({ ok: false, reason: 'failed' }),
+        readLive: async () => ({ ok: false, reason: 'failed' }),
+        querySiteLive: async (_firestore, input) => {
+          calls.push(input);
+          return {
+            ok: true,
+            result: {
+              records: [1, 2, 3, 4, 5, 6, 7].map((day) =>
+                record(day, day === 7 ? -500 : 8_800, 'Groceries'),
+              ),
+              matchedCount: 31,
+              totalCents: 264_000,
+              currency: 'USD',
+              isPartial: false,
+            },
+          };
+        },
+        isLiveDeepLink,
+      };
+      const quotes = createQuoteBook();
+      const searched = createSearchedLog();
+      const scope = {
+        uid: 'u1',
+        key: {} as never,
+        aliases: createAliasBook('t'),
+        synced: createSyncedBook(),
+        timeZone: 'UTC',
+        firestore: {} as never,
+        quotes,
+        searched,
+        live,
+      };
+      const names = (siteGrants: typeof SITE) =>
+        buildHelmTools({ ...scope, siteGrants }).map((tool) => tool.name);
+      assert.ok(!names([]).includes('search_app_records'));
+      assert.ok(
+        !names([{ ...SITE[0], categories: [] }]).includes('search_app_records'),
+      );
+      assert.ok(names(SITE).includes('search_app_records'));
+      const tool = buildHelmTools({ ...scope, siteGrants: SITE }).find(
+        (entry) => entry.name === 'search_app_records',
+      );
+      const bad = (await tool?.run({
+        app: 'app:pinch',
+        category: 'transactions',
+      } as never)) as {
+        error?: string;
+      };
+      assert.match(bad.error ?? '', /No such app/);
+      assert.equal(
+        calls.length,
+        0,
+        'an app that is not offered is never asked',
+      );
+      const result = (await tool?.run({
+        app: 'app:runway',
+        category: 'transactions',
+        payee: 'Costco',
+        from: '2026-10-01',
+        to: '2026-10-31',
+      } as never)) as {
+        records: { alias?: string; kind: string; amount: string }[];
+        matchedCount: number;
+        total: string;
+      };
+      assert.deepEqual(calls, [
+        {
+          uid: 'u1',
+          readerAppId: 'helm',
+          connectorId: 'app:runway',
+          category: 'transactions',
+          args: { payee: 'Costco', from: '2026-10-01', to: '2026-10-31' },
+        },
+      ]);
+      assert.equal(result.matchedCount, 31);
+      assert.equal(result.total, '$2,640.00');
+      assert.equal(result.records.length, 7);
+      assert.deepEqual(
+        result.records.map((row) => row.alias ?? null),
+        ['q1', 'q2', 'q3', 'q4', 'q5', null, null],
+        'at most five rows are kept as quotes',
+      );
+      assert.equal(result.records[6].kind, 'refund');
+      assert.equal(result.records[6].amount, '$5.00');
+      assert.deepEqual(quotes.get('q1'), {
+        alias: 'q1',
+        connectorId: 'app:runway',
+        accountId: 'site',
+        ref: 'purchases/1',
+        title: 'Costco',
+        from: 'Costco',
+        at: Date.UTC(2026, 9, 1),
+        snippet: '$88.00 \u00b7 Groceries',
+        deepLink: '/runway',
+      });
+      const [line] = searched.entries();
+      assert.equal(line.label, 'Runway (transactions)');
+      assert.equal(line.found, 31);
+      assert.equal(line.failed, null);
+      const built = buildAnswer(
+        {
+          question: 'What did I spend at Costco?',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: 'You spent $2,640.00 at Costco.',
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [quotes.get('q1')!],
+        } as never,
+        undefined,
+        searched.entries(),
+      );
+      assert.equal(built.answer.quotes[0].sourceLabel, 'Runway \u00b7 Costco');
+      assert.equal(built.answer.quotes[0].deepLink, '/runway');
+      assert.deepEqual(built.quotedSourceKeys, ['app:runway|site']);
+    },
+  ],
+  [
+    "an app link counts only as that app's own path",
+    () => {
+      assert.ok(isLiveDeepLink('app:runway', '/runway'));
+      assert.ok(!isLiveDeepLink('app:runway', '/pinch'));
+      assert.ok(!isLiveDeepLink('app:runway', '/runway/other'));
+      assert.ok(!isLiveDeepLink('app:runway', 'https://evil.example/runway'));
+      assert.ok(!isLiveDeepLink('app:runway', '//evil.example'));
+      assert.ok(!isLiveDeepLink('google:gmail', '/runway'));
+    },
+  ],
+  [
     'a planDay is read for today, tomorrow and a day span, dropped past or beyond six days, and only the first is kept',
     () => {
       const NOW = Date.UTC(2026, 10, 10, 22);

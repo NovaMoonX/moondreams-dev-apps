@@ -45,7 +45,14 @@ const isDocumentLink = (link: string) => {
   }
 };
 
+/** A site app's own route: its path and nothing else (no host, no other app's path). */
+const isSiteLink = (connectorId: string, link: string) => {
+  const appId = connectorId.startsWith('app:') ? connectorId.slice(4) : '';
+  return appId !== '' && /^[a-z0-9-]+$/.test(appId) && link === `/${appId}`;
+};
+
 /** True only for a link this connector builds, whatever else the text parses as. */
 export const isLiveDeepLink = (connectorId: string, link: string) =>
+  isSiteLink(connectorId, link) ||
   (connectorId === 'google:gmail' && isMailLink(link)) ||
   (connectorId === 'google:drive' && isDocumentLink(link));

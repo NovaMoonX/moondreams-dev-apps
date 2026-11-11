@@ -32,6 +32,7 @@ import {
   readContacts,
   toContactOption,
 } from '../../functions/src/connections/google/contacts.ts';
+import { querySiteLive } from '../../functions/src/connections/liveRouter.ts';
 import {
   applyCategoryChanges,
   buildNewGrant,
@@ -2182,7 +2183,13 @@ assert.deepEqual(
     ['moneySummary', true],
     ['upcomingBills', false],
     ['horizon', false],
+    ['transactions', false],
   ],
+);
+assert.equal(
+  runwayAdapter.manifest.categories.find(({ id }) => id === 'transactions')
+    ?.mode,
+  'live',
 );
 const runwayCtx = (uid: string) => ({
   uid,
@@ -2308,6 +2315,315 @@ assert.equal(await runwayAdapter.status(runwayCtx(OTHER)), 'noAccess');
 assert.equal(
   runwayAdapter.deepLink('plan/summary', runwayCtx(OWNER)),
   '/runway',
+);
+
+// Transactions: asked for live, read in the function, and only a day, payee, amount, currency and category leave.
+const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+const TX_SECRETS = [
+  'TX NOTE SECRET',
+  'TX RECEIPT SECRET',
+  'https://tx-link.example/secret',
+  'tx-card-secret',
+  'tx-account-secret',
+  'TX BANK NAME SECRET',
+];
+const sealTx = (fields: Record<string, unknown>) =>
+  sealWithKey({ ...runwayKey, keyVersion: 1 }, fields, 1);
+const baseTx = {
+  merchant: null,
+  label: null,
+  note: null,
+  bankName: null,
+  category: null,
+  lines: [] as unknown[],
+  refundOfId: null,
+  incomeDayId: null,
+  pairedWithId: null,
+  pairKind: null,
+  cardPaymentMoveId: null,
+  paidByCardId: null,
+  link: null,
+  receiptText: null,
+};
+const txDoc = (
+  uid: string,
+  id: string,
+  daysAgo: number,
+  fields: Record<string, unknown>,
+) =>
+  runwayPlans
+    .doc(uid)
+    .collection('purchases')
+    .doc(id)
+    .set({
+      date: TODAY - daysAgo * DAY,
+      accountId: TX_SECRETS[4],
+      sealed: sealTx({ ...baseTx, ...fields }),
+    });
+const txLine = (envelopeId: string | null, cents: number) => ({
+  envelopeId,
+  cents,
+  via: 'direct',
+});
+const txVersion = (id: string, createdAt: number, name: string) =>
+  runwayPlans
+    .doc(OWNER)
+    .collection('versions')
+    .doc(id)
+    .set({
+      itemId: 'env-groceries',
+      kind: 'envelope',
+      createdAt,
+      sealed: sealTx({ name }),
+    });
+const TX_RICH = {
+  note: TX_SECRETS[0],
+  receiptText: TX_SECRETS[1],
+  link: TX_SECRETS[2],
+  paidByCardId: TX_SECRETS[3],
+  bankName: TX_SECRETS[5],
+};
+await Promise.all([
+  txDoc(OWNER, 'costco-1', 18, {
+    ...TX_RICH,
+    merchant: 'Costco Wholesale',
+    amountCents: 8_800,
+    lines: [txLine('env-groceries', 8_800)],
+  }),
+  txDoc(OWNER, 'costco-2', 3, {
+    ...TX_RICH,
+    label: 'Gas at Costco',
+    merchant: 'Shell',
+    amountCents: 1_200,
+    lines: [txLine(null, 1_200)],
+  }),
+  txDoc(OWNER, 'costco-refund', 1, {
+    ...TX_RICH,
+    merchant: 'Costco Wholesale',
+    amountCents: -500,
+    refundOfId: 'costco-1',
+    lines: [txLine('env-groceries', -500)],
+  }),
+  txDoc(OWNER, 'deposit', 2, {
+    merchant: 'Costco Payroll',
+    amountCents: -250_000,
+    incomeDayId: 'day-1',
+  }),
+  txDoc(OWNER, 'unlinked-credit', 2, {
+    merchant: 'Costco Gift Card',
+    amountCents: -900,
+  }),
+  txDoc(OWNER, 'transfer-out', 4, {
+    merchant: 'Costco Savings Transfer',
+    amountCents: 30_000,
+    pairedWithId: 'transfer-in',
+    pairKind: 'transfer',
+  }),
+  txDoc(OWNER, 'transfer-in', 4, {
+    merchant: 'Costco Savings Transfer',
+    amountCents: -30_000,
+    pairedWithId: 'transfer-out',
+    pairKind: 'transfer',
+  }),
+  txDoc(OWNER, 'card-payment', 5, {
+    merchant: 'Costco Card Payment',
+    amountCents: 20_000,
+    cardPaymentMoveId: 'move-1',
+  }),
+  txDoc(OWNER, 'target', 6, {
+    merchant: 'Target',
+    amountCents: 4_000,
+    lines: [txLine('env-groceries', 3_000), txLine('env-fun', 1_000)],
+  }),
+  txDoc(OWNER, 'old', 100, { merchant: 'Costco Wholesale', amountCents: 700 }),
+  txDoc(OWNER, 'ancient', 430, {
+    merchant: 'Costco Wholesale',
+    amountCents: 600,
+  }),
+  txVersion('v-1', 1, 'Groceries'),
+  txVersion('v-2', 2, 'Food'),
+]);
+const queryTx = (uid: string, args: unknown) =>
+  runwayAdapter.query!(runwayCtx(uid), { category: 'transactions', args });
+const costco = await queryTx(OWNER, {
+  payee: 'costco',
+  from: dayText(TODAY - 30 * DAY),
+  to: dayText(TODAY),
+});
+assertShape(costco.records);
+assert.deepEqual(
+  costco.records.map((record) => [record.title, record.amountCents]),
+  [
+    ['Costco Wholesale', -500],
+    ['Gas at Costco', 1_200],
+    ['Costco Wholesale', 8_800],
+  ],
+  'newest first; deposits, transfers and card payments are left out',
+);
+assert.equal(costco.matchedCount, 3);
+assert.equal(costco.totalCents, 9_500, 'a refund subtracts');
+assert.equal(costco.currency, 'USD');
+assert.equal(costco.isPartial, false);
+costco.records.forEach((record) => {
+  assert.equal(record.kind, 'transaction');
+  assert.equal(record.currency, 'USD');
+  assert.equal(record.isAllDay, true);
+  assert.deepEqual(Object.keys(record.extra), ['category']);
+  assert.equal(record.subtitle, null);
+  assert.equal(record.detail, null);
+  assert.equal(record.placeLabel, null);
+  assert.match(record.sourceRef, /^purchases\/[0-9a-f]{16}$/);
+});
+assert.deepEqual(
+  costco.records.map((record) => record.extra.category),
+  ['Food', 'Free to Spend', 'Food'],
+  'the envelope is named by its newest version',
+);
+assert.equal(costco.records[2]?.startAt, TODAY - 18 * DAY);
+const costcoOutput = JSON.stringify(costco);
+[...TX_SECRETS, 'Costco Payroll', 'Savings Transfer', 'Card Payment'].forEach(
+  (secret) =>
+    assert.ok(!costcoOutput.includes(secret), `Transactions have ${secret}`),
+);
+const everyone = await queryTx(OWNER, {
+  payee: null,
+  from: dayText(TODAY - 30 * DAY),
+  to: dayText(TODAY),
+});
+assert.deepEqual(
+  everyone.records
+    .filter((record) => record.title === 'Target')
+    .map((record) => record.extra.category),
+  ['Split'],
+);
+assert.equal(
+  (await queryTx(OWNER, { payee: 'Cheesecake Factory' })).matchedCount,
+  0,
+);
+assert.equal(
+  (await queryTx(OWNER, {})).matchedCount,
+  everyone.matchedCount,
+  'no range is the last 30 days',
+);
+assert.equal(
+  (await queryTx(OWNER, 'garbage')).matchedCount,
+  everyone.matchedCount,
+  'malformed arguments fall back to the defaults',
+);
+const longRange = await queryTx(OWNER, {
+  payee: 'Costco Wholesale',
+  from: '2020-01-01',
+  to: dayText(TODAY),
+});
+assert.equal(longRange.matchedCount, 4, 'the oldest 13+ months are cut off');
+assert.deepEqual(
+  (await queryTx(OWNER, { from: '2026-11-09', to: '2026-11-01' })).records,
+  [],
+  'a backwards range is empty',
+);
+await assert.rejects(
+  () =>
+    runwayAdapter.query!(runwayCtx(OWNER), {
+      category: 'moneySummary',
+      args: {},
+    }),
+  /Unknown category/,
+);
+
+// Twenty rows come back, and the count and total cover every match.
+await runwayPlanWith('runway-many', null);
+await Promise.all(
+  Array.from({ length: 25 }, (_, index) =>
+    txDoc('runway-many', `bulk-${index}`, index % 20, {
+      merchant: 'Bulk Mart',
+      amountCents: 100,
+    }),
+  ),
+);
+const many = await queryTx('runway-many', { payee: 'Bulk Mart' });
+assert.equal(many.records.length, 20);
+assert.equal(many.matchedCount, 25);
+assert.equal(many.totalCents, 2_500);
+assert.equal(many.currency, null, 'no currency is known, so none is made up');
+const manyDays = many.records.map((record) => record.startAt ?? 0);
+assert.deepEqual(
+  manyDays,
+  [...manyDays].sort((a, b) => b - a),
+);
+
+// A long history is read only as far as the scan cap, and says so.
+await runwayPlanWith('runway-huge', null);
+await Promise.all(
+  [0, 1].map(async (half) => {
+    const batch = firestore.batch();
+    Array.from({ length: 255 }, (_, index) => {
+      batch.set(
+        runwayPlans
+          .doc('runway-huge')
+          .collection('purchases')
+          .doc(`huge-${half}-${index}`),
+        {
+          date: TODAY - (index % 25) * DAY,
+          sealed: sealTx({ ...baseTx, merchant: 'Huge', amountCents: 10 }),
+        },
+      );
+    });
+    await batch.commit();
+  }),
+);
+const huge = await queryTx('runway-huge', { payee: 'Huge' });
+assert.equal(huge.matchedCount, 500);
+assert.equal(huge.isPartial, true);
+
+// Someone else's plan, or a key that does not open it, yields nothing.
+await txDoc(WRONG_RUNWAY_UID, 'wrong-key', 1, {
+  merchant: 'Costco Wholesale',
+  amountCents: 100,
+});
+assert.deepEqual((await queryTx(WRONG_RUNWAY_UID, {})).records, []);
+await assert.rejects(() => queryTx(OTHER, {}));
+
+// The router refuses a category that is off or unknown before the source is asked.
+const txGrant = (isOn: boolean, status: string) =>
+  firestore.doc('connections/tx-owner/grants/helm__app:runway__site').set({
+    readerAppId: 'helm',
+    connectorId: 'app:runway',
+    accountId: 'site',
+    status,
+    categories: { transactions: { isOn, changedAt: NOW } },
+  });
+const routed = (category: string) =>
+  querySiteLive(firestore, {
+    uid: 'tx-owner',
+    readerAppId: 'helm',
+    connectorId: 'app:runway',
+    category,
+    args: {},
+  });
+await txGrant(false, 'live');
+assert.deepEqual(await routed('transactions'), {
+  ok: false,
+  reason: 'notGranted',
+});
+await txGrant(true, 'ended');
+assert.deepEqual(await routed('transactions'), {
+  ok: false,
+  reason: 'notGranted',
+});
+await txGrant(true, 'live');
+assert.deepEqual(await routed('moneySummary'), {
+  ok: false,
+  reason: 'notGranted',
+});
+assert.deepEqual(
+  await querySiteLive(firestore, {
+    uid: 'tx-owner',
+    readerAppId: 'helm',
+    connectorId: 'google:gmail',
+    category: 'transactions',
+    args: {},
+  }),
+  { ok: false, reason: 'notGranted' },
 );
 
 // A plan's key reaches the adapter only through the shared unwrap.

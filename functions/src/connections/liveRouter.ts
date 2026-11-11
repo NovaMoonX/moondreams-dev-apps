@@ -4,7 +4,12 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import { isGateOpenForUid } from '../gates/assertGateOpen.js';
-import { toGrantId, type ConnectorId } from '../vendor/connectionsContract.js';
+import {
+  SITE_ACCOUNT_ID,
+  readConnectorAppId,
+  toGrantId,
+  type ConnectorId,
+} from '../vendor/connectionsContract.js';
 import { toDocumentLink, toMailLink, isLiveDeepLink } from './deepLinks.js';
 import { GoogleHttpError } from './google/client.js';
 import {
@@ -18,7 +23,11 @@ import { GOOGLE_DRIVE_MANIFEST } from './google/driveManifest.js';
 import { isMailRef, readMail, searchMail } from './google/gmail.js';
 import { GOOGLE_GMAIL_MANIFEST } from './google/gmailManifest.js';
 import { readGrant } from './grants.js';
-import { READER_APPS } from './registry.js';
+import {
+  READER_APPS,
+  SOURCE_ADAPTERS,
+  type LiveQueryResult,
+} from './registry.js';
 import { ReconnectNeeded, getGoogleAccessToken } from './tokens.js';
 
 export { isLiveDeepLink };
@@ -354,4 +363,99 @@ export const readLive = async (
   return result.value === 'notReadable'
     ? { ok: false, reason: 'notReadable' }
     : { ok: true, item: result.value };
+};
+
+export interface SiteLiveGrant {
+  connectorId: string;
+  /** The live categories the person has switched on, with the labels they know them by. */
+  categories: { id: string; label: string }[];
+}
+
+const siteLiveCategories = (connectorId: string) =>
+  Object.hasOwn(SOURCE_ADAPTERS, connectorId) &&
+  readConnectorAppId(connectorId) !== null &&
+  SOURCE_ADAPTERS[connectorId].query
+    ? SOURCE_ADAPTERS[connectorId].manifest.categories.filter(
+        (category) => category.mode === 'live',
+      )
+    : [];
+
+const siteGrantPath = (uid: string, readerAppId: string, connectorId: string) =>
+  `connections/${uid}/grants/${toGrantId(
+    readerAppId,
+    connectorId as ConnectorId,
+    SITE_ACCOUNT_ID,
+  )}`;
+
+/** The site apps the person lets a reader app ask about, each with the live categories switched on; none for a grant that ended or lost access. */
+export const listSiteLiveGrants = async (
+  firestore: Firestore,
+  uid: string,
+  readerAppId: string,
+): Promise<SiteLiveGrant[]> => {
+  const connectorIds = Object.keys(SOURCE_ADAPTERS).filter(
+    (id) => siteLiveCategories(id).length > 0,
+  );
+  const snapshots = await Promise.all(
+    connectorIds.map((id) =>
+      firestore.doc(siteGrantPath(uid, readerAppId, id)).get(),
+    ),
+  );
+  return connectorIds.flatMap((connectorId, index): SiteLiveGrant[] => {
+    if (!snapshots[index].exists) return [];
+    const grant = readGrant(snapshots[index].data());
+    const categories = siteLiveCategories(connectorId).filter(
+      ({ id }) => grant.categories[id]?.isOn === true,
+    );
+    return grant.status === 'live' && categories.length > 0
+      ? [{ connectorId, categories }]
+      : [];
+  });
+};
+
+export const querySiteLive = async (
+  firestore: Firestore,
+  input: {
+    uid: string;
+    readerAppId: string;
+    connectorId: string;
+    category: string;
+    args: unknown;
+  },
+): Promise<{ ok: true; result: LiveQueryResult } | LiveFailure> => {
+  const adapter = Object.hasOwn(SOURCE_ADAPTERS, input.connectorId)
+    ? SOURCE_ADAPTERS[input.connectorId]
+    : null;
+  const isLiveCategory = siteLiveCategories(input.connectorId).some(
+    ({ id }) => id === input.category,
+  );
+  if (!adapter?.query || !isLiveCategory) return NOT_GRANTED;
+  const snapshot = await firestore
+    .doc(siteGrantPath(input.uid, input.readerAppId, input.connectorId))
+    .get();
+  const grant = readGrant(snapshot.data());
+  if (
+    !snapshot.exists ||
+    grant.status !== 'live' ||
+    grant.categories[input.category]?.isOn !== true
+  ) {
+    return NOT_GRANTED;
+  }
+  const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
+  try {
+    if ((await adapter.status(ctx)) !== 'ok') return NOT_GRANTED;
+    return {
+      ok: true,
+      result: await adapter.query(ctx, {
+        category: input.category,
+        args: input.args,
+      }),
+    };
+  } catch (error) {
+    logger.warn('connections.live.siteFailed', {
+      connector: input.connectorId,
+      code: error instanceof Error ? error.name : 'error',
+    });
+    return { ok: false, reason: 'failed' };
+  }
 };

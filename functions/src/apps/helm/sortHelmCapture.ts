@@ -37,7 +37,7 @@ import {
   restFailureFields,
   settleAttempts,
 } from './sortAttempts.js';
-import type { LiveGrant } from '../../connections/liveRouter.js';
+import type { LiveGrant, SiteLiveGrant } from '../../connections/liveRouter.js';
 import {
   readContextKeyDates,
   readIndexIn,
@@ -207,6 +207,7 @@ import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
+  APP_RECORDS_PROMPT,
   MAIL_PROMPT,
   MAX_CONTEXT_TASKS,
   MEDIA_PROMPT,
@@ -374,6 +375,18 @@ const readLiveGrants = (firestore: Firestore, uid: string) =>
     .then(({ listLiveGrants }) => listLiveGrants(firestore, uid, 'helm'))
     .catch((error): LiveGrant[] => {
       logger.warn('helm.live.grantsFailed', {
+        cause: error instanceof Error ? error.name : 'error',
+      });
+      return [];
+    });
+
+const readSiteGrants = (firestore: Firestore, uid: string) =>
+  import('../../connections/liveRouter.js')
+    .then(({ listSiteLiveGrants }) =>
+      listSiteLiveGrants(firestore, uid, 'helm'),
+    )
+    .catch((error): SiteLiveGrant[] => {
+      logger.warn('helm.live.siteGrantsFailed', {
         cause: error instanceof Error ? error.name : 'error',
       });
       return [];
@@ -1782,11 +1795,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mode !== 'rest' && isQuestion(combined.text.trim())
         ? await readLiveGrants(firestore, uid)
         : [];
+    const siteGrants =
+      mode !== 'rest' && isQuestion(combined.text.trim())
+        ? await readSiteGrants(firestore, uid)
+        : [];
     const quotes = createQuoteBook();
     const searched = createSearchedLog();
     const system = [
       SYSTEM_PROMPT,
       liveGrants.length > 0 ? MAIL_PROMPT : null,
+      siteGrants.length > 0 ? APP_RECORDS_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
       style ? STYLE_PROMPT : null,
       mode !== 'rest' &&
@@ -1815,6 +1833,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         timeZone,
         firestore,
         liveGrants,
+        siteGrants,
         quotes,
         searched,
         topicRead: isOtherTopicNamed

@@ -6119,6 +6119,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       moneySummary: { isOn: true, changedAt: connectedAt },
       upcomingBills: { isOn: false, changedAt: connectedAt },
       horizon: { isOn: false, changedAt: connectedAt },
+      transactions: { isOn: true, changedAt: connectedAt },
     },
     options: null,
     status: 'live',

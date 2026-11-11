@@ -738,7 +738,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] The site's Sign out everywhere (O) (issue 62)
 - [x] Everything stored encrypted, kept files and photos included; delete all of my Helm data (O, N, C) (issue 63 built the delete)
 - [ ] Connected apps: connect, choose what each may read, see status and errors, disconnect with or without deleting copies; the site's account page lists every connection; every copied thing shows its source (O, N)
-- [ ] Pinch, Google Calendar (busy and shifts calendars, several accounts), A-List, Going Once, Nine Lives (cats as pets), Waypoint, Runway (summary; bills, Horizon and transactions when switched on) and Worth the Wait (box counts) connected (O, N) (issue 25 built Runway's summary, bills and Horizon)
+- [ ] Pinch, Google Calendar (busy and shifts calendars, several accounts), A-List, Going Once, Nine Lives (cats as pets), Waypoint, Runway (summary; bills, Horizon and transactions when switched on) and Worth the Wait (box counts) connected (O, N) (issue 25 built Runway's summary, bills and Horizon; issue 30 built Runway's transactions, read when a question needs them)
 - [x] Gmail and Drive: answers that search and read your mail, Docs and PDFs, citing each (O)
 
 ### Next Steps
