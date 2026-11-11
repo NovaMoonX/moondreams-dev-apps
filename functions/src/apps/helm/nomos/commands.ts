@@ -43,6 +43,7 @@ export const COMMAND_KINDS = [
   'createProject',
   'setProjectRole',
   'addMilestone',
+  'createNote',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -81,6 +82,13 @@ export const PROJECT_OBJECTIVE_CAP = 200;
 export const PROJECT_ROLE_NOTE_CAP = 40;
 export const MAX_PROJECT_ROLES = 5;
 export const MAX_CONTEXT_PROJECTS = 20;
+export const NOTE_TITLE_CAP = 80;
+export const NOTE_BODY_CAP = 20_000;
+export const NOTES_LIMIT = 1_000;
+export const NOTE_TOPICS_CAP = 10;
+export const MAX_NOTES_PER_TURN = 3;
+export const MAX_CONTEXT_TOPICS = 100;
+export const MAX_HINT_NOTES = 8;
 export const MILESTONE_TITLE_CAP = 80;
 export const MAX_MILESTONES_PER_TURN = 3;
 export const MAX_MILESTONES_PER_PROJECT = 30;
@@ -307,6 +315,14 @@ export interface AddMilestoneCommand {
 export type ProjectCommand =
   CreateProjectCommand | SetProjectRoleCommand | AddMilestoneCommand;
 
+/** Something general to remember that is about no person, pet, place or project, its topics settled to ids of ones the person already has. */
+export interface CreateNoteCommand {
+  kind: 'createNote';
+  title: string;
+  body: string;
+  topicIds: string[];
+}
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -409,6 +425,8 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'objective',
             'role',
             'roleNote',
+            'bodyQuote',
+            'topicAliases',
           ],
           properties: {
             kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
@@ -422,7 +440,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters.`,
             ),
             dueSpanId: nullable(
               'string',
@@ -645,6 +663,16 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               'noteFact: the alias of a fact above that this one disagrees with ("centerpieces are $2,100 now" against "centerpieces are $1,800"); null when it adds to it.',
             ),
+            bodyQuote: nullable(
+              'string',
+              `createNote: the words to keep, copied exactly from the capture, at most ${NOTE_BODY_CAP} characters.`,
+            ),
+            topicAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description:
+                'createNote: the alias of each topic in <your_topics> the note plainly belongs in; empty when none fits. Never invent one.',
+            },
           },
         },
       },

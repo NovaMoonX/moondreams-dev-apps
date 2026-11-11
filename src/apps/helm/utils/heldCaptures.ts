@@ -27,6 +27,7 @@ export const hasOpenChoice = (capture: OpenCapture) =>
     'whichPerson',
     'whichPlace',
     'whichIsTrue',
+    'whichTopic',
     'asked',
   ]);
 

@@ -7,6 +7,7 @@ import type {
   ExecutionEffect,
   ExecutionSealed,
   KeyDateSealed,
+  NoteSealed,
   OpenExecution,
   ProjectSealed,
   TaskSealed,
@@ -26,7 +27,8 @@ export interface UndoTarget {
   /** The document as it is now; null when it is gone. */
   data: Record<string, unknown> | null;
   /** Its sealed words; null when they won't open. */
-  opened: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
+  opened:
+    TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | NoteSealed | null;
   /** For a date that was removed: whether the person it belonged to is still there. */
   isOwnerHere?: boolean;
 }
@@ -102,7 +104,7 @@ const refuse = (
 
 interface Step {
   data: Values | null;
-  opened: TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed | null;
+  opened: UndoTarget['opened'];
   fields: Values;
   sealedFields: Values;
   restored: Values;
@@ -325,6 +327,9 @@ const planRecreate = (
   };
 };
 
+const isKnowledge = (name: EffectRef['collection'] | undefined) =>
+  name === 'notes' || name === 'topics';
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -387,12 +392,16 @@ const planRecord = (
     return updated.hasKeptEntry ? { kind: 'kept', title } : left;
   }
   const reseal =
-    Object.keys(updated.sealedFields).length > 0 ? updated.opened : null;
+    Object.keys(updated.sealedFields).length > 0
+      ? (updated.opened as Exclude<UndoTarget['opened'], NoteSealed>)
+      : null;
   const restoredTitle = toOpenedTitle(updated.opened) || title;
   return {
     kind: 'restored',
     title: restoredTitle,
-    fields: { ...updated.fields, lastEditedAt: now },
+    fields: isKnowledge(entries[0]?.ref.collection)
+      ? updated.fields
+      : { ...updated.fields, lastEditedAt: now },
     reseal,
     effect: {
       written: { ...updated.restored, 'sealed.title': restoredTitle },
@@ -444,11 +453,15 @@ export function planUndo(input: {
   const groups = [...groupByDoc(original)];
   const isEntityDoc = (docId: string) =>
     isEntity(collectionOf.get(docId) ?? 'tasks');
+  const isTopicDoc = (docId: string) => collectionOf.get(docId) === 'topics';
   const isMediaDoc = (docId: string) => collectionOf.get(docId) === 'media';
   const targetOf = (docId: string) =>
     targets.get(docId) ?? { docId, data: null, opened: null };
   const recordOutcomes = groups
-    .filter(([docId]) => !isEntityDoc(docId) && !isMediaDoc(docId))
+    .filter(
+      ([docId]) =>
+        !isEntityDoc(docId) && !isMediaDoc(docId) && !isTopicDoc(docId),
+    )
     .map(([docId, entries]) => ({
       docId,
       outcome: planRecord(
@@ -487,6 +500,31 @@ export function planUndo(input: {
         ),
       })),
   ];
+  // A topic a note was filed in goes back only with that note, and a topic that changed since just stays marked.
+  const isNoteTakenBack = recordOutcomes.some(
+    ({ docId, outcome }) =>
+      collectionOf.get(docId) === 'notes' &&
+      (outcome.kind === 'deleted' || outcome.kind === 'restored'),
+  );
+  const topicOutcomes = groups
+    .filter(([docId]) => isTopicDoc(docId))
+    .map(([docId, entries]) => {
+      const outcome = planRecord(
+        targetOf(docId),
+        entries,
+        now,
+        original.createdAt,
+        false,
+        false,
+      );
+      const isQuiet =
+        !isNoteTakenBack ||
+        (outcome.kind !== 'restored' && outcome.kind !== 'deleted');
+      return {
+        docId,
+        outcome: isQuiet ? ({ kind: 'skipped' } as RecordOutcome) : outcome,
+      };
+    });
   // A photo an import added goes with its person: when the person is taken back or restored, or already gone.
   const photoOutcomes = groups
     .filter(([docId]) => isMediaDoc(docId))
@@ -528,12 +566,13 @@ export function planUndo(input: {
     outcome.kind === 'gone' ? [docId] : [],
   );
   const gone = goneIds.length;
-  const done = [...outcomes, ...photoOutcomes].flatMap(({ docId, outcome }) =>
-    outcome.kind === 'deleted' ||
-    outcome.kind === 'restored' ||
-    outcome.kind === 'recreated'
-      ? [{ docId, outcome }]
-      : [],
+  const done = [...outcomes, ...topicOutcomes, ...photoOutcomes].flatMap(
+    ({ docId, outcome }) =>
+      outcome.kind === 'deleted' ||
+      outcome.kind === 'restored' ||
+      outcome.kind === 'recreated'
+        ? [{ docId, outcome }]
+        : [],
   );
   const isImport = original.category === 'import';
   const isFactDoc = (docId: string) => collectionOf.get(docId) === 'facts';
@@ -541,7 +580,9 @@ export function planUndo(input: {
     collectionOf.get(docId) === 'keyDates';
   const isProjectDoc = (docId: string) =>
     collectionOf.get(docId) === 'projects';
+  const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
+  const notesDone = done.filter(({ docId }) => isNoteDoc(docId));
   const factsDone = done.filter(({ docId }) => isFactDoc(docId));
   const datesDone = done.filter(({ docId }) => isKeyDateDoc(docId));
   const records = done.filter(({ docId }) =>
@@ -551,9 +592,12 @@ export function planUndo(input: {
         !isMediaDoc(docId) &&
         !isFactDoc(docId) &&
         !isKeyDateDoc(docId) &&
-        !isProjectDoc(docId),
+        !isProjectDoc(docId) &&
+        !isNoteDoc(docId) &&
+        !isTopicDoc(docId),
   );
   if (
+    notesDone.length === 0 &&
     records.length === 0 &&
     factsDone.length === 0 &&
     datesDone.length === 0 &&
@@ -579,11 +623,29 @@ export function planUndo(input: {
   const datesToo =
     dateCount > 0 ? HELM_COPY.undoReportKeyDatesToo(dateCount) : '';
   const projectCount = projectsDone.length;
-  const projectsToo =
-    projectCount > 0 ? HELM_COPY.undoReportProjectsToo(projectCount) : '';
+  const noteCount = notesDone.length;
+  const notesToo = noteCount > 0 ? HELM_COPY.undoReportNotesToo(noteCount) : '';
+  const projectsToo = [
+    projectCount > 0 ? HELM_COPY.undoReportProjectsToo(projectCount) : '',
+    notesToo,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const isNotesOnly =
+    records.length === 0 &&
+    factCount === 0 &&
+    dateCount === 0 &&
+    projectCount === 0;
   const report =
     records.length === 0 && factCount === 0 && dateCount === 0
-      ? HELM_COPY.undoReportProjects(projectCount, kept.length, gone)
+      ? isNotesOnly
+        ? HELM_COPY.undoReportNotes(noteCount, kept.length, gone)
+        : [
+            HELM_COPY.undoReportProjects(projectCount, kept.length, gone),
+            notesToo,
+          ]
+            .filter(Boolean)
+            .join(' ')
       : records.length === 0
         ? factCount === 0
           ? [
@@ -671,9 +733,11 @@ export function planUndo(input: {
     undoSealed: {
       summary:
         records.length === 0
-          ? factCount === 0
-            ? HELM_COPY.tookBackKeyDates(dateCount)
-            : HELM_COPY.tookBackFacts(factCount)
+          ? isNotesOnly
+            ? HELM_COPY.tookBackNotes(noteCount)
+            : factCount === 0
+              ? HELM_COPY.tookBackKeyDates(dateCount)
+              : HELM_COPY.tookBackFacts(factCount)
           : counted.length === 0
             ? wasLeaving
               ? HELM_COPY.tookBackNotHome
@@ -691,7 +755,7 @@ export function planUndo(input: {
       spoken: null,
       goneIds,
     },
-    takenBack: [...records, ...factsDone, ...datesDone].map(
+    takenBack: [...records, ...factsDone, ...datesDone, ...notesDone].map(
       ({ outcome }) => outcome.title,
     ),
     kept,

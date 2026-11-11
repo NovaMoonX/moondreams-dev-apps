@@ -101,7 +101,9 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
     ? [
         note.source === 'typed'
           ? HELM_COPY.noteWrote(formatDateShort(note.createdAt))
-          : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
+          : note.source === 'capture'
+            ? HELM_COPY.noteFromWhatYouSaid(formatDateShort(note.createdAt))
+            : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
         ...(note.lastEditedAt !== null
           ? [HELM_COPY.noteChangedOn(formatDateShort(note.lastEditedAt))]
           : []),

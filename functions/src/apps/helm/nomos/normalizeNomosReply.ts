@@ -19,6 +19,10 @@ import {
   FACT_QUOTE_CAP,
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
+  MAX_NOTES_PER_TURN,
+  NOTE_BODY_CAP,
+  NOTE_TITLE_CAP,
+  NOTE_TOPICS_CAP,
   MAX_KEY_DATES,
   MAX_MILESTONES_PER_TURN,
   MAX_PROJECT_ROLES,
@@ -45,6 +49,7 @@ import {
   VALUE_CAP,
   type AnswerCommand,
   type CaptureReading,
+  type CreateNoteCommand,
   type MentionRead,
   type NoteFactCommand,
   type PlaceRead,
@@ -108,6 +113,8 @@ const KNOWN_KEYS = new Set([
   'objective',
   'role',
   'roleNote',
+  'bodyQuote',
+  'topicAliases',
   'shape',
   'prompt',
   'options',
@@ -268,6 +275,58 @@ const readNoteFact = (
         ? (facts?.idOf(item.contradicts) ?? null)
         : null,
   };
+};
+
+const toSpaced = (text: string) =>
+  text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** A note to keep: its words must be a span of the capture, its topics only ones the person has, and it is dropped when it is only the words of a fact or date said in the same turn. */
+const readNotes = (
+  items: Record<string, unknown>[],
+  topics: AliasBook | undefined,
+  captureText: string | undefined,
+  said: string[],
+): CreateNoteCommand[] => {
+  const spoken = new Set(said.map((text) => toComparable(text)));
+  return items
+    .filter((item) => item.kind === 'createNote')
+    .flatMap((item): CreateNoteCommand[] => {
+      const words =
+        typeof item.bodyQuote === 'string'
+          ? item.bodyQuote.trim().slice(0, NOTE_BODY_CAP)
+          : '';
+      if (
+        !words ||
+        (captureText !== undefined &&
+          !toSpaced(captureText).includes(toSpaced(words))) ||
+        spoken.has(toComparable(words))
+      ) {
+        return [];
+      }
+      const firstLine = words.split('\n').find((line) => line.trim()) ?? words;
+      return [
+        {
+          kind: 'createNote',
+          title:
+            toText(item.title, NOTE_TITLE_CAP) ??
+            cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
+          body: words,
+          topicIds: [
+            ...new Set(
+              (Array.isArray(item.topicAliases)
+                ? item.topicAliases
+                : []
+              ).flatMap((alias: unknown) => {
+                const id =
+                  typeof alias === 'string' ? topics?.idOf(alias) : null;
+                return id ? [id] : [];
+              }),
+            ),
+          ].slice(0, NOTE_TOPICS_CAP),
+        },
+      ];
+    })
+    .slice(0, MAX_NOTES_PER_TURN);
 };
 
 const MONTH_WORD_RE =
@@ -821,7 +880,8 @@ const readCommand = (
     kind === 'removeKeyDate' ||
     kind === 'createProject' ||
     kind === 'setProjectRole' ||
-    kind === 'addMilestone'
+    kind === 'addMilestone' ||
+    kind === 'createNote'
   ) {
     return null;
   }
@@ -890,6 +950,9 @@ export function normalizeNomosReply(
     synced?: SyncedBook;
     facts?: AliasBook;
     keyDates?: AliasBook;
+    topics?: AliasBook;
+    /** The words of the turn, which a note's words must come from. */
+    captureText?: string;
     quotes?: QuoteBook;
     alreadyMade?: string[];
     records?: RecordBook;
@@ -904,6 +967,7 @@ export function normalizeNomosReply(
   noteFacts: NoteFactCommand[];
   keyDates: KeyDateCommand[];
   projects: ProjectCommand[];
+  notes: CreateNoteCommand[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -957,6 +1021,12 @@ export function normalizeNomosReply(
       return read ? [read] : [];
     })
     .slice(0, MAX_KEY_DATES);
+  const notes = readNotes(items, context.topics, context.captureText, [
+    ...noteFacts.flatMap((fact) => [fact.statement, fact.quote ?? '']),
+    ...keyDates.flatMap((date) =>
+      date.kind === 'setKeyDate' ? [date.quote ?? ''] : [],
+    ),
+  ]);
   const projects = readProjects(
     items,
     entities,
@@ -1002,6 +1072,7 @@ export function normalizeNomosReply(
     noteFacts,
     keyDates,
     projects,
+    notes,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

@@ -1,5 +1,6 @@
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
+  FieldValue,
   getFirestore,
   type DocumentReference,
   type Firestore,
@@ -44,6 +45,13 @@ import {
 } from './nomos/commands.js';
 import { namedMomentWhoIds, type KeyDateRecord } from './nomos/planKeyDates.js';
 import { readActiveProjectsIn, readContextProjects } from './projectStore.js';
+import {
+  openTopicRecord,
+  readContextTopics,
+  readHintedNotes,
+  type HintedNote,
+  type OpenTopicRecord,
+} from './noteStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   createQuoteBook,
@@ -65,11 +73,14 @@ import {
   type AnswerCommand,
   type AskCommand,
   type CaptureReading,
+  type CreateNoteCommand,
   type MentionRead,
   type NoteFactCommand,
   type KeyDateCommand,
   type ProjectCommand,
   MAX_CONTEXT_PROJECTS,
+  MAX_CONTEXT_TOPICS,
+  MAX_HINT_NOTES,
   type NomosCommand,
   type PlaceRead,
   type PlanDayCommand,
@@ -105,7 +116,9 @@ import {
   settleCapture,
   type ExistingFact,
   type ExistingTask,
+  type KeptNote,
   type KnownWhoState,
+  type NoteTopicState,
   type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
@@ -453,6 +466,8 @@ interface Claimed {
   capture: CaptureDoc;
   mode: SortMode;
   startedAt: number;
+  /** The notes the device ranked for what was typed, ids only; the rest of the call reads them under the caller's own uid. */
+  noteIds: string[];
 }
 
 async function readAlreadyMade(
@@ -1250,6 +1265,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       noteFacts: [],
       keyDates: [],
       projects: [],
+      notes: [],
+      topics: [],
+      hinted: [],
       captureText: '',
       planDay: null,
       setCurrentPlace: null,
@@ -1421,6 +1439,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
+    const [topics, hinted] =
+      mode === 'rest'
+        ? [[], []]
+        : await Promise.all([
+            readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
+            readHintedNotes(firestore, base, key, claimed.noteIds),
+          ]);
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -1438,6 +1463,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       keyDates: contextKeyDates,
       upcoming,
       projects,
+      topics,
+      notes: hinted,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1550,6 +1577,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       route: routed.route,
       quotes,
       searched,
+      topics,
+      hinted,
     };
   };
 
@@ -1575,7 +1604,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quietMs: SETTLE_QUIET_MS,
     maxWaitMs: SETTLE_MAX_MS,
   });
-  const { loop, context, combined, route, quotes, searched } = result;
+  const { loop, context, combined, route, quotes, searched, topics, hinted } =
+    result;
   if (loop.endedBy !== 'terminal') {
     throw toFailure(
       loop.endedBy === 'error'
@@ -1590,6 +1620,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     synced: context.synced,
     facts: context.facts,
     keyDates: context.keyDates,
+    topics: context.topics,
+    captureText: combined.text,
     quotes,
     alreadyMade,
     timeZone,
@@ -1609,6 +1641,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     noteFacts: mode === 'full' ? reply.noteFacts : [],
     keyDates: mode === 'full' ? reply.keyDates : [],
     projects: mode === 'full' ? reply.projects : [],
+    notes: mode === 'full' ? reply.notes : [],
+    topics,
+    hinted,
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
     setCurrentPlace: mode === 'full' ? reply.setCurrentPlace : null,
@@ -1637,6 +1672,9 @@ async function writeResult(
     noteFacts: NoteFactCommand[];
     keyDates: KeyDateCommand[];
     projects: ProjectCommand[];
+    notes: CreateNoteCommand[];
+    topics: OpenTopicRecord[];
+    hinted: HintedNote[];
     captureText: string;
     planDay: PlanDayCommand | null;
     setCurrentPlace: SetCurrentPlaceCommand | null;
@@ -1666,6 +1704,9 @@ async function writeResult(
     noteFacts,
     keyDates,
     projects: projectCommands,
+    notes,
+    topics: contextTopics,
+    hinted,
     captureText,
     planDay: requestedPlanDay,
     setCurrentPlace: requestedHome,
@@ -1722,6 +1763,7 @@ async function writeResult(
   const askedRef = answerTurn
     ? captureRef.parent.doc(answerTurn.ref.captureId)
     : null;
+  const noteTopicIds = [...new Set(notes.flatMap((note) => note.topicIds))];
   const result = await firestore.runTransaction(async (transaction) => {
     const [
       captureSnap,
@@ -1732,6 +1774,8 @@ async function writeResult(
       copySnap,
       homeSnap,
       profileSnap,
+      noteCountSnap,
+      topicSnaps,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -1766,6 +1810,14 @@ async function writeResult(
       requestedHome || noteFacts.length > 0 || keyDates.length > 0
         ? transaction.get(firestore.doc(base))
         : Promise.resolve(null),
+      notes.length > 0
+        ? transaction.get(firestore.collection(`${base}/notes`).count())
+        : Promise.resolve(null),
+      Promise.all(
+        noteTopicIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/topics/${id}`)),
+        ),
+      ),
       ...targetIds.map((id) =>
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
@@ -1938,7 +1990,33 @@ async function writeResult(
         : null;
     const home = typeof homeWords === 'string' ? null : homeWords;
     const homeRefusal = typeof homeWords === 'string' ? homeWords : null;
+    const topicStates = new Map<string, NoteTopicState>(
+      topicSnaps.flatMap((snapshot): [string, NoteTopicState][] => {
+        const data = snapshot.data();
+        const topic = data ? openTopicRecord(key, snapshot.id, data) : null;
+        return topic
+          ? [
+              [
+                snapshot.id,
+                {
+                  name: topic.name,
+                  path:
+                    contextTopics.find((entry) => entry.id === snapshot.id)
+                      ?.path ?? topic.name,
+                  docState: topic.docState,
+                  pendingNoteIds: topic.pendingNoteIds,
+                },
+              ],
+            ]
+          : [];
+      }),
+    );
+    const keptNotes: KeptNote[] = hinted;
     const written = planWrites({
+      notes: isStale ? [] : notes,
+      topics: topicStates,
+      keptNotes,
+      noteCount: noteCountSnap?.data().count ?? 0,
       commands: isStale ? [] : commands,
       projectCommands: isStale ? [] : projectCommands,
       existingProjects,
@@ -1976,7 +2054,7 @@ async function writeResult(
           effects: [...written.effects, home.effect],
         }
       : written;
-    const isFiling = plan.effects.length > 0;
+    const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
     if (
       !isFiling &&
       commands.length > 0 &&
@@ -2035,6 +2113,15 @@ async function writeResult(
       );
       plan.keyDateDeletes.forEach((id) =>
         transaction.delete(firestore.doc(`${base}/keyDates/${id}`)),
+      );
+      plan.noteCreates.forEach(({ id, data }) =>
+        transaction.create(firestore.doc(`${base}/notes/${id}`), data),
+      );
+      plan.topicUpdates.forEach(({ id, docState, addPendingIds }) =>
+        transaction.update(firestore.doc(`${base}/topics/${id}`), {
+          docState,
+          pendingNoteIds: FieldValue.arrayUnion(...addPendingIds),
+        }),
       );
       if (plan.keyDateIndex && keyDateRead?.index) {
         writeIndexIn(transaction, firestore, base, {
@@ -2123,6 +2210,8 @@ async function writeResult(
       hasFacts:
         noteFacts.length +
           keyDates.length +
+          written.noteCreates.length +
+          written.lines.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,
@@ -2236,10 +2325,15 @@ const readInput = (data: unknown) => {
     captureId?: unknown;
     requestKey?: unknown;
     mode?: unknown;
+    noteIds?: unknown;
   };
   const mode = input.mode ?? 'full';
+  const noteIds = input.noteIds ?? [];
   if (
     (mode !== 'full' && mode !== 'rest') ||
+    !Array.isArray(noteIds) ||
+    noteIds.length > MAX_HINT_NOTES ||
+    !noteIds.every((id) => typeof id === 'string' && ID_RE.test(id)) ||
     typeof input.captureId !== 'string' ||
     typeof input.requestKey !== 'string' ||
     !ID_RE.test(input.captureId) ||
@@ -2251,6 +2345,7 @@ const readInput = (data: unknown) => {
     captureId: input.captureId,
     requestKey: input.requestKey,
     mode: mode as SortMode,
+    noteIds: noteIds as string[],
   };
 };
 
@@ -2273,7 +2368,7 @@ export const sortHelmCapture = onCall(
       throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
     }
     const startedAt = Date.now();
-    const { captureId, requestKey, mode } = readInput(request.data);
+    const { captureId, requestKey, mode, noteIds } = readInput(request.data);
     const firestore = getFirestore();
     const captureRef = firestore.doc(
       `apps/helm/users/${uid}/captures/${captureId}`,
@@ -2312,6 +2407,7 @@ export const sortHelmCapture = onCall(
       requestRef,
       mode,
       startedAt,
+      noteIds,
       ...claim,
     }).catch((error: unknown) => {
       if (error instanceof HttpsError) throw error;

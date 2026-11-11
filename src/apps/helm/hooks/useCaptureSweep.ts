@@ -10,6 +10,7 @@ import {
   SWEEP_RUN_LIMIT,
 } from '@apps/helm/constants';
 import { sortCapture, isSorting } from '@apps/helm/queries/nomosMutations';
+import { rankStoredNotes } from '@apps/helm/store/actions/captureActions';
 import type { OpenCapture } from '@apps/helm/types';
 
 const isUtcDayOver = (heldAt: number, now: number) =>
@@ -71,7 +72,11 @@ function createSweep() {
       .sort((a, b) => a.createdAt - b.createdAt)[0];
     if (!next) return;
     tried.add(next.id);
-    const { kind } = await sortCapture(next.id);
+    const { kind } = await sortCapture(
+      next.id,
+      'full',
+      rankStoredNotes(next.text),
+    );
     if (kind === 'failed' || kind === 'notSorted') {
       state.heldAt.set(next.id, Date.now());
     }

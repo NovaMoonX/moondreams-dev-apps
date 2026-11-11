@@ -20,11 +20,14 @@ import {
   CAPTURE_COUNTER_FROM,
   CAPTURE_MAX_CHARS,
   HELM_COPY,
+  NOTE_BODY_MAX,
 } from '@apps/helm/constants';
+import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import ReadChips from '@apps/helm/components/home/ReadChips';
 import ShorthandRow from '@apps/helm/components/home/ShorthandRow';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
+import { useSaveAsNote } from '@apps/helm/hooks/useSaveAsNote';
 import {
   clearSentTurn,
   getNextTurn,
@@ -34,7 +37,10 @@ import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
 import type { ScreenContext } from '@apps/helm/types';
-import { sendCapture } from '@apps/helm/store/actions/captureActions';
+import {
+  rankStoredNotes,
+  sendCapture,
+} from '@apps/helm/store/actions/captureActions';
 import {
   applyReadingEdits,
   getReadingKey,
@@ -90,6 +96,8 @@ function Composer({
     keepOnUnmount: true,
   });
   const [isSending, setIsSending] = useState(false);
+  const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const saveAsNote = useSaveAsNote(setOpenNoteId);
   // The clock the words are read against, taken when they last changed.
   const [typedAt, setTypedAt] = useState(() => Date.now());
   const [isFocused, setIsFocused] = useState(false);
@@ -149,6 +157,7 @@ function Composer({
     isCapturesLoaded &&
     user !== null &&
     !isTooLong;
+  const canSaveAsNote = isTooLong && length <= NOTE_BODY_MAX;
   const isNearLimit = length >= CAPTURE_COUNTER_FROM;
 
   const send = async () => {
@@ -194,6 +203,7 @@ function Composer({
         screen,
         answersQuestion: null,
         questionAnswer: null,
+        noteIds: rankStoredNotes(sent),
         ...turn,
       });
       recordSentTurn(uid, turn, id);
@@ -322,8 +332,32 @@ function Composer({
       )}
       {isTooLong && (
         <p className='text-destructive text-[13px]' aria-live='polite'>
-          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS)}
+          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS, canSaveAsNote)}
         </p>
+      )}
+      {isTooLong && (
+        <div className='flex items-center'>
+          {canSaveAsNote ? (
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              rounded='full'
+              disabled={!isReady || !user}
+              onClick={() =>
+                void saveAsNote(text).then((isTaken) => {
+                  if (isTaken) setText('');
+                })
+              }
+            >
+              {HELM_COPY.saveAsNote}
+            </Button>
+          ) : (
+            <p className='text-muted-foreground text-[13px]'>
+              {HELM_COPY.saveAsNoteTooLong}
+            </p>
+          )}
+        </div>
       )}
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
@@ -346,6 +380,7 @@ function Composer({
           </Button>
         </div>
       )}
+      <NoteSheet noteId={openNoteId} onClose={() => setOpenNoteId(null)} />
     </div>
   );
 }

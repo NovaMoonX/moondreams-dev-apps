@@ -272,6 +272,7 @@ export const HELM_COPY = {
   resultLinked: (names: string[]) => `Linked ${names.join(', ')}`,
   resultTaskDue: (due: string) => `Task · ${due}`,
   resultDone: 'Marked done',
+  resultNoteFallback: 'A note',
   resultTaskFallback: 'A task',
   resultFactFallback: 'Something noted',
   aiNotice: (name: string) =>
@@ -304,8 +305,14 @@ export const HELM_COPY = {
   moreChips: (count: number) => `+${count} more`,
   changeDayTitle: 'Change the day',
   changeDay: (text: string) => `Change the day for ${text}`,
-  tooLong: (over: number) =>
-    `Too long by ${over.toLocaleString()} ${over === 1 ? 'character' : 'characters'}. Split it into two.`,
+  tooLong: (over: number, canSaveAsNote: boolean) =>
+    `Too long by ${over.toLocaleString()} ${over === 1 ? 'character' : 'characters'}. Split it into two${canSaveAsNote ? ', or save it as a note' : ''}.`,
+  saveAsNote: 'Save as a note',
+  saveAsNoteTooLong: 'Too long to save as a note (20,000 at most).',
+  noteSavedFromText: (title: string) => `Saved a note: ${title}`,
+  noteAlreadyKept: (title: string) => `Already in your notes: ${title}`,
+  noteOpen: 'Open',
+  noteFromWhatYouSaid: (date: string) => `From what you said on ${date}`,
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
@@ -1115,9 +1122,11 @@ export const HELM_COPY = {
   questionGone: (kind: string) =>
     kind === 'whichIsTrue'
       ? 'That changed since.'
-      : kind === 'whichPlace'
-        ? 'That place was removed.'
-        : 'That person was removed.',
+      : kind === 'whichTopic'
+        ? 'That note or one of those topics was removed.'
+        : kind === 'whichPlace'
+          ? 'That place was removed.'
+          : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>
@@ -1362,6 +1371,18 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  tookBackNotes: (count: number) =>
+    `Took back ${count} ${count === 1 ? 'note' : 'notes'}`,
+  undoReportNotes: (takenBack: number, kept: number, gone: number) =>
+    [
+      `Took back ${takenBack} ${takenBack === 1 ? 'note' : 'notes'}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportNotesToo: (count: number) =>
+    `${count === 1 ? '1 note' : `${count} notes`} too.`,
   undoReportProjectsToo: (count: number) =>
     `${count === 1 ? '1 project' : `${count} projects`} too.`,
   askProject: (name: string) => `Ask about ${name}`,

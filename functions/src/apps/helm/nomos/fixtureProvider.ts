@@ -578,8 +578,12 @@ const readAtHome = (text: string) =>
     ? [toAnswer({ kind: 'setCurrentPlace', place: 'home', isHealth: null })]
     : null;
 
+const LEAD_RE = /^\s*(?:please\s+)?(?:remember\s+that|note\s*(?:that|:))\s+/i;
+
+const withoutLead = (text: string) => text.replace(LEAD_RE, '');
+
 const FACT_RE =
-  /^\s*(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)\s+is\s+(?:the|a|an)\s+[^?]+?\s*[.!]?\s*$/u;
+  /^\s*(@?[A-Z][\p{L}'’.-]*(?: [A-Z][\p{L}'’.-]*)*)\s+is\s+(?:(?:the|a|an)|allergic\s+to)\s+[^?]+?\s*[.!]?\s*$/u;
 
 const NOT_NAMES = new Set([
   'It',
@@ -600,8 +604,9 @@ const NOT_NAMES = new Set([
   'Tomorrow',
 ]);
 
-/** The emulator's stand-in for "Dana is the florist" or "Dana is a florist": one noteFact, stated, quoting the words, about the name that starts them. Null for any other words. */
-const readFact = (text: string) => {
+/** The emulator's stand-in for "Dana is the florist" or "Dana is a florist": one noteFact, stated, quoting the words, about the name that starts them ("Dana is allergic to nuts" too). Null for any other words. */
+const readFact = (said: string) => {
+  const text = withoutLead(said);
   const match = FACT_RE.exec(text);
   const handle = match?.[1];
   const name = handle?.replace(/^@/, '');
@@ -728,7 +733,8 @@ const readContradiction = (text: string, message: string) => {
 };
 
 /** The emulator's stand-in for the facts a person says about themself ("I always go to Shell for gas", "my favorite movie is Arrival", "I'm vegan", "I have diabetes") and the private detail said about a named person ("Dana has diabetes"): one noteFact, stated, quoting the words. Null for any other words. */
-const readSelfFact = (text: string) => {
+const readSelfFact = (said: string) => {
+  const text = withoutLead(said);
   const quote = text.trim().replace(/[.!]$/, '');
   const preference = PREFERENCE_RE.exec(text);
   if (preference) {
@@ -1031,7 +1037,7 @@ const readKeyDate = (
   reading: CaptureReading,
   message: string,
 ) => {
-  const removal = REMOVE_KEY_DATE_RE.exec(text);
+  const removal = REMOVE_KEY_DATE_RE.exec(withoutLead(text));
   if (removal) {
     const name = removal[1].replace(/^@/, '');
     const word = removal[2].toLowerCase();
@@ -1055,7 +1061,7 @@ const readKeyDate = (
         }
       : null;
   }
-  const match = KEY_DATE_RE.exec(text);
+  const match = KEY_DATE_RE.exec(withoutLead(text));
   if (!match) return readMoment(text, reading);
   const [, handle, owner, word, said] = match;
   const name = handle?.replace(/^@/, '');
@@ -1091,6 +1097,55 @@ const readKeyDate = (
           },
         ]
       : [],
+    places: [],
+  };
+};
+
+/** Topic words a body word stands for in the emulator, beside the words that share their first four letters. */
+const NOTE_TOPIC_WORDS: Record<string, string> = {
+  cake: 'baking',
+  cookie: 'baking',
+  sauce: 'kitchen',
+  soup: 'kitchen',
+};
+
+interface ListedTopic {
+  alias: string;
+  name: string;
+}
+
+const stemOf = (word: string) => word.toLowerCase().slice(0, 4);
+
+/** The emulator's stand-in for "remember that cakes keep 3 days in the fridge" or "note: the wifi at the cabin is …": one createNote of the words after the lead, filed under every topic whose name shares its first four letters with a word of them (or that a few kitchen words stand for). Null for any other words. */
+const readNote = (text: string, message: string) => {
+  const match = LEAD_RE.exec(text);
+  const body = match ? text.slice(match[0].length).trim() : '';
+  if (!match || !body) return null;
+  const words = body.toLowerCase().match(/\p{L}+/gu) ?? [];
+  const topics = readBlock<ListedTopic[]>(message, 'your_topics') ?? [];
+  const matched = topics.filter((topic) =>
+    (topic.name.toLowerCase().match(/\p{L}+/gu) ?? []).some((nameWord) =>
+      words.some(
+        (word) =>
+          word.length >= 4 &&
+          nameWord.length >= 4 &&
+          (stemOf(word) === stemOf(nameWord) ||
+            NOTE_TOPIC_WORDS[word.replace(/s$/, '')] === nameWord),
+      ),
+    ),
+  );
+  const title = upperFirst(body.replace(/[.!]+$/, ''));
+  return {
+    commands: [
+      toAnswer({
+        kind: 'createNote',
+        title: title.length > 80 ? title.slice(0, 80).trim() : title,
+        bodyQuote: body,
+        topicAliases: matched.map((topic) => topic.alias),
+        isHealth: null,
+      }),
+    ],
+    mentions: [],
     places: [],
   };
 };
@@ -1189,6 +1244,17 @@ export function createFixtureProvider(
       if (fact) {
         return {
           terminalInput: fact,
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const noted = readNote(text, messages[0]?.content ?? '');
+      if (noted) {
+        return {
+          terminalInput: noted,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

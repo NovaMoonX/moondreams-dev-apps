@@ -40,7 +40,7 @@ const toHeldReason = (error: unknown): HeldReason | null => {
 };
 
 const sortHelmCaptureCallable = httpsCallable<
-  { captureId: string; requestKey: string; mode: SortMode },
+  { captureId: string; requestKey: string; mode: SortMode; noteIds: string[] },
   SortResult
 >(functions, 'sortHelmCapture');
 
@@ -74,6 +74,7 @@ const isConnectionError = (error: unknown) =>
 export async function sortCapture(
   captureId: string,
   mode: SortMode = 'full',
+  noteIds: string[] = [],
 ): Promise<SortOutcome> {
   if (inFlight.has(captureId)) return outcome('skipped');
   inFlight.add(captureId);
@@ -83,6 +84,7 @@ export async function sortCapture(
       captureId,
       requestKey: generateUuid(),
       mode,
+      noteIds,
     });
     unreachable.delete(captureId);
     const { status, releasedIds } = result.data;
@@ -112,7 +114,9 @@ export async function sortCapture(
 
 export interface QuestionAnswerInput {
   by: 'tap' | 'voice';
-  optionId: string;
+  optionId?: string;
+  /** The topics ticked on a which-topics question. */
+  optionIds?: string[];
   /** The person's own statement, with the answer "none" to which fact is true. */
   text?: string;
 }

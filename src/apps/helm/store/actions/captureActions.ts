@@ -39,6 +39,7 @@ import {
   canMakeTaskAsWritten,
   toTaskTitle,
 } from '@apps/helm/utils/heldCaptures';
+import { rankNotes } from '@apps/helm/utils/noteSearch';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import type {
   Capture,
@@ -72,6 +73,16 @@ function writeJoined(
   return batch.commit();
 }
 
+/** The ids of the notes that best match words about to be sorted, from the notes the device has open. */
+export const rankStoredNotes = (text: string) => {
+  const { notes, topics } = store.getState().helm;
+  return rankNotes(
+    text,
+    notes.items.filter((note) => !note.isUnreadable),
+    topics.items,
+  );
+};
+
 /** Seals what the person typed or said and starts writing it as a received turn; the write is handed back unawaited. The words are never edited afterwards. */
 export async function sendCapture(
   uid: string,
@@ -87,6 +98,8 @@ export async function sendCapture(
     /** The question this turn answers and its structured answer (null when a spoken one could not be placed); both null on any other turn. */
     answersQuestion: Capture['answersQuestion'];
     questionAnswer: QuestionAnswerValue | null;
+    /** The notes the typed words matched, best first (at most 8); empty when none were ranked. */
+    noteIds?: string[];
     /** A spoken turn names the listener that wrote it; a typed one leaves both out. */
     voice?: { sttProvider: string; interruptedCaptureId: string | null };
   },
@@ -143,7 +156,7 @@ export async function sendCapture(
     : setDoc(reference, capture);
   // Once the write is acknowledged the server reads the turn; offline that happens when the device is back.
   void write.then(
-    () => sortCapture(reference.id),
+    () => sortCapture(reference.id, 'full', turn.noteIds ?? []),
     () => undefined,
   );
   return { write, id: reference.id };
@@ -303,7 +316,7 @@ export async function retryCapture(
     }),
   );
   await batch.commit();
-  return sortCapture(capture.id);
+  return sortCapture(capture.id, 'full', rankStoredNotes(capture.text));
 }
 
 /** Asks the server to file what a turn held back past its first 20 changes. */

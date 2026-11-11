@@ -1,13 +1,18 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
 import {
   createOptionMatcher,
+  toComparable,
   toDisplayCase,
 } from '../../../vendor/optionMatchUtils.js';
 import {
   DEFAULT_ASSISTANT_NAME,
   MAX_EFFECTS,
+  MAX_NOTES_PER_TURN,
   MAX_OPEN_ASKED,
+  NOTE_TOPICS_CAP,
+  NOTES_LIMIT,
   type AskCommand,
+  type CreateNoteCommand,
   type KeyDateCommand,
   type MentionRead,
   type NomosCommand,
@@ -39,6 +44,14 @@ import { buildSpokenAck, toKnownZone } from './spoken.js';
 import {
   buildAskedQuestion,
   buildCodeQuestion,
+  buildNoteDuplicateLine,
+  buildNoteLine,
+  buildSpokenNote,
+  buildSpokenWhichTopic,
+  buildTopicQuestion,
+  describeNotes,
+  NOTE_KEPT_SPOKEN,
+  NOTES_FULL_LINE,
   buildPickQuestion,
   buildSpokenPick,
   buildSpokenQuestion,
@@ -118,9 +131,45 @@ export interface EffectRef {
     | 'media'
     | 'profile'
     | 'keyDates'
-    | 'projects';
+    | 'projects'
+    | 'notes'
+    | 'topics';
   docId: string;
 }
+
+/** A topic as the turn's transaction read it, for filing a note under it. */
+export interface NoteTopicState {
+  name: string;
+  path: string;
+  docState: string;
+  pendingNoteIds: string[];
+}
+
+/** A note the person already keeps, opened, for the repeat check. */
+export interface KeptNote {
+  id: string;
+  title: string;
+  body: string;
+}
+
+/** A line of the turn's card that is no change to a record, with the record it opens. */
+export interface ResultNote {
+  text: string;
+  ref: { collection: 'notes'; id: string };
+}
+
+/** A topic a note was filed under: it falls behind, with the note waiting to be written in. */
+export interface TopicFiling {
+  id: string;
+  docState: string;
+  addPendingIds: string[];
+}
+
+/** Behind only from a state that can fall behind; one being written or failed keeps its state and still gains the pending note. */
+export const toBehindState = (docState: string) =>
+  docState === 'empty' || docState === 'current' || docState === 'behind'
+    ? 'behind'
+    : docState;
 
 export interface Effect {
   written: Record<string, unknown>;
@@ -142,6 +191,13 @@ export interface WritePlan {
   keyDateDeletes: string[];
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
+  noteCreates: { id: string; data: Record<string, unknown> }[];
+  topicUpdates: TopicFiling[];
+  /** Notes kept, and the line said aloud for them. */
+  notesMade: number;
+  spokenNote: string | null;
+  /** Lines with a record to open that changed nothing, such as a note already kept. */
+  lines: ResultNote[];
   /** Projects started, people given a key or involved role and milestones added, for the summary. */
   projectsMade: number;
   rolesSet: number;
@@ -206,6 +262,12 @@ interface PlanInput {
   storedMoments?: Map<string, { id: string; record: KeyDateRecord }[]>;
   /** The key dates an open "which is true now?" question already asks about. */
   openClashIds?: Set<string>;
+  notes?: CreateNoteCommand[];
+  /** The topics a note may be filed under, by id. */
+  topics?: Map<string, NoteTopicState>;
+  /** The notes the device ranked for the words, opened. */
+  keptNotes?: KeptNote[];
+  noteCount?: number;
 }
 
 interface Draft {
@@ -952,11 +1014,136 @@ export function planWrites(input: PlanInput): WritePlan {
   keyDatePlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
+  const noteSteps = (input.notes ?? []).slice(0, MAX_NOTES_PER_TURN).reduce<{
+    creates: { id: string; data: Record<string, unknown> }[];
+    lines: ResultNote[];
+    notKept: string[];
+    seen: string[];
+    working: Map<string, { docState: string; pendingNoteIds: string[] }>;
+    filings: Map<string, TopicFiling>;
+    asks: { noteId: string; topicIds: string[] }[];
+    names: string[][];
+  }>(
+    (acc, note) => {
+      const key = toComparable(note.body);
+      const kept = (input.keptNotes ?? []).find(
+        (entry) => toComparable(entry.body) === key,
+      );
+      if (kept) {
+        return {
+          ...acc,
+          lines: [
+            ...acc.lines,
+            {
+              text: buildNoteDuplicateLine(kept.title),
+              ref: { collection: 'notes', id: kept.id },
+            },
+          ],
+        };
+      }
+      if (acc.seen.includes(key)) return acc;
+      const seen = [...acc.seen, key];
+      if ((input.noteCount ?? 0) + acc.creates.length >= NOTES_LIMIT) {
+        return {
+          ...acc,
+          seen,
+          notKept: acc.notKept.includes(NOTES_FULL_LINE)
+            ? acc.notKept
+            : [...acc.notKept, NOTES_FULL_LINE],
+        };
+      }
+      const known = note.topicIds
+        .filter((id) => input.topics?.has(id))
+        .slice(0, NOTE_TOPICS_CAP);
+      const filedIds = known.length === 1 ? known : [];
+      const reserved =
+        effects.length +
+        drafts.size +
+        entities.newWho.length +
+        entities.newPlaces.length +
+        acc.creates.length +
+        acc.filings.size;
+      if (reserved + 1 + filedIds.length > MAX_EFFECTS) return acc;
+      const id = input.newId();
+      const topicNames = filedIds.map(
+        (topicId) => input.topics?.get(topicId)?.name ?? '',
+      );
+      const line = buildNoteLine(note.title, topicNames);
+      record(id, 'create', { 'sealed.title': line }, null, 'notes');
+      const stepped = filedIds.reduce(
+        (state, topicId) => {
+          const before = state.working.get(topicId) ?? {
+            docState: input.topics?.get(topicId)?.docState ?? 'empty',
+            pendingNoteIds: input.topics?.get(topicId)?.pendingNoteIds ?? [],
+          };
+          const after = {
+            docState: toBehindState(before.docState),
+            pendingNoteIds: [...before.pendingNoteIds, id],
+          };
+          record(topicId, 'update', after, before, 'topics');
+          const earlier = state.filings.get(topicId);
+          return {
+            working: new Map(state.working).set(topicId, after),
+            filings: new Map(state.filings).set(topicId, {
+              id: topicId,
+              docState: after.docState,
+              addPendingIds: [...(earlier?.addPendingIds ?? []), id],
+            }),
+          };
+        },
+        { working: acc.working, filings: acc.filings },
+      );
+      return {
+        creates: [
+          ...acc.creates,
+          {
+            id,
+            data: {
+              topicIds: filedIds,
+              source: 'capture',
+              isFromGeneralAnswer: false,
+              checkedAt: null,
+              hasHealthCaution: false,
+              sourceCaptureId: input.captureId,
+              sourceMediaId: null,
+              projectIds: [],
+              createdBy: 'nomos',
+              executionId: input.executionId,
+              createdAt: now,
+              lastEditedAt: null,
+              sealed: seal({ title: note.title, body: note.body }),
+            },
+          },
+        ],
+        lines: acc.lines,
+        notKept: acc.notKept,
+        seen,
+        working: stepped.working,
+        filings: stepped.filings,
+        asks:
+          known.length > 1
+            ? [...acc.asks, { noteId: id, topicIds: known }]
+            : acc.asks,
+        names: [...acc.names, topicNames],
+      };
+    },
+    {
+      creates: [],
+      lines: [],
+      notKept: [],
+      seen: [],
+      working: new Map(),
+      filings: new Map(),
+      asks: [],
+      names: [],
+    },
+  );
   const notKept = [
     ...new Set([
       ...factSteps.notKept,
       ...keyDatePlan.notKept,
       ...projectPlan.notKept,
+      ...noteSteps.notKept,
     ]),
   ];
 
@@ -1220,24 +1407,56 @@ export function planWrites(input: PlanInput): WritePlan {
       spoken,
     }),
   );
+  const pickQuestions = !isFiling
+    ? []
+    : buildPickQuestions({
+        entities,
+        unsureTasks,
+        people,
+        newId: input.newId,
+        now,
+        room:
+          MAX_PICK_QUESTIONS - disputeQuestions.length - clashQuestions.length,
+      });
+  const topicQuestions = !isFiling
+    ? []
+    : noteSteps.asks
+        .slice(
+          0,
+          Math.max(
+            0,
+            MAX_PICK_QUESTIONS -
+              disputeQuestions.length -
+              clashQuestions.length -
+              pickQuestions.length,
+          ),
+        )
+        .map(({ noteId, topicIds }): PlannedQuestion => {
+          const candidates = topicIds.map((id) => ({
+            id,
+            label:
+              input.topics?.get(id)?.path || input.topics?.get(id)?.name || '',
+          }));
+          return {
+            id: input.newId(),
+            state: {
+              kind: 'whichTopic',
+              shape: 'pickSeveral',
+              askedAt: now,
+              answeredAt: null,
+              skippedAt: null,
+            },
+            sealed: buildTopicQuestion({ noteId, candidates }),
+            spoken: buildSpokenWhichTopic(
+              topicIds.map((id) => input.topics?.get(id)?.name ?? ''),
+            ),
+          };
+        });
   const questions = [
     ...clashQuestions,
     ...(!isFiling
       ? []
-      : [
-          ...disputeQuestions,
-          ...buildPickQuestions({
-            entities,
-            unsureTasks,
-            people,
-            newId: input.newId,
-            now,
-            room:
-              MAX_PICK_QUESTIONS -
-              disputeQuestions.length -
-              clashQuestions.length,
-          }),
-        ]),
+      : [...disputeQuestions, ...pickQuestions, ...topicQuestions]),
   ];
 
   return {
@@ -1254,6 +1473,16 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateDeletes: keyDatePlan.deletes,
     projectCreates: projectPlan.creates,
     projectUpdates: projectPlan.updates,
+    noteCreates: noteSteps.creates,
+    topicUpdates: [...noteSteps.filings.values()],
+    notesMade: noteSteps.creates.length,
+    spokenNote:
+      noteSteps.creates.length === 0
+        ? null
+        : noteSteps.creates.length === 1
+          ? buildSpokenNote(noteSteps.names[0]?.[0] ?? null)
+          : `${describeNotes(noteSteps.creates.length)}.`,
+    lines: noteSteps.lines,
     projectsMade: projectPlan.creates.length,
     rolesSet: projectPlan.rolesSet,
     milestonesAdded: projectPlan.milestonesAdded,
@@ -1497,6 +1726,9 @@ export function buildExecution(
   );
   const spokenProject =
     projectLine && input.inputMode === 'voice' ? `${projectLine}.` : null;
+  const isVoice = input.inputMode === 'voice';
+  const spokenNote = isVoice ? plan.spokenNote : null;
+  const spokenKept = isVoice && plan.lines.length > 0 ? NOTE_KEPT_SPOKEN : null;
   return {
     captureId: input.captureId,
     actor: 'nomos',
@@ -1538,6 +1770,7 @@ export function buildExecution(
           plan.rolesSet,
           plan.milestonesAdded,
         ),
+        describeNotes(plan.notesMade),
         ...plan.notKept,
         homeLine,
       ]
@@ -1545,10 +1778,13 @@ export function buildExecution(
         .join('. '),
       commands: input.commands,
       effects: plan.effects,
+      lines: plan.lines,
       undoReport: null,
       goneIds: null,
       spoken: withQuestion(
-        [ack, spokenProject, spokenHome].filter(Boolean).join(' ') || null,
+        [ack, spokenProject, spokenNote, spokenKept, spokenHome]
+          .filter(Boolean)
+          .join(' ') || null,
         plan.questions[0]?.spoken ?? null,
       ),
     }),
@@ -1637,6 +1873,7 @@ interface SettleInput {
 const isPickKind = (kind: string) =>
   kind === 'whichPerson' ||
   kind === 'whichPlace' ||
+  kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
   kind === 'asked';
 

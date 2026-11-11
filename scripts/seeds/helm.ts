@@ -1555,6 +1555,128 @@ async function buildProjects(input: {
   return { projects, tasks };
 }
 
+const CAPTURE_NOTE_ID = 'seed-note-from-capture';
+const CAPTURE_NOTE_TURN_ID = 'seed-turn-note';
+const CAPTURE_NOTE_EXECUTION_ID = 'seed-execution-note';
+
+/** The turn "Remember that cakes keep 3 days in the fridge": the note it kept in Baking, the topic it marked behind, and the execution with the result line as the assistant writes it. */
+async function buildNoteTurn(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const text = 'Remember that cakes keep 3 days in the fridge';
+  const title = 'Cakes keep 3 days in the fridge';
+  const body = 'cakes keep 3 days in the fridge';
+  const createdAt = now - 12 * MINUTE_MS;
+  const sortedAt = createdAt + SORT_DELAY_MS;
+  const line = `Saved a note: ${title} · Baking`;
+  const capture: Capture = {
+    inputMode: 'typed',
+    sttProvider: null,
+    interruptedCaptureId: null,
+    answersQuestion: null,
+    ttsProvider: null,
+    medium: 'web',
+    sessionId: `seed-${uid}-answers`,
+    turnIndex: 7,
+    route: 'full',
+    status: 'sorted',
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    questionState: {},
+    executionIds: [CAPTURE_NOTE_EXECUTION_ID],
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    seenAt: createdAt + MINUTE_MS,
+    quotedSourceKeys: [],
+    whoIds: [],
+    placeIds: [],
+    planDayKey: null,
+    createdAt,
+    sortedAt,
+    screen: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text,
+        reading: readCapture(text, {
+          now: createdAt,
+          timeZone,
+          assistantName: DEFAULT_ASSISTANT_NAME,
+        }),
+        answer: null,
+        questionAnswer: null,
+      },
+      encryption,
+    ),
+  };
+  const execution: Execution = {
+    captureId: CAPTURE_NOTE_TURN_ID,
+    actor: 'nomos',
+    category: 'remember',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: CAPTURE_NOTE_ID },
+      {
+        op: 'update',
+        collection: 'topics',
+        docId: 'seed-topic-kitchen-baking',
+      },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: sortedAt,
+    decidedAt: sortedAt,
+    finishedAt: sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: 'Saved a note',
+        commands: [],
+        effects: [
+          { written: { 'sealed.title': line }, previous: null },
+          {
+            written: {
+              docState: 'behind',
+              pendingNoteIds: [CAPTURE_NOTE_ID],
+            },
+            previous: { docState: 'empty', pendingNoteIds: [] },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+      },
+      encryption,
+    ),
+  };
+  const note: Note = {
+    topicIds: ['seed-topic-kitchen-baking'],
+    source: 'capture',
+    isFromGeneralAnswer: false,
+    checkedAt: null,
+    hasHealthCaution: false,
+    sourceCaptureId: CAPTURE_NOTE_TURN_ID,
+    sourceMediaId: null,
+    projectIds: [],
+    createdBy: 'nomos',
+    executionId: CAPTURE_NOTE_EXECUTION_ID,
+    createdAt: sortedAt,
+    lastEditedAt: null,
+    sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+  };
+  return { capture, execution, note };
+}
+
 /** Alex's Knowledge: nine topics up to three levels deep (🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-one typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. */
 async function buildKnowledge(input: {
   now: number;
@@ -1567,6 +1689,10 @@ async function buildKnowledge(input: {
     emoji: string | null,
     parentId: string | null,
     depth: TopicDepth = parentId === null ? 1 : 2,
+    filing: Pick<Topic, 'docState' | 'pendingNoteIds'> = {
+      docState: 'empty',
+      pendingNoteIds: [],
+    },
   ): Promise<{ id: string; topic: Topic }> => ({
     id,
     topic: {
@@ -1574,8 +1700,7 @@ async function buildKnowledge(input: {
       depth,
       projectIds: [],
       version: 0,
-      docState: 'empty',
-      pendingNoteIds: [],
+      ...filing,
       writeClaim: null,
       overviewOf: {},
       createdBy: 'person',
@@ -1594,7 +1719,14 @@ async function buildKnowledge(input: {
     topicOf('seed-topic-car-washing', 'Washing', null, 'seed-topic-car'),
     topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
     topicOf('seed-topic-kitchen', 'Kitchen', '🍰', null),
-    topicOf('seed-topic-kitchen-baking', 'Baking', null, 'seed-topic-kitchen'),
+    topicOf(
+      'seed-topic-kitchen-baking',
+      'Baking',
+      null,
+      'seed-topic-kitchen',
+      2,
+      { docState: 'behind', pendingNoteIds: [CAPTURE_NOTE_ID] },
+    ),
     topicOf('seed-topic-wedding', 'Wedding etiquette', '💐', null),
     topicOf('seed-topic-garden', 'Garden', '🌱', null),
     topicOf(
@@ -3261,6 +3393,29 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           gmailTurn.fact,
         );
       }
+      const noteTurn =
+        user.uid === FIXTURE_USERS.partnerOne.uid
+          ? await buildNoteTurn({
+              uid: user.uid,
+              now: context.now,
+              timeZone,
+              encryption,
+            })
+          : null;
+      if (noteTurn) {
+        batch.set(
+          person.collection('captures').doc(CAPTURE_NOTE_TURN_ID),
+          noteTurn.capture,
+        );
+        batch.set(
+          person.collection('executions').doc(CAPTURE_NOTE_EXECUTION_ID),
+          noteTurn.execution,
+        );
+        batch.set(
+          person.collection('notes').doc(CAPTURE_NOTE_ID),
+          noteTurn.note,
+        );
+      }
       const planDays =
         user.uid === FIXTURE_USERS.partnerOne.uid
           ? await buildPlanDays({
@@ -3389,6 +3544,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         answerTurns.turns.length * 2 +
         answerTurns.tasks.length +
         (gmailTurn ? 3 : 0) +
+        (noteTurn ? 3 : 0) +
         (planDays ? planDays.days.length + 1 : 0);
       return (
         backToBackCount +

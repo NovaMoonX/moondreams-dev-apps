@@ -7,6 +7,8 @@ import {
 import { toKnownZone, toSyncedView, type SyncedCopy } from '../syncedCopies.js';
 import {
   MAX_CONTEXT_PROJECTS,
+  MAX_CONTEXT_TOPICS,
+  MAX_HINT_NOTES,
   type CaptureReading,
   type TaskDue,
   type Token,
@@ -40,6 +42,19 @@ export interface ContextSelfFact {
   by: 'said' | 'inferred';
 }
 
+/** A topic as the model sees it: its name and its path from the top down ("Car care › Washing"). */
+export interface ContextTopic {
+  id: string;
+  name: string;
+  path: string;
+}
+
+/** A note the device ranked for what was typed; only its title goes to the model. */
+export interface ContextNote {
+  id: string;
+  title: string;
+}
+
 export interface ContextInput {
   text: string;
   /** Each message of a turn made of several, address already stripped. */
@@ -66,6 +81,10 @@ export interface ContextInput {
   upcoming?: ContextUpcoming[];
   /** The active projects, newest first, each with its open milestones. */
   projects?: ContextProject[];
+  /** The person's topics, at most `MAX_CONTEXT_TOPICS`. */
+  topics?: ContextTopic[];
+  /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
+  notes?: ContextNote[];
 }
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
@@ -111,8 +130,11 @@ export function buildContext(input: ContextInput): {
   synced: SyncedBook;
   facts: AliasBook;
   keyDates: AliasBook;
+  topics: AliasBook;
 } {
   const aliases = createAliasBook('t');
+  const topics = createAliasBook('tp');
+  const notes = createAliasBook('n');
   const facts = createAliasBook('f');
   const keyDates = createAliasBook('k');
   const synced = createSyncedBook();
@@ -218,6 +240,27 @@ export function buildContext(input: ContextInput): {
           )}</open_projects>`,
         ]
       : []),
+    ...(input.topics?.length
+      ? [
+          `<your_topics>${toDataJson(
+            input.topics.slice(0, MAX_CONTEXT_TOPICS).map((topic) => ({
+              alias: topics.add(topic.id),
+              name: topic.name,
+              path: topic.path,
+            })),
+          )}</your_topics>`,
+        ]
+      : []),
+    ...(input.notes?.length
+      ? [
+          `<related_notes>${toDataJson(
+            input.notes.slice(0, MAX_HINT_NOTES).map((note) => ({
+              alias: notes.add(note.id),
+              title: note.title,
+            })),
+          )}</related_notes>`,
+        ]
+      : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
       : []),
@@ -227,7 +270,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced, facts, keyDates };
+  return { message, aliases, synced, facts, keyDates, topics };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */

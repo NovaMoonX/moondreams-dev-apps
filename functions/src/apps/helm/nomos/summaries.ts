@@ -220,6 +220,68 @@ export const buildCodeQuestion = (kind: CodeQuestionKind) => ({
   answer: null,
 });
 
+/** The result line of a note kept: "Saved a note: Cakes keep 3 days · Baking"; no topic part when it is in none. */
+export const buildNoteLine = (title: string, topicNames: string[]) =>
+  [`Saved a note: ${title}`, topicNames.join(', ')].filter(Boolean).join(' · ');
+
+/** The result line of a note the person filed by answering: "Filed a note: Cakes keep 3 days · Kitchen, Baking". */
+export const buildNoteFiledLine = (title: string, topicNames: string[]) =>
+  [`Filed a note: ${title}`, topicNames.join(', ')].filter(Boolean).join(' · ');
+
+/** The line for words the person already keeps word for word. */
+export const buildNoteDuplicateLine = (title: string) =>
+  `Already in your notes: ${title}`;
+
+export const NOTE_KEPT_SPOKEN = "That's already in your notes.";
+
+export const NOTES_FULL_LINE = 'Your notes are full (1,000).';
+
+/** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
+export const describeNotes = (count: number) =>
+  count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);
+
+/** "Saved a note." or "Saved a note in Kitchen." */
+export const buildSpokenNote = (topicName: string | null) =>
+  topicName ? `Saved a note in ${topicName}.` : 'Saved a note.';
+
+export const WHICH_TOPIC_WORDS = {
+  prompt: 'Which topics should this go in?',
+};
+
+/** "Which topics should this go in: Kitchen or Baking?" */
+export const buildSpokenWhichTopic = (names: string[]) =>
+  `Which topics should this go in: ${joinOr(names)}?`;
+
+export interface TopicCandidate {
+  id: string;
+  label: string;
+}
+
+/** The sealed half of the question asked when a note could go in two or more topics: one option per topic and nothing picked, with the filing held until the person answers. */
+export const buildTopicQuestion = (input: {
+  noteId: string;
+  candidates: TopicCandidate[];
+}) => ({
+  kind: 'whichTopic' as const,
+  builtBy: 'code' as const,
+  shape: 'pickSeveral' as const,
+  prompt: WHICH_TOPIC_WORDS.prompt,
+  options: input.candidates.map((candidate) => ({
+    id: candidate.id,
+    label: candidate.label,
+    detail: null,
+    ref: { collection: 'topics', id: candidate.id },
+  })),
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  heldCommands: [{ kind: 'fileNote', noteId: input.noteId }],
+  aboutRef: { collection: 'notes', id: input.noteId },
+  answer: null,
+});
+
 export type PickKind = 'whichPerson' | 'whichPlace';
 
 /** Fixed wording for the "which one?" questions asked when a name fits more than one record. */

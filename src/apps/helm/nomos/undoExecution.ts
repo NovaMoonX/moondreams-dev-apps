@@ -40,6 +40,7 @@ import type {
   ExecutionSealed,
   HelmEncryption,
   KeyDateSealed,
+  NoteSealed,
   ProjectSealed,
   Sealed,
   TaskSealed,
@@ -362,7 +363,8 @@ export async function undoExecution(
                 ref.collection === 'tasks' ||
                 ref.collection === 'who' ||
                 ref.collection === 'projects' ||
-                ref.collection === 'keyDates';
+                ref.collection === 'keyDates' ||
+                ref.collection === 'notes';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
@@ -391,7 +393,11 @@ export async function undoExecution(
               const opened = await (
                 data?.sealed
                   ? openJson<
-                      TaskSealed | WhoSealed | KeyDateSealed | ProjectSealed
+                      | TaskSealed
+                      | WhoSealed
+                      | KeyDateSealed
+                      | ProjectSealed
+                      | NoteSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);

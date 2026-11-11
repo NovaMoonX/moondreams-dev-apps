@@ -74,6 +74,7 @@ export type QuestionKind =
   | 'whichPerson'
   | 'whichPlace'
   | 'whichIsTrue'
+  | 'whichTopic'
   | 'asked'
   | (string & {});
 
@@ -104,6 +105,7 @@ export interface QuestionOption {
     | { collection: 'who' | 'places'; id: string }
     | { collection: 'facts'; id: string }
     | { collection: 'keyDates'; id: string }
+    | { collection: 'topics' | 'notes'; id: string }
     | null;
 }
 
@@ -137,7 +139,7 @@ export interface QuestionNumber {
 
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
-  kind: 'whichPerson' | 'whichPlace' | 'whichIsTrue' | 'asked';
+  kind: 'whichPerson' | 'whichPlace' | 'whichIsTrue' | 'whichTopic' | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
@@ -709,7 +711,9 @@ export interface EffectRef {
     | 'media'
     | 'profile'
     | 'keyDates'
-    | 'projects';
+    | 'projects'
+    | 'notes'
+    | 'topics';
   docId: string;
 }
 
@@ -738,6 +742,11 @@ export interface Execution {
   sealed: Sealed;
 }
 
+export interface ResultNoteLine {
+  text: string;
+  ref: { collection: 'notes'; id: string };
+}
+
 export interface ExecutionSealed {
   summary: string;
   commands: unknown[];
@@ -747,6 +756,8 @@ export interface ExecutionSealed {
   spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
+  /** Result rows that touch no record (a note already kept); absent on older executions. */
+  lines?: ResultNoteLine[];
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -757,6 +768,7 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   undoReport: string | null;
   spoken: string | null;
   goneIds: string[] | null;
+  lines?: ResultNoteLine[];
   isUnreadable: boolean;
 }
 
