@@ -498,9 +498,7 @@ export const HELM_COPY = {
   newSinceLooked: (count: number) => `${count} new since you looked`,
   settingsTrustedBrowsers: 'Trusted browsers',
   keptCopyNotice: (when: string | null) =>
-    when
-      ? `Offline · showing what this browser kept as of ${when}`
-      : 'Offline · showing what this browser kept',
+    when ? `Offline copy · ${when}` : 'Offline copy',
   keptCopyRetry: 'Try again',
   trustLapsedBody: (app: string) =>
     `Trust this browser is off now. Turn it on again in Settings to keep opening ${app} offline.`,
