@@ -6,6 +6,7 @@ import {
   getTakenBackIds,
   planReopen,
   planUndo,
+  procedureEffectKind,
   topicEffectKind,
   type UndoPlan,
   type UndoTarget,
@@ -16,6 +17,7 @@ import type {
   EffectRef,
   ExecutionEffect,
   OpenExecution,
+  ProcedureSealed,
   TaskSealed,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
@@ -1311,7 +1313,9 @@ test('a turn that made a note and added to a topic takes back both, the topic as
     result.deletes.map((entry) => entry.docId),
     ['n1'],
   );
-  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
   assert.equal(
     result.undoSealed.summary,
     'Took back 1 note and 1 change to Car care',
@@ -1333,7 +1337,9 @@ test('a version change alone is taken back, and says the topic', () => {
       [topicTarget('car', { version: 5, writeClaim: null })],
     ),
   );
-  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'car', collection: 'topics', from: 5, to: 4 },
+  ]);
   assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
   assert.equal(result.report, 'Took back 1 change to Car care.');
   assert.equal(result.deletes.length, 0);
@@ -1514,7 +1520,7 @@ test('a grouping goes back as one change: the child moves out, its version is re
     ['parent'],
   );
   assert.deepEqual(result.versionRestores, [
-    { docId: 'washing', from: 3, to: 2 },
+    { docId: 'washing', collection: 'topics', from: 3, to: 2 },
   ]);
   assert.equal(result.updates.length, 1);
   assert.equal(result.undoSealed.summary, 'Took back grouping under Car care');
@@ -1745,6 +1751,162 @@ test('deleting a task leaves other photos and discarded ones alone', () => {
       NOW,
     ),
     [],
+  );
+});
+
+const procedureSealed = (title: string): ProcedureSealed => ({
+  title,
+  steps: { a: { text: 'Laptop', detail: null } },
+  groups: {},
+});
+
+const procedureTarget = (
+  data: Record<string, unknown> | null,
+  title = 'Packing for a work trip',
+): [string, UndoTarget] => [
+  'pack',
+  { docId: 'pack', data, opened: data ? procedureSealed(title) : null },
+];
+
+const PROCEDURE_MADE_LINE = 'New procedure: Packing for a work trip · 12 steps';
+const PROCEDURE_CHANGED_LINE =
+  'Changed Packing for a work trip: added the laptop charger';
+
+const procedureMade = {
+  ref: { op: 'create', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      'sealed.title': PROCEDURE_MADE_LINE,
+      'sealed.name': 'Packing for a work trip',
+      version: 1,
+    },
+    previous: null,
+  } as ExecutionEffect,
+};
+
+const procedureRevised = {
+  ref: { op: 'update', collection: 'procedures', docId: 'pack' } as EffectRef,
+  effect: {
+    written: {
+      version: 3,
+      change: 'revised',
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+    previous: {
+      version: 2,
+      'sealed.title': PROCEDURE_CHANGED_LINE,
+      'sealed.name': 'Packing for a work trip',
+    },
+  } as ExecutionEffect,
+};
+
+test('procedureEffectKind tells a made procedure from a new version', () => {
+  assert.equal(procedureEffectKind(procedureMade.effect), 'made');
+  assert.equal(procedureEffectKind(procedureRevised.effect), 'version');
+});
+
+test('a procedure the turn made is deleted while it is at version 1', () => {
+  const result = asWrite(
+    plan(execution([procedureMade]), [procedureTarget({ version: 1 })]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'pack', collection: 'procedures' },
+  ]);
+  assert.equal(result.versionRestores.length, 0);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 change to Packing for a work trip',
+  );
+  assert.equal(result.report, 'Took back 1 change to Packing for a work trip.');
+});
+
+test('a procedure the person changed since is kept, not deleted', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget({ version: 2 })]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a revised procedure goes back as a new version holding the earlier one', () => {
+  const result = asWrite(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 3 })]),
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'pack', collection: 'procedures', from: 3, to: 2 },
+  ]);
+  assert.equal(result.deletes.length, 0);
+  assert.deepEqual(result.undoSealed.effects[0].written, {
+    version: 4,
+    change: 'restored',
+    'sealed.title': PROCEDURE_CHANGED_LINE,
+  });
+});
+
+test('a revised procedure edited since is kept', () => {
+  const result = asRefused(
+    plan(execution([procedureRevised]), [procedureTarget({ version: 4 })]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
+test('a made procedure that is already gone is counted as gone', () => {
+  const result = asRefused(
+    plan(execution([procedureMade]), [procedureTarget(null)]),
+  );
+  assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a turn that made a procedure and a note takes back both and says so', () => {
+  const result = asWrite(
+    plan(execution([noteMade, procedureMade]), [
+      noteTarget(),
+      procedureTarget({ version: 1 }),
+    ]),
+  );
+  assert.deepEqual(result.deletes.map((entry) => entry.docId).sort(), [
+    'n1',
+    'pack',
+  ]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and 1 change to Packing for a work trip',
+  );
+  assert.equal(
+    result.report,
+    'Took back 1 note. 1 change to Packing for a work trip too.',
+  );
+});
+
+test('a procedure result line names the procedure and opens it', () => {
+  const lines = buildResultLines(
+    execution([procedureMade, procedureRevised]),
+    new Map(),
+    'America/Los_Angeles',
+    NOW,
+  );
+  assert.deepEqual(
+    lines.map((line) => [line.title, line.ref]),
+    [
+      [PROCEDURE_MADE_LINE, { collection: 'procedures', id: 'pack' }],
+      [PROCEDURE_CHANGED_LINE, { collection: 'procedures', id: 'pack' }],
+    ],
+  );
+});
+
+test('procedure undo copy counts one change by name and several by number', () => {
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(1, 'Cabin'),
+    'Took back 1 change to Cabin',
+  );
+  assert.equal(
+    HELM_COPY.undoProcedureChanges(2, null),
+    'Took back 2 changes to procedures',
+  );
+  assert.equal(
+    HELM_COPY.undoReportProceduresToo(1, null),
+    '1 change to a procedure too.',
   );
 });
 

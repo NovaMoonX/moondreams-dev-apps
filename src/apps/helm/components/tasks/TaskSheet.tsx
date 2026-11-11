@@ -619,6 +619,9 @@ function TaskSheet({
           editing={editing}
           onEdit={(id) => go(`step:${id}`)}
           onBack={() => go('main')}
+          onOpenProcedure={(procedureId) =>
+            afterBackLayersClose(() => void showView('procedure', procedureId))
+          }
         />
       );
     }

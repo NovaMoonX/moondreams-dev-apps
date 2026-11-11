@@ -1,5 +1,9 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
-import type { MediaKind, TopicVersionReason } from '@apps/helm/types';
+import type {
+  MediaKind,
+  ProcedureVersionReason,
+  TopicVersionReason,
+} from '@apps/helm/types';
 import {
   MAX_ATTACHMENTS_PER_TURN,
   MAX_MARKDOWN_BYTES,
@@ -100,6 +104,16 @@ export const TOPIC_DOCUMENT_MAX = 30_000;
 export const SECTION_SOURCES_MAX = 20;
 /** The newest versions the History sheet listens to. */
 export const TOPIC_VERSIONS_LIMIT = 200;
+export const PROCEDURES_LIMIT = 200;
+export const PROCEDURE_STEPS_MAX = 60;
+export const PROCEDURE_STEP_TEXT_CAP = 200;
+export const PROCEDURE_STEP_DETAIL_CAP = 500;
+export const PROCEDURE_TITLE_CAP = 80;
+export const PROCEDURE_GROUPS_MAX = 12;
+export const PROCEDURE_GROUP_NAME_CAP = 40;
+export const PROCEDURE_VERSIONS_KEPT = 200;
+/** Steps past which a procedure's groups start folded. */
+export const PROCEDURE_FOLD_FROM = 50;
 export const SUBTOPICS_MAX = 20;
 export const NOTE_TOPICS_MAX = 10;
 /** Notes the search field appears from. */
@@ -238,6 +252,11 @@ const toTopicPhrase = (
     : count === 1
       ? `1 change to ${name ?? 'a topic'}`
       : `${count} changes to topics`;
+
+const toProcedurePhrase = (count: number, name: string | null) =>
+  count === 1
+    ? `1 change to ${name ?? 'a procedure'}`
+    : `${count} changes to procedures`;
 
 /** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
 const MEDIA_WORDS: Record<
@@ -1635,6 +1654,24 @@ export const HELM_COPY = {
     name: string | null,
     isGrouping = false,
   ) => `${toTopicPhrase(count, name, isGrouping)} too.`,
+  undoProcedurePhrase: toProcedurePhrase,
+  undoProcedureChanges: (count: number, name: string | null) =>
+    `Took back ${toProcedurePhrase(count, name)}`,
+  undoReportProcedures: (
+    count: number,
+    name: string | null,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `Took back ${toProcedurePhrase(count, name)}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportProceduresToo: (count: number, name: string | null) =>
+    `${toProcedurePhrase(count, name)} too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -1847,6 +1884,87 @@ export const HELM_COPY = {
               ]
             : []),
         ].join(' · '),
+  proceduresTitle: 'Procedures',
+  proceduresFailed: "Your procedures couldn't be opened.",
+  proceduresEmpty: (assistant: string) =>
+    `No procedures yet. Ask ${assistant} for a routine, or turn a task's steps into one.`,
+  procedureNew: 'New procedure',
+  procedureEditTitle: 'Change procedure',
+  procedureStepCount: (count: number) =>
+    count === 1 ? '1 step' : `${count} steps`,
+  procedureLine: (count: number) =>
+    `A procedure · ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureChanged: (date: string) => `Changed ${date}`,
+  procedureMadeBy: (assistant: string) => `Made by ${assistant}`,
+  procedureMadeByYou: 'Made by you',
+  procedureMadeFrom: (task: string) => `Made from ${task}`,
+  procedureEdit: 'Edit',
+  procedureHistory: 'History',
+  procedureCopy: 'Copy as Markdown',
+  procedureDelete: 'Delete',
+  procedureDeleteTitle: (title: string) => `Delete ${title}?`,
+  procedureDeleteConfirm: 'Delete this procedure? You can undo it right after.',
+  procedureDeleted: 'Procedure deleted',
+  procedureDeletedBack: (title: string) => `${title} is back`,
+  procedureDeleteFailed: "That wasn't deleted. Try again.",
+  procedureUndoFailed: "That wasn't put back. Try again.",
+  procedureCopied: (count: number) =>
+    count === 1 ? 'Copied 1 step' : `Copied ${count} steps`,
+  procedureCopyFailed: "Couldn't copy",
+  procedureStepsFull: 'A procedure holds 60 steps',
+  procedureGroupsFull: 'A procedure holds 12 groups',
+  procedureAddStep: 'Add a step',
+  procedureAddGroup: 'Add a group',
+  procedurePutInGroup: 'Put it in a group',
+  procedureNoGroup: 'No group',
+  procedureStepDetail: 'Add detail',
+  procedureStepField: 'Step',
+  procedureDetailField: 'Detail',
+  procedureGroupField: 'Group name',
+  procedureGroupFallback: 'Group',
+  procedureTitleLabel: 'Title',
+  procedureTitlePlaceholder: 'Packing for a work trip',
+  procedureStepPlaceholder: 'What to do',
+  procedureMoveUp: 'Move up',
+  procedureMoveDown: 'Move down',
+  procedureRemoveStep: 'Remove step',
+  procedureRemoveGroup: 'Remove group',
+  procedureNeedsWords: 'Add a title and at least one step.',
+  procedureFromTask: 'Make these steps a procedure',
+  procedureFromTaskCut: 'Kept the first 60 steps',
+  procedureFromTaskMade: (title: string) => `Made the procedure ${title}`,
+  procedureNeedsConnection: 'Needs a connection to save',
+  procedureRaced: 'Changed elsewhere · Reload',
+  procedureGone: 'This procedure is gone.',
+  procedureUntitled: 'A procedure',
+  procedureSaved: 'Saved',
+  procedureUndoHint: 'Puts the procedure back as it was before this.',
+  procedureSummaryAdded: (count: number) =>
+    `You added ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureSummaryRemoved: (count: number) =>
+    `You removed ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureSummaryChanged: (count: number) =>
+    `You changed ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureSummaryReordered: 'You reordered the steps',
+  procedureSummaryRenamed: 'You changed the title',
+  procedureSummaryGroups: 'You changed the groups',
+  procedureSummaryNothing: 'You saved it again',
+  procedureSummaryRestored: (version: number) => `Put back version ${version}`,
+  procedureMade: (title: string) => `Kept ${title}`,
+  procedureGroupShow: (name: string, count: number) =>
+    `${name} · ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureHistoryTitle: (title: string) => `History · ${title}`,
+  historyStepsLine: (count: number) =>
+    `${count} ${count === 1 ? 'step' : 'steps'} in this version`,
+  askAboutProcedure: 'Ask about this procedure',
+  chipProcedure: (title: string) => `About this procedure: ${title}`,
+  askAboutProcedures: (count: number) =>
+    count === 0
+      ? 'Ask about your procedures'
+      : `Ask about these ${count} procedures`,
+  chipProcedures: 'About your procedures',
+  backToProcedures: 'Back to Procedures',
+  backToProcedure: (title: string) => `Back to ${title}`,
   askTopic: 'Ask about this topic',
   chipTopic: (name: string) => `About this topic: ${name}`,
   backToTopic: (name: string) => `Back to ${name}`,
@@ -1974,26 +2092,34 @@ export const HELM_COPY = {
   historyTitle: (name: string) => `History · ${name}`,
   historyEmpty: 'Nothing has changed yet.',
   historyFailed: "History couldn't be opened.",
-  historyReason: (reason: TopicVersionReason) =>
-    reason === 'firstWritten'
-      ? 'First written from your notes'
-      : reason === 'addedFromSource'
-        ? 'Added from your notes'
-        : reason === 'personEdit'
-          ? 'You edited a part'
-          : reason === 'revisedOnRequest'
-            ? 'Changed when you asked'
-            : reason === 'moved'
-              ? 'Moved'
-              : reason === 'grouped'
-                ? 'Grouped under a topic'
-                : reason === 'rearranged'
-                  ? 'Rearranged'
-                  : reason === 'imported'
-                    ? 'Brought in from a file'
-                    : reason === 'sourceRemoved'
-                      ? 'Took out what a removed note said'
-                      : 'Restored an earlier version',
+  historyReason: (
+    reason: TopicVersionReason | ProcedureVersionReason,
+    byYou = true,
+    assistant = '',
+  ) =>
+    reason === 'created'
+      ? byYou
+        ? 'Made by you'
+        : `${assistant} made it`
+      : reason === 'firstWritten'
+        ? 'First written from your notes'
+        : reason === 'addedFromSource'
+          ? 'Added from your notes'
+          : reason === 'personEdit'
+            ? 'You edited a part'
+            : reason === 'revisedOnRequest'
+              ? 'Changed when you asked'
+              : reason === 'moved'
+                ? 'Moved'
+                : reason === 'grouped'
+                  ? 'Grouped under a topic'
+                  : reason === 'rearranged'
+                    ? 'Rearranged'
+                    : reason === 'imported'
+                      ? 'Brought in from a file'
+                      : reason === 'sourceRemoved'
+                        ? 'Took out what a removed note said'
+                        : 'Restored an earlier version',
   historyRowLine: (
     version: number,
     when: string,

@@ -22,6 +22,7 @@ import {
   type NoteFactKind,
   type PlaceRead,
   type ProjectCommand,
+  type ProcedureCommand,
   type TaskDue,
   type TopicCommand,
 } from './commands.js';
@@ -42,6 +43,13 @@ import {
   type PlacedTopic,
   type PlannedVersion,
 } from './planTopicCommands.js';
+import {
+  planProcedureCommands,
+  type PlannedProcedureCreate,
+  type PlannedProcedureVersion,
+  type ProcedureTask,
+} from './planProcedureCommands.js';
+import type { LiveProcedure } from '../procedureStore.js';
 import { LET_GO_WINDOW_MS } from '../media/mediaCaps.js';
 import {
   fitsTopic,
@@ -67,6 +75,7 @@ import {
   buildSpokenWhichTopic,
   buildTopicQuestion,
   describeNotes,
+  describeProcedureChanges,
   describeTopicChanges,
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
@@ -156,7 +165,8 @@ export interface EffectRef {
     | 'keyDates'
     | 'projects'
     | 'notes'
-    | 'topics';
+    | 'topics'
+    | 'procedures';
   docId: string;
 }
 
@@ -577,6 +587,8 @@ export interface WritePlan {
   topicCreates: { id: string; data: Record<string, unknown> }[];
   /** Revisions whose topic changed after the model read it. */
   topicRetry: number;
+  procedureCreates: PlannedProcedureCreate[];
+  procedureVersions: PlannedProcedureVersion[];
   /** Notes kept, and the line said aloud for them. */
   notesMade: number;
   spokenNote: string | null;
@@ -592,6 +604,8 @@ export interface WritePlan {
   notKept: string[];
   /** The result line of each change the turn made to a topic. */
   topicLines: string[];
+  /** The result line of each procedure the turn made or changed. */
+  procedureLines: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -659,6 +673,11 @@ interface PlanInput {
   liveTopics?: Map<string, LiveTopic>;
   /** Every topic's place in the tree, for a move or a grouping. */
   topicTree?: PlacedTopic[];
+  procedureCommands?: ProcedureCommand[];
+  /** The procedures the procedure commands revise, opened as the transaction read them; null when gone. */
+  liveProcedures?: Map<string, LiveProcedure | null>;
+  /** The tasks whose steps a procedure is made from, opened. */
+  procedureTasks?: Map<string, ProcedureTask | null>;
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
   media?: MediaInput;
@@ -1589,6 +1608,27 @@ export function planWrites(input: PlanInput): WritePlan {
   topicPlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
+  const procedurePlan = planProcedureCommands({
+    commands: input.procedureCommands ?? [],
+    live: input.liveProcedures ?? new Map(),
+    tasks: input.procedureTasks ?? new Map(),
+    captureId: input.captureId,
+    executionId: input.executionId,
+    now,
+    newId: input.newId,
+    seal,
+    room: Math.max(
+      0,
+      MAX_EFFECTS -
+        (effects.length +
+          drafts.size +
+          entities.newWho.length +
+          entities.newPlaces.length),
+    ),
+  });
+  procedurePlan.effects.forEach(({ ref, effect }) =>
+    record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
+  );
   const refiled = [...skipFiling]
     .filter((key) => !topicPlan.skipFiling.has(key))
     .reduce(
@@ -1628,6 +1668,7 @@ export function planWrites(input: PlanInput): WritePlan {
       ...projectPlan.notKept,
       ...noteSteps.notKept,
       ...topicPlan.notKept,
+      ...procedurePlan.notKept,
     ]),
   ];
 
@@ -2096,6 +2137,8 @@ export function planWrites(input: PlanInput): WritePlan {
       ),
     ],
     topicRetry: topicPlan.retry.length,
+    procedureCreates: procedurePlan.creates,
+    procedureVersions: procedurePlan.versions,
     notesMade: noteSteps.creates.length,
     spokenNote:
       noteSteps.creates.length === 0
@@ -2116,6 +2159,7 @@ export function planWrites(input: PlanInput): WritePlan {
         : null,
     notKept: [...notKept, ...knowledge.notKept],
     topicLines: topicPlan.topicLines,
+    procedureLines: procedurePlan.lines,
     linkedWhoIds: isFiling
       ? union(
           [...entities.whoIdOf.values()],
@@ -2399,6 +2443,10 @@ export function buildExecution(
         describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
         ...plan.fileSummaries,
         describeTopicChanges(plan.topicLines.length),
+        describeProcedureChanges(
+          plan.procedureCreates.length,
+          plan.procedureVersions.length,
+        ),
         ...plan.notKept,
         homeLine,
       ]

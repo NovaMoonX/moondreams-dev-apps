@@ -21,7 +21,7 @@ import SectionSourcesSheet from '@apps/helm/components/knowledge/SectionSourcesS
 import TopicFormSheet from '@apps/helm/components/knowledge/TopicFormSheet';
 import TopicMoveSheet from '@apps/helm/components/knowledge/TopicMoveSheet';
 import TopicRow from '@apps/helm/components/knowledge/TopicRow';
-import VersionsSheet from '@apps/helm/components/knowledge/VersionsSheet';
+import TopicVersionsSheet from '@apps/helm/components/knowledge/TopicVersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
@@ -560,7 +560,7 @@ function TopicScreen({
             version={topic.version}
             section={editingSection}
           />
-          <VersionsSheet
+          <TopicVersionsSheet
             isOpen={isHistoryOpen}
             onClose={() => setIsHistoryOpen(false)}
             topic={topic}

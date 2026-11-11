@@ -233,6 +233,51 @@ def main():
         admin([rm(vk + '-new-' + a)])
     check('versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/topics/t/versions/1', vr)]), False)
 
+    # A procedure is the owner's alone, and its shape caps the steps and groups the rules can count.
+    def procedure_doc(steps=3, groups=1, version=1):
+        return dict(stepState={f's{i}': dict(order=i, groupId=None) for i in range(steps)}, groupOrder=[f'g{i}' for i in range(groups)], version=version, createdBy='person', sourceCaptureId=None, sourceTaskId=None, executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+
+    pdoc = procedure_doc()
+    pk = f'{path}/procedures/procedure-1'
+    for a, tok in actors.items():
+        admin([put(pk, pdoc)])
+        check(f'procedures read [{a}]', get(pk, tok), a == 'o')
+        check(f'procedures list [{a}]', get(f'{path}/procedures', tok), a == 'o')
+        check(f'procedures create [{a}]', commit(tok, [put_new(pk + '-new-' + a, pdoc)]), a == 'o')
+        check(f'procedures update [{a}]', commit(tok, [put(pk, dict(pdoc, version=2))]), a == 'o')
+        check(f'procedures delete [{a}]', commit(tok, [rm(pk)]), a == 'o')
+        admin([rm(pk + '-new-' + a)])
+    check('procedures create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedures/p', pdoc)]), False)
+    for label, doc, allowed in (
+        ('with 60 steps', procedure_doc(steps=60), True),
+        ('with 61 steps', procedure_doc(steps=61), False),
+        ('with 12 groups', procedure_doc(groups=12), True),
+        ('with 13 groups', procedure_doc(groups=13), False),
+        ('with version 0', procedure_doc(version=0), False),
+        ('with a string version', dict(pdoc, version='1'), False),
+        ('with createdBy system', dict(pdoc, createdBy='system'), False),
+        ('without sealed', {k: v for k, v in pdoc.items() if k != 'sealed'}, False),
+    ):
+        check(f'procedures create {label} [o]', commit(o_tok, [put_new(pk + '-shape', doc)]), allowed)
+        admin([rm(pk + '-shape')])
+    admin([put(pk, pdoc)])
+    check('procedures update to 61 steps [o]', commit(o_tok, [put(pk, procedure_doc(steps=61))]), False)
+    check('procedures update to 60 steps [o]', commit(o_tok, [put(pk, procedure_doc(steps=60))]), True)
+    admin([rm(pk)])
+
+    # A procedure's versions are the owner's to read, list, create and delete; nobody updates one.
+    pvr = dict(version=1, restoredFromVersion=None, createdBy='person', reason='created', stepState={}, groupOrder=[], sourceCaptureId=None, executionId=None, createdAt=NOW, sealed=SEAL)
+    pvk = f'{path}/procedures/procedure-1/versions/1'
+    for a, tok in actors.items():
+        admin([put(pvk, pvr)])
+        check(f'procedure versions read [{a}]', get(pvk, tok), a == 'o')
+        check(f'procedure versions list [{a}]', get(f'{path}/procedures/procedure-1/versions', tok), a == 'o')
+        check(f'procedure versions create [{a}]', commit(tok, [put_new(pvk + '-new-' + a, pvr)]), a == 'o')
+        check(f'procedure versions update [{a}]', commit(tok, [put(pvk, dict(pvr, reason='personEdit'))]), False)
+        check(f'procedure versions delete [{a}]', commit(tok, [rm(pvk)]), a == 'o')
+        admin([rm(pvk + '-new-' + a)])
+    check('procedure versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/procedures/p/versions/1', pvr)]), False)
+
     # A key date and the sealed index of them are the owner's alone, like a task; the index is written in the same transaction as the date.
     kd = dict(whoId='who-1', shape='yearly', source='person', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
     ix = dict(entryCount=1, rebuiltAt=None, lastEditedAt=NOW, sealed=SEAL)

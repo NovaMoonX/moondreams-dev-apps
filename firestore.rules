@@ -253,6 +253,25 @@ service cloud.firestore {
       allow read, create, delete: if isHelmOwner(uid);
     }
 
+    // A procedure's steps and their groups are sealed; the readable part is its shape, so the number of steps and groups stays capped.
+    match /apps/helm/users/{uid}/procedures/{procedureId} {
+      function isProcedureShape(data) {
+        return data.keys().hasAll(['stepState', 'groupOrder', 'version', 'createdBy', 'sealed'])
+          && data.stepState is map && data.stepState.size() <= 60
+          && data.groupOrder is list && data.groupOrder.size() <= 12
+          && data.version is int && data.version >= 1
+          && data.createdBy in ['person', 'nomos']
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isProcedureShape(request.resource.data);
+    }
+
+    // A procedure's versions are history: the owner reads, adds and trims them, and nobody rewrites one.
+    match /apps/helm/users/{uid}/procedures/{procedureId}/versions/{version} {
+      allow read, create, delete: if isHelmOwner(uid);
+    }
+
     // A medium's document names sealed bytes in Storage and what they show on; the words in it stay sealed, so the shape checked here is the readable part.
     match /apps/helm/users/{uid}/media/{mediaId} {
       function isMediumShape(data) {

@@ -33,6 +33,7 @@ import {
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
+import { toStepState } from '../../src/apps/helm/utils/stepGroups.ts';
 import {
   getMediaObjectPath,
   getMediaObjectPaths,
@@ -71,6 +72,10 @@ import type {
   Task,
   TaskDue,
   TaskSealed,
+  Procedure,
+  ProcedureSealed,
+  ProcedureVersion,
+  ProcedureVersionSealed,
   Topic,
   TopicDepth,
   TopicSealed,
@@ -289,6 +294,7 @@ const MOVE_SCREEN: ScreenContext = {
     { collection: 'tasks', id: 'seed-task-3-1' },
   ],
   topicId: null,
+  procedureId: null,
   v: 1,
 };
 
@@ -2441,6 +2447,225 @@ async function buildKnowledge(input: {
       { id: 'seed-turn-group-fitness', capture: groupCapture },
     ],
     executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+  };
+}
+
+interface SeedProcedureStep {
+  id: string;
+  text: string;
+  detail?: string | null;
+  groupId: string | null;
+}
+
+interface SeedProcedureVersion {
+  by: 'nomos' | 'person';
+  reason: ProcedureVersion['reason'];
+  at: number;
+  summary: string;
+  requestQuote?: string;
+  title: string;
+  steps: SeedProcedureStep[];
+}
+
+/** Alex's two procedures: Packing for a work trip (made by the assistant on request in three groups, a charger added when asked and a pair of shoes renamed by hand, 13 steps at version 3) and Closing the cabin (made by hand, 7 steps in no group at version 2). Two documents plus five versions under `versions/{n}`. */
+async function buildProcedures(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const GROUPS = {
+    clothes: { id: 'seed-group-clothes', name: 'Clothes' },
+    electronics: { id: 'seed-group-electronics', name: 'Electronics' },
+    documents: { id: 'seed-group-documents', name: 'Documents' },
+  };
+  const step = (
+    id: string,
+    text: string,
+    groupId: string | null = null,
+  ): SeedProcedureStep => ({ id, text, groupId });
+  const packingStart = [
+    step('seed-step-pack-weather', 'Check the weather at the destination'),
+    step('seed-step-pack-hotel', 'Confirm the hotel booking'),
+    step('seed-step-pack-shirts', 'Two work shirts', GROUPS.clothes.id),
+    step('seed-step-pack-trousers', 'Trousers', GROUPS.clothes.id),
+    step('seed-step-pack-shoes', 'Shoes for the meeting', GROUPS.clothes.id),
+    step('seed-step-pack-sleepwear', 'Sleepwear', GROUPS.clothes.id),
+    step('seed-step-pack-toiletry', 'Toiletry bag', GROUPS.clothes.id),
+    step('seed-step-pack-laptop', 'Laptop', GROUPS.electronics.id),
+    step(
+      'seed-step-pack-phone-charger',
+      'Phone charger',
+      GROUPS.electronics.id,
+    ),
+    step('seed-step-pack-headphones', 'Headphones', GROUPS.electronics.id),
+    step('seed-step-pack-id', 'ID or passport', GROUPS.documents.id),
+    step('seed-step-pack-agenda', 'Printed agenda', GROUPS.documents.id),
+  ];
+  const charger = step(
+    'seed-step-pack-laptop-charger',
+    'Laptop charger',
+    GROUPS.electronics.id,
+  );
+  const withCharger = [
+    ...packingStart.slice(0, 8),
+    charger,
+    ...packingStart.slice(8),
+  ];
+  const withSmartShoes = withCharger.map((entry) =>
+    entry.id === 'seed-step-pack-shoes'
+      ? { ...entry, text: 'Smart shoes' }
+      : entry,
+  );
+  const packingGroups = Object.values(GROUPS);
+  const packingVersions: SeedProcedureVersion[] = [
+    {
+      by: 'nomos',
+      reason: 'created',
+      at: now - 6 * DAY_MS,
+      summary: '',
+      title: 'Packing for a work trip',
+      steps: packingStart,
+    },
+    {
+      by: 'nomos',
+      reason: 'revisedOnRequest',
+      at: now - 5 * DAY_MS,
+      summary: 'Added the laptop charger',
+      requestQuote: 'add a step for the laptop charger',
+      title: 'Packing for a work trip',
+      steps: withCharger,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 2 * DAY_MS,
+      summary: 'You changed 1 step',
+      title: 'Packing for a work trip',
+      steps: withSmartShoes,
+    },
+  ];
+  const cabinStart = [
+    step('seed-step-cabin-water', 'Turn off the water main'),
+    step('seed-step-cabin-pipes', 'Drain the pipes'),
+    step('seed-step-cabin-fridge', 'Empty the fridge'),
+    step('seed-step-cabin-unplug', 'Unplug appliances'),
+    step('seed-step-cabin-shutters', 'Close the shutters'),
+    step('seed-step-cabin-lock', 'Lock up and check every door'),
+  ];
+  const cabinFinal = [
+    ...cabinStart.slice(0, 5),
+    step('seed-step-cabin-thermostat', 'Set the thermostat to 50°F'),
+    cabinStart[5],
+  ];
+  const cabinVersions: SeedProcedureVersion[] = [
+    {
+      by: 'person',
+      reason: 'created',
+      at: now - 20 * DAY_MS,
+      summary: '',
+      title: 'Closing the cabin',
+      steps: cabinStart,
+    },
+    {
+      by: 'person',
+      reason: 'personEdit',
+      at: now - 12 * DAY_MS,
+      summary: 'You added 1 step',
+      title: 'Closing the cabin',
+      steps: cabinFinal,
+    },
+  ];
+  const partsOf = (
+    title: string,
+    steps: SeedProcedureStep[],
+    groups: { id: string; name: string }[],
+  ) => ({
+    stepState: toStepState(
+      [
+        ...steps.filter((entry) => entry.groupId === null),
+        ...groups.flatMap((group) =>
+          steps.filter((entry) => entry.groupId === group.id),
+        ),
+      ].map(({ id, groupId }) => ({ id, groupId })),
+    ),
+    groupOrder: groups.map((group) => group.id),
+    body: {
+      title,
+      steps: Object.fromEntries(
+        steps.map((entry) => [
+          entry.id,
+          { text: entry.text, detail: entry.detail ?? null },
+        ]),
+      ),
+      groups: Object.fromEntries(
+        groups.map((group) => [group.id, { name: group.name }]),
+      ),
+    } satisfies ProcedureSealed,
+  });
+  const build = async (
+    id: string,
+    createdBy: 'nomos' | 'person',
+    groups: { id: string; name: string }[],
+    history: SeedProcedureVersion[],
+  ) => {
+    const latest = history[history.length - 1];
+    const parts = partsOf(latest.title, latest.steps, groups);
+    return {
+      id,
+      procedure: {
+        stepState: parts.stepState,
+        groupOrder: parts.groupOrder,
+        version: history.length,
+        createdBy,
+        sourceCaptureId: null,
+        sourceTaskId: null,
+        executionId: null,
+        createdAt: history[0].at,
+        lastEditedAt: latest.at,
+        sealed: await sealJson<ProcedureSealed>(parts.body, encryption),
+      } satisfies Procedure,
+      versions: await Promise.all(
+        history.map(async (entry, index) => {
+          const own = partsOf(entry.title, entry.steps, groups);
+          return {
+            procedureId: id,
+            id: String(index + 1),
+            version: {
+              version: index + 1,
+              restoredFromVersion: null,
+              createdBy: entry.by,
+              reason: entry.reason,
+              stepState: own.stepState,
+              groupOrder: own.groupOrder,
+              sourceCaptureId: null,
+              executionId: null,
+              createdAt: entry.at,
+              sealed: await sealJson<ProcedureVersionSealed>(
+                {
+                  ...own.body,
+                  changeSummary: entry.summary,
+                  requestQuote: entry.requestQuote ?? null,
+                },
+                encryption,
+              ),
+            } satisfies ProcedureVersion,
+          };
+        }),
+      ),
+    };
+  };
+  const built = [
+    await build(
+      'seed-procedure-packing',
+      'nomos',
+      packingGroups,
+      packingVersions,
+    ),
+    await build('seed-procedure-cabin', 'person', [], cabinVersions),
+  ];
+  return {
+    procedures: built.map(({ id, procedure }) => ({ id, procedure })),
+    versions: built.flatMap(({ versions }) => versions),
   };
 }
 
@@ -4887,6 +5112,27 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           ),
         );
       }
+      const procedures = people
+        ? await buildProcedures({ now: context.now, encryption })
+        : null;
+      if (procedures) {
+        procedures.procedures.forEach((entry) =>
+          batch.set(
+            person.collection('procedures').doc(entry.id),
+            entry.procedure,
+          ),
+        );
+        procedures.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('procedures')
+              .doc(entry.procedureId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+      }
       const peopleCount = people
         ? (photoTurns
             ? photoTurns.captures.length + photoTurns.media.length + 2
@@ -4915,6 +5161,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               knowledge.versions.length +
               knowledge.captures.length +
               knowledge.executions.length
+            : 0) +
+          (procedures
+            ? procedures.procedures.length + procedures.versions.length
             : 0)
         : 0;
       const backToBackCount =

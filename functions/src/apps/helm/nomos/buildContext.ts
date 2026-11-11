@@ -14,6 +14,7 @@ import {
   type TaskDue,
   type Token,
 } from './commands.js';
+import type { StepGroupBlock } from '../stepGroups.js';
 import { withoutAddress } from './joinedTurn.js';
 import { hasReviseCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
@@ -50,6 +51,23 @@ export interface ContextTopic {
   name: string;
   path: string;
 }
+
+/** A procedure as the model sees it: its title and how many steps it has. */
+export interface ContextProcedure {
+  id: string;
+  title: string;
+  stepCount: number;
+}
+
+/** The open procedure with its steps in their groups, ungrouped first. */
+export interface ContextFocusedProcedure {
+  id: string;
+  title: string;
+  version: number;
+  blocks: StepGroupBlock[];
+}
+
+export const MAX_CONTEXT_PROCEDURES = 50;
 
 /** A note the device ranked for what was typed. Its title always goes to the model; its body only on a question, and `isUnchecked` says it was saved from a general answer nobody has checked. */
 export interface ContextNote {
@@ -128,6 +146,9 @@ export interface ContextInput {
     isCut: boolean;
   }[];
   focusedTopic?: ContextFocusedTopic | null;
+  /** The person's newest procedures, at most `MAX_CONTEXT_PROCEDURES`. */
+  procedures?: ContextProcedure[];
+  focusedProcedure?: ContextFocusedProcedure | null;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
 }
@@ -203,12 +224,16 @@ export function buildContext(input: ContextInput): {
   notes: AliasBook;
   parts: AliasBook;
   sections: AliasBook;
+  procedures: AliasBook;
+  procedureSteps: AliasBook;
   focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
   const sectionBook = createAliasBook('s');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
+  const procedures = createAliasBook('pr');
+  const procedureSteps = createAliasBook('ps');
   const partIds = new Map<string, string>();
   const parts: AliasBook = {
     add: (id) => {
@@ -257,6 +282,25 @@ export function buildContext(input: ContextInput): {
     ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
+  const focusedProcedure = input.focusedProcedure ?? null;
+  const procedureOpen = focusedProcedure
+    ? {
+        procedure: procedures.add(focusedProcedure.id),
+        title: focusedProcedure.title,
+        version: focusedProcedure.version,
+        groups: focusedProcedure.blocks.flatMap((block) =>
+          block.name === null ? [] : [block.name],
+        ),
+        steps: focusedProcedure.blocks.flatMap((block) =>
+          block.steps.map((step) => ({
+            step: procedureSteps.add(step.id),
+            text: step.text,
+            detail: step.detail,
+            group: block.name,
+          })),
+        ),
+      }
+    : null;
   const noteIds = new Set(keptNotes.map((note) => note.id));
   const focused = input.focusedTopic;
   const documentMode = input.topicDocument ?? 'whole';
@@ -395,11 +439,27 @@ export function buildContext(input: ContextInput): {
           )}</your_topics>`,
         ]
       : []),
+    ...(input.procedures?.length
+      ? [
+          `<your_procedures>${toDataJson(
+            input.procedures
+              .slice(0, MAX_CONTEXT_PROCEDURES)
+              .map((procedure) => ({
+                procedure: procedures.add(procedure.id),
+                title: procedure.title,
+                steps: procedure.stepCount,
+              })),
+          )}</your_procedures>`,
+        ]
+      : []),
     ...(input.notes?.length
       ? [`<related_notes>${toDataJson(noteRecords)}</related_notes>`]
       : []),
     ...(topicDocument
       ? [`<topic_document>${toDataJson(topicDocument)}</topic_document>`]
+      : []),
+    ...(procedureOpen
+      ? [`<procedure_open>${toDataJson(procedureOpen)}</procedure_open>`]
       : []),
     ...(input.attachments?.length
       ? [`<attachments>${toDataJson(input.attachments)}</attachments>`]
@@ -426,6 +486,8 @@ export function buildContext(input: ContextInput): {
     notes,
     parts,
     sections: sectionBook,
+    procedures,
+    procedureSteps,
     focus: focused ? { id: focused.id, version: focused.version } : null,
   };
 }

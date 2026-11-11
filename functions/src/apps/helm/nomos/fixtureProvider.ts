@@ -1333,6 +1333,116 @@ const readTopicWork = (text: string, message: string) => {
   return null;
 };
 
+const PACKING_STEPS: [string, string | null][] = [
+  ['Check the weather at the destination', null],
+  ['Confirm the hotel booking', null],
+  ['Two work shirts', 'Clothes'],
+  ['Trousers', 'Clothes'],
+  ['Shoes for the meeting', 'Clothes'],
+  ['Sleepwear', 'Clothes'],
+  ['Toiletry bag', 'Clothes'],
+  ['Laptop', 'Electronics'],
+  ['Phone charger', 'Electronics'],
+  ['Headphones', 'Electronics'],
+  ['ID or passport', 'Documents'],
+  ['Printed agenda', 'Documents'],
+];
+
+interface ProcedureOpenBlock {
+  procedure: string;
+  steps: {
+    step: string;
+    text: string;
+    detail: string | null;
+    group: string | null;
+  }[];
+}
+
+const toProcedureCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    procedureSteps: [],
+    fromTaskAlias: null,
+    changeSummary: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
+const readProcedureWork = (text: string, message: string) => {
+  const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
+  if (/\bpacking routine for work trips?\b/i.test(text)) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Packing for a work trip',
+          requestQuote: 'make me a packing routine',
+          procedureSteps: PACKING_STEPS.map(([stepText, group]) => ({
+            stepAlias: null,
+            text: stepText,
+            detail: null,
+            group,
+          })),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (
+    /\bmake (this|these|it|them|the steps)\b.*\b(routine|procedure)\b/i.test(
+      text,
+    )
+  ) {
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'createProcedure',
+          title: 'Routine',
+          requestQuote: text.trim().replace(/[.!]+$/, ''),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  if (/\badd a step for the laptop charger\b/i.test(text)) {
+    const kept = (open?.steps ?? []).map((step) => ({
+      stepAlias: step.step,
+      text: step.text,
+      detail: step.detail,
+      group: step.group,
+    }));
+    const at = kept.findIndex((step) => step.text === 'Laptop') + 1;
+    const added = {
+      stepAlias: null,
+      text: 'Laptop charger',
+      detail: null,
+      group: 'Electronics',
+    };
+    return {
+      commands: [
+        toProcedureCommand({
+          kind: 'reviseProcedure',
+          procedureAlias: open?.procedure ?? null,
+          procedureSteps: [
+            ...kept.slice(0, at === 0 ? kept.length : at),
+            added,
+            ...(at === 0 ? [] : kept.slice(at)),
+          ],
+          changeSummary: 'added the laptop charger',
+          requestQuote: 'add a step for the laptop charger',
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  return null;
+};
+
 /** The emulator's stand-in for "remember that cakes keep 3 days in the fridge" or "note: the wifi at the cabin is …": one createNote of the words after the lead, filed under every topic whose name shares its first four letters with a word of them (or that a few kitchen words stand for). Null for any other words. */
 const readNote = (text: string, message: string) => {
   const match = LEAD_RE.exec(text);
@@ -1425,10 +1535,9 @@ function createTextFixtureProvider(
           toolCalls: [],
         };
       }
-      const grown = readTopicWork(
-        text,
-        messageText(messages[0]?.content ?? ''),
-      );
+      const grown =
+        readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
+        readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {
         return {
           terminalInput: grown,

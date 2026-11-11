@@ -29,6 +29,7 @@ const withoutPage = (context: ScreenContext): ScreenContext => ({
   focus: null,
   visible: [],
   topicId: null,
+  procedureId: null,
   v: 1,
 });
 

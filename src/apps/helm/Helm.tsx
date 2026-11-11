@@ -17,6 +17,8 @@ import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedApps
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import ProcedureScreen from '@apps/helm/components/procedures/ProcedureScreen';
+import ProceduresView from '@apps/helm/components/procedures/ProceduresView';
 import KnowledgeView from '@apps/helm/components/knowledge/KnowledgeView';
 import TopicScreen from '@apps/helm/components/knowledge/TopicScreen';
 import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
@@ -42,6 +44,7 @@ const ORIGIN_LABELS: Partial<Record<HelmView, string>> = {
   comingUp: HELM_COPY.comingUpTitle,
   people: HELM_COPY.peopleTitle,
   projects: HELM_COPY.projectsTitle,
+  procedures: HELM_COPY.proceduresTitle,
 };
 
 function HelmApp() {
@@ -209,6 +212,24 @@ function HelmApp() {
             onHome={goHome}
             onOpenTopic={(topicId) => showView('topic', topicId)}
             onOpenParent={(topicId) => void goUpTo('topic', topicId)}
+          />
+        )}
+        {!isLocked && view === 'procedures' && (
+          <ProceduresView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenProcedure={(procedureId) =>
+              showView('procedure', procedureId)
+            }
+          />
+        )}
+        {!isLocked && view === 'procedure' && (
+          <ProcedureScreen
+            key={item}
+            procedureId={item}
+            backLabel={toBackLabel(HELM_COPY.proceduresTitle)}
+            onBack={goBackToOrigin}
+            onHome={goHome}
           />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (

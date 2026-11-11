@@ -89,3 +89,5 @@ jobs:
       - run: npm run check:helm-notes
       - run: npm run check:helm-note-search
       - run: npm run check:helm-topic-write
+      - run: npm run check:helm-procedures
+      - run: npm run check:helm-procedure-steps

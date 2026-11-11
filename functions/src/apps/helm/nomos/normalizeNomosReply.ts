@@ -4,7 +4,11 @@ import {
 } from '../../../vendor/optionMatchUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
-import { hasReviseCue } from './route.js';
+import {
+  hasProcedureCue,
+  hasProcedureReviseCue,
+  hasReviseCue,
+} from './route.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import {
   ANSWER_SCOPES,
@@ -31,6 +35,15 @@ import {
   MAX_NOTED_FACTS,
   MAX_NOTES_PER_TURN,
   TOPIC_COMMAND_KINDS,
+  PROCEDURE_COMMAND_KINDS,
+  PROCEDURE_GROUP_NAME_CAP,
+  PROCEDURE_STEP_DETAIL_CAP,
+  PROCEDURE_STEP_TEXT_CAP,
+  PROCEDURE_STEPS_MAX,
+  PROCEDURE_SUMMARY_CAP,
+  PROCEDURE_TITLE_CAP,
+  type ModelProcedureStep,
+  type ProcedureCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
   MAX_TOPIC_ADDS_PER_TURN,
@@ -146,6 +159,9 @@ const KNOWN_KEYS = new Set([
   'changeSummary',
   'requestQuote',
   'topicChanges',
+  'procedureAlias',
+  'procedureSteps',
+  'fromTaskAlias',
   'shape',
   'prompt',
   'options',
@@ -1243,6 +1259,160 @@ const readTopicCommands = (
   return read;
 };
 
+export type ProcedureDrop =
+  | 'procedure-create-unasked'
+  | 'procedure-create-empty'
+  | 'procedure-create-extra'
+  | 'procedure-create-task-unknown'
+  | 'procedure-revise-unasked'
+  | 'procedure-revise-unseen'
+  | 'procedure-revise-empty';
+
+const MAX_PROCEDURE_CREATES_PER_TURN = 3;
+const MAKE_THESE_A_PROCEDURE_RE =
+  /\bmake (this|these|it|them|the steps)\b.*\b(routine|procedure)\b/;
+
+interface ProcedureReadContext {
+  aliases: AliasBook;
+  procedures?: AliasBook;
+  procedureSteps?: AliasBook;
+  procedureNames?: Map<string, string>;
+  focusedProcedureId?: string | null;
+  focusedTaskId?: string | null;
+  procedureVersions?: Map<string, number>;
+  captureText?: string;
+}
+
+const readProcedureSteps = (
+  value: unknown,
+  steps: AliasBook | undefined,
+): ModelProcedureStep[] =>
+  (Array.isArray(value) ? value : []).flatMap((entry) => {
+    const raw = isRecord(entry) ? entry : {};
+    const text = toText(raw.text, PROCEDURE_STEP_TEXT_CAP);
+    const stepId =
+      typeof raw.stepAlias === 'string'
+        ? (steps?.idOf(raw.stepAlias) ?? null)
+        : null;
+    return text === null
+      ? []
+      : [
+          {
+            stepId,
+            text,
+            detail: toText(raw.detail, PROCEDURE_STEP_DETAIL_CAP),
+            group: toText(raw.group, PROCEDURE_GROUP_NAME_CAP),
+          },
+        ];
+  });
+
+/** The procedure commands of a reply, each checked against the turn: a procedure is made only when the words say routine, procedure or checklist, and changed only on words that ask for it, about a procedure that is open or named, at the version the model read. Every drop is named. */
+const readProcedureCommands = (
+  items: Record<string, unknown>[],
+  context: ProcedureReadContext,
+): { commands: ProcedureCommand[]; dropped: ProcedureDrop[] } => {
+  const text = context.captureText ?? '';
+  const comparable = toComparable(text);
+  const captureWords = ` ${comparable} `;
+  const names = context.procedureNames ?? new Map<string, string>();
+  return items
+    .filter((item) =>
+      (PROCEDURE_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .reduce<{ commands: ProcedureCommand[]; dropped: ProcedureDrop[] }>(
+      (acc, item) => {
+        const drop = (code: ProcedureDrop) => ({
+          ...acc,
+          dropped: [...acc.dropped, code],
+        });
+        const keep = (command: ProcedureCommand) => ({
+          ...acc,
+          commands: [...acc.commands, command],
+        });
+        const quote =
+          typeof item.requestQuote === 'string' ? item.requestQuote.trim() : '';
+        const isQuoted =
+          toComparable(quote).split(' ').filter(Boolean).length >= 2 &&
+          captureWords.includes(` ${toComparable(quote)} `);
+        if (item.kind === 'createProcedure') {
+          if (!hasProcedureCue(text)) return drop('procedure-create-unasked');
+          if (
+            acc.commands.filter((c) => c.kind === 'createProcedure').length >=
+            MAX_PROCEDURE_CREATES_PER_TURN
+          ) {
+            return drop('procedure-create-extra');
+          }
+          const title = toText(item.title, PROCEDURE_TITLE_CAP);
+          const isFocusedTask =
+            !!context.focusedTaskId &&
+            MAKE_THESE_A_PROCEDURE_RE.test(comparable);
+          const taskId =
+            typeof item.fromTaskAlias === 'string'
+              ? context.aliases.idOf(item.fromTaskAlias)
+              : null;
+          if (typeof item.fromTaskAlias === 'string' && !taskId) {
+            return drop('procedure-create-task-unknown');
+          }
+          const fromTaskId = isFocusedTask
+            ? (context.focusedTaskId ?? null)
+            : taskId;
+          const steps = readProcedureSteps(item.procedureSteps, undefined);
+          if (!title || (steps.length === 0 && !fromTaskId)) {
+            return drop('procedure-create-empty');
+          }
+          return keep({
+            kind: 'createProcedure',
+            title,
+            steps: steps.slice(0, PROCEDURE_STEPS_MAX),
+            fromTaskId,
+            requestQuote: quote,
+            isTruncated: steps.length > PROCEDURE_STEPS_MAX,
+          });
+        }
+        if (!isQuoted || !hasProcedureReviseCue(quote)) {
+          return drop('procedure-revise-unasked');
+        }
+        const procedureId =
+          typeof item.procedureAlias === 'string'
+            ? (context.procedures?.idOf(item.procedureAlias) ?? null)
+            : null;
+        const name = procedureId ? names.get(procedureId) : undefined;
+        const isAsked =
+          procedureId !== null &&
+          (procedureId === context.focusedProcedureId ||
+            (name !== undefined && isNamedIn(text, name)));
+        if (!procedureId || !isAsked) return drop('procedure-revise-unseen');
+        const seen = context.procedureVersions?.get(procedureId);
+        if (seen === undefined) return drop('procedure-revise-unseen');
+        const steps = readProcedureSteps(
+          item.procedureSteps,
+          context.procedureSteps,
+        );
+        if (
+          steps.length === 0 ||
+          acc.commands.some(
+            (c) =>
+              c.kind === 'reviseProcedure' && c.procedureId === procedureId,
+          )
+        ) {
+          return drop('procedure-revise-empty');
+        }
+        return keep({
+          kind: 'reviseProcedure',
+          procedureId,
+          title: toText(item.title, PROCEDURE_TITLE_CAP),
+          steps: steps.slice(0, PROCEDURE_STEPS_MAX + 1),
+          changeSummary:
+            toText(item.changeSummary, PROCEDURE_SUMMARY_CAP) ?? '',
+          requestQuote: quote,
+          seenVersion: seen,
+          isOverCap: steps.length > PROCEDURE_STEPS_MAX,
+        });
+      },
+      { commands: [], dropped: [] },
+    );
+};
+
 const toKey = (title: string) => title.trim().toLowerCase();
 
 const hasEveryToken = (
@@ -1397,6 +1567,14 @@ export function normalizeNomosReply(
     focusedTopicId?: string | null;
     /** The version of each topic whose document the model read. */
     topicVersions?: Map<string, number>;
+    procedures?: AliasBook;
+    /** The open procedure's steps, and those a search returned, by alias. */
+    procedureSteps?: AliasBook;
+    procedureNames?: Map<string, string>;
+    focusedProcedureId?: string | null;
+    focusedTaskId?: string | null;
+    /** The version of each procedure whose steps the model read. */
+    procedureVersions?: Map<string, number>;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -1420,6 +1598,8 @@ export function normalizeNomosReply(
   notes: CreateNoteCommand[];
   topicCommands: TopicCommand[];
   topicDropped: TopicDrop[];
+  procedureCommands: ProcedureCommand[];
+  procedureDropped: ProcedureDrop[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1500,6 +1680,17 @@ export function normalizeNomosReply(
       noteItemNos,
     },
   );
+  const { commands: procedureCommands, dropped: procedureDropped } =
+    readProcedureCommands(items, {
+      aliases: context.aliases,
+      procedures: context.procedures,
+      procedureSteps: context.procedureSteps,
+      procedureNames: context.procedureNames,
+      focusedProcedureId: context.focusedProcedureId,
+      focusedTaskId: context.focusedTaskId,
+      procedureVersions: context.procedureVersions,
+      captureText: context.captureText,
+    });
   const projects = readProjects(
     items,
     entities,
@@ -1562,6 +1753,8 @@ export function normalizeNomosReply(
     notes,
     topicCommands,
     topicDropped,
+    procedureCommands,
+    procedureDropped,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

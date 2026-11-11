@@ -1,6 +1,7 @@
 import type { MomentPrecision } from '@/utils/yearlyDateUtils';
 import type { ExtraValue, SharedKind } from '@/lib/connections/contract';
 import type { AppEncryption, EncryptedFieldPayload } from '@lib/security';
+import type { StepBody, StepPlace } from '@apps/helm/utils/stepGroups';
 
 export type { SharedKind };
 
@@ -21,6 +22,8 @@ export type HelmView =
   | 'project'
   | 'knowledge'
   | 'topic'
+  | 'procedures'
+  | 'procedure'
   | 'howNomosSeesYou'
   | 'comingUp';
 
@@ -204,6 +207,8 @@ export interface ScreenContext {
   visible: RecordRef[];
   /** The open topic's id on the topic view; null on every other. */
   topicId: string | null;
+  /** The open procedure's id on the procedure view; null on every other. */
+  procedureId: string | null;
   v: 1;
 }
 
@@ -686,6 +691,58 @@ export interface OpenTopicVersion
   id: string;
 }
 
+export interface ProcedureSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+}
+
+/** `apps/helm/users/{uid}/procedures/{id}`: a routine kept once, its steps in named groups. */
+export interface Procedure {
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  version: number;
+  createdBy: 'person' | 'nomos';
+  sourceCaptureId: string | null;
+  sourceTaskId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenProcedure
+  extends Omit<Procedure, 'sealed'>, ProcedureSealed {
+  id: string;
+}
+
+export type ProcedureVersionReason =
+  'created' | 'personEdit' | 'revisedOnRequest' | 'restored';
+
+/** `procedures/{id}/versions/{n}`: one change to a procedure; never rewritten. */
+export interface ProcedureVersion {
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason: ProcedureVersionReason;
+  stepState: Record<string, StepPlace>;
+  groupOrder: string[];
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface ProcedureVersionSealed extends ProcedureSealed {
+  changeSummary: string;
+  requestQuote: string | null;
+}
+
+export interface OpenProcedureVersion
+  extends Omit<ProcedureVersion, 'sealed'>, ProcedureVersionSealed {
+  id: string;
+}
+
 export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
@@ -797,7 +854,8 @@ export interface EffectRef {
     | 'keyDates'
     | 'projects'
     | 'notes'
-    | 'topics';
+    | 'topics'
+    | 'procedures';
   docId: string;
 }
 

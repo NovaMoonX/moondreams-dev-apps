@@ -245,6 +245,47 @@ export const describeTopicChanges = (count: number) =>
     ? null
     : plural(count, 'Changed a topic', `Changed ${count} topics`);
 
+/** "Made a procedure" or "Made 2 procedures", then "Changed a procedure" or "Changed 2 procedures". */
+export const describeProcedureChanges = (made: number, changed: number) =>
+  [
+    made === 0
+      ? null
+      : plural(made, 'Made a procedure', `Made ${made} procedures`),
+    changed === 0
+      ? null
+      : plural(changed, 'Changed a procedure', `Changed ${changed} procedures`),
+  ]
+    .filter((part): part is string => part !== null)
+    .join(' · ') || null;
+
+/** "New procedure: Packing for a work trip · 12 steps". */
+export const buildProcedureMadeLine = (title: string, stepCount: number) =>
+  `New procedure: ${title} · ${plural(stepCount, '1 step', `${stepCount} steps`)}`;
+
+/** "Changed Packing for a work trip: added the laptop charger". */
+export const buildProcedureChangedLine = (title: string, summary: string) =>
+  `Changed ${title}: ${summary === '' ? 'Updated the steps' : summary}`;
+
+export const buildProcedureRacedLine = (title: string) =>
+  `${title} changed while this was made · Ask again`;
+
+export const buildProcedureUnchangedLine = (title: string) =>
+  `${title} is already like that`;
+
+export const buildProcedureFullLine = (title: string, max: number) =>
+  `${title} can hold ${max} steps · Nothing changed`;
+
+export const buildProcedureTruncatedLine = (max: number) =>
+  `Kept the first ${max} steps`;
+
+export const buildProcedureLostLine = (title: string) =>
+  `${title} not changed · It would have lost steps. Ask again`;
+
+export const buildProcedureNoStepsLine = () =>
+  'No steps to make a procedure from';
+
+export const buildProcedureGoneLine = () => 'That procedure is gone';
+
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);

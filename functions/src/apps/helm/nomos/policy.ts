@@ -22,3 +22,6 @@ export const decideTopic = (command: TopicCommand): TopicDecision =>
   command.kind === 'createParentTopic' && !command.isAsked
     ? 'propose'
     : 'automatic';
+
+/** An assistant-made procedure is a draft the person can undo, so it runs without asking. */
+export const decideProcedure = (): TopicDecision => 'automatic';

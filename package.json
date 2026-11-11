@@ -104,6 +104,8 @@
     "check:helm-asks": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmAsks.ts",
     "check:helm-who-tier": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/whoTier.ts",
     "check:helm-task-edits": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmTaskEdits.ts",
+    "check:helm-procedures": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProcedures.ts",
+    "check:helm-procedure-steps": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProcedureSteps.ts",
     "voice:benchmark": "tsx scripts/voice/benchmark.ts",
     "voice:deepgram-secret": "bash scripts/voice/deepgramSecret.sh",
     "voice:gemini-secret": "bash scripts/voice/geminiSecret.sh",

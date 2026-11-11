@@ -15,6 +15,7 @@ import {
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenExecution } from '@apps/helm/types';
+import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
 
 interface ResultRowsProps {
@@ -26,13 +27,14 @@ interface ResultRowsProps {
   isFlat?: boolean;
 }
 
-/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic opens that topic from home. */
+/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic or a procedure opens it from home. */
 function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
   const takenBack = getTakenBackIds(undo);
   const gone = new Set(undo?.goneIds ?? []);
   const isUndone = execution.undoneByExecutionId !== null && undo !== null;
   const noteById = useAppSelector(selectNoteById);
   const topicById = useAppSelector(selectTopicById);
+  const procedureById = useAppSelector(selectProcedureById);
   const { showView } = useHelmUrlState();
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
@@ -55,6 +57,12 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
             topicById.has(line.ref.id)
               ? line.ref.id
               : null;
+          const procedureId =
+            !isFlat &&
+            line.ref?.collection === 'procedures' &&
+            procedureById.has(line.ref.id)
+              ? line.ref.id
+              : null;
           const looseDetail =
             refNote && refNote.topicIds.length === 0
               ? HELM_COPY.noteLoose
@@ -70,7 +78,12 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
             : topicId
               ? () =>
                   afterBackLayersClose(() => void showView('topic', topicId))
-              : null;
+              : procedureId
+                ? () =>
+                    afterBackLayersClose(
+                      () => void showView('procedure', procedureId),
+                    )
+                : null;
           const titleLine = (
             <p
               className={join(
