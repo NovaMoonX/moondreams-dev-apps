@@ -13,12 +13,21 @@ import { useAppSelector } from '@/store';
 const REMINDER_TOAST_DURATION_MS = 7000;
 const FORCE_TOAST_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_FORCE_REMINDER_TOAST === 'true';
+// The scheduled sender delivers anything due within its next one-minute run, so a push can land up to a minute early.
+const SEND_LEAD_MS = 60_000;
+// A computer that slept with the page open never reports it hidden, so a long-overdue flip is old news.
+const STALE_AFTER_MS = 5 * 60_000;
+
+function readVisibleSince() {
+  return document.visibilityState === 'visible' ? Date.now() : Infinity;
+}
 
 /** Bridges the global `reminders` slice into in-app toasts: a reminder this page
- * has seen as not yet sent that flips to `sent` pops a toast. One that first
- * appears already `sent` (the first snapshot after a reload, another device's
- * history) never does, so reloading doesn't replay old ones. One marked
- * `inAppToast: false` never does either. */
+ * has seen as not yet sent that flips to `sent` pops a toast, but only when the
+ * page was in front the whole time it went out. One sent while the app was in
+ * the background, or that first appears already `sent` (a reload, another
+ * device's history), already reached the person as a push and never toasts.
+ * One marked `inAppToast: false` never does either. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
@@ -28,6 +37,22 @@ export function useReminderToasts() {
     null,
   );
   const shownIdsRef = useRef(new Set<string>());
+  const visibleSinceRef = useRef(readVisibleSince());
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      visibleSinceRef.current = readVisibleSince();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  const wasInFrontWhenSent = useCallback(
+    (reminder: Reminder) =>
+      visibleSinceRef.current <= reminder.scheduledFor - SEND_LEAD_MS &&
+      Date.now() - reminder.scheduledFor <= STALE_AFTER_MS,
+    [],
+  );
 
   const showReminderToast = useCallback(
     (reminder: Reminder, duration = REMINDER_TOAST_DURATION_MS) => {
@@ -107,13 +132,17 @@ export function useReminderToasts() {
       .filter((reminder) => reminder.status === 'pending')
       .map((reminder) =>
         setTimeout(
-          () => showReminderToast(reminder),
+          () => {
+            if (wasInFrontWhenSent(reminder)) {
+              showReminderToast(reminder);
+            }
+          },
           Math.max(0, reminder.scheduledFor - Date.now()),
         ),
       );
 
     return () => timers.forEach(clearTimeout);
-  }, [reminders, showReminderToast]);
+  }, [reminders, showReminderToast, wasInFrontWhenSent]);
 
   useEffect(() => {
     const previousStatusById = previousStatusByIdRef.current;
@@ -131,9 +160,10 @@ export function useReminderToasts() {
         return (
           reminder.status === 'sent' &&
           previousStatus !== undefined &&
-          previousStatus !== 'sent'
+          previousStatus !== 'sent' &&
+          wasInFrontWhenSent(reminder)
         );
       })
       .forEach((reminder) => showReminderToast(reminder));
-  }, [reminders, showReminderToast]);
+  }, [reminders, showReminderToast, wasInFrontWhenSent]);
 }

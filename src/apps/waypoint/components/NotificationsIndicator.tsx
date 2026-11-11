@@ -25,6 +25,7 @@ import { markEventSeen } from '@apps/waypoint/store/actions/eventActions';
 import { markStaySeen } from '@apps/waypoint/store/actions/stayActions';
 import {
   getEventLastActivityAt,
+  getEventStatus,
   getStayLastActivityAt,
   selectLiveAnnouncements,
   selectUnseenActivityEvents,
@@ -125,6 +126,15 @@ function getUpdateItemLastActivityAt(item: UpdateItem, trip: TripSpace): number 
   return item.kind === 'event' ? getEventLastActivityAt(item.data, trip) : getStayLastActivityAt(item.data, trip);
 }
 
+// Once an event or stay is over, a change to it asks nothing of anyone, so it stops being news.
+function isUpdateItemOver(item: UpdateItem, trip: TripSpace, now: number): boolean {
+  if (item.kind === 'event') {
+    return getEventStatus(trip, item.data, now) === 'COMPLETED';
+  }
+  const { checkOutMs } = getStayTime(trip, item.data);
+  return checkOutMs !== null && checkOutMs <= now;
+}
+
 function getUpdateItemKey(item: UpdateItem): string {
   return `${item.kind}-${item.data.id}`;
 }
@@ -209,7 +219,7 @@ function NotificationsIndicator({ trip, currentUserId, isSmallScreen, className 
     ...unseenStays.map((stay): UpdateItem => ({ kind: 'stay', data: stay })),
   ]
     // You already know about your own activity — it's not "new" to you.
-    .filter((item) => getUpdateItemActivity(item, trip).uid !== currentUserId)
+    .filter((item) => getUpdateItemActivity(item, trip).uid !== currentUserId && !isUpdateItemOver(item, trip, now))
     .sort((a, b) => getUpdateItemLastActivityAt(b, trip) - getUpdateItemLastActivityAt(a, trip));
   const totalCount = announcements.length + updateItems.length;
   const actorUids = Array.from(
