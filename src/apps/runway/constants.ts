@@ -2871,6 +2871,8 @@ export const SET_HELD_WORDS = {
   title: (name: string) => `What ${name} holds now`,
   amount: 'Holds now',
   needsAmount: 'Enter what it holds.',
+  sourceIn: 'Where did it come from?',
+  sourceOut: 'Where did it go?',
   unchanged: 'That is what it holds already.',
   action: 'Set what it holds',
   moved: (name: string) => `Updated what ${name} holds`,
@@ -2921,7 +2923,7 @@ export const SET_HELD_WORDS = {
 /** A bill's "Put money aside": money added to what is set aside for its payments, never taken out. */
 export const BILL_SET_ASIDE_WORDS = {
   open: 'Put money aside',
-  openSub: 'From Free to Spend or money saved elsewhere',
+  openSub: 'Add to what it holds',
   openSubNone: 'Nothing set aside yet',
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
@@ -2933,9 +2935,12 @@ export const BILL_SET_ASIDE_WORDS = {
     body: 'In another account or in cash. Free to Spend stays the same.',
   },
   setAside: (name: string) => `${name}, set aside`,
+  sourceQuestion: 'Where does it come from?',
   addTitle: 'Already set aside for it?',
   addLabel: 'Already set aside',
-  addHint: 'Money you have put aside for its next payment. Leave it empty if none.',
+  addAmount: 'Amount',
+  addNone: 'None yet',
+  addHint: 'Saved for its next payment. Leave it empty if none.',
   notRecorded: (name: string) =>
     `${name} was added, but what is set aside for it did not record. Open the bill and choose Put money aside.`,
 } as const;

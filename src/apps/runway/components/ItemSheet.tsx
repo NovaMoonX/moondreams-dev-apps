@@ -118,6 +118,7 @@ import {
   MOVE_WORDS,
   SET_HELD_WORDS,
   BILL_SET_ASIDE_WORDS,
+  BILL_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
   HOME_PIN_WORDS,
@@ -1277,6 +1278,12 @@ function ItemSheet({
     setIsChangeFromList(isFromList);
   };
   const openHistory = () => goTo('history');
+  const getSetAsideSub = (totalCents: number) => {
+    if (billSetAsideCents >= totalCents) return BILL_WORDS.readyToPay;
+    return billSetAsideCents > 0
+      ? BILL_SET_ASIDE_WORDS.openSub
+      : BILL_SET_ASIDE_WORDS.openSubNone;
+  };
   const getMarkPaidSub = (due: NonNullable<typeof payment>) => {
     if (paid.needsAmount) return PAID_AMOUNT_WORDS.markSub;
     if (paidWithCard !== null) return CARD_WORDS.chargedTo(paidWithCard);
@@ -1453,11 +1460,7 @@ function ItemSheet({
             hasChevron
             icon={<PiggyBank />}
             label={BILL_SET_ASIDE_WORDS.open}
-            subtitle={
-              billSetAsideCents > 0
-                ? BILL_SET_ASIDE_WORDS.openSub
-                : BILL_SET_ASIDE_WORDS.openSubNone
-            }
+            subtitle={getSetAsideSub(payment.totalCents)}
             onClick={() =>
               hasStarted ? goTo('setAside') : setIsStartOpen(true)
             }

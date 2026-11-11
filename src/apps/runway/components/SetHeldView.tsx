@@ -190,6 +190,10 @@ function SetHeldView({
           },
         ]),
   ];
+  const getSourceQuestion = () => {
+    if (isBill) return BILL_SET_ASIDE_WORDS.sourceQuestion;
+    return isRaising ? SET_HELD_WORDS.sourceIn : SET_HELD_WORDS.sourceOut;
+  };
   const isSourceLocked =
     options.find((option) => option.choice === source)?.isLocked ?? false;
   const getAmountBlocker = () => {
@@ -348,8 +352,19 @@ function SetHeldView({
         disabled={isSaving}
       />
       {amountBlocker === null && (
+        <p className='text-foreground text-[15px] font-medium'>
+          {getSourceQuestion()}
+        </p>
+      )}
+      {amountBlocker === null && (
         <div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
-          {options.map((option) => {
+          {(isBill
+            ? [
+                ...options.filter((option) => option.choice === 'free'),
+                ...options.filter((option) => option.choice !== 'free'),
+              ]
+            : options
+          ).map((option) => {
             const isChosen = source === option.choice && !option.isLocked;
             return (
               <Button

@@ -1379,6 +1379,33 @@ function BillFormBody({
             },
           ]
         : []),
+    ...(editing || draft || fromCost
+      ? []
+      : [
+          {
+            id: 'setAside',
+            title: BILL_SET_ASIDE_WORDS.addTitle,
+            summaryLabel: BILL_SET_ASIDE_WORDS.addLabel,
+            summaryValue:
+              setAsideCents !== null && setAsideCents > 0
+                ? formatCents(setAsideCents)
+                : BILL_SET_ASIDE_WORDS.addNone,
+            isAnswered:
+              formData.setAside.trim() === '' ||
+              (setAsideCents !== null && setAsideCents <= MAX_PURCHASE_CENTS),
+            isPreAnswered: true,
+            blocker: FORM_FLOW_WORDS.badAmount,
+            render: () => (
+              <AmountField
+                isHero
+                label={BILL_SET_ASIDE_WORDS.addAmount}
+                value={formData.setAside}
+                onChange={(setAside) => set({ setAside })}
+                hint={BILL_SET_ASIDE_WORDS.addHint}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]),
     ...(draft && !draft.forName
       ? []
       : [
@@ -1505,33 +1532,6 @@ function BillFormBody({
           },
         ]
       : []),
-    ...(editing || draft || fromCost
-      ? []
-      : [
-          {
-            id: 'setAside',
-            title: BILL_SET_ASIDE_WORDS.addTitle,
-            summaryLabel: BILL_SET_ASIDE_WORDS.addLabel,
-            summaryValue:
-              setAsideCents !== null && setAsideCents > 0
-                ? formatCents(setAsideCents)
-                : BILL_SET_ASIDE_WORDS.openSubNone,
-            isAnswered:
-              formData.setAside.trim() === '' ||
-              (setAsideCents !== null && setAsideCents <= MAX_PURCHASE_CENTS),
-            isPreAnswered: true,
-            blocker: FORM_FLOW_WORDS.badAmount,
-            render: () => (
-              <AmountField
-                isHero
-                label={BILL_SET_ASIDE_WORDS.addLabel}
-                value={formData.setAside}
-                onChange={(setAside) => set({ setAside })}
-                hint={BILL_SET_ASIDE_WORDS.addHint}
-              />
-            ),
-          } satisfies QuestionStep,
-        ]),
     {
       id: 'emoji',
       title: FORM_FLOW_WORDS.emojiTitle,
