@@ -280,12 +280,14 @@ function PairingsEditor({
       : null;
   };
   const getBillBase = (id: string | null) => {
-    const amount = bills.find((entry) => entry.item.id === id)?.version.payload
-      .amount;
-    return amount
+    const payload = bills.find((entry) => entry.item.id === id)?.version
+      .payload;
+    return payload
       ? {
-          cents: amount.highCents,
-          isRanged: amount.lowCents !== amount.highCents,
+          cents: payload.amount.highCents,
+          lowCents: payload.amount.lowCents,
+          isRanged: payload.amount.lowCents !== payload.amount.highCents,
+          isUndated: payload.timing.schedule.anchor === null,
         }
       : null;
   };

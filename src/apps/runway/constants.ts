@@ -3951,15 +3951,19 @@ export const PAIRING_BILL_WORDS = {
   worked: (
     share: string,
     name: string,
-    bill: string,
+    bill: string | null,
     cents: string,
     isOneDay: boolean,
   ) =>
-    `${share} of ${name} (${bill}) · ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
+    `${share} of ${name}${bill === null ? '' : ` (${bill})`} · up to ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
   ranged:
-    'Uses the high end of its range, and follows the bill when it changes.',
-  follows: 'Follows the bill when its amount changes.',
+    'Uses the high end of its range. Follows the bill when it changes, and stops once its payment is covered.',
+  follows:
+    'Follows the bill when it changes, and stops once its payment is covered.',
+  undated: (name: string) =>
+    `${name} has no due date yet, so this sends nothing until it has one.`,
   typeShare: 'Type a percent to see what each pay puts in.',
+  badShare: 'Type a share above 0% and up to 100%.',
 } as const;
 
 /** What happens to "Pay these first" when the item it pays has stopped. */

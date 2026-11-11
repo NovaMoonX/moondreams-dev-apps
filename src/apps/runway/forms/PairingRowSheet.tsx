@@ -98,7 +98,12 @@ interface PairingRowSheetProps {
   /** Why the row can't be kept as it is; null when it can. */
   problem: string | null;
   /** The bill it pays first, at the high end of its amount; null when it pays an envelope or goal. */
-  bill: { cents: number; isRanged: boolean } | null;
+  bill: {
+    cents: number;
+    lowCents: number;
+    isRanged: boolean;
+    isUndated: boolean;
+  } | null;
   /** Edits one income day's own set, so a share reads as from this pay. */
   isOneDay: boolean;
   onChange: (patch: Partial<PairingRow>) => void;
@@ -133,6 +138,13 @@ function PairingRowSheet({
   const getBillLine = () => {
     const bps = getShareBps(row);
     if (bill === null || !picked) return null;
+    if (bill.isUndated)
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {PAIRING_BILL_WORDS.undated(picked.text)}
+        </p>
+      );
+    if (bps === null && row.amount.trim() !== '') return null;
     if (bps === null)
       return (
         <p className='text-muted-foreground text-sm'>
@@ -150,7 +162,11 @@ function PairingRowSheet({
             {PAIRING_BILL_WORDS.worked(
               shareWord,
               picked.text,
-              formatCents(bill.cents),
+              row.share === 'full'
+                ? null
+                : bill.isRanged
+                  ? `${formatCents(bill.lowCents)} to ${formatCents(bill.cents)}`
+                  : formatCents(bill.cents),
               formatCents(percentOf(bill.cents, bps)),
               isOneDay,
             )}
@@ -267,6 +283,11 @@ function PairingRowSheet({
                   onChange={(amount) => onChange({ amount })}
                   mode='percent'
                   percentOfLabel='of the bill'
+                  hint={
+                    row.amount.trim() !== '' && getShareBps(row) === null
+                      ? PAIRING_BILL_WORDS.badShare
+                      : undefined
+                  }
                 />
               )}
               {getBillLine()}
