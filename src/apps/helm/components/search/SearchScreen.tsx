@@ -4,7 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 
 import SearchInput from '@/components/SearchInput';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { toComparable } from '@/utils/optionMatchUtils';
 import SearchGroup from '@apps/helm/components/search/SearchGroup';
 import SearchSheets, {
@@ -74,6 +77,15 @@ function SearchScreen({
   const { user } = useAuth();
   const uid = user?.uid ?? '';
   const assistant = useAssistantName();
+  const now = useNow(60_000);
+  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const when = useMemo(
+    () => ({
+      timeZone: profileZone ?? getDeviceTimeZone() ?? 'UTC',
+      now: Math.floor(now / 60_000) * 60_000,
+    }),
+    [profileZone, now],
+  );
   const who = useAppSelector((state) => state.helm.who.items);
   const places = useAppSelector((state) => state.helm.places.items);
   const facts = useAppSelector((state) => state.helm.facts.items);
@@ -192,7 +204,7 @@ function SearchScreen({
           value={query}
           onChange={onQueryChange}
           placeholder={HELM_COPY.searchPlaceholder}
-          autoFocus
+          autoFocus={canFocusFieldOnOpen()}
         />
         {!hasQuery && (
           <p className='text-muted-foreground text-[15px] text-pretty'>
@@ -243,6 +255,7 @@ function SearchScreen({
                 entries={results[group]}
                 isExpanded={openGroups.includes(group)}
                 onToggle={() => toggleGroup(group)}
+                when={when}
                 onOpen={openEntry}
               />
             ),

@@ -10,6 +10,7 @@ import {
   SEARCH_PREVIEW,
   toGroupRows,
   type SearchEntry,
+  type SearchWhen,
 } from '@apps/helm/utils/searchRecords';
 
 interface SearchGroupProps {
@@ -17,6 +18,7 @@ interface SearchGroupProps {
   entries: SearchEntry[];
   isExpanded: boolean;
   onToggle: () => void;
+  when: SearchWhen;
   onOpen: (entry: SearchEntry) => void;
 }
 
@@ -28,6 +30,7 @@ function SearchGroup({
   entries,
   isExpanded,
   onToggle,
+  when,
   onOpen,
 }: SearchGroupProps) {
   const { rows, hidden } = toGroupRows(entries, isExpanded);
@@ -35,7 +38,7 @@ function SearchGroup({
     <ul className='helm-card divide-border divide-y overflow-hidden'>
       {rows.map((entry) => (
         <li key={entry.id}>
-          <SearchRow entry={entry} onOpen={onOpen} />
+          <SearchRow entry={entry} when={when} onOpen={onOpen} />
         </li>
       ))}
       {entries.length > SEARCH_PREVIEW && (
@@ -63,7 +66,22 @@ function SearchGroup({
 
   return (
     <section className='space-y-3'>
-      <SectionDivider label={label} />
+      <SectionDivider
+        label={label}
+        trailing={
+          isExpanded ? (
+            <Button
+              type='button'
+              variant='tertiary'
+              size='sm'
+              className='text-muted-foreground! relative h-7 px-2 text-[13px] font-normal after:absolute after:-inset-1.5 after:content-[""]'
+              onClick={onToggle}
+            >
+              {HELM_COPY.searchShowFewer}
+            </Button>
+          ) : null
+        }
+      />
       {isExpanded ? (
         <LazyMount estimatedHeight={rows.length * ROW_HEIGHT}>{list}</LazyMount>
       ) : (

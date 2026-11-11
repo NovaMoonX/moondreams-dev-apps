@@ -23,8 +23,34 @@ import {
   toKeyDateWord,
 } from '@apps/helm/utils/keyDateText';
 import type { WhoMoment } from '@apps/helm/utils/moments';
+import { formatTaskDue } from '@apps/helm/utils/taskDue';
 import { pathOf } from '@apps/helm/utils/topicTree';
 import { getWhoLine } from '@apps/helm/utils/whoGroups';
+
+/** The zone and moment an open task's day is read against. */
+export interface SearchWhen {
+  timeZone: string;
+  now: number;
+}
+
+/** Every date row in one style: "Nov 13", "Nov 17, 2015", "Jun 2020", "2015". */
+const formatShortDate = (
+  month: number | null,
+  day: number | null,
+  year: number | null,
+) => {
+  const name =
+    month === null
+      ? ''
+      : new Date(Date.UTC(2000, month - 1, 1)).toLocaleDateString('en-US', {
+          timeZone: 'UTC',
+          month: 'short',
+        });
+  const monthDay = day === null ? name : `${name} ${day}`;
+  if (year === null) return monthDay;
+  if (monthDay === '') return String(year);
+  return day === null ? `${monthDay} ${year}` : `${monthDay}, ${year}`;
+};
 
 export const SEARCH_GROUPS = [
   'people',
@@ -75,7 +101,7 @@ export interface SearchEntry {
   /** The record's id, unique within its group. */
   id: string;
   /** The row's words, made only for the rows drawn. */
-  describe: () => SearchRow;
+  describe: (when?: SearchWhen) => SearchRow;
   /** What a typed word is matched against first, comparable. */
   titleText: string;
   bodyText: string;
@@ -191,7 +217,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
           you: HELM_COPY.youLabel,
           pet: HELM_COPY.petKindFallback,
           organization: HELM_COPY.organizationKindFallback,
-        }) || null,
+        }) || HELM_COPY.whoKindPerson,
     }),
     ...whoTexts[index],
     target: { kind: 'view', view: 'who', id: entry.id },
@@ -200,11 +226,28 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
     recency: 0,
   }));
 
+  const projectNames = new Map(
+    sources.projects
+      .filter((project) => !project.isUnreadable)
+      .map((project) => [project.id, project.name]),
+  );
   const taskEntries = tasks.map<SearchEntry>((task) => {
     const isDone = task.status === 'done';
     return {
       id: task.id,
-      describe: () => ({ title: task.title, line: null }),
+      describe: (when = { timeZone: 'UTC', now: Date.now() }) => ({
+        title: task.title,
+        line: isDone
+          ? null
+          : [
+              task.due
+                ? formatTaskDue(task.due, when.timeZone, when.now)
+                : HELM_COPY.noDay,
+              task.projectId ? projectNames.get(task.projectId) : null,
+            ]
+              .filter(Boolean)
+              .join(' · '),
+      }),
       ...textsOf(task, () => ({
         title: [task.title],
         body: [
@@ -270,7 +313,7 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
             whoKind: owner.who.kind,
             isSelf: owner.who.isSelf,
           }),
-          line: formatYearlyDate({ month, day, year }),
+          line: formatShortDate(month, day, year),
         }),
         titleText: `${owner.text} ${toDateText(kind, label, month)}`,
         bodyText: year === null ? '' : String(year),
@@ -295,7 +338,14 @@ export function buildSearchIndex(sources: SearchSources): SearchIndex {
                 whoName: owner.who.name,
                 isSelf: owner.who.isSelf,
               }),
-              line: describeMomentWhen(moment),
+              line:
+                moment.precision === 'decade'
+                  ? describeMomentWhen(moment)
+                  : formatShortDate(
+                      moment.precision === 'year' ? null : moment.month,
+                      moment.precision === 'day' ? moment.day : null,
+                      moment.year,
+                    ),
             }),
             titleText: `${owner.text} ${toDateText(moment.kind, moment.label, moment.month)}`,
             bodyText: String(moment.year),

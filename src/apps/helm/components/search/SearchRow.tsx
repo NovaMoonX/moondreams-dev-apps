@@ -8,10 +8,11 @@ import { formatDateShort } from '@/utils/formatUtils';
 import WhoPhoto from '@apps/helm/components/who/WhoPhoto';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
-import type { SearchEntry } from '@apps/helm/utils/searchRecords';
+import type { SearchEntry, SearchWhen } from '@apps/helm/utils/searchRecords';
 
 interface SearchRowProps {
   entry: SearchEntry;
+  when: SearchWhen;
   onOpen: (entry: SearchEntry) => void;
 }
 
@@ -29,15 +30,20 @@ function SyncedMark({ connectorId }: { connectorId: string }) {
 }
 
 /** One result: its mark where it has one, its words and a quiet line under them. Opens the record. */
-function SearchRow({ entry, onOpen }: SearchRowProps) {
-  const { sourceNameOf } = useSourceAppName();
-  const { title, line } = entry.describe();
+function SearchRow({ entry, when, onOpen }: SearchRowProps) {
+  const { nameOf, sourceNameOf } = useSourceAppName();
+  const { title, line } = entry.describe(when);
   const { mark } = entry;
   const detail =
     mark?.kind === 'done' && mark.completedAt !== null
       ? HELM_COPY.rowDoneOn(formatDateShort(mark.completedAt))
       : mark?.kind === 'synced'
-        ? sourceNameOf(mark.record)
+        ? [
+            ...new Set([
+              nameOf(mark.record.connectorId),
+              sourceNameOf(mark.record),
+            ]),
+          ].join(' · ')
         : line;
 
   return (
