@@ -101,7 +101,7 @@ import type {
   Pairing,
   EnvelopeSealed,
   EnvelopeVersion,
-  FundingAmount,
+  PairingAmount,
   FundingRule,
   GoalSealed,
   MoneyRange,
@@ -200,7 +200,7 @@ export const selectResolvedPlan = createSelector(
 
 export interface PairedBy {
   sourceName: string;
-  amount: FundingAmount;
+  amount: PairingAmount;
 }
 
 /** For each bill, envelope or goal a pairing names, the sources that send it money and how much: a pairing replaces the item's own rule on that source's income days. */

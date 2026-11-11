@@ -273,6 +273,8 @@ function fundPairings(
   resolutions: Record<string, HoldChoice>,
   /** What a target still needs before this day's pairings, or null for no ceiling (an envelope). */
   needOf: (itemId: string) => Cents | null,
+  /** The high end of a bill's payment this day saves toward, which a share of the bill is taken from; null when there is none. */
+  billBaseOf: (itemId: string) => Cents | null,
 ): { outcomes: PairingOutcome[]; leftCents: Cents } {
   const seen = new Set<string>();
   const asDemand = (pairing: Pairing): Demand => {
@@ -292,7 +294,7 @@ function fundPairings(
       ask:
         pairing.amount.kind === 'percent'
           ? { kind: 'percent', bps: pairing.amount.bps, of: pairing.amount.of }
-          : { kind: pairing.amount.kind },
+          : { kind: pairing.amount.kind === 'rest' ? 'rest' : 'exact' },
       capCents: null,
     };
   };
@@ -313,15 +315,17 @@ function fundPairings(
   const result = ordered.reduce<{ outcomes: PairingOutcome[]; left: Cents }>(
     (acc, { pairing, demand }) => {
       const { amount } = pairing;
-      const asked =
-        amount.kind === 'exact'
-          ? amount.cents
-          : amount.kind === 'rest'
-            ? acc.left
-            : percentOf(
-                amount.of === 'remaining' ? acc.left : moneyCents,
-                amount.bps,
-              );
+      const getAsked = () => {
+        if (amount.kind === 'exact') return amount.cents;
+        if (amount.kind === 'rest') return acc.left;
+        if (amount.kind === 'billShare')
+          return percentOf(billBaseOf(demand.itemId) ?? 0, amount.bps);
+        return percentOf(
+          amount.of === 'remaining' ? acc.left : moneyCents,
+          amount.bps,
+        );
+      };
+      const asked = getAsked();
       const need = needOf(demand.itemId);
       const wanted = need === null ? asked : Math.min(asked, need);
       if (wanted <= 0 && amount.kind !== 'rest') return acc;
@@ -541,6 +545,15 @@ export function buildDraft(input: DraftInput): Draft {
         return need === null
           ? null
           : Math.max(0, need.cents - (used.get(need.key) ?? 0));
+      },
+      (itemId) => {
+        const payment = billPayments
+          .get(itemId)
+          ?.find((entry) => entry.dueOn >= day.on);
+        if (!payment) return null;
+        return payment.ranged
+          ? Math.max(payment.totalCents, payment.ranged.range.highCents)
+          : payment.totalCents;
       },
     );
     funded.outcomes.forEach(({ line }) => {

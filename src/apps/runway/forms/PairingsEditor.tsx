@@ -49,12 +49,16 @@ import {
   selectItemNames,
 } from '@apps/runway/store/selectors/runwaySelectors';
 import type {
-  FundingAmount,
   Pairing,
+  PairingAmount,
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
-import { describeAmount } from '@apps/runway/utils/fundingText';
+import {
+  describeAmount,
+  getShareBps,
+  SHARE_BPS,
+} from '@apps/runway/utils/fundingText';
 
 interface PairingsFormData {
   rows: PairingRow[];
@@ -101,11 +105,16 @@ const blankRow = (key: number): PairingRow => ({
   mode: 'exact',
   of: 'dayMoney',
   amount: '',
+  share: 'full',
   topUp: false,
 });
 
-const toAmount = (row: PairingRow): FundingAmount | null => {
+const toAmount = (row: PairingRow): PairingAmount | null => {
   if (row.mode === 'rest') return { kind: 'rest' };
+  if (row.mode === 'bill') {
+    const bps = getShareBps(row);
+    return bps === null ? null : { kind: 'billShare', bps };
+  }
   if (row.mode === 'percent') {
     const bps = parsePercentToBps(row.amount);
     return bps === null ? null : { kind: 'percent', bps, of: row.of };
@@ -119,17 +128,29 @@ const toRow = (pairing: Pairing, key: number): PairingRow => {
   return {
     key,
     targetItemId: pairing.targetItemId,
-    mode: amount.kind,
+    mode: amount.kind === 'billShare' ? 'bill' : amount.kind,
     of: amount.kind === 'percent' ? amount.of : 'dayMoney',
     amount:
       amount.kind === 'exact'
         ? (amount.cents / 100).toFixed(2)
-        : amount.kind === 'percent'
+        : amount.kind === 'percent' ||
+            (amount.kind === 'billShare' &&
+              amount.bps !== SHARE_BPS.full &&
+              amount.bps !== SHARE_BPS.half)
           ? String(amount.bps / 100)
           : '',
+    share:
+      amount.kind !== 'billShare' || amount.bps === SHARE_BPS.full
+        ? 'full'
+        : amount.bps === SHARE_BPS.half
+          ? 'half'
+          : 'other',
     topUp: pairing.topUpFromAnySource,
   };
 };
+
+const capitalize = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
 
 const getBlocker = (rows: PairingRow[], canBeEmpty: boolean) => {
   if (rows.length === 0)
@@ -258,6 +279,21 @@ function PairingsEditor({
         }
       : null;
   };
+  const getBillBase = (id: string | null) => {
+    const payload = bills.find((entry) => entry.item.id === id)?.version
+      .payload;
+    return payload
+      ? {
+          cents: payload.amount.highCents,
+          lowCents: payload.amount.lowCents,
+          isRanged: payload.amount.lowCents !== payload.amount.highCents,
+          isUndated: payload.timing.schedule.anchor === null,
+          hasPaymentAhead: (billPayments[id ?? ''] ?? []).some(
+            (entry) => entry.dueOn >= (day?.on ?? today),
+          ),
+        }
+      : null;
+  };
   const buildPairings = (rows: PairingRow[]) =>
     rows.flatMap((row): Pairing[] => {
       const amount = toAmount(row);
@@ -333,14 +369,16 @@ function PairingsEditor({
   const getRowAmountText = (row: PairingRow) => {
     const amount = toAmount(row);
     return amount === null
-      ? row.mode === 'percent'
+      ? row.mode === 'percent' || row.mode === 'bill'
         ? 'Percent not set'
         : 'Amount not set'
-      : amount.kind === 'exact'
-        ? day
-          ? `Asks ${describeAmount(amount)} of this pay`
-          : `${describeAmount(amount)} each pay`
-        : describeAmount(amount, fromLabel);
+      : amount.kind === 'billShare'
+        ? `${capitalize(describeAmount(amount))} ${day ? 'from this pay' : 'each pay'}`
+        : amount.kind === 'exact'
+          ? day
+            ? `Asks ${describeAmount(amount)} of this pay`
+            : `${describeAmount(amount)} each pay`
+          : describeAmount(amount, fromLabel);
   };
 
   const getCapNote = (row: PairingRow) => {
@@ -496,6 +534,12 @@ function PairingsEditor({
               : null
           }
           capNote={getCapNote(editingRow)}
+          bill={
+            editingRow.mode === 'bill'
+              ? getBillBase(editingRow.targetItemId)
+              : null
+          }
+          isOneDay={day !== undefined}
           amountText={getRowAmountText(editingRow)}
           problem={getBlocker([editingRow], true)}
           onChange={(patch) =>

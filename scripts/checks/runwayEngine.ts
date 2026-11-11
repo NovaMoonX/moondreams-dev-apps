@@ -16680,6 +16680,111 @@ console.log('runway engine: ok');
   );
 }
 
+// A share of the bill: "Half" asks half of each payment from every pay that pays it first, follows the bill's amount, and takes a range's high end.
+{
+  const shareOf = (bps: number): Pairing => ({
+    targetItemId: 'rent',
+    amount: { kind: 'billShare', bps },
+    topUpFromAnySource: false,
+  });
+  const keys = ['pay_a', 'pay_b'];
+  const ons = [utc(2026, 11, 1), utc(2026, 11, 8)];
+  const rentShares = (bps: number, amount: MoneyRange) => {
+    const draft = buildDraft({
+      days: keys.map((dayKey, index) => ({
+        dayKey,
+        sourceId: 'src',
+        on: ons[index],
+        amount: { lowCents: 200_000, highCents: 200_000 },
+        pairings: { day: null, payLine: [shareOf(bps)], source: [] },
+      })),
+      plan: {
+        envelopes: [],
+        bills: [
+          {
+            itemId: 'rent',
+            createdAt: 1,
+            priority: 'must',
+            orderIndex: 1,
+            amount,
+            stanceOverride: null,
+            schedule: {
+              kind: 'monthly',
+              anchor: utc(2026, 11, 15),
+              monthDays: [15],
+            },
+            ending: NEVER,
+            fundedBy: { kind: 'suggested' },
+            progress: { funded: [], paid: [] },
+          },
+        ],
+        goals: [],
+        horizon: utc(2027, 6, 1),
+        incomeDays: keys.map((dayKey, index) => ({
+          dayKey,
+          on: ons[index],
+          moneyCents: 200_000,
+        })),
+      },
+      stance: 'conservative',
+      overrides: { dayCents: {} },
+    });
+    return keys.map(
+      (key) =>
+        draft.lines.find((line) => line.lineId === `${key}:rent`)?.cents ?? 0,
+    );
+  };
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 120_000, highCents: 120_000 }),
+    [60_000, 60_000],
+    'billShare: half the bill from each of two pays covers the payment',
+  );
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 130_000, highCents: 130_000 }),
+    [65_000, 65_000],
+    'billShare: half follows the bill when its amount changes',
+  );
+  assert.deepEqual(
+    rentShares(5_000, { lowCents: 100_000, highCents: 140_000 }),
+    [70_000, 70_000],
+    'billShare: a ranged bill is shared at its high end',
+  );
+  assert.deepEqual(
+    rentShares(10_000, { lowCents: 120_000, highCents: 120_000 }),
+    [120_000, 0],
+    'billShare: the full bill from two pays asks only what the payment still needs',
+  );
+  const rentVersion = {
+    id: 'rent_v1',
+    itemId: 'rent',
+    kind: 'bill',
+    createdAt: 1,
+    effectiveFrom: utc(2026, 1, 1),
+    effectiveUntil: null,
+    payload: { amount: { lowCents: 100_000, highCents: 140_000 } },
+  } as unknown as OpenVersion;
+  const coming: ComingDay = {
+    dayKey: 'pay_a',
+    payLineId: 'job',
+    sourceId: null,
+    on: utc(2026, 11, 1),
+    sourceName: null,
+    payLineName: 'Job',
+    amount: { lowCents: 200_000, highCents: 200_000 },
+    stanceOverride: null,
+  };
+  assert.deepEqual(
+    getPairedByBill(
+      [rentVersion],
+      [{ id: 'pay_a', override: { pairings: [shareOf(5_000)] } }],
+      [coming],
+      'conservative',
+    ).get('rent'),
+    { pay_a: 70_000 },
+    'billShare: the lookahead counts a share of the bill at its high end',
+  );
+}
+
 // A figure pinned on one pay of a pay line that pays the bill first is counted against what its other pays still ask for.
 {
   const rentOver = (
