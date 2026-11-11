@@ -25,6 +25,7 @@ export { readConnectorOptions } from './connections/options.js';
 export { syncConnectionsHourly } from './connections/scheduled.js';
 export { expireKeptCopies } from './connections/scheduled.js';
 export { getHelmKey } from './apps/helm/getHelmKey.js';
+export { importHelmOutbox } from './apps/helm/importHelmOutbox.js';
 export { verifyHelmKeys } from './apps/helm/verifyHelmKeys.js';
 export { sortHelmCapture } from './apps/helm/sortHelmCapture.js';
 export { resolveHelmQuestion } from './apps/helm/resolveHelmQuestion.js';

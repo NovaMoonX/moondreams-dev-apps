@@ -86,6 +86,7 @@ import {
   startOpenTasksListener,
   startProjectTasksListener,
 } from '@apps/helm/store/listeners/taskListener';
+import { useCaptureOutbox } from '@apps/helm/hooks/useCaptureOutbox';
 import { useCaptureSweep } from '@apps/helm/hooks/useCaptureSweep';
 import { useKeyDateRepair } from '@apps/helm/hooks/useKeyDateRepair';
 import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
@@ -211,6 +212,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   }, [uid, dispatch]);
 
   useCaptureSweep(uid);
+  useCaptureOutbox(uid);
   usePlanOnCapture(uid);
   useConnectionsRefresh(uid);
   useSelfWho(uid, displayName);

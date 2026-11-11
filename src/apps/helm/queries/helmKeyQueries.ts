@@ -5,6 +5,7 @@ import { functions } from '@lib/firebase/config';
 import { queryClient } from '@lib/query/queryClient';
 
 import { normalizeHelmEncryption } from '@apps/helm/security';
+import { keepDropBoxKey } from '@apps/helm/store/actions/outboxActions';
 
 export const helmQueryKeys = {
   all: ['helm'] as const,
@@ -26,6 +27,10 @@ export const helmKeyQueryOptions = (uid: string) =>
       if (!encryption) {
         throw new Error('The key did not arrive in the expected shape.');
       }
+      void keepDropBoxKey(
+        uid,
+        (response.data as { dropBoxKey?: unknown } | null)?.dropBoxKey,
+      );
       return encryption;
     },
     staleTime: Infinity,

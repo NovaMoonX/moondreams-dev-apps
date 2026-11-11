@@ -56,6 +56,7 @@ import {
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
+import { saveToOutbox } from '@apps/helm/store/actions/outboxActions';
 import { MAX_VOICE_NOTE_MS } from '@apps/helm/utils/mediaCaps';
 import type { ScreenContext } from '@apps/helm/types';
 import {
@@ -86,6 +87,8 @@ interface ComposerProps {
   onFocusChange: (isFocused: boolean) => void;
   /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft. */
   isReady: boolean;
+  /** With no key but the person's drop-box key kept on this device, the field takes words and keeps them sealed on this device until Helm is online; photos and voice notes wait. */
+  isOutbox?: boolean;
   /** Says why the field waits when the key can't come yet (offline, or refused). */
   waitingPlaceholder: string | null;
   /** The page the words are asked from, stamped on the turn; null from home. */
@@ -99,6 +102,7 @@ function Composer({
   fieldRef,
   onFocusChange,
   isReady,
+  isOutbox = false,
   waitingPlaceholder,
   screen,
   draftKey = HOME_DRAFT_KEY,
@@ -247,10 +251,46 @@ function Composer({
     !isTooLong &&
     !isRecording &&
     !isHeldBackByPhotos;
+  const canSendToOutbox =
+    isOutbox &&
+    !isReady &&
+    length > 0 &&
+    !isSending &&
+    user !== null &&
+    !isTooLong;
   const canSaveAsNote = isTooLong && length <= NOTE_BODY_MAX;
   const isNearLimit = length >= CAPTURE_COUNTER_FROM;
 
+  const sendToOutbox = async () => {
+    if (!canSendToOutbox || !user) return;
+    const sent = text.trim();
+    const createdAt = Date.now();
+    setIsSending(true);
+    try {
+      await saveToOutbox(user.uid, {
+        text: sent,
+        reading: applyReadingEdits(
+          readCapture(sent, { now: createdAt, timeZone, assistantName: name }),
+          { dismissed, days: fixedDays, timeZone },
+        ),
+        inputMode: 'typed',
+        createdAt,
+      });
+      setText('');
+      setDismissed([]);
+      setFixedDays({});
+      setLastDrop(null);
+      addToast({ title: HELM_COPY.outboxSaved(name), type: 'info' });
+    } catch (error) {
+      console.error('Helm could not keep this on the device', error);
+      addToast({ title: HELM_COPY.outboxNotKept(name), type: 'error' });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
   const send = async () => {
+    if (canSendToOutbox) return sendToOutbox();
     if (!canSend || !user) return;
     const { uid } = user;
     const sent = text;
@@ -398,7 +438,9 @@ function Composer({
           {voice.notice}
         </p>
       )}
-      {isFocused && isReady && <ShorthandRow onInsert={insertShorthand} />}
+      {isFocused && (isReady || isOutbox) && (
+        <ShorthandRow onInsert={insertShorthand} />
+      )}
       {isRecording ? (
         <div
           className='helm-field flex items-center gap-3 px-3 py-3'
@@ -444,7 +486,7 @@ function Composer({
             waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
           }
           className='helm-field'
-          disabled={!isReady}
+          disabled={!isReady && !isOutbox}
           value={text}
           onChange={(event) => {
             if (voice.notice !== null) voice.clearNotice();
@@ -565,45 +607,54 @@ function Composer({
           )}
         </div>
       )}
+      {isOutbox && !isReady && (
+        <p className='text-muted-foreground text-[13px] text-pretty'>
+          {HELM_COPY.outboxNoAttach}
+        </p>
+      )}
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
           <div className='flex min-w-0 items-center gap-2'>
-            <EllipsisDropdown
-              variant='tertiary'
-              placement='top'
-              alignment='start'
-              ariaLabel={HELM_COPY.attachMenuLabel}
-              disabled={!isReady || isRecording}
-              icon={<Paperclip className='size-4' aria-hidden='true' />}
-              items={[
-                ...(canTakePhoto
-                  ? [
-                      option({
-                        label: HELM_COPY.attachTake,
-                        value: TAKE_PHOTO,
-                        icon: <Camera className='size-4' aria-hidden='true' />,
-                      }),
-                    ]
-                  : []),
-                option({
-                  label: HELM_COPY.attachChoose,
-                  value: CHOOSE_PHOTOS,
-                  icon: <ImagePlus className='size-4' aria-hidden='true' />,
-                }),
-                option({
-                  label: HELM_COPY.attachChooseFile,
-                  description: HELM_COPY.attachChooseFileHint,
-                  value: CHOOSE_FILE,
-                  icon: <FileText className='size-4' aria-hidden='true' />,
-                }),
-                option({
-                  label: HELM_COPY.attachRecord,
-                  value: RECORD,
-                  icon: <Mic className='size-4' aria-hidden='true' />,
-                }),
-              ]}
-              onItemSelect={chooseAttachment}
-            />
+            {!(isOutbox && !isReady) && (
+              <EllipsisDropdown
+                variant='tertiary'
+                placement='top'
+                alignment='start'
+                ariaLabel={HELM_COPY.attachMenuLabel}
+                disabled={!isReady || isRecording}
+                icon={<Paperclip className='size-4' aria-hidden='true' />}
+                items={[
+                  ...(canTakePhoto
+                    ? [
+                        option({
+                          label: HELM_COPY.attachTake,
+                          value: TAKE_PHOTO,
+                          icon: (
+                            <Camera className='size-4' aria-hidden='true' />
+                          ),
+                        }),
+                      ]
+                    : []),
+                  option({
+                    label: HELM_COPY.attachChoose,
+                    value: CHOOSE_PHOTOS,
+                    icon: <ImagePlus className='size-4' aria-hidden='true' />,
+                  }),
+                  option({
+                    label: HELM_COPY.attachChooseFile,
+                    description: HELM_COPY.attachChooseFileHint,
+                    value: CHOOSE_FILE,
+                    icon: <FileText className='size-4' aria-hidden='true' />,
+                  }),
+                  option({
+                    label: HELM_COPY.attachRecord,
+                    value: RECORD,
+                    icon: <Mic className='size-4' aria-hidden='true' />,
+                  }),
+                ]}
+                onItemSelect={chooseAttachment}
+              />
+            )}
             <span
               className='text-muted-foreground text-[13px] tabular-nums'
               aria-live='polite'
@@ -632,7 +683,7 @@ function Composer({
               type='button'
               size='sm'
               rounded='full'
-              disabled={!canSend}
+              disabled={!canSend && !canSendToOutbox}
               onClick={() => void send()}
             >
               <ArrowUp className='size-4' aria-hidden='true' />

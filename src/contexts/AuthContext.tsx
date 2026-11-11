@@ -23,6 +23,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 
 import { AuthContext, AuthContextValue } from '@/hooks/useAuth';
 import { clearUserInfoStore } from '@/hooks/useUserInfo';
@@ -42,6 +43,7 @@ import {
   keepAccountSession,
   loadAccountSessions,
 } from '@/lib/auth/accountSessions';
+import { getSignOutQuestions } from '@/lib/auth/signOutChecks';
 import { forgetDeviceSecretsFor } from '@/lib/security';
 import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
@@ -97,6 +99,7 @@ const cacheRememberedPhotos = async (uids: string[]) => {
 
 export function AuthProvider({ children }: PropsWithChildren) {
   const dispatch = useAppDispatch();
+  const { confirm } = useActionModal();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isDisplayNameUpdating, setIsDisplayNameUpdating] = useState(false);
@@ -411,6 +414,15 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const logOut = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     if (uid) {
+      const questions = await getSignOutQuestions(uid);
+      const isConfirmed = await questions.reduce(
+        async (previous, question) =>
+          (await previous) && confirm({ ...question, destructive: true }),
+        Promise.resolve(true),
+      );
+      if (!isConfirmed) return;
+    }
+    if (uid) {
       const userStatusRef = ref(realtimeDb, `status/${uid}`);
       await Promise.race([
         Promise.allSettled([
@@ -447,7 +459,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     if (uid) await dropAccountSession(uid);
     await signOut(auth).catch((error) => console.error('Sign-out error:', error));
     window.location.href = '/';
-  }, []);
+  }, [confirm]);
 
   const updateDisplayName = useCallback(async (displayName: string) => {
     setIsDisplayNameUpdating(true);

@@ -3,6 +3,7 @@ import type { Ref } from 'react';
 import { Search, Settings2 } from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
@@ -10,6 +11,11 @@ import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { HELM_COPY } from '@apps/helm/constants';
+import OutboxList from '@apps/helm/components/inbox/OutboxRow';
+import {
+  useCanUseDropBox,
+  useOutboxEntries,
+} from '@apps/helm/hooks/useCaptureOutbox';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSession } from '@apps/helm/hooks/useSession';
@@ -22,11 +28,18 @@ interface HomeSurfaceProps {
   onOpenSearch: () => void;
 }
 
-const WAITING_PLACEHOLDER: Record<KeyStatus, string | null> = {
-  loading: null,
-  ready: null,
-  offline: HELM_COPY.composerOffline,
-  failed: HELM_COPY.composerBlocked,
+const getWaitingPlaceholder = (
+  keyStatus: KeyStatus,
+  canSaveOffline: boolean,
+  name: string,
+) => {
+  if (keyStatus === 'offline') {
+    return canSaveOffline ? null : HELM_COPY.outboxNeedsConnection(name);
+  }
+  if (keyStatus === 'failed') {
+    return canSaveOffline ? null : HELM_COPY.composerBlocked;
+  }
+  return null;
 };
 
 function HomeSurface({
@@ -40,6 +53,10 @@ function HomeSurface({
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const isKeyRetrying = useAppSelector((state) => state.helm.isKeyRetrying);
   const keyRefusals = useAppSelector((state) => state.helm.keyRefusals);
+  const { user } = useAuth();
+  const uid = user?.uid ?? null;
+  const canSaveOffline = useCanUseDropBox(uid) && keyStatus !== 'ready';
+  const outbox = useOutboxEntries(uid);
   const { sessions, openSessionId } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
     useAppSelector((state) => state.helm.recentCaptures);
@@ -92,7 +109,10 @@ function HomeSurface({
         />
       )}
       <div className='mt-auto flex flex-col gap-4'>
-        {keyStatus === 'offline' && <NeedsConnectionState name={name} />}
+        {keyStatus === 'offline' && (
+          <NeedsConnectionState name={name} canSave={canSaveOffline} />
+        )}
+        {keyStatus !== 'ready' && <OutboxList entries={outbox} />}
         {keyStatus === 'failed' && (
           <CannotOpenState
             isRetrying={isKeyRetrying}
@@ -108,7 +128,12 @@ function HomeSurface({
             screen={null}
             onFocusChange={onComposerFocusChange}
             isReady={keyStatus === 'ready'}
-            waitingPlaceholder={WAITING_PLACEHOLDER[keyStatus]}
+            isOutbox={canSaveOffline}
+            waitingPlaceholder={getWaitingPlaceholder(
+              keyStatus,
+              canSaveOffline,
+              name,
+            )}
           />
         </div>
       </div>

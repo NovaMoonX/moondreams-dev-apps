@@ -712,6 +712,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Questions in the shape that fits (pick one, pick several, yes or no, a few words, a date or time, a person, place or project, a number), asked only for what the assistant can't settle, one at a time when spoken, answered by tap or voice, skippable to Needs you, with Undo (O, N, C)
 - [ ] Inbox: Needs you (the questions waiting) and what's new since you looked (O, C)
 - [x] Turns kept when the AI, the connection or the day's limit is away, and sorted once it is back (N, C)
+- [x] A capture made with no connection, even in a browser that isn't trusted, is kept sealed on this device and sorted once it is back online; signing out with some waiting asks first (N, C) (issue 60)
 - [ ] Tasks with importance, urgency, deadline, length, energy, context, place, who, steps, what they wait on and "not until" (O, N)
 - [x] Dates that come back for people, pets, organizations and you (birthdays with or without a year, anniversaries, custom yearly dates) on each page, on Today a few days ahead for close and regular people, and in a Coming up view by month; from conversation and Contacts, with Undo (O, C)
 - [x] Moments for people, pets, organizations and you (moves, jobs, graduations, adoptions, meeting, passing away) on each page and in a list by decade and year; from conversation and Contacts, used in answers (O, C)

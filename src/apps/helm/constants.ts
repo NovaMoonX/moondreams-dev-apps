@@ -504,8 +504,35 @@ export const HELM_COPY = {
     "They're safe and nothing was changed. The problem is on our side, not yours.",
   tryAgain: 'Try again',
   stillCannotOpen: "Still can't open them. Your things are safe.",
-  composerOffline: "Typing works again once you're back online",
   composerBlocked: 'Typing works again once your things open',
+  outboxIntro: (name: string) =>
+    `You can still tell ${name} things; they wait here.`,
+  outboxNeedsConnection: (name: string) =>
+    `${name} needs a connection to keep this`,
+  outboxNoAttach: 'Photos and voice notes need a connection.',
+  outboxSaved: (name: string) =>
+    `Saved on this device. ${name} will sort it once you're back online.`,
+  outboxNotKept: (name: string) =>
+    `Couldn't keep this on this device. ${name} needs a connection to keep it. Your words are still in the field.`,
+  outboxRowTitle: 'Saved on this device',
+  outboxRowLine: (time: string) => `${time} · sorted once you're back online`,
+  outboxCount: (count: number) =>
+    count === 1
+      ? '1 thing saved on this device'
+      : `${count} things saved on this device`,
+  outboxRejected: (count: number) =>
+    count === 1
+      ? "1 thing saved on this device couldn't be kept."
+      : `${count} things saved on this device couldn't be kept.`,
+  outboxSignOutTitle: 'Sign out?',
+  outboxSignOutBody: (count: number, name: string) =>
+    count === 1
+      ? `1 thing you told ${name} hasn't been saved yet. Sign out anyway?`
+      : `${count} things you told ${name} haven't been saved yet. Sign out anyway?`,
+  outboxSignOutConfirm: 'Sign out anyway',
+  outboxStay: 'Stay',
+  arrivedViaDropBox:
+    'Saved on this device, then sent once you were back online',
   needsYouCount: (count: number) =>
     count === 1 ? '1 needs you' : `${count} need you`,
   couldNotRead: "Couldn't read this",
