@@ -19,6 +19,8 @@ export type HelmView =
   | 'place'
   | 'projects'
   | 'project'
+  | 'knowledge'
+  | 'topic'
   | 'howNomosSeesYou'
   | 'comingUp';
 
@@ -539,6 +541,84 @@ export interface ProjectSealed {
 }
 
 export interface OpenProject extends Omit<Project, 'sealed'>, ProjectSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type NoteSource =
+  'typed' | 'capture' | 'savedAnswer' | 'importedFile' | 'assistantDraft';
+
+/** `apps/helm/users/{uid}/notes/{id}`: one piece of knowledge, in any number of topics or none. */
+export interface Note {
+  topicIds: string[];
+  source: NoteSource;
+  isFromGeneralAnswer: boolean;
+  checkedAt: number | null;
+  hasHealthCaution: boolean;
+  sourceCaptureId: string | null;
+  sourceMediaId: string | null;
+  projectIds: string[];
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface NoteSealed {
+  title: string;
+  body: string;
+}
+
+export interface OpenNote extends Omit<Note, 'sealed'>, NoteSealed {
+  id: string;
+  isUnreadable: boolean;
+}
+
+export type TopicDepth = 1 | 2 | 3;
+
+export type TopicSource =
+  | { kind: 'note'; noteId: string }
+  | { kind: 'message'; captureId: string; at: number }
+  | { kind: 'file'; mediaId: string; noteId: string | null }
+  | { kind: 'general'; noteId: string }
+  | { kind: 'person'; at: number };
+
+export interface TopicSection {
+  id: string;
+  heading: string | null;
+  level: 1 | 2 | 3;
+  markdown: string;
+  writtenBy: 'nomos' | 'person';
+  sources: TopicSource[];
+}
+
+/** `apps/helm/users/{uid}/topics/{id}`: a place notes are filed under; its document is written in a later issue. */
+export interface Topic {
+  parentId: string | null;
+  depth: TopicDepth;
+  projectIds: string[];
+  version: number;
+  docState: 'empty' | 'current' | 'behind' | 'writing' | 'failed';
+  pendingNoteIds: string[];
+  writeClaim: { claimId: string; at: number } | null;
+  overviewOf: Record<string, number>;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  lastWrittenAt: number | null;
+  sealed: Sealed;
+}
+
+export interface TopicSealed {
+  name: string;
+  emoji: string | null;
+  overview: string | null;
+  sections: TopicSection[];
+}
+
+export interface OpenTopic extends Omit<Topic, 'sealed'>, TopicSealed {
   id: string;
   isUnreadable: boolean;
 }

@@ -17,6 +17,8 @@ import ConnectedAppsScreen from '@apps/helm/components/connections/ConnectedApps
 import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
+import KnowledgeView from '@apps/helm/components/knowledge/KnowledgeView';
+import TopicScreen from '@apps/helm/components/knowledge/TopicScreen';
 import ProjectDetail from '@apps/helm/components/projects/ProjectDetail';
 import ProjectsView from '@apps/helm/components/projects/ProjectsView';
 import PlaceDetail from '@apps/helm/components/who/PlaceDetail';
@@ -189,6 +191,21 @@ function HelmApp() {
             onBack={goBackToOrigin}
             onHome={goHome}
             onOpenWho={(whoId) => showView('who', whoId)}
+          />
+        )}
+        {!isLocked && view === 'knowledge' && (
+          <KnowledgeView
+            onBack={goBack}
+            onHome={goHome}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
+          />
+        )}
+        {!isLocked && view === 'topic' && (
+          <TopicScreen
+            topicId={item}
+            onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenTopic={(topicId) => showView('topic', topicId)}
           />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (

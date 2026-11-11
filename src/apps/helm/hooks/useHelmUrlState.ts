@@ -24,6 +24,8 @@ const URL_VIEWS = [
   'place',
   'projects',
   'project',
+  'knowledge',
+  'topic',
   'howNomosSeesYou',
 ] as const satisfies readonly HelmView[];
 
@@ -96,7 +98,12 @@ export function useHelmUrlState() {
       ask: null,
       grant: next === 'connection' ? id : null,
       item:
-        next === 'who' || next === 'place' || next === 'project' ? id : null,
+        next === 'who' ||
+        next === 'place' ||
+        next === 'project' ||
+        next === 'topic'
+          ? id
+          : null,
     };
     if (isBrowseOpen) {
       await setUrl(target, { history: 'replace' });

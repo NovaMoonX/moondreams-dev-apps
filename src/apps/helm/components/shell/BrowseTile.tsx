@@ -1,5 +1,6 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import {
+  BookOpen,
   CalendarDays,
   CalendarHeart,
   FolderKanban,
@@ -39,6 +40,8 @@ const VIEW_ENTRIES: Record<
   place: { label: HELM_COPY.linkedPlace, icon: MapPin },
   projects: { label: HELM_COPY.projectsTitle, icon: FolderKanban },
   project: { label: HELM_COPY.projectsTitle, icon: FolderKanban },
+  knowledge: { label: HELM_COPY.knowledgeTitle, icon: BookOpen },
+  topic: { label: HELM_COPY.knowledgeTitle, icon: BookOpen },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
 };
 

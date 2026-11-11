@@ -202,11 +202,13 @@ def main():
         admin([rm(f'{path}/planDays/new-' + a)])
     check('planDays create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/planDays/d', plan)]), False)
 
-    # A who, a place and a project are the owner's alone, like a task.
+    # A who, a place, a project, a note and a topic are the owner's alone, like a task.
     whoDoc = dict(kind='person', tier='passing', tierSetBy='nomos', isSelf=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     placeDoc = dict(isHome=False, createdBy='nomos', createdAt=NOW, sealed=SEAL)
     projectDoc = dict(status='active', targetDate=None, whoRoles={}, createdBy='person', createdAt=NOW, sealed=SEAL)
-    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished')):
+    noteDoc = dict(topicIds=[], source='typed', projectIds=[], createdBy='person', createdAt=NOW, sealed=SEAL)
+    topicDoc = dict(parentId=None, depth=1, docState='empty', projectIds=[], createdBy='person', createdAt=NOW, sealed=SEAL)
+    for name, doc, field, changed in (('who', whoDoc, 'tier', 'regular'), ('places', placeDoc, 'isHome', True), ('projects', projectDoc, 'status', 'finished'), ('notes', noteDoc, 'topicIds', ['topic-1']), ('topics', topicDoc, 'depth', 2)):
         dk = f'{path}/{name}/{name}-1'
         for a, tok in actors.items():
             admin([put(dk, doc)])

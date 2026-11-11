@@ -73,6 +73,18 @@ export const TOPIC_MAX = 40;
 export const WHO_LIMIT = 2_500;
 export const PLACES_LIMIT = 500;
 export const PROJECTS_LIMIT = 500;
+export const NOTES_LIMIT = 1_000;
+export const TOPICS_LIMIT = 100;
+export const NOTE_TITLE_MAX = 80;
+export const NOTE_BODY_MAX = 20_000;
+/** The count under a note's text shows from here. */
+export const NOTE_COUNT_FROM = 18_000;
+export const TOPIC_NAME_MAX = 40;
+export const TOPIC_DEPTH_MAX = 3;
+export const SUBTOPICS_MAX = 20;
+export const NOTE_TOPICS_MAX = 10;
+/** Notes the search field appears from. */
+export const KNOWLEDGE_SEARCH_FROM = 8;
 /** The most tasks in projects (open and done) the app keeps listening to. */
 export const PROJECT_TASKS_LIMIT = 1_000;
 export const PROJECT_NAME_MAX = 80;
@@ -1531,6 +1543,129 @@ export const HELM_COPY = {
     role: 'key' | 'involved',
   ) =>
     `${emoji ? `${emoji} ` : ''}${name} · ${role === 'key' ? 'key person' : 'involved'}`,
+  knowledgeTitle: 'Knowledge',
+  knowledgeFailed: "Your knowledge couldn't be opened.",
+  knowledgeEmpty: (assistant: string) =>
+    `What you keep shows here. Write a note, or tell ${assistant} something worth keeping.`,
+  knowledgeSearch: 'Search your knowledge',
+  knowledgeNoMatch: 'No note matches that.',
+  askKnowledge: 'Ask about your knowledge',
+  chipKnowledge: 'About your knowledge',
+  backToKnowledge: 'Back to Knowledge',
+  noteNew: 'New note',
+  topicNew: 'New topic',
+  looseNotesRow: (count: number) => `Loose notes · ${count}`,
+  looseNotesTitle: 'Loose notes',
+  looseNotesEmpty: 'Every note is in a topic.',
+  topicCountLine: (subtopics: number, notes: number) =>
+    subtopics === 0 && notes === 0
+      ? 'Nothing here yet'
+      : [
+          ...(subtopics > 0
+            ? [`${subtopics} ${subtopics === 1 ? 'subtopic' : 'subtopics'}`]
+            : []),
+          ...(notes > 0 ? [`${notes} ${notes === 1 ? 'note' : 'notes'}`] : []),
+        ].join(' · '),
+  askTopic: 'Ask about this topic',
+  chipTopic: (name: string) => `About this topic: ${name}`,
+  backToTopic: (name: string) => `Back to ${name}`,
+  topicsHeading: 'Topics',
+  topicSubtopicsHeading: 'Subtopics',
+  topicNotesHeading: 'Notes',
+  topicNotesEmpty: 'No notes here yet.',
+  topicGone: 'This topic is gone.',
+  topicUnreadable: "This topic couldn't be opened.",
+  topicMenuRename: 'Change name or emoji',
+  topicMenuAddSub: 'Add a subtopic',
+  topicMenuMove: 'Move under…',
+  topicMenuDelete: 'Delete topic',
+  topicAddTitle: 'New topic',
+  topicSubAddTitle: 'New subtopic',
+  topicEditTitle: 'Change topic',
+  topicNameField: 'Name',
+  topicEmojiField: 'Emoji',
+  topicNamePlaceholder: 'Car care',
+  topicNameMissing: 'A name is needed.',
+  topicAddAction: 'Add',
+  topicMadeToast: (name: string) => `Made ${name}`,
+  topicSavedToast: (name: string) => `Saved ${name}`,
+  topicsFull: 'Knowledge holds up to 100 topics.',
+  topicSubsFull: 'A topic holds up to 20 subtopics.',
+  topicTooDeep: 'Topics go three levels deep.',
+  topicChanged: 'That topic changed since. Open it again to try.',
+  topicMoveTitle: 'Move under…',
+  topicMoveTop: 'Top level',
+  topicMoveTopHint: 'Not under any topic',
+  topicMoveNone: 'There is nowhere else to move this.',
+  topicMoveToast: (name: string, parent: string | null) =>
+    parent === null
+      ? `Moved ${name} to the top level`
+      : `Moved ${name} under ${parent}`,
+  topicMoveRefused: "That move isn't allowed.",
+  topicDeleteConfirm: (name: string, subtopics: number, notes: number) =>
+    [
+      subtopics === 0 && notes === 0
+        ? `${name} has nothing in it.`
+        : `${name} has ${[
+            ...(subtopics > 0
+              ? [`${subtopics} ${subtopics === 1 ? 'subtopic' : 'subtopics'}`]
+              : []),
+            ...(notes > 0
+              ? [`${notes} ${notes === 1 ? 'note' : 'notes'}`]
+              : []),
+          ].join(' and ')}.`,
+      subtopics > 0
+        ? `The ${subtopics === 1 ? 'subtopic moves' : 'subtopics move'} up a level${notes > 0 ? '; the notes stay, loose or in their other topics.' : '.'}`
+        : notes > 0
+          ? `The ${notes === 1 ? 'note stays' : 'notes stay'}, loose or in ${notes === 1 ? 'its' : 'their'} other topics.`
+          : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  topicDeleteAction: 'Delete topic',
+  topicDeletedToast: (name: string) => `Deleted ${name}`,
+  topicDeletedBack: (name: string) => `${name} is back`,
+  topicUndoFailed: "That couldn't be put back. Try again.",
+  topicDeleteNeedsConnection: 'Deleting a topic needs a connection.',
+  topicDeletePartial: (name: string) =>
+    `${name} wasn't deleted, and some notes may have lost it. Open it and check.`,
+  topicDeleteFailed: "That wasn't deleted. Try again.",
+  noteAddTitle: 'New note',
+  noteEditTitle: 'Change note',
+  noteTitleField: 'Title',
+  noteTitlePlaceholder: 'Wash the car in the shade',
+  noteBodyField: 'Note',
+  noteBodyPlaceholder: 'What is worth keeping?',
+  noteTopicsField: 'Topics',
+  noteTopicsHint: 'None is fine. It then shows under Loose notes.',
+  noteNeedsWords: 'Add a title or some words.',
+  noteCount: (count: number) =>
+    `${count.toLocaleString('en-US')} / ${NOTE_BODY_MAX.toLocaleString('en-US')}`,
+  noteSavedToast: (title: string) => `Saved ${title}`,
+  noteMadeToast: (title: string) => `Kept ${title}`,
+  noteDeletedToast: (title: string) => `Deleted ${title}`,
+  noteDeletedBack: (title: string) => `${title} is back`,
+  noteDeleteConfirm: (title: string) => `Delete ${title}?`,
+  noteDeleteAction: 'Delete',
+  noteUntitled: 'Untitled note',
+  noteGone: 'This note is gone.',
+  noteUnreadable: "This note couldn't be opened.",
+  noteSheetTitle: 'Note',
+  noteAdded: (date: string) => `Added ${date}`,
+  noteWrote: (date: string) => `You wrote this on ${date}`,
+  noteChangedOn: (date: string) => `Last changed ${date}`,
+  noteCopy: 'Copy',
+  noteEdit: 'Edit',
+  noteDelete: 'Delete',
+  notesFull: 'Knowledge holds up to 1,000 notes.',
+  noteTopicsFull: 'A note goes in up to 10 topics.',
+  noteChangedSince: 'That note changed since. Open it again to try.',
+  noteUndoFailed: "That couldn't be put back. Try again.",
+  noteDeleteFailed: "That wasn't deleted. Try again.",
+  topicPickerNew: '+ New topic',
+  topicPickerNamePlaceholder: 'Topic name',
+  topicPickerFull:
+    'A note goes in up to 10 topics. Take one off to pick another.',
   taskProjectRow: 'Project',
   resultProjectLine: (emoji: string | null, name: string) =>
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,

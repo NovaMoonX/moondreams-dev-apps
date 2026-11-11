@@ -10,6 +10,8 @@ const VIEWS = new Set([
   'place',
   'projects',
   'project',
+  'knowledge',
+  'topic',
   'howNomosSeesYou',
 ]);
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;

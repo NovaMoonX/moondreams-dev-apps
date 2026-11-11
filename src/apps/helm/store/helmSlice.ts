@@ -9,9 +9,11 @@ import type {
   OpenExecution,
   OpenFact,
   OpenMedia,
+  OpenNote,
   OpenPlace,
   OpenProject,
   OpenTask,
+  OpenTopic,
   OpenWho,
   PlanDay,
   SyncedRecord,
@@ -80,6 +82,10 @@ export interface HelmState {
   places: LoadedSet<OpenPlace>;
   /** The projects the person has started, active and finished. */
   projects: LoadedSet<OpenProject>;
+  /** The person's notes, newest first. */
+  notes: LoadedSet<OpenNote>;
+  /** The topics notes are filed under, every level. */
+  topics: LoadedSet<OpenTopic>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
   /** Copies of other apps' records, opened. */
@@ -138,6 +144,8 @@ const initialState: HelmState = {
   keyDateIndex: emptyKeyDateIndex,
   places: emptyLoadedSet,
   projects: emptyLoadedSet,
+  notes: emptyLoadedSet,
+  topics: emptyLoadedSet,
   media: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
@@ -282,6 +290,22 @@ const helmSlice = createSlice({
     setProjectsFailed: (state) => {
       state.projects.isFailed = true;
     },
+    setNotes: (state, action: PayloadAction<OpenNote[]>) => {
+      state.notes = { items: action.payload, isLoaded: true, isFailed: false };
+    },
+    setNotesFailed: (state) => {
+      state.notes.isFailed = true;
+    },
+    setTopics: (state, action: PayloadAction<OpenTopic[]>) => {
+      state.topics = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setTopicsFailed: (state) => {
+      state.topics.isFailed = true;
+    },
     setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
       state.media = { items: action.payload, isLoaded: true, isFailed: false };
     },
@@ -402,6 +426,10 @@ export const {
   setPlacesFailed,
   setProjects,
   setProjectsFailed,
+  setNotes,
+  setNotesFailed,
+  setTopics,
+  setTopicsFailed,
   setMedia,
   setMediaFailed,
   setSynced,

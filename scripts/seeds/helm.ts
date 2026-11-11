@@ -47,6 +47,8 @@ import type {
   MediaSealed,
   Place,
   PlaceSealed,
+  Note,
+  NoteSealed,
   Project,
   ProjectSealed,
   Who,
@@ -58,6 +60,8 @@ import type {
   Task,
   TaskDue,
   TaskSealed,
+  Topic,
+  TopicSealed,
 } from '../../src/apps/helm/types.ts';
 import {
   GOOGLE_ACCOUNT_PREFIX,
@@ -1548,6 +1552,213 @@ async function buildProjects(input: {
     }),
   ]);
   return { projects, tasks };
+}
+
+/** Alex's Knowledge: eight topics two levels deep (🚗 Car care › Washing and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. */
+async function buildKnowledge(input: {
+  now: number;
+  encryption: HelmEncryption;
+}) {
+  const { now, encryption } = input;
+  const topicOf = async (
+    id: string,
+    name: string,
+    emoji: string | null,
+    parentId: string | null,
+  ): Promise<{ id: string; topic: Topic }> => ({
+    id,
+    topic: {
+      parentId,
+      depth: parentId === null ? 1 : 2,
+      projectIds: [],
+      version: 0,
+      docState: 'empty',
+      pendingNoteIds: [],
+      writeClaim: null,
+      overviewOf: {},
+      createdBy: 'person',
+      executionId: null,
+      createdAt: now - 40 * DAY_MS,
+      lastEditedAt: null,
+      lastWrittenAt: null,
+      sealed: await sealJson<TopicSealed>(
+        { name, emoji, overview: null, sections: [] },
+        encryption,
+      ),
+    },
+  });
+  const topics = await Promise.all([
+    topicOf('seed-topic-car', 'Car care', '🚗', null),
+    topicOf('seed-topic-car-washing', 'Washing', null, 'seed-topic-car'),
+    topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
+    topicOf('seed-topic-kitchen', 'Kitchen', '🍰', null),
+    topicOf('seed-topic-kitchen-baking', 'Baking', null, 'seed-topic-kitchen'),
+    topicOf('seed-topic-wedding', 'Wedding etiquette', '💐', null),
+    topicOf('seed-topic-garden', 'Garden', '🌱', null),
+    topicOf(
+      'seed-topic-garden-tomatoes',
+      'Tomatoes',
+      null,
+      'seed-topic-garden',
+    ),
+  ]);
+  const noteOf = async (
+    index: number,
+    title: string,
+    body: string,
+    topicIds: string[],
+    extra: Partial<Pick<Note, 'lastEditedAt' | 'checkedAt'>> = {},
+  ): Promise<{ id: string; note: Note }> => ({
+    id: `seed-note-${String(index).padStart(2, '0')}`,
+    note: {
+      topicIds,
+      source: 'typed',
+      isFromGeneralAnswer: false,
+      checkedAt: null,
+      hasHealthCaution: false,
+      sourceCaptureId: null,
+      sourceMediaId: null,
+      projectIds: [],
+      createdBy: 'person',
+      executionId: null,
+      createdAt: now - (21 - index) * DAY_MS,
+      lastEditedAt: null,
+      ...extra,
+      sealed: await sealJson<NoteSealed>({ title, body }, encryption),
+    },
+  });
+  const car = 'seed-topic-car';
+  const washing = 'seed-topic-car-washing';
+  const fragrance = 'seed-topic-car-fragrance';
+  const kitchen = 'seed-topic-kitchen';
+  const baking = 'seed-topic-kitchen-baking';
+  const wedding = 'seed-topic-wedding';
+  const garden = 'seed-topic-garden';
+  const tomatoes = 'seed-topic-garden-tomatoes';
+  const notes = await Promise.all([
+    noteOf(
+      1,
+      'Oil change every 5,000 miles',
+      'Synthetic oil, the 5W-30 the manual names. The shop on Fifth does it in twenty minutes.',
+      [car],
+    ),
+    noteOf(
+      2,
+      'Tire pressure',
+      'Front 35, back 33 when the tires are cold. The sticker inside the driver door has it.',
+      [car],
+    ),
+    noteOf(
+      3,
+      'Wash in the shade',
+      'Hot paint dries soap into spots. Early morning or after five.',
+      [washing],
+    ),
+    noteOf(
+      4,
+      'Two buckets',
+      'One for soap, one for rinsing the mitt, so grit stays out of the paint.',
+      [washing],
+    ),
+    noteOf(
+      5,
+      'Microfiber for drying',
+      'Pat the panels dry, never wipe in circles.',
+      [washing],
+      { lastEditedAt: now - 3 * DAY_MS, checkedAt: now - 3 * DAY_MS },
+    ),
+    noteOf(
+      6,
+      'Clean the vents first',
+      'A new air freshener smells muddy over old dust. Wipe the vents and the dash, then clip it on.',
+      [washing, fragrance],
+    ),
+    noteOf(
+      7,
+      'Vanilla and sandalwood',
+      'The scent that lasted a whole month in the heat.',
+      [fragrance],
+    ),
+    noteOf(
+      8,
+      'Pie crust stays flaky',
+      'Butter straight from the fridge and ice water, a tablespoon at a time.',
+      [kitchen],
+    ),
+    noteOf(
+      9,
+      'Sharpen knives twice a year',
+      'The honing steel is for every week; the stone only in spring and fall.',
+      [kitchen],
+    ),
+    noteOf(
+      10,
+      'Bread flour for chewy loaves',
+      'Higher protein makes the crumb chewier. All-purpose is fine for quick bread.',
+      [baking],
+    ),
+    noteOf(
+      11,
+      'Oven runs hot',
+      'About 15 degrees over. Bake at 335 when a recipe says 350.',
+      [baking],
+    ),
+    noteOf(
+      12,
+      'Brown butter cookies',
+      'Let the butter cool before the sugar goes in, or the cookies spread.',
+      [baking],
+    ),
+    noteOf(
+      13,
+      'RSVP wording',
+      'Please reply by May 15. Wording that worked for Priya: https://example.com/rsvp-wording, then a text to anyone silent after a week.',
+      [wedding],
+    ),
+    noteOf(
+      14,
+      'Seating the families',
+      'Parents near the front, and keep anyone who is not speaking apart.',
+      [wedding],
+    ),
+    noteOf(
+      15,
+      'Thank-you notes',
+      'Within three months, and name the gift in the note.',
+      [wedding],
+    ),
+    noteOf(
+      16,
+      'Water in the morning',
+      'Wet leaves overnight invite blight. Water the soil at dawn.',
+      [garden],
+    ),
+    noteOf(
+      17,
+      'Pinch the suckers',
+      'The small shoots between the stem and a branch. Pinch them off the determinate plants, leave them on the cherry ones.',
+      [tomatoes],
+    ),
+    noteOf(
+      18,
+      'Wifi password for the cabin',
+      'Written on the router: it is the cabin name and 2019.',
+      [],
+    ),
+    noteOf(
+      19,
+      'Gift ideas for Mom',
+      'A framed photo of the lake, the good tea, a book about birds.',
+      [],
+    ),
+    noteOf(
+      20,
+      'Parking by the dentist',
+      'The garage on Elm is cheaper than the meter, and the validation is at the front desk.',
+      [],
+    ),
+  ]);
+  return { topics, notes };
 }
 
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
@@ -3131,6 +3342,17 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           batch.set(person.collection('tasks').doc(entry.id), entry.task),
         );
       }
+      const knowledge = people
+        ? await buildKnowledge({ now: context.now, encryption })
+        : null;
+      if (knowledge) {
+        knowledge.topics.forEach((entry) =>
+          batch.set(person.collection('topics').doc(entry.id), entry.topic),
+        );
+        knowledge.notes.forEach((entry) =>
+          batch.set(person.collection('notes').doc(entry.id), entry.note),
+        );
+      }
       const peopleCount = people
         ? people.who.length +
           people.places.length +
@@ -3140,7 +3362,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           people.keyDates.length +
           1 +
           7 +
-          (projects ? projects.projects.length + projects.tasks.length : 0)
+          (projects ? projects.projects.length + projects.tasks.length : 0) +
+          (knowledge ? knowledge.topics.length + knowledge.notes.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +

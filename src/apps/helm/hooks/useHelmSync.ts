@@ -30,6 +30,10 @@ import {
   setProjectTasksFailed,
   setProjects,
   setProjectsFailed,
+  setNotes,
+  setNotesFailed,
+  setTopics,
+  setTopicsFailed,
   setMedia,
   setMediaFailed,
   setWho,
@@ -60,7 +64,9 @@ import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
 import { startMediaListener } from '@apps/helm/store/listeners/mediaListener';
 import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
+import { startNotesListener } from '@apps/helm/store/listeners/noteListener';
 import { startProjectsListener } from '@apps/helm/store/listeners/projectListener';
+import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
 import { startPlanDaysListener } from '@apps/helm/store/listeners/planDayListener';
@@ -320,6 +326,24 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm projects listener failed', error);
               dispatch(setProjectsFailed());
+            },
+          ),
+          startNotesListener(
+            uid,
+            read,
+            (notes) => dispatch(setNotes(notes)),
+            (error) => {
+              console.error('Helm notes listener failed', error);
+              dispatch(setNotesFailed());
+            },
+          ),
+          startTopicsListener(
+            uid,
+            read,
+            (topics) => dispatch(setTopics(topics)),
+            (error) => {
+              console.error('Helm topics listener failed', error);
+              dispatch(setTopicsFailed());
             },
           ),
           startMediaListener(
