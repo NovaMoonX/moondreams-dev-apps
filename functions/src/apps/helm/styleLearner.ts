@@ -295,7 +295,7 @@ export const toMailOccasion = (to: string[]): 'work' | 'personal' =>
     ? 'personal'
     : 'work';
 
-/** Sent messages (newest first) split into work and personal, plus up to five people already known by address who got at least five, most written to first. */
+/** Sent messages (newest first) split into work and personal, plus up to five people already known by address who got at least five, most written to first; at most six groups, one per batch. */
 export const toMailGroups = (
   mails: { to: string[]; text: string }[],
   whoIdByAddress: Map<string, string>,
@@ -326,9 +326,9 @@ export const toMailGroups = (
       audienceWhoId: whoId,
       texts,
     }));
-  return [occasion('work'), occasion('personal'), ...audiences].filter(
-    (group) => group.texts.length >= MIN_MAIL_GROUP,
-  );
+  return [occasion('work'), occasion('personal'), ...audiences]
+    .filter((group) => group.texts.length >= MIN_MAIL_GROUP)
+    .slice(0, MAX_MAIL_BATCHES);
 };
 
 const chunkTexts = (texts: string[]) =>

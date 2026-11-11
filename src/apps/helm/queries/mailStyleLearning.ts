@@ -10,7 +10,7 @@ export type MailStyleResult =
 const learnHelmMailStyleCallable = httpsCallable<
   Record<string, never>,
   MailStyleResult
->(functions, 'learnHelmMailStyle');
+>(functions, 'learnHelmMailStyle', { timeout: 190_000 });
 
 /** Reads the person's sent mail once on the server and writes short notes per occasion and person. */
 export const learnMailStyle = async () =>

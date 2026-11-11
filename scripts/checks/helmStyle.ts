@@ -329,6 +329,26 @@ assert.deepEqual(
   'a person with under 5 messages gets no audience; most written first',
 );
 assert.equal(grouped[2].audienceWhoId, 'who-sam');
+const sevenWays = [
+  ...Array.from({ length: 5 }, (_, i) => mail(['ops@acme.example'], `w${i}`)),
+  ...Array.from({ length: 5 }, (_, i) => mail(['pal@gmail.com'], `p${i}`)),
+  ...['a', 'b', 'c', 'd', 'e'].flatMap((who) =>
+    Array.from({ length: 5 }, (_, i) =>
+      mail([`${who}@acme.example`], `${who}${i}`),
+    ),
+  ),
+];
+const sevenGroups = toMailGroups(
+  sevenWays,
+  new Map(
+    ['a', 'b', 'c', 'd', 'e'].map((who) => [
+      `${who}@acme.example`,
+      `who-${who}`,
+    ]),
+  ),
+);
+assert.equal(sevenGroups.length, 6, 'never more groups than batches');
+assert.equal(toMailBatches(sevenGroups).length, sevenGroups.length);
 assert.equal(grouped[0].scope, 'occasion');
 
 // Sent mail: one batch per group when groups are many, never more than six in all, 50 a batch.

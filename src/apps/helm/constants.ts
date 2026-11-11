@@ -1365,7 +1365,7 @@ export const HELM_COPY = {
     'To learn from your sent mail, connect Gmail under Connected apps, then come back and switch this on.',
   styleMailOffConfirmTitle: 'Stop learning from sent mail?',
   styleMailOffConfirm:
-    'The notes learned from your sent mail are removed. Nothing else changes, and the notes you wrote or that came from what you type stay.',
+    'Work email, Personal email and the notes for each person are removed, including any you changed or added there. Your other style notes stay.',
   styleMailOffAction: 'Remove them',
   styleMailRemoved: 'Removed the notes from your sent mail',
   styleMailRemoveFailed: "The notes couldn't be removed. Try again.",

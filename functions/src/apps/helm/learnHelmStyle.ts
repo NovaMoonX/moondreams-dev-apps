@@ -299,7 +299,7 @@ export const learnHelmMailStyle = onCall(
           )
         : new HttpsError(
             'failed-precondition',
-            'Helm needs Gmail reconnected before it can read your sent mail.',
+            'Gmail needs reconnecting before your sent mail can be read.',
           );
     }
     const mails = read.value;
@@ -313,6 +313,10 @@ export const learnHelmMailStyle = onCall(
       mails,
       new Map(whos.map((who) => [who.address, who.whoId])),
     );
+    if (groups.length === 0) {
+      logger.info('helm.style.mail.notEnough', { messages: mails.length });
+      return { status: 'notEnough', groups: 0 };
+    }
     const batchesByGroup = toMailBatches(groups);
     const batchCount = batchesByGroup.reduce(
       (total, batches) => total + batches.length,
@@ -372,6 +376,13 @@ export const learnHelmMailStyle = onCall(
       MAIL_LABELS[group.id] ??
       whos.find((who) => who.whoId === group.audienceWhoId)?.name ??
       'Someone';
+    const openStyleOrNull = (sealed: unknown) => {
+      try {
+        return toStyleWords(openForHelm(key, sealed as SealedPayload));
+      } catch {
+        return null;
+      }
+    };
     const written = await firestore.runTransaction(async (transaction) => {
       const refs = learned.map(({ group }) =>
         firestore.doc(`${base}/style/${group.id}`),
@@ -382,15 +393,7 @@ export const learnHelmMailStyle = onCall(
       const prepared = learned.map(
         ({ group, learned: notes, sampleCount }, index) => {
           const data = current[index].data();
-          const existing = (() => {
-            try {
-              return data
-                ? toStyleWords(openForHelm(key, data.sealed as SealedPayload))
-                : null;
-            } catch {
-              return null;
-            }
-          })();
+          const existing = data ? openStyleOrNull(data.sealed) : null;
           if (data && !existing) {
             logger.error('helm.style.unreadable', { uid });
             throw new HttpsError(
