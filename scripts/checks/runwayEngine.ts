@@ -1588,82 +1588,85 @@ const version = (
   );
 
   // A bill paid on a day of its own is saved for by the pays before that day, and keeps its due date as its key.
-  assert.deepEqual(
-    [
-      toPayOn(utc(2026, 12, 15), 1),
-      toPayOn(utc(2026, 12, 1), 1),
-      toPayOn(utc(2026, 12, 3), 5),
-      toPayOn(utc(2027, 3, 10), 31),
-      toPayOn(utc(2026, 12, 15), null),
-    ].map(toDayStamp),
-    ['20261201', '20261201', '20261105', '20270228', '20261215'],
-    'the pay day is the last one on or before the due date, clamped to a short month',
-  );
-  const monthEndPays = Array.from({ length: 3 }, (_, index) =>
-    day(Date.UTC(2026, 10 + index, 30), String(index)),
-  );
-  const carNote = makeBill({
-    schedule: monthly(utc(2026, 12, 15)),
-    fundedBy: { kind: 'lastBefore' },
-  });
-  const byDue = planBillPayments(carNote, monthEndPays, horizon);
-  const byPayDay = planBillPayments(
-    { ...carNote, payOnDay: 1 },
-    monthEndPays,
-    horizon,
-  );
-  assert.deepEqual(
-    [byDue[0].parts.map((part) => toDayStamp(part.day.on)), byDue[0].payOn],
-    [['20261130'], byDue[0].dueOn],
-    'with no pay day the payment is paid and saved for by its due date',
-  );
-  assert.deepEqual(
-    byPayDay
-      .slice(0, 2)
-      .map((payment) => [
-        toDayStamp(payment.dueOn),
-        toDayStamp(payment.payOn),
-        payment.parts.map((part) => toDayStamp(part.day.on)),
-      ]),
-    [
-      ['20261215', '20261201', ['20261130']],
-      ['20270115', '20270101', ['20261230']],
-    ],
-    'paid on the 1st, the pay on the 30th before it carries it',
-  );
-  {
-    const shortHorizon = utc(2026, 12, 31);
-    const early = planBillPayments(
-      makeBill({
-        schedule: monthly(utc(2027, 1, 3)),
-        fundedBy: { kind: 'lastBefore' },
-        payOnDay: 25,
-      }),
-      monthEndPays,
-      shortHorizon,
-    );
+  const checkPayOnDays = () => {
     assert.deepEqual(
-      [toDayStamp(early[0].dueOn), toDayStamp(early[0].payOn)],
-      ['20270103', '20261225'],
-      'a payment due past the horizon but paid inside it is planned',
+      [
+        toPayOn(utc(2026, 12, 15), 1),
+        toPayOn(utc(2026, 12, 1), 1),
+        toPayOn(utc(2026, 12, 3), 5),
+        toPayOn(utc(2027, 3, 10), 31),
+        toPayOn(utc(2026, 12, 15), null),
+      ].map(toDayStamp),
+      ['20261201', '20261201', '20261105', '20270228', '20261215'],
+      'the pay day is the last one on or before the due date, clamped to a short month',
     );
-    const twice = planBillPayments(
-      makeBill({
-        schedule: {
-          kind: 'monthly',
-          anchor: utc(2027, 1, 1),
-          monthDays: [1, 15],
-        },
-        payOnDay: 20,
-      }),
+    const monthEndPays = Array.from({ length: 3 }, (_, index) =>
+      day(Date.UTC(2026, 10 + index, 30), String(index)),
+    );
+    const carNote = makeBill({
+      schedule: monthly(utc(2026, 12, 15)),
+      fundedBy: { kind: 'lastBefore' },
+    });
+    const byDue = planBillPayments(carNote, monthEndPays, horizon);
+    const byPayDay = planBillPayments(
+      { ...carNote, payOnDay: 1 },
       monthEndPays,
       horizon,
     );
-    assert.ok(
-      twice.every((payment) => payment.payOn === payment.dueOn),
-      'two payments a month ignore a pay day, so they never share one',
+    assert.deepEqual(
+      [byDue[0].parts.map((part) => toDayStamp(part.day.on)), byDue[0].payOn],
+      [['20261130'], byDue[0].dueOn],
+      'with no pay day the payment is paid and saved for by its due date',
     );
-  }
+    assert.deepEqual(
+      byPayDay
+        .slice(0, 2)
+        .map((payment) => [
+          toDayStamp(payment.dueOn),
+          toDayStamp(payment.payOn),
+          payment.parts.map((part) => toDayStamp(part.day.on)),
+        ]),
+      [
+        ['20261215', '20261201', ['20261130']],
+        ['20270115', '20270101', ['20261230']],
+      ],
+      'paid on the 1st, the pay on the 30th before it carries it',
+    );
+    {
+      const shortHorizon = utc(2026, 12, 31);
+      const early = planBillPayments(
+        makeBill({
+          schedule: monthly(utc(2027, 1, 3)),
+          fundedBy: { kind: 'lastBefore' },
+          payOnDay: 25,
+        }),
+        monthEndPays,
+        shortHorizon,
+      );
+      assert.deepEqual(
+        [toDayStamp(early[0].dueOn), toDayStamp(early[0].payOn)],
+        ['20270103', '20261225'],
+        'a payment due past the horizon but paid inside it is planned',
+      );
+      const twice = planBillPayments(
+        makeBill({
+          schedule: {
+            kind: 'monthly',
+            anchor: utc(2027, 1, 1),
+            monthDays: [1, 15],
+          },
+          payOnDay: 20,
+        }),
+        monthEndPays,
+        horizon,
+      );
+      assert.ok(
+        twice.every((payment) => payment.payOn === payment.dueOn),
+        'two payments a month ignore a pay day, so they never share one',
+      );
+    }
+  };
+  checkPayOnDays();
 
   // A monthly bill on the 31st lands on the last day of shorter months.
   assert.deepEqual(
