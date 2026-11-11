@@ -42,6 +42,7 @@ export const COMMAND_KINDS = [
   'removeKeyDate',
   'createProject',
   'setProjectRole',
+  'addMilestone',
 ] as const;
 
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
@@ -80,6 +81,10 @@ export const PROJECT_OBJECTIVE_CAP = 200;
 export const PROJECT_ROLE_NOTE_CAP = 40;
 export const MAX_PROJECT_ROLES = 5;
 export const MAX_CONTEXT_PROJECTS = 20;
+export const MILESTONE_TITLE_CAP = 80;
+export const MAX_MILESTONES_PER_TURN = 3;
+export const MAX_MILESTONES_PER_PROJECT = 30;
+export const MAX_CONTEXT_MILESTONES = 10;
 export const PROJECT_ROLES = ['key', 'involved'] as const;
 export const KEY_DATE_LABEL_CAP = 60;
 export const MAX_MOMENTS_PER_WHO = 500;
@@ -291,7 +296,16 @@ export interface SetProjectRoleCommand {
   note: string | null;
 }
 
-export type ProjectCommand = CreateProjectCommand | SetProjectRoleCommand;
+/** A dated point in a project, named by words code matches; its date is date-only (UTC midnight). */
+export interface AddMilestoneCommand {
+  kind: 'addMilestone';
+  projectRef: string;
+  title: string;
+  date: number | null;
+}
+
+export type ProjectCommand =
+  CreateProjectCommand | SetProjectRoleCommand | AddMilestoneCommand;
 
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
@@ -408,11 +422,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              'createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters.',
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters.`,
             ),
             dueSpanId: nullable(
               'string',
-              "The id of a date span from the reading that gives this task its day, the day to plan for planDay (null means today), or the project's target date for createProject. Never write a date yourself.",
+              "The id of a date span from the reading that gives this task its day, the day to plan for planDay (null means today), the project's target date for createProject, or the date of an addMilestone (null when it has none). Never write a date yourself.",
             ),
             isUrgent: nullable(
               'boolean',
@@ -607,7 +621,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             projectRef: nullable(
               'string',
-              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole: the name of the project. null otherwise.',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. null otherwise.',
             ),
             projectEmoji: nullable(
               'string',

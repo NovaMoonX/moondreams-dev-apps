@@ -108,6 +108,8 @@ interface Step {
   restored: Values;
   current: Values;
   isKept: boolean;
+  /** A milestone the turn added was changed since, so it is left where it is. */
+  hasKeptEntry: boolean;
 }
 
 type RecordOutcome =
@@ -163,6 +165,50 @@ const isStillHome = (value: unknown, now: number) =>
   typeof value.saidAt === 'number' &&
   now - value.saidAt < CURRENT_PLACE_MS;
 
+const MILESTONE_PATHS = ['milestoneState.', 'sealed.milestones.'];
+
+/** A milestone an effect wrote is one entry under a dotted path, so Undo compares and restores that entry alone. */
+const isMilestonePath = (path: string) =>
+  MILESTONE_PATHS.some((prefix) => path.startsWith(prefix));
+
+const readPath = (source: Values | null, path: string): unknown =>
+  path
+    .split('.')
+    .reduce<unknown>(
+      (value, key) =>
+        typeof value === 'object' && value !== null
+          ? (value as Values)[key]
+          : undefined,
+      source,
+    );
+
+/** Sets one path on a copy; a null written to a nested path takes the entry away. */
+const writePath = (source: Values, path: string, value: unknown): Values => {
+  const [head, ...rest] = path.split('.');
+  if (rest.length === 0) return { ...source, [head]: value };
+  const inner = (source[head] ?? {}) as Values;
+  if (rest.length === 1 && value === null) {
+    return {
+      ...source,
+      [head]: Object.fromEntries(
+        Object.entries(inner).filter(([key]) => key !== rest[0]),
+      ),
+    };
+  }
+  return { ...source, [head]: writePath(inner, rest.join('.'), value) };
+};
+
+const writePaths = (
+  source: Values,
+  paths: string[],
+  values: Values,
+  toPath: (path: string) => string,
+) =>
+  paths.reduce(
+    (copy, path) => writePath(copy, toPath(path), values[path]),
+    source,
+  );
+
 const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   if (step.isKept) return step;
   const { written, previous } = effect;
@@ -173,33 +219,38 @@ const stepBack = (step: Step, effect: ExecutionEffect): Step => {
   if (own.some((path) => previous[path] === undefined)) {
     return { ...step, isKept: true };
   }
+  const toField = (path: string) => path.slice(SEALED_PREFIX.length);
+  const live = (path: string) => {
+    const value = path.startsWith(SEALED_PREFIX)
+      ? readPath(step.opened as unknown as Values | null, toField(path))
+      : readPath(step.data, path);
+    return isMilestonePath(path) ? (value ?? null) : value;
+  };
   const isMatch = own.every((path) =>
     path.startsWith(SEALED_PREFIX)
-      ? step.opened !== null &&
-        isSame(
-          (step.opened as unknown as Values)[path.slice(SEALED_PREFIX.length)],
-          written[path],
-        )
-      : step.data !== null && isSame(step.data[path], written[path]),
+      ? step.opened !== null && isSame(live(path), written[path])
+      : step.data !== null && isSame(live(path), written[path]),
   );
-  if (!isMatch) return { ...step, isKept: true };
+  if (!isMatch) {
+    // A milestone the person changed since stays; the rest of the turn is still taken back.
+    return own.every(isMilestonePath)
+      ? { ...step, hasKeptEntry: true }
+      : { ...step, isKept: true };
+  }
   const sealedPaths = own.filter((path) => path.startsWith(SEALED_PREFIX));
   const dataPaths = own.filter((path) => !path.startsWith(SEALED_PREFIX));
-  const toField = (path: string) => path.slice(SEALED_PREFIX.length);
+  const identity = (path: string) => path;
   return {
     ...step,
-    data: step.data && {
-      ...step.data,
-      ...Object.fromEntries(dataPaths.map((path) => [path, previous[path]])),
-    },
+    data: step.data && writePaths(step.data, dataPaths, previous, identity),
     opened:
       sealedPaths.length > 0 && step.opened
-        ? {
-            ...step.opened,
-            ...Object.fromEntries(
-              sealedPaths.map((path) => [toField(path), previous[path]]),
-            ),
-          }
+        ? (writePaths(
+            step.opened as unknown as Values,
+            sealedPaths,
+            previous,
+            toField,
+          ) as unknown as Step['opened'])
         : step.opened,
     fields: {
       ...step.fields,
@@ -302,6 +353,7 @@ const planRecord = (
       restored: {},
       current: {},
       isKept: false,
+      hasKeptEntry: false,
     });
   if (updated.isKept) return { kind: 'kept', title };
   // A person or place a later turn or task also uses stays, quietly: the person never edited it.
@@ -330,7 +382,9 @@ const planRecord = (
         }
       : { kind: 'kept', title };
   }
-  if (Object.keys(updated.restored).length === 0) return left;
+  if (Object.keys(updated.restored).length === 0) {
+    return updated.hasKeptEntry ? { kind: 'kept', title } : left;
+  }
   const reseal =
     Object.keys(updated.sealedFields).length > 0 ? updated.opened : null;
   const restoredTitle = toOpenedTitle(updated.opened) || title;

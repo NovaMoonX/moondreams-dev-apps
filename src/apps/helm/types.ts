@@ -359,6 +359,8 @@ export interface Task {
   createdAt: number;
   lastEditedAt: number | null;
   completedAt: number | null;
+  /** Set when the person clears the done tasks of a project: hidden from its done fold, still found by search. */
+  clearedAt: number | null;
   sealed: Sealed;
 }
 

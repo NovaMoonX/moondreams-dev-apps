@@ -940,11 +940,44 @@ const START_PROJECT_RE =
 const PROJECT_KEY_RE =
   /^\s*@?(\p{Lu}\p{L}+) is key for (?:the |my |our )?(.+?)[.!]?\s*$/iu;
 
+const MILESTONE_DUE_RE =
+  /^\s*(.+?) is due (.+?) for (?:the |my |our )?(.+?)[.!]?\s*$/i;
+const MILESTONE_LABELLED_RE =
+  /^\s*milestone for (?:the |my |our )?(.+?):\s*(.+?) on (.+?)[.!]?\s*$/i;
+
 const toProjectName = (words: string) =>
   words.charAt(0).toUpperCase() + words.slice(1);
 
-/** The emulator's stand-in for "Start a project for the move" (one createProject) and "Dana is key for the wedding" (one setProjectRole). Null for any other words. */
-const readProject = (text: string) => {
+/** One addMilestone from "The venue deposit is due March 3 for the wedding" or "Milestone for the wedding: Venue booked on March 3", dated by the span the words end with. */
+const readMilestone = (text: string, reading: CaptureReading) => {
+  const due = MILESTONE_DUE_RE.exec(text);
+  const labelled = due ? null : MILESTONE_LABELLED_RE.exec(text);
+  const [title, said, project] = due
+    ? [due[1], due[2], due[3]]
+    : labelled
+      ? [labelled[2], labelled[3], labelled[1]]
+      : [];
+  if (!title || !said || !project) return null;
+  const span = reading.dates.find(
+    (entry) => entry.start >= text.lastIndexOf(said),
+  );
+  return {
+    commands: [
+      toAnswer({
+        kind: 'addMilestone',
+        isHealth: null,
+        title: toProjectName(title),
+        projectRef: toProjectName(project),
+        dueSpanId: span?.id ?? null,
+      }),
+    ],
+    mentions: [],
+    places: [],
+  };
+};
+
+/** The emulator's stand-in for "Start a project for the move" (one createProject), "Dana is key for the wedding" (one setProjectRole) and a milestone (one addMilestone). Null for any other words. */
+const readProject = (text: string, reading: CaptureReading) => {
   const start = START_PROJECT_RE.exec(text);
   if (start) {
     return {
@@ -962,6 +995,8 @@ const readProject = (text: string) => {
       places: [],
     };
   }
+  const milestone = readMilestone(text, reading);
+  if (milestone) return milestone;
   const key = PROJECT_KEY_RE.exec(text);
   if (!key || NOT_NAMES.has(key[1])) return null;
   const known = KNOWN_MENTIONS.find((entry) => entry.name === key[1]);
@@ -1125,7 +1160,7 @@ export function createFixtureProvider(
           toolCalls: [],
         };
       }
-      const project = readProject(text);
+      const project = readProject(text, reading);
       if (project) {
         return {
           terminalInput: project,

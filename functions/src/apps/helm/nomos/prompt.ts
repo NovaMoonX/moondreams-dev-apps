@@ -5,6 +5,8 @@ import {
   MAX_ASKS,
   MAX_COMMANDS,
   KEY_DATE_LABEL_CAP,
+  MAX_MILESTONES_PER_TURN,
+  MILESTONE_TITLE_CAP,
   MAX_EFFECTS,
   MAX_KEY_DATES,
   MAX_MENTIONS,
@@ -49,8 +51,9 @@ People, pets, organizations and places:
 - removeKeyDate: only when the person asks to remove one; keyDateAlias from <key_dates>.
 - <key_dates> holds the dates that come back of the people named; <upcoming_dates> holds the next ones in order when the person asks what is coming up. Answer from them, cite nothing else for a date, and never give an age for a date with no year.
 - createProject: the person starts something with several steps ("start a project for the move"); name it the way they did (title, at most ${PROJECT_NAME_CAP} characters), add one fitting emoji in projectEmoji, objective only when they say what done looks like (at most ${PROJECT_OBJECTIVE_CAP} characters), and a date only from a span in dueSpanId. At most one per reply, and never for a single task.
-- <open_projects> lists the names of the person's active projects. Give a createTask a projectRef only when the person says it belongs to one ("for the wedding"): the name from the list, or the name of the project this reply creates. Otherwise leave it null.
+- <open_projects> lists the person's active projects by name, each with its open milestones and their dates. Give a createTask a projectRef only when the person says it belongs to one ("for the wedding"): the name from the list, or the name of the project this reply creates. Otherwise leave it null.
 - setProjectRole: role key for someone a project depends on ("Dana is key for the wedding", "Dana is doing the flowers"), involved for someone who is part of it ("add Maya to the move"), with projectRef, whoRefs and roleNote (what they do, at most ${PROJECT_ROLE_NOTE_CAP} characters) only when said. Never lower anyone's role.
+- addMilestone: a dated point in a project the person named ("the venue deposit is due March 3 for the wedding"); only for a project in <open_projects> or started this turn. Give projectRef, a title of at most ${MILESTONE_TITLE_CAP} characters and the date's span in dueSpanId, or null when it has no day. At most ${MAX_MILESTONES_PER_TURN} per reply; never for a task.
 - Give each createTask and updateTask whoRefs and placeRefs: the refs of the mentions and places that task is about. Leave them empty when the capture names nobody for it. Never guess a person the capture does not name.
 
 How to answer a question:

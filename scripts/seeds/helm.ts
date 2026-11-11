@@ -600,6 +600,7 @@ async function buildBackToBack(input: {
         createdAt: sortedAt,
         lastEditedAt: null,
         completedAt: null,
+        clearedAt: null,
         sealed: await sealJson<TaskSealed>(
           { title, notes: null, steps: {} },
           encryption,
@@ -1084,6 +1085,7 @@ async function buildAnswerTurns(input: {
         createdAt: made,
         lastEditedAt: null,
         completedAt: null,
+        clearedAt: null,
         sealed: await sealJson<TaskSealed>(
           { title: entry.title, notes: null, steps: {} },
           encryption,
@@ -1148,6 +1150,7 @@ async function buildPlanDays(input: {
     createdAt: now - 3 * DAY_MS,
     lastEditedAt: at(yesterdayKey, '14:25'),
     completedAt: at(yesterdayKey, '14:25'),
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title: doneTitle, notes: null, steps: {} },
       encryption,
@@ -1381,7 +1384,7 @@ async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   }
 }
 
-/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago, so its line reads "1 overdue · Dana (florist) has 1 open") and the 🏠 Move finished a month ago with its one done task. */
+/** Alex's two projects: the 💍 Wedding going (Dana key as the florist, Priya involved, Sam Rivera mentioned, four tasks: one overdue, one waiting on Dana, one done a month ago that stays uncleared so the Done fold shows 1; three milestones: Venue booked reached, Final guest list in 9 days, Pick the menu undated; so its line reads "1 overdue · Final guest list in 9 days") and the 🏠 Move finished a month ago with its one done task and one reached milestone. */
 async function buildProjects(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1401,11 +1404,12 @@ async function buildProjects(input: {
       | 'lastEditedAt'
     >,
     words: ProjectSealed,
+    milestoneState: Project['milestoneState'] = {},
   ): Promise<{ id: string; project: Project }> => ({
     id,
     project: {
       ...fields,
-      milestoneState: {},
+      milestoneState,
       mediaIds: [],
       createdBy: 'person',
       executionId: null,
@@ -1440,6 +1444,7 @@ async function buildProjects(input: {
       executionId: null,
       lastEditedAt: null,
       completedAt: null,
+      clearedAt: null,
       ...fields,
       sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
     },
@@ -1466,8 +1471,25 @@ async function buildProjects(input: {
         name: 'Wedding',
         emoji: '💍',
         objective: 'Married on June 20 with everyone there',
-        milestones: {},
+        milestones: {
+          'seed-milestone-wedding-1': { title: 'Venue booked' },
+          'seed-milestone-wedding-2': { title: 'Final guest list' },
+          'seed-milestone-wedding-3': { title: 'Pick the menu' },
+        },
         roleNotes: { 'seed-who-dana': 'florist' },
+      },
+      {
+        'seed-milestone-wedding-1': {
+          date: today - 40 * DAY_MS,
+          order: 0,
+          doneAt: now - 32 * DAY_MS,
+        },
+        'seed-milestone-wedding-2': {
+          date: today + 9 * DAY_MS,
+          order: 1,
+          doneAt: null,
+        },
+        'seed-milestone-wedding-3': { date: null, order: 2, doneAt: null },
       },
     ),
     projectOf(
@@ -1483,8 +1505,15 @@ async function buildProjects(input: {
         name: 'Move',
         emoji: '🏠',
         objective: null,
-        milestones: {},
+        milestones: { 'seed-milestone-move-1': { title: 'Keys handed over' } },
         roleNotes: {},
+      },
+      {
+        'seed-milestone-move-1': {
+          date: today - 35 * DAY_MS,
+          order: 0,
+          doneAt: now - 36 * DAY_MS,
+        },
       },
     ),
   ]);
@@ -1731,6 +1760,7 @@ async function buildPeople(input: {
       createdAt: now - (order + 3) * DAY_MS,
       lastEditedAt: null,
       completedAt: null,
+      clearedAt: null,
       sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
     },
   });
@@ -2741,6 +2771,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
                 createdAt: sortedAt,
                 lastEditedAt: null,
                 completedAt: null,
+                clearedAt: null,
                 sealed: await sealJson<TaskSealed>(
                   { title, notes: null, steps: {} },
                   encryption,
@@ -2901,6 +2932,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             createdAt: made,
             lastEditedAt: made + 3 * MINUTE_MS,
             completedAt: null,
+            clearedAt: null,
             sealed: await sealJson<TaskSealed>(
               {
                 title: entry.title,

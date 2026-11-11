@@ -375,7 +375,7 @@ A task is a one-off thing to do. A routine done again and again is a procedure (
 ### Projects and Health, In Detail
 
 - **Starting one.** By saying so ("start a project for the move") or from Projects' "New project": a name, an optional emoji, a one-sentence objective, an optional target date. Projects shows nothing until the first exists.
-- **What a project holds.** An objective in a sentence, milestones with dates, its people in their roles (Key first, with photos), its tasks (overdue first, then by deadline, then undated, then "Not yet"), its facts, its procedures and their runs, and its kept media. Built so far: the objective, the target date, its people and its tasks; milestones, facts, procedures and media on a project come later.
+- **What a project holds.** An objective in a sentence, milestones with dates, its people in their roles (Key first, with photos), its tasks (overdue first, then by deadline, then undated, then "Not yet"), its facts, its procedures and their runs, and its kept media. Built so far: the objective, the target date, its milestones, its people and its tasks; facts, procedures and media on a project come later.
 - **People in a project.** "Dana is key for the wedding" or "add Maya to the move" links them with a role (People, Pets and Organizations, In Detail); a who linked to a task in the project is added as Involved, with a line and Undo.
 - **Health is evidence, not a score.** A project says what it can show, at most two parts in this order: what is overdue, the next dated open task ("Pick the ceremony readings in 20 days"), how long nothing has been done ("Nothing done in 12 days · 3 open"), and what a key person still has open. With no tasks it reads "No tasks yet"; with open tasks and no dates, "3 open, no dates yet"; with dated open tasks and nothing overdue it says "On track: nothing overdue" when no part applies. With every task done: "Everything is done. Finish this project?" It never shows a percentage, a progress bar or a colour grade. Only "overdue" takes the warning colour.
 - **Finishing.** "Mark finished" moves it behind "Finished (3)" and asks nothing; the toast says how many tasks are still open and carries Undo. Open tasks stay open, in Today and the lists, and Reopen (on the finished bar and in its ⋯) puts the project back.
@@ -718,7 +718,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] "Ask about this" on every content page, the same control in the same place, opening the conversation about that page and returning to it (O, C)
 - [x] People, pets and organizations, each with a page, a photo and a level (close, regular, passing); passing ones out of the way until they matter (O, C)
 - [x] Projects with an objective, tasks, people in roles (key, involved, mentioned) and health from evidence, started by talking or by a short form, finished and reopened with Undo (O, C)
-- [ ] Project milestones, and clearing a project's done tasks
+- [x] Project milestones, and clearing a project's done tasks
 - [x] Add people from Google Contacts, picking each one (O)
 - [x] Places with photos (O)
 - [x] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)

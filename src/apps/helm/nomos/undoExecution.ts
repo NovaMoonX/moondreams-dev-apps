@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -454,7 +455,14 @@ export async function undoExecution(
         );
         plan.updates.forEach((update, index) =>
           transaction.update(docOf(update), {
-            ...update.fields,
+            ...Object.fromEntries(
+              Object.entries(update.fields).map(([path, value]) => [
+                path,
+                path.startsWith('milestoneState.') && value === null
+                  ? deleteField()
+                  : value,
+              ]),
+            ),
             ...resealed[index],
           }),
         );

@@ -20,7 +20,9 @@ import {
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
   MAX_KEY_DATES,
+  MAX_MILESTONES_PER_TURN,
   MAX_PROJECT_ROLES,
+  MILESTONE_TITLE_CAP,
   PROJECT_NAME_CAP,
   PROJECT_OBJECTIVE_CAP,
   PROJECT_ROLE_NOTE_CAP,
@@ -377,7 +379,7 @@ const readProjectDate = (
     : getDayIn(span.due.at, toKnownZone(timeZone));
 };
 
-/** A project to start, or a role to give; null when its words are missing. At most one project and `MAX_PROJECT_ROLES` roles. */
+/** A project to start, a role to give or a milestone to add; null when its words are missing. At most one project, `MAX_PROJECT_ROLES` roles and `MAX_MILESTONES_PER_TURN` milestones. */
 const readProjects = (
   items: Record<string, unknown>[],
   entities: Entities,
@@ -395,6 +397,20 @@ const readProjects = (
               emoji: toEmoji(item.projectEmoji),
               objective: toText(item.objective, PROJECT_OBJECTIVE_CAP),
               targetDate: readProjectDate(item.dueSpanId, reading, timeZone),
+            },
+          ]
+        : [];
+    }
+    if (item.kind === 'addMilestone') {
+      const projectRef = toText(item.projectRef, PROJECT_NAME_CAP);
+      const title = toText(item.title, MILESTONE_TITLE_CAP);
+      return projectRef && title
+        ? [
+            {
+              kind: 'addMilestone',
+              projectRef,
+              title,
+              date: readProjectDate(item.dueSpanId, reading, timeZone),
             },
           ]
         : [];
@@ -420,6 +436,9 @@ const readProjects = (
     ...read
       .filter((command) => command.kind === 'setProjectRole')
       .slice(0, MAX_PROJECT_ROLES),
+    ...read
+      .filter((command) => command.kind === 'addMilestone')
+      .slice(0, MAX_MILESTONES_PER_TURN),
   ];
 };
 
@@ -801,7 +820,8 @@ const readCommand = (
     kind === 'setKeyDate' ||
     kind === 'removeKeyDate' ||
     kind === 'createProject' ||
-    kind === 'setProjectRole'
+    kind === 'setProjectRole' ||
+    kind === 'addMilestone'
   ) {
     return null;
   }

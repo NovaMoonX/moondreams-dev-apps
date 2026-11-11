@@ -1,10 +1,20 @@
 import type { SealedPayload } from '../../../appKeys/seal.js';
-import { createOptionMatcher } from '../../../vendor/optionMatchUtils.js';
-import type {
-  CreateProjectCommand,
-  SetProjectRoleCommand,
+import {
+  createOptionMatcher,
+  toComparable,
+} from '../../../vendor/optionMatchUtils.js';
+import {
+  MAX_MILESTONES_PER_PROJECT,
+  type AddMilestoneCommand,
+  type CreateProjectCommand,
+  type SetProjectRoleCommand,
 } from './commands.js';
-import { buildProjectNotFoundLine, buildRoleLine } from './summaries.js';
+import {
+  buildMilestoneLine,
+  buildMilestonesFullLine,
+  buildProjectNotFoundLine,
+  buildRoleLine,
+} from './summaries.js';
 
 export type ProjectRoleName = 'key' | 'involved' | 'mentioned';
 
@@ -14,6 +24,12 @@ const RANK: Record<ProjectRoleName, number> = {
   key: 3,
 };
 
+export interface ExistingMilestoneState {
+  date: number | null;
+  order: number;
+  doneAt: number | null;
+}
+
 /** An active project the person already has, its words opened. */
 export interface ExistingProject {
   id: string;
@@ -21,6 +37,9 @@ export interface ExistingProject {
   emoji: string | null;
   whoRoles: Record<string, ProjectRoleName>;
   roleNotes: Record<string, string>;
+  milestoneState: Record<string, ExistingMilestoneState>;
+  /** Milestone titles by id; an id with no state, or a state with no title, is not a milestone. */
+  milestoneTitles: Record<string, string>;
   sealed: Record<string, unknown>;
 }
 
@@ -76,12 +95,27 @@ interface Request {
 const toLabel = (emoji: string | null, name: string) =>
   [emoji, name].filter(Boolean).join(' ');
 
-/** Turns the roles a turn asks for into the project documents to write: roles only rise (mentioned, involved, key), a note is set only when said, and a project made in the same turn carries its roles from the start. */
+interface NewMilestone {
+  id: string;
+  title: string;
+  date: number | null;
+  order: number;
+}
+
+const toMilestoneState = (milestone: NewMilestone) => ({
+  date: milestone.date,
+  order: milestone.order,
+  doneAt: null,
+});
+
+/** Turns the roles and milestones a turn asks for into the project documents to write: roles only rise (mentioned, involved, key), a note is set only when said, a milestone is added only when the project has no one by that title and room for another, and a project made in the same turn carries both from the start. One write per project holds roles and milestones together, each milestone with its own effect so Undo can leave one that changed. */
 export function planProjectRoles(input: {
   created: CreatedProject | null;
   existing: ExistingProject[];
   pool: ProjectPoolEntry[];
   commands: SetProjectRoleCommand[];
+  milestones: AddMilestoneCommand[];
+  newId: () => string;
   /** The who each task of the turn names, by the project it is filed in. */
   taskWho: { projectId: string | null; whoIds: string[] }[];
   /** Every who the capture names that is settled, the person's own excluded. */
@@ -97,6 +131,7 @@ export function planProjectRoles(input: {
   effects: Effect[];
   roleWhoIds: Set<string>;
   rolesSet: number;
+  milestonesAdded: number;
   notKept: string[];
 } {
   const add = (
@@ -121,6 +156,76 @@ export function planProjectRoles(input: {
     command,
     projectId: matchProject(command.projectRef, input.pool),
   }));
+  const askedMilestones = input.milestones.map((command) => ({
+    command,
+    projectId: matchProject(command.projectRef, input.pool),
+  }));
+  const labelOf = (projectId: string) => {
+    const project = input.existing.find((entry) => entry.id === projectId);
+    const made = input.created?.id === projectId ? input.created.command : null;
+    return toLabel(
+      project?.emoji ?? made?.emoji ?? null,
+      project?.name ?? made?.name ?? '',
+    );
+  };
+  const addedMilestones = askedMilestones.reduce(
+    (all, { command, projectId }) => {
+      if (!projectId) return all;
+      const project = input.existing.find((entry) => entry.id === projectId);
+      const current = all.get(projectId) ?? { added: [], isFull: false };
+      const states = Object.values(project?.milestoneState ?? {});
+      const isDuplicate = [
+        ...Object.values(project?.milestoneTitles ?? {}),
+        ...current.added.map((entry) => entry.title),
+      ].some((title) => toComparable(title) === toComparable(command.title));
+      const isRoomLeft =
+        states.length + current.added.length < MAX_MILESTONES_PER_PROJECT;
+      if (isDuplicate) return all.set(projectId, current);
+      if (!isRoomLeft) return all.set(projectId, { ...current, isFull: true });
+      return all.set(projectId, {
+        ...current,
+        added: [
+          ...current.added,
+          {
+            id: input.newId(),
+            title: command.title,
+            date: command.date,
+            order:
+              Math.max(-1, ...states.map((state) => state.order)) +
+              1 +
+              current.added.length,
+          },
+        ],
+      });
+    },
+    new Map<string, { added: NewMilestone[]; isFull: boolean }>(),
+  );
+  const milestoneEffect = (projectId: string, milestone: NewMilestone) => {
+    const line = buildMilestoneLine({
+      title: milestone.title,
+      project: labelOf(projectId),
+      date: milestone.date,
+    });
+    return {
+      ref: {
+        op: 'update' as const,
+        collection: 'projects' as const,
+        docId: projectId,
+      },
+      effect: {
+        written: {
+          [`milestoneState.${milestone.id}`]: toMilestoneState(milestone),
+          [`sealed.milestones.${milestone.id}`]: { title: milestone.title },
+          'sealed.title': line,
+        },
+        previous: {
+          [`milestoneState.${milestone.id}`]: null,
+          [`sealed.milestones.${milestone.id}`]: null,
+          'sealed.title': line,
+        },
+      },
+    };
+  };
   const said = matched.flatMap(({ command, projectId }) =>
     projectId
       ? [
@@ -178,12 +283,15 @@ export function planProjectRoles(input: {
         request.note ? [[whoId, request.note]] : [],
       ),
     );
+    const added = addedMilestones.get(id)?.added ?? [];
     return {
       id,
       data: {
         targetDate: command.targetDate,
         status: 'active',
-        milestoneState: {},
+        milestoneState: Object.fromEntries(
+          added.map((entry) => [entry.id, toMilestoneState(entry)]),
+        ),
         whoRoles,
         mediaIds: [],
         createdBy: 'nomos',
@@ -195,10 +303,13 @@ export function planProjectRoles(input: {
           name: command.name,
           emoji: command.emoji,
           objective: command.objective,
-          milestones: {},
+          milestones: Object.fromEntries(
+            added.map((entry) => [entry.id, { title: entry.title }]),
+          ),
           roleNotes,
         }),
       },
+      milestoneEffects: added.map((entry) => milestoneEffect(id, entry)),
       effect: {
         ref: {
           op: 'create' as const,
@@ -222,6 +333,7 @@ export function planProjectRoles(input: {
 
   const changes = input.existing.flatMap((project) => {
     const entries = rolesOf(project.id);
+    const added = addedMilestones.get(project.id)?.added ?? [];
     const raised = entries.flatMap(([whoId, request]) => {
       const current = project.whoRoles[whoId];
       const role =
@@ -234,7 +346,7 @@ export function planProjectRoles(input: {
         ? [{ whoId, role, note, isNew: role !== current }]
         : [];
     });
-    if (raised.length === 0) return [];
+    if (raised.length === 0 && added.length === 0) return [];
     const whoRoles = {
       ...project.whoRoles,
       ...Object.fromEntries(raised.map((entry) => [entry.whoId, entry.role])),
@@ -261,36 +373,69 @@ export function planProjectRoles(input: {
           : 'mentioned',
       project: toLabel(project.emoji, project.name),
     });
+    const heldMilestones =
+      typeof project.sealed.milestones === 'object' &&
+      project.sealed.milestones !== null
+        ? (project.sealed.milestones as Record<string, unknown>)
+        : {};
+    const isResealed = hasNotes || added.length > 0;
     return [
       {
         id: project.id,
         count: raised.filter((entry) => entry.role !== 'mentioned').length,
+        added: added.length,
         data: {
-          whoRoles,
-          ...(hasNotes && {
-            sealed: input.seal({ ...project.sealed, roleNotes }),
+          ...(raised.length > 0 && { whoRoles }),
+          ...(isResealed && {
+            sealed: input.seal({
+              ...project.sealed,
+              ...(hasNotes && { roleNotes }),
+              ...(added.length > 0 && {
+                milestones: {
+                  ...heldMilestones,
+                  ...Object.fromEntries(
+                    added.map((entry) => [entry.id, { title: entry.title }]),
+                  ),
+                },
+              }),
+            }),
           }),
+          ...Object.fromEntries(
+            added.map((entry) => [
+              `milestoneState.${entry.id}`,
+              toMilestoneState(entry),
+            ]),
+          ),
           lastEditedAt: input.now,
         },
-        effect: {
-          ref: {
-            op: 'update' as const,
-            collection: 'projects' as const,
-            docId: project.id,
-          },
-          effect: {
-            written: {
-              whoRoles,
-              ...(hasNotes && { 'sealed.roleNotes': roleNotes }),
-              'sealed.title': label,
-            },
-            previous: {
-              whoRoles: project.whoRoles,
-              ...(hasNotes && { 'sealed.roleNotes': project.roleNotes }),
-              'sealed.title': label,
-            },
-          },
-        },
+        effects: [
+          ...(raised.length > 0
+            ? [
+                {
+                  ref: {
+                    op: 'update' as const,
+                    collection: 'projects' as const,
+                    docId: project.id,
+                  },
+                  effect: {
+                    written: {
+                      whoRoles,
+                      ...(hasNotes && { 'sealed.roleNotes': roleNotes }),
+                      'sealed.title': label,
+                    },
+                    previous: {
+                      whoRoles: project.whoRoles,
+                      ...(hasNotes && {
+                        'sealed.roleNotes': project.roleNotes,
+                      }),
+                      'sealed.title': label,
+                    },
+                  },
+                },
+              ]
+            : []),
+          ...added.map((entry) => milestoneEffect(project.id, entry)),
+        ],
       },
     ];
   });
@@ -301,17 +446,35 @@ export function planProjectRoles(input: {
       : [],
     updates: changes.map(({ id, data }) => ({ id, data })),
     effects: [
-      ...(createdWrites ? [createdWrites.effect] : []),
-      ...changes.map((change) => change.effect),
+      ...(createdWrites
+        ? [createdWrites.effect, ...createdWrites.milestoneEffects]
+        : []),
+      ...changes.flatMap((change) => change.effects),
     ],
     roleWhoIds,
     notKept: [
-      ...new Set(
-        matched.flatMap(({ command, projectId }) =>
+      ...new Set([
+        ...matched.flatMap(({ command, projectId }) =>
           projectId ? [] : [buildProjectNotFoundLine(command.projectRef)],
         ),
-      ),
+        ...askedMilestones.flatMap(({ command, projectId }) =>
+          projectId ? [] : [buildProjectNotFoundLine(command.projectRef)],
+        ),
+        ...[...addedMilestones.entries()].flatMap(([projectId, entry]) =>
+          entry.isFull
+            ? [
+                buildMilestonesFullLine(
+                  labelOf(projectId),
+                  MAX_MILESTONES_PER_PROJECT,
+                ),
+              ]
+            : [],
+        ),
+      ]),
     ],
     rolesSet: changes.reduce((total, change) => total + change.count, 0),
+    milestonesAdded:
+      changes.reduce((total, change) => total + change.added, 0) +
+      (createdWrites?.milestoneEffects.length ?? 0),
   };
 }

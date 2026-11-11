@@ -142,9 +142,10 @@ export interface WritePlan {
   keyDateDeletes: string[];
   projectCreates: { id: string; data: Record<string, unknown> }[];
   projectUpdates: { id: string; data: Record<string, unknown> }[];
-  /** Projects started and people given a key or involved role, for the summary. */
+  /** Projects started, people given a key or involved role and milestones added, for the summary. */
   projectsMade: number;
   rolesSet: number;
+  milestonesAdded: number;
   /** The yearly index after the turn's dates, null when it did not change. */
   keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
@@ -610,6 +611,10 @@ export function planWrites(input: PlanInput): WritePlan {
     commands: projectCommands.flatMap((command) =>
       command.kind === 'setProjectRole' ? [command] : [],
     ),
+    milestones: projectCommands.flatMap((command) =>
+      command.kind === 'addMilestone' ? [command] : [],
+    ),
+    newId: input.newId,
     taskWho: [...drafts.values()].map((draft) => ({
       projectId: draft.projectId,
       whoIds: draft.whoIds.filter((id) => id !== selfWhoId),
@@ -990,6 +995,7 @@ export function planWrites(input: PlanInput): WritePlan {
         createdAt: now,
         lastEditedAt: null,
         completedAt: isDone ? now : null,
+        clearedAt: null,
         sealed: seal({ title: draft.title, notes: null, steps: {} }),
       },
     };
@@ -1245,6 +1251,7 @@ export function planWrites(input: PlanInput): WritePlan {
     projectUpdates: projectPlan.updates,
     projectsMade: projectPlan.creates.length,
     rolesSet: projectPlan.rolesSet,
+    milestonesAdded: projectPlan.milestonesAdded,
     keyDateIndex:
       isFiling && keyDatePlan.changes.length > 0
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
@@ -1478,7 +1485,11 @@ export function buildExecution(
   });
   const spokenHome =
     homeLine && input.inputMode === 'voice' ? `${homeLine}.` : null;
-  const projectLine = describeProjects(plan.projectsMade, plan.rolesSet);
+  const projectLine = describeProjects(
+    plan.projectsMade,
+    plan.rolesSet,
+    plan.milestonesAdded,
+  );
   const spokenProject =
     projectLine && input.inputMode === 'voice' ? `${projectLine}.` : null;
   return {
@@ -1517,7 +1528,11 @@ export function buildExecution(
               : [],
           ),
         ),
-        describeProjects(plan.projectsMade, plan.rolesSet),
+        describeProjects(
+          plan.projectsMade,
+          plan.rolesSet,
+          plan.milestonesAdded,
+        ),
         ...plan.notKept,
         homeLine,
       ]

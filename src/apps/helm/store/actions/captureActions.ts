@@ -360,6 +360,7 @@ export async function makeTaskAsWritten(
     createdAt: now,
     lastEditedAt: null,
     completedAt: null,
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title, notes: null, steps: {} },
       encryption,

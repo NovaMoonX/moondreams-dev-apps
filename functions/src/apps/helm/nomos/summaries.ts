@@ -125,8 +125,37 @@ export const buildRoleLine = (input: {
     .filter(Boolean)
     .join(' · ');
 
-/** "Started a project" and "added 2 people to projects", for the summary of a turn that did either. */
-export const describeProjects = (made: number, roles: number) =>
+/** The result line of a milestone added: "Milestone · Venue booked · 💍 Wedding · Mar 3". */
+export const buildMilestoneLine = (input: {
+  title: string;
+  project: string;
+  date: number | null;
+}) =>
+  [
+    'Milestone',
+    input.title,
+    input.project,
+    input.date === null
+      ? null
+      : new Date(input.date).toLocaleDateString('en-US', {
+          timeZone: 'UTC',
+          month: 'short',
+          day: 'numeric',
+        }),
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+/** The skipped line for a milestone asked of a project that already holds as many as it may. */
+export const buildMilestonesFullLine = (project: string, max: number) =>
+  `${project} already holds ${max} milestones`;
+
+/** "Started a project", "added 2 people to projects" and "added a milestone", for the summary of a turn that did any. */
+export const describeProjects = (
+  made: number,
+  roles: number,
+  milestones: number,
+) =>
   [
     made > 0 ? 'Started a project' : null,
     roles > 0
@@ -134,6 +163,13 @@ export const describeProjects = (made: number, roles: number) =>
           roles,
           'Added a person to a project',
           `Added ${roles} people to projects`,
+        )
+      : null,
+    milestones > 0
+      ? plural(
+          milestones,
+          'Added a milestone',
+          `Added ${milestones} milestones`,
         )
       : null,
   ]

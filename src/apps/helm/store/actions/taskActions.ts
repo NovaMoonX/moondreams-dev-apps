@@ -68,6 +68,7 @@ export async function createTask(
     createdAt: Date.now(),
     lastEditedAt: null,
     completedAt: null,
+    clearedAt: null,
     sealed: await sealJson<TaskSealed>(
       { title, notes: null, steps: {} },
       encryption,
@@ -164,6 +165,7 @@ export const reopenTask = (uid: string, taskId: string) =>
   updateDoc(doc(tasksOf(uid), taskId), {
     status: 'open',
     completedAt: null,
+    clearedAt: null,
     lastEditedAt: Date.now(),
   });
 
@@ -174,6 +176,7 @@ export function completeTask(uid: string, taskId: string) {
   const write = updateDoc(ref, {
     status: 'done',
     completedAt,
+    clearedAt: null,
     lastEditedAt: completedAt,
   });
   const undo = async () => {

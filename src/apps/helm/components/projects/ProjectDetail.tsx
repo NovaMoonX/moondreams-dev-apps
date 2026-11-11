@@ -15,7 +15,9 @@ import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
 import { formatDateShort, formatDateShortUTC } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
+import DoneTasksFold from '@apps/helm/components/projects/DoneTasksFold';
 import EvidenceLine from '@apps/helm/components/projects/EvidenceLine';
+import MilestonesTab from '@apps/helm/components/projects/MilestonesTab';
 import ProjectEditSheet from '@apps/helm/components/projects/ProjectEditSheet';
 import ProjectPeople from '@apps/helm/components/projects/ProjectPeople';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -34,7 +36,7 @@ import { sortProjectTasks } from '@apps/helm/utils/projectTasks';
 
 const { option } = DropdownMenuFactories;
 
-type ProjectTab = 'tasks' | 'people';
+type ProjectTab = 'tasks' | 'milestones' | 'people';
 
 interface ProjectDetailProps {
   projectId: string | null;
@@ -77,9 +79,20 @@ function ProjectDetail({
       ),
     [projectTasks, projectId, timeZone, now],
   );
-  const doneCount = projectTasks.filter(
-    (task) => task.projectId === projectId && task.status === 'done',
-  ).length;
+  const doneTasks = useMemo(
+    () =>
+      projectTasks
+        .filter(
+          (task) =>
+            task.projectId === projectId &&
+            task.status === 'done' &&
+            task.clearedAt === null,
+        )
+        .sort(
+          (left, right) => (right.completedAt ?? 0) - (left.completedAt ?? 0),
+        ),
+    [projectTasks, projectId],
+  );
   const shownTasks = isAllTasks
     ? openTasks
     : openTasks.slice(0, PROJECT_TASKS_SHOWN);
@@ -301,6 +314,9 @@ function ProjectDetail({
                 <TabsTrigger value='tasks'>
                   {HELM_COPY.projectTabTasks}
                 </TabsTrigger>
+                <TabsTrigger value='milestones'>
+                  {HELM_COPY.projectTabMilestones}
+                </TabsTrigger>
                 <TabsTrigger value='people'>
                   {HELM_COPY.projectTabPeople}
                 </TabsTrigger>
@@ -312,7 +328,7 @@ function ProjectDetail({
                   tasks={shownTasks}
                   emptyLine={HELM_COPY.projectTasksEmpty(
                     project.name,
-                    doneCount,
+                    doneTasks.length,
                   )}
                   view='project'
                   ownerId={project.id}
@@ -327,7 +343,10 @@ function ProjectDetail({
                       : HELM_COPY.projectTasksShowAll(openTasks.length)}
                   </ShowMoreButton>
                 )}
+                <DoneTasksFold projectId={project.id} tasks={doneTasks} />
               </section>
+            ) : tab === 'milestones' ? (
+              <MilestonesTab project={project} isReadOnly={isFinished} />
             ) : (
               <ProjectPeople
                 project={project}

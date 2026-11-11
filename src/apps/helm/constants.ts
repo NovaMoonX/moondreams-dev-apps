@@ -78,6 +78,9 @@ export const PROJECT_TASKS_LIMIT = 1_000;
 export const PROJECT_NAME_MAX = 80;
 export const PROJECT_OBJECTIVE_MAX = 200;
 export const PROJECT_ROLE_NOTE_MAX = 40;
+export const MILESTONE_TITLE_MAX = 80;
+/** The most milestones one project holds. */
+export const MILESTONES_MAX = 30;
 /** Tasks a project's page lists before "Show all". */
 export const PROJECT_TASKS_SHOWN = 6;
 /** Days without a finished task before a project says it has gone quiet. */
@@ -1393,6 +1396,7 @@ export const HELM_COPY = {
           ? `Target was ${dateLabel}`
           : `Target was ${dateLabel} · ${-daysAway} ${daysAway === -1 ? 'day' : 'days'} ago`,
   projectTabTasks: 'Tasks',
+  projectTabMilestones: 'Milestones',
   projectTabPeople: 'People',
   projectTabsLabel: 'Project sections',
   projectTasksEmpty: (name: string, doneCount: number) =>
@@ -1401,6 +1405,41 @@ export const HELM_COPY = {
       : `No tasks yet. Say "add a task for ${name}" to put one here.`,
   projectTasksShowAll: (count: number) => `Show all ${count}`,
   projectTasksShowFewer: 'Show fewer',
+  doneTasksFold: (count: number) => `Done · ${count}`,
+  doneTasksHide: 'Hide done',
+  clearDoneTasks: 'Clear done tasks',
+  clearDoneNone: 'There was nothing left to clear.',
+  doneTasksCleared: (count: number) =>
+    `Cleared ${count} done ${count === 1 ? 'task' : 'tasks'}`,
+  clearDoneNeedsConnection: 'Clearing done tasks needs a connection.',
+  milestonesTitle: 'Milestones',
+  milestoneAdd: 'Add milestone',
+  milestonesEmpty: "No milestones. Add one if there's a date that matters.",
+  milestoneNoDate: 'No date',
+  milestoneWhen: (dateLabel: string, days: number) =>
+    days > 0
+      ? `${dateLabel} · in\u00a0${days}\u00a0${days === 1 ? 'day' : 'days'}`
+      : days === 0
+        ? `${dateLabel} · today`
+        : `${dateLabel} · ${-days}\u00a0${days === -1 ? 'day' : 'days'} ago`,
+  milestoneReachedFold: (count: number) => `Reached · ${count}`,
+  milestoneReachedHide: 'Hide reached',
+  milestoneMarkReached: (title: string) => `Mark ${title} reached`,
+  milestoneMarkNotReached: (title: string) => `Mark ${title} not reached`,
+  milestoneAddTitle: 'Add milestone',
+  milestoneEditTitle: 'Change milestone',
+  milestoneTitleField: 'Title',
+  milestoneTitlePlaceholder: 'Venue booked',
+  milestoneDateField: 'Date (optional)',
+  milestoneTitleMissing: 'A title is needed.',
+  milestoneDeleteConfirm: (title: string) => `Delete ${title}?`,
+  milestoneAddedToast: (title: string) => `Added ${title}`,
+  milestoneChangedToast: (title: string) => `Saved ${title}`,
+  milestoneDeletedToast: (title: string) => `Deleted ${title}`,
+  milestoneReachedToast: (title: string) => `Reached ${title}`,
+  milestoneReopenedToast: (title: string) => `${title} is open again`,
+  milestonesFull: 'A project holds up to 30 milestones.',
+  milestoneGone: 'This milestone is gone.',
   projectPeopleEmpty: 'No one is on this project yet.',
   projectKeyPerson: 'key person',
   projectInvolvedPerson: 'involved',

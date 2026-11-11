@@ -985,11 +985,14 @@ test('a removed moment is written back as a moment with its precision', () => {
   assert.equal(result.creates[0].seal.year, 2015);
 });
 
-const projectSealed = (roleNotes: Record<string, string> = {}) => ({
+const projectSealed = (
+  roleNotes: Record<string, string> = {},
+  milestones: Record<string, { title: string }> = {},
+) => ({
   name: 'Wedding',
   emoji: '💍',
   objective: null,
-  milestones: {},
+  milestones,
   roleNotes,
 });
 
@@ -1071,6 +1074,95 @@ test('a role the turn gave is stepped back with the earlier roles and notes, and
     ],
   ]);
   assert.equal(kept.kind, 'refused');
+});
+
+const milestoneEffect = (
+  id: string,
+  title: string,
+  date: number | null,
+): { ref: EffectRef; effect: ExecutionEffect } => {
+  const line = `Milestone · ${title} · 💍 Wedding`;
+  return {
+    ref: { op: 'update', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        [`milestoneState.${id}`]: { date, order: 0, doneAt: null },
+        [`sealed.milestones.${id}`]: { title },
+        'sealed.title': line,
+      },
+      previous: {
+        [`milestoneState.${id}`]: null,
+        [`sealed.milestones.${id}`]: null,
+        'sealed.title': line,
+      },
+    },
+  };
+};
+
+test('a milestone the turn added is taken away from both maps by its undo', () => {
+  const result = asWrite(
+    plan(execution([milestoneEffect('m1', 'Venue booked', 9)]), [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: {
+            milestoneState: {
+              m1: { date: 9, order: 0, doneAt: null },
+              m0: { date: null, order: 1, doneAt: null },
+            },
+            lastEditedAt: NOW,
+          },
+          opened: projectSealed(
+            {},
+            { m1: { title: 'Venue booked' }, m0: { title: 'Pick the menu' } },
+          ),
+        },
+      ],
+    ]),
+  );
+  assert.equal(result.updates[0].fields['milestoneState.m1'], null);
+  assert.deepEqual(
+    (result.updates[0].reseal as { milestones: unknown }).milestones,
+    { m0: { title: 'Pick the menu' } },
+  );
+});
+
+test('a milestone ticked or retitled since is kept, and the other one the turn added still goes', () => {
+  const both = execution([
+    milestoneEffect('m1', 'Venue booked', 9),
+    milestoneEffect('m2', 'Final guest list', null),
+  ]);
+  const live = (doneAt: number | null, title: string) => [
+    [
+      'p1',
+      {
+        docId: 'p1',
+        data: {
+          milestoneState: {
+            m1: { date: 9, order: 0, doneAt },
+            m2: { date: null, order: 0, doneAt: null },
+          },
+          lastEditedAt: NOW,
+        },
+        opened: projectSealed(
+          {},
+          { m1: { title }, m2: { title: 'Final guest list' } },
+        ),
+      },
+    ] as [string, UndoTarget],
+  ];
+  const ticked = asWrite(plan(both, live(5, 'Venue booked')));
+  assert.equal(ticked.updates[0].fields['milestoneState.m2'], null);
+  assert.equal('milestoneState.m1' in ticked.updates[0].fields, false);
+  const retitled = asWrite(plan(both, live(null, 'Venue is booked')));
+  assert.equal('milestoneState.m1' in retitled.updates[0].fields, false);
+  const alone = plan(
+    execution([milestoneEffect('m1', 'Venue booked', 9)]),
+    live(5, 'Venue booked'),
+  );
+  assert.equal(alone.kind, 'refused');
+  assert.deepEqual(alone.kept, ['Wedding']);
 });
 
 const failures = tests.flatMap(([name, run]) => {
