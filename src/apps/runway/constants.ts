@@ -1462,7 +1462,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 };
 
 export const DRAFT_WORDS = {
-  fundedFrom: 'from',
+  fundedFrom: 'set aside from',
   outOfMoney: "This day's money ran out before it got to this item",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',

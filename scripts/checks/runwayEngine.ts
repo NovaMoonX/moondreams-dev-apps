@@ -4971,7 +4971,7 @@ const version = (
     };
     assert.ok(
       describeLineReason(fromMain, { main: 'Main job' }).includes(
-        'paid from Main job',
+        'set aside from Main job',
       ),
       'a line names the source that pays it',
     );
@@ -4991,7 +4991,7 @@ const version = (
         { main: 'Main job' },
         'Vacation fund',
         'side',
-      ).includes('paid from Main job'),
+      ).includes('set aside from Main job'),
       'a line paid by another source still names it',
     );
   }
