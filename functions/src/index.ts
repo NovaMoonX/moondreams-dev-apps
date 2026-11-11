@@ -35,6 +35,7 @@ export { importHelmContacts } from './apps/helm/importHelmContacts.js';
 export { learnHelmStyle } from './apps/helm/learnHelmStyle.js';
 export { learnHelmMailStyle } from './apps/helm/learnHelmStyle.js';
 export { mintVoiceToken } from './voice/mintVoiceToken.js';
+export { signOutEverywhere } from './auth/signOutEverywhere.js';
 export { streamSpeech } from './voice/streamSpeech.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';
 export { createRunwayLinkSession } from './apps/runway/createRunwayLinkSession.js';

@@ -10,6 +10,7 @@ import {
   UserRound,
 } from 'lucide-react';
 
+import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
 import SettingsGroup from '@/components/SettingsGroup';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
 import SettingsRow from '@/components/SettingsRow';
@@ -44,7 +45,7 @@ function SettingsScreen({
   onOpenConnectedApps,
   onOpenSeesYou,
 }: SettingsScreenProps) {
-  const { user } = useAuth();
+  const { user, logOut } = useAuth();
   const assistant = useAssistantName();
   const tone = useAssistantTone();
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -151,6 +152,10 @@ function SettingsScreen({
               store={helmTrustStore}
               uid={user.uid}
               appName={helmAppName}
+              onSignOutEverywhere={async () => {
+                await signOutEverywhere();
+                await logOut();
+              }}
             />
           </section>
         )}

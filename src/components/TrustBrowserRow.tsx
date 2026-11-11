@@ -4,6 +4,7 @@ import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal } from '@moondreamsdev/dreamer-ui/hooks';
 import {
   Monitor,
+  LogOut,
   MonitorSmartphone,
   ShieldCheck,
   Smartphone,
@@ -12,7 +13,9 @@ import {
 import AppToggle from '@/components/AppToggle';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
+import LockedButton from '@/components/LockedButton';
 import SettingsRow from '@/components/SettingsRow';
+import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { canKeepDeviceSecrets } from '@/lib/security';
 import type { TrustedBrowser } from '@/lib/security/trustedBrowsers';
 import type { TrustedKeyStore } from '@/lib/security/trustedKey';
@@ -35,6 +38,17 @@ const TRUST_BROWSER_WORDS = {
   removeOne: (label: string) => `Remove ${label}?`,
   removeAll: 'Remove all',
   removeAllTitle: (count: number) => `Remove all ${count} browsers?`,
+  signOutAll: 'Lost a phone? Sign out everywhere',
+  signOutAllHelp: 'Ends every sign-in on this site, on every device.',
+  signOutAllTitle: 'Sign out everywhere?',
+  signOutAllMessage: (appName: string) =>
+    `This signs you out of every app on this site, on every browser and device, this one too. Trusted browsers stop opening ${appName} offline the next time they’re online. One that never comes online keeps what it already has until its 30 days run out, and until then someone who can unlock it can read it.`,
+  signOutAllConfirm: 'Sign out everywhere',
+  signOutAllFailed:
+    'Couldn’t sign you out everywhere, so your other browsers are still signed in. Check your connection and try again.',
+  needsConnection: 'Needs a connection',
+  needsConnectionBody:
+    'Signing out everywhere changes your account on our servers, so it can only start while you’re online.',
 } as const;
 
 const isPhone = (label: string) => /iPhone|iPad|Android/.test(label);
@@ -78,10 +92,17 @@ interface TrustBrowserRowProps {
   store: TrustedKeyStore;
   uid: string;
   appName: string;
+  /** Adds a way to end every sign-in on the site; the handler ends this browser's own session once the server has. */
+  onSignOutEverywhere?: () => Promise<void>;
 }
 
 /** An app's offline switch for this browser, and the other browsers that keep its key with a way to remove them; draws nothing where the browser can't keep the key. */
-function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
+function TrustBrowserRow({
+  store,
+  uid,
+  appName,
+  onSignOutEverywhere,
+}: TrustBrowserRowProps) {
   const canKeep = canKeepDeviceSecrets();
   const isTrusted =
     useQuery({ ...store.trustedQueryOptions(uid), enabled: canKeep }).data ??
@@ -92,6 +113,7 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
   const [error, setError] = useState<string | null>(null);
   const [isListOpen, setListOpen] = useState(false);
   const { confirm } = useActionModal();
+  const isOffline = useNetworkStatus() === 'offline';
 
   if (!canKeep) return null;
 
@@ -134,6 +156,22 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
     setListOpen(false);
   };
 
+  const signOutEverywhere = async () => {
+    if (!onSignOutEverywhere) return;
+    const isConfirmed = await confirm({
+      title: TRUST_BROWSER_WORDS.signOutAllTitle,
+      message: TRUST_BROWSER_WORDS.signOutAllMessage(appName),
+      confirmText: TRUST_BROWSER_WORDS.signOutAllConfirm,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    setError(null);
+    onSignOutEverywhere().catch((signOutError: unknown) => {
+      console.error(signOutError);
+      setError(TRUST_BROWSER_WORDS.signOutAllFailed);
+    });
+  };
+
   return (
     <>
       <ul className='border-border divide-border divide-y rounded-2xl border px-3'>
@@ -162,6 +200,25 @@ function TrustBrowserRow({ store, uid, appName }: TrustBrowserRowProps) {
             hasChevron
           />
         )}
+        {onSignOutEverywhere &&
+          (isOffline ? (
+            <li className='py-3'>
+              <LockedButton
+                label={TRUST_BROWSER_WORDS.signOutAll}
+                title={TRUST_BROWSER_WORDS.needsConnection}
+              >
+                <p>{TRUST_BROWSER_WORDS.needsConnectionBody}</p>
+              </LockedButton>
+            </li>
+          ) : (
+            <SettingsRow
+              icon={<LogOut className='size-5' />}
+              title={TRUST_BROWSER_WORDS.signOutAll}
+              description={TRUST_BROWSER_WORDS.signOutAllHelp}
+              onClick={() => void signOutEverywhere()}
+              hasChevron
+            />
+          ))}
       </ul>
       {error && (
         <p className='text-destructive mt-2 text-sm' role='alert'>

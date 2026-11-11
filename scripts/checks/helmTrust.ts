@@ -50,4 +50,27 @@ assert.match(
   'Settings offers the shared switch over Helm’s store',
 );
 
+const callable = read('functions/src/auth/signOutEverywhere.ts');
+assert.ok(
+  callable.indexOf('trustedBrowsers/') > -1 &&
+    callable.indexOf('recursiveDelete') <
+      callable.indexOf('revokeRefreshTokens'),
+  'sign out everywhere deletes the trusted entries before it revokes sessions',
+);
+assert.doesNotMatch(
+  callable,
+  /helm|runway|recipe|trip|waypoint/i,
+  'the site callable carries no app’s words',
+);
+assert.doesNotMatch(
+  read('src/apps/runway/screens/plan/SettingsScreen.tsx'),
+  /onSignOutEverywhere/,
+  'Runway does not offer sign out everywhere',
+);
+assert.match(
+  settings,
+  /onSignOutEverywhere=\{async \(\) => \{\s*await signOutEverywhere\(\);\s*await logOut\(\)/,
+  'Helm signs this browser out only after the server has ended every session',
+);
+
 console.log('helm trust checks passed');
