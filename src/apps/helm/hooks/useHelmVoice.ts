@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { getToken } from 'firebase/app-check';
 import { httpsCallable } from 'firebase/functions';
@@ -16,11 +23,7 @@ import {
 } from '@/lib/speech/voice/voiceToken';
 import { store, useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import {
-  DEFAULT_ASSISTANT_NAME,
-  END_PHRASES,
-  HELM_COPY,
-} from '@apps/helm/constants';
+import { END_PHRASES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -107,22 +110,23 @@ const getSpeechHeaders = async () => {
   };
 };
 
-const HELM_VOICE_IDENTITY: VoiceIdentity = {
+const toVoiceIdentity = (label: string): VoiceIdentity => ({
   id: 'helm-assistant',
-  label: DEFAULT_ASSISTANT_NAME,
+  label,
   device: {
     naturalVoice: true,
     systemVoiceHints: [],
     rate: 1,
     pitch: 1,
   },
-};
+});
 
 /** Helm's voice: talking writes a spoken turn like a typed one, the line the server sealed for it is said once the turn is sorted, and "undo that" takes the open session's latest turn back. One instance serves home and the conversation over a page. */
 export function useHelmVoice() {
   const { user } = useAuth();
   const { addToast } = useToast();
   const name = useAssistantName();
+  const voiceIdentity = useMemo(() => toVoiceIdentity(name), [name]);
   const uid = user?.uid ?? null;
   const [note, setNote] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -174,7 +178,7 @@ export function useHelmVoice() {
 
   const voice = useVoiceConversation({
     lang: navigator.language || 'en-US',
-    identity: HELM_VOICE_IDENTITY,
+    identity: voiceIdentity,
     endPhrases: END_PHRASES,
     onUtterance: (text, heardBy) => {
       void handleUtterance(text, heardBy.sttProvider);

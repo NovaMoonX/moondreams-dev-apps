@@ -1,9 +1,18 @@
 import { useState } from 'react';
 
-import { Eye, History, Link2, Mic, Sun, UserRound } from 'lucide-react';
+import {
+  Eye,
+  History,
+  Link2,
+  Mic,
+  Sparkles,
+  Sun,
+  UserRound,
+} from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
 import SettingsRow from '@/components/SettingsRow';
+import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
@@ -12,8 +21,9 @@ import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
-import { HELM_COPY } from '@apps/helm/constants';
+import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { formatClockTime } from '@/utils/formatUtils';
 import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 
@@ -32,6 +42,8 @@ function SettingsScreen({
   onOpenSeesYou,
 }: SettingsScreenProps) {
   const assistant = useAssistantName();
+  const tone = useAssistantTone();
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isSeesOpen, setIsSeesOpen] = useState(false);
   const [isVoiceOpen, setIsVoiceOpen] = useState(false);
   const [isDayOpen, setIsDayOpen] = useState(false);
@@ -64,6 +76,19 @@ function SettingsScreen({
         <h1 className='helm-serif text-[28px] leading-[34px]'>
           {HELM_COPY.settingsTitle}
         </h1>
+        <SettingsGroup title={HELM_COPY.settingsAssistant}>
+          <SettingsRow
+            icon={<Sparkles className='size-5' aria-hidden='true' />}
+            title={HELM_COPY.assistantRow}
+            description={HELM_COPY.assistantLine(
+              assistant,
+              ASSISTANT_TONES.find((option) => option.value === tone)?.label ??
+                '',
+            )}
+            onClick={() => setIsAssistantOpen(true)}
+            hasChevron
+          />
+        </SettingsGroup>
         <SettingsGroup title={HELM_COPY.settingsPlanning}>
           <SettingsRow
             icon={<Sun className='size-5' aria-hidden='true' />}
@@ -137,6 +162,10 @@ function SettingsScreen({
           />
         </SettingsGroup>
       </main>
+      <AssistantNameToneSheet
+        isOpen={isAssistantOpen}
+        onClose={() => setIsAssistantOpen(false)}
+      />
       <YourDaySheet isOpen={isDayOpen} onClose={() => setIsDayOpen(false)} />
       <VoiceSettings
         isOpen={isVoiceOpen}

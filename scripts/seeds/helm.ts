@@ -130,8 +130,18 @@ const MINUTE_MS = 60_000;
 
 // Alex keeps Pacific Time, so the first open shows a profile that was made earlier; Jamie's zone differs from the emulator's.
 const SEED_PROFILES = [
-  { user: FIXTURE_USERS.partnerOne, timeZone: 'America/Los_Angeles' },
-  { user: FIXTURE_USERS.partnerTwo, timeZone: 'America/New_York' },
+  {
+    user: FIXTURE_USERS.partnerOne,
+    timeZone: 'America/Los_Angeles',
+    assistantName: null,
+    assistantTone: null,
+  },
+  {
+    user: FIXTURE_USERS.partnerTwo,
+    timeZone: 'America/New_York',
+    assistantName: 'Juniper',
+    assistantTone: 'warm',
+  },
 ];
 
 const SORT_DELAY_MS = 4_000;
@@ -4753,9 +4763,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
   const batch = context.firestore.batch();
 
   const turnCounts = await Promise.all(
-    SEED_PROFILES.map(async ({ user, timeZone }) => {
+    SEED_PROFILES.map(async ({ user, timeZone, assistantName, assistantTone }) => {
       batch.set(users.doc(user.uid), {
         timeZone,
+        assistantName,
+        assistantTone,
         dayStartTime: DEFAULT_DAY_START_TIME,
         dayEndTime: DEFAULT_DAY_END_TIME,
         planFillPercent: DEFAULT_PLAN_FILL_PERCENT,

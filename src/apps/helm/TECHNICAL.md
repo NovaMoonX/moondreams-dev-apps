@@ -86,8 +86,8 @@ type AssistantTone = 'composed' | 'warm' | 'brief' | 'formal'; // options + samp
 type VoiceMode = 'cloudWhenOnline' | 'deviceOnly';             // round 6: deviceOnly never sends audio to a voice provider
 
 interface HelmProfile {
-  assistantName: string;               // default DEFAULT_ASSISTANT_NAME ("Nomos"); 1–16 chars of ASSISTANT_NAME_PATTERN; also the wake word
-  assistantTone: AssistantTone;        // default 'composed'
+  assistantName: string | null;        // null = DEFAULT_ASSISTANT_NAME ("Nomos"); 1–16 chars passing readAssistantName; also the wake word
+  assistantTone: AssistantTone | null; // null = 'composed'
   selfWhoId: string | null;            // round 6: the person's own who record, made with the profile
   timeZone: string;                    // IANA; set from the device on first open, editable
   dayStartTime: string;                // "HH:mm" floating: the earliest a slot may start
@@ -110,7 +110,7 @@ interface HelmProfile {
 }
 ```
 
-`ASSISTANT_NAME_PATTERN` = `/^[\p{L}\p{N}](?:[\p{L}\p{N} '\-]{0,15})$/u` after trimming and collapsing spaces. The same pattern is copied to the server (it goes into a prompt). `useAssistantName()` returns `assistantName || DEFAULT_ASSISTANT_NAME`; every copy line that names the assistant is a template in `constants.ts` filled with it, and `check:helm-copy` fails on a literal "Nomos" under `src/apps/helm/components`. The wake word is `readWakePhrase` over "hey {name}" and "{name}" (section 20); a renamed assistant answers to its new name.
+`readAssistantName` (`utils/assistantName.ts`, vendored to the server by `check:server-copies`) trims, collapses spaces and accepts 1–16 characters of Unicode letters, numbers, inner spaces, hyphens and apostrophes, else null; it goes into a prompt, so the server reads the stored name through it too. `useAssistantName()` returns `readAssistantName(assistantName) ?? DEFAULT_ASSISTANT_NAME`; every copy line that names the assistant is a template in `constants.ts` filled with it, and `check:helm-copy` fails on a literal "Nomos" under `src/apps/helm/components`. The wake word is `readWakePhrase` over "hey {name}" and "{name}" (section 20); a renamed assistant answers to its new name.
 
 ### `Capture` (one turn) [MVP]
 
@@ -906,6 +906,8 @@ Step 3 of the flow reads the session's last 6 turns (what was said, the sealed s
 ### Name and tone
 
 The profile's `assistantName` (validated on the device and again on the server against the same pattern, since it goes into a prompt) and `assistantTone` fill one fixed block of the system prompt: "You are {name}." and the tone's line from `TONE_PROMPT_LINES` (`composed`, `warm`, `brief`, `formal`). The block applies only to `answer.fromRecords` and `answer.general`, the text the person reads as the assistant speaking. The schema descriptions of fact statements, note titles, task titles and checklist items ask for neutral wording in the person's own terms (product: "a checklist item is written plainly in every tone"). Every stored sentence the app writes itself (summaries, question prompts, change summaries, undo reports, slot reasons) is a code template with no name and no tone; copy adds the current name at render. Any per-tone fixed line product keeps (a summary line above a result card, an empty Inbox) is a device template chosen at render from `TONE_LINES`, never stored. The tone sheet's samples are fixed strings in `constants.ts`, no AI call. Round 6: tone also shapes `answer.spoken`, never the voice that says it (section 20); the name is also the wake phrase "Hey {name}", read on the device by `readWakePhrase`, so renaming the assistant renames the wake word at once.
+
+**As built (issue 58).** Settings' first group, "Your assistant", has one row ("{Name} · Composed") opening `AssistantNameToneSheet`: a name field with an inline error and "Use the default name", and the four tones as a radio list, each with its fixed sample (`ASSISTANT_TONES` in `constants.ts`). Save is one field-scoped `updateDoc` of `assistantName` (null for the default), `assistantTone` and `lastEditedAt`. The profile listener reads a legacy profile's missing keys as null; `useAssistantName` and `useAssistantTone` read the store, so the wake phrase, the voice identity and every line update at once. On the server `sortHelmCapture` reads both fields from the profile it already reads, never from the device, and the name for stored lines ("{name} inferred") and for the not-a-person match is the validated one. `toPersonaPrompt` (`nomos/prompt.ts`) builds the fixed block ("You are {name}.", the tone's `TONE_PROMPT_LINES` entry, and the scope: only `fromRecordsText`, `generalText` and `generalSpoken`) and is the last part of the system prompt; the system prompt is one cached block, so a person's block caches per person and the tool definitions' cache is untouched. A rename never rewrites a stored line. `check:helm-assistant` covers the pattern, the tone lines and the fallback.
 
 ### Cost, latency and limits
 

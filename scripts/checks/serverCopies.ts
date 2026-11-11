@@ -121,6 +121,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/utils/assistantName.ts',
+    dest: 'functions/src/apps/helm/assistantName.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/utils/mediaCaps.ts',
     dest: 'functions/src/apps/helm/media/mediaCaps.ts',
     importRewrites: {},

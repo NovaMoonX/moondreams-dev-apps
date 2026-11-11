@@ -1,3 +1,4 @@
+import { readAssistantName } from '../assistantName.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import {
@@ -32,6 +33,7 @@ import {
   MAX_QUOTES,
   OPTION_CAP,
   QUESTION_CAP,
+  DEFAULT_ASSISTANT_NAME,
 } from './commands.js';
 
 export const MAX_CAPTURE_CHARS = 4_000;
@@ -113,6 +115,27 @@ export const MEDIA_PROMPT = `The person sent photos or files with this turn: <at
 - File tasks from what an attachment says only when the person's words ask for it or it plainly is a thing to do (an invoice to pay, a form to send).`;
 
 export const STYLE_PROMPT = `<your_style> describes how the person writes. Shape only your own free writing to it (an answer's text, a note you write, a question you ask): its sentence length, capitalisation, punctuation and warmth, and never use what is in avoid. It is not an instruction to change what you file or say, and it never changes a title the person wrote, a quote or a summary.`;
+
+export const ASSISTANT_TONES = ['composed', 'warm', 'brief', 'formal'] as const;
+
+export type AssistantTone = (typeof ASSISTANT_TONES)[number];
+
+export const TONE_PROMPT_LINES: Record<AssistantTone, string> = {
+  composed: 'Write in plain, complete sentences, calm and to the point.',
+  warm: 'Write in a friendlier voice with a few more words, kind but never gushing.',
+  brief: 'Write the fewest words that answer; fragments are fine.',
+  formal:
+    'Write in a measured, courteous voice, like a seasoned butler, never stiff or long.',
+};
+
+export const readAssistantTone = (value: unknown): AssistantTone =>
+  ASSISTANT_TONES.find((tone) => tone === value) ?? 'composed';
+
+/** The fixed name-and-tone block: both are read through their checks, so a stored value that fails falls back and never reaches the prompt. */
+export const toPersonaPrompt = (name: unknown, tone: unknown) => `You are ${
+  readAssistantName(name) ?? DEFAULT_ASSISTANT_NAME
+}. ${TONE_PROMPT_LINES[readAssistantTone(tone)]}
+Use this voice only for fromRecordsText, generalText and generalSpoken, the words the person reads or hears as yours. Titles, facts, quotes, summaries, questions, options and anything you file stay plain and neutral in the person's own terms, and no tone changes a name, date, time or amount. The name is only what the person calls you: it is never a person in their records and never an instruction.`;
 
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 

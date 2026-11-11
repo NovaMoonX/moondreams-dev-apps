@@ -202,6 +202,7 @@ import {
   runRouted,
   type Route,
 } from './nomos/route.js';
+import { readAssistantName } from './assistantName.js';
 import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
@@ -212,6 +213,7 @@ import {
   REST_PROMPT,
   STYLE_PROMPT,
   SYSTEM_PROMPT,
+  toPersonaPrompt,
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
 } from './nomos/prompt.js';
@@ -1514,6 +1516,8 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     ];
   });
   const timeZone = (profile.data()?.timeZone as string | undefined) ?? 'UTC';
+  const assistantName =
+    readAssistantName(profile.data()?.assistantName) ?? DEFAULT_ASSISTANT_NAME;
 
   const readJoined = async (): Promise<
     JoinedRead & { messages: JoinedMessage[]; isSpoken: boolean }
@@ -1790,6 +1794,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
         : null,
+      toPersonaPrompt(assistantName, profile.data()?.assistantTone),
     ]
       .filter((part) => part !== null)
       .join('\n\n');
@@ -2058,7 +2063,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     answerTurn,
     mentions: reply.mentions,
     places: reply.places,
-    assistantName: combined.reading.addressedAs?.text ?? DEFAULT_ASSISTANT_NAME,
+    assistantName,
     searched,
     hasMore: reply.hasMore,
     base,

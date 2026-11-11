@@ -93,3 +93,4 @@ jobs:
       - run: npm run check:helm-procedure-steps
       - run: npm run check:helm-runs
       - run: npm run check:helm-style
+      - run: npm run check:helm-assistant

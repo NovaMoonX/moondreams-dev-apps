@@ -1,5 +1,6 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type {
+  AssistantTone,
   MediaKind,
   ProcedureVersionReason,
   TopicVersionReason,
@@ -14,6 +15,37 @@ import {
 } from '@apps/helm/utils/mediaCaps';
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
+export const DEFAULT_ASSISTANT_TONE: AssistantTone = 'composed';
+
+/** Each tone with a fixed sample of the same answer, shown before saving; no model writes these. */
+export const ASSISTANT_TONES: {
+  value: AssistantTone;
+  label: string;
+  sample: string;
+}[] = [
+  {
+    value: 'composed',
+    label: 'Composed',
+    sample: 'Your cake tasting is today at 3:00 PM at Sweet Layer Bakery.',
+  },
+  {
+    value: 'warm',
+    label: 'Warm',
+    sample:
+      "Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one.",
+  },
+  {
+    value: 'brief',
+    label: 'Brief',
+    sample: 'Cake tasting: today, 3:00 PM, Sweet Layer Bakery.',
+  },
+  {
+    value: 'formal',
+    label: 'Formal',
+    sample:
+      'The cake tasting is this afternoon at 3:00 PM, at Sweet Layer Bakery.',
+  },
+];
 
 export const DEFAULT_DAY_START_TIME = '08:00';
 export const DEFAULT_DAY_END_TIME = '22:00';
@@ -1161,6 +1193,19 @@ export const HELM_COPY = {
   planNoRoomPick: 'Pick a day',
   planUnreadable: 'This plan could not be opened.',
   planTaskGone: 'A task that is done or removed',
+  settingsAssistant: 'Your assistant',
+  assistantRow: 'Your assistant',
+  assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
+  assistantNameLabel: 'Name',
+  assistantNameHint:
+    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. This is also the name you say to wake it.',
+  assistantNameError:
+    'Use 1 to 16 letters, numbers, spaces, hyphens or apostrophes.',
+  assistantUseDefault: 'Use the default name',
+  assistantToneLabel: 'How it sounds',
+  assistantToneHint:
+    'This shapes the answers it writes. Names, dates and what it files read the same in every tone.',
+  assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',
   yourDayLine: (start: string, end: string) => `${start} to ${end}`,
