@@ -1363,7 +1363,10 @@ export const toWho = (
   sealed,
 });
 
-export const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+export const wordsOf = (
+  name: string,
+  extra: Partial<WhoSealed> = {},
+): WhoSealed => ({
   name,
   aliases: [],
   relation: null,
