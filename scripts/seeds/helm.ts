@@ -2865,6 +2865,7 @@ async function buildStyle(input: {
       },
     },
     avoid: ['No exclamation marks', 'No emoji'],
+    removed: [],
   };
   return {
     id: 'general',

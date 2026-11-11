@@ -6,12 +6,13 @@ import { ChevronRight, Plus } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import RevealChip from '@/components/RevealChip';
+import HelpTip from '@/components/HelpTip';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import {
   HELM_COPY,
+  STYLE_AVOID_LIMIT,
   STYLE_AVOID_MAX,
   STYLE_TRAIT_LIMIT,
   STYLE_TRAIT_MAX,
@@ -29,7 +30,7 @@ import {
 type Target =
   | { kind: 'add' }
   | { kind: 'trait'; key: string; text: string; source: string }
-  | { kind: 'avoid'; text: string };
+  | { kind: 'avoid'; text: string; source: string };
 
 const getTraitSource = (trait: {
   isPersonSet: boolean;
@@ -39,12 +40,21 @@ const getTraitSource = (trait: {
     ? trait.exampleCount === 0
       ? HELM_COPY.styleAddedByYou
       : HELM_COPY.styleEditedByYou
-    : HELM_COPY.styleBasedOn(trait.exampleCount);
+    : HELM_COPY.styleSeenIn(trait.exampleCount);
 
 interface NoteSheetProps {
   target: Target | null;
   onClose: () => void;
 }
+
+const getFailureTitle = (kind: 'full' | 'fullAvoid' | 'gone' | 'offline') =>
+  kind === 'full'
+    ? HELM_COPY.styleFull(STYLE_TRAIT_LIMIT)
+    : kind === 'fullAvoid'
+      ? HELM_COPY.styleAvoidFull(STYLE_AVOID_LIMIT)
+      : kind === 'gone'
+        ? HELM_COPY.styleGone
+        : HELM_COPY.factNeedsConnection;
 
 function NoteSheet({ target, onClose }: NoteSheetProps) {
   const { user } = useAuth();
@@ -90,12 +100,7 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
     }
     setIsSaving(false);
     addToast({
-      title:
-        result.kind === 'full'
-          ? HELM_COPY.styleFull(STYLE_TRAIT_LIMIT)
-          : result.kind === 'gone'
-            ? HELM_COPY.styleGone
-            : HELM_COPY.factNeedsConnection,
+      title: getFailureTitle(result.kind),
       type: 'info',
     });
   };
@@ -222,14 +227,8 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
         target &&
         target.kind !== 'add' && (
           <div className='space-y-1'>
-            <p className='text-[15px] break-words'>
-              {target.kind === 'avoid' ? target.text : target.text}
-            </p>
-            <p className='text-muted-foreground text-[13px]'>
-              {target.kind === 'avoid'
-                ? HELM_COPY.styleAvoidSource
-                : target.source}
-            </p>
+            <p className='text-[15px] break-words'>{target.text}</p>
+            <p className='text-muted-foreground text-[13px]'>{target.source}</p>
           </div>
         )
       )}
@@ -253,13 +252,47 @@ function StyleNotes() {
   );
   const avoid = style?.avoid ?? [];
   const isEmpty = traits.length === 0 && avoid.length === 0;
+  const isUnreadable = useAppSelector((state) =>
+    state.helm.style.items.some(
+      (entry) => entry.id === GENERAL_STYLE_ID && entry.isUnreadable,
+    ),
+  );
+  const avoidSource = style?.personEditedAt
+    ? HELM_COPY.styleEditedByYou
+    : HELM_COPY.styleAvoidSource;
 
   if (!isLoaded) return null;
 
   return (
     <section className='space-y-3'>
-      <SectionDivider label={HELM_COPY.styleTitle} />
-      {isEmpty ? (
+      <SectionDivider
+        label={HELM_COPY.styleTitle}
+        trailing={
+          <>
+            <HelpTip title={HELM_COPY.styleTitle} placement='top'>
+              <p>{HELM_COPY.styleHelpTip}</p>
+            </HelpTip>
+            {!isUnreadable && (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='sm'
+                aria-label={HELM_COPY.styleAddLabel}
+                className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+                onClick={() => setTarget({ kind: 'add' })}
+              >
+                <Plus className='size-4' aria-hidden='true' />
+                {HELM_COPY.styleAdd}
+              </Button>
+            )}
+          </>
+        }
+      />
+      {isUnreadable ? (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {HELM_COPY.styleUnreadable}
+        </p>
+      ) : isEmpty ? (
         <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
           {HELM_COPY.styleEmpty}
         </p>
@@ -281,25 +314,19 @@ function StyleNotes() {
               />
             </li>
           ))}
-          {avoid.map((line) => (
-            <li key={`avoid-${line}`}>
+          {avoid.map((line, index) => (
+            <li key={`avoid-${index}-${line}`}>
               <NoteRow
                 text={line}
-                detail={HELM_COPY.styleAvoidSource}
-                onOpen={() => setTarget({ kind: 'avoid', text: line })}
+                detail={avoidSource}
+                onOpen={() =>
+                  setTarget({ kind: 'avoid', text: line, source: avoidSource })
+                }
               />
             </li>
           ))}
         </ul>
       )}
-      <div className='flex flex-wrap gap-2'>
-        <RevealChip
-          icon={<Plus className='size-4' aria-hidden='true' />}
-          onClick={() => setTarget({ kind: 'add' })}
-        >
-          {HELM_COPY.styleAdd}
-        </RevealChip>
-      </div>
       <NoteSheet
         key={target ? JSON.stringify(target) : 'none'}
         target={target}

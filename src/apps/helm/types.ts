@@ -84,9 +84,11 @@ export interface StyleSealed {
   traits: Record<string, StyleTrait>;
   /** At most 6, each at most 80 characters. */
   avoid: string[];
+  /** Notes the person removed, each as `text.trim().replace(/\s+/g, ' ').toLowerCase()`; the last 30, so learning never brings one back. */
+  removed: string[];
 }
 
-/** One writing-style note set at `apps/helm/users/{uid}/style/{styleId}`; no sample of the person's writing is stored. */
+/** One writing-style note set at `apps/helm/users/{uid}/style/{styleId}`; no run of more than 30 characters of what the person typed is stored. */
 export interface StyleProfile {
   scope: StyleScope;
   audienceWhoId: string | null;

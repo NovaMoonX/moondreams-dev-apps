@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import {
   messageText,
   type ModelProvider,
@@ -14,6 +16,7 @@ export const MAX_QUOTED_CHARS = 30;
 export const MIN_STYLE_SAMPLES = 10;
 export const MAX_STYLE_SAMPLES = 50;
 export const MIN_TRAIT_EXAMPLES = 3;
+export const MAX_REMOVED = 30;
 const SAMPLE_CHARS = 1_500;
 const COPY_WINDOW = MAX_QUOTED_CHARS + 1;
 const ID_CHARS = 40;
@@ -28,6 +31,7 @@ export interface StyleWords {
   label: string;
   traits: Record<string, StyleTraitValue>;
   avoid: string[];
+  removed: string[];
 }
 
 export interface LearnedLine {
@@ -92,18 +96,41 @@ export const buildStyleMessage = (samples: string[]) =>
 
 const squash = (text: string) => text.toLowerCase().replace(/\s+/g, ' ').trim();
 
-const toTraitId = (text: string) =>
-  squash(text)
+/** How a note is matched against the ones the person removed. */
+export const toNoteKey = (text: string) =>
+  text.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const toTraitId = (text: string) => {
+  const key = squash(text);
+  const slug = key
     .replace(/[^\p{L}\p{N}]+/gu, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, ID_CHARS);
+  return slug === ''
+    ? ''
+    : `${slug}-${createHash('sha256').update(key).digest('hex').slice(0, 8)}`;
+};
 
-const QUOTE_RE = /["“”‘’']([^"“”‘’']*)["“”‘’']/gu;
+// An apostrophe between letters is part of a word, not a quote mark.
+const QUOTE_RE =
+  /(?:["“”]|(?<!\p{L})['‘’])([\s\S]*?)(?:["“”]|['‘’](?!\p{L}))/gu;
 
-const hasLongQuote = (text: string) =>
-  [...text.matchAll(QUOTE_RE)].some(
-    (match) => match[1].length > MAX_QUOTED_CHARS,
-  );
+const toLoose = (text: string) =>
+  text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim();
+
+const hasUnsafeQuote = (text: string, looseSamples: string[]) =>
+  [...text.matchAll(QUOTE_RE)].some((match) => {
+    const quoted = toLoose(match[1]);
+    return (
+      match[1].length > MAX_QUOTED_CHARS ||
+      (quoted !== '' &&
+        looseSamples.filter((sample) => sample.includes(quoted)).length <
+          MIN_TRAIT_EXAMPLES)
+    );
+  });
 
 const copiesSamples = (text: string, corpus: string) => {
   const line = squash(text);
@@ -119,6 +146,7 @@ const readLines = (
   count: number,
   samples: number,
   corpus: string,
+  looseSamples: string[],
 ): LearnedLine[] => {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -134,7 +162,7 @@ const readLines = (
         trimmed.length > cap ||
         id === '' ||
         seen.has(id) ||
-        hasLongQuote(trimmed) ||
+        hasUnsafeQuote(trimmed, looseSamples) ||
         copiesSamples(trimmed, corpus)
       )
         return [];
@@ -160,6 +188,7 @@ export const readStyleReply = (
   const { traits, avoid } = (reply ?? {}) as Record<string, unknown>;
   if (!Array.isArray(traits) || !Array.isArray(avoid)) return null;
   const corpus = samples.map(squash).join(' ');
+  const looseSamples = samples.map(toLoose);
   return {
     traits: readLines(
       traits,
@@ -167,6 +196,7 @@ export const readStyleReply = (
       MAX_STYLE_TRAITS,
       samples.length,
       corpus,
+      looseSamples,
     ),
     avoid: readLines(
       avoid,
@@ -174,6 +204,7 @@ export const readStyleReply = (
       MAX_STYLE_AVOID,
       samples.length,
       corpus,
+      looseSamples,
     ),
   };
 };
@@ -187,12 +218,17 @@ export const mergeStyle = (
   const kept = Object.entries(existing?.traits ?? {}).filter(
     ([, trait]) => trait.isPersonSet,
   );
+  const removed = new Set(existing?.removed ?? []);
   const taken = new Set([
     ...kept.map(([id]) => id),
     ...kept.map(([, trait]) => squash(trait.text)),
   ]);
   const fresh = [...learned.traits]
-    .filter((line) => line.exampleCount >= MIN_TRAIT_EXAMPLES)
+    .filter(
+      (line) =>
+        line.exampleCount >= MIN_TRAIT_EXAMPLES &&
+        !removed.has(toNoteKey(line.text)),
+    )
     .sort((a, b) => b.exampleCount - a.exampleCount)
     .flatMap((line): [string, StyleTraitValue][] => {
       const id = toTraitId(line.text);
@@ -212,7 +248,11 @@ export const mergeStyle = (
     .slice(0, Math.max(0, MAX_STYLE_TRAITS - kept.length));
   const keptAvoid = isPersonEdited ? (existing?.avoid ?? []) : [];
   const freshAvoid = learned.avoid
-    .filter((line) => line.exampleCount >= MIN_TRAIT_EXAMPLES)
+    .filter(
+      (line) =>
+        line.exampleCount >= MIN_TRAIT_EXAMPLES &&
+        !removed.has(toNoteKey(line.text)),
+    )
     .sort((a, b) => b.exampleCount - a.exampleCount)
     .map((line) => line.text)
     .filter((text) => !keptAvoid.some((line) => squash(line) === squash(text)));
@@ -220,15 +260,18 @@ export const mergeStyle = (
     label: existing?.label ?? 'General',
     traits: Object.fromEntries([...kept, ...fresh]),
     avoid: [...keptAvoid, ...freshAvoid].slice(0, MAX_STYLE_AVOID),
+    removed: existing?.removed ?? [],
   };
 };
 
 /** What a free-writing turn is told about the person's style: the descriptions only. */
 export const toStyleNotes = (words: StyleWords | null) => {
   const traits = Object.values(words?.traits ?? {})
-    .map((trait) => trait.text)
+    .map((trait) => trait.text.slice(0, MAX_TRAIT_CHARS))
     .slice(0, MAX_STYLE_TRAITS);
-  const avoid = (words?.avoid ?? []).slice(0, MAX_STYLE_AVOID);
+  const avoid = (words?.avoid ?? [])
+    .slice(0, MAX_STYLE_AVOID)
+    .map((line) => line.slice(0, MAX_AVOID_CHARS));
   return traits.length > 0 || avoid.length > 0 ? { traits, avoid } : null;
 };
 
@@ -236,7 +279,7 @@ export const toStyleNotes = (words: StyleWords | null) => {
 export const toStyleWords = (
   opened: Record<string, unknown>,
 ): StyleWords | null => {
-  const { label, traits, avoid } = opened;
+  const { label, traits, avoid, removed } = opened;
   if (
     !traits ||
     typeof traits !== 'object' ||
@@ -269,6 +312,11 @@ export const toStyleWords = (
       ),
     ),
     avoid: avoid.filter((line): line is string => typeof line === 'string'),
+    removed: Array.isArray(removed)
+      ? removed
+          .filter((line): line is string => typeof line === 'string')
+          .slice(-MAX_REMOVED)
+      : [],
   };
 };
 

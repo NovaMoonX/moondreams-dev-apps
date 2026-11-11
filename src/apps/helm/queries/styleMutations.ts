@@ -3,7 +3,9 @@ import { doc, runTransaction } from 'firebase/firestore';
 import { db } from '@lib/firebase/config';
 import { generateUuid } from '@/utils';
 import {
+  STYLE_AVOID_LIMIT,
   STYLE_AVOID_MAX,
+  STYLE_REMOVED_LIMIT,
   STYLE_TRAIT_LIMIT,
   STYLE_TRAIT_MAX,
 } from '@apps/helm/constants';
@@ -18,20 +20,44 @@ type Trait = StyleSealed['traits'][string];
 
 export type StyleResult =
   | { kind: 'done'; undo: (() => Promise<StyleResult>) | null }
-  | { kind: 'full' | 'gone' | 'offline' };
+  | { kind: 'full' | 'fullAvoid' | 'gone' | 'offline' };
+
+type Outcome = 'done' | 'full' | 'fullAvoid' | 'gone' | 'offline';
+
+/** Returned by a change that finds the notes already as wanted, so nothing is written. */
+const UNCHANGED = 'unchanged';
 
 const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
 
-const emptySealed: StyleSealed = { label: 'General', traits: {}, avoid: [] };
+const emptySealed: StyleSealed = {
+  label: 'General',
+  traits: {},
+  avoid: [],
+  removed: [],
+};
+
+/** The form a removed note is remembered by, so the learner never brings it back in other spacing or case. */
+const normalizeNote = (text: string) =>
+  text.trim().replace(/\s+/g, ' ').toLowerCase();
+
+const forgetRemoved = (removed: string[], text: string) =>
+  removed.filter((entry) => entry !== normalizeNote(text));
+
+const rememberRemoved = (removed: string[], text: string) =>
+  [...forgetRemoved(removed, text), normalizeNote(text)].slice(
+    -STYLE_REMOVED_LIMIT,
+  );
 
 /** Re-reads the profile inside a transaction and writes only `sealed` and the edit stamps (the whole document when it is the first note). `change` returns the new notes, or null when what it meant to change is no longer there. */
 async function changeStyle(
   uid: string,
-  change: (sealed: StyleSealed) => StyleSealed | 'full' | null,
-): Promise<'done' | 'full' | 'gone' | 'offline'> {
+  change: (
+    sealed: StyleSealed,
+  ) => StyleSealed | 'full' | 'fullAvoid' | typeof UNCHANGED | null,
+): Promise<Outcome> {
   if (!navigator.onLine) return 'offline';
   const encryption = await getHelmEncryption(uid);
   const ref = doc(db, 'apps', 'helm', 'users', uid, 'style', GENERAL_STYLE_ID);
@@ -44,11 +70,15 @@ async function changeStyle(
           ? await openJson<StyleSealed>(data.sealed, encryption)
           : emptySealed;
       const next = change({
+        ...before,
         label: before.label || emptySealed.label,
         traits: before.traits ?? {},
         avoid: before.avoid ?? [],
+        removed: before.removed ?? [],
       });
-      if (next === 'full' || next === null) return next ?? 'gone';
+      if (next === null) return 'gone';
+      if (next === UNCHANGED) return 'done';
+      if (next === 'full' || next === 'fullAvoid') return next;
       const sealed = await sealJson<StyleSealed>(next, encryption);
       const now = Date.now();
       if (current.exists()) {
@@ -79,7 +109,7 @@ async function changeStyle(
 }
 
 const toResult = (
-  outcome: 'done' | 'full' | 'gone' | 'offline',
+  outcome: Outcome,
   undo: (() => Promise<StyleResult>) | null,
 ): StyleResult =>
   outcome === 'done' ? { kind: 'done', undo } : { kind: outcome };
@@ -103,6 +133,7 @@ export async function addStyleTrait(
               exampleCount: 0,
             },
           },
+          removed: forgetRemoved(sealed.removed, text),
         },
   );
   return toResult(outcome, () => removeStyleTrait(uid, key));
@@ -127,6 +158,7 @@ export async function editStyleTrait(
           isPersonSet: true,
         },
       },
+      removed: forgetRemoved(sealed.removed, text),
     };
   });
   return toResult(outcome, null);
@@ -142,7 +174,11 @@ export async function removeStyleTrait(
     const { [key]: removed, ...rest } = sealed.traits;
     if (!removed) return null;
     previous.trait = removed;
-    return { ...sealed, traits: rest };
+    return {
+      ...sealed,
+      traits: rest,
+      removed: rememberRemoved(sealed.removed, removed.text),
+    };
   });
   return toResult(outcome, () => putTraitBack(uid, key, previous.trait));
 }
@@ -154,31 +190,43 @@ async function putTraitBack(
 ): Promise<StyleResult> {
   if (!trait) return { kind: 'gone' };
   const outcome = await changeStyle(uid, (sealed) =>
-    sealed.traits[key]
-      ? null
-      : Object.keys(sealed.traits).length >= STYLE_TRAIT_LIMIT
-        ? 'full'
-        : { ...sealed, traits: { ...sealed.traits, [key]: trait } },
+    Object.values(sealed.traits).some(
+      (entry) => normalizeNote(entry.text) === normalizeNote(trait.text),
+    )
+      ? UNCHANGED
+      : sealed.traits[key]
+        ? null
+        : Object.keys(sealed.traits).length >= STYLE_TRAIT_LIMIT
+          ? 'full'
+          : {
+              ...sealed,
+              traits: { ...sealed.traits, [key]: trait },
+              removed: forgetRemoved(sealed.removed, trait.text),
+            },
   );
   return toResult(outcome, null);
 }
 
-/** Rewrites one "avoid" line, found by its words; the profile counts as the person's afterwards. */
+/** Rewrites one "avoid" line, found by its words; the profile counts as the person's afterwards. A line that now repeats another is dropped. */
 export async function editStyleAvoid(
   uid: string,
   line: string,
   text: string,
 ): Promise<StyleResult> {
-  const outcome = await changeStyle(uid, (sealed) =>
-    sealed.avoid.includes(line)
-      ? {
-          ...sealed,
-          avoid: sealed.avoid.map((entry) =>
-            entry === line ? text.trim().slice(0, STYLE_AVOID_MAX) : entry,
-          ),
-        }
-      : null,
-  );
+  const next = text.trim().slice(0, STYLE_AVOID_MAX);
+  const outcome = await changeStyle(uid, (sealed) => {
+    if (!sealed.avoid.includes(line)) return null;
+    const isRepeat = sealed.avoid.some(
+      (entry) => entry !== line && normalizeNote(entry) === normalizeNote(next),
+    );
+    return {
+      ...sealed,
+      avoid: isRepeat
+        ? sealed.avoid.filter((entry) => entry !== line)
+        : sealed.avoid.map((entry) => (entry === line ? next : entry)),
+      removed: forgetRemoved(sealed.removed, next),
+    };
+  });
   return toResult(outcome, null);
 }
 
@@ -192,20 +240,27 @@ export async function removeStyleAvoid(
     previous.index = sealed.avoid.indexOf(line);
     return previous.index < 0
       ? null
-      : { ...sealed, avoid: sealed.avoid.filter((entry) => entry !== line) };
+      : {
+          ...sealed,
+          avoid: sealed.avoid.filter((entry) => entry !== line),
+          removed: rememberRemoved(sealed.removed, line),
+        };
   });
   const undo = async (): Promise<StyleResult> => {
     const undone = await changeStyle(uid, (sealed) =>
-      sealed.avoid.includes(line)
-        ? null
-        : {
-            ...sealed,
-            avoid: [
-              ...sealed.avoid.slice(0, previous.index),
-              line,
-              ...sealed.avoid.slice(previous.index),
-            ],
-          },
+      sealed.avoid.some((entry) => normalizeNote(entry) === normalizeNote(line))
+        ? UNCHANGED
+        : sealed.avoid.length >= STYLE_AVOID_LIMIT
+          ? 'fullAvoid'
+          : {
+              ...sealed,
+              avoid: [
+                ...sealed.avoid.slice(0, previous.index),
+                line,
+                ...sealed.avoid.slice(previous.index),
+              ],
+              removed: forgetRemoved(sealed.removed, line),
+            },
     );
     return toResult(undone, null);
   };

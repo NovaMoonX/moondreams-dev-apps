@@ -355,7 +355,7 @@ The owner's words: a way of "learning the user's write style, for different occa
 
 - **What it learns from.** What the person types in Helm (turns and notes they wrote), and, only if they switch it on, a sample of their sent Gmail. Spoken turns are not writing and are left out.
 - **Sent mail, by choice.** On the Gmail connection, "Learn how I write from my sent mail" starts off and says what it means before it is on: "[name] reads up to 300 messages you sent in the last 6 months, keeps a few notes about how you write, and keeps none of the mail." Off again removes what came from it.
-- **What it keeps.** A few plain notes, by occasion and by person, each with how many examples it rests on: "With vendors: short and polite, signs 'Thanks, Alex'", "With Mom: warm, longer, no sign-off", "At work: bullet points, no greeting". Never the messages themselves.
+- **What it keeps.** A few plain notes, by occasion and by person, each with how many of the person's messages it was seen in: "With vendors: short and polite, signs 'Thanks, Alex'", "With Mom: warm, longer, no sign-off", "At work: bullet points, no greeting". Never the messages themselves.
 - **Visible and editable.** The notes show on "How [name] sees you", each editable or removable; a note the person wrote themself ("I never use exclamation marks") is kept as said.
 - **Learning again.** The notes are refreshed at most once a week from new writing, and a refresh never overwrites one the person edited.
 

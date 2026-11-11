@@ -1,11 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useMutation } from '@tanstack/react-query';
 import {
   collection,
-  getDocs,
-  limit,
-  orderBy,
+  getCountFromServer,
   query,
   where,
 } from 'firebase/firestore';
@@ -26,10 +23,11 @@ const learnHelmStyleCallable = httpsCallable<
   LearnResult
 >(functions, 'learnHelmStyle');
 
-/** Persons whose call is out, and the "uid|through" marks already tried this session, so renders and a second look at the same count never call twice. A second tab is turned away by the server's `busy`. */
+/** Persons whose call is out, and the "uid|through" marks already answered this session, so renders and a second look at the same count never call twice. A second tab is turned away by the server's `busy`. */
 const inFlight = new Set<string>();
 const attempted = new Set<string>();
-/** Marks whose stored count was read once this session; the store's windows keep watching after that. */
+/** Marks whose stored count is being read or was read once this session; the store's windows keep watching after that. */
+const counting = new Set<string>();
 const counted = new Set<string>();
 
 /** How many typed messages after `through` are in the store's windows, a lower bound of all of them. */
@@ -43,16 +41,14 @@ const countLoaded = (
   ).length;
 
 async function countStored(uid: string, through: number | null) {
-  const snapshot = await getDocs(
+  const snapshot = await getCountFromServer(
     query(
       collection(db, 'apps', 'helm', 'users', uid, 'captures'),
+      where('inputMode', '==', 'typed'),
       where('createdAt', '>', through ?? 0),
-      orderBy('createdAt', 'desc'),
-      limit(STYLE_LEARN_EVERY * 4),
     ),
   );
-  return snapshot.docs.filter((entry) => entry.data().inputMode === 'typed')
-    .length;
+  return snapshot.data().count;
 }
 
 /** After every 25 new typed messages, asks the server once, in the background, to learn the person's writing style. Voice is never counted; a failure is only logged. */
@@ -62,40 +58,62 @@ export function useStyleLearning(uid: string | null) {
     state.helm.uid === uid ? state.helm.profile : null,
   );
   const captures = useAppSelector(selectAllCaptures);
-  const mutation = useMutation({
-    mutationFn: async () => (await learnHelmStyleCallable({})).data,
-    onError: (error) => console.warn('Helm style learning failed', error),
-  });
-  const { mutate } = mutation;
-  const isReady = uid !== null && keyStatus === 'ready' && profile !== null;
+  const isCapturesLoaded = useAppSelector(
+    (state) => state.helm.recentCaptures.isLoaded,
+  );
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const isReady =
+    uid !== null &&
+    keyStatus === 'ready' &&
+    profile !== null &&
+    isCapturesLoaded &&
+    isOnline;
   const through = profile?.styleLearnedThroughAt ?? null;
   const isDueInStore = countLoaded(captures, through) >= STYLE_LEARN_EVERY;
+
+  useEffect(() => {
+    const update = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    return () => {
+      window.removeEventListener('online', update);
+      window.removeEventListener('offline', update);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isReady || !uid) return;
     const mark = `${uid}|${through ?? ''}`;
     if (attempted.has(mark) || inFlight.has(uid)) return;
     const run = () => {
-      attempted.add(mark);
       inFlight.add(uid);
-      mutate(undefined, { onSettled: () => inFlight.delete(uid) });
+      learnHelmStyleCallable({})
+        .then(() => {
+          attempted.add(mark);
+        })
+        .catch((error: unknown) =>
+          console.warn('Helm style learning failed', error),
+        )
+        .finally(() => inFlight.delete(uid));
     };
     if (isDueInStore) {
       run();
       return;
     }
-    if (counted.has(mark)) return;
-    let isCurrent = true;
+    if (counted.has(mark) || counting.has(mark)) return;
+    counting.add(mark);
     countStored(uid, through)
       .then((count) => {
         counted.add(mark);
-        if (isCurrent && count >= STYLE_LEARN_EVERY) run();
+        if (
+          count >= STYLE_LEARN_EVERY &&
+          !attempted.has(mark) &&
+          !inFlight.has(uid)
+        ) {
+          run();
+        }
       })
-      .catch((error: unknown) =>
-        console.warn('Helm style count failed', error),
-      );
-    return () => {
-      isCurrent = false;
-    };
-  }, [isReady, uid, through, isDueInStore, mutate]);
+      .catch((error: unknown) => console.warn('Helm style count failed', error))
+      .finally(() => counting.delete(mark));
+  }, [isReady, uid, through, isDueInStore]);
 }

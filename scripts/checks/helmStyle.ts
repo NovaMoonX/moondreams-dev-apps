@@ -36,6 +36,7 @@ const existing: StyleWords = {
     stays: trait('Short sentences', false, 9),
   },
   avoid: ['No emoji'],
+  removed: [],
 };
 const merged = mergeStyle(
   existing,
@@ -57,7 +58,9 @@ assert.equal(
   'a learned trait not seen again is replaced',
 );
 assert.equal(
-  merged.traits['signs-off-cheers'],
+  Object.values(merged.traits).find(
+    (entry) => entry.text === 'Signs off Cheers',
+  ),
   undefined,
   'a count below 3 goes',
 );
@@ -68,13 +71,39 @@ assert.equal(
   1,
   'a learned copy of a person-set trait is not added',
 );
-assert.equal(merged.traits['short-sentences'].exampleCount, 20);
+assert.equal(
+  Object.values(merged.traits).find((entry) => entry.text === 'Short sentences')
+    ?.exampleCount,
+  20,
+);
 assert.deepEqual(merged.avoid, ['No exclamation marks']);
 assert.deepEqual(
   mergeStyle(existing, { traits: [], avoid: [line('No puns', 4)] }, true).avoid,
   ['No emoji', 'No puns'],
   'an edited profile keeps its avoid lines',
 );
+
+// Merge: a note the person removed is not learned again, and the list is carried through.
+const tombstoned = mergeStyle(
+  {
+    label: 'General',
+    traits: {},
+    avoid: [],
+    removed: ['short sentences', 'no puns'],
+  },
+  {
+    traits: [line('  Short   Sentences ', 9), line('Plain words', 9)],
+    avoid: [line('No puns', 9), line('No emoji', 9)],
+  },
+  false,
+);
+assert.deepEqual(
+  Object.values(tombstoned.traits).map((entry) => entry.text),
+  ['Plain words'],
+  'a removed trait is not learned again',
+);
+assert.deepEqual(tombstoned.avoid, ['No emoji'], 'a removed avoid line goes');
+assert.deepEqual(tombstoned.removed, ['short sentences', 'no puns']);
 
 // Merge: the cap is 12 with the person-set ones first.
 const personTraits = Object.fromEntries(
@@ -84,7 +113,7 @@ const personTraits = Object.fromEntries(
   ]),
 );
 const crowded = mergeStyle(
-  { label: 'General', traits: personTraits, avoid: [] },
+  { label: 'General', traits: personTraits, avoid: [], removed: [] },
   {
     traits: Array.from({ length: 12 }, (_, index) =>
       line(`Learned ${index}`, 20 - index),
@@ -162,6 +191,22 @@ assert.equal(
   SAMPLES.length,
   'a count never passes the samples read',
 );
+const quoteReply = readStyleReply(
+  {
+    traits: [
+      line("Calls everyone 'Dana'", 9),
+      line("Doesn't use contractions like don't", 9),
+      line('Ends with "Plain words"', 9),
+    ],
+    avoid: [],
+  },
+  [...SAMPLES, "Dana said it doesn't matter, don't worry"],
+);
+assert.deepEqual(
+  quoteReply?.traits.map((entry) => entry.text),
+  ["Doesn't use contractions like don't"],
+  'a quote in one sample goes, an apostrophe inside a word is no quote',
+);
 assert.equal(readStyleReply(null, SAMPLES), null);
 assert.equal(readStyleReply({ traits: 'x', avoid: [] }, SAMPLES), null);
 
@@ -190,7 +235,10 @@ assert.ok(stored.length < 2_000);
 const notes = toStyleNotes(mergeStyle(null, learned, false));
 assert.ok(notes && notes.traits.length > 0 && notes.avoid.length > 0);
 assert.equal(toStyleNotes(null), null);
-assert.equal(toStyleNotes({ label: 'General', traits: {}, avoid: [] }), null);
+assert.equal(
+  toStyleNotes({ label: 'General', traits: {}, avoid: [], removed: [] }),
+  null,
+);
 
 const reading: CaptureReading = {
   people: [],

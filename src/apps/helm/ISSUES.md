@@ -1395,7 +1395,7 @@ The person can also attach a PDF (up to 20 pages, 10 MB), a Markdown file (up to
 **Files:** `functions/src/apps/helm/learnHelmStyle.ts`, `functions/src/ai/models.ts` (`style` prompt), `functions/src/index.ts`, `src/apps/helm/queries/styleMutations.ts`, `src/apps/helm/store/listeners/styleListener.ts`, `src/apps/helm/components/howNomosSeesYou/StyleNotes.tsx`, `functions/src/apps/helm/nomos/prompt.ts` (style in free writing), `src/apps/helm/types.ts` (`StyleProfile`, `styleLearnedThroughAt`), `firestore.rules`, `scripts/helm/rulesMatrix.py`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` sections 2 ("StyleProfile"), 26.
 ### Description
-After every 25 typed turns, Helm learns a few notes about how the person writes ("Short sentences", "Signs off 'Cheers,'"), each saying how many examples it rests on. They show under "How {name} sees you", editable and removable, and shape the assistant's own free writing.
+After every 25 typed turns, Helm learns a few notes about how the person writes ("Short sentences", "Signs off 'Cheers,'"), each saying how many of their messages it was seen in. They show under "How {name} sees you", editable and removable, and shape the assistant's own free writing.
 ### Possible Approach
 1. `learnHelmStyle` over the last 50 typed turns (never voice), quick model, ≤12 traits and ≤6 avoid lines with counts; merge keeps person-set traits.
 2. Nothing written is stored besides the traits.

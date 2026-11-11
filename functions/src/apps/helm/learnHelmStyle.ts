@@ -140,6 +140,13 @@ export const learnHelmStyle = onCall(
         "Your writing style couldn't be read just now. Try again later.",
       );
     }
+    if (learned.traits.length === 0 && learned.avoid.length === 0) {
+      logger.warn('helm.style.noReply');
+      throw new HttpsError(
+        'unavailable',
+        "Your writing style couldn't be read just now. Try again later.",
+      );
+    }
     const throughAt = Math.max(...samples.map((sample) => sample.createdAt));
 
     const traitCount = await firestore.runTransaction(async (transaction) => {
@@ -148,10 +155,23 @@ export const learnHelmStyle = onCall(
         transaction.get(firestore.doc(base)),
       ]);
       const data = current.data();
-      const existing = data
-        ? toStyleWords(openForHelm(key, data.sealed as SealedPayload))
-        : null;
-      if (data && !existing) throw new Error('styleUnreadable');
+      const readExisting = () => {
+        try {
+          return data
+            ? toStyleWords(openForHelm(key, data.sealed as SealedPayload))
+            : null;
+        } catch {
+          return null;
+        }
+      };
+      const existing = readExisting();
+      if (data && !existing) {
+        logger.error('helm.style.unreadable', { uid });
+        throw new HttpsError(
+          'failed-precondition',
+          "Your style notes can't be opened right now, so they were left as they are.",
+        );
+      }
       const merged = mergeStyle(
         existing,
         learned,

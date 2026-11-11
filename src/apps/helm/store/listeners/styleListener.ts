@@ -72,10 +72,22 @@ async function openStyle(
             (line): line is string => typeof line === 'string',
           )
         : [],
+      removed: Array.isArray(payload.removed)
+        ? payload.removed.filter(
+            (line): line is string => typeof line === 'string',
+          )
+        : [],
       isUnreadable: false,
     };
   } catch {
-    return { ...base, label: '', traits: {}, avoid: [], isUnreadable: true };
+    return {
+      ...base,
+      label: '',
+      traits: {},
+      avoid: [],
+      removed: [],
+      isUnreadable: true,
+    };
   }
 }
 

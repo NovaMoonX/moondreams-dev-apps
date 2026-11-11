@@ -87,6 +87,8 @@ export const FACT_STATEMENT_MAX = 500;
 export const STYLE_TRAIT_MAX = 120;
 export const STYLE_AVOID_MAX = 80;
 export const STYLE_TRAIT_LIMIT = 12;
+export const STYLE_AVOID_LIMIT = 6;
+export const STYLE_REMOVED_LIMIT = 30;
 /** New typed messages between one learning run and the next. */
 export const STYLE_LEARN_EVERY = 25;
 export const TOPIC_MAX = 40;
@@ -1320,14 +1322,16 @@ export const HELM_COPY = {
   seesYouTopicSuggestions: 'Topics you already use',
   seesYouAddedToast: 'Added to what is kept about you',
   styleTitle: 'How you write',
-  styleEmpty:
-    'Notes about your writing appear here after about 25 typed messages. You can also add one yourself.',
-  styleBasedOn: (count: number) =>
-    `Based on ${count} ${count === 1 ? 'example' : 'examples'}`,
+  styleHelpTip:
+    'Notes about how you write, from messages you type here. Only these notes are kept, never your messages.',
+  styleEmpty: `Notes about your writing appear here after about ${STYLE_LEARN_EVERY} messages you type. You can also add one yourself.`,
+  styleUnreadable: "Your writing notes can't be opened right now.",
+  styleSeenIn: (count: number) => `Seen in ${count} of your messages`,
   styleAddedByYou: 'Added by you',
   styleEditedByYou: 'Edited by you',
-  styleAvoidSource: 'Something you leave out',
-  styleAdd: 'Add a note',
+  styleAvoidSource: 'Not in what you write',
+  styleAdd: 'Add',
+  styleAddLabel: 'Add a writing note',
   styleAddTitle: 'Add a writing note',
   styleSheetTitle: 'Writing note',
   styleField: 'The note',
@@ -1336,6 +1340,8 @@ export const HELM_COPY = {
   styleMissing: 'Write the note first.',
   styleFull: (limit: number) =>
     `Up to ${limit} notes. Remove one to add another.`,
+  styleAvoidFull: (limit: number) =>
+    `Up to ${limit} of these. Remove one to put this back.`,
   styleEdit: 'Edit',
   styleRemove: 'Remove',
   styleSaved: 'Saved your note',
