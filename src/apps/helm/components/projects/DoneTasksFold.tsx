@@ -100,6 +100,7 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
                   timeZone={timeZone}
                   now={now}
                   isDone
+                  hasUndo={false}
                   omitLinkedId={projectId}
                   onOpen={(opened) => setOpenId(opened.id)}
                   onTick={() => undefined}
