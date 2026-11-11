@@ -3957,6 +3957,40 @@ export const MOVED_DAY_WORDS = {
       : `What you changed for ${count} income days has no new date near it, so it stops applying.`,
 } as const;
 
+/** "Pay these first" taking a share of the bill it pays. */
+export const PAIRING_BILL_WORDS = {
+  mode: 'Of the bill',
+  full: 'Full',
+  half: 'Half',
+  other: 'Other share',
+  shareLabel: 'Share of the bill',
+  shareWords: { full: 'All', half: 'Half' },
+  describe: (bps: number) =>
+    bps === 10_000
+      ? 'the full bill'
+      : bps === 5_000
+        ? 'half the bill'
+        : `${bps / 100}% of the bill`,
+  worked: (
+    share: string,
+    name: string,
+    bill: string | null,
+    cents: string,
+    isOneDay: boolean,
+  ) =>
+    `${share} of ${name}${bill === null ? '' : ` (${bill})`} · up to ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
+  ranged:
+    'Uses the high end of its range. Follows the bill when it changes, and stops once its payment is covered.',
+  follows:
+    'Follows the bill when it changes, and stops once its payment is covered.',
+  undated: (name: string) =>
+    `${name} has no due date yet, so this sends nothing until it has one.`,
+  nothingAhead: (name: string) =>
+    `${name} has no payment coming, so this sends nothing.`,
+  typeShare: 'Type a percent to see what each pay puts in.',
+  badShare: 'Type a share above 0% and up to 100%.',
+} as const;
+
 /** What happens to "Pay these first" when the item it pays has stopped. */
 export const PAIRING_STOP_WORDS = {
   archived: 'Archived, so it gets nothing from this pay',
