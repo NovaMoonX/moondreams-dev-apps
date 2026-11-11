@@ -14,21 +14,35 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import SummaryRow from '@/components/SummaryRow';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
-import { centsToInputValue, parseMoneyToCents } from '@/utils/moneyUtils';
-import ItemBadge from '@apps/runway/components/ItemBadge';
 import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
+import ItemBadge from '@apps/runway/components/ItemBadge';
+import { MaskedText } from '@apps/runway/components/MaskedText';
+import { percentOf } from '@apps/runway/engine/money';
+import { getShareBps } from '@apps/runway/utils/fundingText';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
+import {
+  PAIRING_BILL_WORDS,
   PICK_KIND_HEADINGS,
   RUNWAY_SEARCH_THRESHOLD,
 } from '@apps/runway/constants';
 
 export type PairingOf = 'dayMoney' | 'remaining';
 
+export type BillShareChoice = 'full' | 'half' | 'other';
+
 export interface PairingRow {
   key: number;
   targetItemId: string | null;
-  mode: AmountMode;
+  /** `bill` takes a share of the bill it pays first. */
+  mode: AmountMode | 'bill';
   of: PairingOf;
+  /** Money for `exact`, a percent for `percent` and for `bill` with an `other` share. */
   amount: string;
+  share: BillShareChoice;
   topUp: boolean;
 }
 
@@ -46,6 +60,17 @@ const MODE_OPTIONS = [
   { value: 'exact', label: 'Exact' },
   { value: 'percent', label: 'Percent' },
   { value: 'rest', label: 'The rest' },
+] as const;
+
+const BILL_MODE_OPTION = {
+  value: 'bill',
+  label: PAIRING_BILL_WORDS.mode,
+} as const;
+
+const SHARE_OPTIONS = [
+  { value: 'full', label: PAIRING_BILL_WORDS.full },
+  { value: 'half', label: PAIRING_BILL_WORDS.half },
+  { value: 'other', label: PAIRING_BILL_WORDS.other },
 ] as const;
 
 const OF_OPTIONS = [
@@ -72,6 +97,16 @@ interface PairingRowSheetProps {
   capNote: string | null;
   /** Why the row can't be kept as it is; null when it can. */
   problem: string | null;
+  /** The bill it pays first, at the high end of its amount; null when it pays an envelope or goal. */
+  bill: {
+    cents: number;
+    lowCents: number;
+    isRanged: boolean;
+    isUndated: boolean;
+    hasPaymentAhead: boolean;
+  } | null;
+  /** Edits one income day's own set, so a share reads as from this pay. */
+  isOneDay: boolean;
   onChange: (patch: Partial<PairingRow>) => void;
   onRemove: () => void;
   onClose: () => void;
@@ -87,6 +122,8 @@ function PairingRowSheet({
   maxCents,
   capNote,
   problem,
+  bill,
+  isOneDay,
   onChange,
   onRemove,
   onClose,
@@ -98,6 +135,54 @@ function PairingRowSheet({
   const shown = choices.filter((choice) =>
     choice.text.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  const getBillLine = () => {
+    const bps = getShareBps(row);
+    if (bill === null || !picked) return null;
+    if (bill.isUndated || !bill.hasPaymentAhead)
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {bill.isUndated
+            ? PAIRING_BILL_WORDS.undated(picked.text)
+            : PAIRING_BILL_WORDS.nothingAhead(picked.text)}
+        </p>
+      );
+    if (bps === null && row.amount.trim() !== '') return null;
+    if (bps === null)
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {PAIRING_BILL_WORDS.typeShare}
+        </p>
+      );
+    const shareWord =
+      row.share === 'other'
+        ? `${bps / 100}%`
+        : PAIRING_BILL_WORDS.shareWords[row.share];
+    return (
+      <div className='text-muted-foreground space-y-1 text-sm'>
+        <p className='text-pretty'>
+          <MaskedText>
+            {PAIRING_BILL_WORDS.worked(
+              shareWord,
+              picked.text,
+              row.share === 'full'
+                ? null
+                : bill.isRanged
+                  ? `${formatCents(bill.lowCents)} to ${formatCents(bill.cents)}`
+                  : formatCents(bill.cents),
+              formatCents(percentOf(bill.cents, bps)),
+              isOneDay,
+            )}
+          </MaskedText>
+        </p>
+        <p className='text-xs'>
+          {bill.isRanged
+            ? PAIRING_BILL_WORDS.ranged
+            : PAIRING_BILL_WORDS.follows}
+        </p>
+      </div>
+    );
+  };
 
   const getBody = () => {
     if (view === 'what') {
@@ -125,7 +210,15 @@ function PairingRowSheet({
                           variant='tertiary'
                           className='text-foreground! h-auto min-h-14 w-full items-start justify-start gap-3 rounded-none p-3! text-left font-normal whitespace-normal'
                           onClick={() => {
-                            onChange({ targetItemId: choice.value });
+                            onChange(
+                              choice.kind !== 'bill' && row.mode === 'bill'
+                                ? {
+                                    targetItemId: choice.value,
+                                    mode: 'exact',
+                                    amount: '',
+                                  }
+                                : { targetItemId: choice.value },
+                            );
                             setView(isNew ? 'how' : 'main');
                           }}
                         >
@@ -167,11 +260,42 @@ function PairingRowSheet({
           <PillGroup
             label='How much'
             isThin
-            options={MODE_OPTIONS}
+            options={
+              picked?.kind === 'bill'
+                ? [...MODE_OPTIONS, BILL_MODE_OPTION]
+                : MODE_OPTIONS
+            }
             value={row.mode === 'range' ? 'exact' : row.mode}
-            onChange={(mode) => onChange({ mode, amount: '' })}
+            onChange={(mode) => onChange({ mode, amount: '', share: 'full' })}
           />
-          {row.mode === 'rest' ? (
+          {row.mode === 'bill' ? (
+            <div className='space-y-3'>
+              <PillGroup
+                label={PAIRING_BILL_WORDS.shareLabel}
+                isThin
+                options={SHARE_OPTIONS}
+                value={row.share}
+                onChange={(share) => onChange({ share, amount: '' })}
+              />
+              {row.share === 'other' && (
+                <AmountField
+                  isHero
+                  autoFocus={canFocusFieldOnOpen()}
+                  label='Percent'
+                  value={row.amount}
+                  onChange={(amount) => onChange({ amount })}
+                  mode='percent'
+                  percentOfLabel='of the bill'
+                  hint={
+                    row.amount.trim() !== '' && getShareBps(row) === null
+                      ? PAIRING_BILL_WORDS.badShare
+                      : undefined
+                  }
+                />
+              )}
+              {getBillLine()}
+            </div>
+          ) : row.mode === 'rest' ? (
             <p className='text-muted-foreground text-sm'>
               Takes what is left of {fromLabel} after the others.
             </p>
@@ -242,7 +366,9 @@ function PairingRowSheet({
           {picked?.text ?? 'Pick one'}
         </SummaryRow>
         <SummaryRow label='How much' onClick={() => setView('how')}>
-          {row.amount === '' && row.mode !== 'rest'
+          {row.amount === '' &&
+          row.mode !== 'rest' &&
+          (row.mode !== 'bill' || row.share === 'other')
             ? 'Not set yet'
             : amountText}
         </SummaryRow>
