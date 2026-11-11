@@ -256,8 +256,8 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
       }
     };
     return (
-      <p className={LINE}>
-        <span className='text-muted-foreground min-w-0 flex-1'>
+      <p className={join(LINE, 'flex-wrap gap-y-1')}>
+        <span className='text-muted-foreground min-w-0 basis-full sm:flex-1 sm:basis-0'>
           {media.kind === 'photo' ? (
             canKeep ? (
               HELM_COPY.mediaNotKeptIn(hoursLeft)

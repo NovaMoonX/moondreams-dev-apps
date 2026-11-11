@@ -5,7 +5,7 @@ import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.ts';
 import {
   markdownTitle,
-  splitMarkdownSections,
+  readableSections,
 } from '../../functions/src/apps/helm/media/markdownSections.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
@@ -3020,16 +3020,14 @@ async function buildFileTurns(input: {
       deleteAfter: null,
     },
   });
-  const sections = splitMarkdownSections(mdText)
-    .filter((section) => section.markdown !== '')
-    .map((section, index) => ({
-      id: `seed-section-file-packing-${index + 1}`,
-      heading: section.heading,
-      level: section.level,
-      markdown: section.markdown,
-      writtenBy: 'person' as const,
-      sources: [{ kind: 'file' as const, mediaId: mdMedia, noteId: mdNote }],
-    }));
+  const sections = readableSections(mdText).map((section, index) => ({
+    id: `seed-section-file-packing-${index + 1}`,
+    heading: section.heading,
+    level: section.level,
+    markdown: section.markdown,
+    writtenBy: 'person' as const,
+    sources: [{ kind: 'file' as const, mediaId: mdMedia, noteId: mdNote }],
+  }));
   const noteTitle = markdownTitle(mdText, mdName);
   const topicLine = buildFileTopicLine(noteTitle, mdName);
   const mdAt = sortedAt(markdown);

@@ -36,6 +36,15 @@ interface NoteSheetProps {
   onClose: () => void;
 }
 
+const LEADING_H1 = /^\s*#[ \t]+(.+?)[ \t]*#*[ \t]*(?:\r?\n|$)/;
+
+const withoutTitleHeading = (body: string, title: string) => {
+  const heading = LEADING_H1.exec(body);
+  return heading && heading[1].trim().slice(0, 80) === title
+    ? body.slice(heading[0].length).trimStart()
+    : body;
+};
+
 /** One note: its words with tappable links, where it came from, its topics, and Copy, Edit and Delete. */
 function NoteSheet({ noteId, onClose }: NoteSheetProps) {
   const { user } = useAuth();
@@ -202,7 +211,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
             {note.body &&
               (note.source === 'importedFile' ? (
                 <MarkdownText
-                  text={note.body}
+                  text={withoutTitleHeading(note.body, note.title)}
                   className='text-[15px] break-words'
                 />
               ) : (

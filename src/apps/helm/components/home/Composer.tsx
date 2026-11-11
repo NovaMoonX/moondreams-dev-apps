@@ -365,7 +365,9 @@ function Composer({
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    void recorder.start();
+    void recorder.start().then((isStarted) => {
+      if (isStarted) attachments.say(null);
+    });
   };
 
   const chooseAttachment = (value: string) => {
@@ -446,6 +448,7 @@ function Composer({
           value={text}
           onChange={(event) => {
             if (voice.notice !== null) voice.clearNotice();
+            if (attachments.notice !== null) attachments.say(null);
             setText(event.target.value);
             setTypedAt(Date.now());
           }}
@@ -476,9 +479,11 @@ function Composer({
           }}
         />
       )}
-      {recorder.state === 'refused' && (
+      {(recorder.state === 'refused' || recorder.state === 'unsupported') && (
         <p className='text-muted-foreground text-[13px]' role='status'>
-          {HELM_COPY.recordNoMicrophone}
+          {recorder.state === 'unsupported'
+            ? HELM_COPY.recordUnsupported
+            : HELM_COPY.recordNoMicrophone}
         </p>
       )}
       <AttachmentChips
@@ -656,7 +661,7 @@ function Composer({
       <input
         ref={fileInput}
         type='file'
-        accept='application/pdf,.md,text/markdown'
+        accept='application/pdf,.pdf,.md,.markdown,text/markdown'
         multiple
         className='hidden'
         tabIndex={-1}

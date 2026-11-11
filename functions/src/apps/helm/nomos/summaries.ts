@@ -253,9 +253,17 @@ export const describeNotes = (count: number) =>
 export const buildPhotosNotOpenedLine = (count: number) =>
   count === 1 ? "Couldn't open one photo" : `Couldn't open ${count} photos`;
 
-/** The line for a file that would not read, naming it. */
-export const buildFileNotReadLine = (name: string) =>
-  `Couldn't read ${name}. It may be protected or scanned too faintly.`;
+/** The line for a file that would not read, naming it and saying what to do about that reason. */
+export const buildFileNotReadLine = (
+  name: string,
+  reason: 'locked' | 'unreadable' | 'tooManyPages' | 'tooLarge',
+) =>
+  ({
+    tooLarge: `Didn't read ${name}: the files in this turn were too big together. Send it on its own.`,
+    locked: `${name} is locked. Unlock it and send it again.`,
+    tooManyPages: `${name} has too many pages to read. Send the pages that matter.`,
+    unreadable: `Couldn't read ${name}. It may be protected or scanned too faintly.`,
+  })[reason];
 
 /** What a turn kept of what it was sent: "Kept the photo", "Kept 2 photos", "Kept the PDF" or, for mixed kinds, "Kept 3 files"; each one's own line under the card names where it went. */
 export const describeKeptPhotos = (

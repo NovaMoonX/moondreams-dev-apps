@@ -96,6 +96,18 @@ export function splitMarkdownSections(text: string): MarkdownSection[] {
   });
 }
 
+/** The sections that hold words, plus an empty `##` or `###` heading that groups a deeper section with words after it; an empty `#` is the file's title and is not a section. */
+export const readableSections = (text: string): MarkdownSection[] =>
+  splitMarkdownSections(text).filter((section, index, all) => {
+    if (section.markdown !== '') return true;
+    if (section.level === 1) return false;
+    const after = all.slice(index + 1);
+    const end = after.findIndex((next) => next.level <= section.level);
+    return (end === -1 ? after : after.slice(0, end)).some(
+      (next) => next.markdown !== '',
+    );
+  });
+
 /** Whether a file's sections fit a topic's section cap. */
 export const fitsTopic = (sections: MarkdownSection[]) =>
   sections.length > 0 && sections.length <= MAX_SECTIONS;

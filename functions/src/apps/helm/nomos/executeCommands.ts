@@ -46,7 +46,7 @@ import { LET_GO_WINDOW_MS } from '../media/mediaCaps.js';
 import {
   fitsTopic,
   markdownTitle,
-  splitMarkdownSections,
+  readableSections,
 } from '../media/markdownSections.js';
 import { TOPICS_LIMIT } from '../topicLimits.js';
 import { toNoteSource } from '../topicWrite.js';
@@ -295,9 +295,7 @@ export function planFileKnowledge(input: {
         typeof item.words.fileName === 'string' && item.words.fileName
           ? item.words.fileName
           : 'file';
-      const sections = splitMarkdownSections(text).filter(
-        (section) => section.markdown !== '',
-      );
+      const sections = readableSections(text);
       const topicsMade = acc.imports.filter((entry) => entry.topic).length;
       const isTopicWanted =
         decision.asTopic && input.topicCount + topicsMade < TOPICS_LIMIT;

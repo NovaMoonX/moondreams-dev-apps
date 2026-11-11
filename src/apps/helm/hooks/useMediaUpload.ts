@@ -88,7 +88,7 @@ export interface TurnAttachment {
   };
   status: 'uploading' | 'transcribing' | 'ready' | 'failed';
   /** Why a failed chip failed; null while it has not. */
-  failure: 'upload' | 'transcribe' | 'usedUp' | null;
+  failure: 'upload' | 'transcribe' | 'usedUp' | 'tooLong' | null;
   /** True once a voice note's words are in the field. */
   isWritten: boolean;
   mediaId: string | null;
@@ -99,6 +99,8 @@ interface TurnAttachmentsOptions {
   /** Receives a voice note's words once they are written out; the caller puts them in its field. */
   onTranscript: (text: string) => void;
 }
+
+type PdfIssue = 'locked' | 'unreadable';
 
 const NO_MEASURE = { pageCount: null, text: null, durationMs: null };
 
@@ -119,11 +121,13 @@ const TOO_LARGE_TEXT: Record<AttachmentKind, string> = {
 };
 
 const refusalText = (
-  reason: PickRefusal,
+  reason: PickRefusal | PdfIssue,
   file: File,
   measured: { pages: number | null; chars: number | null } | null = null,
 ) => {
   const kind = kindOfFile(file);
+  if (reason === 'locked') return HELM_COPY.attachPdfLocked;
+  if (reason === 'unreadable') return HELM_COPY.attachPdfUnreadable;
   if (reason === 'notSupported') return HELM_COPY.attachNotSupported;
   if (reason === 'tooManyPages') {
     return HELM_COPY.attachTooManyPages(measured?.pages ?? 0);
@@ -173,7 +177,7 @@ export function useTurnAttachments({
   const refuse = (
     key: string,
     file: File,
-    reason: PickRefusal,
+    reason: PickRefusal | PdfIssue,
     measured: {
       pages: number | null;
       chars: number | null;
@@ -200,7 +204,9 @@ export function useTurnAttachments({
         failure:
           result.reason === 'listenLimit' || result.reason === 'budgetReached'
             ? 'usedUp'
-            : 'transcribe',
+            : result.reason === 'tooLong'
+              ? 'tooLong'
+              : 'transcribe',
       });
     } catch (failure) {
       console.error('Helm voice note was not written out', failure);
@@ -216,19 +222,27 @@ export function useTurnAttachments({
       return {
         ...NO_MEASURE,
         pageCount: result.status === 'ok' ? result.pageCount : null,
+        pdfIssue: result.status === 'ok' ? null : result.status,
       };
     }
     if (entry.kind === 'markdown') {
-      return { ...NO_MEASURE, text: await entry.source.text() };
+      return {
+        ...NO_MEASURE,
+        text: await entry.source.text(),
+        pdfIssue: null,
+      };
     }
-    return entry.measured;
+    return { ...entry.measured, pdfIssue: null };
   };
 
   const run = async (key: string) => {
     const entry = latest.current.find((held) => held.key === key);
     if (!user || !entry) return;
     if (!navigator.onLine) {
-      patch(key, { status: 'failed', failure: 'upload' });
+      patch(key, {
+        status: 'failed',
+        failure: entry.mediaId ? 'transcribe' : 'upload',
+      });
       return;
     }
     patch(key, { status: 'uploading', failure: null });
@@ -237,8 +251,15 @@ export function useTurnAttachments({
         await write(key, entry.mediaId);
         return;
       }
-      const measured = await measure(entry);
+      const { pdfIssue, ...measured } = await measure(entry);
       if (!latest.current.some((held) => held.key === key)) return;
+      if (pdfIssue) {
+        refuse(key, entry.source, pdfIssue, {
+          pages: null,
+          chars: null,
+        });
+        return;
+      }
       const refusal = checkMeasured(entry.kind, {
         pages: measured.pageCount,
         chars: measured.text?.length ?? null,

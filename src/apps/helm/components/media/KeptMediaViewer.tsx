@@ -111,6 +111,12 @@ function KeptMediaViewer({ media, record, onClose }: KeptMediaViewerProps) {
       >
         <div className='space-y-4'>
           {media.kind !== 'photo' && <BackLink onBack={onClose} />}
+          {media.fileName &&
+            (media.kind === 'pdf' || media.kind === 'markdown') && (
+              <p className='text-muted-foreground text-[13px] break-all'>
+                {media.fileName}
+              </p>
+            )}
           {media.kind === 'photo' && (
             <Button
               type='button'

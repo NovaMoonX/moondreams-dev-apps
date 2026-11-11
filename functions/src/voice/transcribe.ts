@@ -30,7 +30,7 @@ const held = (reason: 'unavailable' | 'tooLong'): TranscribeResult => ({
   reason,
 });
 
-/** Writes out one recording. Its claimed length is reserved against the person's day and the site's day first, then settled at the length the provider measures; a recording that turns out longer than the limit is charged but refused. In the emulator with no key it answers `emulatorText` and charges the claimed length. */
+/** Writes out one recording. Its worst case, or its claimed length when only that fits, is reserved against the person's day and the site's day first, then settled at the length the provider measures; a recording that turns out longer than the limit is charged but refused. In the emulator with no key it answers `emulatorText` and charges `emulatorMs`. */
 export async function transcribeAudio({
   firestore,
   uid,
@@ -39,6 +39,7 @@ export async function transcribeAudio({
   bytes,
   mimeType,
   claimedMs,
+  emulatorMs,
   emulatorText,
 }: {
   firestore: Firestore;
@@ -48,6 +49,7 @@ export async function transcribeAudio({
   bytes: Uint8Array;
   mimeType: string;
   claimedMs: number;
+  emulatorMs: number;
   emulatorText: string;
 }): Promise<TranscribeResult> {
   const limits = Object.hasOwn(VOICE_APPS, appId) ? VOICE_APPS[appId] : null;
@@ -67,17 +69,22 @@ export async function transcribeAudio({
     return held('unavailable');
   }
   const now = Date.now();
-  const reservedMs = Math.ceil(claimedMs);
-  const reservedMicros = transcribeCostMicros(reservedMs);
-  const reason = await reserveTranscribe(firestore, {
+  const claimedCeil = Math.ceil(claimedMs);
+  const reservation = await reserveTranscribe(firestore, {
     uid,
     limits,
     now,
     timeZone,
-    reserveMs: reservedMs,
-    reserveMicros: reservedMicros,
+    worst: {
+      ms: TRANSCRIBE_MAX_MS,
+      micros: transcribeCostMicros(TRANSCRIBE_MAX_MS),
+    },
+    claimed: { ms: claimedCeil, micros: transcribeCostMicros(claimedCeil) },
   });
-  if (reason !== null) return { status: 'held', reason };
+  if (reservation.held !== null) {
+    return { status: 'held', reason: reservation.held };
+  }
+  const { ms: reservedMs, micros: reservedMicros } = reservation.reserved;
 
   const settle = (actualMs: number) =>
     settleTranscribe(firestore, {
@@ -90,8 +97,8 @@ export async function transcribeAudio({
       actualMicros: transcribeCostMicros(actualMs),
     });
   if (apiKey === null) {
-    await settle(reservedMs);
-    return { status: 'ready', text: emulatorText, durationMs: reservedMs };
+    await settle(emulatorMs);
+    return { status: 'ready', text: emulatorText, durationMs: emulatorMs };
   }
   try {
     const written = await transcribeDeepgram({

@@ -120,7 +120,8 @@ export const transcribeHelmVoiceNote = onCall(
       timeZone,
       bytes,
       mimeType: row.mimeType,
-      claimedMs: MAX_VOICE_NOTE_MS,
+      claimedMs: Math.min(row.durationMs, MAX_VOICE_NOTE_MS),
+      emulatorMs: Math.min(row.durationMs, MAX_VOICE_NOTE_MS),
       emulatorText: EMULATOR_TEXT,
     });
     if (written.status === 'held') return written;

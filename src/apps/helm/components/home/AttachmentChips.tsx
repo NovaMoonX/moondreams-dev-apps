@@ -40,9 +40,11 @@ const getRemoveLabel = (item: TurnAttachment) =>
 const getFailure = (item: TurnAttachment) =>
   item.failure === 'usedUp'
     ? HELM_COPY.attachVoiceUsedUp
-    : item.failure === 'transcribe'
-      ? HELM_COPY.attachWriteFailed
-      : HELM_COPY.attachFailed;
+    : item.failure === 'tooLong'
+      ? HELM_COPY.attachVoiceTooLongToWrite
+      : item.failure === 'transcribe'
+        ? HELM_COPY.attachWriteFailed
+        : HELM_COPY.attachFailed;
 
 /** The photos and files picked for the turn being written, above the field: a spinner while one uploads (a voice note then says it is being written out), then Remove; a failed one says so with Try again. */
 function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
@@ -127,7 +129,7 @@ function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
                 <span className='text-destructive text-[12px] leading-4'>
                   {getFailure(item)}
                 </span>
-                {item.failure !== 'usedUp' && (
+                {item.failure !== 'usedUp' && item.failure !== 'tooLong' && (
                   <Button
                     type='button'
                     variant='tertiary'

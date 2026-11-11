@@ -550,12 +550,17 @@ export const HELM_COPY = {
   attachWriteFailed: "Couldn't write this out",
   attachVoiceUsedUp:
     'Voice notes are used up for today. Type what it says, or try tomorrow.',
+  attachVoiceTooLongToWrite:
+    'This recording is over 5 minutes. Type what it says instead.',
+  attachPdfLocked: 'This PDF is locked. Unlock it and send it again.',
+  attachPdfUnreadable: "Couldn't open this PDF. Try another copy.",
   recording: 'Recording',
   recordCancel: 'Cancel',
   recordStop: 'Stop',
   recordStoppedAtLimit: 'Voice notes stop at 5 minutes. This one is saved.',
   recordNoMicrophone:
     "The microphone isn't available. Allow it in your browser's settings, or type instead.",
+  recordUnsupported: "This browser can't record. Type instead.",
   recordNeedsConnection:
     "Voice notes need a connection. Type it, or try again when you're back online.",
   mediaKeptOn: (noun: string, record: string) => `Kept ${noun} on ${record}`,

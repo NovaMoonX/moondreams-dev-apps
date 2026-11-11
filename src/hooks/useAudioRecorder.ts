@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-export type RecorderState = 'idle' | 'recording' | 'refused';
+export type RecorderState = 'idle' | 'recording' | 'refused' | 'unsupported';
 
 export interface Recording {
   blob: Blob;
@@ -32,14 +32,13 @@ const pickType = () =>
     ? null
     : (TYPES.find((type) => MediaRecorder.isTypeSupported(type)) ?? null);
 
-/** Records the microphone with `MediaRecorder` (Opus in WebM, else MP4). `stop` hands the recording to `onDone`, `cancel` drops it; at `maxMs` it stops by itself. The microphone is released on stop, cancel and unmount. */
+/** Records the microphone with `MediaRecorder` (Opus in WebM, else MP4); a browser that cannot record is `unsupported`, one the person refused `refused`. `start` answers whether it began; `stop` hands the recording to `onDone`, `cancel` drops it; at `maxMs` it stops by itself. The microphone is released on stop, cancel and unmount. */
 export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
   const [state, setState] = useState<RecorderState>('idle');
   const [elapsedMs, setElapsedMs] = useState(0);
   const session = useRef<Session | null>(null);
   const done = useRef(onDone);
   const isStarting = useRef(false);
-  const isAborted = useRef(false);
   const isMounted = useRef(true);
   useEffect(() => {
     done.current = onDone;
@@ -69,24 +68,23 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
     };
   }, []);
 
-  const start = async () => {
-    if (session.current || isStarting.current) return;
+  const start = async (): Promise<boolean> => {
+    if (session.current || isStarting.current) return false;
     if (
       typeof MediaRecorder === 'undefined' ||
       !navigator.mediaDevices?.getUserMedia
     ) {
-      setState('refused');
-      return;
+      setState('unsupported');
+      return false;
     }
     isStarting.current = true;
-    isAborted.current = false;
     const acquired: { stream: MediaStream | null } = { stream: null };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       acquired.stream = stream;
-      if (!isMounted.current || isAborted.current) {
+      if (!isMounted.current) {
         stream.getTracks().forEach((track) => track.stop());
-        return;
+        return false;
       }
       const type = pickType();
       const recorder = new MediaRecorder(
@@ -132,10 +130,12 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
       setElapsedMs(0);
       setState('recording');
       recorder.start();
+      return true;
     } catch {
       acquired.stream?.getTracks().forEach((track) => track.stop());
       release();
       if (isMounted.current) setState('refused');
+      return false;
     } finally {
       isStarting.current = false;
     }
@@ -148,7 +148,6 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
   };
 
   const cancel = () => {
-    if (isStarting.current) isAborted.current = true;
     const held = session.current;
     if (!held) return;
     held.isDiscarded = true;

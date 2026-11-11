@@ -1545,8 +1545,8 @@ const transcribePlan = (
     usage: { listenMs: 0, transcribeMs: 0 },
     budgetMicros: 0,
     limits: listenLimits,
-    reserveMs: fiveMinutes,
-    reserveMicros: transcribeCostMicros(fiveMinutes),
+    worst: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
+    claimed: { ms: fiveMinutes, micros: transcribeCostMicros(fiveMinutes) },
     ...overrides,
   });
 assert.equal(
@@ -1573,6 +1573,20 @@ assert.equal(
   }).held,
   'listenLimit',
   'listening and recordings share the day, held when the reserve would pass it',
+);
+const claimOf = (ms: number) => ({ ms, micros: transcribeCostMicros(ms) });
+const fourMinutesLeft = { listenMs: 3_600_000 - 240_000, transcribeMs: 0 };
+assert.deepEqual(
+  (({ held, reserved }) => [held, reserved.ms])(
+    transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(10_000) }),
+  ),
+  [null, 10_000],
+  'a short claim is reserved at its own length when the worst case does not fit',
+);
+assert.equal(
+  transcribePlan({ usage: fourMinutesLeft, claimed: claimOf(270_000) }).held,
+  'listenLimit',
+  'a claim longer than what is left is still held',
 );
 assert.deepEqual(
   transcribePlan({

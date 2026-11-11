@@ -48,8 +48,10 @@ import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtu
 import { readPdf } from '../../functions/src/files/pdfText.ts';
 import {
   fitsTopic,
+  readableSections,
   splitMarkdownSections,
 } from '../../functions/src/apps/helm/media/markdownSections.ts';
+import { buildFileNotReadLine } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import { transcribeAudio } from '../../functions/src/voice/transcribe.ts';
 import { sweepExpiredMedia } from '../../functions/src/apps/helm/media/sweepMedia.ts';
 
@@ -937,6 +939,19 @@ test('a PDF with text goes in <files>, a scan as a document, a locked one and a 
   assert.deepEqual(over.unreadable, [
     { id: 'bigC', name: 'bigC.pdf', reason: 'tooLarge' },
   ]);
+  assert.equal(
+    buildFileNotReadLine('bigC.pdf', 'tooLarge'),
+    "Didn't read bigC.pdf: the files in this turn were too big together. Send it on its own.",
+  );
+  assert.equal(
+    buildFileNotReadLine('locked.pdf', 'locked'),
+    'locked.pdf is locked. Unlock it and send it again.',
+  );
+  assert.ok(
+    buildFileNotReadLine('scan.pdf', 'unreadable').includes(
+      'scanned too faintly',
+    ),
+  );
 });
 
 const markdownInput = (decision: Decided, text = PACKING) => {
@@ -1093,6 +1108,16 @@ test('a title with no words under it is not a section, and a file of only such h
   );
   assert.equal(written.noteCreates.length, 1);
   assert.equal(written.topicCreates.length, 0);
+  assert.deepEqual(
+    readableSections(
+      '# Trip\n## Day 1\n### Morning\ntext\n## Day 2\n### Morning\ntext',
+    ).map((section) => section.heading),
+    ['Day 1', 'Morning', 'Day 2', 'Morning'],
+  );
+  assert.deepEqual(
+    readableSections('# Title\n\n## Empty\n').map((s) => s.heading),
+    [],
+  );
 });
 
 test('a file with more than 60 sections stays a note and says so', () => {
@@ -1293,6 +1318,7 @@ test('a recording is written out in the emulator, charged its minutes, and held 
       bytes: Buffer.from('audio'),
       mimeType: 'audio/webm',
       claimedMs,
+      emulatorMs: claimedMs,
       emulatorText: 'Call the vet about Miso’s booster on Friday',
     });
   const usageOf = () =>

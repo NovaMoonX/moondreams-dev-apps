@@ -58,7 +58,11 @@ import {
   type OpenTopicRecord,
 } from './noteStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
-import { openMedia, type OpenedMedia } from './media/openMedia.js';
+import {
+  openMedia,
+  type OpenedMedia,
+  type UnreadableReason,
+} from './media/openMedia.js';
 import { sweepExpiredMedia } from './media/sweepMedia.js';
 import {
   createQuoteBook,
@@ -1859,7 +1863,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ...attached.unreadable.map((entry) => entry.id),
       ],
       unopenedCount: attached.unopened.length,
-      unreadableNames: attached.unreadable.map((entry) => entry.name),
+      unreadable: attached.unreadable.map(({ name, reason }) => ({
+        name,
+        reason,
+      })),
     },
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
@@ -1887,7 +1894,7 @@ interface SentMedia {
   /** Media code lets go without a decision: refused over the cap, not opened, unreadable, or a recording. */
   letGoIds: string[];
   unopenedCount: number;
-  unreadableNames: string[];
+  unreadable: { name: string; reason: UnreadableReason }[];
 }
 
 const toMessageContent = (
@@ -2511,7 +2518,9 @@ async function writeResult(
             ...(sentMedia.unopenedCount > 0
               ? [buildPhotosNotOpenedLine(sentMedia.unopenedCount)]
               : []),
-            ...sentMedia.unreadableNames.map(buildFileNotReadLine),
+            ...sentMedia.unreadable.map((entry) =>
+              buildFileNotReadLine(entry.name, entry.reason),
+            ),
           ],
         }
       : withHome;
