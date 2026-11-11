@@ -79,12 +79,14 @@ function TopicMoveSheet({
                 className='flex h-auto w-full min-w-0 items-center justify-start gap-3 rounded-none border-0 px-0 py-3 text-left'
                 onClick={() => onPick(parent.id)}
               >
-                <span
-                  className='w-7 shrink-0 text-center text-xl'
-                  aria-hidden='true'
-                >
-                  {parent.emoji ?? ''}
-                </span>
+                {parent.emoji && (
+                  <span
+                    className='w-7 shrink-0 text-center text-xl'
+                    aria-hidden='true'
+                  >
+                    {parent.emoji}
+                  </span>
+                )}
                 <span className='text-foreground min-w-0 flex-1 text-[15px] break-words'>
                   {pathOf(parent.id, topics).join(' › ')}
                 </span>
