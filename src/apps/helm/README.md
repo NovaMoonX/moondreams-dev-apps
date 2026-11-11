@@ -43,7 +43,7 @@ Built:
 - Give a person, pet, organization or place a photo from the library or the camera, with one main photo that shows beside their name in People and several more under it (up to 12), each opening full screen; the main one can change and a photo can be removed with an Undo. Every photo is sealed on your phone before it is stored.
 - Topics grow from the conversation: a note that fits a part is added to it in the same turn with Undo, "make the intro shorter" changes only what you asked, a topic can move under another, and related topics are offered a parent as a question; editing or deleting a note brings its topics up to date.
 - Send up to 5 photos or screenshots with a turn (a photo of any size is shrunk on the phone first); the assistant reads them with your words and keeps one on the task or fact it changed ("Kept the photo on Dana's quote") or lets it go, "Read the photo. Didn't keep it" with "Keep it" for 24 hours before it is deleted; a kept photo shows on its task or fact, Undo takes it back, and a photo can be sent with no words. PDFs (up to 20 pages) are read and kept on the task they made or let go; a Markdown file becomes a note, or a topic when it reads as one; a voice note is written out into the field so you can fix it before sending, and the recording is let go unless you keep it. Keeping a file on a project or a person is still to come.
-- Procedures: say "make me a packing routine for work trips", or tap "Make these steps a procedure" on a task, and the routine is kept once, its steps in named groups; edit it by hand or ask ("add a step for the laptop charger"), every change is a version you can open and restore, and Copy as Markdown puts it on the clipboard. Procedures shows in Browse once you have one. Running one for a trip or project is still to come.
+- Procedures: say "make me a packing routine for work trips", or tap "Make these steps a procedure" on a task, and the routine is kept once, its steps in named groups; edit it by hand or ask ("add a step for the laptop charger"), every change is a version you can open and restore, and Copy as Markdown puts it on the clipboard. Procedures is always in Browse. Start a run of one for a trip, event or project (or just to run it), tick its steps by tap or by saying "done with the charger", add a step just this time, and finish it; its runs stay listed on the procedure, the project and the trip.
 
 Next (Core MVP):
 - [ ] A voice-first home: natural cloud voice online, offline voice on any phone after a one-time download, barge-in, short answers, an optional wake phrase
@@ -53,7 +53,7 @@ Next (Core MVP):
 - [ ] People, pets and organizations with photos, levels and project roles; key dates; places with photos; Google Contacts picker
 - [ ] Preferences, favorites and who you are; how you write; "How Nomos sees you"
 - [ ] Knowledge as nested topics that read as documents, with sources on every part and a history of versions
-- [ ] Procedures run each time, attached to a trip, event or project
+- [x] Procedures run each time, attached to a trip, event or project
 - [ ] Tasks with steps, projects with health from evidence, the Inbox, Today
 - [ ] Connected apps, read only: Google Calendar, Gmail, Drive and every site app, each sharing only what you switch on
 - [ ] Encrypted from day one; Trust this browser; Activity with Undo; search
