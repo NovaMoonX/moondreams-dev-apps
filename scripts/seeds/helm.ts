@@ -1342,7 +1342,7 @@ async function buildPlanDays(input: {
   return { days, task: { id: 'seed-task-plan-done', task: doneTask } };
 }
 
-const toWho = (
+export const toWho = (
   fields: Pick<Who, 'kind' | 'tier' | 'tierSetBy' | 'isSelf' | 'createdBy'> &
     Partial<Pick<Who, 'lastMentionedAt'>>,
   createdAt: number,
@@ -1363,7 +1363,7 @@ const toWho = (
   sealed,
 });
 
-const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
+export const wordsOf = (name: string, extra: Partial<WhoSealed> = {}): WhoSealed => ({
   name,
   aliases: [],
   relation: null,
@@ -1418,7 +1418,7 @@ function makeSquarePng(
 }
 
 /** One kept photo of a who or place: a flat-colour PNG sealed with the person's key, its document and the two sealed objects to upload. */
-async function buildSeedPhoto(input: {
+export async function buildSeedPhoto(input: {
   uid: string;
   id: string;
   attachedTo: Media['attachedTo'][number];
@@ -1470,7 +1470,7 @@ async function buildSeedPhoto(input: {
 }
 
 /** Uploads a seeded sealed object to the Storage emulator; a bucket the app isn't configured for leaves the photo unreadable. */
-async function uploadSealedSeed(path: string, bytes: Uint8Array) {
+export async function uploadSealedSeed(path: string, bytes: Uint8Array) {
   const bucket =
     process.env.STORAGE_BUCKET ??
     process.env.VITE_FIREBASE_STORAGE_BUCKET ??

@@ -29,6 +29,7 @@
     "seed:going-once": "npm run seed -- --scope going-once",
     "seed:going-once-scale": "npm run seed -- --scope going-once-scale",
     "seed:runway-scale": "npm run seed -- --scope runway-scale",
+    "seed:helm-scale": "npm run seed -- --scope helm-scale",
     "seed:pinch-scale": "npm run seed -- --scope pinch-scale",
     "seed:worth-the-wait": "npm run seed -- --scope worth-the-wait",
     "seed:reset": "npm run seed -- --scope all --reset",

@@ -1179,6 +1179,32 @@ Every row is proven in `check:helm-rules` (the site rows in `check:connections-r
 - Request/response calls are TanStack Query or mutations: the key, the connections callables, `sortHelmCapture`, `resolveHelmQuestion`, `importHelmOutbox`, `importHelmContacts`, `learnHelmStyle`, `transcribeVoiceNote`, `mintVoiceToken`, `signOutEverywhere`, `deleteHelmData`; `streamSpeech` is a `fetch` read as a stream inside `cloudTts.ts`.
 - No section-scoped Context. The open view and record live in the URL through `useHelmUrlState` (`nuqs`); sheet state is local; voice state (listening phase, playing, route) lives in `useVoiceConversation`, never in Redux. An unsent turn survives the phone closing the app as a sealed form draft once the key is there; a turn sent with no key is in the drop-box outbox (text only: attachments need the key and a connection, and say so).
 
+**As built (issue 64): performance at a lifetime's volume.** `helm-scale` gives Morgan 2,000 who, 20,000 key dates, 600 tasks, 2,000 facts, 300 notes, 400 turns, 200 photos (twelve on Avery Brooks) and 1,500 synced copies (`SEEDING.md`). Fixes, from a CPU profile on the dev build:
+- The People list renders in chunks of 40 rows under `LazyMount` (the first chunk at once, each later one holding a 65px-per-row estimate until it nears the screen), so opening People no longer draws 1,300 rows.
+- Every due-day and time format goes through `getDateTimeFormat` (`@/utils/timezoneUtils`), which builds one `Intl.DateTimeFormat` per locale and options and reuses it: building one per task was most of a Tasks or Today switch.
+
+### Performance
+
+Production build, a 390×844 viewport, CPU throttled 4× (CDP), the emulators, Morgan's scale data with the 1,500 copies (4,828 decrypts); three first opens and each Browse view twice:
+
+| Measure | Before | After |
+|---|---|---|
+| Home shown after a first open | 1.9–2.0 s | 2.0–2.1 s |
+| Everything loaded | 8.6–8.7 s | 8.7–9.4 s |
+| Key-date index opened | 42–46 ms | 42–50 ms (budget 150 ms) |
+| Today | 538–631 ms | 220–303 ms over three runs |
+| Tasks | 561, 576 ms | 250, 276 ms |
+| People | 1,320, 1,240 ms | 205, 191 ms |
+| Projects | 504, 406 ms | 181, 171 ms |
+| Search | 303, 137 ms | 99, 90 ms |
+| Every other view | 46–190 ms | 41–202 ms |
+| A typed capture ("Remind me to call Avery Brooks tomorrow at 9") | | shown at once (174 ms); "Made a task" with Undo at 3.2 s, the emulator's function included |
+| Avery's 12 photos, the on-screen 7 | | 357 ms cold, 287 ms warm |
+| The hourly sync, Morgan's stale grants plus Alex's | | 43 s, about 1,850 writes in 48 batches |
+| The hourly sync with nothing changed | | 4.3 s, 17 writes |
+
+A first open is bound by the listeners and the sealed reads, not by rendering, so the fixes leave it as it was. Today is the one switch near 300 ms: it draws the agenda, the plan and the day's dates together, and its slowest run of six was 303 ms. The open tasks arrive about 3.5 s after the home, behind the heavier who and synced listeners (a follow-up: start the listeners Today needs first).
+
 ## 16. Backend surface
 
 | Kind | Name / path | What it does, and why plain client code can't | Trigger / consumer | Lands in |

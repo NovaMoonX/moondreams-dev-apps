@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, UserPlus } from 'lucide-react';
 
+import LazyMount from '@/components/LazyMount';
 import LockedButton from '@/components/LockedButton';
 import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
@@ -21,6 +22,13 @@ import type { OpenWho } from '@apps/helm/types';
 import { groupWho } from '@apps/helm/utils/whoGroups';
 
 const SEARCH_FROM = 8;
+const ROWS_PER_CHUNK = 40;
+const ROW_HEIGHT = 65;
+
+const toChunks = (list: OpenWho[]) =>
+  Array.from({ length: Math.ceil(list.length / ROWS_PER_CHUNK) }, (_, index) =>
+    list.slice(index * ROWS_PER_CHUNK, (index + 1) * ROWS_PER_CHUNK),
+  );
 
 interface WhoViewProps {
   onBack: () => void;
@@ -64,17 +72,31 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
     back: HELM_COPY.backToPeople,
   });
 
+  const renderRows = (list: OpenWho[]) => (
+    <div className='helm-card divide-border divide-y overflow-hidden'>
+      {toChunks(list).map((chunk, index) => (
+        <LazyMount
+          key={index}
+          eager={index === 0}
+          estimatedHeight={chunk.length * ROW_HEIGHT}
+        >
+          <ul className='divide-border divide-y'>
+            {chunk.map((entry) => (
+              <li key={entry.id}>
+                <WhoRow who={entry} onOpen={onOpenWho} />
+              </li>
+            ))}
+          </ul>
+        </LazyMount>
+      ))}
+    </div>
+  );
+
   const renderGroup = (label: string, list: OpenWho[]) =>
     list.length > 0 && (
       <section className='space-y-3'>
         <SectionDivider label={label} />
-        <ul className='helm-card divide-border divide-y overflow-hidden'>
-          {list.map((entry) => (
-            <li key={entry.id}>
-              <WhoRow who={entry} onOpen={onOpenWho} />
-            </li>
-          ))}
-        </ul>
+        {renderRows(list)}
       </section>
     );
 
@@ -171,15 +193,7 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
                   : HELM_COPY.showOthers(groups.others.length)}
               </ShowMoreButton>
             )}
-            {isOthersShown && (
-              <ul className='helm-card divide-border divide-y overflow-hidden'>
-                {groups.others.map((entry) => (
-                  <li key={entry.id}>
-                    <WhoRow who={entry} onOpen={onOpenWho} />
-                  </li>
-                ))}
-              </ul>
-            )}
+            {isOthersShown && renderRows(groups.others)}
           </section>
         )}
       </main>
