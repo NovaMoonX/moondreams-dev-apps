@@ -1,4 +1,5 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
+import type { TopicVersionReason } from '@apps/helm/types';
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 
@@ -81,6 +82,13 @@ export const NOTE_BODY_MAX = 20_000;
 export const NOTE_COUNT_FROM = 18_000;
 export const TOPIC_NAME_MAX = 40;
 export const TOPIC_DEPTH_MAX = 3;
+export const SECTION_HEADING_MAX = 80;
+export const SECTION_MARKDOWN_MAX = 4_000;
+export const TOPIC_SECTIONS_MAX = 60;
+export const TOPIC_DOCUMENT_MAX = 30_000;
+export const SECTION_SOURCES_MAX = 20;
+/** The newest versions the History sheet listens to. */
+export const TOPIC_VERSIONS_LIMIT = 200;
 export const SUBTOPICS_MAX = 20;
 export const NOTE_TOPICS_MAX = 10;
 /** Notes the search field appears from. */
@@ -1704,6 +1712,92 @@ export const HELM_COPY = {
   topicDeletePartial: (name: string) =>
     `${name} wasn't deleted, and some notes may have lost it. Open it and check.`,
   topicDeleteFailed: "That wasn't deleted. Try again.",
+  topicBringingIn: (count: number) =>
+    `Bringing in ${count} new ${count === 1 ? 'note' : 'notes'}…`,
+  topicFailedLine: (count: number) =>
+    `${count} new ${count === 1 ? "note isn't" : "notes aren't"} in the document yet`,
+  topicTryAgain: 'Try again',
+  topicLimitedLine: (count: number) =>
+    `${count} new ${count === 1 ? 'note' : 'notes'} will be added tomorrow`,
+  topicReadThemNow: 'Read them now',
+  topicNewNotesHeading: 'New notes',
+  topicNotesDivider: 'Notes',
+  topicDocumentEmptyNotes: 'Nothing is written here yet.',
+  topicAddPart: 'Add a part',
+  topicMenuHistory: 'History',
+  topicSectionOpen: (heading: string | null) =>
+    heading ? `Where ${heading} came from` : 'Where this part came from',
+  topicSubtopicsLinkHeading: 'Subtopics',
+  sourcesTitle: 'Where this came from',
+  sourceNote: (title: string) => `Your note · ${title}`,
+  sourceNoteGone: 'A note that is removed',
+  sourceMessage: (date: string) => `You said, ${date}`,
+  sourceGeneral: 'Saved from a general answer',
+  sourceFile: 'From a file',
+  sourcePerson: (date: string) => `You wrote this, ${date}`,
+  sourcesEmpty: 'Nothing is recorded for this part.',
+  sourcesEditPart: 'Edit this part',
+  sectionAddTitle: 'Add a part',
+  sectionEditTitle: 'Edit this part',
+  sectionHeadingField: 'Heading',
+  sectionHeadingPlaceholder: 'Tyre pressure',
+  sectionWordsField: 'Words',
+  sectionWordsHint:
+    'Markdown works: **bold**, - lists, [links](https://example.com).',
+  sectionWordsPlaceholder: 'Front 36 psi, rear 38 psi.',
+  sectionWordsMissing: 'Some words are needed.',
+  sectionFull: 'A document holds up to 60 parts.',
+  sectionTooLong: 'The document would pass 30,000 characters.',
+  sectionSaved: 'Saved. This part is yours now.',
+  sectionAdded: 'Added your part.',
+  sectionGone: 'That part is gone. Open the topic again.',
+  historyTitle: (name: string) => `History · ${name}`,
+  historyEmpty: 'Nothing has changed yet.',
+  historyFailed: "History couldn't be opened.",
+  historyReason: (reason: TopicVersionReason) =>
+    reason === 'firstWritten'
+      ? 'First written from your notes'
+      : reason === 'addedFromSource'
+        ? 'Added from your notes'
+        : reason === 'personEdit'
+          ? 'You edited a part'
+          : reason === 'revisedOnRequest'
+            ? 'Changed when you asked'
+            : reason === 'moved'
+              ? 'Moved'
+              : reason === 'grouped'
+                ? 'Grouped under a topic'
+                : reason === 'rearranged'
+                  ? 'Rearranged'
+                  : reason === 'imported'
+                    ? 'Brought in from a file'
+                    : 'Restored an earlier version',
+  historyRowLine: (
+    version: number,
+    when: string,
+    byYou: boolean,
+    assistant: string,
+  ) => `Version ${version} · ${when} · ${byYou ? 'you' : assistant}`,
+  historyRestoredFrom: (version: number) => `Back to version ${version}`,
+  historyNewest: 'Newest',
+  historyVersionTitle: (version: number) => `Version ${version}`,
+  historyUndo: 'Undo this change',
+  historyUndoHint: 'Puts the document back as it was before this.',
+  historyRestore: (version: number) => `Restore version ${version}`,
+  historyRestoreHint: 'Writes it again as the newest version. Nothing is lost.',
+  historyFirstVersion: 'This is the first version.',
+  historySummaryEdited: (heading: string | null) =>
+    heading ? `You edited ${heading}` : 'You edited a part',
+  historySummaryAdded: (heading: string | null) =>
+    heading ? `You added ${heading}` : 'You added a part',
+  historySummaryRestored: (version: number) => `Put back version ${version}`,
+  sectionBusy: 'The document is being updated. Try again in a moment.',
+  historyRestored: (version: number) => `Restored version ${version}`,
+  historyChanged: 'The document changed since. Open History again.',
+  historyNeedsConnection: 'Changing the document needs a connection.',
+  historyRestoreFailed: "That wasn't restored. Try again.",
+  historyPartsLine: (count: number) =>
+    `${count} ${count === 1 ? 'part' : 'parts'} in this version`,
   noteAddTitle: 'New note',
   noteEditTitle: 'Change note',
   noteTitleField: 'Title',

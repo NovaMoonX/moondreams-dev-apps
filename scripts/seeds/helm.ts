@@ -63,6 +63,9 @@ import type {
   Topic,
   TopicDepth,
   TopicSealed,
+  TopicSection,
+  TopicVersion,
+  TopicVersionSealed,
 } from '../../src/apps/helm/types.ts';
 import {
   GOOGLE_ACCOUNT_PREFIX,
@@ -274,6 +277,7 @@ const MOVE_SCREEN: ScreenContext = {
     { collection: 'tasks', id: 'seed-task-hand-2' },
     { collection: 'tasks', id: 'seed-task-3-1' },
   ],
+  topicId: null,
   v: 1,
 };
 
@@ -1737,7 +1741,7 @@ async function buildNoteTurn(input: {
   return { capture, execution, note };
 }
 
-/** Alex's Knowledge: nine topics up to three levels deep (🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-one typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. */
+/** Alex's Knowledge: nine topics up to three levels deep (🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-one typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: six parts (a list under Service, a part from each kind of source and a winter-tires part the person wrote) at version 3, with its three versions under `versions/{n}`. */
 async function buildKnowledge(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1753,29 +1757,155 @@ async function buildKnowledge(input: {
       docState: 'empty',
       pendingNoteIds: [],
     },
+    document: { version: number; sections: TopicSection[] } = {
+      version: 0,
+      sections: [],
+    },
   ): Promise<{ id: string; topic: Topic }> => ({
     id,
     topic: {
       parentId,
       depth,
       projectIds: [],
-      version: 0,
+      version: document.version,
       ...filing,
       writeClaim: null,
       overviewOf: {},
       createdBy: 'person',
       executionId: null,
       createdAt: now - 40 * DAY_MS,
-      lastEditedAt: null,
-      lastWrittenAt: null,
+      lastEditedAt: document.version > 0 ? now - 2 * DAY_MS : null,
+      lastWrittenAt: document.version > 0 ? now - 2 * DAY_MS : null,
       sealed: await sealJson<TopicSealed>(
-        { name, emoji, overview: null, sections: [] },
+        { name, emoji, overview: null, sections: document.sections },
         encryption,
       ),
     },
   });
+  const service: TopicSection = {
+    id: 'seed-section-car-service',
+    heading: 'Service',
+    level: 1,
+    markdown:
+      '- **Oil:** synthetic 5W-30, every 5,000 miles.\n- The shop on Fifth does it in about twenty minutes.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-01' }],
+  };
+  const tyres: TopicSection = {
+    id: 'seed-section-car-tyres',
+    heading: 'Tire pressure',
+    level: 1,
+    markdown:
+      'Front **35**, back **33** when the tires are cold. The sticker inside the driver door has it.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-02' }],
+  };
+  const tyresHeard: TopicSection = {
+    ...tyres,
+    sources: [
+      ...tyres.sources,
+      {
+        kind: 'message',
+        captureId: 'seed-turn-car-tires',
+        at: now - 9 * DAY_MS,
+      },
+    ],
+  };
+  const freshener: TopicSection = {
+    id: 'seed-section-car-freshener',
+    heading: 'Keeping it fresh inside',
+    level: 2,
+    markdown:
+      'Wipe the vents and the dash before clipping on a new air freshener, so it does not smell muddy over old dust.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'general', noteId: SAVED_ANSWER_NOTE_ID }],
+  };
+  const booklet: TopicSection = {
+    id: 'seed-section-car-booklet',
+    heading: 'From the owner booklet',
+    level: 2,
+    markdown:
+      'Rotate the tires every 7,500 miles. Check the brake fluid once a year.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'file', mediaId: 'seed-media-home', noteId: null }],
+  };
+  const winter: TopicSection = {
+    id: 'seed-section-car-winter',
+    heading: 'Winter tires',
+    level: 1,
+    markdown: 'Put them on in early November and take them off in April.',
+    writtenBy: 'person',
+    sources: [{ kind: 'person', at: now - 2 * DAY_MS }],
+  };
+  const carVersions: {
+    reason: TopicVersion['reason'];
+    at: number;
+    by: TopicVersion['createdBy'];
+    noteIds: string[];
+    summary: string;
+    sections: TopicSection[];
+  }[] = [
+    {
+      reason: 'firstWritten',
+      at: now - 20 * DAY_MS,
+      by: 'nomos',
+      noteIds: ['seed-note-01', 'seed-note-02'],
+      summary: 'Wrote the first version from 2 notes',
+      sections: [service, tyres],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 9 * DAY_MS,
+      by: 'nomos',
+      noteIds: [],
+      summary: 'Added the owner booklet and a line from a saved answer',
+      sections: [service, tyresHeard, freshener, booklet],
+    },
+    {
+      reason: 'personEdit',
+      at: now - 2 * DAY_MS,
+      by: 'person',
+      noteIds: [],
+      summary: 'You added Winter tires',
+      sections: [service, tyresHeard, freshener, booklet, winter],
+    },
+  ];
+  const carSections = carVersions[carVersions.length - 1].sections;
+  const versions = await Promise.all(
+    carVersions.map(async (entry, index) => ({
+      topicId: 'seed-topic-car',
+      id: String(index + 1),
+      version: {
+        version: index + 1,
+        restoredFromVersion: null,
+        createdBy: entry.by,
+        reason: entry.reason,
+        noteIds: entry.noteIds,
+        sourceCaptureId: null,
+        executionId: null,
+        createdAt: entry.at,
+        sealed: await sealJson<TopicVersionSealed>(
+          {
+            sections: entry.sections,
+            changeSummary: entry.summary,
+            requestQuote: null,
+            parentName: null,
+          },
+          encryption,
+        ),
+      } satisfies TopicVersion,
+    })),
+  );
   const topics = await Promise.all([
-    topicOf('seed-topic-car', 'Car care', '🚗', null),
+    topicOf(
+      'seed-topic-car',
+      'Car care',
+      '🚗',
+      null,
+      1,
+      { docState: 'current', pendingNoteIds: [] },
+      { version: carVersions.length, sections: carSections },
+    ),
     topicOf('seed-topic-car-washing', 'Washing', null, 'seed-topic-car'),
     topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
     topicOf('seed-topic-kitchen', 'Kitchen', '🍰', null),
@@ -1969,7 +2099,7 @@ async function buildKnowledge(input: {
       [ceramic],
     ),
   ]);
-  return { topics, notes };
+  return { topics, notes, versions };
 }
 
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
@@ -3594,6 +3724,16 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         knowledge.notes.forEach((entry) =>
           batch.set(person.collection('notes').doc(entry.id), entry.note),
         );
+        knowledge.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('topics')
+              .doc(entry.topicId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
       }
       const peopleCount = people
         ? people.who.length +
@@ -3605,7 +3745,11 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           1 +
           7 +
           (projects ? projects.projects.length + projects.tasks.length : 0) +
-          (knowledge ? knowledge.topics.length + knowledge.notes.length : 0)
+          (knowledge
+            ? knowledge.topics.length +
+              knowledge.notes.length +
+              knowledge.versions.length
+            : 0)
         : 0;
       const backToBackCount =
         peopleCount +

@@ -115,7 +115,16 @@ export interface ContextInput {
   topics?: ContextTopic[];
   /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
   notes?: ContextNote[];
+  /** The topic document the person is reading, answered from whole. */
+  focusedTopic?: ContextFocusedTopic | null;
 }
+
+export interface ContextFocusedTopic {
+  name: string;
+  sections: { heading: string | null; markdown: string; noteIds: string[] }[];
+}
+
+export const MAX_TOPIC_DOCUMENT_CHARS = 30_000;
 
 /** A turn said earlier in this conversation: its words, what it did, and the tasks it made or changed. */
 export interface EarlierTurn {
@@ -205,6 +214,37 @@ export function buildContext(input: ContextInput): {
     ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
+  const noteIds = new Set(keptNotes.map((note) => note.id));
+  const topicDocument = input.focusedTopic
+    ? {
+        name: input.focusedTopic.name,
+        sections: input.focusedTopic.sections.reduce<
+          {
+            heading: string | null;
+            markdown: string;
+            sourceAliases: string[];
+          }[]
+        >((kept, section) => {
+          const used = kept.reduce(
+            (sum, entry) => sum + entry.markdown.length,
+            0,
+          );
+          const room = MAX_TOPIC_DOCUMENT_CHARS - used;
+          return room <= 0
+            ? kept
+            : [
+                ...kept,
+                {
+                  heading: section.heading,
+                  markdown: section.markdown.slice(0, room),
+                  sourceAliases: section.noteIds
+                    .filter((id) => noteIds.has(id))
+                    .map((id) => notes.add(id)),
+                },
+              ];
+        }, []),
+      }
+    : null;
   const { reading } = input;
   const text = withoutAddress(input.text, reading).slice(0, MAX_CAPTURE_CHARS);
   const message = [
@@ -292,6 +332,9 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.notes?.length
       ? [`<related_notes>${toDataJson(noteRecords)}</related_notes>`]
+      : []),
+    ...(topicDocument
+      ? [`<topic_document>${toDataJson(topicDocument)}</topic_document>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

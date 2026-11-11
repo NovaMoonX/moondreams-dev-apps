@@ -25,6 +25,7 @@ export function useScreenContext(
   visible: RecordRef[],
   labels: ScreenLabels,
   placement: ScreenPlacement = 'page',
+  topicId: string | null = null,
 ) {
   const dispatch = useAppDispatch();
   const ownerId = useId();
@@ -34,10 +35,11 @@ export function useScreenContext(
     visible: visible.slice(0, SCREEN_VISIBLE_CAP),
     labels,
     placement,
+    topicId,
   });
 
   useEffect(() => {
-    const { view, focus, visible, labels, placement } = JSON.parse(
+    const { view, focus, visible, labels, placement, topicId } = JSON.parse(
       serialized,
     ) as {
       view: ContentView;
@@ -45,11 +47,12 @@ export function useScreenContext(
       visible: RecordRef[];
       labels: ScreenLabels;
       placement: ScreenPlacement;
+      topicId: string | null;
     };
     dispatch(
       publishScreen({
         ownerId,
-        context: { view, focus, visible, v: 1 },
+        context: { view, focus, visible, topicId, v: 1 },
         labels,
         placement,
       }),

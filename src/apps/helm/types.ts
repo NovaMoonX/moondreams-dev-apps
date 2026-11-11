@@ -195,6 +195,8 @@ export interface ScreenContext {
   view: HelmView;
   focus: RecordRef | null;
   visible: RecordRef[];
+  /** The open topic's id on the topic view; null on every other. */
+  topicId: string | null;
   v: 1;
 }
 
@@ -631,6 +633,42 @@ export interface TopicSealed {
 export interface OpenTopic extends Omit<Topic, 'sealed'>, TopicSealed {
   id: string;
   isUnreadable: boolean;
+}
+
+export type TopicVersionReason =
+  | 'firstWritten'
+  | 'addedFromSource'
+  | 'personEdit'
+  | 'revisedOnRequest'
+  | 'moved'
+  | 'grouped'
+  | 'rearranged'
+  | 'imported'
+  | 'restored';
+
+/** `topics/{id}/versions/{n}`: one change to a topic's document; never rewritten. */
+export interface TopicVersion {
+  version: number;
+  restoredFromVersion: number | null;
+  createdBy: 'person' | 'nomos';
+  reason: TopicVersionReason;
+  noteIds: string[];
+  sourceCaptureId: string | null;
+  executionId: string | null;
+  createdAt: number;
+  sealed: Sealed;
+}
+
+export interface TopicVersionSealed {
+  sections: TopicSection[];
+  changeSummary: string;
+  requestQuote: string | null;
+  parentName: string | null;
+}
+
+export interface OpenTopicVersion
+  extends Omit<TopicVersion, 'sealed'>, TopicVersionSealed {
+  id: string;
 }
 
 export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';

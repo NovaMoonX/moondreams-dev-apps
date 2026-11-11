@@ -62,6 +62,7 @@ import {
   buildContext,
   readMadeTitles,
   type ContextFact,
+  type ContextFocusedTopic,
   type ContextSelfFact,
   type ContextTask,
   type EarlierTurn,
@@ -1067,6 +1068,64 @@ async function readScreenTasks(
   };
 }
 
+/** The topic the person is reading, opened under their own account, for a question asked from its page; null when there is none or it will not open. */
+async function readFocusedTopic(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  topicId: string | null,
+): Promise<ContextFocusedTopic | null> {
+  if (!topicId) return null;
+  try {
+    const data = (
+      await firestore.doc(`${base}/topics/${topicId}`).get()
+    ).data();
+    if (!data) return null;
+    const words = openForHelm(key, data.sealed as SealedPayload);
+    const sections = Array.isArray(words.sections)
+      ? (words.sections as {
+          heading: string | null;
+          markdown: string;
+          sources: { noteId?: string | null }[];
+        }[])
+      : [];
+    return typeof words.name === 'string'
+      ? {
+          name: words.name,
+          sections: sections.map((section) => ({
+            heading: section.heading,
+            markdown: section.markdown,
+            noteIds: section.sources.flatMap((source) =>
+              typeof source.noteId === 'string' ? [source.noteId] : [],
+            ),
+          })),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The notes a focused document cites, as titles the answer can name as its sources; their words are already in the document. */
+async function readCitedNotes(
+  firestore: Firestore,
+  base: string,
+  key: HelmKey,
+  topic: ContextFocusedTopic | null,
+  already: HintedNote[],
+): Promise<HintedNote[]> {
+  const known = new Set(already.map((note) => note.id));
+  const ids = [
+    ...new Set(topic?.sections.flatMap((section) => section.noteIds) ?? []),
+  ].filter((id) => !known.has(id));
+  const room = MAX_HINT_NOTES - already.length;
+  return room > 0 && ids.length > 0
+    ? (await readHintedNotes(firestore, base, key, ids.slice(0, room))).map(
+        (note) => ({ ...note, body: '' }),
+      )
+    : [];
+}
+
 /** The last turns of this turn's conversation, oldest first: what was said, the summary of what was done and the tasks it touched. A turn from before conversations were kept has none. */
 async function readEarlierTurns(
   firestore: Firestore,
@@ -1439,13 +1498,29 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
-    const [topics, hinted] =
+    const [topics, hintedNotes, focusedTopic] =
       mode === 'rest'
-        ? [[], []]
+        ? [[], [], null]
         : await Promise.all([
             readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
             readHintedNotes(firestore, base, key, claimed.noteIds),
+            readFocusedTopic(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.topicId ?? null,
+            ),
           ]);
+    const hinted = [
+      ...hintedNotes,
+      ...(await readCitedNotes(
+        firestore,
+        base,
+        key,
+        focusedTopic,
+        hintedNotes,
+      )),
+    ];
     const context = buildContext({
       text: combined.text,
       texts: combined.texts,
@@ -1465,6 +1540,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       projects,
       topics,
       notes: toContextNotes(hinted, combined.text),
+      focusedTopic: isQuestion(combined.text.trim()) ? focusedTopic : null,
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =

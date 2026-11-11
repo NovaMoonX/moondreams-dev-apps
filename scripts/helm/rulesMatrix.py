@@ -220,6 +220,19 @@ def main():
             admin([rm(dk + '-new-' + a)])
         check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
 
+    # A topic's versions are the owner's to read, list, create and delete; nobody updates one.
+    vr = dict(version=1, restoredFromVersion=None, createdBy='nomos', reason='firstWritten', noteIds=['note-1'], sourceCaptureId=None, executionId=None, createdAt=NOW, sealed=SEAL)
+    vk = f'{path}/topics/topic-1/versions/1'
+    for a, tok in actors.items():
+        admin([put(vk, vr)])
+        check(f'versions read [{a}]', get(vk, tok), a == 'o')
+        check(f'versions list [{a}]', get(f'{path}/topics/topic-1/versions', tok), a == 'o')
+        check(f'versions create [{a}]', commit(tok, [put_new(vk + '-new-' + a, vr)]), a == 'o')
+        check(f'versions update [{a}]', commit(tok, [put(vk, dict(vr, reason='personEdit'))]), False)
+        check(f'versions delete [{a}]', commit(tok, [rm(vk)]), a == 'o')
+        admin([rm(vk + '-new-' + a)])
+    check('versions create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/topics/t/versions/1', vr)]), False)
+
     # A key date and the sealed index of them are the owner's alone, like a task; the index is written in the same transaction as the date.
     kd = dict(whoId='who-1', shape='yearly', source='person', createdBy='person', executionId=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
     ix = dict(entryCount=1, rebuiltAt=None, lastEditedAt=NOW, sealed=SEAL)

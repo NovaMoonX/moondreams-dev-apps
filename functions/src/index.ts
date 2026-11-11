@@ -28,6 +28,7 @@ export { getHelmKey } from './apps/helm/getHelmKey.js';
 export { verifyHelmKeys } from './apps/helm/verifyHelmKeys.js';
 export { sortHelmCapture } from './apps/helm/sortHelmCapture.js';
 export { resolveHelmQuestion } from './apps/helm/resolveHelmQuestion.js';
+export { writeHelmTopic } from './apps/helm/writeHelmTopic.js';
 export { importHelmContacts } from './apps/helm/importHelmContacts.js';
 export { mintVoiceToken } from './voice/mintVoiceToken.js';
 export { streamSpeech } from './voice/streamSpeech.js';
