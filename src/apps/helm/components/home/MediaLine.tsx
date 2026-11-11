@@ -257,10 +257,13 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
     typeof effectTitle === 'string' && effectTitle
       ? effectTitle
       : (storedTitle ?? null);
-  const label =
-    record && title
+  const getLabel = () => {
+    if (!record || !title) return HELM_COPY.mediaKeptNoRecord;
+    return media.decidedBy === 'person'
       ? HELM_COPY.mediaKeptOn(title)
-      : HELM_COPY.mediaKeptNoRecord;
+      : HELM_COPY.mediaSeeOn(title);
+  };
+  const label = getLabel();
   const canOpen =
     record === null ||
     (record.kind === 'fact'

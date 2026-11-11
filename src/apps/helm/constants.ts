@@ -472,6 +472,7 @@ export const HELM_COPY = {
     "A photo didn't upload. Try again or remove it, then send.",
   attachThumbLabel: (position: number) => `Photo ${position}`,
   mediaKeptOn: (record: string) => `Kept the photo on ${record}`,
+  mediaSeeOn: (record: string) => `See it on ${record}`,
   mediaKeptNoRecord: 'Kept the photo',
   mediaLetGo: "Didn't keep the photo",
   mediaKeepIt: 'Keep it',

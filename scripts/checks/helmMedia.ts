@@ -459,7 +459,8 @@ test('a keep on a task this reply makes lands on its new id, in the turn summary
     key.key,
     execution.sealed as SealedPayload,
   ).summary;
-  assert.match(String(summary), /Kept the photo on Book the venue/);
+  assert.match(String(summary), /Kept the photo/);
+  assert.doesNotMatch(String(summary), /Book the venue/);
 });
 
 test('the sweep keeps a let-go photo until 24 hours pass, then deletes objects before the document', async () => {

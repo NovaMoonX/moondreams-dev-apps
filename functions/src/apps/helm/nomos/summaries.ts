@@ -253,12 +253,12 @@ export const describeNotes = (count: number) =>
 export const buildPhotosNotOpenedLine = (count: number) =>
   count === 1 ? "Couldn't open one photo" : `Couldn't open ${count} photos`;
 
-/** "Kept the photo on Venue quote", or "Kept 2 photos" when the titles differ in number from one. */
+/** "Kept the photo" or "Kept 2 photos"; the photo's own line under the card names where it went. */
 export const describeKeptPhotos = (titles: string[]) =>
   titles.length === 0
     ? null
     : titles.length === 1
-      ? `Kept the photo on ${titles[0]}`
+      ? 'Kept the photo'
       : `Kept ${titles.length} photos`;
 
 /** "Saved a note." or "Saved a note in Kitchen." */
