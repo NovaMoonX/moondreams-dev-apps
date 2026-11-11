@@ -417,6 +417,7 @@ import {
 import {
   occurrences,
   selectFundedDays,
+  toPayOn,
 } from '../../src/apps/runway/engine/schedule.ts';
 import {
   effectiveStance,
@@ -1584,6 +1585,51 @@ const version = (
     uneven[0].parts.map((part) => part.cents),
     [4, 3, 3],
     'ceil of what is left over the days left, summing to the bill',
+  );
+
+  // A bill paid on a day of its own is saved for by the pays before that day, and keeps its due date as its key.
+  assert.deepEqual(
+    [
+      toPayOn(utc(2026, 12, 15), 1),
+      toPayOn(utc(2026, 12, 1), 1),
+      toPayOn(utc(2026, 12, 3), 5),
+      toPayOn(utc(2027, 3, 10), 31),
+      toPayOn(utc(2026, 12, 15), null),
+    ].map(toDayStamp),
+    ['20261201', '20261201', '20261105', '20270228', '20261215'],
+    'the pay day is the last one on or before the due date, clamped to a short month',
+  );
+  const monthEndPays = Array.from({ length: 3 }, (_, index) =>
+    day(Date.UTC(2026, 10 + index, 30), String(index)),
+  );
+  const carNote = makeBill({
+    schedule: monthly(utc(2026, 12, 15)),
+    fundedBy: { kind: 'lastBefore' },
+  });
+  const byDue = planBillPayments(carNote, monthEndPays, horizon);
+  const byPayDay = planBillPayments(
+    { ...carNote, payOnDay: 1 },
+    monthEndPays,
+    horizon,
+  );
+  assert.deepEqual(
+    [byDue[0].parts.map((part) => toDayStamp(part.day.on)), byDue[0].payOn],
+    [['20261130'], byDue[0].dueOn],
+    'with no pay day the payment is paid and saved for by its due date',
+  );
+  assert.deepEqual(
+    byPayDay
+      .slice(0, 2)
+      .map((payment) => [
+        toDayStamp(payment.dueOn),
+        toDayStamp(payment.payOn),
+        payment.parts.map((part) => toDayStamp(part.day.on)),
+      ]),
+    [
+      ['20261215', '20261201', ['20261130']],
+      ['20270115', '20270101', ['20261230']],
+    ],
+    'paid on the 1st, the pay on the 30th before it carries it',
   );
 
   // A monthly bill on the 31st lands on the last day of shorter months.
@@ -6017,6 +6063,7 @@ const version = (
   const payment = (dueOn: number, parts: number, fundedCents = 0) =>
     ({
       dueOn,
+      payOn: dueOn,
       totalCents: 1_000,
       fundedCents,
       fundedDays: 0,
@@ -6154,6 +6201,7 @@ const version = (
       billId: 'rent',
       name: 'rent',
       dueOn: today - 3 * DAY_MS,
+      payOn: today - 3 * DAY_MS,
       isOverdue: true,
       laterDueOn: [],
     },
@@ -6177,6 +6225,7 @@ const version = (
       billId: 'rent',
       name: 'rent',
       dueOn: today,
+      payOn: today,
       isOverdue: false,
       laterDueOn: [],
     },
@@ -6197,6 +6246,7 @@ const version = (
         billId: 'rent',
         name: 'rent',
         dueOn: today - 14 * DAY_MS,
+        payOn: today - 14 * DAY_MS,
         isOverdue: true,
         laterDueOn: [today - 7 * DAY_MS, today],
       },
@@ -6662,6 +6712,7 @@ const version = (
       b1: [
         {
           dueOn: today + 4 * DAY_MS,
+          payOn: today + 4 * DAY_MS,
           totalCents: 20_000,
           ranged: {
             range: { lowCents: 10_000, highCents: 20_000 },
@@ -12812,7 +12863,12 @@ const version = (
         { dayKey: 'p_20261201', on: utc(2026, 12, 1) },
       ],
       billPayments: [
-        { billId: 'rent', dueOn: utc(2026, 11, 6), totalCents: 150000 },
+        {
+          billId: 'rent',
+          dueOn: utc(2026, 11, 6),
+          payOn: utc(2026, 11, 6),
+          totalCents: 150000,
+        },
       ],
       cards: [
         { cardId: 'c1', dueDay: 31, since: utc(2026, 1, 1) },

@@ -2,6 +2,7 @@ import {
   BILL_WORDS,
   BILL_FREQUENCY_LABELS,
   BILL_REPEAT_KINDS,
+  FORM_FLOW_WORDS,
   GROUP_WORDS,
   PRIORITY_DIAL_WORDS,
   SCHEDULE_LABELS,
@@ -26,7 +27,8 @@ import type {
   Schedule,
 } from '@apps/runway/types';
 import { describeCadenceLine } from '@apps/runway/utils/fundingText';
-import { formatDateOrdinalUTC } from '@/utils/formatUtils';
+import { formatDateOrdinalUTC, toDayOrdinal } from '@/utils/formatUtils';
+import { LAST_DAY } from '@apps/runway/utils/monthDays';
 import { formatCents, formatCentsShort } from '@/utils/moneyUtils';
 
 /** What a group's bills, envelopes and goals come to in a month, the same figure on its heading and in its sheet: "$140 to $180". */
@@ -251,3 +253,11 @@ export function describePlanTotal(
 /** A bill with no due date yet, which the plan sets nothing aside for. */
 export const isUndatedBill = (bill: { timing: { schedule: Schedule } }) =>
   bill.timing.schedule.anchor === null;
+
+/** When a bill is paid, as a summary: "On the due date", or "On the 1st" (the last one before it is due). */
+export const describePayOnDay = (payOnDay: number | null | undefined) =>
+  !payOnDay
+    ? FORM_FLOW_WORDS.payOnDue
+    : payOnDay === LAST_DAY
+      ? FORM_FLOW_WORDS.payOnLastDay
+      : FORM_FLOW_WORDS.payOnDaySummary(toDayOrdinal(payOnDay));

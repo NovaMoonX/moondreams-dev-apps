@@ -6,6 +6,7 @@ import {
   ACCOUNT_WORDS,
   AUTO_PAY_WORDS,
   COST_PAID_WORDS,
+  FORM_FLOW_WORDS,
   GROUP_WORDS,
   HORIZON_WORDS,
   MAKE_BILL_WORDS,
@@ -13,7 +14,10 @@ import {
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
 } from '@apps/runway/constants';
-import { describeBillTiming } from '@apps/runway/utils/billText';
+import {
+  describeBillTiming,
+  describePayOnDay,
+} from '@apps/runway/utils/billText';
 import { getExtras } from '@apps/runway/engine/parts';
 import { isSavingFor } from '@apps/runway/engine/pace';
 import { describeFunding } from '@apps/runway/utils/fundingText';
@@ -307,6 +311,12 @@ const getParts = (
         billBefore.timing.schedule,
         billAfter.timing.schedule,
         describeBillTiming,
+      ),
+      diff(
+        FORM_FLOW_WORDS.payOn,
+        billBefore.payOnDay ?? null,
+        billAfter.payOnDay ?? null,
+        (value) => describePayOnDay(value).toLowerCase(),
       ),
       diff('Ends', billBefore.ending, billAfter.ending, (value) =>
         value.onDate !== null

@@ -109,6 +109,7 @@ assert.equal(isAutoBill({}, 'link'), false);
       billId: 'netflix',
       billName: 'Netflix',
       dueOn: at(-1),
+      paidOn: at(-1),
       amountCents: 1_599,
       isEstimate: false,
       cardId: 'venture',
@@ -214,6 +215,7 @@ assert.equal(isAutoBill({}, 'link'), false);
       netflix: [
         {
           dueOn: at(-1),
+          payOn: at(-1),
           totalCents: 1_599,
           parts: [],
           ranged: null,
@@ -601,6 +603,7 @@ assert.equal(isAutoBill({}, 'link'), false);
 const paymentRows = (dueDays: number[]) =>
   dueDays.map((dueOn) => ({
     dueOn,
+    payOn: dueOn,
     totalCents: 1_599,
     parts: [],
     ranged: null,

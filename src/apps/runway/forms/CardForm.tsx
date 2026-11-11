@@ -6,7 +6,6 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import AmountHero from '@/components/AmountHero';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
-import Pill from '@/components/Pill';
 import { PillGroup } from '@/components/PillGroup';
 import DraftRestoredNotice from '@/components/DraftRestoredNotice';
 import QuestionFlow from '@/components/QuestionFlow';
@@ -71,6 +70,7 @@ import {
   resolveIssuer,
 } from '@apps/runway/utils/cardText';
 import { LAST_DAY, toOrdinal } from '@apps/runway/utils/monthDays';
+import MonthDayGrid from '@apps/runway/components/MonthDayGrid';
 import { maskSummaries } from '@apps/runway/utils/maskSummaries';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
@@ -398,26 +398,14 @@ function CardFormBody({
       blocker: CARD_WORDS.needsDue,
       render: ({ moveOn }) => (
         <div className='space-y-3'>
-          <div
-            className='grid grid-cols-7 gap-1.5'
-            role='group'
-            aria-label={CARD_WORDS.dueTitle}
-          >
-            {DUE_DAYS.map((day) => (
-              <Pill
-                key={day}
-                className="relative w-full px-0! after:absolute after:-inset-x-[3px] after:inset-y-0 after:content-['']"
-                isSelected={formData.dueDay === day}
-                ariaLabel={day === LAST_DAY ? 'Last day' : toOrdinal(day)}
-                onClick={() => {
-                  set({ dueDay: day, hasNoDueDay: false });
-                  moveOn();
-                }}
-              >
-                {String(day)}
-              </Pill>
-            ))}
-          </div>
+          <MonthDayGrid
+            label={CARD_WORDS.dueTitle}
+            value={formData.dueDay}
+            onPick={(day) => {
+              set({ dueDay: day, hasNoDueDay: false });
+              moveOn();
+            }}
+          />
           <div>
             <RevealChip
               onClick={() => {

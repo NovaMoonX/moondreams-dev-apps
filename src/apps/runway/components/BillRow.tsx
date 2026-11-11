@@ -79,6 +79,14 @@ const getDueLine = (
   if (!payment) return 'No payment left';
   const date = formatRelativeDayUTC(payment.dueOn, today, formatDateOrdinalUTC);
   if (payment.paid) return `Paid · due\u00a0${date}`;
+  if (payment.payOn !== payment.dueOn) {
+    const payDate = formatRelativeDayUTC(
+      payment.payOn,
+      today,
+      formatDateOrdinalUTC,
+    );
+    return BILL_WORDS.payOnLine(payDate, date);
+  }
   return isSavingUp
     ? `${BILL_WORDS.savingUp} · due\u00a0${date}`
     : `Due\u00a0${date}`;
@@ -89,7 +97,7 @@ const getProgress = (payment: BillPayment | null, isSavingUp: boolean) => {
   if (!payment) return null;
   const { paid, fundedCents, totalCents } = payment;
   if (paid) {
-    return `${paid.paidOn < payment.dueOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
+    return `${paid.paidOn < payment.payOn ? 'Paid ahead' : 'Paid'} ${formatDateOrdinalUTC(paid.paidOn)}`;
   }
   if (fundedCents <= 0)
     return isSavingUp ? BILL_WORDS.nothingSaved : 'Nothing set aside yet';

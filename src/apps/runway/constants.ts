@@ -1613,6 +1613,8 @@ export const PAID_AMOUNT_WORDS = {
 } as const;
 
 export const BILL_WORDS = {
+  payOnLine: (payOn: string, dueOn: string) =>
+    `Pay\u00a0${payOn} · due\u00a0${dueOn}`,
   paid: 'Paid',
   paidAhead: 'Paid ahead',
   waiting: 'Waiting for the rest',
@@ -1644,6 +1646,7 @@ export const DUE_WORDS = {
   title: 'To pay today',
   titleLate: 'To pay now',
   today: 'Due today',
+  dueLater: (when: string) => `Your day to pay it · due\u00a0${when}`,
   upTo: (amount: string) => `up\u00A0to\u00A0${amount}`,
   wasDue: (when: string) => `Was due\u00a0${when}`,
   missed: (
@@ -3002,6 +3005,15 @@ export const FORM_FLOW_WORDS = {
   dueLaterSummary: 'Later',
   repeatsTitle: 'Does it repeat?',
   repeats: 'Repeats',
+  payOnTitle: 'When do you pay it?',
+  payOn: 'You pay it',
+  payOnDue: 'On the due date',
+  payOnSetDay: 'On a set day',
+  payOnDayLabel: 'Day of the month you pay it',
+  payOnLastDay: 'On the last day of the month',
+  payOnDaySummary: (ordinal: string) => `On the ${ordinal}`,
+  payOnNote: (payOn: string, dueOn: string) =>
+    `Runway has it ready by ${payOn}, ahead of its ${dueOn} due date.`,
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
