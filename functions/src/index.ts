@@ -31,6 +31,7 @@ export { resolveHelmQuestion } from './apps/helm/resolveHelmQuestion.js';
 export { writeHelmTopic } from './apps/helm/writeHelmTopic.js';
 export { transcribeHelmVoiceNote } from './apps/helm/transcribeHelmVoiceNote.js';
 export { importHelmContacts } from './apps/helm/importHelmContacts.js';
+export { learnHelmStyle } from './apps/helm/learnHelmStyle.js';
 export { mintVoiceToken } from './voice/mintVoiceToken.js';
 export { streamSpeech } from './voice/streamSpeech.js';
 export { deleteRunwayPlan } from './apps/runway/deleteRunwayPlan.js';

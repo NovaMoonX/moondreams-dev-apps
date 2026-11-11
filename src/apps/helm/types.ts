@@ -62,8 +62,40 @@ export interface HelmProfile {
   selfWhoId: string | null;
   /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
   currentPlace: { placeId: string; saidAt: number } | null;
+  /** The createdAt of the newest typed capture the style learner has read; null until it has run, and on a profile from before it. */
+  styleLearnedThroughAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
+}
+
+export type StyleScope = 'general' | 'occasion' | 'audience';
+
+export interface StyleTrait {
+  /** A description of how the person writes, at most 120 characters; a quoted sign-off at most 30. */
+  text: string;
+  isPersonSet: boolean;
+  /** How many pieces of writing showed it; 0 when the person wrote it. */
+  exampleCount: number;
+}
+
+export interface StyleSealed {
+  label: string;
+  /** At most 12, by id. */
+  traits: Record<string, StyleTrait>;
+  /** At most 6, each at most 80 characters. */
+  avoid: string[];
+}
+
+/** One writing-style note set at `apps/helm/users/{uid}/style/{styleId}`; no sample of the person's writing is stored. */
+export interface StyleProfile {
+  scope: StyleScope;
+  audienceWhoId: string | null;
+  learnedFrom: ('helmText' | 'sentMail')[];
+  sampleCount: number;
+  personEditedAt: number | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  sealed: Sealed;
 }
 
 export type CaptureStatus =

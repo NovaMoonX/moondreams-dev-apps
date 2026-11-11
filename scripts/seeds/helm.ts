@@ -74,6 +74,8 @@ import type {
   TaskSealed,
   Procedure,
   ProcedureSealed,
+  StyleProfile,
+  StyleSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
   Topic,
@@ -2826,6 +2828,59 @@ async function buildRuns(input: {
   ];
 }
 
+/** Alex's general writing style, learned from 34 typed messages: four learned traits, one the person set, and two lines to avoid. One document at `style/general`. */
+async function buildStyle(input: {
+  now: number;
+  encryption: HelmEncryption;
+}): Promise<{ id: string; style: StyleProfile }> {
+  const { now, encryption } = input;
+  const editedAt = now - 2 * DAY_MS;
+  const words: StyleSealed = {
+    label: 'General',
+    traits: {
+      'short-sentences': {
+        text: 'Short sentences',
+        isPersonSet: false,
+        exampleCount: 27,
+      },
+      'lowercase-starts-in-quick-notes': {
+        text: 'Lowercase starts in quick notes',
+        isPersonSet: false,
+        exampleCount: 19,
+      },
+      'signs-off-cheers': {
+        text: "Signs off 'Cheers,'",
+        isPersonSet: false,
+        exampleCount: 11,
+      },
+      'plain-words-over-formal-ones': {
+        text: 'Plain words over formal ones',
+        isPersonSet: false,
+        exampleCount: 22,
+      },
+      'warm-but-brief': {
+        text: 'Warm but brief',
+        isPersonSet: true,
+        exampleCount: 0,
+      },
+    },
+    avoid: ['No exclamation marks', 'No emoji'],
+  };
+  return {
+    id: 'general',
+    style: {
+      scope: 'general',
+      audienceWhoId: null,
+      learnedFrom: ['helmText'],
+      sampleCount: 34,
+      personEditedAt: editedAt,
+      createdAt: now - 6 * DAY_MS,
+      lastEditedAt: editedAt,
+      sealed: await sealJson<StyleSealed>(words, encryption),
+    },
+  };
+}
+
 /** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
 async function buildPhotoTurns(input: {
   uid: string;
@@ -4657,6 +4712,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         hasSeenVoiceNotice: false,
         selfWhoId: user.uid === FIXTURE_USERS.partnerOne.uid ? 'self' : null,
         currentPlace: null,
+        styleLearnedThroughAt:
+          user.uid === FIXTURE_USERS.partnerOne.uid ? context.now : null,
         createdAt,
         lastEditedAt: null,
       });
@@ -5306,6 +5363,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           ),
         );
       }
+      const style = people
+        ? await buildStyle({ now: context.now, encryption })
+        : null;
+      if (style) {
+        batch.set(person.collection('style').doc(style.id), style.style);
+      }
       const peopleCount = people
         ? (photoTurns
             ? photoTurns.captures.length + photoTurns.media.length + 2
@@ -5338,7 +5401,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           (procedures
             ? procedures.procedures.length + procedures.versions.length
             : 0) +
-          (runs ? runs.length : 0)
+          (runs ? runs.length : 0) +
+          (style ? 1 : 0)
         : 0;
       const backToBackCount =
         peopleCount +

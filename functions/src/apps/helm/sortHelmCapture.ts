@@ -202,6 +202,7 @@ import {
   runRouted,
   type Route,
 } from './nomos/route.js';
+import { toStyleNotes, toStyleWords } from './styleLearner.js';
 import { sanitizeScreen, type ScreenRefs } from './nomos/sanitizeScreen.js';
 import {
   INTERRUPTED_PROMPT,
@@ -209,6 +210,7 @@ import {
   MAX_CONTEXT_TASKS,
   MEDIA_PROMPT,
   REST_PROMPT,
+  STYLE_PROMPT,
   SYSTEM_PROMPT,
   TOPIC_PROMPT,
   PROCEDURE_PROMPT,
@@ -393,6 +395,22 @@ export function loadKeyringOrFail(): Keyring {
     );
   }
 }
+
+/** The general style's descriptions for a turn's free writing; nothing when it is missing or will not open. */
+const readStyleNotes = (firestore: Firestore, base: string, key: HelmKey) =>
+  firestore
+    .doc(`${base}/style/general`)
+    .get()
+    .then((snapshot) =>
+      snapshot.exists
+        ? toStyleNotes(
+            toStyleWords(
+              openForHelm(key, snapshot.get('sealed') as SealedPayload),
+            ),
+          )
+        : null,
+    )
+    .catch(() => null);
 
 const openTitle = (key: HelmKey, sealed: SealedPayload) => {
   try {
@@ -1456,7 +1474,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         };
 
   const profileRead = firestore.doc(base).get();
-  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
+  const [profile, openTasks, alreadyMade, screen, earlierTurns, synced, style] =
     await Promise.all([
       profileRead,
       firestore
@@ -1483,6 +1501,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               ),
             ),
       ),
+      mode === 'rest' ? null : readStyleNotes(firestore, base, key),
     ]);
   const tasks = openTasks.docs.flatMap((doc): ContextTask[] => {
     const words = openTitle(key, (doc.data() as TaskDoc).sealed);
@@ -1685,6 +1704,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       upcoming,
       projects,
       topics,
+      style,
       notes: toContextNotes(hinted, combined.text),
       focusedTopic: topicDocument ? focusedTopic : null,
       topicDocument,
@@ -1756,6 +1776,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       SYSTEM_PROMPT,
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
+      style ? STYLE_PROMPT : null,
       mode !== 'rest' &&
       (procedureRecords.length > 0 ||
         contextRuns.length > 0 ||

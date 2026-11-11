@@ -315,6 +315,24 @@ service cloud.firestore {
       allow create, update: if isHelmOwner(uid) && isMediumShape(request.resource.data);
     }
 
+    // A style profile's words are sealed; the readable part is its scope, who it is about and how much writing it rests on.
+    match /apps/helm/users/{uid}/style/{styleId} {
+      function isStyleShape(data) {
+        return data.keys().hasOnly(['scope', 'audienceWhoId', 'learnedFrom', 'sampleCount', 'personEditedAt', 'createdAt', 'lastEditedAt', 'sealed'])
+          && data.keys().hasAll(['scope', 'audienceWhoId', 'learnedFrom', 'sampleCount', 'personEditedAt', 'createdAt', 'lastEditedAt', 'sealed'])
+          && data.scope in ['general', 'occasion', 'audience']
+          && (data.audienceWhoId == null || (data.audienceWhoId is string && data.audienceWhoId.size() <= 128))
+          && data.learnedFrom is list && data.learnedFrom.size() <= 2
+          && data.sampleCount is int && data.sampleCount >= 0
+          && (data.personEditedAt == null || data.personEditedAt is int)
+          && data.createdAt is int
+          && (data.lastEditedAt == null || data.lastEditedAt is int)
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isStyleShape(request.resource.data);
+    }
+
     // Copies of what another app shares are read by their owner and written only by the platform's functions; `synced` stays out of the list above on purpose.
     match /apps/helm/users/{uid}/synced/{syncedId} {
       allow read: if isHelmOwner(uid);

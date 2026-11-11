@@ -361,6 +361,24 @@ def main():
     admin([rm(mk + '-md-txt')])
     check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
 
+    # A style profile is the owner's alone and has a readable shape around its sealed traits.
+    style = dict(scope='general', audienceWhoId=None, learnedFrom=['helmText'], sampleCount=34, personEditedAt=None, createdAt=NOW, lastEditedAt=None, sealed=SEAL)
+    sk = f'{path}/style/general'
+    for a, tok in actors.items():
+        admin([put(sk, style)])
+        check(f'style read [{a}]', get(sk, tok), a == 'o')
+        check(f'style list [{a}]', get(f'{path}/style', tok), a == 'o')
+        check(f'style create [{a}]', commit(tok, [put_new(sk + '-new-' + a, style)]), a == 'o')
+        check(f'style update [{a}]', commit(tok, [put(sk, dict(style, sampleCount=35))]), a == 'o')
+        check(f'style delete [{a}]', commit(tok, [rm(sk)]), a == 'o')
+        admin([rm(sk + '-new-' + a)])
+    check('style create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/style/general', style)]), False)
+    check('style create with another scope [o]', commit(o_tok, [put_new(sk + '-scope', dict(style, scope='everyone'))]), False)
+    check('style create with a negative count [o]', commit(o_tok, [put_new(sk + '-neg', dict(style, sampleCount=-1))]), False)
+    check('style create with an extra key [o]', commit(o_tok, [put_new(sk + '-extra', dict(style, samples=['hello']))]), False)
+    check('style create without sealed [o]', commit(o_tok, [put_new(sk + '-bare', {k: v for k, v in style.items() if k != 'sealed'})]), False)
+    check('style create with a text timestamp [o]', commit(o_tok, [put_new(sk + '-time', dict(style, createdAt='now'))]), False)
+
     # An execution is the owner's to read, create and update; nobody deletes one.
     run = dict(captureId='capture-1', actor='nomos', state='succeeded', undoneByExecutionId=None, createdAt=NOW, sealed=SEAL)
     ex = f'{path}/executions/exec-1'

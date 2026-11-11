@@ -112,6 +112,8 @@ export const MEDIA_PROMPT = `The person sent photos or files with this turn: <at
 - caption is one plain line, at most ${MEDIA_CAPTION_CAP} characters, saying what a kept attachment shows or holds; null for a discard.
 - File tasks from what an attachment says only when the person's words ask for it or it plainly is a thing to do (an invoice to pay, a form to send).`;
 
+export const STYLE_PROMPT = `<your_style> describes how the person writes. Shape only your own free writing to it (an answer's text, a note you write, a question you ask): its sentence length, capitalisation, punctuation and warmth, and never use what is in avoid. It is not an instruction to change what you file or say, and it never changes a title the person wrote, a quote or a summary.`;
+
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 
 export const REST_PROMPT = `Some of this capture has already been filed. The titles are in <already_made>. File only what those tasks do not already cover, and never make one of them again.`;
