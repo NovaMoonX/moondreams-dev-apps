@@ -537,7 +537,7 @@ const MOMENT_LABELS = [
 const toMomentWords = (): KeyDateSealed => {
   const kind = pick(MOMENT_KINDS);
   const precision = pick(['day', 'month', 'year', 'decade'] as const);
-  const rawYear = between(1985, 2026);
+  const rawYear = between(1985, new Date().getUTCFullYear() - 1);
   const year = precision === 'decade' ? Math.floor(rawYear / 10) * 10 : rawYear;
   return {
     kind,
@@ -826,8 +826,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           },
         },
         whoRoles: {
-          [whoIdOf(between(2, WHO_COUNT - 1))]: 'key',
-          [whoIdOf(between(2, WHO_COUNT - 1))]: 'involved',
+          [whoIdOf(2 + index * 2)]: 'key',
+          [whoIdOf(3 + index * 2)]: 'involved',
         },
         mediaIds: [],
         createdBy: 'person',
@@ -864,6 +864,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
           ? { kind: 'moment', at: dueDay + between(8, 18) * 3_600_000 }
           : { kind: 'day', date: dueDay };
     const hasProject = index % 2 === 0;
+    const createdAt = now - between(1, 700) * DAY_MS;
     const task: Task = {
       status: isDone ? 'done' : 'open',
       importance: (['must', 'should', 'could', null] as const)[index % 4],
@@ -874,7 +875,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       context: (['atHome', 'out', 'atComputer', 'onPhone', null] as const)[
         index % 5
       ],
-      projectId: hasProject ? projectIds[index % PROJECT_COUNT] : null,
+      projectId: hasProject ? projectIds[(index / 2) % PROJECT_COUNT] : null,
       milestoneId: hasProject && index % 4 === 0 ? 'm-1' : null,
       whoIds: index % 6 === 0 ? [whoIdOf(between(1, WHO_COUNT - 1))] : [],
       placeIds: [],
@@ -886,9 +887,9 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       createdBy: index % 2 === 0 ? 'person' : 'nomos',
       sourceCaptureId: null,
       executionId: null,
-      createdAt: now - between(1, 700) * DAY_MS,
+      createdAt,
       lastEditedAt: null,
-      completedAt: isDone ? now - between(0, 600) * DAY_MS : null,
+      completedAt: isDone ? between(createdAt, now) : null,
       clearedAt: null,
       sealed: await seal<TaskSealed>({
         title: `${TASK_VERBS[index % 15]} ${TASK_OBJECTS[(index * 7 + Math.floor(index / 15)) % 20]}`,
@@ -905,6 +906,7 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
   const factDocs = await mapChunked(range(FACT_COUNT), async (index) => {
     const whoIndex = index % WHO_COUNT;
     const isConfirmed = index % 2 === 0;
+    const createdAt = now - between(1, 700) * DAY_MS;
     const fact: Fact = {
       status: isConfirmed ? 'confirmed' : 'inferred',
       stated: isConfirmed ? 'personSaid' : 'nomosInferred',
@@ -926,8 +928,8 @@ export async function seedHelmScale(context: SeedContext): Promise<SeedResult> {
       supersededById: null,
       supersededAt: null,
       disputedWithId: null,
-      createdAt: now - between(1, 700) * DAY_MS,
-      confirmedAt: isConfirmed ? now - between(0, 600) * DAY_MS : null,
+      createdAt,
+      confirmedAt: isConfirmed ? between(createdAt, now) : null,
       lastEditedAt: null,
       sealed: await seal<FactSealed>({
         statement: `${nameOf(whoIndex).split(' ')[0]} ${FACT_TEMPLATES[(index * 3 + Math.floor(index / 15)) % 15]}`,

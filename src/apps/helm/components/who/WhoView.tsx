@@ -23,7 +23,7 @@ import { groupWho } from '@apps/helm/utils/whoGroups';
 
 const SEARCH_FROM = 8;
 const ROWS_PER_CHUNK = 40;
-const ROW_HEIGHT = 65;
+const ROW_HEIGHT = 65.5;
 
 const toChunks = (list: OpenWho[]) =>
   Array.from({ length: Math.ceil(list.length / ROWS_PER_CHUNK) }, (_, index) =>

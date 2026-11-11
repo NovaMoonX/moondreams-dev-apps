@@ -1180,7 +1180,7 @@ Every row is proven in `check:helm-rules` (the site rows in `check:connections-r
 - No section-scoped Context. The open view and record live in the URL through `useHelmUrlState` (`nuqs`); sheet state is local; voice state (listening phase, playing, route) lives in `useVoiceConversation`, never in Redux. An unsent turn survives the phone closing the app as a sealed form draft once the key is there; a turn sent with no key is in the drop-box outbox (text only: attachments need the key and a connection, and say so).
 
 **As built (issue 64): performance at a lifetime's volume.** `helm-scale` gives Morgan 2,000 who, 20,000 key dates, 600 tasks, 2,000 facts, 300 notes, 400 turns, 200 photos (twelve on Avery Brooks) and 1,500 synced copies (`SEEDING.md`). Fixes, from a CPU profile on the dev build:
-- The People list renders in chunks of 40 rows under `LazyMount` (the first chunk at once, each later one holding a 65px-per-row estimate until it nears the screen), so opening People no longer draws 1,300 rows.
+- The People list renders in chunks of 40 rows under `LazyMount` (the first chunk at once, each later one holding a 65.5 px-per-row estimate (measured) until it nears the screen), so opening People no longer draws 1,300 rows.
 - The date and time formats a list draws per row (a task's due day and time, Today's plan clocks and day labels, a person's moments) go through `getDateTimeFormat` (`@/utils/timezoneUtils`), which builds one `Intl.DateTimeFormat` per locale and options and reuses it: building one per task was most of a Tasks or Today switch.
 
 ### Performance
