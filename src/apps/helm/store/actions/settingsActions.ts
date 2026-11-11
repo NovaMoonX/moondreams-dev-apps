@@ -17,6 +17,7 @@ import {
 } from '@apps/helm/queries/helmKeyQueries';
 import { forgetOutboxSecrets } from '@apps/helm/store/actions/outboxActions';
 import { clearHelm } from '@apps/helm/store/helmSlice';
+import { keepDeletedNote } from '@apps/helm/utils/deletedNote';
 import {
   DEFAULT_DAY_END_TIME,
   DEFAULT_DAY_START_TIME,
@@ -158,9 +159,11 @@ export async function forgetHelmOnDevice(uid: string) {
   store.dispatch(clearHelm());
 }
 
-/** Opens the app again from its start, as a first open. */
-export const reopenHelmToFirstRun = () =>
-  window.location.replace(window.location.pathname);
+/** Opens the app again on Today, as a first open; a bare path would resume the last view this visit. */
+export function reopenHelmToFirstRun() {
+  keepDeletedNote();
+  window.location.replace(`${window.location.pathname}?view=today`);
+}
 
 const signIn = { isStale: false };
 

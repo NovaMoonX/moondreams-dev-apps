@@ -93,6 +93,11 @@ assert.match(
   /reauthenticateWithPopup/,
   'the sign-in is renewed in the tap',
 );
+assert.match(
+  settings,
+  /keepDeletedNote\(\);\s*window\.location\.replace\(`\$\{window\.location\.pathname\}\?view=today`\)/,
+  'every reopen after a delete lands on Today with its one-time note, never the resumed view',
+);
 assert.doesNotMatch(
   settings,
   /functions\/not-found/,

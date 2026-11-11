@@ -14,7 +14,6 @@ import {
   deleteAllHelmData,
   reopenHelmToFirstRun,
 } from '@apps/helm/store/actions/settingsActions';
-import { keepDeletedNote } from '@apps/helm/utils/deletedNote';
 
 const readFailure = (error: unknown) => {
   const code = (error as { code?: string } | null)?.code ?? '';
@@ -92,7 +91,6 @@ function DeleteHelmData({ connectionCount }: DeleteHelmDataProps) {
     setIsDeleting(true);
     try {
       await deleteAllHelmData(user.uid);
-      keepDeletedNote();
       reopenHelmToFirstRun();
     } catch (error) {
       console.error('Helm data was not deleted', error);
