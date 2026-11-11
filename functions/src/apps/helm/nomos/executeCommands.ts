@@ -501,7 +501,12 @@ export function planWrites(input: PlanInput): WritePlan {
         { 'sealed.title': current.title, status: 'done', completedAt: now },
         { 'sealed.title': current.title, status: 'open', completedAt: null },
       );
-      patch(id, { status: 'done', completedAt: now, lastEditedAt: now });
+      patch(id, {
+        status: 'done',
+        completedAt: now,
+        clearedAt: null,
+        lastEditedAt: now,
+      });
       working.set(id, { ...current, status: 'done' });
       counts.completed += 1;
       return;

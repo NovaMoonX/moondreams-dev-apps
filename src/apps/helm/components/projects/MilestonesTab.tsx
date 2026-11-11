@@ -1,12 +1,12 @@
 import { useState } from 'react';
 
-import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, Plus } from 'lucide-react';
 
-import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
+import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -43,7 +43,10 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const [isReachedOpen, setIsReachedOpen] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{
+    draft: MilestoneDraft | null;
+    isOpen: boolean;
+  }>({ draft: null, isOpen: false });
   const [isAdding, setIsAdding] = useState(false);
 
   const milestones: Milestone[] = Object.entries(project.milestoneState)
@@ -58,7 +61,6 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
   const nextId =
     open.find((entry) => entry.date !== null && entry.date >= today)?.id ??
     null;
-  const editing = milestones.find((entry) => entry.id === openId) ?? null;
 
   const tick = (entry: Milestone, isDone: boolean) => {
     if (!user || isReadOnly) return;
@@ -119,19 +121,36 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
     );
     return (
       <li key={entry.id} className='flex items-center pl-4'>
-        <Checkbox
-          rounded
-          filled
-          checked={isReached}
-          disabled={isReadOnly}
-          aria-label={
-            isReached
-              ? HELM_COPY.milestoneMarkNotReached(entry.title)
-              : HELM_COPY.milestoneMarkReached(entry.title)
-          }
-          className="relative shrink-0 after:absolute after:-inset-2.5 after:content-['']"
-          onCheckedChange={(isOn) => tick(entry, isOn)}
-        />
+        {isReadOnly ? (
+          <span
+            className={join(
+              'size-6 shrink-0 rounded-full border-2',
+              isReached ? 'border-transparent' : 'border-muted-foreground/60',
+            )}
+          >
+            {isReached && <TickMark className='size-6' />}
+          </span>
+        ) : (
+          <Button
+            type='button'
+            variant='tertiary'
+            rounded='full'
+            className={join(
+              "relative size-6 min-h-0 min-w-0 shrink-0 border-2 p-0! after:absolute after:-inset-2.5 after:content-['']",
+              isReached
+                ? 'border-transparent'
+                : 'border-muted-foreground/60 bg-transparent',
+            )}
+            aria-label={
+              isReached
+                ? HELM_COPY.milestoneMarkNotReached(entry.title)
+                : HELM_COPY.milestoneMarkReached(entry.title)
+            }
+            onClick={() => tick(entry, !isReached)}
+          >
+            {isReached && <TickMark className='size-6' />}
+          </Button>
+        )}
         {isReadOnly ? (
           <div className='min-w-0 flex-1 py-3 pr-4 pl-3'>{body}</div>
         ) : (
@@ -139,7 +158,12 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
             type='button'
             variant='tertiary'
             className='flex h-auto min-w-0 flex-1 items-center justify-between gap-3 rounded-none border-0 py-3 pr-4 pl-3 text-left focus-visible:-outline-offset-2'
-            onClick={() => setOpenId(entry.id)}
+            onClick={() =>
+              setEditing({
+                draft: { id: entry.id, title: entry.title, date: entry.date },
+                isOpen: true,
+              })
+            }
           >
             {body}
             <ChevronRight
@@ -154,22 +178,20 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
 
   return (
     <section className='space-y-3'>
-      <SectionHeader
-        title={HELM_COPY.milestonesTitle}
-        action={
-          isReadOnly ? undefined : (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              onClick={() => setIsAdding(true)}
-            >
-              <Plus className='size-4' aria-hidden='true' />
-              {HELM_COPY.milestoneAdd}
-            </Button>
-          )
-        }
-      />
+      {!isReadOnly && (
+        <div className='flex justify-end'>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
+            onClick={() => setIsAdding(true)}
+          >
+            <Plus className='size-4' aria-hidden='true' />
+            {HELM_COPY.milestoneAdd}
+          </Button>
+        </div>
+      )}
       {milestones.length === 0 && (
         <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
           {HELM_COPY.milestonesEmpty}
@@ -206,10 +228,10 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
             milestone={null}
           />
           <MilestoneSheet
-            isOpen={editing !== null}
-            onClose={() => setOpenId(null)}
+            isOpen={editing.isOpen}
+            onClose={() => setEditing((was) => ({ ...was, isOpen: false }))}
             projectId={project.id}
-            milestone={editing}
+            milestone={editing.draft}
           />
         </>
       )}

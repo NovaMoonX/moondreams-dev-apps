@@ -3,6 +3,7 @@ import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import TickMark from '@/components/TickMark';
+import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useLinkedNames } from '@apps/helm/hooks/useLinkedNames';
 import type { OpenTask } from '@apps/helm/types';
@@ -52,7 +53,9 @@ function TaskRow({
     task.due !== null &&
     isOverdue(task.due, timeZone, now);
   const dayPart = isDone
-    ? HELM_COPY.rowDone
+    ? hasUndo || task.completedAt === null
+      ? HELM_COPY.rowDone
+      : HELM_COPY.rowDoneOn(formatDateShort(task.completedAt))
     : (condition ??
       (isLate && dueLine ? HELM_COPY.overdueDue(dueLine) : dueLine));
   const otherParts = isDone

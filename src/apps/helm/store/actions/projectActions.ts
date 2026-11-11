@@ -579,25 +579,29 @@ const settleMilestone = (
   projectId: string,
   id: string,
   next: { state: MilestoneState; title: string } | null,
-  isNowAllowed: (current: MilestoneState | undefined) => boolean,
+  isNowAllowed: (
+    current: MilestoneState | undefined,
+    title: string | undefined,
+  ) => boolean,
 ) =>
   runTransaction(db, async (transaction) => {
     const ref = doc(projectsOf(uid), projectId);
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists()) return;
     const data = snapshot.data() as Project;
-    if (!isNowAllowed(data.milestoneState?.[id])) return;
     const opened = await openJson<ProjectSealed>(
       data.sealed as Sealed,
       encryption,
     ).catch(() => null);
     if (!opened) return;
+    const milestones = opened.milestones ?? {};
+    if (!isNowAllowed(data.milestoneState?.[id], milestones[id]?.title)) return;
     const sealed = await sealJson<ProjectSealed>(
       {
         ...opened,
         milestones: next
-          ? { ...opened.milestones, [id]: { title: next.title } }
-          : withoutKey(opened.milestones, id),
+          ? { ...milestones, [id]: { title: next.title } }
+          : withoutKey(milestones, id),
       },
       encryption,
     );
@@ -608,7 +612,7 @@ const settleMilestone = (
     });
   });
 
-/** Adds a milestone to a project in one transaction (both maps, one id); Undo removes it while it is still there. At most thirty a project. */
+/** Adds a milestone to a project in one transaction (both maps, one id); Undo removes it while it is unchanged. At most thirty a project. */
 export function addMilestone(
   uid: string,
   encryption: HelmEncryption,
@@ -622,7 +626,9 @@ export function addMilestone(
     encryption,
     projectId,
     async ({ data, opened }) => {
-      const states = Object.values(data.milestoneState);
+      const states = Object.values(data.milestoneState ?? {}).filter((entry) =>
+        Number.isFinite(entry?.order),
+      );
       if (states.length >= MILESTONES_MAX) return 'full';
       const state: MilestoneState = {
         date: input.date,
@@ -634,18 +640,26 @@ export function addMilestone(
         fields: { [`milestoneState.${id}`]: state },
         sealed: {
           ...opened,
-          milestones: { ...opened.milestones, [id]: { title } },
+          milestones: { ...(opened.milestones ?? {}), [id]: { title } },
         },
         undo: () =>
-          settleMilestone(uid, encryption, projectId, id, null, (current) =>
-            Boolean(current),
+          settleMilestone(
+            uid,
+            encryption,
+            projectId,
+            id,
+            null,
+            (current, currentTitle) =>
+              current?.doneAt === null &&
+              current.date === input.date &&
+              currentTitle === title,
           ),
       };
     },
   );
 }
 
-/** Changes a milestone's title and date. The date is a dotted-path write; a new title reseals inside the same transaction. Undo puts back both. */
+/** Changes a milestone's title and date. The date is a dotted-path write; a new title reseals inside the same transaction. Undo puts back what it changed, only while the milestone is as it left it. */
 export function editMilestone(
   uid: string,
   encryption: HelmEncryption,
@@ -659,38 +673,45 @@ export function editMilestone(
     encryption,
     projectId,
     async ({ data, opened }) => {
-      const current = data.milestoneState[id];
-      const before = opened.milestones[id];
+      const current = data.milestoneState?.[id];
+      const before = opened.milestones?.[id];
       if (!current || !before) return 'missing';
-      const undoTo = { date: current.date, title: before.title };
+      const isDateChanged = input.date !== current.date;
+      const isTitleChanged = title !== before.title;
       return {
         id,
-        fields:
-          input.date !== current.date
-            ? { [`milestoneState.${id}.date`]: input.date }
-            : {},
-        sealed:
-          title !== before.title
-            ? {
-                ...opened,
-                milestones: { ...opened.milestones, [id]: { title } },
-              }
-            : null,
+        fields: isDateChanged
+          ? { [`milestoneState.${id}.date`]: input.date }
+          : {},
+        sealed: isTitleChanged
+          ? {
+              ...opened,
+              milestones: { ...opened.milestones, [id]: { title } },
+            }
+          : null,
         undo: async () => {
           await changeMilestones(uid, encryption, projectId, async (live) => {
-            const liveState = live.data.milestoneState[id];
-            const liveTitle = live.opened.milestones[id];
-            if (!liveState || !liveTitle) return 'missing';
+            const liveState = live.data.milestoneState?.[id];
+            const liveTitle = live.opened.milestones?.[id]?.title;
+            const isAsLeft =
+              liveState?.date === input.date &&
+              liveTitle === title &&
+              liveState.doneAt === current.doneAt;
+            if (!isAsLeft) return 'missing';
             return {
               id,
-              fields: { [`milestoneState.${id}.date`]: undoTo.date },
-              sealed: {
-                ...live.opened,
-                milestones: {
-                  ...live.opened.milestones,
-                  [id]: { title: undoTo.title },
-                },
-              },
+              fields: isDateChanged
+                ? { [`milestoneState.${id}.date`]: current.date }
+                : {},
+              sealed: isTitleChanged
+                ? {
+                    ...live.opened,
+                    milestones: {
+                      ...live.opened.milestones,
+                      [id]: { title: before.title },
+                    },
+                  }
+                : null,
               undo: async () => undefined,
             };
           });
@@ -700,7 +721,7 @@ export function editMilestone(
   );
 }
 
-/** Ticks a milestone reached or not with one dotted-path field, handed back unawaited so it works offline; Undo writes the earlier value. */
+/** Ticks a milestone reached or not with one dotted-path field, handed back unawaited so it works offline; Undo writes the earlier value while the milestone is still as the tick left it. */
 export function setMilestoneDone(
   uid: string,
   projectId: string,
@@ -710,9 +731,18 @@ export function setMilestoneDone(
 ) {
   const ref = doc(projectsOf(uid), projectId);
   const field = `milestoneState.${id}.doneAt`;
+  const doneAt = isDone ? Date.now() : null;
   return {
-    written: updateDoc(ref, { [field]: isDone ? Date.now() : null }),
-    undo: () => updateDoc(ref, { [field]: previousDoneAt }),
+    written: updateDoc(ref, { [field]: doneAt }),
+    undo: () =>
+      runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(ref);
+        const current = snapshot.exists()
+          ? (snapshot.data() as Project).milestoneState?.[id]
+          : undefined;
+        if (current?.doneAt !== doneAt) return;
+        transaction.update(ref, { [field]: previousDoneAt });
+      }),
   };
 }
 
@@ -728,13 +758,16 @@ export function removeMilestone(
     encryption,
     projectId,
     async ({ data, opened }) => {
-      const state = data.milestoneState[id];
-      const before = opened.milestones[id];
+      const state = data.milestoneState?.[id];
+      const before = opened.milestones?.[id];
       if (!state || !before) return 'missing';
       return {
         id,
         fields: { [`milestoneState.${id}`]: deleteField() },
-        sealed: { ...opened, milestones: withoutKey(opened.milestones, id) },
+        sealed: {
+          ...opened,
+          milestones: withoutKey(opened.milestones ?? {}, id),
+        },
         undo: () =>
           settleMilestone(
             uid,

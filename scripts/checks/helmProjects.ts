@@ -493,6 +493,18 @@ test('a milestone with a title the project already has is not added again', () =
   );
   assert.equal(result.milestonesAdded, 1);
   assert.equal(result.projectUpdates.length, 1);
+  const added = Object.keys(result.projectUpdates[0].data).filter((key) =>
+    key.startsWith('milestoneState.'),
+  );
+  assert.equal(added.length, 1);
+  assert.deepEqual(
+    result.effects[0].written[
+      `sealed.milestones.${added[0].slice('milestoneState.'.length)}`
+    ],
+    {
+      title: 'Final guest list',
+    },
+  );
 });
 
 test('a milestone for a project the person has none of is kept out and reported', () => {

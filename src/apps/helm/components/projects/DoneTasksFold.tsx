@@ -35,10 +35,12 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
 
   const reopen = (taskId: string) => {
     if (!user) return;
+    const title = tasks.find((task) => task.id === taskId)?.title ?? '';
     reopenTask(user.uid, taskId).catch((error: unknown) => {
       console.error('Helm task was not reopened', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
+    addToast({ title: HELM_COPY.taskReopenedToast(title), type: 'info' });
     setOpenId(null);
   };
 
@@ -82,43 +84,46 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
   if (tasks.length === 0) return null;
   return (
     <div className='space-y-2'>
-      <ShowMoreButton
-        isOpen={isOpen}
-        onClick={() => setIsOpen((open) => !open)}
-      >
-        {isOpen
-          ? HELM_COPY.doneTasksHide
-          : HELM_COPY.doneTasksFold(tasks.length)}
-      </ShowMoreButton>
-      {isOpen && (
-        <>
-          <ul className='helm-card divide-border divide-y overflow-hidden'>
-            {tasks.map((task) => (
-              <li key={task.id}>
-                <TaskRow
-                  task={task}
-                  timeZone={timeZone}
-                  now={now}
-                  isDone
-                  hasUndo={false}
-                  omitLinkedId={projectId}
-                  onOpen={(opened) => setOpenId(opened.id)}
-                  onTick={() => undefined}
-                  onUndoTick={reopen}
-                />
-              </li>
-            ))}
-          </ul>
+      <div className='flex items-center justify-between gap-3'>
+        <ShowMoreButton
+          isOpen={isOpen}
+          onClick={() => setIsOpen((open) => !open)}
+        >
+          {isOpen
+            ? HELM_COPY.doneTasksHide
+            : HELM_COPY.doneTasksFold(tasks.length)}
+        </ShowMoreButton>
+        {isOpen && (
           <Button
             type='button'
-            variant='tertiary'
+            variant='secondary'
             size='sm'
             loading={isClearing}
+            className="relative after:absolute after:inset-x-0 after:-inset-y-1.5 after:content-['']"
             onClick={() => void clear()}
           >
-            {HELM_COPY.clearDoneTasks}
+            {HELM_COPY.clearDoneTasks(tasks.length)}
           </Button>
-        </>
+        )}
+      </div>
+      {isOpen && (
+        <ul className='helm-card divide-border divide-y overflow-hidden'>
+          {tasks.map((task) => (
+            <li key={task.id}>
+              <TaskRow
+                task={task}
+                timeZone={timeZone}
+                now={now}
+                isDone
+                hasUndo={false}
+                omitLinkedId={projectId}
+                onOpen={(opened) => setOpenId(opened.id)}
+                onTick={() => undefined}
+                onUndoTick={reopen}
+              />
+            </li>
+          ))}
+        </ul>
       )}
       <TaskSheet
         task={openTask}

@@ -753,6 +753,8 @@ export const HELM_COPY = {
   markNotDone: (title: string) => `Mark ${title} not done`,
   doneAt: (day: string, time: string) => `Done ${day} ${time}`,
   rowDone: 'Done',
+  rowDoneOn: (day: string) => `Done ${day}`,
+  taskReopenedToast: (title: string) => `${title} is open again`,
   deleteTaskTitle: 'Delete this task?',
   deleteTaskBody: (waiting: number) =>
     `Its notes and steps go with it.${waitingOnCount(waiting)}`,
@@ -1407,12 +1409,12 @@ export const HELM_COPY = {
   projectTasksShowFewer: 'Show fewer',
   doneTasksFold: (count: number) => `Done · ${count}`,
   doneTasksHide: 'Hide done',
-  clearDoneTasks: 'Clear done tasks',
+  clearDoneTasks: (count: number) =>
+    count === 1 ? 'Clear 1 done task' : `Clear ${count} done tasks`,
   clearDoneNone: 'There was nothing left to clear.',
   doneTasksCleared: (count: number) =>
     `Cleared ${count} done ${count === 1 ? 'task' : 'tasks'}`,
   clearDoneNeedsConnection: 'Clearing done tasks needs a connection.',
-  milestonesTitle: 'Milestones',
   milestoneAdd: 'Add milestone',
   milestonesEmpty: "No milestones. Add one if there's a date that matters.",
   milestoneNoDate: 'No date',
