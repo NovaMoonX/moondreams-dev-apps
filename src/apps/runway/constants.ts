@@ -3962,6 +3962,8 @@ export const PAIRING_BILL_WORDS = {
     'Follows the bill when it changes, and stops once its payment is covered.',
   undated: (name: string) =>
     `${name} has no due date yet, so this sends nothing until it has one.`,
+  nothingAhead: (name: string) =>
+    `${name} has no payment coming, so this sends nothing.`,
   typeShare: 'Type a percent to see what each pay puts in.',
   badShare: 'Type a share above 0% and up to 100%.',
 } as const;

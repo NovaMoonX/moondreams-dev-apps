@@ -103,6 +103,7 @@ interface PairingRowSheetProps {
     lowCents: number;
     isRanged: boolean;
     isUndated: boolean;
+    hasPaymentAhead: boolean;
   } | null;
   /** Edits one income day's own set, so a share reads as from this pay. */
   isOneDay: boolean;
@@ -138,10 +139,12 @@ function PairingRowSheet({
   const getBillLine = () => {
     const bps = getShareBps(row);
     if (bill === null || !picked) return null;
-    if (bill.isUndated)
+    if (bill.isUndated || !bill.hasPaymentAhead)
       return (
         <p className='text-muted-foreground text-sm'>
-          {PAIRING_BILL_WORDS.undated(picked.text)}
+          {bill.isUndated
+            ? PAIRING_BILL_WORDS.undated(picked.text)
+            : PAIRING_BILL_WORDS.nothingAhead(picked.text)}
         </p>
       );
     if (bps === null && row.amount.trim() !== '') return null;

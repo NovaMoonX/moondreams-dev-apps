@@ -288,6 +288,9 @@ function PairingsEditor({
           lowCents: payload.amount.lowCents,
           isRanged: payload.amount.lowCents !== payload.amount.highCents,
           isUndated: payload.timing.schedule.anchor === null,
+          hasPaymentAhead: (billPayments[id ?? ''] ?? []).some(
+            (entry) => entry.dueOn >= (day?.on ?? today),
+          ),
         }
       : null;
   };
