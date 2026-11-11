@@ -394,6 +394,14 @@ The success toast carries one Undo that puts every written bill back as it was (
 - **Purchase screen:** a matched charge says "Paid Netflix's Nov 1st bill", has no Edit row, and offers "Not this bill's charge" right under the facts tile, which sends it back to waiting.
 - **Undo, unmatch and Take back:** undoing a match or choosing "Not this bill's charge" sends the payment back to "Which charge was this?", never to To pay now; taking back a mark that a charge settled (History, or Not paid on the bill) sends the charge back to Needs a home with it.
 
+## Card annual fees
+
+- **Card form:** two questions after Due: "Does it have an annual fee?" (an `AmountHero` with a "No annual fee" reveal chip that answers it and moves on in one tap, like the name step's "It has no name"; Next names the chip while nothing is answered) and "When is the fee charged next?" (a date, today or later), folded as "Annual fee" and "Next fee". Clearing a fee whose bill holds money adds "Where does its money go?" with the held choices, nothing preselected.
+- **Bills:** the managed "Card annual fees" group appears with the first fee and hides when it has no bills. A fee row reads like any yearly bill ("$45.83 a month" over "$550 yearly · due Mar 11th, 2027") with no card after the date, since the name carries it.
+- **Fee bill sheet:** Change opens on priority with Set aside from folded under it; "Fee and date" ("Change it on Capital One Venture X") opens the card's form (Track); no Mark paid, no group move, no End or Archive.
+- **Group sheet:** only the priority rows and one line saying the group follows the cards (at Plan, without card wording).
+- **Card sheet:** archiving a card whose fee bill holds money opens an in-sheet view asking where the money goes before "Archive the card".
+
 ## Pinned envelopes and the card total
 
 - **Home's four envelope tiles** are the pinned envelopes first, in the person's order, then the rest as before: money before empty, each in plan order (priority, then the Priorities rank, then oldest). Up to four can be pinned (`HOME_TILE_COUNT`), so what is pinned is what Home shows (restoring an archived pinned envelope can make five, and Home shows the first four until one is unpinned); a pinned tile wears a small pin beside its name.

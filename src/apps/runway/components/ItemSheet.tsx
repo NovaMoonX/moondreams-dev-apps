@@ -216,6 +216,7 @@ import {
   resolveGroupChoice,
 } from '@apps/runway/utils/groupChoice';
 import { isTrackingLevel } from '@apps/runway/engine/level';
+import { isCardFeeBill, isCardFeeGroup } from '@apps/runway/engine/cardFees';
 
 type View =
   | 'menu'
@@ -281,6 +282,13 @@ export interface ItemSheetProps {
     subtitle?: string;
     step: string;
     icon?: ReactNode;
+  };
+  /** A row that opens another record which owns some of this item's fields (a card's annual fee). */
+  linkAction?: {
+    label: string;
+    subtitle?: string;
+    icon: ReactNode;
+    onOpen: () => void;
   };
   /** A bill's "Paid with" row, opening the change at that question. */
   payAction?: {
@@ -368,6 +376,7 @@ function ItemSheet({
   dayAction,
   maxAction,
   payAction,
+  linkAction,
   startsAtStep,
   presetEventId,
   presetChange,
@@ -650,12 +659,17 @@ function ItemSheet({
     setView(nextView);
   };
 
-  const groupOptions = groups.map(({ item, version }) => ({
-    id: item.id,
-    name: version.payload.name,
-  }));
+  const groupOptions = groups
+    .filter(({ item }) => !isCardFeeGroup(item.id))
+    .map(({ item, version }) => ({
+      id: item.id,
+      name: version.payload.name,
+    }));
+  const isFeeBill = itemKind === 'bill' && isCardFeeBill(payload as BillSealed);
   const isGroupable =
-    itemKind === 'bill' || itemKind === 'envelope' || itemKind === 'goal';
+    (itemKind === 'bill' && !isFeeBill) ||
+    itemKind === 'envelope' ||
+    itemKind === 'goal';
   const savedGroupId = isGroupable
     ? (payload as BillSealed | EnvelopeSealed | GoalSealed).groupId
     : null;
@@ -1146,7 +1160,8 @@ function ItemSheet({
     return null;
   };
   const blocker = getBlocker();
-  const isArchivable = itemKind !== 'source' && header?.archivedAt == null;
+  const isArchivable =
+    itemKind !== 'source' && header?.archivedAt == null && !isFeeBill;
   const isPinned = homePins.pins.includes(itemId);
   const isStoppable = isArchivable && (endedAt === null || endedAt >= today);
   const isTrackEnvelope = itemKind === 'envelope' && isTrackingLevel(level);
@@ -1438,6 +1453,16 @@ function ItemSheet({
             label={ITEM_SHEET_WORDS.change}
             subtitle={presetDayKey ? ITEM_SHEET_WORDS.changeDaySub : undefined}
             onClick={() => openChange(null)}
+          />
+        )}
+        {canChange && linkAction && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={linkAction.icon}
+            label={linkAction.label}
+            subtitle={linkAction.subtitle}
+            onClick={linkAction.onOpen}
           />
         )}
         {canChange && payAction && (

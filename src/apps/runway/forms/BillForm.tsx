@@ -120,6 +120,7 @@ import ChangeSteps from '@apps/runway/components/ChangeSteps';
 import ChangeReason from '@apps/runway/components/ChangeReason';
 import BackLink from '@/components/BackLink';
 import QuickChange from '@apps/runway/components/QuickChange';
+import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import ChangeSection from '@apps/runway/components/ChangeSection';
 import { ChangeFlowContext } from '@apps/runway/forms/changeFlowContext';
 import { selectResolvedPlan } from '@apps/runway/store/selectors/runwaySelectors';
@@ -888,6 +889,7 @@ function BillFormBody({
     return PAID_FROM_WORDS[formData.paidFrom];
   };
 
+  const isFeeBill = editing !== undefined && isCardFeeBill(editing.payload);
   const savedCardId = editing?.payload.paidByCardId ?? null;
   const cardOptions = allCards.filter(
     (card) =>
@@ -1029,7 +1031,7 @@ function BillFormBody({
       ]
     : [];
 
-  const steps: QuestionStep[] = [
+  const allSteps: QuestionStep[] = [
     ...bringStep,
     {
       id: 'name',
@@ -1550,6 +1552,9 @@ function BillFormBody({
       ),
     },
   ];
+  const steps = isFeeBill
+    ? allSteps.filter(({ id }) => id === 'priority' || id === 'funding')
+    : allSteps;
   const [isAll, setIsAll] = useState(false);
   const maskNote = (note: string | null | undefined) =>
     note ? mask(note) : null;
@@ -1640,6 +1645,23 @@ function BillFormBody({
           ? {}
           : { startingCents }),
     };
+    if (isFeeBill && editing) {
+      const locked = editing.payload;
+      return {
+        ...result,
+        name: locked.name,
+        emoji: locked.emoji,
+        amount: locked.amount,
+        timing: locked.timing,
+        ending: locked.ending,
+        stanceOverride: locked.stanceOverride,
+        groupId: locked.groupId,
+        paidByCardId: locked.paidByCardId ?? null,
+        accountId: locked.accountId ?? null,
+        paysItself: locked.paysItself === true,
+        cardFeeOf: locked.cardFeeOf ?? null,
+      };
+    }
     return result;
   };
 
@@ -1980,7 +2002,13 @@ function BillFormBody({
                 step={quickStep}
                 flow={questions}
                 rowIds={
-                  quickStep.id === 'funding' ? [] : ['name', 'due', 'repeats']
+                  isFeeBill
+                    ? quickStep.id === 'funding'
+                      ? []
+                      : ['funding']
+                    : quickStep.id === 'funding'
+                      ? []
+                      : ['name', 'due', 'repeats']
                 }
                 after={changeSection}
                 isAfterFirst={flow.isPlanning}

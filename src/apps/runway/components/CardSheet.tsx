@@ -11,20 +11,35 @@ import FormSheet from '@/components/FormSheet';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import ValuesEyeButton from '@/components/ValuesEyeButton';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { getErrorMessage } from '@/utils/errorUtils';
 import {
   formatDateOrdinalUTC,
   formatRelativeDayUTC,
 } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
-import { ActionSection } from '@apps/runway/components/ActionSection';
+import {
+  ActionSection,
+  ActionTitle,
+} from '@apps/runway/components/ActionSection';
+import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
+import type { HeldChoice } from '@apps/runway/engine/endings';
+import {
+  getFeeHeldCents,
+  getFeePlan,
+  isFeeBillLive,
+} from '@apps/runway/utils/cardFeePlan';
 import ItemRow from '@apps/runway/components/ItemRow';
 import LinkToBankRow from '@apps/runway/components/LinkToBankRow';
 import { useLinkedFact } from '@apps/runway/hooks/useLinkedFact';
 import SheetHead from '@apps/runway/components/SheetHead';
 import LinkBankScreen from '@apps/runway/screens/link/LinkBankScreen';
-import { AUTO_PAY_WORDS, CARD_WORDS } from '@apps/runway/constants';
+import {
+  AUTO_PAY_WORDS,
+  CARD_FEE_WORDS,
+  CARD_WORDS,
+  HELD_WORDS,
+} from '@apps/runway/constants';
 import { useLiveEmojiResolver } from '@apps/runway/hooks/useItemEmoji';
 import { useMaskedText } from '@apps/runway/hooks/useMaskedText';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -132,7 +147,17 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const [isLinking, setIsLinking] = useState(false);
   const reserveCents = balances.reserveByCard[card.id] ?? 0;
   const today = todayAsUtcDate(useNow(60_000));
-  const [view, setView] = useState<'menu' | 'history' | 'purchase'>('menu');
+  const [view, setView] = useState<'menu' | 'history' | 'purchase' | 'archive'>(
+    'menu',
+  );
+  const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
+  const fee = card.annualFee ?? null;
+  const isFeeOpen = useAppSelector((state) =>
+    fee === null ? false : isFeeBillLive(state, fee.billId),
+  );
+  const feeHeldCents = isFeeOpen
+    ? getFeeHeldCents(balances.assignedByItem, fee)
+    : 0;
   const [purchaseId, setPurchaseId] = useState<string | null>(null);
   const name = getCardName(card, cards);
   const moves = useAppSelector((state) => state.runway.moves);
@@ -149,17 +174,20 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
 
   const linkedFact = useLinkedFact(card.linkId);
 
-  const handleArchive = async () => {
+  const archive = async (choice: HeldChoice | null) => {
     if (!user || isArchiving) return;
-    const isConfirmed = await confirm({
-      title: CARD_WORDS.archiveConfirmTitle(name),
-      message:
-        reserveCents > 0
-          ? mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))
-          : CARD_WORDS.archiveSub,
-      confirmText: CARD_WORDS.archiveConfirmText,
+    const feeResult = getFeePlan(store.getState(), {
+      cardId: card.id,
+      cardName: name,
+      before: fee,
+      after: null,
+      heldChoice: choice,
+      today,
     });
-    if (!isConfirmed) return;
+    if (feeResult.kind === 'loading') {
+      addToast({ title: CARD_FEE_WORDS.loading, type: 'error' });
+      return;
+    }
     setIsArchiving(true);
     try {
       await archiveCard(
@@ -167,6 +195,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
         await getRunwayEncryption(user.uid),
         card.id,
         CARD_WORDS.changeArchived(name),
+        feeResult.plan,
       );
       addToast({ title: CARD_WORDS.archived(name), type: 'success' });
       onClose();
@@ -178,6 +207,25 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       });
       setIsArchiving(false);
     }
+  };
+
+  const handleArchive = async () => {
+    if (!user || isArchiving) return;
+    if (feeHeldCents > 0) {
+      setHeldChoice(null);
+      setView('archive');
+      return;
+    }
+    const isConfirmed = await confirm({
+      title: CARD_WORDS.archiveConfirmTitle(name),
+      message:
+        reserveCents > 0
+          ? mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))
+          : CARD_WORDS.archiveSub,
+      confirmText: CARD_WORDS.archiveConfirmText,
+    });
+    if (!isConfirmed) return;
+    await archive(null);
   };
 
   if (isLinking) {
@@ -208,7 +256,43 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
       title={name}
       actions={<ValuesEyeButton />}
     >
-      {view === 'history' ? (
+      {view === 'archive' ? (
+        <div className='space-y-4'>
+          <BackLink onBack={() => setView('menu')} />
+          <ActionTitle>{CARD_FEE_WORDS.archiveTitle(name)}</ActionTitle>
+          {reserveCents > 0 && (
+            <p className='text-muted-foreground text-sm'>
+              {mask(CARD_WORDS.archiveWaitingText(formatCents(reserveCents)))}
+            </p>
+          )}
+          <ActionSection
+            caption={mask(
+              CARD_FEE_WORDS.heldCaption(formatCents(feeHeldCents)),
+            )}
+          >
+            <HeldChoiceList
+              value={heldChoice}
+              onChange={setHeldChoice}
+              freeBody={CARD_FEE_WORDS.heldFreeBody}
+              keepBody={HELD_WORDS.keepBody}
+            />
+          </ActionSection>
+          <Button
+            type='button'
+            className='w-full'
+            loading={isArchiving}
+            disabled={heldChoice === null || isArchiving}
+            onClick={() => void archive(heldChoice)}
+          >
+            {CARD_FEE_WORDS.archiveDo}
+          </Button>
+          {heldChoice === null && (
+            <p className='text-muted-foreground text-center text-xs'>
+              {CARD_FEE_WORDS.needsHeld}
+            </p>
+          )}
+        </div>
+      ) : view === 'history' ? (
         <div className='space-y-4'>
           <div className='flex items-center gap-1'>
             <BackLink isChevronOnly onBack={() => setView('menu')} />
