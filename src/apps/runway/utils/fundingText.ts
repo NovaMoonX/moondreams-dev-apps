@@ -1,4 +1,9 @@
-import { formatBps, formatCents, formatCentsShort } from '@/utils/moneyUtils';
+import {
+  formatBps,
+  formatCents,
+  formatCentsShort,
+  parsePercentToBps,
+} from '@/utils/moneyUtils';
 import {
   CALENDAR_PERIOD_LABELS,
   CALENDAR_PERIOD_UNITS,
@@ -12,6 +17,17 @@ import type {
   PairingAmount,
   PriorityExtra,
 } from '@apps/runway/types';
+
+export const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
+
+/** The share of the bill a "pay these first" row asks for, in basis points; null while a typed share is not a valid percent. */
+export const getShareBps = (row: {
+  share: 'full' | 'half' | 'other';
+  amount: string;
+}) =>
+  row.share === 'other'
+    ? parsePercentToBps(row.amount, { stepBps: 1 })
+    : SHARE_BPS[row.share];
 
 const describeCadence = (cadence: FundingRule['cadence']) => {
   if (cadence.kind === 'calendar') return CALENDAR_PERIOD_UNITS[cadence.period];
@@ -42,7 +58,8 @@ export function normalizeFunding(funding: FundingRule): FundingRule {
 export function describeAmount(amount: PairingAmount, of?: string) {
   if (amount.kind === 'exact') return formatCents(amount.cents);
   if (amount.kind === 'rest') return 'the rest';
-  if (amount.kind === 'billShare') return PAIRING_BILL_WORDS.describe(amount.bps);
+  if (amount.kind === 'billShare')
+    return PAIRING_BILL_WORDS.describe(amount.bps);
   const target =
     amount.of === 'remaining' ? 'what is left' : (of ?? 'each pay');
   const result = `${formatBps(amount.bps)}% of ${target}`;

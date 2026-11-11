@@ -18,11 +18,11 @@ import {
   centsToInputValue,
   formatCents,
   parseMoneyToCents,
-  parsePercentToBps,
 } from '@/utils/moneyUtils';
 import ItemBadge from '@apps/runway/components/ItemBadge';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { percentOf } from '@apps/runway/engine/money';
+import { getShareBps } from '@apps/runway/utils/fundingText';
 import {
   PAIRING_BILL_WORDS,
   PICK_KIND_HEADINGS,
@@ -71,8 +71,6 @@ const SHARE_OPTIONS = [
   { value: 'half', label: PAIRING_BILL_WORDS.half },
   { value: 'other', label: PAIRING_BILL_WORDS.other },
 ] as const;
-
-const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
 
 const OF_OPTIONS = [
   { value: 'dayMoney', label: "Of the day's money" },
@@ -131,14 +129,8 @@ function PairingRowSheet({
     choice.text.toLowerCase().includes(query.trim().toLowerCase()),
   );
 
-  const getShareBps = () =>
-    row.share === 'other'
-      ? parsePercentToBps(row.amount, { stepBps: 1 })
-      : SHARE_BPS[row.share];
-
-  /** "Half of Rent ($1,200.00) · $600.00 from each pay", worked from the bill as it is now. */
   const getBillLine = () => {
-    const bps = getShareBps();
+    const bps = getShareBps(row);
     if (bill === null || bps === null || !picked) return null;
     const shareWord =
       row.share === 'other'

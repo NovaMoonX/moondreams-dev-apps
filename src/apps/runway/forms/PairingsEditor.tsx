@@ -54,7 +54,11 @@ import type {
   PayLineSealed,
   SourceSealed,
 } from '@apps/runway/types';
-import { describeAmount } from '@apps/runway/utils/fundingText';
+import {
+  describeAmount,
+  getShareBps,
+  SHARE_BPS,
+} from '@apps/runway/utils/fundingText';
 
 interface PairingsFormData {
   rows: PairingRow[];
@@ -105,15 +109,10 @@ const blankRow = (key: number): PairingRow => ({
   topUp: false,
 });
 
-const SHARE_BPS = { full: 10_000, half: 5_000 } as const;
-
 const toAmount = (row: PairingRow): PairingAmount | null => {
   if (row.mode === 'rest') return { kind: 'rest' };
   if (row.mode === 'bill') {
-    const bps =
-      row.share === 'other'
-        ? parsePercentToBps(row.amount, { stepBps: 1 })
-        : SHARE_BPS[row.share];
+    const bps = getShareBps(row);
     return bps === null ? null : { kind: 'billShare', bps };
   }
   if (row.mode === 'percent') {
@@ -280,12 +279,14 @@ function PairingsEditor({
         }
       : null;
   };
-  /** The high end of a bill's amount, which a share of the bill is taken from. */
   const getBillBase = (id: string | null) => {
-    const amount = bills.find((entry) => entry.item.id === id)?.version
-      .payload.amount;
+    const amount = bills.find((entry) => entry.item.id === id)?.version.payload
+      .amount;
     return amount
-      ? { cents: amount.highCents, isRanged: amount.lowCents !== amount.highCents }
+      ? {
+          cents: amount.highCents,
+          isRanged: amount.lowCents !== amount.highCents,
+        }
       : null;
   };
   const buildPairings = (rows: PairingRow[]) =>
@@ -369,10 +370,10 @@ function PairingsEditor({
       : amount.kind === 'billShare'
         ? `${capitalize(describeAmount(amount))} ${day ? 'from this pay' : 'each pay'}`
         : amount.kind === 'exact'
-        ? day
-          ? `Asks ${describeAmount(amount)} of this pay`
-          : `${describeAmount(amount)} each pay`
-        : describeAmount(amount, fromLabel);
+          ? day
+            ? `Asks ${describeAmount(amount)} of this pay`
+            : `${describeAmount(amount)} each pay`
+          : describeAmount(amount, fromLabel);
   };
 
   const getCapNote = (row: PairingRow) => {

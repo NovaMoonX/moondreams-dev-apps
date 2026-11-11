@@ -3934,7 +3934,7 @@ export const MOVED_DAY_WORDS = {
       : `What you changed for ${count} income days has no new date near it, so it stops applying.`,
 } as const;
 
-/** What happens to "Pay these first" when the item it pays has stopped. */
+/** "Pay these first" taking a share of the bill it pays. */
 export const PAIRING_BILL_WORDS = {
   mode: 'Of the bill',
   full: 'Full',
@@ -3956,10 +3956,12 @@ export const PAIRING_BILL_WORDS = {
     isOneDay: boolean,
   ) =>
     `${share} of ${name} (${bill}) · ${cents} from ${isOneDay ? 'this pay' : 'each pay'}`,
-  ranged: 'Uses the high end of its range, and follows the bill when it changes.',
+  ranged:
+    'Uses the high end of its range, and follows the bill when it changes.',
   follows: 'Follows the bill when its amount changes.',
 } as const;
 
+/** What happens to "Pay these first" when the item it pays has stopped. */
 export const PAIRING_STOP_WORDS = {
   archived: 'Archived, so it gets nothing from this pay',
   ended: (date: string) => `Ended ${date}, so it gets nothing from this pay`,

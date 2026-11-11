@@ -150,6 +150,8 @@ const pairedCache = new WeakMap<
  * day's own set, else its pay line's, else its source's. Only a fixed figure or a share of the
  * day's money or of the bill (at its high end) is known ahead, counted only as far as the day's money
  * reaches once its other pairings have theirs; a share of what remains or the rest of the day is left out.
+ * A bill share reads the bill's version on the pay day, not its payment's due day, so a change dated
+ * between the two is seen a pay late; the draft itself reads the payment.
  */
 export function getPairedByBill(
   versions: readonly OpenVersion[],
