@@ -35,6 +35,7 @@ import {
   findLostPairs,
   isBankMove,
   findDepositDays,
+  findPendingMoveHolds,
   findPurchaseMatches,
   type DepositDay,
 } from '../../src/apps/runway/engine/matching.ts';
@@ -11225,6 +11226,98 @@ const version = (
     [['out', { inId: 'in', kind: 'cardPayment' }]],
     'the same amount out of an account and into a card is a card payment',
   );
+
+  const checkCardAndPending = () => {
+    const cardFlag = { category: 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT' };
+    const cardOut = side('out', 30_000, 0, cardFlag);
+    const cardIn = side('inCard', -30_000, 1, { ...onCard, ...cardFlag });
+    const deposit = side('inSavings', -30_000, 1);
+    const cardWins = findAccountPairs([cardOut, cardIn, deposit]);
+    assert.deepEqual(
+      [...cardWins.clear],
+      [['out', { inId: 'inCard', kind: 'cardPayment' }]],
+      'a card payment both sides of which the bank flags is paired though a same-amount deposit exists',
+    );
+    assert.deepEqual(
+      [...findAccountPairs([deposit, cardIn, cardOut].reverse()).clear],
+      [...cardWins.clear],
+      'the card tie-break does not depend on input order',
+    );
+    assert.deepEqual(
+      cardWins.offers.get('inSavings'),
+      undefined,
+      'the deposit is offered nothing once the card payment is paired',
+    );
+    const twoCards = findAccountPairs([
+      cardOut,
+      cardIn,
+      { ...cardIn, id: 'inCard2', paidByCardId: 'sapphire' },
+    ]);
+    assert.equal(twoCards.clear.size, 0, 'two card candidates still ask');
+    assert.equal(
+      twoCards.offers.get('out')?.length,
+      2,
+      'both card candidates are offered',
+    );
+    assert.equal(
+      findAccountPairs([cardOut, { ...cardIn, category: null }, deposit]).clear
+        .size,
+      0,
+      'a card side the bank does not flag is not settled by the card rule',
+    );
+
+    const pendingOut = side('pendingOut', 20_000, 0, { status: 'pending' });
+    const postedIn = side('postedIn', -20_000, 1);
+    assert.equal(
+      findAccountPairs([pendingOut, postedIn]).clear.size +
+        findAccountPairs([pendingOut, postedIn], true).offers.size,
+      0,
+      'a pending purchase never appears in clear or offers',
+    );
+    assert.deepEqual(
+      [...findPendingMoveHolds([postedIn, pendingOut])],
+      [['postedIn', 'pendingOut']],
+      'a posted money in waits for a pending money out of the same amount',
+    );
+    assert.deepEqual(
+      [...findPendingMoveHolds([pendingOut, postedIn])],
+      [...findPendingMoveHolds([postedIn, pendingOut])],
+      'the hold does not depend on input order',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, accountId: 'savings' }, postedIn])
+        .size,
+      0,
+      'a pending money out of the same account is not the other side',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, amountCents: 20_100 }, postedIn])
+        .size,
+      0,
+      'a different amount is not held',
+    );
+    assert.equal(
+      findPendingMoveHolds([{ ...pendingOut, date: base + 6 * day }, postedIn])
+        .size,
+      0,
+      'a pending money out more than three days away is not held',
+    );
+    assert.equal(
+      findPendingMoveHolds([
+        { ...pendingOut, paidByCardId: 'venture', accountId: null },
+        postedIn,
+      ]).size,
+      0,
+      'a pending charge on a card is not money out of an account',
+    );
+    assert.equal(
+      findPendingMoveHolds([pendingOut, { ...postedIn, status: 'pending' }])
+        .size,
+      0,
+      'a pending money in is not held, it is on its way itself',
+    );
+  };
+  checkCardAndPending();
 
   const equalCandidates = [
     side('out', 25_000, 0),

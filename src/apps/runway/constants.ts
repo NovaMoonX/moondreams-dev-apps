@@ -3485,14 +3485,14 @@ export const SPEND_PERIODS = ['month', 'lastMonth', '30', '90'] as const;
 export const DEFAULT_SPEND_PERIOD = 'month' as const;
 
 /** What Spend's Kind filter narrows to, as the URL keeps it; none shows every purchase and refund that counts. */
-export const SPEND_KINDS = ['purchases', 'refunds', 'notCounted'] as const;
+export const SPEND_KINDS = ['purchases', 'moneyIn', 'notCounted'] as const;
 
 export const SPEND_FILTER_WORDS = {
   label: 'Filter purchases',
   kind: 'Kind',
   kinds: {
     purchases: 'Purchases',
-    refunds: 'Refunds',
+    moneyIn: 'Money in',
     notCounted: 'Not counted',
   },
   paidWith: 'Card or account',
@@ -3502,6 +3502,17 @@ export const SPEND_FILTER_WORDS = {
   minLabel: 'Lowest amount',
   maxLabel: 'Highest amount',
   notCountedHelp: 'Left out of spending, or from before you linked.',
+  moneyInHelp:
+    'Deposits and refunds. Moves between your own accounts are left out.',
+  inFree: 'In Free to Spend',
+  toPay: 'Your pay',
+  cameIn: 'Came in',
+  onItsWay: 'On its way',
+  onItsWayIntro:
+    'The bank has not settled these yet, so they don’t count as money in until they clear.',
+  onItsWayPending: 'Not counted until it clears',
+  waitingFor: (account: string) => `Waiting for ${account} to clear`,
+  otherAccount: 'the other account',
   show: (count: number) =>
     `Show ${count} ${count === 1 ? 'purchase' : 'purchases'}`,
   showShort: (count: number) => `Show ${count}`,
@@ -3840,6 +3851,17 @@ const countMembers = (bills: number, envelopes: number, goals: number) =>
 
 // Round 4, package G4.
 export const FREE_SUM_WORDS = {
+  moneyIn: 'Money in this month',
+  moneyInSub: (straight: string | null, plan: string | null) =>
+    [
+      straight === null ? null : `${straight} to Free to Spend`,
+      plan === null ? null : `${plan} through pay and envelopes`,
+    ]
+      .filter(Boolean)
+      .join(' · '),
+  moneyInNone: 'Nothing has come in since the 1st',
+  onItsWay: 'On its way',
+  onItsWaySub: (total: string) => `${total} · not counted yet`,
   total: 'Everything you have',
   cards: 'Set aside for cards',
   bills: 'Held for bills',
@@ -4679,15 +4701,25 @@ export const NEEDS_HOME_WORDS = {
   untitled: 'Purchase',
   moneyIn: 'Money in',
   moneyInHelp:
-    'Deposits from your bank. Runway links one to your pay when it is clearly that day’s; the rest wait for you to say which pay they are.',
+    'Deposits that may be a pay or a move between your accounts. Runway links one to your pay when it is clearly that day’s. Any other money in is already in Free to Spend, under Spend’s Money in.',
   maybeTwice: 'Might be in twice',
   inEnvelope: (name: string) => `In ${name}`,
   maybeTwiceHelp:
     'You put these in an envelope, so they count there. Each looks like one you added yourself before linking your bank, so it may be in twice. Nothing is removed unless you say so: open one to say if it’s the same.',
-  leaveOut: 'Leave it out of spending',
-  leaveOutSub: 'Free to Spend gets it back',
-  leaveOutMoneyInSub: 'It will not count as income or spending',
-  leftOut: 'Left out of spending',
+  notPay: 'Not a pay',
+  notPaySub: 'It’s already in Free to Spend',
+  savedIn: 'Saved as money in',
+  unseenOut: 'To an account Runway doesn’t see',
+  unseenOutSub: 'Not spending. Your balance already shows it',
+  unseenIn: 'From an account Runway doesn’t see',
+  savedMove: 'Saved as a move to another account',
+  thisWasPay: 'This was a pay',
+  unlistedPay: 'A pay that isn’t listed',
+  thisWasPaySub: 'Plan it as a one-time pay so it can fill envelopes',
+  alreadyIn: 'It’s already in Free to Spend through your balance.',
+  onItsWaySheet:
+    'If it’s a move between your accounts, it pairs once it clears. If not, it counts then.',
+  linkedTo: (day: string) => `Linked to your pay on ${day}.`,
   keepFree: 'Keep in Free to Spend',
   keepFreeSub: 'Still counts, with no envelope',
   keptFree: 'Kept in Free to Spend',
@@ -4739,8 +4771,6 @@ export const NEEDS_HOME_WORDS = {
   bulkKeepFreeShort: 'Keep',
   bulkPut: 'Put in an envelope',
   bulkPutShort: 'Envelope',
-  bulkLeaveOut: 'Leave out of spending',
-  bulkLeaveOutShort: 'Leave out',
   bulkPickTitle: 'Which envelope?',
   bulkPickSub: (count: number) =>
     count === 1
@@ -4749,20 +4779,10 @@ export const NEEDS_HOME_WORDS = {
   bulkSearch: 'Search your envelopes',
   bulkNoMatch: 'Nothing matches that.',
   bulkNoEnvelopes: 'You have no envelopes yet.',
-  bulkLeaveOutTitle: (count: number) =>
-    count === 1 ? 'Leave out 1 charge?' : `Leave out ${count} charges?`,
-  bulkLeaveOutMessage: (count: number) =>
-    count === 1
-      ? "It won't count as spending, so Free to Spend gets the money back. You can undo it right after."
-      : "They won't count as spending, so Free to Spend gets the money back. You can undo it right after.",
-  bulkLeaveOutConfirm: (count: number) =>
-    count === 1 ? 'Leave it out' : 'Leave them out',
   bulkKept: (written: number, total: number) =>
     `Kept ${getBulkCount(written, total)} in Free to Spend`,
   bulkPlaced: (written: number, total: number, envelope: string) =>
     `Put ${getBulkCount(written, total)} in ${envelope}`,
-  bulkLeft: (written: number, total: number) =>
-    `Left ${getBulkCount(written, total)} out of spending`,
   bulkPartlyFailed: 'The rest did not save. Nothing else was changed.',
   bulkUndone: (count: number) =>
     count === 1
@@ -4774,8 +4794,6 @@ export const NEEDS_HOME_WORDS = {
 
 export const DEPOSIT_WORDS = {
   whichTitle: 'Which pay is this?',
-  noneNear:
-    'No pay day is close to this one. You can leave it out of spending for now.',
   dayRow: (differs: string | null) =>
     differs === null ? 'Same as expected' : differs,
   linkedOne: (amount: string, day: string) =>
@@ -4802,7 +4820,7 @@ export const DEPOSIT_WORDS = {
   notWaiting: 'This deposit is not waiting in Needs a home anymore.',
   notLinked: 'This deposit is not linked to a pay anymore.',
   dayNotArrived: 'That pay was marked as not arrived. Pick another one.',
-  lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or leave it out.',
+  lost: 'This was linked to a pay Runway no longer lists, or to one that already has its deposit. Pick the pay it is, or say it is not a pay.',
 } as const;
 
 export const PAIR_WORDS = {
@@ -4810,10 +4828,9 @@ export const PAIR_WORDS = {
   cardWhichTitle: (card: string | null, from: string | null) =>
     `Did you pay ${card ?? 'a card'} from ${from ?? 'one of your accounts'}?`,
   notCardPayment: 'Not a card payment',
-  pickRefund: 'Say if it is a refund',
   pairVerb: 'Pair them',
-  pickEnvelope: 'Then choose where it goes',
-  pickPay: 'Pick the pay it is',
+  leftOn: (day: string) => `Left ${day}`,
+  arrivedOn: (day: string) => `Arrived ${day}`,
   cardPaymentTo: (card: string) => `Card payment to ${card}`,
   cardPaymentFrom: (account: string) => `Payment from ${account}`,
   transferred: (amount: string, from: string, to: string) =>
@@ -4835,7 +4852,7 @@ export const PAIR_WORDS = {
   notWaiting: 'These are not both waiting in Needs a home anymore.',
   notPaired: 'These are not paired with each other anymore.',
   tooManyPayments: 'Too many payments were saved to this card that day.',
-  lost: 'Its other side changed or is gone, so it is waiting again. Pair it, file it or leave it out.',
+  lost: 'Its other side changed or is gone, so it is waiting again. Pair it again or say what it is.',
   doorTitle: 'Moves and card payments',
   screenTitle: 'Account moves',
   doorShort: 'Account moves',
@@ -4857,7 +4874,6 @@ export const PAIR_WORDS = {
   pairedTitle: 'Paired',
   waitingCardPayment: 'Your bank calls this a card payment',
   waitingTransfer: 'Your bank calls this a move between accounts',
-  waitingSheet: 'Pair it with its other side, or say it is spending.',
   waitingIntro: 'Your bank calls these card payments or moves.',
   isSpending: 'This is spending',
   isSpendingSub: 'Back on Purchases, from Free to Spend',

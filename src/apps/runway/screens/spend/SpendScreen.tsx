@@ -40,6 +40,7 @@ import {
 import PurchaseForm from '@apps/runway/forms/PurchaseForm';
 import GroupsScreen from '@apps/runway/screens/spend/GroupsScreen';
 import PurchaseScreen from '@apps/runway/screens/spend/PurchaseScreen';
+import MoneyInSheet from '@apps/runway/components/MoneyInSheet';
 import { selectRecentFrom } from '@apps/runway/store/selectors/historySelectors';
 import {
   getMonthStart,
@@ -58,6 +59,8 @@ import {
   selectAccountPairs,
   selectAllCards,
   selectRules,
+  selectMoneyIn,
+  selectOnItsWay,
   selectSpendPurchases,
   selectWaitingBankMoves,
 } from '@apps/runway/store/selectors/runwaySelectors';
@@ -78,7 +81,7 @@ const fitsKind = (purchase: OpenPurchase, kind: SpendKind | null) => {
   if (kind === 'notCounted') return !isCounted(purchase);
   if (!isCounted(purchase)) return false;
   if (kind === 'purchases') return purchase.amountCents > 0;
-  if (kind === 'refunds') return purchase.amountCents < 0;
+  if (kind === 'moneyIn') return purchase.amountCents < 0;
   return true;
 };
 
@@ -169,6 +172,8 @@ function DoorButton({
 function SpendScreen() {
   const isLoaded = useAppSelector(selectIsMovesLoaded);
   const allSpendPurchases = useAppSelector(selectSpendPurchases);
+  const allMoneyIn = useAppSelector(selectMoneyIn);
+  const allOnItsWay = useAppSelector(selectOnItsWay);
   const recentFrom = useAppSelector(selectRecentFrom);
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
@@ -213,9 +218,20 @@ function SpendScreen() {
   );
 
   const range = getSpendRange(spendPeriod, today);
-  const purchases = allSpendPurchases.filter(
-    (purchase) => purchase.date >= range.from && purchase.date < range.to,
-  );
+  const isInRange = (purchase: OpenPurchase) =>
+    purchase.date >= range.from && purchase.date < range.to;
+  const purchases = allSpendPurchases.filter(isInRange);
+  const moneyIn = allMoneyIn.filter(isInRange);
+  const onItsWay = allOnItsWay.filter(({ purchase }) => isInRange(purchase));
+  // A deposit waiting, on its way or linked to a pay is not in the purchase list, so its own sheet opens it.
+  const openedDeposit =
+    allMoneyIn.find(
+      (purchase) =>
+        purchase.id === purchaseId &&
+        (purchase.needsHome || purchase.incomeDayId !== null),
+    ) ??
+    allOnItsWay.find(({ purchase }) => purchase.id === purchaseId)?.purchase ??
+    null;
   const isPeriodReady =
     periodFor === range.key ||
     (recentFrom !== null && range.from >= recentFrom);
@@ -266,6 +282,10 @@ function SpendScreen() {
   const total = purchases
     .filter(isCounted)
     .reduce((sum, purchase) => sum + purchase.amountCents, 0);
+  const moneyInTotal = moneyIn.reduce(
+    (sum, purchase) => sum - purchase.amountCents,
+    0,
+  );
   const [query, setQuery] = useState('');
   const [shown, setShown] = useState(SPEND_PAGE_SIZE);
   const [formKey, setFormKey] = useState<number | null>(null);
@@ -275,26 +295,39 @@ function SpendScreen() {
     looks.get(envelopeId)?.name ?? 'An envelope';
   const paidWithOf = (purchase: OpenPurchase) =>
     getPaidWithName(purchase, cards, accounts);
+  const getEmptyWhere = (purchase: OpenPurchase) => {
+    if (kindId !== 'moneyIn' || level !== 'link') return undefined;
+    return purchase.incomeDayId !== null
+      ? SPEND_FILTER_WORDS.toPay
+      : SPEND_FILTER_WORDS.inFree;
+  };
   const resetPaging = () => setShown(SPEND_PAGE_SIZE);
 
   const kindCounts = SPEND_KINDS.reduce<Record<SpendKind, number>>(
     (acc, kind) => ({
       ...acc,
-      [kind]: purchases.filter((purchase) => fitsKind(purchase, kind)).length,
+      [kind]:
+        kind === 'moneyIn'
+          ? moneyIn.length
+          : purchases.filter((purchase) => fitsKind(purchase, kind)).length,
     }),
-    { purchases: 0, refunds: 0, notCounted: 0 },
+    { purchases: 0, moneyIn: 0, notCounted: 0 },
   );
-  // Purchases and Refunds split by sign, so they wait until amounts show.
+  // Purchases and Money in split by sign, so they wait until amounts show.
   const shownKinds = SPEND_KINDS.filter((kind) =>
     kind === 'notCounted' ? kindCounts.notCounted > 0 : !isHidden,
   );
   const kindId: SpendKind | null =
     spendKind !== null &&
-    kindCounts[spendKind] > 0 &&
+    (kindCounts[spendKind] > 0 ||
+      (spendKind === 'moneyIn' && onItsWay.length > 0)) &&
     shownKinds.includes(spendKind)
       ? spendKind
       : null;
-  const ofKind = purchases.filter((purchase) => fitsKind(purchase, kindId));
+  const ofKind =
+    kindId === 'moneyIn'
+      ? moneyIn
+      : purchases.filter((purchase) => fitsKind(purchase, kindId));
 
   const sources = ofKind.reduce<Map<string, { name: string; count: number }>>(
     (acc, purchase) => {
@@ -359,6 +392,7 @@ function SpendScreen() {
   const hasBar =
     purchases.length >= RUNWAY_SEARCH_THRESHOLD ||
     kindCounts.notCounted > 0 ||
+    kindCounts.moneyIn > 0 ||
     sources.size >= 2 ||
     counts.size >= 2;
   const needle = hasBar ? query.trim().toLowerCase() : '';
@@ -375,6 +409,13 @@ function SpendScreen() {
           .toLowerCase()
           .includes(needle)),
   );
+  const showOnItsWay =
+    kindId === 'moneyIn' &&
+    onItsWay.length > 0 &&
+    needle === '' &&
+    sourceIds.length === 0 &&
+    filterId === null &&
+    !isAmountOn;
   const visible = matches.slice(0, shown);
   const groups = groupByMonth(visible);
   const isRecent = spendPeriod === DEFAULT_SPEND_PERIOD;
@@ -542,10 +583,16 @@ function SpendScreen() {
         <div className='space-y-3'>
           <div>
             <p className='text-muted-foreground text-xs'>
-              {SPEND_PERIOD_WORDS.total}
+              {kindId === 'moneyIn'
+                ? SPEND_FILTER_WORDS.cameIn
+                : SPEND_PERIOD_WORDS.total}
             </p>
             <p className='text-3xl font-semibold tracking-tight tabular-nums'>
-              <SensitiveValue>{formatCents(total)}</SensitiveValue>
+              <SensitiveValue>
+                {kindId === 'moneyIn'
+                  ? `+${formatCents(moneyInTotal)}`
+                  : formatCents(total)}
+              </SensitiveValue>
             </p>
           </div>
         </div>
@@ -579,6 +626,11 @@ function SpendScreen() {
                 {kindId === 'notCounted' && (
                   <p className='text-muted-foreground text-xs'>
                     {SPEND_FILTER_WORDS.notCountedHelp}
+                  </p>
+                )}
+                {kindId === 'moneyIn' && (
+                  <p className='text-muted-foreground text-xs'>
+                    {SPEND_FILTER_WORDS.moneyInHelp}
                   </p>
                 )}
               </FilterSection>
@@ -651,7 +703,33 @@ function SpendScreen() {
             ))}
           </div>
         )}
-        {matches.length === 0 ? (
+        {showOnItsWay && (
+          <div className='space-y-2'>
+            <SectionDivider label={SPEND_FILTER_WORDS.onItsWay} />
+            <p className='text-muted-foreground text-sm'>
+              {SPEND_FILTER_WORDS.onItsWayIntro}
+            </p>
+            <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
+              {onItsWay.map(({ purchase, heldBy }) => (
+                <PurchaseRow
+                  key={purchase.id}
+                  purchase={purchase}
+                  looks={looks}
+                  paidWith={paidWithOf(purchase)}
+                  emptyWhere={
+                    heldBy === null
+                      ? SPEND_FILTER_WORDS.onItsWayPending
+                      : SPEND_FILTER_WORDS.waitingFor(
+                          paidWithOf(heldBy) ?? SPEND_FILTER_WORDS.otherAccount,
+                        )
+                  }
+                  onOpen={() => openPurchase(purchase.id)}
+                />
+              ))}
+            </ul>
+          </div>
+        )}
+        {matches.length === 0 && showOnItsWay ? null : matches.length === 0 ? (
           <p className='text-muted-foreground text-sm'>
             {ofKind.length === 0 && kindId === null
               ? SPEND_PERIOD_WORDS.emptyPeriod
@@ -668,6 +746,7 @@ function SpendScreen() {
                     purchase={purchase}
                     looks={looks}
                     paidWith={paidWithOf(purchase)}
+                    emptyWhere={getEmptyWhere(purchase)}
                     onOpen={() => openPurchase(purchase.id)}
                   />
                 ))}
@@ -697,7 +776,14 @@ function SpendScreen() {
         onClick={() => setFormKey((current) => (current ?? 0) + 1)}
       />
       {isGroupsOpen && <GroupsScreen onClose={closeGroups} />}
-      {purchaseId !== null && (
+      {openedDeposit !== null && (
+        <MoneyInSheet
+          key={openedDeposit.id}
+          purchase={openedDeposit}
+          onClose={closePurchase}
+        />
+      )}
+      {purchaseId !== null && openedDeposit === null && (
         <PurchaseScreen
           key={purchaseId}
           purchaseId={purchaseId}
