@@ -1464,7 +1464,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       upcoming,
       projects,
       topics,
-      notes: hinted,
+      notes: isQuestion(combined.text.trim())
+        ? hinted
+        : hinted.map(({ id, title }) => ({ id, title })),
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -1621,6 +1623,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     facts: context.facts,
     keyDates: context.keyDates,
     topics: context.topics,
+    notes: context.notes,
     captureText: combined.text,
     quotes,
     alreadyMade,
@@ -1734,6 +1737,22 @@ async function writeResult(
         answer,
         (code) => logger.info('helm.answer.dropped', { code }),
         searched.entries(),
+        undefined,
+        new Map(
+          hinted.map((note) => {
+            const topic = note.topicIds
+              .map((id) => contextTopics.find((entry) => entry.id === id))
+              .find((entry) => entry !== undefined);
+            return [
+              note.id,
+              {
+                title: note.title,
+                topicPath: topic?.path || null,
+                topicEmoji: topic?.emoji ?? null,
+              },
+            ];
+          }),
+        ),
       )
     : null;
   const { commands, refused: settledRefused } = settleLiveTurn(

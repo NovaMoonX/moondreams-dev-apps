@@ -235,7 +235,7 @@ function TurnCard({
         </div>
       )}
       {capture.answer && !capture.isUnreadable && (
-        <AnswerCard answer={capture.answer} isInset />
+        <AnswerCard answer={capture.answer} isInset capture={capture} />
       )}
       {hasLost && (
         <LostResult

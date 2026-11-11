@@ -87,6 +87,7 @@
     "check:helm-sensitive": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSensitive.ts",
     "check:helm-projects": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmProjects.ts",
     "check:helm-notes": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmNotes.ts",
+    "check:helm-note-search": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmNoteSearch.ts",
     "check:helm-topic-tree": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmTopicTree.ts",
     "check:helm-evidence": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmEvidence.ts",
     "check:helm-key-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmKeyDates.ts",

@@ -9,6 +9,7 @@ import {
   MAX_CONTEXT_PROJECTS,
   MAX_CONTEXT_TOPICS,
   MAX_HINT_NOTES,
+  NOTES_CONTEXT_CHARS,
   type CaptureReading,
   type TaskDue,
   type Token,
@@ -49,11 +50,40 @@ export interface ContextTopic {
   path: string;
 }
 
-/** A note the device ranked for what was typed; only its title goes to the model. */
+/** A note the device ranked for what was typed. Its title always goes to the model; its body only on a question, and `isUnchecked` says it was saved from a general answer nobody has checked. */
 export interface ContextNote {
   id: string;
   title: string;
+  body?: string;
+  isUnchecked?: boolean;
 }
+
+/** Each body trimmed so that all together stay within the cap: the shortest keep every word and what they leave over is shared by the longer ones. */
+const toNoteBodies = (notes: ContextNote[]): (string | null)[] => {
+  const withBody = notes.flatMap((note, index) =>
+    note.body === undefined ? [] : [{ index, body: note.body }],
+  );
+  const kept = withBody
+    .sort((left, right) => left.body.length - right.body.length)
+    .reduce(
+      (acc, { index, body }) => {
+        const share = Math.floor(acc.left / (withBody.length - acc.done));
+        const text =
+          body.length > share ? body.slice(0, share).trimEnd() : body;
+        return {
+          left: acc.left - text.length,
+          done: acc.done + 1,
+          byIndex: acc.byIndex.set(index, text),
+        };
+      },
+      {
+        left: NOTES_CONTEXT_CHARS,
+        done: 0,
+        byIndex: new Map<number, string>(),
+      },
+    ).byIndex;
+  return notes.map((_, index) => kept.get(index) ?? null);
+};
 
 export interface ContextInput {
   text: string;
@@ -131,6 +161,7 @@ export function buildContext(input: ContextInput): {
   facts: AliasBook;
   keyDates: AliasBook;
   topics: AliasBook;
+  notes: AliasBook;
 } {
   const aliases = createAliasBook('t');
   const topics = createAliasBook('tp');
@@ -165,6 +196,14 @@ export function buildContext(input: ContextInput): {
     said: turn.said.slice(0, MAX_EARLIER_SAID_CHARS),
     did: turn.did,
     records: turn.taskIds.map((id) => aliases.add(id)),
+  }));
+  const keptNotes = (input.notes ?? []).slice(0, MAX_HINT_NOTES);
+  const noteBodies = toNoteBodies(keptNotes);
+  const noteRecords = keptNotes.map((note, index) => ({
+    alias: notes.add(note.id),
+    title: note.title,
+    ...(noteBodies[index] === null ? {} : { body: noteBodies[index] }),
+    ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
   const { reading } = input;
   const text = withoutAddress(input.text, reading).slice(0, MAX_CAPTURE_CHARS);
@@ -252,14 +291,7 @@ export function buildContext(input: ContextInput): {
         ]
       : []),
     ...(input.notes?.length
-      ? [
-          `<related_notes>${toDataJson(
-            input.notes.slice(0, MAX_HINT_NOTES).map((note) => ({
-              alias: notes.add(note.id),
-              title: note.title,
-            })),
-          )}</related_notes>`,
-        ]
+      ? [`<related_notes>${toDataJson(noteRecords)}</related_notes>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]
@@ -270,7 +302,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced, facts, keyDates, topics };
+  return { message, aliases, synced, facts, keyDates, topics, notes };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */

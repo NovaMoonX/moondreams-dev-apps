@@ -228,6 +228,8 @@ export interface Capture {
   seenAt: number | null;
   /** `"{connectorId}|{accountId}"` of each connection an answer quoted; empty on a turn that quoted none and on one made before quotes. */
   quotedSourceKeys: string[];
+  /** The note made from this turn's general answer by Save to my knowledge; null until then. */
+  answerSavedNoteId: string | null;
   /** The who and places this turn named, once the assistant has read it. */
   whoIds: string[];
   placeIds: string[];
@@ -244,7 +246,6 @@ export type SourceRef =
   | {
       kind:
         | 'fact'
-        | 'note'
         | 'task'
         | 'project'
         | 'who'
@@ -253,6 +254,13 @@ export type SourceRef =
         | 'media'
         | 'topic';
       id: string;
+    }
+  | {
+      kind: 'note';
+      id: string;
+      title: string;
+      topicPath: string | null;
+      topicEmoji: string | null;
     }
   | { kind: 'event'; eventRef: string; title: string; startAt: number }
   | {
@@ -301,7 +309,7 @@ export interface CaptureAnswer {
   sources: SourceRef[];
   general: string | null;
   isHealth: boolean;
-  generalDiffersFrom: { noteId: string; says: string } | null;
+  generalDiffersFrom: { noteId: string; title: string; says: string } | null;
   suggestedTopicId: string | null;
   quotes: AnswerQuote[];
   searched: SearchedSource[];

@@ -299,6 +299,10 @@ const answer = (fields: Partial<AnswerCommand> = {}): AnswerCommand => ({
   syncedKeys: [],
   generalText: null,
   generalSpoken: null,
+  noteIds: [],
+  differsFromNoteId: null,
+  differsSays: null,
+  suggestedTopicId: null,
   ...fields,
 });
 
@@ -573,6 +577,117 @@ const tests: [string, () => void | Promise<void>][] = [
         },
         { kind: 'connection', ...connection },
       ]);
+    },
+  ],
+  [
+    'note and topic aliases resolve against the context, an unknown one is dropped, differsSays is cut at 80',
+    () => {
+      const notes = createAliasBook('n');
+      const topics = createAliasBook('tp');
+      const noteAlias = notes.add('note-1');
+      const topicAlias = topics.add('topic-1');
+      const read = (extra: Record<string, unknown>) =>
+        normalizeNomosReply(
+          {
+            commands: [
+              {
+                kind: 'answer',
+                scope: 'both',
+                question: 'How long do cakes keep?',
+                fromRecordsText: 'Your note says 3 days.',
+                sourceAliases: [noteAlias, 'n9'],
+                generalText: 'Guides say 2 days.',
+                differsFromNoteAlias: noteAlias,
+                differsSays: 'word '.repeat(40),
+                suggestedTopicAlias: topicAlias,
+                ...extra,
+              },
+            ],
+          },
+          { reading: READING, aliases: createAliasBook('t'), notes, topics },
+        ).answer;
+      const kept = read({});
+      assert.deepEqual(kept?.noteIds, ['note-1']);
+      assert.deepEqual(kept?.sources, []);
+      assert.equal(kept?.differsFromNoteId, 'note-1');
+      assert.ok((kept?.differsSays ?? '').length <= 80);
+      assert.equal(kept?.suggestedTopicId, 'topic-1');
+      const unknown = read({
+        differsFromNoteAlias: 'n9',
+        suggestedTopicAlias: 'tp9',
+        sourceAliases: ['n9'],
+      });
+      assert.deepEqual(unknown?.noteIds, []);
+      assert.equal(unknown?.differsFromNoteId, null);
+      assert.equal(unknown?.suggestedTopicId, null);
+    },
+  ],
+  [
+    'a cited note is copied into the answer, and differs and suggested topic are kept only with a note in the context and a general part',
+    () => {
+      const notes = new Map([
+        [
+          'note-1',
+          { title: 'Cake storage', topicPath: 'Kitchen', topicEmoji: '🍰' },
+        ],
+      ]);
+      const command = (fields: Partial<AnswerCommand>) =>
+        answer({
+          scope: 'both',
+          sources: [],
+          noteIds: ['note-1'],
+          fromRecordsText: 'Your note says 3 days.',
+          generalText: 'Guides say 2 days.',
+          differsFromNoteId: 'note-1',
+          differsSays: 'Cakes keep 3 days',
+          suggestedTopicId: 'topic-1',
+          ...fields,
+        });
+      const built = buildAnswer(command({}), undefined, [], undefined, notes);
+      assert.deepEqual(built.answer.sources, [
+        {
+          kind: 'note',
+          id: 'note-1',
+          title: 'Cake storage',
+          topicPath: 'Kitchen',
+          topicEmoji: '🍰',
+        },
+      ]);
+      assert.deepEqual(built.answer.generalDiffersFrom, {
+        noteId: 'note-1',
+        title: 'Cake storage',
+        says: 'Cakes keep 3 days',
+      });
+      assert.equal(built.answer.suggestedTopicId, 'topic-1');
+      const drops: string[] = [];
+      const foreign = buildAnswer(
+        command({ noteIds: ['note-9'], differsFromNoteId: 'note-9' }),
+        (code) => drops.push(code),
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(foreign.answer.fromRecords, null);
+      assert.deepEqual(drops, ['answer-unsourced']);
+      assert.equal(foreign.answer.generalDiffersFrom, null);
+      const noSays = buildAnswer(
+        command({ differsSays: null }),
+        undefined,
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(noSays.answer.generalDiffersFrom, null);
+      const refused = buildAnswer(
+        command({ scope: 'yourThings' }),
+        undefined,
+        [],
+        undefined,
+        notes,
+      );
+      assert.equal(refused.answer.general, null);
+      assert.equal(refused.answer.generalDiffersFrom, null);
+      assert.equal(refused.answer.suggestedTopicId, null);
     },
   ],
   [

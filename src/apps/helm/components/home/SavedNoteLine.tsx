@@ -1,0 +1,95 @@
+import { useState } from 'react';
+
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { BookOpen } from 'lucide-react';
+
+import { useAppSelector } from '@/store';
+import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
+import NoteTopicsSheet from '@apps/helm/components/knowledge/NoteTopicsSheet';
+import SavedNoteTopicQuestion from '@apps/helm/components/home/SavedNoteTopicQuestion';
+import { HELM_COPY } from '@apps/helm/constants';
+import { selectAllTopics } from '@apps/helm/store/selectors/knowledgeSelectors';
+import type { OpenNote } from '@apps/helm/types';
+import { pathOf } from '@apps/helm/utils/topicTree';
+
+interface SavedNoteLineProps {
+  note: OpenNote;
+  /** True while the note is loose and the topic question is still open. */
+  isAsking: boolean;
+  onAnswered: () => void;
+  onUndo: () => void;
+  isUndoing: boolean;
+}
+
+/** The line a saved answer leaves where Save to my knowledge was: where it went, with Change topic and Undo (while the note is untouched), or the question of which topic when none fit. */
+function SavedNoteLine({
+  note,
+  isAsking,
+  onAnswered,
+  onUndo,
+  isUndoing,
+}: SavedNoteLineProps) {
+  const topics = useAppSelector(selectAllTopics);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isChanging, setIsChanging] = useState(false);
+  const topic = topics.find((entry) => note.topicIds.includes(entry.id));
+  const title = note.title || HELM_COPY.noteUntitled;
+  const words = topic
+    ? HELM_COPY.savedNoteIn(
+        `${topic.emoji ? `${topic.emoji} ` : ''}${pathOf(topic.id, topics).join(' › ')}`,
+      )
+    : HELM_COPY.savedNoteLoose;
+
+  return (
+    <div className='flex flex-col gap-2.5'>
+      <div className='flex items-center gap-2'>
+        <Button
+          type='button'
+          variant='tertiary'
+          className='h-auto min-h-10 min-w-0 flex-1 justify-start gap-2 rounded-none border-0 px-0! py-1! text-left'
+          aria-label={HELM_COPY.savedNoteOpen(title)}
+          onClick={() => setIsOpen(true)}
+        >
+          <BookOpen
+            className='text-muted-foreground size-4 shrink-0'
+            aria-hidden='true'
+          />
+          <span className='min-w-0 text-[15px] break-words'>{words}</span>
+        </Button>
+        {note.lastEditedAt === null && (
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            loading={isUndoing}
+            onClick={onUndo}
+          >
+            {HELM_COPY.undo}
+          </Button>
+        )}
+        <Button
+          type='button'
+          variant='tertiary'
+          size='sm'
+          onClick={() => setIsChanging(true)}
+        >
+          {HELM_COPY.savedChangeTopic}
+        </Button>
+      </div>
+      {isAsking && !topic && (
+        <SavedNoteTopicQuestion note={note} onDone={onAnswered} />
+      )}
+      <NoteSheet
+        noteId={isOpen ? note.id : null}
+        onClose={() => setIsOpen(false)}
+      />
+      <NoteTopicsSheet
+        isOpen={isChanging}
+        onClose={() => setIsChanging(false)}
+        note={note}
+      />
+    </div>
+  );
+}
+
+export default SavedNoteLine;

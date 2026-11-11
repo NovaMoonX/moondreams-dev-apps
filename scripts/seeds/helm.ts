@@ -559,6 +559,7 @@ async function buildBackToBack(input: {
         joinedCaptureIds: order === 0 ? joinedIds : [],
         seenAt: createdAt,
         quotedSourceKeys: [],
+        answerSavedNoteId: null,
         whoIds: [],
         placeIds: [],
         planDayKey: null,
@@ -697,6 +698,9 @@ const ANSWER_TASKS = [
   },
 ];
 
+const SAVED_ANSWER_QUESTION = 'How long does cake keep?';
+const SAVED_ANSWER_NOTE_ID = 'seed-note-from-answer';
+
 const EMPTY_ANSWER = {
   sources: [],
   general: null,
@@ -766,7 +770,7 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
     },
     {
       ...EMPTY_ANSWER,
-      question: 'How long does cake keep?',
+      question: SAVED_ANSWER_QUESTION,
       scope: 'theWorld',
       fromRecords: null,
       general:
@@ -883,6 +887,7 @@ async function buildGmailTurn(input: {
     joinedCaptureIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [`google:gmail|${GOOGLE_ACCOUNT_ID}`],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     planDayKey: null,
@@ -1017,6 +1022,10 @@ async function buildAnswerTurns(input: {
         joinedCaptureIds: [],
         seenAt: createdAt + MINUTE_MS,
         quotedSourceKeys: [],
+        answerSavedNoteId:
+          answer.question === SAVED_ANSWER_QUESTION
+            ? SAVED_ANSWER_NOTE_ID
+            : null,
         whoIds: [],
         placeIds: [],
         planDayKey: null,
@@ -1069,6 +1078,41 @@ async function buildAnswerTurns(input: {
       return { captureId, capture, executionId, execution };
     }),
   );
+  const saved = answers.find(
+    (entry) => entry.question === SAVED_ANSWER_QUESTION,
+  );
+  const savedTurn = turns.find(
+    (turn) => turn.capture.answerSavedNoteId === SAVED_ANSWER_NOTE_ID,
+  );
+  const notes: { id: string; note: Note }[] =
+    saved?.general && savedTurn
+      ? [
+          {
+            id: SAVED_ANSWER_NOTE_ID,
+            note: {
+              topicIds: ['seed-topic-kitchen-baking'],
+              source: 'savedAnswer',
+              isFromGeneralAnswer: true,
+              checkedAt: null,
+              hasHealthCaution: false,
+              sourceCaptureId: savedTurn.captureId,
+              sourceMediaId: null,
+              projectIds: [],
+              createdBy: 'person',
+              executionId: null,
+              createdAt: savedTurn.capture.sortedAt ?? now,
+              lastEditedAt: null,
+              sealed: await sealJson<NoteSealed>(
+                {
+                  title: 'How long does cake keep',
+                  body: saved.general,
+                },
+                encryption,
+              ),
+            },
+          },
+        ]
+      : [];
   const tasks = await Promise.all(
     ANSWER_TASKS.map(async (entry, order) => {
       const made = now - (order + 4) * 60 * MINUTE_MS;
@@ -1104,7 +1148,7 @@ async function buildAnswerTurns(input: {
       return { id: entry.id, task };
     }),
   );
-  return { turns, tasks };
+  return { turns, tasks, notes };
 }
 
 /** Alex's plan days: yesterday as it was (one event, one kept task done that day and one not) and today (one kept slot and one suggestion), with the done task they need. */
@@ -1600,6 +1644,7 @@ async function buildNoteTurn(input: {
     joinedCaptureIds: [],
     seenAt: createdAt + MINUTE_MS,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     planDayKey: null,
@@ -1731,7 +1776,10 @@ async function buildKnowledge(input: {
       null,
       'seed-topic-kitchen',
       2,
-      { docState: 'behind', pendingNoteIds: [CAPTURE_NOTE_ID] },
+      {
+        docState: 'behind',
+        pendingNoteIds: [CAPTURE_NOTE_ID, SAVED_ANSWER_NOTE_ID],
+      },
     ),
     topicOf('seed-topic-wedding', 'Wedding etiquette', '💐', null),
     topicOf('seed-topic-garden', 'Garden', '🌱', null),
@@ -2223,6 +2271,7 @@ async function buildPeople(input: {
     joinedCaptureIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     createdAt: questionAt,
@@ -2309,6 +2358,7 @@ async function buildPeople(input: {
     joinedCaptureIds: [],
     seenAt: null,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     createdAt: askedAt,
@@ -2354,6 +2404,7 @@ async function buildPeople(input: {
     joinedCaptureIds: [],
     seenAt: turnAt + MINUTE_MS,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: ['seed-who-sam-patel'],
     placeIds: [],
     createdAt: turnAt,
@@ -3100,6 +3151,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             joinedCaptureIds: [],
             seenAt: turn.isSeen ? turnTime + MINUTE_MS : null,
             quotedSourceKeys: [],
+            answerSavedNoteId: null,
             whoIds: [],
             placeIds: [],
             planDayKey: null,
@@ -3363,7 +3415,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
               timeZone,
               encryption,
             })
-          : { turns: [], tasks: [] };
+          : { turns: [], tasks: [], notes: [] };
       answerTurns.turns.forEach((entry) => {
         batch.set(
           person.collection('captures').doc(entry.captureId),
@@ -3376,6 +3428,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       });
       answerTurns.tasks.forEach((entry) =>
         batch.set(person.collection('tasks').doc(entry.id), entry.task),
+      );
+      answerTurns.notes.forEach((entry) =>
+        batch.set(person.collection('notes').doc(entry.id), entry.note),
       );
       const gmailTurn =
         user.uid === FIXTURE_USERS.partnerOne.uid
@@ -3550,6 +3605,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         1 +
         answerTurns.turns.length * 2 +
         answerTurns.tasks.length +
+        answerTurns.notes.length +
         (gmailTurn ? 3 : 0) +
         (noteTurn ? 3 : 0) +
         (planDays ? planDays.days.length + 1 : 0);

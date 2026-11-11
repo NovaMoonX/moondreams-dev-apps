@@ -27,6 +27,13 @@ export interface AnswerQuote {
 
 export type SearchedSource = SearchedEntry;
 
+/** What the answer copies of a note it cites so its row survives the note's deletion: its title and where it is filed. */
+export interface NoteCopy {
+  title: string;
+  topicPath: string | null;
+  topicEmoji: string | null;
+}
+
 /** What is stored on the capture, sealed; `general` is never shown or read without its label. */
 export interface CaptureAnswer {
   question: string;
@@ -35,7 +42,7 @@ export interface CaptureAnswer {
   sources: SourceRef[];
   general: string | null;
   isHealth: boolean;
-  generalDiffersFrom: { noteId: string; says: string } | null;
+  generalDiffersFrom: { noteId: string; title: string; says: string } | null;
   suggestedTopicId: string | null;
   quotes: AnswerQuote[];
   searched: SearchedSource[];
@@ -108,8 +115,13 @@ export function buildAnswer(
   onDrop: (code: AnswerDrop) => void = () => undefined,
   searched: SearchedSource[] = [],
   newId: () => string = () => crypto.randomUUID(),
+  notes: ReadonlyMap<string, NoteCopy> = new Map(),
 ) {
-  const sources = dedupe(command.sources).slice(0, MAX_SOURCES);
+  const cited = command.noteIds.flatMap((id): SourceRef[] => {
+    const copy = notes.get(id);
+    return copy ? [{ kind: 'note', id, ...copy }] : [];
+  });
+  const sources = dedupe([...command.sources, ...cited]).slice(0, MAX_SOURCES);
   const quotes = command.quotes.filter(
     (quote, index) =>
       command.quotes.findIndex((other) => other.alias === quote.alias) ===
@@ -132,6 +144,9 @@ export function buildAnswer(
   const generalSpoken = general
     ? oneLine(command.generalSpoken || general)
     : null;
+  const differs = command.differsFromNoteId
+    ? notes.get(command.differsFromNoteId)
+    : undefined;
   const answer: CaptureAnswer = {
     question: command.question,
     scope: command.scope,
@@ -139,8 +154,15 @@ export function buildAnswer(
     sources: fromRecords ? sources : [],
     general,
     isHealth: command.isHealth,
-    generalDiffersFrom: null,
-    suggestedTopicId: null,
+    generalDiffersFrom:
+      general && differs && command.differsFromNoteId && command.differsSays
+        ? {
+            noteId: command.differsFromNoteId,
+            title: differs.title,
+            says: command.differsSays,
+          }
+        : null,
+    suggestedTopicId: general ? command.suggestedTopicId : null,
     quotes: [],
     searched,
   };

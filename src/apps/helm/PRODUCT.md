@@ -727,7 +727,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] How you write: style notes learned from what you type in Helm and, if you switch it on, your sent mail (O)
 - [ ] Knowledge: topics as living documents written from what you tell it, nested up to three levels, each part showing where it came from, with a history of versions and Undo; ask about one while reading, tell it what to change; loose notes for what fits no topic (O, C)
 - [ ] Filing knowledge: asked which topic the first time, then filed there on its own with Undo; parents proposed for related topics (O)
-- [ ] Save to my knowledge, and notes cited in answers before any general knowledge (O, C)
+- [x] Save to my knowledge, and notes cited in answers before any general knowledge (O, C)
 - [ ] Procedures: routines kept once and run each time, attached to a trip, event or project; a run ticked by tap or voice; versions (O, N, C)
 - [ ] Today, one view among the others: a few tasks suggested for real gaps, rest days, "I'm home", a version without a calendar (O, N)
 - [x] Answers from your own records with their sources, short when spoken; general knowledge only when they don't say, clearly marked, with a stronger caution on health (O, C)

@@ -229,6 +229,9 @@ const toAnswer = (fields: Partial<Record<string, unknown>>) => ({
   quoteAliases: [],
   generalText: null,
   generalSpoken: null,
+  differsFromNoteAlias: null,
+  differsSays: null,
+  suggestedTopicAlias: null,
   statement: null,
   quoteAlias: null,
   aboutAlias: null,
@@ -508,6 +511,60 @@ function readSelfAnswer(question: string, words: string[], message: string) {
   });
 }
 
+interface ListedNote {
+  alias: string;
+  title: string;
+  body?: string;
+}
+
+const DIFFERING_GENERAL = {
+  text: 'Published guides often give a shorter time than that, so check a reliable source for the specifics. This is a stand-in answer from the emulator.',
+  spoken: 'Published guides often give a shorter time than that.',
+};
+
+/** A question a kept note answers: cited as a record, and with "guide", "official", "really" or "recommend" in it a general part that says the note differs. Null when no note's words cover half the question's. */
+function readNoteAnswer(question: string, words: string[], message: string) {
+  const found = (readBlock<ListedNote[]>(message, 'related_notes') ?? []).find(
+    (note) =>
+      note.body !== undefined &&
+      words.filter((word) =>
+        `${note.title} ${note.body}`.toLowerCase().includes(word),
+      ).length >= Math.max(1, words.length / 2),
+  );
+  if (!found?.body) return null;
+  const says = found.body.replace(/\s+/g, ' ').trim();
+  const records = {
+    fromRecordsText: says.slice(0, 1_100),
+    sourceAliases: [found.alias],
+  };
+  return /\b(guide|guides|official|really|recommend)\b/i.test(question)
+    ? toAnswer({
+        scope: 'both',
+        question,
+        ...records,
+        generalText: DIFFERING_GENERAL.text,
+        generalSpoken: DIFFERING_GENERAL.spoken,
+        differsFromNoteAlias: found.alias,
+        differsSays: says.slice(0, 80),
+      })
+    : toAnswer({ scope: 'yourThings', question, ...records });
+}
+
+/** The alias of the first topic whose name shares its first four letters with a word of the question; null when none does. */
+const readSuggestedTopic = (words: string[], message: string) =>
+  (readBlock<{ alias: string; name: string }[]>(message, 'your_topics') ?? [])
+    .filter((topic) =>
+      (topic.name.toLowerCase().match(/\p{L}+/gu) ?? []).some((nameWord) =>
+        words.some(
+          (word) =>
+            word.length >= 4 &&
+            nameWord.length >= 4 &&
+            word.slice(0, 4) === nameWord.slice(0, 4),
+        ),
+      ),
+    )
+    .map((topic) => topic.alias)[0] ?? null;
+
 /** The emulator's stand-in answer to a question, from the records in the context; null when the text is not a question it knows. */
 function readQuestion(text: string, message: string) {
   const question = text.trim();
@@ -524,6 +581,8 @@ function readQuestion(text: string, message: string) {
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
   const own = readSelfAnswer(question, words, message);
   if (own) return own;
+  const fromNote = readNoteAnswer(question, words, message);
+  if (fromNote) return fromNote;
   const scored = records.map((record) => ({
     record,
     score: words.filter((word) => record.title.toLowerCase().includes(word))
@@ -545,6 +604,7 @@ function readQuestion(text: string, message: string) {
   const general = {
     generalText: GENERAL_STAND_IN.text,
     generalSpoken: GENERAL_STAND_IN.spoken,
+    suggestedTopicAlias: readSuggestedTopic(words, message),
   };
   if (/\b(ibuprofen|medicine|dose|doctor)\b/.test(lower)) {
     return toAnswer({

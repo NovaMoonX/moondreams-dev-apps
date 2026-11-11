@@ -141,6 +141,7 @@ export async function sendCapture(
     joinedCaptureIds: [],
     seenAt: createdAt,
     quotedSourceKeys: [],
+    answerSavedNoteId: null,
     whoIds: [],
     placeIds: [],
     planDayKey: null,

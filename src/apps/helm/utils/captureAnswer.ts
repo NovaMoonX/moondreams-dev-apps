@@ -9,7 +9,6 @@ import type {
 const SCOPES: AnswerScope[] = ['yourThings', 'theWorld', 'both'];
 const PLAIN_KINDS = [
   'fact',
-  'note',
   'task',
   'project',
   'who',
@@ -33,6 +32,21 @@ const toSource = (value: unknown): SourceRef[] => {
   if (PLAIN_KINDS.includes(value.kind)) {
     const id = toText(value.id);
     return id ? [{ kind: value.kind as 'task', id }] : [];
+  }
+  if (value.kind === 'note') {
+    const id = toText(value.id);
+    const title = toText(value.title);
+    return id && title
+      ? [
+          {
+            kind: 'note',
+            id,
+            title,
+            topicPath: toText(value.topicPath),
+            topicEmoji: toText(value.topicEmoji),
+          },
+        ]
+      : [];
   }
   if (value.kind === 'event') {
     const eventRef = toText(value.eventRef);
@@ -126,6 +140,7 @@ export function normalizeAnswer(value: unknown): CaptureAnswer | null {
   const differs = value.generalDiffersFrom;
   const differsNoteId = isRecord(differs) ? toText(differs.noteId) : null;
   const differsSays = isRecord(differs) ? toText(differs.says) : null;
+  const differsTitle = isRecord(differs) ? toText(differs.title) : null;
   return {
     question,
     scope: value.scope as AnswerScope,
@@ -137,7 +152,11 @@ export function normalizeAnswer(value: unknown): CaptureAnswer | null {
     isHealth: value.isHealth === true,
     generalDiffersFrom:
       differsNoteId && differsSays
-        ? { noteId: differsNoteId, says: differsSays }
+        ? {
+            noteId: differsNoteId,
+            title: differsTitle ?? '',
+            says: differsSays,
+          }
         : null,
     suggestedTopicId: toText(value.suggestedTopicId),
     quotes: Array.isArray(value.quotes) ? value.quotes.flatMap(toQuote) : [],

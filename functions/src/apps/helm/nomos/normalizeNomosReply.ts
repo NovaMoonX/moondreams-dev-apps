@@ -13,6 +13,7 @@ import {
   type AskCommand,
   type AskOption,
   ANSWER_SPOKEN_CAP,
+  DIFFERS_SAYS_CAP,
   ANSWER_TEXT_CAP,
   COMMAND_KINDS,
   FACT_KINDS,
@@ -89,6 +90,9 @@ const KNOWN_KEYS = new Set([
   'quoteAliases',
   'generalText',
   'generalSpoken',
+  'differsFromNoteAlias',
+  'differsSays',
+  'suggestedTopicAlias',
   'statement',
   'quoteAlias',
   'aboutAlias',
@@ -203,6 +207,8 @@ const readAnswer = (
   synced: SyncedBook | undefined,
   quotes: QuoteBook | undefined,
   facts: AliasBook | undefined,
+  notes: AliasBook | undefined,
+  topics: AliasBook | undefined,
 ): AnswerCommand | null => {
   const scope = ANSWER_SCOPES.find((entry) => entry === item.scope);
   const question = toText(item.question, QUESTION_CAP);
@@ -230,6 +236,23 @@ const readAnswer = (
     }),
     generalText: toText(item.generalText, ANSWER_TEXT_CAP),
     generalSpoken: toText(item.generalSpoken, ANSWER_SPOKEN_CAP),
+    noteIds: [
+      ...new Set(
+        listed.flatMap((alias: unknown) => {
+          const id = typeof alias === 'string' ? notes?.idOf(alias) : null;
+          return id ? [id] : [];
+        }),
+      ),
+    ],
+    differsFromNoteId:
+      typeof item.differsFromNoteAlias === 'string'
+        ? (notes?.idOf(item.differsFromNoteAlias) ?? null)
+        : null,
+    differsSays: toText(item.differsSays, DIFFERS_SAYS_CAP),
+    suggestedTopicId:
+      typeof item.suggestedTopicAlias === 'string'
+        ? (topics?.idOf(item.suggestedTopicAlias) ?? null)
+        : null,
   };
 };
 
@@ -955,6 +978,7 @@ export function normalizeNomosReply(
     facts?: AliasBook;
     keyDates?: AliasBook;
     topics?: AliasBook;
+    notes?: AliasBook;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -998,6 +1022,8 @@ export function normalizeNomosReply(
           context.synced,
           context.quotes,
           context.facts,
+          context.notes,
+          context.topics,
         );
         return read ? [read] : [];
       })[0] ?? null;

@@ -2,6 +2,7 @@ import AnswerSources from '@apps/helm/components/home/AnswerSources';
 import QuoteLine from '@apps/helm/components/home/QuoteLine';
 import SearchedLine from '@apps/helm/components/home/SearchedLine';
 import GeneralKnowledgeCard from '@apps/helm/components/home/GeneralKnowledgeCard';
+import SaveToKnowledge from '@apps/helm/components/home/SaveToKnowledge';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { CaptureAnswer } from '@apps/helm/types';
 
@@ -9,10 +10,12 @@ interface AnswerCardProps {
   answer: CaptureAnswer;
   /** Set under a line of words it lines up with; only then do its sources open, since a sheet can't open a sheet. */
   isInset?: boolean;
+  /** The turn this answer belongs to; with it the general part can be saved as a note. */
+  capture?: { id: string; answerSavedNoteId: string | null };
 }
 
 /** An answer in its two kinds of words: what the person's records say, then general knowledge under its label. */
-function AnswerCard({ answer, isInset = false }: AnswerCardProps) {
+function AnswerCard({ answer, isInset = false, capture }: AnswerCardProps) {
   const { fromRecords, general, scope } = answer;
   const recordsText =
     fromRecords ??
@@ -59,7 +62,19 @@ function AnswerCard({ answer, isInset = false }: AnswerCardProps) {
         </section>
       )}
       {general !== null && (
-        <GeneralKnowledgeCard text={general} isHealth={answer.isHealth} />
+        <GeneralKnowledgeCard
+          text={general}
+          isHealth={answer.isHealth}
+          differs={answer.generalDiffersFrom}
+        >
+          {capture && (
+            <SaveToKnowledge
+              captureId={capture.id}
+              savedNoteId={capture.answerSavedNoteId}
+              answer={answer}
+            />
+          )}
+        </GeneralKnowledgeCard>
       )}
     </div>
   );

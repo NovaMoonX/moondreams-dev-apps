@@ -177,6 +177,10 @@ async function openCapture(
     joinedCaptureIds: toIds(data.joinedCaptureIds),
     seenAt: data.seenAt ?? null,
     quotedSourceKeys: toIds(data.quotedSourceKeys),
+    answerSavedNoteId:
+      typeof data.answerSavedNoteId === 'string'
+        ? data.answerSavedNoteId
+        : null,
     whoIds: toIds(data.whoIds),
     placeIds: toIds(data.placeIds),
     planDayKey: typeof data.planDayKey === 'string' ? data.planDayKey : null,

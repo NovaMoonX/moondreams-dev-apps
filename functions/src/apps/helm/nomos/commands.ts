@@ -89,6 +89,8 @@ export const NOTE_TOPICS_CAP = 10;
 export const MAX_NOTES_PER_TURN = 3;
 export const MAX_CONTEXT_TOPICS = 100;
 export const MAX_HINT_NOTES = 8;
+export const NOTES_CONTEXT_CHARS = 6_000;
+export const DIFFERS_SAYS_CAP = 80;
 export const MILESTONE_TITLE_CAP = 80;
 export const MAX_MILESTONES_PER_TURN = 3;
 export const MAX_MILESTONES_PER_PROJECT = 30;
@@ -219,6 +221,13 @@ export interface PlaceRead {
 export type SourceRef =
   | { kind: 'task' | 'fact'; id: string }
   | {
+      kind: 'note';
+      id: string;
+      title: string;
+      topicPath: string | null;
+      topicEmoji: string | null;
+    }
+  | {
       kind: 'synced';
       id: string;
       connectorId: string;
@@ -346,6 +355,11 @@ export interface AnswerCommand {
   syncedKeys: string[];
   generalText: string | null;
   generalSpoken: string | null;
+  /** Notes the answer cites, resolved from the context's note aliases. */
+  noteIds: string[];
+  differsFromNoteId: string | null;
+  differsSays: string | null;
+  suggestedTopicId: string | null;
 }
 
 const NAMED_BY_REF = (name: string) => ({
@@ -389,6 +403,9 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'quoteAliases',
             'generalText',
             'generalSpoken',
+            'differsFromNoteAlias',
+            'differsSays',
+            'suggestedTopicAlias',
             'statement',
             'quoteAlias',
             'aboutAlias',
@@ -484,6 +501,18 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             generalSpoken: nullable(
               'string',
               `answer: generalText as one plain spoken sentence, at most ${ANSWER_SPOKEN_CAP} characters.`,
+            ),
+            differsFromNoteAlias: nullable(
+              'string',
+              'answer: the alias of a note in related_notes that generalText disagrees with; null when it disagrees with none.',
+            ),
+            differsSays: nullable(
+              'string',
+              `answer: what that note says on the point, at most ${DIFFERS_SAYS_CAP} characters; null with no differsFromNoteAlias.`,
+            ),
+            suggestedTopicAlias: nullable(
+              'string',
+              'answer: the alias of the one topic in your_topics generalText plainly belongs in, for keeping it; null when none plainly fits.',
             ),
             statement: nullable(
               'string',

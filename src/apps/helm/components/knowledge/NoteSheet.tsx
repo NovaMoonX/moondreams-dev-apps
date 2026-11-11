@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { Stethoscope } from 'lucide-react';
 
 import CopyTextButton from '@/components/CopyTextButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
@@ -16,7 +17,10 @@ import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
-import { deleteNote } from '@apps/helm/store/actions/noteActions';
+import {
+  deleteNote,
+  markNoteChecked,
+} from '@apps/helm/store/actions/noteActions';
 import {
   selectNoteById,
   selectTopicById,
@@ -48,6 +52,16 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
       onClose();
     });
   }, [noteId, onClose]);
+
+  const check = async () => {
+    if (!user || !note) return;
+    try {
+      await markNoteChecked(user.uid, note.id);
+    } catch (error) {
+      console.error('Helm note was not marked checked', error);
+      addToast({ title: HELM_COPY.noteCheckFailed, type: 'error' });
+    }
+  };
 
   const remove = async () => {
     if (!user || !note) return;
@@ -103,7 +117,16 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
           ? HELM_COPY.noteWrote(formatDateShort(note.createdAt))
           : note.source === 'capture'
             ? HELM_COPY.noteFromWhatYouSaid(formatDateShort(note.createdAt))
-            : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
+            : note.isFromGeneralAnswer
+              ? `${HELM_COPY.noteSavedFromAnswer} · ${formatDateShort(note.createdAt)}`
+              : HELM_COPY.noteAdded(formatDateShort(note.createdAt)),
+        ...(note.isFromGeneralAnswer
+          ? [
+              note.checkedAt === null
+                ? HELM_COPY.noteNotChecked
+                : HELM_COPY.noteCheckedByYou,
+            ]
+          : []),
         ...(note.lastEditedAt !== null
           ? [HELM_COPY.noteChangedOn(formatDateShort(note.lastEditedAt))]
           : []),
@@ -128,6 +151,15 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 }
                 rightActions={
                   <>
+                    {note.isFromGeneralAnswer && note.checkedAt === null && (
+                      <Button
+                        type='button'
+                        variant='secondary'
+                        onClick={() => void check()}
+                      >
+                        {HELM_COPY.noteIChecked}
+                      </Button>
+                    )}
                     <CopyTextButton
                       variant='secondary'
                       label={HELM_COPY.noteCopy}
@@ -151,6 +183,15 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
       >
         {note && (
           <div className='space-y-4'>
+            {note.hasHealthCaution && (
+              <p className='bg-muted text-foreground flex items-start gap-2 rounded-[10px] px-3 py-2.5 text-[13px] leading-[18px] font-semibold text-pretty'>
+                <Stethoscope
+                  className='mt-px size-4 shrink-0'
+                  aria-hidden='true'
+                />
+                <span className='min-w-0'>{HELM_COPY.answerHealthCaution}</span>
+              </p>
+            )}
             {note.body && (
               <LinkedText text={note.body} className='text-[15px]' />
             )}
