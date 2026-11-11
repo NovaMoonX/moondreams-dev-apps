@@ -22,12 +22,9 @@ function readVisibleSince() {
   return document.visibilityState === 'visible' ? Date.now() : Infinity;
 }
 
-/** Bridges the global `reminders` slice into in-app toasts: a reminder this page
- * has seen as not yet sent that flips to `sent` pops a toast, but only when the
- * page was in front the whole time it went out. One sent while the app was in
- * the background, or that first appears already `sent` (a reload, another
- * device's history), already reached the person as a push and never toasts.
- * One marked `inAppToast: false` never does either. */
+/** Toasts a reminder that flips to `sent` while the page is in front; one sent in the
+ * background or first seen already sent (a reload) reached the person as a push and
+ * never toasts, nor does `inAppToast: false`. */
 export function useReminderToasts() {
   const reminders = useAppSelector((state) => state.reminders.items);
   const { addToast } = useToast();
