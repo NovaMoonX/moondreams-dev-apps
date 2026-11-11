@@ -14,6 +14,7 @@ import {
   deleteAllHelmData,
   reopenHelmToFirstRun,
 } from '@apps/helm/store/actions/settingsActions';
+import { keepDeletedNote } from '@apps/helm/utils/deletedNote';
 
 const readFailure = (error: unknown) => {
   const code = (error as { code?: string } | null)?.code ?? '';
@@ -22,6 +23,11 @@ const readFailure = (error: unknown) => {
     code === 'functions/deadline-exceeded'
   )
     return HELM_COPY.deleteAllUnreachable;
+  if (
+    code === 'auth/popup-closed-by-user' ||
+    code === 'auth/cancelled-popup-request'
+  )
+    return HELM_COPY.deleteAllCancelled;
   if (code.startsWith('auth/')) return HELM_COPY.deleteAllSignIn;
   return HELM_COPY.deleteAllFailed;
 };
@@ -48,7 +54,6 @@ function DeleteHelmData({ connectionCount }: DeleteHelmDataProps) {
       topics: state.helm.topics.items.length,
       notes: state.helm.notes.items.length,
       photos: state.helm.media.items.length,
-      connections: connectionCount,
     }).join('|'),
   );
   const title = HELM_COPY.deleteAllTitle(helmAppName);
@@ -76,6 +81,7 @@ function DeleteHelmData({ connectionCount }: DeleteHelmDataProps) {
       title: HELM_COPY.deleteAllConfirmTitle(helmAppName),
       message: HELM_COPY.deleteAllConfirmBody(
         held === '' ? [] : held.split('|'),
+        connectionCount,
         assistant,
       ),
       confirmText: HELM_COPY.deleteAllConfirmAction,
@@ -86,6 +92,7 @@ function DeleteHelmData({ connectionCount }: DeleteHelmDataProps) {
     setIsDeleting(true);
     try {
       await deleteAllHelmData(user.uid);
+      keepDeletedNote();
       reopenHelmToFirstRun();
     } catch (error) {
       console.error('Helm data was not deleted', error);

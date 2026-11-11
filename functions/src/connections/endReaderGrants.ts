@@ -16,19 +16,26 @@ export async function endReaderGrants({
     .collection(`connections/${uid}/grants`)
     .where('readerAppId', '==', readerAppId)
     .get();
-  const outcomes: boolean[] = [];
-  for (const snapshot of snapshots.docs) {
-    try {
-      await endAndClean(uid, { grantId: snapshot.id, deleteCopies: true });
-      await revokeUnusedAccount(uid, snapshot.id);
-      outcomes.push(true);
-    } catch (error) {
-      logger.warn('connections.endReader.failed', {
-        cause: errorCause(error),
-      });
-      outcomes.push(false);
-    }
-  }
+  // One at a time, so the last grant on an account is the one that revokes it.
+  const outcomes = await snapshots.docs.reduce<Promise<boolean[]>>(
+    async (previous, snapshot) => {
+      const done = await previous;
+      const isEnded = await endAndClean(uid, {
+        grantId: snapshot.id,
+        deleteCopies: true,
+      })
+        .then(() => revokeUnusedAccount(uid, snapshot.id))
+        .then(() => true)
+        .catch((error: unknown) => {
+          logger.warn('connections.endReader.failed', {
+            cause: errorCause(error),
+          });
+          return false;
+        });
+      return [...done, isEnded];
+    },
+    Promise.resolve([]),
+  );
   const result = {
     ended: outcomes.filter(Boolean).length,
     failed: outcomes.filter((ok) => !ok).length,

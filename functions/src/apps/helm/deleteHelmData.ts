@@ -22,7 +22,7 @@ if (getApps().length === 0) {
 const userPath = (uid: string) => `apps/helm/users/${uid}`;
 const serverPath = (uid: string) => `apps/helm/server/${uid}`;
 const mediaPrefix = (uid: string) => `apps/helm/media/${uid}/`;
-// Only Helm records voice usage today, so the person's whole usage tree is Helm's.
+// No other app records voice usage yet, so the whole tree is this app's; once one does, only this app's days may go.
 const voiceUsagePath = (uid: string) => `voiceUsage/${uid}`;
 
 /** Deletes a document or collection and everything below it and returns how many documents were removed. */
@@ -40,10 +40,9 @@ async function deleteTree(
 }
 
 async function deleteMedia(uid: string) {
-  const [files] = await getStorage()
-    .bucket()
-    .getFiles({ prefix: mediaPrefix(uid) });
-  await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
+  const bucket = getStorage().bucket();
+  const [files] = await bucket.getFiles({ prefix: mediaPrefix(uid) });
+  await bucket.deleteFiles({ prefix: mediaPrefix(uid) });
   return files.length;
 }
 
@@ -75,7 +74,7 @@ async function deleteServerTree(firestore: Firestore, uid: string) {
 }
 
 /**
- * Removes everything Helm holds for the signed-in person: every connection it holds, the user tree's collections, kept media,
+ * Removes everything the app holds for the signed-in person: every connection it holds, the user tree's collections, kept media,
  * voice usage, the server tree (the wrapped data key last) and then the profile document. Needs a sign-in from the last five minutes; a rerun finishes.
  */
 export const deleteHelmData = onCall(
@@ -115,6 +114,8 @@ export const deleteHelmData = onCall(
         firestore,
         firestore.doc(voiceUsagePath(uid)),
       );
+      // The key and the profile stay until every connection has ended, so the person can still run it again from Settings.
+      if (grants.failed > 0) throw new Error('grants-not-ended');
       const server = await deleteServerTree(firestore, uid);
       // Other open devices reopen to first run when the profile vanishes, so it goes after the key: a reopen never fetches a new key that this run then deletes.
       const profile = await deleteTree(firestore, firestore.doc(userPath(uid)));
@@ -123,7 +124,7 @@ export const deleteHelmData = onCall(
         documents: collections + usage + server + profile,
         files,
       };
-      logger.info('helm.data.deleted', { ...result, failed: grants.failed });
+      logger.info('helm.data.deleted', result);
       return result;
     } catch (error) {
       const code = (error as { code?: unknown } | null)?.code;

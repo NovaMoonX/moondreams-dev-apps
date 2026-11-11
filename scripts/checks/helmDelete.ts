@@ -85,7 +85,7 @@ assert.match(
 
 assert.match(
   settings,
-  /helmTrustStore\.forget\(uid\)[\s\S]*forgetOutboxSecrets\(uid\)[\s\S]*clearHelmKey\(\)[\s\S]*clearHelm\(\)/,
+  /helmTrustStore\s*\.forget\(uid\)[\s\S]*forgetOutboxSecrets\(uid\)[\s\S]*clearHelmKey\(\)[\s\S]*clearHelm\(\)/,
   'this browser forgets the key, the device secrets and the slice',
 );
 assert.match(
@@ -93,7 +93,21 @@ assert.match(
   /reauthenticateWithPopup/,
   'the sign-in is renewed in the tap',
 );
-assert.match(settings, /functions\/not-found/, 'not-found counts as deleted');
+assert.doesNotMatch(
+  settings,
+  /functions\/not-found/,
+  'a missing callable is never read as deleted',
+);
+assert.match(
+  settings,
+  /signIn\.isStale = true;[\s\S]{0,200}auth\/requires-recent-login/,
+  'a late sign-in request is left to the next tap, never opened after the wait',
+);
+assert.match(
+  server,
+  /grants\.failed > 0\)[\s\S]{0,80}throw[\s\S]*deleteServerTree\(firestore, uid\)[\s\S]*userPath\(uid\)/,
+  'a connection that did not end stops the run before the key and the profile go',
+);
 assert.match(
   outbox,
   /forgetDeviceSecret\(uid, OUTBOX_SECRET\)[\s\S]*forgetDeviceSecret\(uid, DROP_BOX_KEY_SECRET\)/,

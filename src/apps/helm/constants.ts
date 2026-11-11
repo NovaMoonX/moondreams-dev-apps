@@ -1,3 +1,4 @@
+import { formatList } from '@/utils/formatUtils';
 import { formatCentsShort } from '@/utils/moneyUtils';
 import type {
   AssistantTone,
@@ -996,15 +997,30 @@ export const HELM_COPY = {
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound. You can change this in Settings.",
   settingsYourData: 'Your data',
   deleteAllTitle: (appName: string) => `Delete all my ${appName} data`,
-  deleteAllRowHint: 'Everything it holds for you, for good',
+  deleteAllRowHint: 'Everything it keeps, for good',
   deleteAllWorking: 'Deleting. This can take a minute.',
   deleteAllConfirmTitle: (appName: string) =>
     `Delete all your ${appName} data?`,
-  deleteAllConfirmBody: (held: string[], assistant: string) =>
-    `This removes ${
-      held.length > 0 ? `your ${held.join(', ')}` : 'everything it holds'
-    }, ends every connection, and deletes the photos and copies from connected apps. ${assistant} starts over as if you had never opened it. This can't be undone.`,
+  deleteAllConfirmBody: (
+    held: string[],
+    connections: number,
+    assistant: string,
+  ) =>
+    [
+      held.length > 0
+        ? `This deletes everything it keeps for you, including your ${formatList(held)}.`
+        : 'This deletes everything it keeps for you.',
+      connections > 0
+        ? `It ends its ${connections === 1 ? 'connection' : `${connections} connections`} and removes the copies it made from them.`
+        : null,
+      `${assistant} starts over as if you had never opened it. Your account and your other apps stay as they are. This can't be undone.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
   deleteAllConfirmAction: 'Delete everything',
+  deleteAllDone:
+    'All your data here is deleted. You can start fresh whenever you like.',
+  deleteAllCancelled: 'The sign-in was closed, so nothing was deleted.',
   deleteAllKinds: (counts: {
     tasks: number;
     people: number;
@@ -1014,7 +1030,6 @@ export const HELM_COPY = {
     topics: number;
     notes: number;
     photos: number;
-    connections: number;
   }) =>
     [
       [counts.tasks, 'open task', 'open tasks'],
@@ -1025,7 +1040,6 @@ export const HELM_COPY = {
       [counts.topics, 'topic', 'topics'],
       [counts.notes, 'note', 'notes'],
       [counts.photos, 'photo', 'photos'],
-      [counts.connections, 'connection', 'connections'],
     ].flatMap(([count, one, many]) =>
       count === 0 ? [] : [`${count} ${count === 1 ? one : many}`],
     ),

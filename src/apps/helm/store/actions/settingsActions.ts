@@ -146,33 +146,37 @@ const readErrorCode = (error: unknown) =>
 const needsRecentSignIn = (error: unknown) =>
   readErrorCode(error) === 'functions/failed-precondition';
 
-/** Makes this browser forget the person's Helm: the key and its trust entry, the saved list and drop-box key, and what the screen holds. */
+/** Makes this browser forget the person's data here: the key and its trust entry, the saved list and drop-box key, and what the screen holds. */
 export async function forgetHelmOnDevice(uid: string) {
-  await helmTrustStore.forget(uid).catch(() => undefined);
-  await forgetOutboxSecrets(uid).catch(() => undefined);
+  await helmTrustStore
+    .forget(uid)
+    .catch((error: unknown) => console.warn('Kept key not forgotten', error));
+  await forgetOutboxSecrets(uid).catch((error: unknown) =>
+    console.warn('Saved outbox not forgotten', error),
+  );
   clearHelmKey();
   store.dispatch(clearHelm());
 }
 
-/** Opens Helm again from its start, as a first open. */
+/** Opens the app again from its start, as a first open. */
 export const reopenHelmToFirstRun = () =>
   window.location.replace(window.location.pathname);
 
-const runDelete = () =>
-  deleteHelmDataCallable({}).catch((error: unknown) => {
-    if (readErrorCode(error) === 'functions/not-found') return null;
-    throw error;
-  });
+const signIn = { isStale: false };
 
-/** Deletes everything Helm holds for the person on the server, then this browser forgets its keys. Throws when the server could not finish; a rerun finishes it. */
+/** Deletes everything the app holds for the person on the server, then this browser forgets its keys. Throws when the server could not finish; a rerun finishes it. */
 export async function deleteAllHelmData(uid: string) {
-  await ensureRecentSignIn(false);
+  await ensureRecentSignIn(signIn.isStale);
+  signIn.isStale = false;
   try {
-    await runDelete();
+    await deleteHelmDataCallable({});
   } catch (error) {
     if (!needsRecentSignIn(error)) throw error;
-    await ensureRecentSignIn(true);
-    await runDelete();
+    // A sign-in window opened after a long wait is blocked, so the next tap asks for it instead.
+    signIn.isStale = true;
+    throw Object.assign(new Error('Sign in again.'), {
+      code: 'auth/requires-recent-login',
+    });
   }
   await forgetHelmOnDevice(uid);
 }
