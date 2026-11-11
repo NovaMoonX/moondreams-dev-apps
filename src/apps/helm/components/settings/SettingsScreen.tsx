@@ -10,6 +10,12 @@ import {
   UserRound,
 } from 'lucide-react';
 
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase/config';
+import {
+  keepSignOutNote,
+  SIGNED_OUT_EVERYWHERE_NOTE,
+} from '@/lib/auth/signOutNote';
 import { signOutEverywhere } from '@/lib/security/trustedBrowsers';
 import SettingsGroup from '@/components/SettingsGroup';
 import TrustBrowserRow from '@/components/TrustBrowserRow';
@@ -154,7 +160,15 @@ function SettingsScreen({
               appName={helmAppName}
               onSignOutEverywhere={async () => {
                 await signOutEverywhere();
-                await logOut();
+                // The server has already ended every sign-in, so this browser leaves even if cleanup fails.
+                await logOut({
+                  hasAskedFirst: true,
+                  landingNote: SIGNED_OUT_EVERYWHERE_NOTE,
+                }).catch(async () => {
+                  await signOut(auth).catch(() => undefined);
+                  keepSignOutNote(SIGNED_OUT_EVERYWHERE_NOTE);
+                  window.location.href = '/';
+                });
               }}
             />
           </section>

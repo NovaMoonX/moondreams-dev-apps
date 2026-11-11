@@ -52,14 +52,24 @@ assert.match(
 
 const callable = read('functions/src/auth/signOutEverywhere.ts');
 assert.ok(
-  callable.indexOf('trustedBrowsers/') > -1 &&
+  callable.includes('`trustedBrowsers/${uid}/browsers`') &&
     callable.indexOf('recursiveDelete') <
       callable.indexOf('revokeRefreshTokens'),
   'sign out everywhere deletes the trusted entries before it revokes sessions',
 );
+assert.match(
+  callable,
+  /enforceAppCheck: true/,
+  'the callable enforces App Check',
+);
+assert.match(
+  callable,
+  /const uid = request\.auth\?\.uid;\s*if \(!uid\)/,
+  'the callable acts only on the signed-in account',
+);
 assert.doesNotMatch(
   callable,
-  /helm|runway|recipe|trip|waypoint/i,
+  /\b(helm|runway|pinch|recipes?|trips?|waypoint)\b/i,
   'the site callable carries no app’s words',
 );
 assert.doesNotMatch(
@@ -69,8 +79,15 @@ assert.doesNotMatch(
 );
 assert.match(
   settings,
-  /onSignOutEverywhere=\{async \(\) => \{\s*await signOutEverywhere\(\);\s*await logOut\(\)/,
-  'Helm signs this browser out only after the server has ended every session',
+  /onSignOutEverywhere=\{async \(\) => \{\s*await signOutEverywhere\(\);[\s\S]{0,160}?await logOut\(\{\s*hasAskedFirst: true,[\s\S]{0,80}?\}\)\.catch\(/,
+  'Helm signs this browser out only after the server has ended every session, and leaves even if cleanup fails',
+);
+const row = read('src/components/TrustBrowserRow.tsx');
+assert.ok(
+  row.indexOf('getSignOutQuestions(uid)') > -1 &&
+    row.indexOf('getSignOutQuestions(uid)') <
+      row.indexOf('onSignOutEverywhere().catch'),
+  'unsent work is asked about before the server ends any session',
 );
 
 console.log('helm trust checks passed');
