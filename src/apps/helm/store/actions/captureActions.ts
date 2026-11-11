@@ -354,6 +354,15 @@ export async function retryCapture(
 export const sortRestOfCapture = (captureId: string) =>
   sortCapture(captureId, 'rest');
 
+/** The turn's photos still there to let go: a gone or kept one would refuse or undo the whole write. */
+const photosToLetGo = (ids: string[]) => {
+  const { media } = store.getState().helm;
+  if (!media.isLoaded) return ids;
+  return ids.filter((id) =>
+    media.items.some((item) => item.id === id && item.status !== 'kept'),
+  );
+};
+
 /** Deletes a turn; the photos it carried are let go with it, due in 24 hours. */
 export function deleteCapture(uid: string, captureId: string) {
   const capture = selectAllCaptures(store.getState()).find(
@@ -361,7 +370,12 @@ export function deleteCapture(uid: string, captureId: string) {
   );
   const batch = writeBatch(db);
   batch.delete(doc(capturesOf(uid), captureId));
-  letGoTurnPhotos(batch, uid, capture?.attachmentIds ?? [], Date.now());
+  letGoTurnPhotos(
+    batch,
+    uid,
+    photosToLetGo(capture?.attachmentIds ?? []),
+    Date.now(),
+  );
   return batch.commit();
 }
 
@@ -447,7 +461,7 @@ export async function makeTaskAsWritten(
       claimedAt: null,
     }),
   );
-  letGoTurnPhotos(batch, uid, current.attachmentIds, now);
+  letGoTurnPhotos(batch, uid, photosToLetGo(current.attachmentIds), now);
   const write = batch.commit();
   const undo = async () => {
     const task = store

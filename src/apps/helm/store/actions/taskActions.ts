@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -7,7 +8,6 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
-  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -212,7 +212,7 @@ export function completeTask(uid: string, taskId: string) {
   return { completedAt, write, undo };
 }
 
-/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. The photos kept only on it are let go for 24 hours in the same write, and `restore` keeps them again. Writes are handed back or left unawaited, so both work offline. */
+/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. The photos kept only on it are let go for 24 hours, each in its own write so a photo already gone never holds back the task, and `restore` keeps them again. Writes are handed back or left unawaited, so both work offline. */
 export async function deleteTask(
   uid: string,
   taskId: string,
@@ -228,16 +228,16 @@ export async function deleteTask(
   );
   const mediaRef = (id: string) =>
     doc(db, 'apps', 'helm', 'users', uid, 'media', id);
-  const batch = writeBatch(db);
-  batch.delete(ref);
-  released.forEach((entry) => batch.update(mediaRef(entry.id), entry.forward));
-  const write = batch.commit();
+  const write = deleteDoc(ref);
+  released.forEach((entry) =>
+    updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
+  );
   const restore = async (): Promise<RestoreResult> => {
     if ((await getDoc(ref)).exists()) return 'exists';
-    const back = writeBatch(db);
-    back.set(ref, { ...raw, lastEditedAt: Date.now() });
-    released.forEach((entry) => back.update(mediaRef(entry.id), entry.back));
-    back.commit().catch(() => undefined);
+    setDoc(ref, { ...raw, lastEditedAt: Date.now() }).catch(() => undefined);
+    released.forEach((entry) =>
+      updateDoc(mediaRef(entry.id), entry.back).catch(() => undefined),
+    );
     return 'restored';
   };
   return { write, restore };

@@ -611,10 +611,10 @@ export async function removeKeptMedia(
   return {
     restore: () =>
       updateDoc(mediaRef, {
-        attachedTo: previous.attachedTo,
+        attachedTo: toAttached(previous.attachedTo),
         status: previous.status,
-        deleteAfter: previous.deleteAfter,
-        decidedAt: previous.decidedAt,
+        deleteAfter: previous.deleteAfter ?? null,
+        decidedAt: previous.decidedAt ?? null,
       }),
   };
 }
