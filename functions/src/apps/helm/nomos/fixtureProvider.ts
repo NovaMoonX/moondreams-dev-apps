@@ -1369,6 +1369,80 @@ const toProcedureCommand = (fields: Record<string, unknown>) =>
     ...fields,
   });
 
+const toRunCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    procedureAlias: null,
+    projectRef: null,
+    runStepAliases: null,
+    requestQuote: null,
+    ...fields,
+  });
+
+/** The emulator's stand-in for starting and ticking a run: "Start packing for the Pacific Northwest weekend" starts the procedure whose title says packing, for the trip in the synced records when there is one, and "done with the charger" ticks every undone step of an open run that names a charger. Null for any other words, or when the procedure or the steps are not in the context. */
+const readRunWork = (text: string, message: string) => {
+  const quote = text.trim().replace(/[.!]+$/, '');
+  if (/\bstart packing for the pacific northwest weekend\b/i.test(text)) {
+    const procedure = (
+      readBlock<{ procedure: string; title: string }[]>(
+        message,
+        'your_procedures',
+      ) ?? []
+    ).find((entry) => /packing/i.test(entry.title));
+    const trip = (
+      readBlock<{ alias: string; title: string; kind: string }[]>(
+        message,
+        'synced_records',
+      ) ?? []
+    ).find(
+      (entry) =>
+        entry.kind === 'trip' && /pacific northwest/i.test(entry.title),
+    );
+    return procedure
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'startRun',
+              procedureAlias: procedure.procedure,
+              aboutAlias: trip?.alias ?? null,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  if (/\bdone with the charger\b/i.test(text)) {
+    const aliases = (
+      readBlock<{ undone: { step: string; text: string }[] }[]>(
+        message,
+        'open_runs',
+      ) ?? []
+    )
+      .map((run) =>
+        run.undone
+          .filter((step) => /charger/i.test(step.text))
+          .map((step) => step.step),
+      )
+      .find((found) => found.length > 0);
+    return aliases
+      ? {
+          commands: [
+            toRunCommand({
+              kind: 'tickRun',
+              runStepAliases: aliases,
+              requestQuote: quote,
+            }),
+          ],
+          mentions: [],
+          places: [],
+        }
+      : null;
+  }
+  return null;
+};
+
 /** The emulator's stand-in for the ways a procedure is made and changed: "Make me a packing routine for work trips", "make this a routine" on an open task, and "Add a step for the laptop charger" with a procedure open (with none open it names no procedure, which code drops). Null for any other words. */
 const readProcedureWork = (text: string, message: string) => {
   const open = readBlock<ProcedureOpenBlock>(message, 'procedure_open');
@@ -1536,6 +1610,7 @@ function createTextFixtureProvider(
         };
       }
       const grown =
+        readRunWork(text, messageText(messages[0]?.content ?? '')) ??
         readProcedureWork(text, messageText(messages[0]?.content ?? '')) ??
         readTopicWork(text, messageText(messages[0]?.content ?? ''));
       if (grown) {

@@ -70,6 +70,14 @@ export const PROCEDURE_GROUPS_MAX = 12;
 export const PROCEDURE_GROUP_NAME_CAP = 40;
 export const PROCEDURE_SUMMARY_CAP = 200;
 
+/** The kinds the reply may carry that start a run of a procedure or tick its steps; each is read from its own list and is no `NomosCommand`. */
+export const RUN_COMMAND_KINDS = ['startRun', 'tickRun'] as const;
+
+export const RUN_STEPS_MAX = 80;
+export const RUN_EXTRA_MAX = 20;
+export const RUN_EXTRA_TEXT_CAP = 200;
+export const MAX_TICKS_PER_TURN = 20;
+
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 
 export type RememberField = (typeof REMEMBER_FIELDS)[number];
@@ -443,6 +451,24 @@ export interface ProcedureExistsCommand {
 export type ProcedureCommand =
   CreateProcedureCommand | ReviseProcedureCommand | ProcedureExistsCommand;
 
+/** A new run of a procedure, for a synced trip or event (`about`), a project named in words (`projectRef`), or for nothing; a synced copy wins over a project. */
+export interface StartRunCommand {
+  kind: 'startRun';
+  procedureId: string;
+  about: SyncedCopy | null;
+  projectRef: string | null;
+  requestQuote: string;
+}
+
+/** Steps of open runs the person said are done; each is one the context listed as not yet done. */
+export interface TickRunCommand {
+  kind: 'tickRun';
+  steps: { runId: string; stepId: string }[];
+  requestQuote: string;
+}
+
+export type RunCommand = StartRunCommand | TickRunCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -636,6 +662,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'procedureAlias',
             'procedureSteps',
             'fromTaskAlias',
+            'runStepAliases',
           ],
           properties: {
             kind: {
@@ -644,6 +671,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
                 ...COMMAND_KINDS,
                 ...TOPIC_COMMAND_KINDS,
                 ...PROCEDURE_COMMAND_KINDS,
+                ...RUN_COMMAND_KINDS,
                 'answer',
                 'ask',
               ],
@@ -725,7 +753,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             aboutAlias: nullable(
               'string',
-              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null.',
+              'remember: the alias (e1, e2, …) of the calendar event the email disagrees with. ask: the alias of the open task the question is about, or null. startRun: the alias (e1, s1, …) of the trip or event in <synced_records> the run is for, only when the person names it; null otherwise.',
             ),
             aboutField: {
               type: ['string', 'null'],
@@ -869,7 +897,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             projectRef: nullable(
               'string',
-              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. null otherwise.',
+              'createTask: the name of the project from <open_projects> (or one this reply creates) that the task is a step of, only when the person says so ("for the wedding"). setProjectRole and addMilestone: the name of the project. startRun: the name of the project from <open_projects> the run is for, only when the person names it and no trip or event. null otherwise.',
             ),
             projectEmoji: nullable(
               'string',
@@ -938,7 +966,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             requestQuote: nullable(
               'string',
-              'reviseTopic, reviseProcedure and createProcedure: the words of the capture that ask for it, copied exactly.',
+              'reviseTopic, reviseProcedure, createProcedure, startRun and tickRun: the words of the capture that ask for it, copied exactly.',
             ),
             topicChanges: {
               type: ['array', 'null'],
@@ -987,7 +1015,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             },
             procedureAlias: nullable(
               'string',
-              "reviseProcedure: the alias of the procedure in <your_procedures> (the open procedure is <procedure_open>'s procedure); null otherwise.",
+              "reviseProcedure and startRun: the alias of the procedure in <your_procedures> (the open procedure is <procedure_open>'s procedure); null otherwise.",
             ),
             procedureSteps: {
               type: ['array', 'null'],
@@ -1020,6 +1048,11 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               'string',
               "createProcedure: the alias of the open task whose steps become the procedure, when the person asks to make a task's steps a procedure; null otherwise.",
             ),
+            runStepAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `tickRun: the alias (rs1, rs2, …) of each step of <open_runs> the person says is done, at most ${MAX_TICKS_PER_TURN}; null otherwise.`,
+            },
           },
         },
       },

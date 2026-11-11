@@ -2666,7 +2666,163 @@ async function buildProcedures(input: {
   return {
     procedures: built.map(({ id, procedure }) => ({ id, procedure })),
     versions: built.flatMap(({ versions }) => versions),
+    basis: {
+      packing: { steps: withSmartShoes, groups: packingGroups },
+      cabin: { steps: cabinStart },
+    },
   };
+}
+
+interface SeedRunSource {
+  steps: SeedProcedureStep[];
+  groups?: { id: string; name: string }[];
+}
+
+/** Alex's two runs of those procedures: Packing for a work trip at version 3, open for the Waypoint trip (5 of 13 steps ticked, the chargers still to do, and one step added just this time, "Umbrella"), and Closing the cabin at version 1, finished three weeks ago for the finished Move project with every step ticked; the procedure has since gained a step, so the run keeps its own steps. Two documents under `procedureRuns/{id}`. */
+async function buildRuns(input: {
+  now: number;
+  encryption: HelmEncryption;
+  packing: SeedRunSource;
+  cabin: SeedRunSource;
+}) {
+  const { now, encryption } = input;
+  const anchor = new Date(now + 10 * DAY_MS);
+  const tripStart = Date.UTC(
+    anchor.getUTCFullYear(),
+    anchor.getUTCMonth(),
+    anchor.getUTCDate(),
+  );
+  const waypointGrantId = toGrantId(
+    'helm',
+    toAppConnectorId('waypoint'),
+    SITE_ACCOUNT_ID,
+  );
+  const tripCopyId = createHash('sha256')
+    .update(`${waypointGrantId}|trips|trips/seed-waypoint-trip`)
+    .digest('hex')
+    .slice(0, 40);
+  const doneFirst = new Set([
+    'seed-step-pack-weather',
+    'seed-step-pack-hotel',
+    'seed-step-pack-shirts',
+    'seed-step-pack-trousers',
+    'seed-step-pack-sleepwear',
+  ]);
+  const umbrella = { id: 'seed-step-run-umbrella', text: 'Umbrella' };
+  const build = async (
+    id: string,
+    run: {
+      procedureId: string;
+      title: string;
+      source: SeedRunSource;
+      version: number;
+      attachedTo: { kind: 'project' | 'synced'; id: string };
+      attachedLabel: string;
+      dueOn: number | null;
+      startedAt: number;
+      finishedAt: number | null;
+      doneAt: (stepId: string) => number | null;
+      extra: { id: string; text: string } | null;
+      createdBy: 'person' | 'nomos';
+    },
+  ) => {
+    const groups = run.source.groups ?? [];
+    const ordered = [
+      ...run.source.steps.filter((entry) => entry.groupId === null),
+      ...groups.flatMap((group) =>
+        run.source.steps.filter((entry) => entry.groupId === group.id),
+      ),
+    ];
+    const rows = [
+      ...ordered.map((entry) => ({
+        id: entry.id,
+        text: entry.text,
+        groupId: entry.groupId,
+        isExtra: false,
+      })),
+      ...(run.extra
+        ? [
+            {
+              id: run.extra.id,
+              text: run.extra.text,
+              groupId: null,
+              isExtra: true,
+            },
+          ]
+        : []),
+    ];
+    return {
+      id,
+      run: {
+        procedureId: run.procedureId,
+        procedureVersion: run.version,
+        attachedTo: run.attachedTo,
+        dueOn: run.dueOn,
+        stepState: Object.fromEntries(
+          rows.map((row, index) => [
+            row.id,
+            {
+              order: index,
+              groupId: row.groupId,
+              doneAt: run.doneAt(row.id),
+              isExtra: row.isExtra,
+            },
+          ]),
+        ),
+        groupOrder: groups.map((group) => group.id),
+        startedAt: run.startedAt,
+        finishedAt: run.finishedAt,
+        createdBy: run.createdBy,
+        executionId: null,
+        lastEditedAt: run.finishedAt ?? run.startedAt + 2 * MINUTE_MS,
+        sealed: await sealJson(
+          {
+            title: run.title,
+            steps: Object.fromEntries(
+              rows.map((row) => [row.id, { text: row.text, detail: null }]),
+            ),
+            groups: Object.fromEntries(
+              groups.map((group) => [group.id, { name: group.name }]),
+            ),
+            attachedLabel: run.attachedLabel,
+          },
+          encryption,
+        ),
+      },
+    };
+  };
+  const finishedAt = now - 21 * DAY_MS;
+  return [
+    await build('seed-run-packing-trip', {
+      procedureId: 'seed-procedure-packing',
+      title: 'Packing for a work trip',
+      source: input.packing,
+      version: 3,
+      attachedTo: { kind: 'synced', id: tripCopyId },
+      attachedLabel: 'Pacific Northwest Weekend',
+      dueOn: tripStart,
+      startedAt: now - 3 * 60 * MINUTE_MS,
+      finishedAt: null,
+      doneAt: (stepId) =>
+        doneFirst.has(stepId) ? now - 2 * 60 * MINUTE_MS : null,
+      extra: umbrella,
+      createdBy: 'nomos',
+    }),
+    await build('seed-run-cabin-move', {
+      procedureId: 'seed-procedure-cabin',
+      title: 'Closing the cabin',
+      source: input.cabin,
+      version: 1,
+      attachedTo: { kind: 'project', id: 'seed-project-move' },
+      attachedLabel: 'Move',
+      dueOn: null,
+      startedAt: finishedAt - 3 * 60 * MINUTE_MS,
+      finishedAt,
+      doneAt: () => finishedAt - 60 * MINUTE_MS,
+      extra: null,
+      createdBy: 'person',
+    }),
+  ];
 }
 
 /** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
@@ -5133,6 +5289,22 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           ),
         );
       }
+      const runs = procedures
+        ? await buildRuns({
+            now: context.now,
+            encryption,
+            packing: procedures.basis.packing,
+            cabin: procedures.basis.cabin,
+          })
+        : null;
+      if (runs) {
+        runs.forEach((entry) =>
+          batch.set(
+            person.collection('procedureRuns').doc(entry.id),
+            entry.run,
+          ),
+        );
+      }
       const peopleCount = people
         ? (photoTurns
             ? photoTurns.captures.length + photoTurns.media.length + 2
@@ -5164,7 +5336,8 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             : 0) +
           (procedures
             ? procedures.procedures.length + procedures.versions.length
-            : 0)
+            : 0) +
+          (runs ? runs.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +

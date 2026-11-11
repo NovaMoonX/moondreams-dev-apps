@@ -8,6 +8,7 @@ import {
   hasProcedureCue,
   hasProcedureReviseCue,
   hasReviseCue,
+  hasRunStartCue,
 } from './route.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import {
@@ -44,6 +45,9 @@ import {
   PROCEDURE_TITLE_CAP,
   type ModelProcedureStep,
   type ProcedureCommand,
+  MAX_TICKS_PER_TURN,
+  RUN_COMMAND_KINDS,
+  type RunCommand,
   MAX_PARENT_CHILDREN,
   MAX_TOPIC_ADD_CHARS,
   MAX_TOPIC_ADDS_PER_TURN,
@@ -162,6 +166,7 @@ const KNOWN_KEYS = new Set([
   'procedureAlias',
   'procedureSteps',
   'fromTaskAlias',
+  'runStepAliases',
   'shape',
   'prompt',
   'options',
@@ -1441,6 +1446,105 @@ const readProcedureCommands = (
     );
 };
 
+export type RunDrop =
+  | 'run-start-unasked'
+  | 'run-start-unknown'
+  | 'run-start-extra'
+  | 'run-tick-unasked'
+  | 'run-tick-unknown';
+
+interface RunReadContext {
+  synced?: SyncedBook;
+  procedures?: AliasBook;
+  /** The undone steps of the open runs, by alias; each id is `runId:stepId`. */
+  runSteps?: AliasBook;
+  captureText?: string;
+}
+
+const toRunStep = (id: string | null) => {
+  const at = id === null ? -1 : id.indexOf(':');
+  return id === null || at < 1
+    ? null
+    : { runId: id.slice(0, at), stepId: id.slice(at + 1) };
+};
+
+/** The run commands of a reply, each checked against the turn: a run starts only on words that ask to begin one, for a procedure the model was shown, once per turn; steps are ticked only on words of the turn, and only ones the context listed as undone, at most `MAX_TICKS_PER_TURN`. Every drop is named. */
+const readRunCommands = (
+  items: Record<string, unknown>[],
+  context: RunReadContext,
+): { commands: RunCommand[]; dropped: RunDrop[] } => {
+  const captureWords = ` ${toComparable(context.captureText ?? '')} `;
+  return items
+    .filter((item) =>
+      (RUN_COMMAND_KINDS as readonly unknown[]).includes(item.kind),
+    )
+    .reduce<{ commands: RunCommand[]; dropped: RunDrop[] }>(
+      (acc, item) => {
+        const drop = (code: RunDrop) => ({
+          ...acc,
+          dropped: [...acc.dropped, code],
+        });
+        const keep = (command: RunCommand) => ({
+          ...acc,
+          commands: [...acc.commands, command],
+        });
+        const quote =
+          typeof item.requestQuote === 'string' ? item.requestQuote.trim() : '';
+        const isQuoted =
+          toComparable(quote).split(' ').filter(Boolean).length >= 2 &&
+          captureWords.includes(` ${toComparable(quote)} `);
+        if (item.kind === 'startRun') {
+          if (!isQuoted || !hasRunStartCue(quote)) {
+            return drop('run-start-unasked');
+          }
+          if (acc.commands.some((command) => command.kind === 'startRun')) {
+            return drop('run-start-extra');
+          }
+          const procedureId =
+            typeof item.procedureAlias === 'string'
+              ? (context.procedures?.idOf(item.procedureAlias) ?? null)
+              : null;
+          if (!procedureId) return drop('run-start-unknown');
+          const about =
+            typeof item.aboutAlias === 'string'
+              ? (context.synced?.get(item.aboutAlias) ?? null)
+              : null;
+          const isPlace = about?.kind === 'trip' || about?.kind === 'event';
+          return keep({
+            kind: 'startRun',
+            procedureId,
+            about: isPlace ? about : null,
+            projectRef: toText(item.projectRef, PROJECT_NAME_CAP),
+            requestQuote: quote,
+          });
+        }
+        if (!isQuoted) return drop('run-tick-unasked');
+        const taken = acc.commands.reduce(
+          (total, command) =>
+            total + (command.kind === 'tickRun' ? command.steps.length : 0),
+          0,
+        );
+        const steps = [
+          ...new Map(
+            (Array.isArray(item.runStepAliases) ? item.runStepAliases : [])
+              .flatMap((alias) => {
+                const step =
+                  typeof alias === 'string'
+                    ? toRunStep(context.runSteps?.idOf(alias) ?? null)
+                    : null;
+                return step ? [step] : [];
+              })
+              .map((step) => [`${step.runId}:${step.stepId}`, step]),
+          ).values(),
+        ].slice(0, Math.max(0, MAX_TICKS_PER_TURN - taken));
+        return steps.length === 0
+          ? drop('run-tick-unknown')
+          : keep({ kind: 'tickRun', steps, requestQuote: quote });
+      },
+      { commands: [], dropped: [] },
+    );
+};
+
 const toKey = (title: string) => title.trim().toLowerCase();
 
 const hasEveryToken = (
@@ -1605,6 +1709,8 @@ export function normalizeNomosReply(
     procedureTitleByTask?: Map<string, string>;
     /** The version of each procedure whose steps the model read. */
     procedureVersions?: Map<string, number>;
+    /** The undone steps of the open runs, by alias. */
+    runSteps?: AliasBook;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -1630,6 +1736,8 @@ export function normalizeNomosReply(
   topicDropped: TopicDrop[];
   procedureCommands: ProcedureCommand[];
   procedureDropped: ProcedureDrop[];
+  runCommands: RunCommand[];
+  runDropped: RunDrop[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1722,6 +1830,15 @@ export function normalizeNomosReply(
       procedureVersions: context.procedureVersions,
       captureText: context.captureText,
     });
+  const { commands: runCommands, dropped: runDropped } = readRunCommands(
+    items,
+    {
+      synced: context.synced,
+      procedures: context.procedures,
+      runSteps: context.runSteps,
+      captureText: context.captureText,
+    },
+  );
   const projects = readProjects(
     items,
     entities,
@@ -1786,6 +1903,8 @@ export function normalizeNomosReply(
     topicDropped,
     procedureCommands,
     procedureDropped,
+    runCommands,
+    runDropped,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

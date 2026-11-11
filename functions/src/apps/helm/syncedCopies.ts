@@ -26,6 +26,10 @@ const MAX_SCANNED_EVENTS = 100;
 const LOOKBACK_MS = 14 * DAY_MS;
 const MAX_LOOKBACK_EVENTS = 40;
 const MAX_SCANNED_COPIES = 300;
+export const MAX_CONTEXT_TRIPS = 10;
+const TRIP_AHEAD_DAYS = 90;
+const TRIP_LOOKBACK_DAYS = 60;
+const MAX_SCANNED_TRIPS = 40;
 const SUBTITLE_CHARS = 120;
 
 const CONNECTOR_LABELS: Record<string, string> = {
@@ -241,6 +245,29 @@ export async function readContextSynced(
     }),
   ]);
   return [...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED);
+}
+
+/** Trips still ahead or under way, starting within 90 days, soonest first; still connected. A trip is a synced copy of kind `trip`. */
+export async function readSyncedTrips(
+  firestore: Firestore,
+  uid: string,
+  key: HelmKey,
+  input: { firstDay: number; limit: number },
+) {
+  const snapshot = await firestore
+    .collection(syncedPath(uid))
+    .where('kind', '==', 'trip')
+    .where('startAt', '>=', input.firstDay - TRIP_LOOKBACK_DAYS * DAY_MS)
+    .where('startAt', '<', input.firstDay + TRIP_AHEAD_DAYS * DAY_MS)
+    .orderBy('startAt')
+    .limit(MAX_SCANNED_TRIPS)
+    .get();
+  return openAll(key, snapshot.docs)
+    .filter(
+      (copy) =>
+        !copy.isEnded && (copy.endAt ?? copy.startAt ?? 0) >= input.firstDay,
+    )
+    .slice(0, input.limit);
 }
 
 /** The newest-synced copies, opened, so words can be matched against titles that only the key can read. */

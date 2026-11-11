@@ -129,6 +129,22 @@
       ]
     },
     {
+      "collectionGroup": "procedureRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "procedureId", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "procedureRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "attachedTo.id", "order": "ASCENDING" },
+        { "fieldPath": "startedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "synced",
       "queryScope": "COLLECTION",
       "fields": [

@@ -77,6 +77,19 @@ export const hasProcedureCue = (text: string) =>
 export const hasProcedureReviseCue = (text: string) =>
   hasWordIn(PROCEDURE_REVISE_CUES, text);
 
+const RUN_START_CUES = new Set([
+  'start',
+  'starting',
+  'begin',
+  'run',
+  'running',
+  'use',
+  'kick',
+]);
+
+/** Whether the words ask to begin something: one of the cue words, as a word of its own. */
+export const hasRunStartCue = (text: string) => hasWordIn(RUN_START_CUES, text);
+
 /** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,

@@ -67,6 +67,13 @@ import {
   writeProcedureVersionIn,
   type LiveProcedure,
 } from './procedureStore.js';
+import {
+  openLiveRun,
+  openRunDocs,
+  openRunsQuery,
+  readOpenRuns,
+  toContextRun,
+} from './runStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
 import {
   openMedia,
@@ -110,6 +117,7 @@ import {
   type NomosCommand,
   type TopicCommand,
   type ProcedureCommand,
+  type RunCommand,
   type PlaceRead,
   type PlanDayCommand,
   type RememberCommand,
@@ -153,7 +161,13 @@ import {
   type PeopleInput,
   type QuestionStateEntry,
 } from './nomos/executeCommands.js';
-import { readContextSynced, toKnownZone } from './syncedCopies.js';
+import {
+  getLocalDay,
+  MAX_CONTEXT_TRIPS,
+  readContextSynced,
+  readSyncedTrips,
+  toKnownZone,
+} from './syncedCopies.js';
 import { getDayIn } from './nomos/spoken.js';
 import { matchWho } from './nomos/matchEntities.js';
 import { createFixtureProvider } from './nomos/fixtureProvider.js';
@@ -1381,6 +1395,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       notes: [],
       topicCommands: [],
       procedureCommands: [],
+      runCommands: [],
       topics: [],
       hinted: [],
       captureText: '',
@@ -1575,9 +1590,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             });
             return [];
           });
-    const [topics, hintedNotes, focusedTopic, procedureRecords, focusedLive] =
+    const [
+      topics,
+      hintedNotes,
+      focusedTopic,
+      procedureRecords,
+      focusedLive,
+      openRunRecords,
+    ] =
       mode === 'rest'
-        ? [[], [], null, [], null]
+        ? [[], [], null, [], null, []]
         : await Promise.all([
             readContextTopics(firestore, base, key, MAX_CONTEXT_TOPICS),
             readHintedNotes(firestore, base, key, claimed.noteIds),
@@ -1594,7 +1616,30 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               key,
               sanitizeScreen(capture.screen)?.procedureId ?? null,
             ),
+            readOpenRuns(firestore, base, key),
           ]);
+    const screenRunId = sanitizeScreen(capture.screen)?.runId ?? null;
+    const contextRuns = [...openRunRecords]
+      .sort(
+        (a, b) => Number(b.id === screenRunId) - Number(a.id === screenRunId),
+      )
+      .map((run) => toContextRun(run, run.id === screenRunId));
+    const trips =
+      mode !== 'rest' && procedureRecords.length > 0
+        ? await readSyncedTrips(firestore, uid, key, {
+            firstDay: getLocalDay(capture.createdAt, toKnownZone(timeZone)),
+            limit: MAX_CONTEXT_TRIPS,
+          }).catch((error): Awaited<ReturnType<typeof readSyncedTrips>> => {
+            logger.warn('helm.sort.tripsUnreadable', {
+              cause: error instanceof Error ? error.name : 'error',
+            });
+            return [];
+          })
+        : [];
+    const contextSynced = [
+      ...synced,
+      ...trips.filter((trip) => !synced.some((copy) => copy.id === trip.id)),
+    ];
     const contextProcedures: ContextProcedure[] = procedureRecords.map(
       (procedure) => ({
         id: procedure.id,
@@ -1623,7 +1668,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       createdAt: capture.createdAt,
       timeZone,
       tasks,
-      synced,
+      synced: contextSynced,
       alreadyMade,
       screen,
       earlierTurns,
@@ -1646,6 +1691,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
             blocks: blocksOf(focusedLive),
           }
         : null,
+      runs: contextRuns,
       attachments: attached.media.map((item) => ({
         alias: item.alias,
         kind: item.kind,
@@ -1706,6 +1752,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       topics.length > 0 ? TOPIC_PROMPT : null,
       mode !== 'rest' &&
       (procedureRecords.length > 0 ||
+        contextRuns.length > 0 ||
         focusedLive !== null ||
         hasProcedureCue(combined.text))
         ? PROCEDURE_PROMPT
@@ -1918,6 +1965,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedProcedureId,
     focusedTaskId,
     procedureVersions,
+    runSteps: context.runSteps,
     captureText: combined.text,
     quotes,
     alreadyMade,
@@ -1940,6 +1988,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   reply.procedureDropped.forEach((code) =>
     logger.info('helm.procedure.dropped', { code }),
   );
+  reply.runDropped.forEach((code) => logger.info('helm.run.dropped', { code }));
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -1957,6 +2006,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     notes: mode === 'full' ? reply.notes : [],
     topicCommands: mode === 'full' ? reply.topicCommands : [],
     procedureCommands: mode === 'full' ? reply.procedureCommands : [],
+    runCommands: mode === 'full' ? reply.runCommands : [],
     topics,
     hinted,
     media: {
@@ -2082,6 +2132,7 @@ async function writeResult(
     notes: CreateNoteCommand[];
     topicCommands: TopicCommand[];
     procedureCommands: ProcedureCommand[];
+    runCommands: RunCommand[];
     topics: OpenTopicRecord[];
     hinted: HintedNote[];
     captureText: string;
@@ -2117,6 +2168,7 @@ async function writeResult(
     notes,
     topicCommands: requestedTopicCommands,
     procedureCommands,
+    runCommands,
     topics: contextTopics,
     hinted,
     captureText,
@@ -2223,6 +2275,22 @@ async function writeResult(
       ),
     ),
   ];
+  const runProcedureIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'startRun' ? [command.procedureId] : [],
+      ),
+    ),
+  ];
+  const tickRunIds = [
+    ...new Set(
+      runCommands.flatMap((command) =>
+        command.kind === 'tickRun'
+          ? command.steps.map((step) => step.runId)
+          : [],
+      ),
+    ),
+  ];
   const fromTaskIds = [
     ...new Set(
       procedureCommands.flatMap((command) =>
@@ -2251,6 +2319,8 @@ async function writeResult(
       treeSnap,
       procedureSnaps,
       procedureTaskSnaps,
+      runSnaps,
+      openRunsSnap,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -2302,7 +2372,7 @@ async function writeResult(
           )
         : Promise.resolve(null),
       Promise.all(
-        reviseIds.map((id) =>
+        [...new Set([...reviseIds, ...runProcedureIds])].map((id) =>
           transaction.get(firestore.doc(`${base}/procedures/${id}`)),
         ),
       ),
@@ -2311,6 +2381,14 @@ async function writeResult(
           transaction.get(firestore.doc(`${tasksPath}/${id}`)),
         ),
       ),
+      Promise.all(
+        tickRunIds.map((id) =>
+          transaction.get(firestore.doc(`${base}/procedureRuns/${id}`)),
+        ),
+      ),
+      runProcedureIds.length > 0
+        ? transaction.get(openRunsQuery(firestore, base))
+        : Promise.resolve(null),
       ...targetIds.map((id) =>
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
@@ -2379,6 +2457,9 @@ async function writeResult(
         : undefined;
     const existingProjects =
       (projectCommands.length > 0 ||
+        runCommands.some(
+          (command) => command.kind === 'startRun' && command.projectRef,
+        ) ||
         commands.some(
           (command) => command.kind === 'createTask' && command.projectRef,
         )) &&
@@ -2590,6 +2671,12 @@ async function writeResult(
         ];
       }),
     );
+    const liveRuns = new Map(
+      runSnaps.map((snapshot) => {
+        const data = snapshot.data();
+        return [snapshot.id, data ? openLiveRun(key, snapshot.id, data) : null];
+      }),
+    );
     const procedureTasks = new Map(
       procedureTaskSnaps.map((snapshot) => {
         const data = snapshot.data();
@@ -2606,6 +2693,9 @@ async function writeResult(
       procedureCommands: isStale ? [] : procedureCommands,
       liveProcedures,
       procedureTasks,
+      runCommands: isStale ? [] : runCommands,
+      liveRuns,
+      openRuns: openRunDocs(key, openRunsSnap?.docs ?? []),
       liveTopics,
       topicTree,
       capturedAt: capture.createdAt,
@@ -2816,6 +2906,17 @@ async function writeResult(
           seal,
         }),
       );
+      plan.runCreates.forEach(({ id, doc }) =>
+        transaction.create(firestore.doc(`${base}/procedureRuns/${id}`), doc),
+      );
+      plan.runTicks.forEach(({ runId, stepIds }) =>
+        transaction.update(firestore.doc(`${base}/procedureRuns/${runId}`), {
+          ...Object.fromEntries(
+            stepIds.map((stepId) => [`stepState.${stepId}.doneAt`, now]),
+          ),
+          lastEditedAt: now,
+        }),
+      );
       plan.topicPlacements.forEach(({ id, parentId, depth }) =>
         transaction.update(firestore.doc(`${base}/topics/${id}`), {
           parentId,
@@ -2930,6 +3031,7 @@ async function writeResult(
           notes.length +
           topicCommands.length +
           procedureCommands.length +
+          runCommands.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

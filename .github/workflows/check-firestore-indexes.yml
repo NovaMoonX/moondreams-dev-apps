@@ -91,3 +91,4 @@ jobs:
       - run: npm run check:helm-topic-write
       - run: npm run check:helm-procedures
       - run: npm run check:helm-procedure-steps
+      - run: npm run check:helm-runs

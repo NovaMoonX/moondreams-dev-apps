@@ -272,6 +272,29 @@ service cloud.firestore {
       allow read, create, delete: if isHelmOwner(uid);
     }
 
+    // A run is one go through a procedure: its words are sealed, the readable part is its place and ticks, so its size stays capped and it attaches only to a project or a synced copy.
+    match /apps/helm/users/{uid}/procedureRuns/{runId} {
+      function isRunShape(data) {
+        return data.keys().hasAll(['procedureId', 'procedureVersion', 'attachedTo', 'dueOn', 'stepState', 'groupOrder', 'startedAt', 'finishedAt', 'createdBy', 'executionId', 'lastEditedAt', 'sealed'])
+          && data.procedureId is string
+          && data.procedureVersion is int && data.procedureVersion >= 1
+          && (data.attachedTo == null
+            || (data.attachedTo is map
+              && data.attachedTo.keys().hasOnly(['kind', 'id'])
+              && data.attachedTo.kind in ['project', 'synced']
+              && data.attachedTo.id is string && data.attachedTo.id.size() <= 128))
+          && (data.dueOn == null || data.dueOn is int)
+          && data.stepState is map && data.stepState.size() <= 80
+          && data.groupOrder is list && data.groupOrder.size() <= 12
+          && data.startedAt is int
+          && (data.finishedAt == null || data.finishedAt is int)
+          && data.createdBy in ['person', 'nomos']
+          && data.sealed is map;
+      }
+      allow read, delete: if isHelmOwner(uid);
+      allow create, update: if isHelmOwner(uid) && isRunShape(request.resource.data);
+    }
+
     // A medium's document names sealed bytes in Storage and what they show on; the words in it stay sealed, so the shape checked here is the readable part.
     match /apps/helm/users/{uid}/media/{mediaId} {
       function isMediumShape(data) {
