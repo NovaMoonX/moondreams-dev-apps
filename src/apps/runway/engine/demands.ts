@@ -6,6 +6,7 @@ import type {
   HORIZON_DRAFT_CADENCES,
   PAIRING_DRAFT_CADENCES,
 } from '@apps/runway/constants';
+import { START_DAY_KEY } from '@apps/runway/constants';
 import type {
   BillFundedBy,
   Cents,
@@ -38,6 +39,7 @@ import {
   NO_PROGRESS,
   sumFunded,
   type BillProgressInput,
+  type FundedDay,
   type PaidPayment,
 } from './progress';
 import {
@@ -823,8 +825,10 @@ export function planBillPayments(
   }
   const ordered = isInDayOrder(chronological);
   const first = getFirstNeeded(dues, options.firstDayOn);
-  const hasMoved = progress.funded.some((entry) => entry.isMoved);
-  // Money moved into the bill is not tied to one window: what a payment leaves of it is there for the next.
+  const isCarried = (entry: FundedDay) =>
+    entry.isMoved === true || entry.dayKey === START_DAY_KEY;
+  const hasMoved = progress.funded.some(isCarried);
+  // Money moved into the bill, or held on the start day, is not tied to one window: what a payment leaves of it is there for the next.
   const carriedIn = dueList.reduce<{ into: Cents[]; spare: Cents }>(
     (acc, { dueOn, stretch }, index) => {
       if (!hasMoved) return { into: [...acc.into, 0], spare: 0 };
@@ -833,7 +837,7 @@ export function planBillPayments(
         index === 0 ? -Infinity : dues[index - 1],
         dueOn,
       );
-      const movedCents = sumFunded(inWindow.filter((entry) => entry.isMoved));
+      const movedCents = sumFunded(inWindow.filter(isCarried));
       const over =
         sumFunded(inWindow) + acc.spare - figuresOf(stretch).amountCents;
       return {

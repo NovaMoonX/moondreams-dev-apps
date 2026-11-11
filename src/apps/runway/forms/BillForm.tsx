@@ -49,6 +49,7 @@ import {
   AUTO_PAY_WORDS,
   BILL_PAY_WORDS,
   BILL_SET_ASIDE_WORDS,
+  MAX_PURCHASE_CENTS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -1516,7 +1517,8 @@ function BillFormBody({
                 ? formatCents(setAsideCents)
                 : BILL_SET_ASIDE_WORDS.openSubNone,
             isAnswered:
-              formData.setAside.trim() === '' || setAsideCents !== null,
+              formData.setAside.trim() === '' ||
+              (setAsideCents !== null && setAsideCents <= MAX_PURCHASE_CENTS),
             isPreAnswered: true,
             blocker: FORM_FLOW_WORDS.badAmount,
             render: () => (

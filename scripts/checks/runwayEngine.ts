@@ -1,5 +1,6 @@
 // Pure checks for Runway's engine; run under several time zones: `TZ=America/Los_Angeles npm run check:runway-engine`.
 import assert from 'node:assert/strict';
+import { START_DAY_KEY } from '../../src/apps/runway/constants.ts';
 
 import {
   listChangesBetweenIncomeDays,
@@ -19600,6 +19601,22 @@ console.log('runway engine: ok');
     ),
     [0, 0, 0],
     'and the pays ask nothing while the surplus covers them',
+  );
+  const fromStart = planBillPayments(
+    {
+      ...monthly,
+      progress: {
+        funded: [{ dayKey: START_DAY_KEY, on: nov1, cents: 35_000 }],
+        paid: [],
+      },
+    },
+    weekly,
+    dueFeb + 10 * DAY_MS,
+  ).slice(0, 3);
+  assert.deepEqual(
+    fromStart.map(({ fundedCents }) => fundedCents),
+    [35_000, 25_000, 15_000],
+    'what a bill held on the start day carries to each next payment like money moved in',
   );
 
   const cost = (

@@ -1736,12 +1736,12 @@ export const PAID_FROM_WORDS = {
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
   paidFromBack: (name: string, was: string) =>
-    `${name}: Set aside from is back to ${was}.`,
+    `${name}: back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Set aside from, but the per-pay changes could not be put back.`,
+    `${name} is set aside from its old pays again, but the per-pay changes could not be put back.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -1810,7 +1810,7 @@ export const PAY_SHARE_WORDS = {
     `This pay has ${money} left for it, so ${over} would stay short.`,
   savedTitle: 'Saved for this pay',
   withheld: (name: string) =>
-    `Only this pay changed. To choose which pay covers ${name} every time, set its Set aside from.`,
+    `Only this pay changed. To choose which pay covers ${name} every time, change Set aside from on its sheet.`,
   done: 'Done',
   setPaidFrom: 'Choose the pay',
   pinsClearedToast: (name: string, count: number) =>
@@ -1822,7 +1822,7 @@ export const PAY_SHARE_WORDS = {
   pinsNotBack: (name: string, count: number) =>
     `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
   oneTimePay: (pay: string, name: string) =>
-    `${pay} is one-time and ${name} isn't set aside from it. Pick a repeating pay, or change Set aside from.`,
+    `${pay} is one-time and ${name} isn't set aside from it. Pick a repeating pay, or choose different pays for it.`,
   whyNothing: 'Why this pay puts nothing in',
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
@@ -1846,11 +1846,11 @@ export const PAY_SHARE_WORDS = {
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
   paidFromBack: (name: string, was: string) =>
-    `${name}: Set aside from is back to ${was}.`,
+    `${name}: back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Set aside from, but this pay's figure could not be restored.`,
+    `${name} is set aside from its old pays again, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
@@ -2584,7 +2584,7 @@ export const ITEM_SHEET_WORDS = {
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
   fundsBillNote:
-    'For a bill, this is what this pay puts in, whatever its Set aside from says.',
+    'For a bill, this is what this pay puts in, whichever pays it is set aside from.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
@@ -2921,7 +2921,7 @@ export const SET_HELD_WORDS = {
 /** A bill's "Put money aside": money added to what is set aside for its payments, never taken out. */
 export const BILL_SET_ASIDE_WORDS = {
   open: 'Put money aside',
-  openSub: (held: string) => `${held} set aside so far`,
+  openSub: 'From Free to Spend, or money you already have',
   openSubNone: 'Nothing set aside yet',
   title: (name: string) => `Put money aside for ${name}`,
   amount: 'Put aside',
@@ -2929,8 +2929,8 @@ export const BILL_SET_ASIDE_WORDS = {
   action: 'Put it aside',
   moved: (amount: string, name: string) => `Put ${amount} aside for ${name}`,
   outsideIn: {
-    title: 'I already have it',
-    body: 'Money you put aside before, in another account or in cash. Free to Spend stays the same.',
+    title: 'I put it aside already',
+    body: 'In another account or in cash. Free to Spend stays the same.',
   },
   setAside: (name: string) => `${name}, set aside`,
   addTitle: 'Already set aside for it?',
@@ -4275,10 +4275,10 @@ export const INTEREST_ACCOUNT_KINDS: readonly (typeof ACCOUNT_KINDS)[number][] =
 
 /** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
 export const BILL_PAY_WORDS = {
-  title: 'How do you pay it?',
+  title: 'What is it charged to?',
   label: 'Charged to',
   cardDetail: 'Credit card',
-  fromBank: 'Straight from your bank',
+  fromBank: 'Your bank account',
 } as const;
 
 export const ACCOUNT_WORDS = {

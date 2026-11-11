@@ -1443,7 +1443,11 @@ function ItemSheet({
             onClick={() => openChange(payAction.step)}
           />
         )}
-        {canChange && itemKind === 'bill' && isArchivable && (
+        {canChange &&
+          itemKind === 'bill' &&
+          isArchivable &&
+          payment !== null &&
+          payment.paid === null && (
           <ActionRow
             isGrouped
             hasChevron
@@ -1451,11 +1455,7 @@ function ItemSheet({
             label={BILL_SET_ASIDE_WORDS.open}
             subtitle={
               billSetAsideCents > 0
-                ? mask(
-                    BILL_SET_ASIDE_WORDS.openSub(
-                      formatCentsShort(billSetAsideCents),
-                    ),
-                  )
+                ? BILL_SET_ASIDE_WORDS.openSub
                 : BILL_SET_ASIDE_WORDS.openSubNone
             }
             onClick={() =>
