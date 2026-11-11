@@ -23,12 +23,15 @@ function NeedsConnectionState({
         {HELM_COPY.needsConnectionTitle}
       </h2>
       <p className='text-muted-foreground text-[15px] text-pretty'>
-        {isTrustLapsed
-          ? HELM_COPY.trustLapsedBody(helmAppName)
-          : canSave
-            ? HELM_COPY.outboxIntro(name)
-            : HELM_COPY.needsConnectionBody(name)}
+        {canSave
+          ? HELM_COPY.outboxIntro(name)
+          : HELM_COPY.needsConnectionBody(name)}
       </p>
+      {isTrustLapsed && (
+        <p className='text-muted-foreground text-[15px] text-pretty'>
+          {HELM_COPY.trustLapsedBody(helmAppName)}
+        </p>
+      )}
     </section>
   );
 }

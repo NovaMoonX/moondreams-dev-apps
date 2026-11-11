@@ -23,15 +23,15 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(keyQueries, /console\./, 'the key query logs nothing');
 
-const guards = sync.match(/isKeptKey\(/g) ?? [];
-assert.ok(
-  guards.length >= 3,
-  'a kept key is checked before the profile, the self who and the ready state',
-);
 assert.match(
   sync,
-  /if \(key && isKeptKey\(key\)\) return;\s*return ensureHelmProfile\(uid\)/,
-  'a kept key never creates a profile',
+  /if \(isKept\) \{\s*window\.addEventListener\('online', retryOnline\);[\s\S]{0,400}\} else \{\s*void ensureHelmProfile\(uid\)/,
+  'only the server’s key starts a profile; a kept key asks the server again once online',
+);
+assert.equal(
+  (sync.match(/ensureHelmProfile\(/g) ?? []).length,
+  1,
+  'the profile is started in one place, after the key',
 );
 assert.match(
   sync,

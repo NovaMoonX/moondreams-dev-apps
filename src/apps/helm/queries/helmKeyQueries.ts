@@ -70,7 +70,9 @@ export const helmKeyStore = createTrustedKeyStore({
     if (uid) {
       // Only a browser keeping the copy remembers when the server last answered.
       void readDeviceSecret(uid, KEY_SECRET, Infinity)
-        .then((kept) => (kept ? rememberServerReached(uid) : undefined))
+        .then((kept) =>
+          kept ? rememberServerReached(uid) : forgetServerReached(uid),
+        )
         .catch(() => undefined);
       void keepDropBoxKey(
         uid,
@@ -86,6 +88,7 @@ export const helmTrustStore = {
   ...helmKeyStore,
   setTrusted: async (uid: string, isTrusted: boolean) => {
     await helmKeyStore.setTrusted(uid, isTrusted);
+    if (auth.currentUser?.uid !== uid) return;
     if (isTrusted) rememberServerReached(uid);
     else forgetServerReached(uid);
   },

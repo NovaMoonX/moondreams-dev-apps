@@ -497,9 +497,13 @@ export const HELM_COPY = {
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
   settingsTrustedBrowsers: 'Trusted browsers',
-  asOfLine: (time: string) => `As of ${time}`,
+  keptCopyNotice: (when: string | null) =>
+    when
+      ? `Offline · showing what this browser kept as of ${when}`
+      : 'Offline · showing what this browser kept',
+  keptCopyRetry: 'Try again',
   trustLapsedBody: (app: string) =>
-    `Connect once to keep opening ${app} offline.`,
+    `Trust this browser is off now. Turn it on again in Settings to keep opening ${app} offline.`,
   needsConnectionTitle: "Your things open once you're back online.",
   needsConnectionBody: (name: string) =>
     `This browser doesn't keep the key to them, so typing to ${name} waits for a connection too.`,

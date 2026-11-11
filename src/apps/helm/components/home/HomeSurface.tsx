@@ -20,7 +20,6 @@ import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
-import { formatTime } from '@/utils/formatUtils';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
 
 interface HomeSurfaceProps {
@@ -55,7 +54,6 @@ function HomeSurface({
   const keyStatus = useAppSelector((state) => state.helm.keyStatus);
   const isKeyRetrying = useAppSelector((state) => state.helm.isKeyRetrying);
   const keyRefusals = useAppSelector((state) => state.helm.keyRefusals);
-  const keptKeyAsOf = useAppSelector((state) => state.helm.keptKeyAsOf);
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const canSaveOffline =
@@ -94,11 +92,6 @@ function HomeSurface({
         {keyStatus !== 'offline' && keyStatus !== 'failed' && (
           <p className='text-muted-foreground text-[15px]'>
             {HELM_COPY.homeHint}
-          </p>
-        )}
-        {keptKeyAsOf !== null && keptKeyAsOf > 0 && (
-          <p className='text-muted-foreground text-[13px]'>
-            {HELM_COPY.asOfLine(formatTime(keptKeyAsOf))}
           </p>
         )}
       </div>
