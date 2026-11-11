@@ -195,6 +195,13 @@ Problems we've hit before, so we don't hit them again.
 - **Fix:** each page load stamps its marks with its own id and ignores marks without it, and opening Bills always clears a day the address may still hold.
 - **Telling it apart:** `npm run check:back-history` restarts a stand-in app after a long session and taps a door; it fails on the old hook with the landing on `/home`. In a session, `history.state` on the entries behind the app holding `keptFor` with a `keptLoad` that isn't the current load's is this problem.
 
+### Runway's Home tab loads the whole app again after it reopens on another tab
+
+- **Symptom:** the owner's phone reopened Runway on Plan, Days or Spend after the app had been in the background, and tapping Home showed the loading screen again instead of switching tabs.
+- **Cause:** only leaving Home adds a history entry, and the tab entry it leads to is marked so that tapping Home steps back to it (`showTab`). `history.state` survives a reload or a phone restoring a page it threw away, so the reopened page read the earlier load's mark as its own and stepped back onto Home's entry, which belonged to the earlier page, and the browser loaded the app for it. This is the likely cause, not a proven one: desktop Chromium keeps those entries live across a plain reload, so it could not be reproduced in the sandbox.
+- **Fix:** the mark carries this page load's id (`TAB_STEP_LOAD_ID`), and a mark from an earlier load switches to Home in place.
+- **Telling it apart:** on the reopened tab, `history.state.runwayTabStep` is `true` (old build) or holds another load's id. A reload that happens without tapping Home is the system throwing the page away, not this.
+
 ### Pinch-zoom on a full-screen photo works on one phone and not another
 
 - **Symptom:** in a full-screen photo (Going Once's thing photos, the admin's screenshots) two fingers do nothing on a OnePlus 12, while the same page zooms on a Galaxy Fold.

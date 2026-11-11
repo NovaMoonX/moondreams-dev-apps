@@ -10,6 +10,7 @@ import { createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { keepEntryFor } from '@/hooks/useBackHistory';
+import { generateUuid } from '@/utils';
 
 import {
   CHANGE_LOG_SPANS,
@@ -36,6 +37,9 @@ import {
   useOpenItemRequest,
 } from '@apps/runway/utils/openItemRequest';
 import type { MoreEntry, PlanSection, RunwayTab } from '@apps/runway/types';
+
+// Home's entry from before a reload belongs to the old page, so stepping back to it would load the app again.
+const TAB_STEP_LOAD_ID = generateUuid();
 
 /** True inside a view drawn only as a preview (the next Plan view under a swiping finger), which must never act on what the URL asks for. */
 export const RunwayPreviewContext = createContext(false);
@@ -260,7 +264,10 @@ export function useRunwayUrlState() {
     const { backLayerKey, backLayerSeq, ...entry } = window.history.state ?? {};
     void backLayerKey;
     void backLayerSeq;
-    window.history.replaceState({ ...entry, runwayTabStep: true }, '');
+    window.history.replaceState(
+      { ...entry, runwayTabStep: TAB_STEP_LOAD_ID },
+      '',
+    );
   };
   const showTab = async (tab: RunwayTab) => {
     if (tab === activeTab) return;
@@ -270,7 +277,7 @@ export function useRunwayUrlState() {
     if (requestedUndatedBills !== null) closeUndatedBills();
     if (requestedAllDue !== null) closeAllDue();
     if (tab === DEFAULT_RUNWAY_TAB) {
-      if (window.history.state?.runwayTabStep) {
+      if (window.history.state?.runwayTabStep === TAB_STEP_LOAD_ID) {
         navigate(-1);
         return;
       }
