@@ -185,8 +185,11 @@ function useSelfWho(uid: string | null, displayName: string | null) {
   }, [uid, keyStatus, hasNoSelf, name]);
 }
 
-const formatKeptAt = (at: number | null) =>
-  at === null ? null : `${formatDateShort(at)}, ${formatTime(at)}`;
+const formatKeptAt = (at: number | null) => {
+  if (at === null) return null;
+  const isToday = new Date(at).toDateString() === new Date().toDateString();
+  return isToday ? formatTime(at) : formatDateShort(at);
+};
 
 /** Keeps the signed-in person's Helm profile in the store and makes it the first time they open Helm; once the data key is here, keeps their turns there too. */
 export function useHelmSync(uid: string | null, displayName: string | null) {
