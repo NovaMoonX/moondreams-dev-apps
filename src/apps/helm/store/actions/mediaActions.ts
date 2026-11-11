@@ -340,12 +340,12 @@ export async function removeMediaOf(uid: string, mediaIds: string[]) {
         const mediaRef = doc(mediaOf(uid), mediaId);
         const previous = (await getDoc(mediaRef)).data() ?? null;
         if (!previous) return [];
-        const paths = [
-          getMediaObjectPath(uid, mediaId, false),
-          ...(previous.hasThumb === true
-            ? [getMediaObjectPath(uid, mediaId, true)]
-            : []),
-        ];
+        const paths = getMediaObjectPaths(
+          uid,
+          mediaId,
+          previous.kind,
+          previous.hasThumb === true,
+        );
         return [{ mediaRef, previous, held: await holdObjects(paths) }];
       }),
     )

@@ -359,7 +359,7 @@ function Composer({
 
   const startRecording = () => {
     if (!navigator.onLine) {
-      addToast({ title: HELM_COPY.recordNeedsConnection, type: 'info' });
+      attachments.say(HELM_COPY.recordNeedsConnection);
       return;
     }
     if (document.activeElement instanceof HTMLElement) {
@@ -403,11 +403,14 @@ function Composer({
           role='status'
         >
           <span
-            className='bg-destructive size-2.5 shrink-0 animate-pulse rounded-full'
+            className='bg-destructive size-2.5 shrink-0 rounded-full'
             aria-hidden='true'
           />
-          <span className='min-w-0 flex-1 text-[15px] tabular-nums'>
-            {HELM_COPY.recordingLabel(formatClock(recorder.elapsedMs))}
+          <span className='flex min-w-0 flex-1 items-baseline gap-1.5 text-[15px]'>
+            <span className='whitespace-nowrap'>{HELM_COPY.recording}</span>
+            <span className='shrink-0 tabular-nums'>
+              {formatClock(recorder.elapsedMs)}
+            </span>
           </span>
           <Button
             type='button'
@@ -584,6 +587,7 @@ function Composer({
                 }),
                 option({
                   label: HELM_COPY.attachChooseFile,
+                  description: HELM_COPY.attachChooseFileHint,
                   value: CHOOSE_FILE,
                   icon: <FileText className='size-4' aria-hidden='true' />,
                 }),

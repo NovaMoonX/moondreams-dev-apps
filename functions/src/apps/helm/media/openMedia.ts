@@ -70,6 +70,8 @@ export type UnreadableReason =
   'locked' | 'unreadable' | 'tooManyPages' | 'tooLarge';
 
 const FILE_NAME_CAP = 120;
+/** Most PDF bytes one turn sends to the model as document blocks. */
+export const MAX_DOCUMENT_BYTES_PER_TURN = 20 * 1024 * 1024;
 const KINDS = ['photo', 'pdf', 'markdown', 'voiceNote'];
 
 const listIds = (listed: unknown): string[] => [
@@ -222,7 +224,7 @@ export async function openMedia(input: {
       file: null,
     };
   };
-  const opened = await Promise.all(
+  const read = await Promise.all(
     ids
       .filter((id) => !voiceIds.includes(id))
       .map(async (id) => {
@@ -240,6 +242,34 @@ export async function openMedia(input: {
         }
       }),
   );
+  const opened = read.reduce<{ sent: number; entries: typeof read }>(
+    (acc, entry) => {
+      const sent =
+        entry.result.status === 'opened'
+          ? entry.result.blocks.reduce(
+              (sum, block) =>
+                block.type === 'document'
+                  ? sum + Buffer.byteLength(block.data, 'base64')
+                  : sum,
+              0,
+            )
+          : 0;
+      if (sent > 0 && acc.sent + sent > MAX_DOCUMENT_BYTES_PER_TURN) {
+        return {
+          sent: acc.sent,
+          entries: [
+            ...acc.entries,
+            {
+              ...entry,
+              result: { status: 'unreadable', reason: 'tooLarge' },
+            },
+          ],
+        };
+      }
+      return { sent: acc.sent + sent, entries: [...acc.entries, entry] };
+    },
+    { sent: 0, entries: [] },
+  ).entries;
   const readable = opened.flatMap((entry) =>
     entry.result.status === 'opened'
       ? [{ ...entry, result: entry.result }]

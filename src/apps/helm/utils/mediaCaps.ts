@@ -15,8 +15,9 @@ export const MAX_VOICE_NOTE_BYTES = 10 * 1024 * 1024;
 export const MAX_TRANSCRIPT_CHARS = 5_000;
 export type PickRefusal =
   'tooMany' | 'notSupported' | 'tooLarge' | 'tooManyPages' | 'tooLong';
-const MARKDOWN_NAME = /\.md$/i;
-/** image/* → photo; application/pdf → pdf; audio/* → voiceNote; text/markdown, or text/plain or no type with a .md name → markdown. */
+const MARKDOWN_NAME = /\.(md|markdown)$/i;
+const PDF_NAME = /\.pdf$/i;
+/** image/* → photo; application/pdf → pdf; audio/* → voiceNote; text/markdown → markdown; text/plain, no type or a generic binary type is read by its name (.pdf, .md, .markdown). */
 export function kindOfFile(file: {
   type: string;
   name: string;
@@ -25,7 +26,10 @@ export function kindOfFile(file: {
   if (file.type === 'application/pdf') return 'pdf';
   if (file.type.startsWith('audio/')) return 'voiceNote';
   if (file.type === 'text/markdown') return 'markdown';
-  return (file.type === 'text/plain' || file.type === '') &&
+  const isGeneric =
+    file.type === '' || file.type === 'application/octet-stream';
+  if (isGeneric && PDF_NAME.test(file.name)) return 'pdf';
+  return (isGeneric || file.type === 'text/plain') &&
     MARKDOWN_NAME.test(file.name)
     ? 'markdown'
     : null;

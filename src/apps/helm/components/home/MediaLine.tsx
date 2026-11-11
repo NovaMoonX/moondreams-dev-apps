@@ -3,15 +3,17 @@ import { useEffect, useState } from 'react';
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, FileText, ImageOff, Mic } from 'lucide-react';
+import { ChevronRight, ImageOff } from 'lucide-react';
 
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import { formatClock } from '@/utils/durationUtils';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
+import { MediaKindIcon } from '@apps/helm/components/media/MediaKindIcon';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -29,6 +31,7 @@ import {
 import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { MediaAttachment, OpenCapture, OpenMedia } from '@apps/helm/types';
+import { shortenFileName } from '@apps/helm/utils/fileNames';
 import { isMediaExpired } from '@apps/helm/utils/mediaCaps';
 import { getKeepTarget, getKeptEffect } from '@apps/helm/utils/mediaKeep';
 
@@ -43,15 +46,24 @@ interface TurnPhotosProps {
 
 /** What a file or recording sent with a turn looks like in its tile: an icon and its name (a recording just says so). */
 function FileTile({ media }: { media: OpenMedia }) {
-  const Icon = media.kind === 'voiceNote' ? Mic : FileText;
   return (
     <span className='bg-muted text-muted-foreground flex size-20 flex-col items-center justify-center gap-1 rounded-xl p-1.5'>
-      <Icon className='size-5 shrink-0' aria-hidden='true' />
+      <MediaKindIcon kind={media.kind} className='size-5 shrink-0' />
       <span className='line-clamp-2 w-full text-center text-[11px] leading-tight break-words'>
         {media.kind === 'voiceNote'
-          ? HELM_COPY.mediaVoiceTile
-          : (media.fileName ?? HELM_COPY.mediaWord(media.kind))}
+          ? media.durationMs === null
+            ? HELM_COPY.mediaVoiceTile
+            : HELM_COPY.attachVoiceMeta(formatClock(media.durationMs))
+          : shortenFileName(
+              media.fileName ?? HELM_COPY.mediaWord(media.kind),
+              20,
+            )}
       </span>
+      {media.kind === 'pdf' && media.pageCount !== null && (
+        <span className='w-full truncate text-center text-[11px] leading-tight'>
+          {HELM_COPY.mediaPdfPages(media.pageCount)}
+        </span>
+      )}
     </span>
   );
 }
@@ -213,7 +225,7 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
         ? null
         : media.deleteAfter - now <= HOUR_MS
           ? 0
-          : Math.ceil((media.deleteAfter - now) / HOUR_MS);
+          : Math.min(24, Math.ceil((media.deleteAfter - now) / HOUR_MS));
     const keep = async () => {
       if (isWorking) return;
       if (!navigator.onLine) {
@@ -257,7 +269,7 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
               <span className='block break-words'>
                 {media.kind === 'voiceNote'
                   ? HELM_COPY.mediaVoiceNotKept
-                  : HELM_COPY.mediaReadNotKept(fileName)}
+                  : HELM_COPY.mediaReadNotKept(shortenFileName(fileName))}
               </span>
               <span className='block'>
                 {HELM_COPY.mediaNotKeptHours(hoursLeft)}

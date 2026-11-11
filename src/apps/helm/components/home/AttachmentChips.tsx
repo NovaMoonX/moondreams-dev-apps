@@ -1,11 +1,13 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { FileText, Loader2, Mic, X } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 
 import FallbackImage from '@/components/FallbackImage';
 import { formatClock } from '@/utils/durationUtils';
+import { MediaKindIcon } from '@apps/helm/components/media/MediaKindIcon';
 import { HELM_COPY } from '@apps/helm/constants';
 import type { TurnAttachment } from '@apps/helm/hooks/useMediaUpload';
+import { shortenFileName } from '@apps/helm/utils/fileNames';
 
 interface AttachmentChipsProps {
   items: TurnAttachment[];
@@ -13,19 +15,27 @@ interface AttachmentChipsProps {
   onRetry: (key: string) => void;
 }
 
-const getMeta = (item: TurnAttachment) => {
-  if (item.kind === 'pdf') {
-    return item.measured.pageCount === null
-      ? 'PDF'
-      : HELM_COPY.attachPages(item.measured.pageCount);
-  }
-  if (item.kind === 'markdown') return HELM_COPY.attachMarkdownMeta;
+const getVoiceMeta = (item: TurnAttachment) => {
   const time = formatClock(item.measured.durationMs ?? 0);
   if (item.status === 'transcribing') return HELM_COPY.attachWritingOut;
   return item.isWritten
     ? HELM_COPY.attachVoiceWritten(time)
     : HELM_COPY.attachVoiceMeta(time);
 };
+
+const META: Record<TurnAttachment['kind'], (item: TurnAttachment) => string> = {
+  photo: () => '',
+  pdf: (item) => HELM_COPY.mediaPdfPages(item.measured.pageCount),
+  markdown: () => HELM_COPY.attachMarkdownMeta,
+  voiceNote: getVoiceMeta,
+};
+
+const getRemoveLabel = (item: TurnAttachment) =>
+  item.kind === 'voiceNote'
+    ? HELM_COPY.attachRemoveVoice
+    : item.kind === 'photo'
+      ? HELM_COPY.mediaRemove('photo')
+      : HELM_COPY.attachRemove(shortenFileName(item.source.name));
 
 const getFailure = (item: TurnAttachment) =>
   item.failure === 'usedUp'
@@ -87,19 +97,17 @@ function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
                     role='status'
                     aria-label={HELM_COPY.attachUploading}
                   />
-                ) : item.kind === 'voiceNote' ? (
-                  <Mic className='size-5 shrink-0' aria-hidden='true' />
                 ) : (
-                  <FileText className='size-5 shrink-0' aria-hidden='true' />
+                  <MediaKindIcon kind={item.kind} className='size-5 shrink-0' />
                 )}
                 <span className='min-w-0'>
                   {item.kind !== 'voiceNote' && (
                     <span className='block truncate text-[13px] leading-4 font-medium'>
-                      {item.source.name}
+                      {shortenFileName(item.source.name)}
                     </span>
                   )}
                   <span className='text-muted-foreground block text-[12px] leading-4 text-pretty'>
-                    {getMeta(item)}
+                    {META[item.kind](item)}
                   </span>
                 </span>
               </span>
@@ -108,7 +116,7 @@ function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
               type='button'
               variant='base'
               size='icon'
-              aria-label={HELM_COPY.attachRemove}
+              aria-label={getRemoveLabel(item)}
               className="bg-background/85 text-foreground absolute top-1 right-1 size-6 min-w-6 rounded-full p-0 before:absolute before:-inset-2 before:content-['']"
               onClick={() => onRemove(item.key)}
             >

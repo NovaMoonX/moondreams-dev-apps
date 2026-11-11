@@ -645,6 +645,11 @@ test('a file is a photo, PDF, recording or Markdown file by its type, or a .md n
   assert.equal(kind('text/markdown', 'a.md'), 'markdown');
   assert.equal(kind('text/plain', 'Packing.MD'), 'markdown');
   assert.equal(kind('', 'readme.md'), 'markdown');
+  assert.equal(kind('', 'Vet.PDF'), 'pdf');
+  assert.equal(kind('application/octet-stream', 'vet.pdf'), 'pdf');
+  assert.equal(kind('application/octet-stream', 'notes.markdown'), 'markdown');
+  assert.equal(kind('text/plain', 'a.pdf'), null);
+  assert.equal(kind('', 'notes.txt'), null);
   assert.equal(kind('text/plain', 'notes.txt'), null);
   assert.equal(kind('video/mp4', 'clip.mp4'), null);
 });
@@ -893,6 +898,45 @@ test('a PDF with text goes in <files>, a scan as a document, a locked one and a 
   assert.deepEqual(more.unreadable, [
     { id: 'pdfLong', name: 'long.pdf', reason: 'tooManyPages' },
   ]);
+  const padded = sealBytes(
+    Buffer.concat([makePdf([null]), Buffer.alloc(9 * 1024 * 1024, 32)]),
+  );
+  const paddedIds = ['bigA', 'bigB', 'bigC'];
+  const paddedDocs = Object.fromEntries(
+    paddedIds.map((id) => [
+      `${BASE}/media/${id}`,
+      {
+        ...row({ kind: 'pdf' }),
+        sealed: seal({
+          bytesNonce: padded.nonce,
+          keyId: key.keyId,
+          fileName: `${id}.pdf`,
+          text: null,
+        }),
+      },
+    ]),
+  );
+  const over = await openMedia({
+    firestore: fakeStore(paddedDocs).firestore as never,
+    bucket: {
+      file: () => ({
+        download: async () => [padded.bytes],
+        delete: async () => undefined,
+      }),
+    },
+    base: BASE,
+    uid: 'u1',
+    key,
+    captureId: 'cap-1',
+    listed: paddedIds,
+  });
+  assert.deepEqual(
+    over.media.map((item) => item.id),
+    ['bigA', 'bigB'],
+  );
+  assert.deepEqual(over.unreadable, [
+    { id: 'bigC', name: 'bigC.pdf', reason: 'tooLarge' },
+  ]);
 });
 
 const markdownInput = (decision: Decided, text = PACKING) => {
@@ -1013,6 +1057,42 @@ test('asNote writes the file verbatim as a note kept on the file; asTopic also m
     String(openWithKey(key.key, execution.sealed as SealedPayload).summary),
     /Made the topic Packing list from packing-list\.md/,
   );
+});
+
+test('a title with no words under it is not a section, and a file of only such headings stays a note', () => {
+  const kept = markdownInput(
+    {
+      alias: 'm1',
+      decision: 'keep',
+      caption: null,
+      targets: [],
+      asNote: true,
+      asTopic: true,
+    },
+    '# Packing list\n\n## Clothes\n- a\n',
+  );
+  const doc = openWithKey(
+    key.key,
+    kept.topicCreates[0].data.sealed as SealedPayload,
+  );
+  assert.deepEqual(
+    (doc.sections as { heading: string }[]).map((section) => section.heading),
+    ['Clothes'],
+  );
+
+  const written = markdownInput(
+    {
+      alias: 'm1',
+      decision: 'keep',
+      caption: null,
+      targets: [],
+      asNote: true,
+      asTopic: true,
+    },
+    '# Title\n\n## Empty\n',
+  );
+  assert.equal(written.noteCreates.length, 1);
+  assert.equal(written.topicCreates.length, 0);
 });
 
 test('a file with more than 60 sections stays a note and says so', () => {

@@ -147,22 +147,36 @@ export function buildResultLines(
       ];
     },
   );
-  const lines = effectLines.filter(
-    (line, index) =>
-      line.ref?.collection !== 'topics' ||
-      effectLines.findIndex(
-        (other) =>
-          other.ref?.collection === 'topics' && other.title === line.title,
-      ) === index,
+  const lines = effectLines.filter((line, index) =>
+    line.ref?.collection === 'notes'
+      ? !effectLines.some(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        )
+      : line.ref?.collection !== 'topics' ||
+        effectLines.findIndex(
+          (other) =>
+            other.ref?.collection === 'topics' && other.title === line.title,
+        ) === index,
   );
-  const noteLines = (execution.lines ?? []).map((line, index): ResultLine => ({
-    key: `line:${index}`,
-    docId: line.ref.id,
-    title: line.text,
-    detail: null,
-    ref: line.ref,
-    isNoEffect: true,
-  }));
+  const noteLines = (execution.lines ?? [])
+    .filter(
+      (line) =>
+        !lines.some(
+          (row) =>
+            row.ref?.collection === line.ref.collection &&
+            row.ref.id === line.ref.id &&
+            row.title === line.text,
+        ),
+    )
+    .map((line, index): ResultLine => ({
+      key: `line:${index}`,
+      docId: line.ref.id,
+      title: line.text,
+      detail: null,
+      ref: line.ref,
+      isNoEffect: true,
+    }));
   return [...lines, ...noteLines];
 }
 

@@ -38,6 +38,9 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
   const [elapsedMs, setElapsedMs] = useState(0);
   const session = useRef<Session | null>(null);
   const done = useRef(onDone);
+  const isStarting = useRef(false);
+  const isAborted = useRef(false);
+  const isMounted = useRef(true);
   useEffect(() => {
     done.current = onDone;
   });
@@ -52,7 +55,9 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
 
   useEffect(() => {
     const live = session;
+    isMounted.current = true;
     return () => {
+      isMounted.current = false;
       const held = live.current;
       if (held) held.isDiscarded = true;
       if (held?.recorder.state === 'recording') held.recorder.stop();
@@ -65,9 +70,24 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
   }, []);
 
   const start = async () => {
-    if (session.current) return;
+    if (session.current || isStarting.current) return;
+    if (
+      typeof MediaRecorder === 'undefined' ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setState('refused');
+      return;
+    }
+    isStarting.current = true;
+    isAborted.current = false;
+    const acquired: { stream: MediaStream | null } = { stream: null };
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      acquired.stream = stream;
+      if (!isMounted.current || isAborted.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
       const type = pickType();
       const recorder = new MediaRecorder(
         stream,
@@ -113,8 +133,11 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
       setState('recording');
       recorder.start();
     } catch {
+      acquired.stream?.getTracks().forEach((track) => track.stop());
       release();
-      setState('refused');
+      if (isMounted.current) setState('refused');
+    } finally {
+      isStarting.current = false;
     }
   };
 
@@ -125,6 +148,7 @@ export function useAudioRecorder({ maxMs, onDone }: UseAudioRecorderOptions) {
   };
 
   const cancel = () => {
+    if (isStarting.current) isAborted.current = true;
     const held = session.current;
     if (!held) return;
     held.isDiscarded = true;

@@ -239,15 +239,48 @@ const toTopicPhrase = (
       ? `1 change to ${name ?? 'a topic'}`
       : `${count} changes to topics`;
 
-/** What a kept photo, PDF, voice note or file is called in a sentence. */
-const mediaWordOf = (kind: MediaKind) =>
-  kind === 'photo'
-    ? 'photo'
-    : kind === 'pdf'
-      ? 'PDF'
-      : kind === 'voiceNote'
-        ? 'recording'
-        : 'file';
+/** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
+const MEDIA_WORDS: Record<
+  MediaKind,
+  {
+    word: string;
+    title: string;
+    noun: string;
+    sheet: string;
+    isNamedByFile: boolean;
+  }
+> = {
+  photo: {
+    word: 'photo',
+    title: 'A photo',
+    noun: 'the photo',
+    sheet: 'Photo',
+    isNamedByFile: false,
+  },
+  pdf: {
+    word: 'PDF',
+    title: 'A PDF',
+    noun: 'the PDF',
+    sheet: 'PDF',
+    isNamedByFile: false,
+  },
+  voiceNote: {
+    word: 'recording',
+    title: 'A recording',
+    noun: 'the recording',
+    sheet: 'Recording',
+    isNamedByFile: false,
+  },
+  markdown: {
+    word: 'file',
+    title: 'A file',
+    noun: 'the file',
+    sheet: 'Markdown file',
+    isNamedByFile: true,
+  },
+};
+
+const mediaWordOf = (kind: MediaKind) => MEDIA_WORDS[kind].word;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -469,30 +502,24 @@ export const HELM_COPY = {
       .join(' '),
   resultPhotoFallback: 'A photo',
   mediaFallbackTitle: (kind: MediaKind, fileName: string | null) =>
-    kind === 'photo'
-      ? 'A photo'
-      : kind === 'pdf'
-        ? 'A PDF'
-        : kind === 'voiceNote'
-          ? 'A recording'
-          : (fileName ?? 'A file'),
+    MEDIA_WORDS[kind].isNamedByFile
+      ? (fileName ?? MEDIA_WORDS[kind].title)
+      : MEDIA_WORDS[kind].title,
   mediaNoun: (kind: MediaKind, fileName: string | null) =>
-    kind === 'photo'
-      ? 'the photo'
-      : kind === 'pdf'
-        ? 'the PDF'
-        : kind === 'voiceNote'
-          ? 'the recording'
-          : (fileName ?? 'the file'),
+    MEDIA_WORDS[kind].isNamedByFile
+      ? (fileName ?? MEDIA_WORDS[kind].noun)
+      : MEDIA_WORDS[kind].noun,
   mediaWord: mediaWordOf,
   attachMenuLabel: 'Add a photo or file',
   attachTake: 'Take a photo',
   attachChoose: 'Choose photos',
-  attachChooseFile: 'Choose a PDF or Markdown file',
+  attachChooseFile: 'Choose a file',
+  attachChooseFileHint: 'PDF or Markdown',
   attachRecord: 'Record a voice note',
   attachNote: (name: string) =>
     `${name} reads what you send to sort it, and keeps only what's useful. You'll see what it kept.`,
-  attachRemove: 'Remove',
+  attachRemove: (name: string) => `Remove ${name}`,
+  attachRemoveVoice: 'Remove voice note',
   attachFailed: "Didn't upload",
   attachTryAgain: 'Try again',
   attachUploading: 'Uploading',
@@ -507,7 +534,6 @@ export const HELM_COPY = {
     `This file has ${chars.toLocaleString()} characters. Up to ${MAX_MARKDOWN_CHARS.toLocaleString()} can be read.`,
   attachMarkdownTooLarge: `Markdown files can be up to ${MAX_MARKDOWN_BYTES / 1024} KB.`,
   attachVoiceTooLong: `Voice notes can be up to ${MAX_VOICE_NOTE_MS / 60_000} minutes.`,
-  attachFileUnreadable: "This file couldn't be opened. Try another.",
   attachNeedsConnection:
     'Sending a photo or file needs a connection. Your words stay here.',
   attachWaiting: 'Waiting for your photos and files to upload.',
@@ -517,30 +543,29 @@ export const HELM_COPY = {
     "A photo or file didn't upload. Try again or remove it, then send.",
   attachThumbLabel: (position: number) => `Photo ${position}`,
   attachFileLabel: (name: string) => name,
-  attachPages: (pages: number) => `${pages} ${pages === 1 ? 'page' : 'pages'}`,
-  attachMarkdownMeta: 'Markdown',
+  attachMarkdownMeta: 'Markdown file',
   attachVoiceMeta: (time: string) => `Voice note · ${time}`,
   attachVoiceWritten: (time: string) => `Voice note · ${time} · Written out`,
   attachWritingOut: 'Writing it out…',
   attachWriteFailed: "Couldn't write this out",
   attachVoiceUsedUp:
     'Voice notes are used up for today. Type what it says, or try tomorrow.',
-  recordingLabel: (time: string) => `Recording · ${time}`,
+  recording: 'Recording',
   recordCancel: 'Cancel',
   recordStop: 'Stop',
   recordStoppedAtLimit: 'Voice notes stop at 5 minutes. This one is saved.',
   recordNoMicrophone:
     "The microphone isn't available. Allow it in your browser's settings, or type instead.",
   recordNeedsConnection:
-    'Recording a voice note needs a connection. Your words stay here.',
+    "Voice notes need a connection. Type it, or try again when you're back online.",
   mediaKeptOn: (noun: string, record: string) => `Kept ${noun} on ${record}`,
   mediaSeeOn: (record: string) => `See it on ${record}`,
   mediaKeptNoRecord: (noun: string) => `Kept ${noun}`,
   mediaLetGo: (kind: MediaKind) => `Didn't keep the ${mediaWordOf(kind)}`,
   mediaKeepIt: 'Keep it',
   mediaKeepRecording: 'Keep the recording',
-  mediaReadNotKept: (file: string) => `Read ${file}. Didn't keep it`,
-  mediaVoiceNotKept: "Wrote out your voice note. Didn't keep the recording",
+  mediaReadNotKept: (file: string) => `Read ${file}`,
+  mediaVoiceNotKept: 'Wrote out your voice note',
   mediaKeepFailed: "That couldn't be kept. Try again.",
   mediaKeepGone: 'That is already gone.',
   mediaKeepNeedsConnection: 'Keeping this needs a connection.',
@@ -565,28 +590,21 @@ export const HELM_COPY = {
   mediaSeeNote: (title: string) => `See it in Knowledge: ${title}`,
   mediaNotKeptHours: (hoursLeft: number | null) =>
     hoursLeft === null
-      ? 'Not kept'
+      ? "Didn't keep it"
       : hoursLeft < 1
-        ? 'Deleted in under an hour'
-        : `Deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
-  mediaRemove: (kind: MediaKind) =>
-    `Remove ${kind === 'photo' ? 'photo' : kind === 'voiceNote' ? 'recording' : kind === 'pdf' ? 'PDF' : 'file'}`,
+        ? "Didn't keep it · Deleted in under an hour"
+        : `Didn't keep it · Deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+  mediaRemove: (kind: MediaKind) => `Remove ${mediaWordOf(kind)}`,
   mediaRemoveSubtitle: (kind: MediaKind) =>
     `A ${mediaWordOf(kind)} nothing else holds is deleted in 24 hours. You can undo it until then.`,
   mediaViewOnRecord: (position: number, total: number) =>
     `Item ${position} of ${total}`,
   mediaOpenPdf: 'Open the PDF',
+  mediaOpenPdfHint: 'Opens in a new tab',
   mediaOpenPdfFailed: "The PDF didn't open. Try again.",
   mediaPdfPages: (pages: number | null) =>
     pages === null ? 'PDF' : `PDF · ${pages} ${pages === 1 ? 'page' : 'pages'}`,
-  mediaSheetTitle: (kind: MediaKind) =>
-    kind === 'photo'
-      ? 'Photo'
-      : kind === 'pdf'
-        ? 'PDF'
-        : kind === 'voiceNote'
-          ? 'Recording'
-          : 'Markdown file',
+  mediaSheetTitle: (kind: MediaKind) => MEDIA_WORDS[kind].sheet,
   mediaTranscriptTitle: 'What you said',
   mediaMarkdownEmpty: 'This file is empty.',
   mediaViewFile: (name: string) => `Open ${name}`,

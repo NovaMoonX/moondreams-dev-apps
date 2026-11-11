@@ -295,7 +295,9 @@ export function planFileKnowledge(input: {
         typeof item.words.fileName === 'string' && item.words.fileName
           ? item.words.fileName
           : 'file';
-      const sections = splitMarkdownSections(text);
+      const sections = splitMarkdownSections(text).filter(
+        (section) => section.markdown !== '',
+      );
       const topicsMade = acc.imports.filter((entry) => entry.topic).length;
       const isTopicWanted =
         decision.asTopic && input.topicCount + topicsMade < TOPICS_LIMIT;
@@ -401,7 +403,7 @@ export function planFileKnowledge(input: {
                     ref: { collection: 'topics', id: topicId },
                   }
                 : { text: noteLine, ref: { collection: 'notes', id: noteId } },
-              ...(isTopicWanted && !canBeTopic
+              ...(isTopicWanted && !canBeTopic && sections.length > 0
                 ? [
                     {
                       text: FILE_TOPIC_TOO_LONG_LINE,

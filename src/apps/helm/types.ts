@@ -702,7 +702,7 @@ export interface PhotoOwner {
 
 export type MediaKind = 'photo' | 'pdf' | 'voiceNote' | 'markdown';
 
-/** `apps/helm/users/{uid}/media/{mediaId}`: a photo, PDF, voice note or Markdown file. Its sealed bytes are in Storage, except a Markdown file, whose text is sealed in this document. */
+/** A person's photo, PDF, voice note or Markdown file. Its sealed bytes are in Storage, except a Markdown file, whose text is sealed in this document. */
 export interface Media {
   kind: MediaKind;
   /** A who's or place's picture, as opposed to a file a turn brought in. */

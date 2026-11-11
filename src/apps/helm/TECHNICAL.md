@@ -573,8 +573,8 @@ interface Media {
 interface MediaSealed {
   fileName: string | null;             // ≤120
   caption: string | null;              // the assistant's one line of what it is (≤200): "Receipt from Sweet Layer, $1,800"
-  text: string | null;                 // Markdown text (≤20,000), a PDF's text layer (≤30,000), or a voice note's transcript (kept even when the audio is let go)
-  bytesNonce: string; thumbNonce: string | null; // nonces for the sealed Storage objects
+  text: string | null;                 // a Markdown file's text (≤20,000) or a voice note's transcript (≤5,000, kept even when the audio is let go); a PDF's text is never stored
+  bytesNonce: string | null; thumbNonce: string | null; // nonces for the sealed Storage objects
   keyId: string;                       // the data key that sealed the bytes
 }
 ```

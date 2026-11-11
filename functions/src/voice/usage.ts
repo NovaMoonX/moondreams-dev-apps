@@ -11,7 +11,7 @@ import {
 export interface ListenUsage {
   listenMs: number;
   /** Recordings written out, in milliseconds; they share the day's listening allowance. */
-  transcribeMs?: number;
+  transcribeMs: number | null;
   mints: number;
   openMints: Record<string, number>;
 }

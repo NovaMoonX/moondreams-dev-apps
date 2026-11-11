@@ -659,7 +659,10 @@ function TaskSheet({
           </div>
         )}
         {getCondition()}
-        <KeptMediaSection record={{ kind: 'task', id: task.id }} />
+        <KeptMediaSection
+          record={{ kind: 'task', id: task.id }}
+          part='photos'
+        />
         <div className='space-y-2'>
           {!task.isUnreadable && (
             <SummaryRow
@@ -715,6 +718,7 @@ function TaskSheet({
             </SummaryRow>
           )}
         </div>
+        <KeptMediaSection record={{ kind: 'task', id: task.id }} part='files' />
         <ShowMoreButton
           isOpen={isDetailsOpen}
           onClick={() => setDetailsFor(isDetailsOpen ? null : task.id)}

@@ -1464,7 +1464,12 @@ const listenLimits = {
   voices: { googleTts: 'g', deepgramAura: 'd', geminiTts: 'm' },
 };
 const worstCase = listenCostMicros(VOICE_UTTERANCE_MS);
-const emptyUsage: ListenUsage = { listenMs: 0, mints: 0, openMints: {} };
+const emptyUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 0,
+  openMints: {},
+};
 const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
   planListen({
     usage: emptyUsage,
@@ -1476,7 +1481,12 @@ const plan = (overrides: Partial<Parameters<typeof planListen>[0]> = {}) =>
     worstCaseMicros: worstCase,
     ...overrides,
   });
-const openUsage: ListenUsage = { listenMs: 0, mints: 1, openMints: { a: 1 } };
+const openUsage: ListenUsage = {
+  listenMs: 0,
+  transcribeMs: null,
+  mints: 1,
+  openMints: { a: 1 },
+};
 assert.equal(
   plan({
     usage: openUsage,
@@ -1491,7 +1501,7 @@ assert.equal(
   'a negative report adds nothing',
 );
 const replayed = plan({
-  usage: { listenMs: 0, mints: 1, openMints: {} },
+  usage: { listenMs: 0, transcribeMs: null, mints: 1, openMints: {} },
   closed: [
     { mintId: 'a', ms: 5_000 },
     { mintId: 'zzz', ms: 5_000 },

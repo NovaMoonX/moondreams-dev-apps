@@ -111,6 +111,13 @@ const revoke = (entry: TurnAttachment) => {
   if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
 };
 
+const TOO_LARGE_TEXT: Record<AttachmentKind, string> = {
+  photo: HELM_COPY.attachTooMany,
+  pdf: HELM_COPY.attachPdfTooLarge,
+  markdown: HELM_COPY.attachMarkdownTooLarge,
+  voiceNote: HELM_COPY.attachVoiceTooLong,
+};
+
 const refusalText = (
   reason: PickRefusal,
   file: File,
@@ -126,13 +133,7 @@ const refusalText = (
       ? HELM_COPY.attachVoiceTooLong
       : HELM_COPY.attachMarkdownTooLong(measured?.chars ?? 0);
   }
-  if (reason === 'tooLarge') {
-    return kind === 'pdf'
-      ? HELM_COPY.attachPdfTooLarge
-      : kind === 'voiceNote'
-        ? HELM_COPY.attachVoiceTooLong
-        : HELM_COPY.attachMarkdownTooLarge;
-  }
+  if (reason === 'tooLarge') return TOO_LARGE_TEXT[kind ?? 'markdown'];
   return HELM_COPY.attachTooMany;
 };
 
@@ -226,6 +227,10 @@ export function useTurnAttachments({
   const run = async (key: string) => {
     const entry = latest.current.find((held) => held.key === key);
     if (!user || !entry) return;
+    if (!navigator.onLine) {
+      patch(key, { status: 'failed', failure: 'upload' });
+      return;
+    }
     patch(key, { status: 'uploading', failure: null });
     try {
       if (entry.mediaId) {
@@ -233,6 +238,7 @@ export function useTurnAttachments({
         return;
       }
       const measured = await measure(entry);
+      if (!latest.current.some((held) => held.key === key)) return;
       const refusal = checkMeasured(entry.kind, {
         pages: measured.pageCount,
         chars: measured.text?.length ?? null,
@@ -376,6 +382,7 @@ export function useTurnAttachments({
     items,
     add,
     addVoiceNote,
+    say: setNotice,
     retry,
     remove,
     clear,

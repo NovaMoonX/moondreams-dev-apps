@@ -2,10 +2,11 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ExternalLink, FileText, Trash2 } from 'lucide-react';
+import { ExternalLink, Trash2 } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
+import BackLink from '@/components/BackLink';
 import FallbackImage from '@/components/FallbackImage';
 import FormSheet from '@/components/FormSheet';
 import ImageViewer from '@/components/ImageViewer';
@@ -14,10 +15,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { forgetSealedObject } from '@/hooks/useSealedObjectUrl';
 import { shareOrDownloadFiles } from '@/utils/fileUtils';
 import { formatDateShort } from '@/utils/formatUtils';
+import { MediaKindIcon } from '@apps/helm/components/media/MediaKindIcon';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useMediaUrl } from '@apps/helm/hooks/useMediaUrl';
 import { removeKeptMedia } from '@apps/helm/store/actions/mediaActions';
 import type { MediaAttachment, OpenMedia } from '@apps/helm/types';
+import { shortenFileName } from '@apps/helm/utils/fileNames';
 
 interface KeptMediaViewerProps {
   media: OpenMedia;
@@ -100,9 +103,14 @@ function KeptMediaViewer({ media, record, onClose }: KeptMediaViewerProps) {
       <FormSheet
         isOpen
         onClose={onClose}
-        title={HELM_COPY.mediaSheetTitle(media.kind)}
+        title={
+          media.fileName && (media.kind === 'pdf' || media.kind === 'markdown')
+            ? shortenFileName(media.fileName, 32)
+            : HELM_COPY.mediaSheetTitle(media.kind)
+        }
       >
         <div className='space-y-4'>
+          {media.kind !== 'photo' && <BackLink onBack={onClose} />}
           {media.kind === 'photo' && (
             <Button
               type='button'
@@ -122,32 +130,33 @@ function KeptMediaViewer({ media, record, onClose }: KeptMediaViewerProps) {
             </Button>
           )}
           {media.kind === 'pdf' && (
-            <div className='bg-muted flex items-center gap-3 rounded-2xl p-4'>
-              <FileText className='size-6 shrink-0' aria-hidden='true' />
-              <div className='min-w-0 flex-1'>
-                <p className='text-[15px] font-medium break-words'>
-                  {media.fileName ?? HELM_COPY.mediaSheetTitle('pdf')}
-                </p>
-                <p className='text-muted-foreground text-[13px]'>
+            <div className='space-y-3'>
+              <div className='bg-muted flex items-center gap-3 rounded-2xl p-4'>
+                <MediaKindIcon kind='pdf' className='size-6 shrink-0' />
+                <p className='text-muted-foreground min-w-0 text-[13px]'>
                   {HELM_COPY.mediaPdfPages(media.pageCount)}
                 </p>
               </div>
               <Button
                 type='button'
                 variant='secondary'
-                size='sm'
+                className='w-full'
                 disabled={!url}
+                aria-label={`${HELM_COPY.mediaOpenPdf}. ${HELM_COPY.mediaOpenPdfHint}`}
                 onClick={() => void openPdf()}
               >
                 <ExternalLink className='size-4' aria-hidden='true' />
                 {HELM_COPY.mediaOpenPdf}
               </Button>
+              <p className='text-muted-foreground text-center text-[13px]'>
+                {HELM_COPY.mediaOpenPdfHint}
+              </p>
             </div>
           )}
           {media.kind === 'markdown' && (
             <div className='space-y-2'>
-              <p className='text-[15px] font-medium break-words'>
-                {media.fileName}
+              <p className='text-muted-foreground text-[13px]'>
+                {HELM_COPY.attachMarkdownMeta}
               </p>
               {media.text ? (
                 <MarkdownText

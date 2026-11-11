@@ -77,6 +77,9 @@ export const transcribeHelmVoiceNote = onCall(
         'This recording is not ready.',
       );
     }
+    if (row.durationMs > MAX_VOICE_NOTE_MS) {
+      return { status: 'held', reason: 'tooLong' };
+    }
     const key = await unwrapHelmKey(firestore, loadKeyringOrFail(), uid).catch(
       () => {
         throw cannotOpen();
@@ -88,6 +91,9 @@ export const transcribeHelmVoiceNote = onCall(
         'failed-precondition',
         'This recording is not ready.',
       );
+    }
+    if (typeof words.text === 'string' && words.text !== '') {
+      return { status: 'ready', text: words.text };
     }
     const bytes = await getStorage()
       .bucket()
@@ -114,7 +120,7 @@ export const transcribeHelmVoiceNote = onCall(
       timeZone,
       bytes,
       mimeType: row.mimeType,
-      claimedMs: Math.min(row.durationMs, MAX_VOICE_NOTE_MS),
+      claimedMs: MAX_VOICE_NOTE_MS,
       emulatorText: EMULATOR_TEXT,
     });
     if (written.status === 'held') return written;

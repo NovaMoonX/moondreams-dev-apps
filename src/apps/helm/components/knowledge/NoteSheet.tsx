@@ -8,6 +8,7 @@ import CopyTextButton from '@/components/CopyTextButton';
 import DeleteIconButton from '@/components/DeleteIconButton';
 import DetailSheet from '@/components/DetailSheet';
 import LinkedText from '@/components/LinkedText';
+import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
@@ -198,9 +199,15 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 <span className='min-w-0'>{HELM_COPY.answerHealthCaution}</span>
               </p>
             )}
-            {note.body && (
-              <LinkedText text={note.body} className='text-[15px]' />
-            )}
+            {note.body &&
+              (note.source === 'importedFile' ? (
+                <MarkdownText
+                  text={note.body}
+                  className='text-[15px] break-words'
+                />
+              ) : (
+                <LinkedText text={note.body} className='text-[15px]' />
+              ))}
             <KeptMediaSection record={{ kind: 'note', id: note.id }} />
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               <p className='text-muted-foreground min-w-0 text-[13px]'>
