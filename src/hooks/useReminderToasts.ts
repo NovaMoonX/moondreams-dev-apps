@@ -43,13 +43,9 @@ export function useReminderToasts() {
   }, []);
 
   const wasInFrontWhenSent = useCallback(
-    (reminder: Reminder) => {
-      const sentAt = reminder.lastSentAt ?? reminder.scheduledFor;
-      return (
-        visibleSinceRef.current <= sentAt &&
-        Date.now() - sentAt <= STALE_AFTER_MS
-      );
-    },
+    (sentAt: number) =>
+      visibleSinceRef.current <= sentAt &&
+      Date.now() - sentAt <= STALE_AFTER_MS,
     [],
   );
 
@@ -133,7 +129,7 @@ export function useReminderToasts() {
       .map((reminder) =>
         setTimeout(
           () => {
-            if (wasInFrontWhenSent(reminder)) {
+            if (wasInFrontWhenSent(reminder.scheduledFor)) {
               showReminderToast(reminder);
             }
           },
@@ -161,7 +157,7 @@ export function useReminderToasts() {
           reminder.status === 'sent' &&
           previousStatus !== undefined &&
           previousStatus !== 'sent' &&
-          wasInFrontWhenSent(reminder)
+          wasInFrontWhenSent(reminder.lastSentAt ?? reminder.scheduledFor)
         );
       })
       .forEach((reminder) => showReminderToast(reminder));
