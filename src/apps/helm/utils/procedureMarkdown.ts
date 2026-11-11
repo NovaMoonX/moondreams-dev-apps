@@ -2,7 +2,10 @@ import { groupSteps, type StepGroupBlock } from '@apps/helm/utils/stepGroups';
 import type { OpenProcedure } from '@apps/helm/types';
 
 const escape = (text: string) =>
-  text.replace(/[\\*_[\]#]/g, '\\$&').replace(/^-/, '\\-');
+  text
+    .replace(/[\\*_[\]#`<>|~]/g, '\\$&')
+    .replace(/^([-+])/, '\\$1')
+    .replace(/^(\d+)([.)])/, '$1\\$2');
 
 const lineOf = (text: string) => escape(text.replace(/\s+/g, ' ').trim());
 

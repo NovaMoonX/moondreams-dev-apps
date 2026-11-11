@@ -546,6 +546,8 @@ interface ProcedureRun {
 
 A run copies the procedure's steps when it starts, so editing the procedure never changes a run in progress or a past one. A tick is `stepState.<id>.doneAt` alone (no version, offline-friendly). A step added "just this time" is `isExtra` on the run; "Add it to the procedure too" makes a new procedure version (`reason: 'fromRun'`). Section 25 has the flows.
 
+**As built (issue 54).** Procedures only; runs come later. `Procedure` is `{ stepState, groupOrder, version, createdBy, sourceCaptureId, sourceTaskId, executionId, createdAt, lastEditedAt, sealed }`: `projectIds`, `runCount`, `lastRunAt` and `archivedAt` wait for runs and filing, and `sources` is not kept. `sourceTaskId` names the task whose steps it was made from (null otherwise); a task with one offers "Open {title}" instead of making another, and the server refuses a second create from the same task. `ProcedureVersion` carries its own `stepState` and `groupOrder`, `reason` is `'created' | 'personEdit' | 'revisedOnRequest' | 'restored'` (`fromRun` comes with runs), and its sealed part adds `requestQuote` (the turn's words when it was revised by asking). Caps in the rules: 60 steps, 12 groups, `version` an integer ≥1, `createdBy` `person` or `nomos`. Steps are ordered by `groupSteps` (`utils/stepGroups.ts`, a server copy guarded by `check:server-copies`).
+
 ### `Media` [MVP]
 
 ```ts
@@ -1273,7 +1275,7 @@ src/apps/helm/
     media/        MediaThumb, PhotosSection (a who's or place's photos and Add a photo), MediaViewer (the photo's sheet, ImageViewer; PDF and Markdown readers follow)
     knowledge/    KnowledgeView (topic tree, Loose notes), TopicScreen (the document, overview and subtopic links),
                   SectionSourcesSheet, SectionEditSheet, NoteRow, NoteSheet, NoteForm, TopicPicker, VersionsSheet
-    procedures/   ProceduresView, ProcedureScreen, RunScreen
+    procedures/   ProceduresView, ProcedureScreen, ProcedureForm, ProcedureVersionsSheet (RunScreen comes with runs)
     howNomosSeesYou/ HowNomosSeesYou, FactKindGroup, StyleNotes
     connections/  ConnectedAppsScreen, ConnectSheet, ConnectionPage, DisconnectSheet, CalendarPicker,
                   SyncedSourceBlock, QuoteLine, SearchedLine
@@ -1794,6 +1796,8 @@ A discarded medium stays 24 hours with "Didn't keep it · Keep it" on its line i
 - A **run** is one use of it, attached to a project, a task or a synced trip or event (`RunAttachment`). Starting a run copies the procedure's current steps into the run's own `stepState` and sealed `steps`, with `procedureVersion`, so a run keeps the steps it started with whatever the procedure becomes later (PRODUCT.md). Ticks are dotted-path updates on the run's readable `stepState` map (offline-friendly, no execution). A step added during a run is `isExtra` ("this time only"); "Add to the procedure" on it writes a procedure version with reason `fromRun`.
 - A **task with steps** stays a task: its steps live on the task (`steps`, `stepState`) and never become a procedure unless the person says "make this a routine", which copies them into a new procedure.
 - Group boxes with partial state are `ChecklistGroup`, moved from Runway to `src/components` in the runs issue with Runway's import (logged in round 3, still holds). `utils/procedureMarkdown.ts` builds the Markdown for Copy.
+
+**As built (issue 54).** A procedure is made three ways: by hand (New procedure on the Procedures view, a full-page form of one row per step), from a task's steps (the task's row "Make these steps a procedure", which becomes "Open {title}" once one exists), or by asking. `createProcedure` and `reviseProcedure` are planned by the pure `planProcedureCommands` and written in the turn's one transaction with `writeProcedureVersionIn` (`procedureStore.ts`), which trims history to 200 versions. A create is kept only when its quote is the turn's own words and asks to make one; a revise only when the procedure is the focus or named and the quote is verbatim, and a revise that would drop steps the turn did not name is refused. Past 60 steps, 12 groups or the effects left in the turn, what was not kept is said on the turn's card. Both carry Execution effects: Undo deletes a made procedure and its first version only while it is still at version 1, and puts a revised one back as a new version when nothing newer was written. The person's edits, restores and deletes write from the device in one transaction (a delete reads the versions from the server and removes the procedure first); version 1 can be restored. `search_procedures` (MCP) reads up to 5 procedures with their steps. Not built: runs, filing under a project, drafting from notes.
 - A run attached to a synced event that has left the calendar keeps its sealed snapshot of the event's title and date ("From Cake tasting, Nov 8, no longer on your calendar").
 - The planner (section 11) is unchanged: it plans tasks, not runs; a run's attachment shows on Today when its event is today.
 

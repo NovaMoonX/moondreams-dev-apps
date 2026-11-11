@@ -23,7 +23,6 @@ import {
   planProcedureCommands,
   type ProcedurePlanInput,
 } from '../../functions/src/apps/helm/nomos/planProcedureCommands.ts';
-import { decideProcedure } from '../../functions/src/apps/helm/nomos/policy.ts';
 import {
   hasProcedureCue,
   hasProcedureReviseCue,
@@ -132,7 +131,10 @@ assert.ok(!hasProcedureCue('the routinely late train'));
 assert.ok(hasProcedureReviseCue('Add a step for the charger'));
 assert.ok(hasProcedureReviseCue('rename the second group'));
 assert.ok(!hasProcedureReviseCue('what is on it'));
-assert.equal(pickRoute({ text: 'Make me a routine', mode: 'full' }), 'full');
+assert.equal(
+  pickRoute({ text: 'Make me a packing routine', mode: 'full' }),
+  'full',
+);
 assert.equal(pickRoute({ text: 'Add milk', mode: 'full' }), 'quick');
 assert.equal(
   pickRoute({
@@ -146,37 +148,89 @@ assert.equal(
   pickRoute({ text: 'add a step for the charger', mode: 'full' }),
   'quick',
 );
-assert.equal(decideProcedure(), 'automatic');
 
 // 2. A made procedure is kept only when the words ask for one.
 const asked = norm('Make me a packing routine', createRow());
 assert.equal(asked.procedureCommands.length, 1);
+assert.deepEqual(
+  norm(
+    'remind me to do my morning routine at 7',
+    createRow({ requestQuote: 'do my morning routine' }),
+  ).procedureDropped,
+  ['procedure-create-unasked'],
+);
+assert.deepEqual(
+  norm(
+    'Make me a packing routine',
+    createRow({ requestQuote: 'something never said here' }),
+  ).procedureDropped,
+  ['procedure-create-unasked'],
+);
+assert.equal(
+  norm(
+    'make my packing steps a procedure',
+    createRow({ requestQuote: 'make my packing steps a procedure' }),
+  ).procedureCommands.length,
+  1,
+);
+const existsReply = norm(
+  'make this a routine',
+  createRow({ procedureSteps: [], requestQuote: 'make this a routine' }),
+  {
+    focusedTaskId: 'task-1',
+    procedureTitleByTask: new Map([['task-1', 'Closing the cabin']]),
+  },
+);
+assert.deepEqual(existsReply.procedureDropped, ['procedure-create-exists']);
+assert.deepEqual(existsReply.procedureCommands, [
+  { kind: 'procedureExists', title: 'Closing the cabin' },
+]);
+const focusedWhenUnknown = norm(
+  'make this a routine',
+  createRow({
+    procedureSteps: [],
+    fromTaskAlias: 't9',
+    requestQuote: 'make this a routine',
+  }),
+  { focusedTaskId: 'task-1' },
+);
+assert.equal(
+  (focusedWhenUnknown.procedureCommands[0] as CreateProcedureCommand)
+    .fromTaskId,
+  'task-1',
+);
 assert.deepEqual(norm('Buy a laptop', createRow()).procedureDropped, [
   'procedure-create-unasked',
 ]);
 assert.deepEqual(
-  norm('Make me a routine', createRow({ title: '  ' })).procedureDropped,
+  norm('Make me a packing routine', createRow({ title: '  ' }))
+    .procedureDropped,
   ['procedure-create-empty'],
 );
 assert.deepEqual(
-  norm('Make me a routine', createRow({ procedureSteps: [] })).procedureDropped,
+  norm('Make me a packing routine', createRow({ procedureSteps: [] }))
+    .procedureDropped,
   ['procedure-create-empty'],
 );
 assert.deepEqual(
   norm(
-    'Make me a routine',
+    'Make me a packing routine',
     createRow({ procedureSteps: [], fromTaskAlias: 't9' }),
   ).procedureDropped,
   ['procedure-create-task-unknown'],
 );
 const fromAlias = norm(
-  'Make me a routine',
+  'Make me a packing routine',
   createRow({ procedureSteps: [], fromTaskAlias: 't1' }),
 ).procedureCommands[0] as CreateProcedureCommand;
 assert.equal(fromAlias.fromTaskId, 'task-1');
 const fromFocus = norm(
   'make this a routine',
-  createRow({ procedureSteps: [], title: 'Routine' }),
+  createRow({
+    procedureSteps: [],
+    title: 'Routine',
+    requestQuote: 'make this a routine',
+  }),
   { focusedTaskId: 'task-1' },
 );
 assert.equal(
@@ -397,6 +451,7 @@ const liveOf = (): LiveProcedure => {
     groups: sealed.groups,
     stepState: doc.stepState,
     groupOrder: doc.groupOrder,
+    sourceTaskId: null,
   };
 };
 const live = liveOf();
@@ -468,12 +523,76 @@ const raced = planProcedureCommands(
     live: new Map([['proc-1', live]]),
   }),
 );
-assert.equal(raced.retry, true);
 assert.equal(raced.versions.length, 0);
 assert.deepEqual(raced.notKept, [buildProcedureRacedLine(live.title)]);
 assert.equal(
   buildProcedureRacedLine('Packing'),
   'Packing changed while this was made · Ask again',
+);
+assert.deepEqual(
+  planProcedureCommands(
+    input([{ kind: 'procedureExists', title: 'Closing the cabin' }]),
+  ).notKept,
+  ['Closing the cabin is already a procedure'],
+);
+assert.deepEqual(planProcedureCommands(input([packing], { room: 0 })).notKept, [
+  'Too much to save in one go · Ask again for the procedure',
+]);
+assert.deepEqual(
+  planProcedureCommands(
+    input([reviseCommand(withCharger)], {
+      live: new Map([['proc-1', live]]),
+      room: 0,
+    }),
+  ).notKept,
+  ['Too much to save in one go · Ask again for the procedure'],
+);
+const manyGroups = planProcedureCommands(
+  input([
+    {
+      ...packing,
+      steps: Array.from({ length: 13 }, (_, i) => step(`S${i}`, `Group ${i}`)),
+    },
+  ]),
+);
+assert.equal((manyGroups.creates[0].doc.groupOrder as string[]).length, 12);
+assert.deepEqual(manyGroups.notKept, [
+  "Group 12 wasn't kept as a group · 12 groups at most",
+]);
+const detailed = planProcedureCommands(
+  input(
+    [
+      reviseCommand(
+        keptList.map((entry, i) => ({
+          ...entry,
+          detail: i === 0 ? '' : null,
+        })),
+        { requestQuote: 'clear the first detail' },
+      ),
+    ],
+    {
+      live: new Map([
+        [
+          'proc-1',
+          {
+            ...live,
+            steps: Object.fromEntries(
+              Object.entries(live.steps).map(([id, entry]) => [
+                id,
+                { ...entry, detail: 'old' },
+              ]),
+            ),
+          },
+        ],
+      ]),
+    },
+  ),
+);
+const firstId = keptList[0].stepId ?? '';
+assert.equal(detailed.versions[0].steps[firstId].detail, null);
+assert.equal(
+  detailed.versions[0].steps[keptList[1].stepId ?? ''].detail,
+  'old',
 );
 const gone = planProcedureCommands(
   input([reviseCommand(withCharger)], { live: new Map([['proc-1', null]]) }),

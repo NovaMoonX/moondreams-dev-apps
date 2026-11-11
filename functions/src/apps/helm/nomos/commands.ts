@@ -434,7 +434,14 @@ export interface ReviseProcedureCommand {
   isOverCap: boolean;
 }
 
-export type ProcedureCommand = CreateProcedureCommand | ReviseProcedureCommand;
+/** A make request for a task that already has a procedure; it makes nothing and only says so. */
+export interface ProcedureExistsCommand {
+  kind: 'procedureExists';
+  title: string;
+}
+
+export type ProcedureCommand =
+  CreateProcedureCommand | ReviseProcedureCommand | ProcedureExistsCommand;
 
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {

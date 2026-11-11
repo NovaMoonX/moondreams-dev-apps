@@ -1264,11 +1264,14 @@ export type ProcedureDrop =
   | 'procedure-create-empty'
   | 'procedure-create-extra'
   | 'procedure-create-task-unknown'
+  | 'procedure-create-exists'
   | 'procedure-revise-unasked'
   | 'procedure-revise-unseen'
   | 'procedure-revise-empty';
 
 const MAX_PROCEDURE_CREATES_PER_TURN = 3;
+const MAKING_WORD_RE =
+  /\b(make|create|build|start|new|set up|save|keep|turn)\b/;
 const MAKE_THESE_A_PROCEDURE_RE =
   /\bmake (this|these|it|them|the steps)\b.*\b(routine|procedure)\b/;
 
@@ -1279,6 +1282,7 @@ interface ProcedureReadContext {
   procedureNames?: Map<string, string>;
   focusedProcedureId?: string | null;
   focusedTaskId?: string | null;
+  procedureTitleByTask?: Map<string, string>;
   procedureVersions?: Map<string, number>;
   captureText?: string;
 }
@@ -1300,7 +1304,10 @@ const readProcedureSteps = (
           {
             stepId,
             text,
-            detail: toText(raw.detail, PROCEDURE_STEP_DETAIL_CAP),
+            detail:
+              typeof raw.detail === 'string' && raw.detail.trim() === ''
+                ? ''
+                : toText(raw.detail, PROCEDURE_STEP_DETAIL_CAP),
             group: toText(raw.group, PROCEDURE_GROUP_NAME_CAP),
           },
         ];
@@ -1335,7 +1342,12 @@ const readProcedureCommands = (
           toComparable(quote).split(' ').filter(Boolean).length >= 2 &&
           captureWords.includes(` ${toComparable(quote)} `);
         if (item.kind === 'createProcedure') {
-          if (!hasProcedureCue(text)) return drop('procedure-create-unasked');
+          const quoted = toComparable(quote);
+          const isAsked =
+            isQuoted &&
+            (MAKE_THESE_A_PROCEDURE_RE.test(quoted) ||
+              (hasProcedureCue(quote) && MAKING_WORD_RE.test(quoted)));
+          if (!isAsked) return drop('procedure-create-unasked');
           if (
             acc.commands.filter((c) => c.kind === 'createProcedure').length >=
             MAX_PROCEDURE_CREATES_PER_TURN
@@ -1350,12 +1362,28 @@ const readProcedureCommands = (
             typeof item.fromTaskAlias === 'string'
               ? context.aliases.idOf(item.fromTaskAlias)
               : null;
-          if (typeof item.fromTaskAlias === 'string' && !taskId) {
+          if (
+            typeof item.fromTaskAlias === 'string' &&
+            !taskId &&
+            !isFocusedTask
+          ) {
             return drop('procedure-create-task-unknown');
           }
           const fromTaskId = isFocusedTask
             ? (context.focusedTaskId ?? null)
             : taskId;
+          const existing = fromTaskId
+            ? context.procedureTitleByTask?.get(fromTaskId)
+            : undefined;
+          if (existing !== undefined) {
+            return {
+              commands: [
+                ...acc.commands,
+                { kind: 'procedureExists', title: existing },
+              ],
+              dropped: [...acc.dropped, 'procedure-create-exists'],
+            };
+          }
           const steps = readProcedureSteps(item.procedureSteps, undefined);
           if (!title || (steps.length === 0 && !fromTaskId)) {
             return drop('procedure-create-empty');
@@ -1573,6 +1601,8 @@ export function normalizeNomosReply(
     procedureNames?: Map<string, string>;
     focusedProcedureId?: string | null;
     focusedTaskId?: string | null;
+    /** The title of the procedure made from each task. */
+    procedureTitleByTask?: Map<string, string>;
     /** The version of each procedure whose steps the model read. */
     procedureVersions?: Map<string, number>;
     /** The words of the turn, which a note's words must come from. */
@@ -1688,6 +1718,7 @@ export function normalizeNomosReply(
       procedureNames: context.procedureNames,
       focusedProcedureId: context.focusedProcedureId,
       focusedTaskId: context.focusedTaskId,
+      procedureTitleByTask: context.procedureTitleByTask,
       procedureVersions: context.procedureVersions,
       captureText: context.captureText,
     });

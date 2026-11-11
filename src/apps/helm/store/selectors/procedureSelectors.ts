@@ -20,5 +20,10 @@ export const selectProcedureById = createSelector(
     new Map(procedures.map((procedure) => [procedure.id, procedure])),
 );
 
-export const selectHasProcedures = (state: RootState) =>
-  state.helm.procedures.items.length > 0;
+/** The procedure made from a task's steps, if there is one. */
+export const selectProcedureFromTask =
+  (taskId: string) =>
+  (state: RootState): OpenProcedure | null =>
+    state.helm.procedures.items.find(
+      (procedure) => procedure.sourceTaskId === taskId,
+    ) ?? null;

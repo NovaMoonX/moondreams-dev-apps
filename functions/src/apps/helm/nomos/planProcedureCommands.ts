@@ -21,6 +21,9 @@ import {
 import type { PlannedEffect } from './planTopicCommands.js';
 import {
   buildProcedureChangedLine,
+  buildProcedureExistsLine,
+  buildProcedureGroupsLine,
+  buildProcedureRoomLine,
   buildProcedureFullLine,
   buildProcedureGoneLine,
   buildProcedureLostLine,
@@ -55,8 +58,6 @@ export interface ProcedurePlan {
   /** The result line of each procedure made or changed. */
   lines: string[];
   notKept: string[];
-  /** A revision whose procedure changed after the model read it. */
-  retry: boolean;
 }
 
 export interface ProcedureTask {
@@ -83,7 +84,6 @@ const EMPTY_PLAN: ProcedurePlan = {
   effects: [],
   lines: [],
   notKept: [],
-  retry: false,
 };
 
 const REMOVAL_CUES = new Set([
@@ -103,6 +103,8 @@ const REMOVAL_CUES = new Set([
 type Layout = Omit<ProcedureWords, 'title'> & {
   stepState: Record<string, StepPlace>;
   groupOrder: string[];
+  /** Names of groups past the cap, whose steps went ungrouped. */
+  overflow: string[];
 };
 
 const toKey = (name: string) => name.trim().toLowerCase();
@@ -130,14 +132,17 @@ const layoutSteps = (
     used: Set<string>;
     groups: Map<string, { id: string; name: string }>;
     rows: Row[];
+    overflow: string[];
   }>(
     (acc, step) => {
       const key = step.group === null ? null : toKey(step.group);
       const known = key === null ? null : (acc.groups.get(key) ?? null);
+      const isOver =
+        key !== null && !known && acc.groups.size >= PROCEDURE_GROUPS_MAX;
       const group =
         key === null || known
           ? known
-          : acc.groups.size >= PROCEDURE_GROUPS_MAX
+          : isOver
             ? null
             : (knownGroups.get(key) ?? { id: newId(), name: step.group ?? '' });
       const isKept =
@@ -148,6 +153,10 @@ const layoutSteps = (
       const id = isKept && step.stepId ? step.stepId : newId();
       return {
         used: new Set([...acc.used, id]),
+        overflow:
+          isOver && step.group && !acc.overflow.includes(step.group)
+            ? [...acc.overflow, step.group]
+            : acc.overflow,
         groups:
           group && key !== null
             ? new Map(acc.groups).set(key, group)
@@ -158,17 +167,20 @@ const layoutSteps = (
             id,
             text: step.text,
             detail:
-              step.detail ??
-              (isKept && live ? (live.steps[id]?.detail ?? null) : null),
+              step.detail === ''
+                ? null
+                : (step.detail ??
+                  (isKept && live ? (live.steps[id]?.detail ?? null) : null)),
             groupId: group?.id ?? null,
           },
         ],
       };
     },
-    { used: new Set(), groups: new Map(), rows: [] },
+    { used: new Set(), groups: new Map(), rows: [], overflow: [] },
   );
   const groups = [...built.groups.values()];
   return {
+    overflow: built.overflow,
     stepState: toStepState(built.rows),
     groupOrder: groups.map((group) => group.id),
     steps: Object.fromEntries(
@@ -180,7 +192,7 @@ const layoutSteps = (
   };
 };
 
-const signature = (title: string, words: Layout) =>
+const signature = (title: string, words: Omit<Layout, 'overflow'>) =>
   JSON.stringify([
     title,
     words.groupOrder.map((id) => words.groups[id]?.name ?? null),
@@ -232,12 +244,15 @@ const planCreate = (
         group: null,
       }))
     : command.steps;
-  if (source.length === 0 || input.room < 1) {
-    return source.length === 0
-      ? withPlan(plan, {
-          notKept: [...plan.notKept, buildProcedureNoStepsLine()],
-        })
-      : plan;
+  if (source.length === 0) {
+    return withPlan(plan, {
+      notKept: [...plan.notKept, buildProcedureNoStepsLine()],
+    });
+  }
+  if (input.room < 1) {
+    return withPlan(plan, {
+      notKept: [...plan.notKept, buildProcedureRoomLine()],
+    });
   }
   const isCut =
     command.isTruncated ||
@@ -299,9 +314,13 @@ const planCreate = (
       },
     ],
     lines: [...plan.lines, line],
-    notKept: isCut
-      ? [...plan.notKept, buildProcedureTruncatedLine(PROCEDURE_STEPS_MAX)]
-      : plan.notKept,
+    notKept: [
+      ...plan.notKept,
+      ...(isCut ? [buildProcedureTruncatedLine(PROCEDURE_STEPS_MAX)] : []),
+      ...laid.overflow.map((name) =>
+        buildProcedureGroupsLine(name, PROCEDURE_GROUPS_MAX),
+      ),
+    ],
   });
 };
 
@@ -318,7 +337,6 @@ const planRevise = (
   }
   if (live.version !== command.seenVersion) {
     return withPlan(plan, {
-      retry: true,
       notKept: [...plan.notKept, buildProcedureRacedLine(live.title)],
     });
   }
@@ -352,7 +370,11 @@ const planRevise = (
       notKept: [...plan.notKept, buildProcedureUnchangedLine(live.title)],
     });
   }
-  if (input.room < 1) return plan;
+  if (input.room < 1) {
+    return withPlan(plan, {
+      notKept: [...plan.notKept, buildProcedureRoomLine()],
+    });
+  }
   const summary = command.changeSummary.slice(0, PROCEDURE_SUMMARY_CAP);
   const line = buildProcedureChangedLine(title, summary);
   return withPlan(plan, {
@@ -377,6 +399,12 @@ const planRevise = (
       revisedEffect(live.id, live.version, line, title, live.title),
     ],
     lines: [...plan.lines, line],
+    notKept: [
+      ...plan.notKept,
+      ...laid.overflow.map((name) =>
+        buildProcedureGroupsLine(name, PROCEDURE_GROUPS_MAX),
+      ),
+    ],
   });
 };
 
@@ -387,6 +415,11 @@ export function planProcedureCommands(
   return input.commands.reduce<ProcedurePlan>((plan, command) => {
     const room = input.room - plan.effects.length;
     const step = { ...input, room };
+    if (command.kind === 'procedureExists') {
+      return withPlan(plan, {
+        notKept: [...plan.notKept, buildProcedureExistsLine(command.title)],
+      });
+    }
     return command.kind === 'createProcedure'
       ? planCreate(plan, command, step)
       : planRevise(plan, command, step);

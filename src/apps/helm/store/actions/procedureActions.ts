@@ -4,7 +4,7 @@ import {
   type DocumentData,
   getDoc,
   getDocFromCache,
-  getDocs,
+  getDocsFromServer,
   runTransaction,
   writeBatch,
 } from 'firebase/firestore';
@@ -313,7 +313,7 @@ export function restoreProcedureVersion(
   );
 }
 
-export type ProcedureRestore = 'restored' | 'exists';
+export type ProcedureRestore = 'restored' | 'exists' | 'offline';
 
 /** Deletes a procedure and its history. Undo sets every document back from what was read here, unless the procedure is back already. Needs a connection. */
 export async function deleteProcedure(uid: string, procedureId: string) {
@@ -321,12 +321,12 @@ export async function deleteProcedure(uid: string, procedureId: string) {
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data() as
     DocumentData | undefined;
   if (!raw) throw new Error('This is already gone.');
-  const versions = await getDocs(collection(ref, 'versions'));
+  const versions = await getDocsFromServer(collection(ref, 'versions'));
   const snapshot = versions.docs.map((entry) => ({
     ref: entry.ref,
     data: entry.data(),
   }));
-  await toChunks([...snapshot.map((entry) => entry.ref), ref]).reduce(
+  await toChunks([ref, ...snapshot.map((entry) => entry.ref)]).reduce(
     (chain, chunk) =>
       chain.then(() => {
         const batch = writeBatch(db);
@@ -337,6 +337,7 @@ export async function deleteProcedure(uid: string, procedureId: string) {
   );
   return {
     restore: async (): Promise<ProcedureRestore> => {
+      if (!navigator.onLine) return 'offline';
       if ((await getDoc(ref)).exists()) return 'exists';
       await toChunks([...snapshot, { ref, data: raw }]).reduce(
         (chain, chunk) =>

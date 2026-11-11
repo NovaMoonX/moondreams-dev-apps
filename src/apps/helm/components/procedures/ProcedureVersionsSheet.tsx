@@ -91,6 +91,7 @@ function ProcedureVersionsBody({
       newest={procedure.version}
       rows={versions && versions.map(toRow)}
       hasFailed={hasFailed}
+      canRestoreFirst
       undoHint={() => HELM_COPY.procedureUndoHint}
       lines={{
         changed: HELM_COPY.procedureRaced,

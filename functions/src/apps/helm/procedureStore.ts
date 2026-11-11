@@ -35,6 +35,7 @@ export interface LiveProcedure extends ProcedureWords {
   version: number;
   stepState: Record<string, ProcedureStepState>;
   groupOrder: string[];
+  sourceTaskId: string | null;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -112,6 +113,8 @@ export const openLiveProcedure = (
             : [],
           steps: toSteps(words.steps),
           groups: toGroups(words.groups),
+          sourceTaskId:
+            typeof data.sourceTaskId === 'string' ? data.sourceTaskId : null,
         }
       : null;
   } catch {

@@ -144,6 +144,27 @@ export const removeGroup = (
   ),
 });
 
+/** Puts a removed group back at its place with the steps it held. */
+export const restoreGroup = (
+  draft: ProcedureDraft,
+  group: DraftGroup,
+  at: number,
+  stepIds: string[],
+): ProcedureDraft =>
+  draft.groups.some((entry) => entry.id === group.id)
+    ? draft
+    : {
+        ...draft,
+        groups: [
+          ...draft.groups.slice(0, at),
+          group,
+          ...draft.groups.slice(at),
+        ],
+        steps: draft.steps.map((step) =>
+          stepIds.includes(step.id) ? { ...step, groupId: group.id } : step,
+        ),
+      };
+
 /** A step moved into another group goes to the end of it. */
 export const setStepGroup = (
   draft: ProcedureDraft,
@@ -249,15 +270,17 @@ export function summarizeEdit(
 ): string {
   const was = new Map(before.steps.map((step) => [step.id, step]));
   const is = new Map(after.steps.map((step) => [step.id, step]));
-  const added = after.steps.filter((step) => !was.has(step.id)).length;
-  const removed = before.steps.filter((step) => !is.has(step.id)).length;
-  const changed = after.steps.filter((step) => {
+  const addedSteps = after.steps.filter((step) => !was.has(step.id));
+  const removedSteps = before.steps.filter((step) => !is.has(step.id));
+  const changedSteps = after.steps.filter((step) => {
     const earlier = was.get(step.id);
     return (
       earlier !== undefined &&
       (earlier.text !== step.text || earlier.detail !== step.detail)
     );
-  }).length;
+  });
+  const namesOf = (steps: DraftStep[]) =>
+    steps.map((step) => step.text.trim()).filter((text) => text !== '');
   const kept = (draft: ProcedureDraft) =>
     orderedSteps(draft)
       .filter((step) => was.has(step.id) && is.has(step.id))
@@ -270,9 +293,30 @@ export function summarizeEdit(
     ...(before.title !== after.title
       ? [HELM_COPY.procedureSummaryRenamed]
       : []),
-    ...(added > 0 ? [HELM_COPY.procedureSummaryAdded(added)] : []),
-    ...(removed > 0 ? [HELM_COPY.procedureSummaryRemoved(removed)] : []),
-    ...(changed > 0 ? [HELM_COPY.procedureSummaryChanged(changed)] : []),
+    ...(addedSteps.length > 0
+      ? [
+          HELM_COPY.procedureSummaryAdded(
+            addedSteps.length,
+            namesOf(addedSteps),
+          ),
+        ]
+      : []),
+    ...(removedSteps.length > 0
+      ? [
+          HELM_COPY.procedureSummaryRemoved(
+            removedSteps.length,
+            namesOf(removedSteps),
+          ),
+        ]
+      : []),
+    ...(changedSteps.length > 0
+      ? [
+          HELM_COPY.procedureSummaryChanged(
+            changedSteps.length,
+            namesOf(changedSteps),
+          ),
+        ]
+      : []),
     ...(isReordered ? [HELM_COPY.procedureSummaryReordered] : []),
     ...(groupsOf(before) !== groupsOf(after) && !isReordered
       ? [HELM_COPY.procedureSummaryGroups]

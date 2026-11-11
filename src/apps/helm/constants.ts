@@ -253,6 +253,27 @@ const toTopicPhrase = (
       ? `1 change to ${name ?? 'a topic'}`
       : `${count} changes to topics`;
 
+const NAMED_STEPS_SHOWN = 2;
+const NAMED_STEP_CLIP = 24;
+
+const toStepNames = (names: string[]) => {
+  const clipped = names.map((name) =>
+    name.length > NAMED_STEP_CLIP
+      ? `${name.slice(0, NAMED_STEP_CLIP - 1).trimEnd()}…`
+      : name,
+  );
+  const shown = clipped.slice(0, NAMED_STEPS_SHOWN);
+  const more = clipped.length - shown.length;
+  return more > 0
+    ? `${shown.join(', ')} and ${more} more`
+    : shown.join(' and ');
+};
+
+const toStepsEdit = (verb: string, count: number, names: string[]) =>
+  names.length === 0
+    ? `You ${verb} ${count === 1 ? '1 step' : `${count} steps`}`
+    : `You ${verb} ${toStepNames(names)}`;
+
 const toProcedurePhrase = (count: number, name: string | null) =>
   count === 1
     ? `1 change to ${name ?? 'a procedure'}`
@@ -1887,13 +1908,14 @@ export const HELM_COPY = {
   proceduresTitle: 'Procedures',
   proceduresFailed: "Your procedures couldn't be opened.",
   proceduresEmpty: (assistant: string) =>
-    `No procedures yet. Ask ${assistant} for a routine, or turn a task's steps into one.`,
+    `No procedures yet. Write down a routine you repeat, ask ${assistant} for one, or turn a task's steps into one.`,
+  procedureMadeOn: (when: string) => `Made ${when}`,
   procedureNew: 'New procedure',
   procedureEditTitle: 'Change procedure',
   procedureStepCount: (count: number) =>
     count === 1 ? '1 step' : `${count} steps`,
-  procedureLine: (count: number) =>
-    `A procedure · ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureFacts: (count: number, madeBy: string) =>
+    `A procedure · ${count === 1 ? '1 step' : `${count} steps`} · ${madeBy}`,
   procedureChanged: (date: string) => `Changed ${date}`,
   procedureMadeBy: (assistant: string) => `Made by ${assistant}`,
   procedureMadeByYou: 'Made by you',
@@ -1904,7 +1926,7 @@ export const HELM_COPY = {
   procedureDelete: 'Delete',
   procedureDeleteTitle: (title: string) => `Delete ${title}?`,
   procedureDeleteConfirm: 'Delete this procedure? You can undo it right after.',
-  procedureDeleted: 'Procedure deleted',
+  procedureDeleted: (title: string) => `Deleted ${title}`,
   procedureDeletedBack: (title: string) => `${title} is back`,
   procedureDeleteFailed: "That wasn't deleted. Try again.",
   procedureUndoFailed: "That wasn't put back. Try again.",
@@ -1929,22 +1951,31 @@ export const HELM_COPY = {
   procedureMoveDown: 'Move down',
   procedureRemoveStep: 'Remove step',
   procedureRemoveGroup: 'Remove group',
+  procedureGroupActions: (name: string) => `Actions for ${name}`,
+  procedureGroupRemoved: (name: string) => `Removed ${name}`,
+  procedureStepActions: (position: number) => `Actions for step ${position}`,
+  procedureStepSheetTitle: 'Step',
+  procedureStepDetailRow: 'Detail',
+  procedureMoveToGroup: 'Move to group',
+  procedureStepDetailHeading: 'More about this step',
   procedureNeedsWords: 'Add a title and at least one step.',
   procedureFromTask: 'Make these steps a procedure',
+  procedureFromTaskOpen: (title: string) => `Open ${title}`,
   procedureFromTaskCut: 'Kept the first 60 steps',
   procedureFromTaskMade: (title: string) => `Made the procedure ${title}`,
   procedureNeedsConnection: 'Needs a connection to save',
   procedureRaced: 'Changed elsewhere · Reload',
+  procedureRacedClose: 'Changed elsewhere · Close and reopen',
   procedureGone: 'This procedure is gone.',
   procedureUntitled: 'A procedure',
   procedureSaved: 'Saved',
   procedureUndoHint: 'Puts the procedure back as it was before this.',
-  procedureSummaryAdded: (count: number) =>
-    `You added ${count === 1 ? '1 step' : `${count} steps`}`,
-  procedureSummaryRemoved: (count: number) =>
-    `You removed ${count === 1 ? '1 step' : `${count} steps`}`,
-  procedureSummaryChanged: (count: number) =>
-    `You changed ${count === 1 ? '1 step' : `${count} steps`}`,
+  procedureSummaryAdded: (count: number, names: string[] = []) =>
+    toStepsEdit('added', count, names),
+  procedureSummaryRemoved: (count: number, names: string[] = []) =>
+    toStepsEdit('removed', count, names),
+  procedureSummaryChanged: (count: number, names: string[] = []) =>
+    toStepsEdit('changed', count, names),
   procedureSummaryReordered: 'You reordered the steps',
   procedureSummaryRenamed: 'You changed the title',
   procedureSummaryGroups: 'You changed the groups',

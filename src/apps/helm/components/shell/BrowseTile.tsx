@@ -3,6 +3,7 @@ import {
   BookOpen,
   CalendarDays,
   CalendarHeart,
+  ClipboardList,
   FolderKanban,
   History,
   Inbox,
@@ -42,8 +43,8 @@ const VIEW_ENTRIES: Record<
   project: { label: HELM_COPY.projectsTitle, icon: FolderKanban },
   knowledge: { label: HELM_COPY.knowledgeTitle, icon: BookOpen },
   topic: { label: HELM_COPY.knowledgeTitle, icon: BookOpen },
-  procedures: { label: HELM_COPY.proceduresTitle, icon: ListChecks },
-  procedure: { label: HELM_COPY.proceduresTitle, icon: ListChecks },
+  procedures: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
+  procedure: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
 };
 

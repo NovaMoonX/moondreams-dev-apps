@@ -55,6 +55,8 @@ interface VersionsSheetProps {
   undoHint: (createdBy: 'person' | 'nomos') => string;
   /** Say it in the thing's own words where the generic line would name the wrong thing. */
   lines?: { changed: string; offline: string };
+  /** Lets the first version be put back once it is no longer the newest. */
+  canRestoreFirst?: boolean;
 }
 
 const ROW =
@@ -86,6 +88,7 @@ function VersionsBody({
   renderVersion,
   turnReasons = [],
   undoHint,
+  canRestoreFirst = false,
   lines,
 }: Omit<VersionsSheetProps, 'isOpen'>) {
   const { user } = useAuth();
@@ -162,7 +165,10 @@ function VersionsBody({
       ? executionsById.get(opened.executionId)
       : undefined;
   const turnId = turn && canUndo(turn) ? turn.id : null;
-  const canAct = canChange && !isFirst && !(isTurnRow && turnId === null);
+  const canAct =
+    canChange &&
+    !(isFirst && !(canRestoreFirst && !isNewest)) &&
+    !(isTurnRow && turnId === null);
 
   return (
     <DetailSheet

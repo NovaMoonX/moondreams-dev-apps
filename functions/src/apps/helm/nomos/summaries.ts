@@ -284,6 +284,16 @@ export const buildProcedureLostLine = (title: string) =>
 export const buildProcedureNoStepsLine = () =>
   'No steps to make a procedure from';
 
+/** "Packing for a work trip is already a procedure". */
+export const buildProcedureExistsLine = (title: string) =>
+  `${title} is already a procedure`;
+
+export const buildProcedureRoomLine = () =>
+  'Too much to save in one go · Ask again for the procedure';
+
+export const buildProcedureGroupsLine = (name: string, max: number) =>
+  `${name} wasn't kept as a group · ${max} groups at most`;
+
 export const buildProcedureGoneLine = () => 'That procedure is gone';
 
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */

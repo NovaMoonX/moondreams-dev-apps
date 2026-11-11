@@ -5,7 +5,7 @@ import {
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
@@ -26,7 +26,7 @@ import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelecto
 import { toProcedureMarkdown } from '@apps/helm/utils/procedureMarkdown';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 
-const { option } = DropdownMenuFactories;
+const { option, separator, custom } = DropdownMenuFactories;
 
 interface ProcedureScreenProps {
   procedureId: string | null;
@@ -35,7 +35,7 @@ interface ProcedureScreenProps {
   onHome: () => void;
 }
 
-/** One procedure: its steps in their groups, with a menu to change it, see its history, copy it as Markdown or delete it. */
+/** One procedure: its steps in their groups, with Edit under its title and a menu for its history, a Markdown copy and Delete. */
 function ProcedureScreen({
   procedureId,
   backLabel,
@@ -107,7 +107,9 @@ function ProcedureScreen({
             title:
               outcome === 'exists'
                 ? HELM_COPY.restoreExists
-                : HELM_COPY.procedureDeletedBack(title),
+                : outcome === 'offline'
+                  ? HELM_COPY.procedureNeedsConnection
+                  : HELM_COPY.procedureDeletedBack(title),
             type: 'info',
           }),
         (error: unknown) => {
@@ -133,7 +135,9 @@ function ProcedureScreen({
       const { restore } = await deleteProcedure(user.uid, procedure.id);
       onBack();
       addToast({
-        title: HELM_COPY.procedureDeleted,
+        title: HELM_COPY.procedureDeleted(
+          procedure.title || HELM_COPY.procedureUntitled,
+        ),
         type: 'success',
         action: {
           label: HELM_COPY.undo,
@@ -154,16 +158,24 @@ function ProcedureScreen({
   const menu = procedure
     ? {
         items: [
-          option({ label: HELM_COPY.procedureEdit, value: 'edit' }),
           option({ label: HELM_COPY.procedureHistory, value: 'history' }),
           option({ label: HELM_COPY.procedureCopy, value: 'copy' }),
-          option({ label: HELM_COPY.procedureDelete, value: 'delete' }),
+          separator(),
+          custom(() => (
+            <Button
+              type='button'
+              variant='tertiary'
+              className='text-destructive! hover:bg-destructive/10 w-full justify-start gap-2 rounded-none px-3 py-2 text-sm'
+              onClick={() => void remove()}
+            >
+              <Trash2 className='size-4' aria-hidden='true' />
+              {HELM_COPY.procedureDelete}
+            </Button>
+          )),
         ],
         onItemSelect: (value: string) => {
-          if (value === 'edit') setIsEditing(true);
-          else if (value === 'history') setIsHistoryOpen(true);
+          if (value === 'history') setIsHistoryOpen(true);
           else if (value === 'copy') void copy();
-          else if (value === 'delete') void remove();
         },
       }
     : undefined;
@@ -188,29 +200,41 @@ function ProcedureScreen({
               <h1 className='helm-serif text-[28px] leading-[34px] break-words'>
                 {procedure.title || HELM_COPY.procedureUntitled}
               </h1>
-              <p className='text-muted-foreground text-[13px]'>
-                {HELM_COPY.procedureLine(stepCount)}
-              </p>
               {sourceLine && (
                 <p className='text-muted-foreground text-[13px] break-words'>
-                  {sourceLine}
+                  {HELM_COPY.procedureFacts(stepCount, sourceLine)}
                 </p>
               )}
+            </div>
+            <div className='flex flex-wrap items-center gap-2'>
+              <Button
+                type='button'
+                variant='secondary'
+                size='sm'
+                onClick={() => setIsEditing(true)}
+              >
+                <Pencil className='size-4' aria-hidden='true' />
+                {HELM_COPY.procedureEdit}
+              </Button>
               {procedure.version > 1 && (
                 <Button
                   type='button'
                   variant='tertiary'
                   size='sm'
-                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0! py-0! text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  className="text-muted-foreground relative max-w-full min-w-0 gap-1 text-[13px] font-normal before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']"
                   onClick={() => setIsHistoryOpen(true)}
                 >
-                  <span className='block truncate'>
+                  <span className='truncate'>
                     {HELM_COPY.procedureChanged(
                       formatDateShort(
                         procedure.lastEditedAt ?? procedure.createdAt,
                       ),
                     )}
                   </span>
+                  <ChevronRight
+                    className='size-4 shrink-0'
+                    aria-hidden='true'
+                  />
                 </Button>
               )}
             </div>

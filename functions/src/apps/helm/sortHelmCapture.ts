@@ -1677,6 +1677,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
         ? [[focusedLive.id, focusedLive.title] as [string, string]]
         : []),
     ]);
+    const procedureTitleByTask = new Map<string, string>(
+      procedureRecords.flatMap((procedure): [string, string][] =>
+        procedure.sourceTaskId
+          ? [[procedure.sourceTaskId, procedure.title]]
+          : [],
+      ),
+    );
     const isProcedureSearchOffered =
       procedureRecords.length > 0 &&
       hasProcedureReviseCue(combined.text) &&
@@ -1838,6 +1845,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       focusedTopicId: focusedTopic?.id ?? null,
       procedureVersions,
       procedureNames,
+      procedureTitleByTask,
       focusedProcedureId: focusedLive?.id ?? null,
       focusedTaskId: screen?.focus?.id ?? null,
     };
@@ -1878,6 +1886,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     focusedTopicId,
     procedureVersions,
     procedureNames,
+    procedureTitleByTask,
     focusedProcedureId,
     focusedTaskId,
   } = result;
@@ -1905,6 +1914,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     procedures: context.procedures,
     procedureSteps: context.procedureSteps,
     procedureNames,
+    procedureTitleByTask,
     focusedProcedureId,
     focusedTaskId,
     procedureVersions,

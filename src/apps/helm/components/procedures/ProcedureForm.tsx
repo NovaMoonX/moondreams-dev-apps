@@ -2,14 +2,15 @@ import { useId, useState } from 'react';
 
 import {
   Button,
+  DropdownMenuFactories,
   Input,
-  Select,
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react';
+import { Ellipsis, Plus } from 'lucide-react';
 
-import FormSheet from '@/components/FormSheet';
+import EllipsisDropdown from '@/components/EllipsisDropdown';
+import FormScreen from '@/components/FormScreen';
 import LockedButton from '@/components/LockedButton';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import RevealChip from '@/components/RevealChip';
@@ -20,10 +21,10 @@ import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import {
   HELM_COPY,
   PROCEDURE_GROUP_NAME_CAP,
-  PROCEDURE_STEP_DETAIL_CAP,
   PROCEDURE_STEP_TEXT_CAP,
   PROCEDURE_TITLE_CAP,
 } from '@apps/helm/constants';
+import ProcedureStepSheet from '@apps/helm/components/procedures/ProcedureStepSheet';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   createProcedure,
@@ -33,16 +34,13 @@ import type { OpenProcedure } from '@apps/helm/types';
 import {
   addGroup,
   addStep,
-  canMoveStep,
   fromProcedure,
   isGroupsFull,
   isStepsFull,
-  moveStep,
   orderedSteps,
   removeGroup,
-  removeStep,
   renameGroup,
-  setStepGroup,
+  restoreGroup,
   toContent,
   updateStep,
   type DraftStep,
@@ -63,9 +61,9 @@ interface ProcedureFormProps extends Omit<ProcedureFormSheetProps, 'isOpen'> {
   onDirtyChange: (isDirty: boolean) => void;
 }
 
-const NO_GROUP = 'none';
-const ICON_BUTTON =
-  "relative size-9 min-w-9 shrink-0 p-0 before:absolute before:-inset-0.5 before:content-['']";
+const ICON_BUTTON = 'size-10 min-w-10 shrink-0 p-0';
+
+const { option } = DropdownMenuFactories;
 
 const startOf = (procedure: OpenProcedure | null): ProcedureDraft =>
   procedure
@@ -76,106 +74,63 @@ const startOf = (procedure: OpenProcedure | null): ProcedureDraft =>
         steps: [{ id: generateUuid(), text: '', detail: null, groupId: null }],
       };
 
-interface StepCardProps {
+interface StepRowProps {
   draft: ProcedureDraft;
   step: DraftStep;
+  position: number;
+  isNew: boolean;
   onChange: (next: ProcedureDraft) => void;
+  onOpenActions: (stepId: string) => void;
 }
 
-function StepCard({ draft, step, onChange }: StepCardProps) {
-  const [isDetailShown, setIsDetailShown] = useState(step.detail !== null);
-
+function StepRow({
+  draft,
+  step,
+  position,
+  isNew,
+  onChange,
+  onOpenActions,
+}: StepRowProps) {
   return (
-    <li className='helm-card space-y-2 p-3'>
-      <div className='flex items-start gap-1'>
-        <Input
+    <li className='flex items-start gap-1 py-1.5 pr-1 pl-3'>
+      <div className='min-w-0 flex-1 py-1'>
+        <Textarea
           aria-label={HELM_COPY.procedureStepField}
+          variant='outline'
+          rows={1}
+          autoExpand
+          className='w-full'
           value={step.text}
           maxLength={PROCEDURE_STEP_TEXT_CAP}
           placeholder={HELM_COPY.procedureStepPlaceholder}
-          onChange={(event) =>
-            onChange(updateStep(draft, step.id, { text: event.target.value }))
-          }
-        />
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={HELM_COPY.procedureMoveUp}
-          disabled={!canMoveStep(draft, step.id, 'up')}
-          className={ICON_BUTTON}
-          onClick={() => onChange(moveStep(draft, step.id, 'up'))}
-        >
-          <ChevronUp className='size-4' aria-hidden='true' />
-        </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={HELM_COPY.procedureMoveDown}
-          disabled={!canMoveStep(draft, step.id, 'down')}
-          className={ICON_BUTTON}
-          onClick={() => onChange(moveStep(draft, step.id, 'down'))}
-        >
-          <ChevronDown className='size-4' aria-hidden='true' />
-        </Button>
-        <Button
-          type='button'
-          variant='tertiary'
-          size='icon'
-          aria-label={HELM_COPY.procedureRemoveStep}
-          className={`${ICON_BUTTON} text-destructive!`}
-          onClick={() => onChange(removeStep(draft, step.id))}
-        >
-          <Trash2 className='size-4' aria-hidden='true' />
-        </Button>
-      </div>
-      {isDetailShown ? (
-        <Textarea
-          aria-label={HELM_COPY.procedureDetailField}
-          variant='outline'
-          rows={2}
-          autoExpand
-          value={step.detail ?? ''}
-          maxLength={PROCEDURE_STEP_DETAIL_CAP}
-          placeholder={HELM_COPY.procedureStepDetail}
+          autoFocus={isNew && canFocusFieldOnOpen()}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') event.preventDefault();
+          }}
           onChange={(event) =>
             onChange(
               updateStep(draft, step.id, {
-                detail: event.target.value === '' ? null : event.target.value,
+                text: event.target.value.replace(/\s*\n\s*/g, ' '),
               }),
             )
           }
         />
-      ) : (
-        <div className='flex flex-wrap gap-2'>
-          <RevealChip
-            icon={<Plus className='size-4' aria-hidden='true' />}
-            onClick={() => setIsDetailShown(true)}
-          >
-            {HELM_COPY.procedureStepDetail}
-          </RevealChip>
-        </div>
-      )}
-      {draft.groups.length > 0 && (
-        <Select
-          aria-label={HELM_COPY.procedurePutInGroup}
-          className='h-10 min-h-10'
-          options={[
-            { value: NO_GROUP, text: HELM_COPY.procedureNoGroup },
-            ...draft.groups.map((group) => ({
-              value: group.id,
-              text: group.name || HELM_COPY.procedureGroupFallback,
-            })),
-          ]}
-          value={step.groupId ?? NO_GROUP}
-          onChange={(value) =>
-            onChange(
-              setStepGroup(draft, step.id, value === NO_GROUP ? null : value),
-            )
-          }
-        />
-      )}
+        {step.detail && (
+          <p className='text-muted-foreground mt-1 truncate text-[13px]'>
+            {step.detail}
+          </p>
+        )}
+      </div>
+      <Button
+        type='button'
+        variant='tertiary'
+        size='icon'
+        aria-label={HELM_COPY.procedureStepActions(position)}
+        className={ICON_BUTTON}
+        onClick={() => onOpenActions(step.id)}
+      >
+        <Ellipsis className='size-4' aria-hidden='true' />
+      </Button>
     </li>
   );
 }
@@ -183,11 +138,11 @@ function StepCard({ draft, step, onChange }: StepCardProps) {
 function AddStepButton({
   draft,
   groupId,
-  onChange,
+  onAdd,
 }: {
   draft: ProcedureDraft;
   groupId: string | null;
-  onChange: (next: ProcedureDraft) => void;
+  onAdd: (groupId: string | null) => void;
 }) {
   return isStepsFull(draft) ? (
     <LockedButton
@@ -198,15 +153,14 @@ function AddStepButton({
       <p>{HELM_COPY.procedureStepsFull}</p>
     </LockedButton>
   ) : (
-    <Button
-      type='button'
-      variant='secondary'
-      size='sm'
-      onClick={() => onChange(addStep(draft, generateUuid(), groupId))}
-    >
-      <Plus className='size-4' aria-hidden='true' />
-      {HELM_COPY.procedureAddStep}
-    </Button>
+    <div className='flex flex-wrap gap-2'>
+      <RevealChip
+        icon={<Plus className='size-4' aria-hidden='true' />}
+        onClick={() => onAdd(groupId)}
+      >
+        {HELM_COPY.procedureAddStep}
+      </RevealChip>
+    </div>
   );
 }
 
@@ -224,12 +178,47 @@ function ProcedureFormFields({
   const [draft, setDraft] = useState(() => startOf(procedure));
   const [isBusy, setIsBusy] = useState(false);
   const [hasRaced, setHasRaced] = useState(false);
+  const [actionsStepId, setActionsStepId] = useState<string | null>(null);
+  const [newStepId, setNewStepId] = useState<string | null>(null);
   const content = toContent(draft);
   const isReady = content.title !== '' && content.steps.length > 0;
 
   const change = (next: ProcedureDraft) => {
     setDraft(next);
     onDirtyChange(true);
+  };
+
+  const edit = (apply: (current: ProcedureDraft) => ProcedureDraft) => {
+    setDraft(apply);
+    onDirtyChange(true);
+  };
+
+  const add = (groupId: string | null) => {
+    const id = generateUuid();
+    setNewStepId(id);
+    change(addStep(draft, id, groupId));
+  };
+
+  const dropGroup = (groupId: string) => {
+    const group = draft.groups.find((entry) => entry.id === groupId);
+    if (!group) return;
+    const at = draft.groups.indexOf(group);
+    const heldIds = draft.steps
+      .filter((step) => step.groupId === groupId)
+      .map((step) => step.id);
+    change(removeGroup(draft, groupId));
+    if (heldIds.length === 0) return;
+    addToast({
+      title: HELM_COPY.procedureGroupRemoved(
+        group.name || HELM_COPY.procedureGroupFallback,
+      ),
+      type: 'info',
+      action: {
+        label: HELM_COPY.undo,
+        onClick: () =>
+          edit((current) => restoreGroup(current, group, at, heldIds)),
+      },
+    });
   };
 
   const reportFailure = (error: unknown) => {
@@ -292,6 +281,8 @@ function ProcedureFormFields({
     })),
   ];
   const ordered = orderedSteps(draft);
+  const actionsStep =
+    draft.steps.find((step) => step.id === actionsStepId) ?? null;
 
   return (
     <div className='space-y-4'>
@@ -332,37 +323,38 @@ function ProcedureFormFields({
                     )
                   }
                 />
-                <Button
-                  type='button'
+                <EllipsisDropdown
                   variant='tertiary'
-                  size='icon'
-                  aria-label={HELM_COPY.procedureRemoveGroup}
-                  className={`${ICON_BUTTON} text-destructive!`}
-                  onClick={() =>
-                    change(removeGroup(draft, block.groupId as string))
-                  }
-                >
-                  <Trash2 className='size-4' aria-hidden='true' />
-                </Button>
+                  ariaLabel={HELM_COPY.procedureGroupActions(
+                    block.name || HELM_COPY.procedureGroupFallback,
+                  )}
+                  className={ICON_BUTTON}
+                  items={[
+                    option({
+                      label: HELM_COPY.procedureRemoveGroup,
+                      value: 'remove',
+                    }),
+                  ]}
+                  onItemSelect={() => dropGroup(block.groupId as string)}
+                />
               </div>
             )}
             {steps.length > 0 && (
-              <ul className='space-y-2'>
+              <ul className='helm-card divide-border divide-y overflow-hidden'>
                 {steps.map((step) => (
-                  <StepCard
+                  <StepRow
                     key={step.id}
                     draft={draft}
                     step={step}
+                    position={ordered.indexOf(step) + 1}
+                    isNew={step.id === newStepId}
                     onChange={change}
+                    onOpenActions={setActionsStepId}
                   />
                 ))}
               </ul>
             )}
-            <AddStepButton
-              draft={draft}
-              groupId={block.groupId}
-              onChange={change}
-            />
+            <AddStepButton draft={draft} groupId={block.groupId} onAdd={add} />
           </section>
         );
       })}
@@ -385,8 +377,8 @@ function ProcedureFormFields({
         )}
       </div>
       {hasRaced && (
-        <Button type='button' variant='tertiary' onClick={onClose}>
-          {HELM_COPY.procedureRaced}
+        <Button type='button' variant='tertiary' onClick={requestClose}>
+          {HELM_COPY.procedureRacedClose}
         </Button>
       )}
       <ModalFooterActions
@@ -412,11 +404,19 @@ function ProcedureFormFields({
           </Button>
         }
       />
+      {actionsStep && (
+        <ProcedureStepSheet
+          draft={draft}
+          step={actionsStep}
+          onChange={change}
+          onClose={() => setActionsStepId(null)}
+        />
+      )}
     </div>
   );
 }
 
-/** Make a procedure or change one: a title, steps in groups the person names, each step movable up and down, up to 60 steps. */
+/** Make a procedure or change one: a title, steps in groups the person names, each step's own menu moving, detailing or removing it, up to 60 steps. */
 function ProcedureForm({
   isOpen,
   onClose,
@@ -431,7 +431,7 @@ function ProcedureForm({
   const requestClose = useDiscardGuard({ isDirty, onClose: close });
 
   return (
-    <FormSheet
+    <FormScreen
       isOpen={isOpen}
       onClose={requestClose}
       title={procedure ? HELM_COPY.procedureEditTitle : HELM_COPY.procedureNew}
@@ -445,7 +445,7 @@ function ProcedureForm({
           onDirtyChange={setIsDirty}
         />
       )}
-    </FormSheet>
+    </FormScreen>
   );
 }
 

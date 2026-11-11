@@ -7,12 +7,14 @@ import {
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ListChecks } from 'lucide-react';
+import { ClipboardList } from 'lucide-react';
 
+import ActionRow from '@/components/ActionRow';
 import BackLink from '@/components/BackLink';
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
 import TickMark from '@/components/TickMark';
+import { useAppSelector } from '@/store';
 import { HELM_COPY, STEP_LIMIT, TASK_TITLE_CAP } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { createProcedureFromTask } from '@apps/helm/store/actions/procedureActions';
@@ -20,6 +22,8 @@ import {
   moveTaskStep,
   tickTaskStep,
 } from '@apps/helm/store/actions/taskActions';
+import { selectProcedureFromTask } from '@apps/helm/store/selectors/procedureSelectors';
+import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
 import {
   getOrderedSteps,
@@ -81,6 +85,7 @@ function TaskSteps({
   const [isAdding, setIsAdding] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [isMakingProcedure, setIsMakingProcedure] = useState(false);
+  const madeProcedure = useAppSelector(selectProcedureFromTask(task.id));
 
   const reportWords = (outcome: WordsOutcome) => {
     if (outcome === 'saved' || outcome === 'missing') return;
@@ -238,18 +243,27 @@ function TaskSteps({
           })}
         </ul>
       )}
-      {steps.length >= 2 && (
-        <Button
-          type='button'
-          variant='tertiary'
-          size='sm'
-          className="text-muted-foreground relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-          loading={isMakingProcedure}
-          onClick={() => void makeProcedure()}
-        >
-          <ListChecks className='size-4' aria-hidden='true' />
-          {HELM_COPY.procedureFromTask}
-        </Button>
+      {madeProcedure ? (
+        <ActionRow
+          icon={<ClipboardList aria-hidden='true' />}
+          label={HELM_COPY.procedureFromTaskOpen(
+            madeProcedure.title || HELM_COPY.procedureUntitled,
+          )}
+          subtitle={HELM_COPY.procedureStepCount(
+            countSteps(groupSteps(madeProcedure)),
+          )}
+          hasChevron
+          onClick={() => onOpenProcedure(madeProcedure.id)}
+        />
+      ) : (
+        steps.length >= 2 && (
+          <ActionRow
+            icon={<ClipboardList aria-hidden='true' />}
+            label={HELM_COPY.procedureFromTask}
+            isDisabled={isMakingProcedure}
+            onClick={() => void makeProcedure()}
+          />
+        )
       )}
       {steps.length >= STEP_LIMIT ? (
         <p className='text-muted-foreground text-sm'>{HELM_COPY.stepsFull}</p>

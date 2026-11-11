@@ -989,9 +989,8 @@ export function planUndo(input: {
       isProcedureDoc(docId) &&
       (outcome.kind === 'versionBack' || outcome.kind === 'deleted'),
   );
-  const procedureCount = new Set(
-    procedureChanges.map(({ outcome }) => outcome.title),
-  ).size;
+  const procedureCount = new Set(procedureChanges.map(({ docId }) => docId))
+    .size;
   const procedureNames = [
     ...new Set(
       procedureChanges.flatMap(({ docId }) => {

@@ -767,28 +767,49 @@ export function buildHelmTools(scope: HelmToolScope) {
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, MAX_PROCEDURE_RESULTS);
-      return {
-        procedures: found.map(({ procedure, blocks }) => {
-          procedureRead.versions.set(procedure.id, procedure.version);
-          procedureRead.names.set(procedure.id, procedure.title);
-          return {
-            procedure: procedureRead.procedures.add(procedure.id),
-            title: procedure.title,
-            version: procedure.version,
-            groups: blocks.flatMap((block) =>
-              block.name === null ? [] : [block.name],
-            ),
-            steps: blocks.flatMap((block) =>
-              block.steps.map((step) => ({
-                step: procedureRead.steps.add(step.id),
-                text: step.text,
-                detail: step.detail,
-                group: block.name,
-              })),
-            ),
-          };
-        }),
-      };
+      const shape = (
+        list: typeof found,
+        alias: {
+          procedure: (id: string) => string;
+          step: (id: string) => string;
+        },
+      ) => ({
+        procedures: list.map(({ procedure, blocks }) => ({
+          procedure: alias.procedure(procedure.id),
+          title: procedure.title,
+          version: procedure.version,
+          groups: blocks.flatMap((block) =>
+            block.name === null ? [] : [block.name],
+          ),
+          steps: blocks.flatMap((block) =>
+            block.steps.map((step) => ({
+              step: alias.step(step.id),
+              text: step.text,
+              detail: step.detail,
+              group: block.name,
+            })),
+          ),
+        })),
+      });
+      const sizeOf = (count: number) =>
+        JSON.stringify(
+          shape(found.slice(0, count), {
+            procedure: () => 'pr99999',
+            step: () => 'ps99999',
+          }),
+        ).replace(/</g, '\\u003c').length;
+      const count = Array.from({ length: found.length + 1 }, (_, n) => n)
+        .reverse()
+        .find((n) => n === 0 || sizeOf(n) <= MAX_PROCEDURE_READ_CHARS - 40);
+      const kept = found.slice(0, count ?? 0);
+      kept.forEach(({ procedure }) => {
+        procedureRead.versions.set(procedure.id, procedure.version);
+        procedureRead.names.set(procedure.id, procedure.title);
+      });
+      return shape(kept, {
+        procedure: procedureRead.procedures.add,
+        step: procedureRead.steps.add,
+      });
     },
   };
 
