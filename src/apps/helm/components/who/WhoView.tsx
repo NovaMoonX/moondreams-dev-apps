@@ -9,6 +9,7 @@ import SearchInput from '@/components/SearchInput';
 import SectionDivider from '@/components/SectionDivider';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useKeptScroll } from '@/hooks/useKeptScroll';
 import { useAppSelector } from '@/store';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import InferredFacts from '@apps/helm/components/who/InferredFacts';
@@ -65,6 +66,8 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
   const isNoMatch =
     isSearching &&
     groups.close.length + groups.regular.length + groups.others.length === 0;
+
+  useKeptScroll(isLoaded);
 
   useScreenContext('people', null, [], {
     ask: HELM_COPY.askPeople(count),

@@ -1203,6 +1203,8 @@ Production build, a 390×844 viewport, CPU throttled 4× (CDP), the emulators, M
 | The hourly sync, Morgan's stale grants plus Alex's | | 43 s, about 1,850 writes in 48 batches |
 | The hourly sync with nothing changed | | 4.3 s, 17 writes |
 
+People is built in chunks of 40 rows, so it is rebuilt when the person comes Back from someone's page; `useKeptScroll` puts it back on the row they left (measured: 12,000 px before the tap, 12,000 px after Back).
+
 A first open is bound by the listeners and the sealed reads, not by rendering, so the fixes leave it as it was. Today is the one switch near 300 ms: it draws the agenda, the plan and the day's dates together, and its slowest run of six was 303 ms. The open tasks arrive about 3.5 s after the home, behind the heavier who and synced listeners (a follow-up: start the listeners Today needs first).
 
 ## 16. Backend surface
