@@ -1982,6 +1982,22 @@ test('a started run the person ticked since is kept', () => {
   assert.deepEqual(result.kept, ['Packing for a work trip']);
 });
 
+test('a started run is deleted once a later tick on it was undone', () => {
+  const result = asWrite(
+    plan(execution([runStarted]), [runTarget(ticked(null, EARLIER))]),
+  );
+  assert.deepEqual(result.deletes, [
+    { docId: 'run1', collection: 'procedureRuns' },
+  ]);
+});
+
+test('a started run with a step ticked by hand is kept whatever its edit stamp', () => {
+  const result = asRefused(
+    plan(execution([runStarted]), [runTarget(ticked(NOW, EARLIER))]),
+  );
+  assert.deepEqual(result.kept, ['Packing for a work trip']);
+});
+
 test('a tick by voice is unticked while it is still the way it was left', () => {
   const result = asWrite(
     plan(execution([runTicked]), [runTarget(ticked(EARLIER))]),

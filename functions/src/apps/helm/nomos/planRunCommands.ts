@@ -48,8 +48,10 @@ export interface RunPlanInput {
   liveProcedures: ReadonlyMap<string, LiveProcedure | null>;
   /** The runs the tick commands name, opened as the transaction read them; null when gone. */
   liveRuns: ReadonlyMap<string, LiveRun | null>;
-  /** Every run not yet finished, for the already-running check. */
+  /** The unfinished runs of the procedures the start commands name, for the already-running check. */
   openRuns: readonly LiveRun[];
+  /** The procedures the tick commands' runs were made from that no longer exist. */
+  goneProcedureIds: ReadonlySet<string>;
   /** The active projects a run may be for. */
   projects: ProjectPoolEntry[];
   timeZone: string;
@@ -256,6 +258,7 @@ const planTicks = (
     if (!live || live.finishedAt !== null) {
       return withPlan(acc, { notKept: [...acc.notKept, buildRunGoneLine()] });
     }
+    if (input.goneProcedureIds.has(live.procedureId)) return acc;
     const fresh = stepIds.filter(
       (stepId) => live.stepState[stepId]?.doneAt === null,
     );
@@ -271,8 +274,7 @@ const planTicks = (
     }
     const line = buildRunTickedLine(
       live.title,
-      fresh.length,
-      live.steps[fresh[0]]?.text ?? '',
+      fresh.map((stepId) => live.steps[stepId]?.text ?? ''),
     );
     return withPlan(acc, {
       ticks: [...acc.ticks, { runId, stepIds: fresh }],
@@ -303,7 +305,6 @@ const planTicks = (
     });
   }, plan);
 
-/** Settles the turn's run commands against what the transaction read: a run starts once for a procedure and what it is for, only a step not yet done is ticked, and a finished or missing run is never touched. Pure. */
 export function planRunCommands(input: RunPlanInput): RunPlan {
   const started = input.commands
     .filter(

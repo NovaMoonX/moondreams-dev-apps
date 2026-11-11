@@ -694,8 +694,10 @@ interface PlanInput {
   runCommands?: RunCommand[];
   /** The runs the tick commands name, opened as the transaction read them; null when gone. */
   liveRuns?: Map<string, LiveRun | null>;
-  /** Every run not yet finished, as the transaction read them. */
+  /** The unfinished runs of the procedures the start commands name, as the transaction read them. */
   openRuns?: LiveRun[];
+  /** The procedures the named runs were made from that no longer exist. */
+  goneProcedureIds?: ReadonlySet<string>;
   /** When the capture was said, which a note's mark in a document carries. */
   capturedAt?: number;
   media?: MediaInput;
@@ -1652,6 +1654,7 @@ export function planWrites(input: PlanInput): WritePlan {
     liveProcedures: input.liveProcedures ?? new Map(),
     liveRuns: input.liveRuns ?? new Map(),
     openRuns: input.openRuns ?? [],
+    goneProcedureIds: input.goneProcedureIds ?? new Set(),
     projects: (input.existingProjects ?? []).map(({ id, name }) => ({
       id,
       name,

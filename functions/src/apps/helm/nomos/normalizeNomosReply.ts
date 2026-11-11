@@ -9,6 +9,7 @@ import {
   hasProcedureReviseCue,
   hasReviseCue,
   hasRunStartCue,
+  hasTickCue,
 } from './route.js';
 import { MEDIA_CAPTION_CAP } from '../media/mediaCaps.js';
 import {
@@ -1450,6 +1451,7 @@ export type RunDrop =
   | 'run-start-unasked'
   | 'run-start-unknown'
   | 'run-start-extra'
+  | 'run-start-itinerary'
   | 'run-tick-unasked'
   | 'run-tick-unknown';
 
@@ -1468,7 +1470,6 @@ const toRunStep = (id: string | null) => {
     : { runId: id.slice(0, at), stepId: id.slice(at + 1) };
 };
 
-/** The run commands of a reply, each checked against the turn: a run starts only on words that ask to begin one, for a procedure the model was shown, once per turn; steps are ticked only on words of the turn, and only ones the context listed as undone, at most `MAX_TICKS_PER_TURN`. Every drop is named. */
 const readRunCommands = (
   items: Record<string, unknown>[],
   context: RunReadContext,
@@ -1509,6 +1510,8 @@ const readRunCommands = (
             typeof item.aboutAlias === 'string'
               ? (context.synced?.get(item.aboutAlias) ?? null)
               : null;
+          if (about?.category === 'itinerary')
+            return drop('run-start-itinerary');
           const isPlace = about?.kind === 'trip' || about?.kind === 'event';
           return keep({
             kind: 'startRun',
@@ -1518,7 +1521,7 @@ const readRunCommands = (
             requestQuote: quote,
           });
         }
-        if (!isQuoted) return drop('run-tick-unasked');
+        if (!isQuoted || !hasTickCue(quote)) return drop('run-tick-unasked');
         const taken = acc.commands.reduce(
           (total, command) =>
             total + (command.kind === 'tickRun' ? command.steps.length : 0),

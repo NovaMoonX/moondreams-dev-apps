@@ -8,6 +8,7 @@ export interface SyncedCopy {
   connectorId: string;
   accountId: string;
   kind: string;
+  category: string | null;
   title: string;
   subtitle: string | null;
   startAt: number | null;
@@ -107,6 +108,7 @@ export function openSyncedCopy(
       connectorId: typeof data.connectorId === 'string' ? data.connectorId : '',
       accountId: typeof data.accountId === 'string' ? data.accountId : '',
       kind: typeof data.kind === 'string' ? data.kind : '',
+      category: typeof data.category === 'string' ? data.category : null,
       title: opened.title,
       subtitle:
         typeof opened.subtitle === 'string' && opened.subtitle

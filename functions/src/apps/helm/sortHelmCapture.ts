@@ -70,7 +70,8 @@ import {
 import {
   openLiveRun,
   openRunDocs,
-  openRunsQuery,
+  procedureOpenRunsQuery,
+  readLiveProcedureIds,
   readOpenRuns,
   toContextRun,
 } from './runStore.js';
@@ -1616,7 +1617,12 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               key,
               sanitizeScreen(capture.screen)?.procedureId ?? null,
             ),
-            readOpenRuns(firestore, base, key),
+            readOpenRuns(
+              firestore,
+              base,
+              key,
+              sanitizeScreen(capture.screen)?.runId ?? null,
+            ),
           ]);
     const screenRunId = sanitizeScreen(capture.screen)?.runId ?? null;
     const contextRuns = [...openRunRecords]
@@ -2320,7 +2326,7 @@ async function writeResult(
       procedureSnaps,
       procedureTaskSnaps,
       runSnaps,
-      openRunsSnap,
+      openRunsSnaps,
       ...targetSnaps
     ] = await Promise.all([
       transaction.get(captureRef),
@@ -2386,9 +2392,11 @@ async function writeResult(
           transaction.get(firestore.doc(`${base}/procedureRuns/${id}`)),
         ),
       ),
-      runProcedureIds.length > 0
-        ? transaction.get(openRunsQuery(firestore, base))
-        : Promise.resolve(null),
+      Promise.all(
+        runProcedureIds.map((id) =>
+          transaction.get(procedureOpenRunsQuery(firestore, base, id)),
+        ),
+      ),
       ...targetIds.map((id) =>
         transaction.get(firestore.doc(`${tasksPath}/${id}`)),
       ),
@@ -2677,6 +2685,18 @@ async function writeResult(
         return [snapshot.id, data ? openLiveRun(key, snapshot.id, data) : null];
       }),
     );
+    const tickedProcedureIds = [...liveRuns.values()].flatMap((run) =>
+      run ? [run.procedureId] : [],
+    );
+    const stillThere = await readLiveProcedureIds(
+      firestore,
+      base,
+      tickedProcedureIds,
+      (refs) => transaction.getAll(...refs),
+    );
+    const goneProcedureIds = new Set(
+      tickedProcedureIds.filter((id) => !stillThere.has(id)),
+    );
     const procedureTasks = new Map(
       procedureTaskSnaps.map((snapshot) => {
         const data = snapshot.data();
@@ -2695,7 +2715,11 @@ async function writeResult(
       procedureTasks,
       runCommands: isStale ? [] : runCommands,
       liveRuns,
-      openRuns: openRunDocs(key, openRunsSnap?.docs ?? []),
+      openRuns: openRunDocs(
+        key,
+        openRunsSnaps.flatMap((snapshot) => snapshot.docs),
+      ),
+      goneProcedureIds,
       liveTopics,
       topicTree,
       capturedAt: capture.createdAt,

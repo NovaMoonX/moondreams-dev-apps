@@ -27,7 +27,10 @@ import {
   planRunCommands,
   type RunPlanInput,
 } from '../../functions/src/apps/helm/nomos/planRunCommands.ts';
-import { hasRunStartCue } from '../../functions/src/apps/helm/nomos/route.ts';
+import {
+  hasRunStartCue,
+  hasTickCue,
+} from '../../functions/src/apps/helm/nomos/route.ts';
 import { sanitizeScreen } from '../../functions/src/apps/helm/nomos/sanitizeScreen.ts';
 import { describeRunChanges } from '../../functions/src/apps/helm/nomos/summaries.ts';
 import type { LiveProcedure } from '../../functions/src/apps/helm/procedureStore.ts';
@@ -59,6 +62,7 @@ const trip: SyncedCopy = {
   connectorId: 'app:waypoint',
   accountId: 'site',
   kind: 'trip',
+  category: null,
   title: 'Pacific Northwest Weekend',
   subtitle: null,
   startAt: Date.UTC(2026, 5, 20),
@@ -75,6 +79,12 @@ const timedEvent: SyncedCopy = {
   startAt: Date.UTC(2026, 5, 20, 3, 30),
   endAt: Date.UTC(2026, 5, 20, 8),
   isAllDay: false,
+};
+const stay: SyncedCopy = {
+  ...timedEvent,
+  id: 'stay-1',
+  category: 'itinerary',
+  title: 'Hotel Lucia',
 };
 const shared: SyncedCopy = { ...trip, id: 'task-copy', kind: 'task' };
 
@@ -150,7 +160,7 @@ const norm = (text: string, items: Record<string, unknown>[]) => {
   const runSteps = createAliasBook('rs');
   ['run-1:b', 'run-1:c', 'run-2:z'].forEach((id) => runSteps.add(id));
   const synced = createSyncedBook();
-  [trip, timedEvent, shared].forEach((copy) => synced.add(copy));
+  [trip, timedEvent, shared, stay].forEach((copy) => synced.add(copy));
   return normalizeNomosReply(
     { commands: items, mentions: [], places: [] },
     {
@@ -167,6 +177,14 @@ const norm = (text: string, items: Record<string, unknown>[]) => {
 assert.ok(hasRunStartCue('Start packing'));
 assert.ok(hasRunStartCue('let us begin the checklist'));
 assert.ok(!hasRunStartCue('the restart button'));
+
+assert.ok(hasTickCue('packed the charger'));
+assert.ok(hasTickCue('Done with the shirts'));
+assert.ok(!hasTickCue('I still need to buy the phone charger'));
+assert.ok(!hasTickCue("haven't packed the charger"));
+assert.ok(!hasTickCue('have not packed the charger'));
+assert.ok(!hasTickCue('forgot to pack the charger'));
+assert.ok(!hasTickCue('the charger'));
 
 const started = norm('Start packing for the weekend', [startRow()]);
 assert.deepEqual(started.runDropped, []);
@@ -204,6 +222,11 @@ const forEvent = norm('Start packing for the weekend', [
   startRow({ aboutAlias: 'e1' }),
 ]).runCommands[0] as StartRunCommand;
 assert.equal(forEvent.about?.id, 'event-1');
+assert.deepEqual(
+  norm('Start packing for the weekend', [startRow({ aboutAlias: 'e2' })])
+    .runDropped,
+  ['run-start-itinerary'],
+);
 const forTask = norm('Start packing for the weekend', [
   startRow({ aboutAlias: 's2', projectRef: '  Move  ' }),
 ]).runCommands[0] as StartRunCommand;
@@ -231,6 +254,15 @@ assert.deepEqual(
   norm('Done with the shirts', [tickRow({ runStepAliases: null })]).runDropped,
   ['run-tick-unknown'],
 );
+const tickQuoteAlias = (text: string) =>
+  norm(text, [tickRow({ requestQuote: text })]).runDropped;
+assert.deepEqual(tickQuoteAlias('I still need to buy the phone charger'), [
+  'run-tick-unasked',
+]);
+assert.deepEqual(tickQuoteAlias("haven't packed the charger"), [
+  'run-tick-unasked',
+]);
+assert.deepEqual(tickQuoteAlias('packed the charger'), []);
 const twice = norm('Done with the shirts', [
   tickRow({ runStepAliases: ['rs1', 'rs1', 'rs2', 'rs3'] }),
 ]).runCommands[0] as TickRunCommand;
@@ -276,6 +308,7 @@ const input = (
   liveProcedures: new Map([['proc-1', liveProcedure()]]),
   liveRuns: new Map(),
   openRuns: [],
+  goneProcedureIds: new Set(),
   projects: [{ id: 'project-1', name: 'Move' }],
   timeZone: 'America/Los_Angeles',
   captureId: 'cap-1',
@@ -470,12 +503,29 @@ const several = planRunCommands(
 );
 assert.equal(several.effects.length, 1);
 assert.deepEqual(several.ticks[0].stepIds, ['b', 'd']);
-assert.deepEqual(several.lines, ['Ticked 2 steps on Packing for a work trip']);
+assert.deepEqual(several.lines, [
+  'Ticked Shirts and Phone charger on Packing for a work trip',
+]);
 assert.deepEqual(Object.keys(several.effects[0].effect.written).sort(), [
   'sealed.title',
   'stepState.b.doneAt',
   'stepState.d.doneAt',
 ]);
+const three = planRunCommands(
+  input([tick('run-1:b', 'run-1:c', 'run-1:d')], withRun),
+);
+assert.deepEqual(three.lines, [
+  'Ticked Shirts, Trousers and 1 more on Packing for a work trip',
+]);
+const orphaned = planRunCommands(
+  input([tick('run-1:b')], {
+    ...withRun,
+    goneProcedureIds: new Set(['proc-1']),
+  }),
+);
+assert.equal(orphaned.ticks.length, 0);
+assert.deepEqual(orphaned.lines, []);
+assert.deepEqual(orphaned.notKept, []);
 const already = planRunCommands(input([tick('run-1:a')], withRun));
 assert.equal(already.ticks.length, 0);
 assert.deepEqual(already.notKept, ['Already ticked']);

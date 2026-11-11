@@ -66,6 +66,7 @@ const COPY: SyncedCopy = {
   connectorId: 'app:pinch',
   accountId: 'site',
   kind: 'event',
+  category: null,
   title: 'Cake tasting',
   subtitle: null,
   startAt: Date.UTC(2026, 10, 13, 19),

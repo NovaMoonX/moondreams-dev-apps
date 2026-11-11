@@ -1,5 +1,11 @@
 import { logger } from 'firebase-functions/v2';
-import type { DocumentData, Firestore, Query } from 'firebase-admin/firestore';
+import type {
+  DocumentData,
+  DocumentReference,
+  DocumentSnapshot,
+  Firestore,
+  Query,
+} from 'firebase-admin/firestore';
 
 import type { SealedPayload } from '../../appKeys/seal.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
@@ -7,7 +13,7 @@ import { toGroups, toSteps, type ProcedureWords } from './procedureStore.js';
 import type { ContextRun } from './nomos/buildContext.js';
 import { flattenSteps, groupSteps } from './stepGroups.js';
 
-const OPEN_RUNS_READ = 20;
+const OPEN_RUNS_READ = 50;
 
 export interface RunStepState {
   order: number;
@@ -130,14 +136,60 @@ export const openRunDocs = (
     })
     .sort((a, b) => b.startedAt - a.startedAt);
 
-/** The person's open runs, opened, for the model to know which exist. A failed read is logged and leaves the turn without them. */
+/** The open runs of one procedure: two equalities, so no composite index. */
+export const procedureOpenRunsQuery = (
+  firestore: Firestore,
+  base: string,
+  procedureId: string,
+): Query =>
+  firestore
+    .collection(`${base}/procedureRuns`)
+    .where('procedureId', '==', procedureId)
+    .where('finishedAt', '==', null);
+
+/** The ids among `procedureIds` that still have a procedure. */
+export async function readLiveProcedureIds(
+  firestore: Firestore,
+  base: string,
+  procedureIds: string[],
+  read: (refs: DocumentReference[]) => Promise<DocumentSnapshot[]> = (refs) =>
+    firestore.getAll(...refs),
+): Promise<Set<string>> {
+  const ids = [...new Set(procedureIds)];
+  const snaps =
+    ids.length === 0
+      ? []
+      : await read(ids.map((id) => firestore.doc(`${base}/procedures/${id}`)));
+  return new Set(snaps.filter((snap) => snap.exists).map((snap) => snap.id));
+}
+
+/** The person's open runs, opened, for the model to know which exist; the run on screen is always among them, and a run whose procedure is gone is left out. A failed read is logged and leaves the turn without them. */
 export async function readOpenRuns(
   firestore: Firestore,
   base: string,
   key: HelmKey,
+  screenRunId: string | null,
 ): Promise<LiveRun[]> {
   try {
-    return openRunDocs(key, (await openRunsQuery(firestore, base).get()).docs);
+    const [snapshot, screenSnap] = await Promise.all([
+      openRunsQuery(firestore, base).get(),
+      screenRunId
+        ? firestore.doc(`${base}/procedureRuns/${screenRunId}`).get()
+        : Promise.resolve(null),
+    ]);
+    const runs = openRunDocs(key, [
+      ...snapshot.docs,
+      ...(screenSnap?.exists &&
+      !snapshot.docs.some((doc) => doc.id === screenSnap.id)
+        ? [{ id: screenSnap.id, data: () => screenSnap.data() ?? {} }]
+        : []),
+    ]).filter((run) => run.finishedAt === null);
+    const live = await readLiveProcedureIds(
+      firestore,
+      base,
+      runs.map((run) => run.procedureId),
+    );
+    return runs.filter((run) => live.has(run.procedureId));
   } catch (error) {
     logger.warn('helm.sort.runsUnreadable', {
       cause: error instanceof Error ? error.name : 'error',

@@ -356,6 +356,20 @@ const planRecreate = (
 const isKnowledge = (name: EffectRef['collection'] | undefined) =>
   name === 'notes' || name === 'topics';
 
+const isRunUntouched = (data: Record<string, unknown>) => {
+  const steps =
+    typeof data.stepState === 'object' && data.stepState !== null
+      ? Object.values(data.stepState as Record<string, unknown>)
+      : [];
+  return (
+    (data.finishedAt ?? null) === null &&
+    steps.every((step) => {
+      const state = step as { doneAt?: unknown; isExtra?: unknown };
+      return (state.doneAt ?? null) === null && state.isExtra !== true;
+    })
+  );
+};
+
 const planRecord = (
   target: UndoTarget,
   entries: { ref: EffectRef; effect: ExecutionEffect }[],
@@ -402,7 +416,10 @@ const planRecord = (
     if (updated.hasKeptEntry) return { kind: 'kept', title };
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
-      target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt;
+      create.ref.collection === 'procedureRuns'
+        ? isRunUntouched(target.data)
+        : target.data.lastEditedAt === null ||
+          target.data.lastEditedAt === madeAt;
     return isUntouched
       ? {
           kind: 'deleted',

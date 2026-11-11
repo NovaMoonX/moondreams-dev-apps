@@ -313,15 +313,15 @@ export const describeRunChanges = (started: number, ticked: number) =>
 export const buildRunStartedLine = (title: string, label: string | null) =>
   label === null ? `Started ${title}` : `Started ${title} for ${label}`;
 
-/** "Ticked Phone charger on Packing for a work trip", or "Ticked 3 steps on …". */
-export const buildRunTickedLine = (
-  title: string,
-  count: number,
-  stepText: string,
-) =>
-  count === 1
-    ? `Ticked ${stepText} on ${title}`
-    : `Ticked ${count} steps on ${title}`;
+/** "Ticked Phone charger on Packing for a work trip", "Ticked Phone charger and Passport on …", "Ticked Phone charger, Passport and 1 more on …". */
+export const buildRunTickedLine = (title: string, stepTexts: string[]) => {
+  const [first = '', second = ''] = stepTexts;
+  const named =
+    stepTexts.length <= 2
+      ? stepTexts.join(' and ')
+      : `${first}, ${second} and ${stepTexts.length - 2} more`;
+  return `Ticked ${named} on ${title}`;
+};
 
 /** "Packing for a work trip is already running for Pacific Northwest Weekend". */
 export const buildRunExistsLine = (title: string, label: string | null) =>
