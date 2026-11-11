@@ -1,6 +1,7 @@
 import type { DocumentData, Firestore } from 'firebase-admin/firestore';
 
 import type { SealedPayload } from '../../appKeys/seal.js';
+import { formatMoney } from '../../utils/formatMoney.js';
 import { openForHelm, type HelmKey } from './helmKey.js';
 
 export interface SyncedCopy {
@@ -37,7 +38,9 @@ const TRIP_AHEAD_DAYS = 90;
 const TRIP_LOOKBACK_DAYS = 60;
 const MAX_SCANNED_TRIPS = 40;
 const SUBTITLE_CHARS = 120;
-const MAX_SCANNED_MONEY = 10;
+const DETAIL_CHARS = 120;
+const MAX_SCANNED_MONEY = 50;
+const MAX_CONTEXT_MONEY = 3;
 
 const CONNECTOR_LABELS: Record<string, string> = {
   'app:pinch': 'Pinch',
@@ -128,7 +131,7 @@ export function openSyncedCopy(
       isEnded: (data.connectionEndedAt ?? null) !== null,
       detail:
         typeof opened.detail === 'string' && opened.detail
-          ? opened.detail.slice(0, SUBTITLE_CHARS)
+          ? opened.detail.slice(0, DETAIL_CHARS)
           : null,
       amountCents: toNumber(opened.amountCents),
       currency: typeof opened.currency === 'string' ? opened.currency : null,
@@ -140,7 +143,11 @@ export function openSyncedCopy(
 }
 
 /** What a model is told about a copy: words, times in the person's zone and the source's name. Never an id, an address, attendees or notes. */
-export function toSyncedView(copy: SyncedCopy, timeZone: string) {
+export function toSyncedView(
+  copy: SyncedCopy,
+  timeZone: string,
+  now: number = Date.now(),
+) {
   const toWhen = (at: number | null) =>
     at === null
       ? null
@@ -156,10 +163,14 @@ export function toSyncedView(copy: SyncedCopy, timeZone: string) {
       ? {
           detail: copy.detail,
           amount:
-            copy.amountCents === null
+            copy.amountCents === null || copy.currency === null
               ? null
-              : `${(copy.amountCents / 100).toFixed(2)} ${copy.currency ?? ''}`.trim(),
+              : formatMoney(copy.amountCents, copy.currency),
           asOf: copy.asOf === null ? null : toLocalText(copy.asOf, timeZone),
+          ageDays:
+            copy.asOf === null
+              ? null
+              : Math.max(0, Math.floor((now - copy.asOf) / DAY_MS)),
         }
       : {}),
     start: toWhen(copy.startAt),
@@ -259,7 +270,9 @@ export async function readSyncedMoney(
     .where('kind', '==', 'moneySummary')
     .limit(MAX_SCANNED_MONEY)
     .get();
-  return openAll(key, snapshot.docs).filter((copy) => !copy.isEnded);
+  return openAll(key, snapshot.docs)
+    .filter((copy) => !copy.isEnded)
+    .slice(0, MAX_CONTEXT_MONEY);
 }
 
 /** The shared money summaries, then today's and tomorrow's events and the week's tasks the context offers; a summary is one line, so it goes first. */
@@ -285,7 +298,10 @@ export async function readContextSynced(
     }),
     readSyncedMoney(firestore, uid, key),
   ]);
-  return [...money, ...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED);
+  return [
+    ...money,
+    ...[...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED - money.length),
+  ];
 }
 
 /** Trips still ahead or under way, starting within 90 days, soonest first; still connected. A trip is a synced copy of kind `trip`. */

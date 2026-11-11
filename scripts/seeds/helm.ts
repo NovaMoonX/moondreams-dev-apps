@@ -101,9 +101,10 @@ import { RUNWAY_SHARES } from '../../functions/src/apps/runway/share/manifest.ts
 import { WAYPOINT_SHARES } from '../../functions/src/apps/waypoint/share/manifest.ts';
 import { WORTH_THE_WAIT_SHARES } from '../../functions/src/apps/worth-the-wait/share/manifest.ts';
 import { zonedDateTimeToEpoch } from '../../functions/src/notifications/zonedTime.ts';
+import { formatMoney } from '../../functions/src/utils/formatMoney.ts';
 import { getShowtime } from './aList.ts';
 import { getSeedPickupOn } from './goingOnce.ts';
-import { buildSeedShareSummary, readEmulatorKeyring } from './runway.ts';
+import { buildSampleShareSummary, readEmulatorKeyring } from './runway.ts';
 import {
   EMPTY_SEED_RESULT,
   FIXTURE_USERS,
@@ -6077,7 +6078,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
 
   const runwayConnectorId = toAppConnectorId('runway');
   const runwayGrantId = toGrantId('helm', runwayConnectorId, SITE_ACCOUNT_ID);
-  const runwaySummary = buildSeedShareSummary(context.now);
+  const runwaySummary = buildSampleShareSummary(context.now);
   const runwayNextIncomeAt = runwaySummary.nextIncomeOn
     ? Date.parse(`${runwaySummary.nextIncomeOn}T00:00:00Z`)
     : null;
@@ -6093,7 +6094,10 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       isAllDay: false,
       detail:
         runwaySummary.dueBeforeIncomeCents > 0
-          ? `${(runwaySummary.dueBeforeIncomeCents / 100).toFixed(2)} ${runwaySummary.currency} is due before the next income on ${runwaySummary.nextIncomeOn}`
+          ? `${formatMoney(
+              runwaySummary.dueBeforeIncomeCents,
+              runwaySummary.currency,
+            )} is due before the next income on ${runwaySummary.nextIncomeOn}`
           : `Nothing is due before the next income on ${runwaySummary.nextIncomeOn}`,
       amountCents: runwaySummary.freeToSpendCents,
       currency: runwaySummary.currency,

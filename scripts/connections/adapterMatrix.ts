@@ -2056,7 +2056,7 @@ await firestore
 assert.equal(itemReads.length, 1, 'the spy sees an item query');
 unwatch.forEach((restore) => restore());
 
-// Runway: one sealed summary opened under the plan's key; only totals and names leave.
+// One sealed summary opened under the plan's key; only totals and names leave.
 const RUNWAY_FORBIDDEN = [
   'SECRET ACCOUNT NAME',
   'SECRET CARD',
@@ -2073,6 +2073,7 @@ const runwaySummary = {
   nextIncomeOn: '2026-11-15',
   dueBeforeIncomeCents: 45_000,
   bills: [
+    { name: 'Overdue', amountCents: 9_000, dueOn: '2026-11-09' },
     { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
     { name: 'Phone', amountCents: 6_000, dueOn: '2026-11-20' },
     { name: 'Broken date', amountCents: 100, dueOn: '2026-02-31' },
@@ -2137,10 +2138,40 @@ await Promise.all([
   runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
 ]);
 
+const runwayPlanWith = (uid: string, shareSummary: unknown) =>
+  Promise.all([
+    runwayWrapped(uid).set(wrapDataKey(DEV_KEYRING, uid, runwayKey, NOW)),
+    runwayPlans.doc(uid).set({ uid, shareSummary }),
+  ]);
+const sealRunway = (summary: Record<string, unknown>) =>
+  sealWithKey({ ...runwayKey, keyVersion: 1 }, summary, 1);
+await Promise.all([
+  runwayPlanWith('runway-cleared', null),
+  runwayPlanWith(
+    'runway-bad-total',
+    sealRunway({ ...runwaySummary, freeToSpendCents: '123456' }),
+  ),
+  runwayPlanWith(
+    'runway-twins',
+    sealRunway({
+      ...runwaySummary,
+      bills: [
+        { name: 'Gym', amountCents: 3_000, dueOn: '2026-11-20' },
+        { name: 'Gym', amountCents: 3_000, dueOn: '2026-11-20' },
+      ],
+      horizon: [
+        { name: 'Trip', targetCents: 1_000, setAsideCents: 0, targetOn: null },
+        { name: 'Trip', targetCents: 1_000, setAsideCents: 0, targetOn: null },
+      ],
+    }),
+  ),
+]);
+
 const runwayAdapter = createRunwayAdapter({
   firestore: () => firestore,
   canOpen: async (uid) => uid === OWNER,
   keyring: () => DEV_KEYRING,
+  now: () => NOW,
 });
 assert.deepEqual(
   runwayAdapter.manifest.categories.map((category) => [
@@ -2201,8 +2232,12 @@ assert.deepEqual(summaryRecord.extra, {
   nextIncomeAt: Date.UTC(2026, 10, 15),
   dueBeforeIncomeCents: 45_000,
 });
-assert.match(summaryRecord.detail ?? '', /450\.00 USD.*2026-11-15/);
-assert.deepEqual(titles(runwayBills), ['Phone', 'Rent']);
+assert.match(summaryRecord.detail ?? '', /\$450\.00.*2026-11-15/);
+assert.deepEqual(
+  titles(runwayBills),
+  ['Phone', 'Rent'],
+  'a bill already past is dropped',
+);
 runwayBills.forEach((record) => {
   assert.equal(record.kind, 'task');
   assert.equal(record.isAllDay, true);
@@ -2222,7 +2257,7 @@ const lisbon = runwayHorizon.find((record) => record.title === 'Lisbon');
 assert.equal(lisbon?.kind, 'project');
 assert.equal(lisbon?.amountCents, 300_000);
 assert.equal(lisbon?.dueAt, Date.UTC(2027, 2, 1));
-assert.match(lisbon?.detail ?? '', /800\.00 USD set aside of 3000\.00 USD/);
+assert.match(lisbon?.detail ?? '', /\$800\.00 set aside of \$3,000\.00/);
 assert.equal(
   runwayHorizon.find((record) => record.title === 'Someday')?.dueAt,
   null,
@@ -2246,6 +2281,27 @@ await Promise.all(
     assert.equal(page.isFull, false, uid);
   }),
 );
+
+// A summary cleared on purpose is a full, empty read, so older copies go.
+await Promise.all(
+  ['moneySummary', 'upcomingBills', 'horizon'].map(async (category) => {
+    const page = await readRunway('runway-cleared', category);
+    assert.deepEqual(page.records, [], category);
+    assert.equal(page.isFull, true, category);
+  }),
+);
+const badTotal = await readRunway('runway-bad-total', 'moneySummary');
+assert.deepEqual(badTotal.records, []);
+assert.equal(badTotal.isFull, false, 'a malformed total is unknown');
+await Promise.all(
+  ['upcomingBills', 'horizon'].map(async (category) => {
+    const twins = (await runRunway('runway-twins', category)).map(
+      (record) => record.sourceRef,
+    );
+    assert.equal(twins.length, 2, category);
+    assert.equal(new Set(twins).size, 2, `${category} twins stay distinct`);
+  }),
+);
 await assert.rejects(() => readRunway(OWNER, 'nothing'), /Unknown category/);
 assert.equal(await runwayAdapter.status(runwayCtx(OWNER)), 'ok');
 assert.equal(await runwayAdapter.status(runwayCtx(OTHER)), 'noAccess');
@@ -2254,7 +2310,7 @@ assert.equal(
   '/runway',
 );
 
-// Runway's key reaches the adapter only through the plan-key file's unwrap.
+// A plan's key reaches the adapter only through the shared unwrap.
 const runwayShareDir = new URL(
   '../../functions/src/apps/runway/share/',
   import.meta.url,

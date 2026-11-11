@@ -48,7 +48,17 @@ import {
   toDocumentLink,
 } from '../../functions/src/connections/deepLinks.ts';
 import { SPOKEN_MAX_CHARS } from '../../functions/src/apps/helm/nomos/spoken.ts';
-import type { SyncedCopy } from '../../functions/src/apps/helm/syncedCopies.ts';
+import {
+  sealForHelm,
+  type HelmKey,
+} from '../../functions/src/apps/helm/helmKey.ts';
+import {
+  MAX_CONTEXT_SYNCED,
+  openSyncedCopy,
+  readContextSynced,
+  toSyncedView,
+  type SyncedCopy,
+} from '../../functions/src/apps/helm/syncedCopies.ts';
 
 const READING: CaptureReading = {
   people: [],
@@ -730,6 +740,96 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.ok(message.includes('"source":"Pinch"'));
       assert.ok(!message.includes('synced-1'));
       assert.equal(synced.get('e1')?.id, 'synced-1');
+    },
+  ],
+  [
+    'a money view carries a signed amount, its date and age, and nulls where the copy has none',
+    () => {
+      const now = Date.UTC(2026, 10, 10, 12);
+      const money: SyncedCopy = {
+        ...COPY,
+        kind: 'moneySummary',
+        title: 'Free to Spend',
+        startAt: null,
+        amountCents: -1_250,
+        currency: 'USD',
+        asOf: now - 2.5 * 86_400_000,
+      };
+      const view = toSyncedView(money, 'UTC', now);
+      assert.equal(view.amount, '-$12.50');
+      assert.equal(view.ageDays, 2);
+      const unknown = toSyncedView(
+        { ...money, currency: null, asOf: null },
+        'UTC',
+        now,
+      );
+      assert.equal(unknown.amount, null);
+      assert.equal(unknown.asOf, null);
+      assert.equal(unknown.ageDays, null);
+    },
+  ],
+  [
+    'a copy sealed before detail and amounts existed reads them as null',
+    () => {
+      const key: HelmKey = {
+        keyId: 'k',
+        keyVersion: 1,
+        key: Buffer.alloc(32, 7),
+      };
+      const copy = openSyncedCopy(key, 'old-1', {
+        connectorId: 'app:runway',
+        kind: 'moneySummary',
+        sealed: sealForHelm(key, { title: 'Free to Spend' }),
+      });
+      assert.equal(copy?.detail, null);
+      assert.equal(copy?.amountCents, null);
+      assert.equal(copy?.currency, null);
+    },
+  ],
+  [
+    'the context cap keeps a money summary and never passes the cap',
+    async () => {
+      const key: HelmKey = {
+        keyId: 'k',
+        keyVersion: 1,
+        key: Buffer.alloc(32, 7),
+      };
+      const doc = (id: string, kind: string, title: string, at: number) => ({
+        id,
+        data: () => ({
+          connectorId: 'app:runway',
+          kind,
+          startAt: kind === 'event' ? at : null,
+          dueAt: null,
+          isAllDay: false,
+          connectionEndedAt: null,
+          sealed: sealForHelm(key, {
+            title,
+            ...(kind === 'moneySummary'
+              ? { amountCents: 100, currency: 'USD' }
+              : {}),
+          }),
+        }),
+      });
+      const at = Date.UTC(2026, 10, 10, 12);
+      const byKind: Record<string, ReturnType<typeof doc>[]> = {
+        event: Array.from({ length: 40 }, (_, index) =>
+          doc(`e${index}`, 'event', `Event ${index}`, at + index * 60_000),
+        ),
+        task: [],
+        moneySummary: [doc('m1', 'moneySummary', 'Free to Spend', 0)],
+      };
+      const query = (kind: string | null): unknown => ({
+        where: (field: string, _op: string, value: unknown) =>
+          query(field === 'kind' ? String(value) : kind),
+        orderBy: () => query(kind),
+        limit: () => query(kind),
+        get: async () => ({ docs: byKind[kind ?? ''] ?? [] }),
+      });
+      const firestore = { collection: () => query(null) } as never;
+      const read = await readContextSynced(firestore, 'u1', key, at, 'UTC');
+      assert.equal(read.length, MAX_CONTEXT_SYNCED);
+      assert.equal(read[0]?.kind, 'moneySummary');
     },
   ],
   [

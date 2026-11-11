@@ -178,8 +178,8 @@ export const change = (
   sealed,
 });
 
-/** The totals-and-names summary Alex's device would write, consistent with the seeded income, rent and Moving; Helm's seeded copy of it uses the same figures. */
-export function buildSeedShareSummary(now: number): ShareSummary {
+/** Sample figures for a seeded shared summary; the device replaces them with the plan's own on first open. */
+export function buildSampleShareSummary(now: number): ShareSummary {
   const today = startOfUtcDay(now);
   const day = (at: number) => new Date(at).toISOString().slice(0, 10);
   const nextIncome = today + 3 * DAY_MS;
@@ -247,7 +247,7 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     keyId: data.keyId,
     sealed,
     shareSummary: await sealJson(
-      buildSeedShareSummary(context.now),
+      buildSampleShareSummary(context.now),
       encryption,
     ),
   });

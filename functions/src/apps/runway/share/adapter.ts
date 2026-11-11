@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 
 import { getAuth } from 'firebase-admin/auth';
+import { logger } from 'firebase-functions';
 import { getFirestore, type Firestore } from 'firebase-admin/firestore';
 
 import { canOpenApp } from '../../../appAccess.js';
@@ -15,6 +16,7 @@ import {
   type ExtraValue,
   type SharedRecord,
 } from '../../../vendor/connectionsContract.js';
+import { formatMoney } from '../../../utils/formatMoney.js';
 import { loadKeyring, RUNWAY_MASTER_KEYS } from '../getRunwayKey.js';
 import {
   openWithKey,
@@ -34,6 +36,7 @@ const manifest = readManifest();
 
 const LIST_LIMIT = 20;
 const NAME_LIMIT = 120;
+const DAY_MS = 86_400_000;
 
 const EMPTY_RECORD: SharedRecord = {
   sourceRef: '',
@@ -114,12 +117,15 @@ const readList = <T>(value: unknown, read: (entry: unknown) => T | null) =>
     return one === null ? [] : [one];
   });
 
-const readBill = (entry: unknown) => {
+const readBill = (entry: unknown, today: number) => {
   const bill = asObject(entry);
   const name = readName(bill?.name);
   const amountCents = readCents(bill?.amountCents);
   const dueAt = readDay(bill?.dueOn);
-  return name === null || amountCents === null || dueAt === null
+  return name === null ||
+    amountCents === null ||
+    dueAt === null ||
+    dueAt < today
     ? null
     : { name, amountCents, dueAt };
 };
@@ -134,15 +140,19 @@ const readGoal = (entry: unknown) => {
     : { name, targetCents, setAsideCents, targetAt: readDay(goal?.targetOn) };
 };
 
-/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry is dropped. */
-const readSummary = (opened: Record<string, unknown>): Summary | null => {
+/** Every field checked by type; null when the totals themselves are malformed, and a malformed list entry or a bill already past is dropped. */
+const readSummary = (
+  opened: Record<string, unknown>,
+  today: number,
+): Summary | null => {
   const computedAt = opened.computedAt;
   const freeToSpendCents = readCents(opened.freeToSpendCents);
   const dueBeforeIncomeCents = readCents(opened.dueBeforeIncomeCents);
   const { currency } = opened;
   if (
     typeof computedAt !== 'number' ||
-    !Number.isFinite(computedAt) ||
+    !Number.isSafeInteger(computedAt) ||
+    computedAt <= 0 ||
     freeToSpendCents === null ||
     dueBeforeIncomeCents === null ||
     typeof currency !== 'string' ||
@@ -155,7 +165,7 @@ const readSummary = (opened: Record<string, unknown>): Summary | null => {
     freeToSpendCents,
     nextIncomeAt: readDay(opened.nextIncomeOn),
     dueBeforeIncomeCents,
-    bills: readList(opened.bills, readBill),
+    bills: readList(opened.bills, (entry) => readBill(entry, today)),
     horizon: readList(opened.horizon, readGoal),
   };
 };
@@ -169,28 +179,60 @@ const isSealed = (value: unknown): value is SealedPayload => {
   );
 };
 
-/** The plan's summary opened under its own key; null when there is none yet or the key or payload will not open. */
+type StoredSummary =
+  | { kind: 'unknown' }
+  | { kind: 'empty' }
+  | { kind: 'summary'; summary: Summary };
+
+const UNKNOWN: StoredSummary = { kind: 'unknown' };
+
+const warnUnreadable = (reason: 'key' | 'malformed') =>
+  logger.warn('runway.share.summaryUnreadable', { reason });
+
+const openSealed = async (
+  firestore: Firestore,
+  keyring: Keyring,
+  uid: string,
+  sealed: SealedPayload,
+) => {
+  try {
+    const planKey = await unwrapPlanKey(firestore, keyring, uid);
+    return openWithKey(planKey.key, sealed);
+  } catch {
+    return null;
+  }
+};
+
+/** The plan's summary opened under its own key. A summary the device cleared on purpose is empty; none yet, or one that will not open, is unknown. */
 async function readStoredSummary(
   firestore: Firestore,
   keyring: Keyring,
   uid: string,
-) {
+  today: number,
+): Promise<StoredSummary> {
   const [plan] = await firestore.getAll(
     firestore.doc(`apps/runway/plans/${uid}`),
     { fieldMask: ['shareSummary'] },
   );
   const sealed = plan?.get('shareSummary');
-  if (!isSealed(sealed)) return null;
-  try {
-    const planKey = await unwrapPlanKey(firestore, keyring, uid);
-    return readSummary(openWithKey(planKey.key, sealed));
-  } catch {
-    return null;
+  if (sealed === null) return { kind: 'empty' };
+  if (sealed === undefined) return UNKNOWN;
+  if (!isSealed(sealed)) {
+    warnUnreadable('malformed');
+    return UNKNOWN;
   }
+  const opened = await openSealed(firestore, keyring, uid, sealed);
+  if (opened === null) {
+    warnUnreadable('key');
+    return UNKNOWN;
+  }
+  const summary = readSummary(opened, today);
+  if (summary === null) {
+    warnUnreadable('malformed');
+    return UNKNOWN;
+  }
+  return { kind: 'summary', summary };
 }
-
-const formatAmount = (cents: number, currency: string) =>
-  `${(cents / 100).toFixed(2)} ${currency}`;
 
 const formatDay = (at: number) => new Date(at).toISOString().slice(0, 10);
 
@@ -198,17 +240,26 @@ const readDetail = (summary: Summary) => {
   if (summary.nextIncomeAt === null) return 'No income day is coming up';
   const day = formatDay(summary.nextIncomeAt);
   return summary.dueBeforeIncomeCents > 0
-    ? `${formatAmount(summary.dueBeforeIncomeCents, summary.currency)} is due before the next income on ${day}`
+    ? `${formatMoney(summary.dueBeforeIncomeCents, summary.currency)} is due before the next income on ${day}`
     : `Nothing is due before the next income on ${day}`;
 };
 
-const toBillRef = (name: string, dueAt: number) =>
-  `bills/${createHash('sha256')
-    .update(`${name}\n${formatDay(dueAt)}`)
+/** Stable per row: its name and day, and how many rows before it share both, so twins stay distinct. */
+const toRef = (prefix: string, keys: string[], index: number) =>
+  `${prefix}/${createHash('sha256')
+    .update(
+      `${keys[index]}\n${keys.slice(0, index).filter((key) => key === keys[index]).length}`,
+    )
     .digest('hex')
     .slice(0, 16)}`;
 
 const toRecords = (category: string, summary: Summary): SharedRecord[] => {
+  const billKeys = summary.bills.map(
+    (bill) => `${bill.name}\n${formatDay(bill.dueAt)}`,
+  );
+  const goalKeys = summary.horizon.map(
+    (goal) => `${goal.name}\n${goal.targetAt ?? ''}`,
+  );
   switch (category) {
     case 'moneySummary':
       return [
@@ -227,9 +278,9 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
         }),
       ];
     case 'upcomingBills':
-      return summary.bills.map((bill) =>
+      return summary.bills.map((bill, index) =>
         toRecord({
-          sourceRef: toBillRef(bill.name, bill.dueAt),
+          sourceRef: toRef('bills', billKeys, index),
           kind: 'task',
           title: bill.name,
           amountCents: bill.amountCents,
@@ -240,15 +291,12 @@ const toRecords = (category: string, summary: Summary): SharedRecord[] => {
         }),
       );
     case 'horizon':
-      return summary.horizon.map((goal) =>
+      return summary.horizon.map((goal, index) =>
         toRecord({
-          sourceRef: `horizon/${createHash('sha256')
-            .update(`${goal.name}\n${goal.targetAt ?? ''}`)
-            .digest('hex')
-            .slice(0, 16)}`,
+          sourceRef: toRef('horizon', goalKeys, index),
           kind: 'project',
           title: goal.name,
-          detail: `${formatAmount(goal.setAsideCents, summary.currency)} set aside of ${formatAmount(goal.targetCents, summary.currency)}`,
+          detail: `${formatMoney(goal.setAsideCents, summary.currency)} set aside of ${formatMoney(goal.targetCents, summary.currency)}`,
           amountCents: goal.targetCents,
           currency: summary.currency,
           dueAt: goal.targetAt,
@@ -265,11 +313,13 @@ export interface RunwayAdapterDeps {
   firestore: () => Firestore;
   canOpen: (uid: string) => Promise<boolean>;
   keyring: () => Keyring;
+  now: () => number;
 }
 
 const defaultDeps: RunwayAdapterDeps = {
   firestore: () => getFirestore(),
   keyring: () => loadKeyring(),
+  now: () => Date.now(),
   canOpen: async (uid) => {
     const user = await getAuth().getUser(uid);
     return canOpenApp(getFirestore(), 'runway', {
@@ -294,15 +344,19 @@ export function createRunwayAdapter(
     syncPage: async (ctx, req): Promise<SyncPageResult> => {
       if (!manifest.categories.some(({ id }) => id === req.category))
         throw new Error('Unknown category.');
-      const summary = await readStoredSummary(
+      const stored = await readStoredSummary(
         deps.firestore(),
         deps.keyring(),
         ctx.uid,
+        Math.floor(deps.now() / DAY_MS) * DAY_MS,
       );
-      // No summary yet, or one that will not open, is unknown rather than empty, so older copies stay.
+      // Cleared on purpose is a full, empty read; none yet or unreadable is unknown, so older copies stay.
       return {
-        records: summary === null ? [] : toRecords(req.category, summary),
-        isFull: summary !== null,
+        records:
+          stored.kind === 'summary'
+            ? toRecords(req.category, stored.summary)
+            : [],
+        isFull: stored.kind !== 'unknown',
         deletedRefs: [],
         cursor: null,
         isDone: true,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
@@ -10,8 +10,11 @@ import { toDateInputValue } from '@/utils/dateInputUtils';
 import { db } from '@lib/firebase/config';
 import { getFreeToSpendFigure } from '@apps/runway/engine/balances';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
-import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
-import { sealJson } from '@apps/runway/security';
+import {
+  getRunwayEncryption,
+  isKeptKey,
+} from '@apps/runway/queries/runwayKeyQueries';
+import { openJson, sealJson } from '@apps/runway/security';
 import { selectIsAutoPayReady } from '@apps/runway/store/selectors/autoPaySelectors';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
 import { selectBillsDueBeforePay } from '@apps/runway/store/selectors/overviewSelectors';
@@ -23,13 +26,15 @@ import {
   selectHorizonItems,
   selectStance,
 } from '@apps/runway/store/selectors/runwaySelectors';
-import type { ShareSummary } from '@apps/runway/types';
+import type { Sealed, ShareSummary } from '@apps/runway/types';
 import { getHorizonStatus } from '@apps/runway/utils/horizonText';
 
 const LIST_LIMIT = 20;
 const BILLS_WITHIN_DAYS = 30;
 const DAY_MS = 86_400_000;
 const WRITE_DELAY_MS = 2000;
+const FRESH_MS = 6 * 3_600_000;
+const CLEARED = 'cleared';
 
 type SummaryFigures = Omit<ShareSummary, 'computedAt'>;
 
@@ -116,7 +121,14 @@ export function useShareSummary(uid: string | null) {
     payments,
     horizon,
   ]);
-  const key = figures === null ? null : JSON.stringify(figures);
+  const isUnknown = useMemo(
+    () =>
+      isReady &&
+      currency !== null &&
+      getFreeToSpendFigure(balances).kind === 'unknown',
+    [isReady, currency, balances],
+  );
+  const key = readWriteKey(isUnknown, figures);
 
   useEffect(() => {
     if (
@@ -127,23 +139,65 @@ export function useShareSummary(uid: string | null) {
       key === lastWritten.current
     )
       return;
-    const timer = setTimeout(() => {
-      const write = async () => {
-        try {
-          const sealed = await sealJson(
-            { ...(JSON.parse(key) as SummaryFigures), computedAt: Date.now() },
-            await getRunwayEncryption(uid),
-          );
-          await updateDoc(doc(db, 'apps', 'runway', 'plans', uid), {
-            shareSummary: sealed,
-          });
-          lastWritten.current = key;
-        } catch (error) {
-          console.error('The shared summary was not written', error);
+    const run = { isCurrent: true };
+    const write = async () => {
+      try {
+        const encryption = await getRunwayEncryption(uid);
+        if (isKeptKey(encryption)) return;
+        const planRef = doc(db, 'apps', 'runway', 'plans', uid);
+        const stored: unknown = (await getDoc(planRef)).get('shareSummary');
+        if (key === CLEARED) {
+          if (stored !== null && run.isCurrent) {
+            await updateDoc(planRef, { shareSummary: null });
+          }
+          if (run.isCurrent) lastWritten.current = key;
+          return;
         }
-      };
-      void write();
-    }, WRITE_DELAY_MS);
-    return () => clearTimeout(timer);
+        const isFresh = await isStoredCurrent(stored, key, encryption);
+        if (isFresh) {
+          if (run.isCurrent) lastWritten.current = key;
+          return;
+        }
+        const sealed = await sealJson(
+          { ...(JSON.parse(key) as SummaryFigures), computedAt: Date.now() },
+          encryption,
+        );
+        if (!run.isCurrent) return;
+        await updateDoc(planRef, { shareSummary: sealed });
+        lastWritten.current = key;
+      } catch (error) {
+        console.error('The shared summary was not written', error);
+      }
+    };
+    const timer = setTimeout(() => void write(), WRITE_DELAY_MS);
+    return () => {
+      run.isCurrent = false;
+      clearTimeout(timer);
+    };
   }, [uid, key, isOffline, isScrambled]);
+}
+
+const readWriteKey = (isUnknown: boolean, figures: SummaryFigures | null) => {
+  if (isUnknown) return CLEARED;
+  return figures === null ? null : JSON.stringify(figures);
+};
+
+/** Whether the stored summary already says these figures and is under six hours old. */
+async function isStoredCurrent(
+  stored: unknown,
+  key: string,
+  encryption: Parameters<typeof openJson>[1],
+) {
+  if (typeof stored !== 'object' || stored === null) return false;
+  try {
+    const { computedAt, ...figures } = await openJson<ShareSummary>(
+      stored as Sealed,
+      encryption,
+    );
+    return (
+      JSON.stringify(figures) === key && Date.now() - computedAt < FRESH_MS
+    );
+  } catch {
+    return false;
+  }
 }
