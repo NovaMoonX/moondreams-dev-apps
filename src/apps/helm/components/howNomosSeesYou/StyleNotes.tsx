@@ -8,7 +8,7 @@ import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
-import LockedButton from '@/components/LockedButton';
+import InlineNotice from '@/components/InlineNotice';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsGateOpen } from '@/hooks/useFeatureGates';
@@ -31,6 +31,7 @@ import {
   removeStyleTrait,
   type StyleResult,
 } from '@apps/helm/queries/styleMutations';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { learnMailStyle } from '@apps/helm/queries/mailStyleLearning';
 import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 
@@ -325,36 +326,59 @@ function NoteList({ style, onOpen }: NoteListProps) {
 }
 
 type MailFailure =
-  'notEnough' | 'nothingLearned' | 'busy' | 'failed' | 'needsGmail' | null;
+  | 'notEnough'
+  | 'nothingLearned'
+  | 'busy'
+  | 'failed'
+  | 'offline'
+  | 'needsGmail'
+  | 'reconnect'
+  | 'unreadable';
 
-const getMailFailureLine = (failure: Exclude<MailFailure, null>) =>
-  failure === 'notEnough'
-    ? HELM_COPY.styleMailNotEnough
-    : failure === 'nothingLearned'
-      ? HELM_COPY.styleMailNothingLearned
-      : failure === 'busy'
-        ? HELM_COPY.styleMailBusy
-        : failure === 'needsGmail'
-          ? HELM_COPY.styleMailNeedsGmailBody
-          : HELM_COPY.styleMailFailed;
+const MAIL_FAILURE_LINES: Record<MailFailure, string> = {
+  notEnough: HELM_COPY.styleMailNotEnough,
+  nothingLearned: HELM_COPY.styleMailNothingLearned,
+  busy: HELM_COPY.styleMailBusy,
+  failed: HELM_COPY.styleMailFailed,
+  offline: HELM_COPY.styleMailOffline,
+  needsGmail: HELM_COPY.styleMailNeedsGmailBody,
+  reconnect: HELM_COPY.styleMailReconnect,
+  unreadable: HELM_COPY.styleMailUnreadable,
+};
 
-/** The switch that learns notes from sent mail once, and removes them again. Hidden until the Gmail gate is open for the person. */
+const SERVER_REASONS: MailFailure[] = ['needsGmail', 'reconnect', 'unreadable'];
+
+const toMailFailure = (error: unknown): MailFailure => {
+  const { code, details } = error as { code?: unknown; details?: unknown };
+  const reason = (details as { reason?: unknown } | null | undefined)?.reason;
+  const known = SERVER_REASONS.find((entry) => entry === reason);
+  if (known) return known;
+  if (reason === 'noKey') return 'unreadable';
+  return code === 'functions/resource-exhausted' ? 'busy' : 'failed';
+};
+
+/** The switch that learns notes from sent mail once, and removes them again. Hidden until the Gmail gate is open for the person, unless notes from mail already exist and need a way off. */
 function MailSwitch({ isOn }: { isOn: boolean }) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const { confirm } = useActionModal();
+  const { showView } = useHelmUrlState();
   const isGateOpen = useIsGateOpen('helm', 'google-mail-and-drive');
   const { grants } = useConnections({ readerAppId: 'helm' });
   const [isWorking, setIsWorking] = useState(false);
-  const [failure, setFailure] = useState<MailFailure>(null);
+  const [failure, setFailure] = useState<MailFailure | null>(null);
   const isConnected = grants.some(
     (grant) => grant.connectorId === 'google:gmail' && grant.status === 'live',
   );
 
-  if (!isGateOpen) return null;
+  if (!isGateOpen && !isOn) return null;
 
   const turnOn = async () => {
     if (isWorking) return;
+    if (!navigator.onLine) {
+      setFailure('offline');
+      return;
+    }
     setIsWorking(true);
     setFailure(null);
     try {
@@ -362,12 +386,8 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
       if (result.status !== 'learned') setFailure(result.status);
       else if (result.groups === 0) setFailure('nothingLearned');
     } catch (error) {
-      console.error('Helm sent mail was not read', error);
-      setFailure(
-        (error as { code?: unknown }).code === 'functions/failed-precondition'
-          ? 'needsGmail'
-          : 'failed',
-      );
+      console.error('Sent mail was not read', error);
+      setFailure(toMailFailure(error));
     } finally {
       setIsWorking(false);
     }
@@ -411,26 +431,26 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
     }
   };
 
+  const isLocked = !isOn && !isConnected;
+  const hasDoor =
+    isLocked || failure === 'needsGmail' || failure === 'reconnect';
+  const isNeutral = failure === 'notEnough' || failure === 'nothingLearned';
+
   return (
-    <div className='helm-card space-y-2 p-4'>
+    <div className='helm-card space-y-3 p-4'>
       <div className='flex items-center gap-3'>
         <span className='min-w-0 flex-1'>
-          <span className='block text-[15px] font-medium'>
+          <span className='flex items-center gap-1 text-[15px] font-medium'>
             {HELM_COPY.styleMailTitle}
+            <HelpTip title={HELM_COPY.styleMailTitle} placement='top'>
+              <p>{HELM_COPY.styleMailHelpTip}</p>
+            </HelpTip>
           </span>
           <span className='text-muted-foreground block text-[13px] text-pretty'>
             {HELM_COPY.styleMailBody}
           </span>
         </span>
-        {!isOn && !isConnected ? (
-          <LockedButton
-            label={HELM_COPY.styleMailNeedsGmail}
-            title={HELM_COPY.styleMailNeedsGmail}
-            size='sm'
-          >
-            <p>{HELM_COPY.styleMailNeedsGmailBody}</p>
-          </LockedButton>
-        ) : (
+        {!isLocked && (
           <AppToggle
             aria-label={HELM_COPY.styleMailTitle}
             checked={isOn || isWorking}
@@ -445,9 +465,23 @@ function MailSwitch({ isOn }: { isOn: boolean }) {
         </p>
       )}
       {failure && (
-        <p className='text-[13px] text-pretty' role='status'>
-          {getMailFailureLine(failure)}
-        </p>
+        <div role='status'>
+          <InlineNotice tone={isNeutral ? 'info' : 'warning'}>
+            {MAIL_FAILURE_LINES[failure]}
+          </InlineNotice>
+        </div>
+      )}
+      {hasDoor && (
+        <Button
+          type='button'
+          variant='secondary'
+          size='sm'
+          onClick={() => void showView('connectedApps')}
+        >
+          {failure === 'reconnect'
+            ? HELM_COPY.styleMailReconnectAction
+            : HELM_COPY.styleMailConnect}
+        </Button>
       )}
     </div>
   );
@@ -509,9 +543,12 @@ function StyleNotes() {
         <NoteList style={style} onOpen={setTarget} />
       )}
       <MailSwitch isOn={isMailOn} />
+      {mailGroups.length > 0 && (
+        <SectionDivider label={HELM_COPY.styleMailGroupsTitle} />
+      )}
       {mailGroups.map((group) => (
         <div key={group.id} className='space-y-1.5'>
-          <h3 className='text-muted-foreground px-1 text-[13px] font-medium'>
+          <h3 className='text-muted-foreground px-4 text-[13px] font-medium'>
             {group.scope === 'audience'
               ? HELM_COPY.styleMailWithWho(group.label)
               : group.label}

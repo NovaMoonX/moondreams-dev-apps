@@ -78,7 +78,7 @@ export const learnHelmStyle = onCall(
       () => {
         throw new HttpsError(
           'failed-precondition',
-          "Helm can't open your things right now.",
+          "Your things can't be opened right now.",
         );
       },
     );
@@ -262,7 +262,8 @@ export const learnHelmMailStyle = onCall(
       () => {
         throw new HttpsError(
           'failed-precondition',
-          "Helm can't open your things right now.",
+          "Your things can't be opened right now.",
+          { reason: 'noKey' },
         );
       },
     );
@@ -275,7 +276,8 @@ export const learnHelmMailStyle = onCall(
     if (!grant) {
       throw new HttpsError(
         'failed-precondition',
-        'Connect Gmail to Helm first, then try again.',
+        'Connect Gmail first, then try again.',
+        { reason: 'needsGmail' },
       );
     }
     const provider = pickStyleProvider();
@@ -300,6 +302,7 @@ export const learnHelmMailStyle = onCall(
         : new HttpsError(
             'failed-precondition',
             'Gmail needs reconnecting before your sent mail can be read.',
+            { reason: 'reconnect' },
           );
     }
     const mails = read.value;
@@ -399,6 +402,7 @@ export const learnHelmMailStyle = onCall(
             throw new HttpsError(
               'failed-precondition',
               "Your style notes can't be opened right now, so they were left as they are.",
+              { reason: 'unreadable' },
             );
           }
           const merged = mergeStyle(

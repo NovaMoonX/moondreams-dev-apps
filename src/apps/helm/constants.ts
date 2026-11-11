@@ -1323,7 +1323,7 @@ export const HELM_COPY = {
   seesYouAddedToast: 'Added to what is kept about you',
   styleTitle: 'How you write',
   styleHelpTip:
-    'Notes about how you write, from messages you type here. Only these notes are kept, never your messages.',
+    'Notes about how you write, from messages you type here and, if you switch it on, your sent mail. Only the notes are kept, never the messages or emails.',
   styleEmpty: `Notes about your writing appear here after about ${STYLE_LEARN_EVERY} messages you type. You can also add one yourself.`,
   styleUnreadable: "Your writing notes can't be opened right now.",
   styleSeenIn: (count: number) => `Seen in ${count} of your messages`,
@@ -1349,9 +1349,11 @@ export const HELM_COPY = {
   styleRemoved: 'Removed the note',
   styleGone: 'That note is already gone.',
   styleUndoneFailed: 'The note could not be put back.',
-  styleMailTitle: 'Learn how I write from my sent mail',
+  styleMailTitle: 'Learn from my sent mail',
   styleMailBody:
-    'Reads up to 300 emails you sent in the last 6 months, once, and keeps only a few short notes about how you write. The emails themselves are never kept.',
+    'Reads your last 6 months of sent mail once. Only short notes are kept, never the emails.',
+  styleMailHelpTip:
+    'Up to 300 emails you sent in the last 6 months are read once, on the server, to note how you write at work, in personal mail and with people you write to often. The emails are never kept. To read them again later, switch this off and on.',
   styleMailReading: 'Reading your sent mail…',
   styleMailNotEnough:
     "There isn't enough sent mail yet to learn from. Try again after you've sent a few more emails.",
@@ -1360,18 +1362,26 @@ export const HELM_COPY = {
   styleMailNothingLearned:
     'Your sent mail was read, but there was nothing clear enough to note yet.',
   styleMailFailed: "Your sent mail couldn't be read. Try again in a moment.",
-  styleMailNeedsGmail: 'Connect Gmail first',
+  styleMailConnect: 'Connect Gmail',
   styleMailNeedsGmailBody:
-    'To learn from your sent mail, connect Gmail under Connected apps, then come back and switch this on.',
-  styleMailOffConfirmTitle: 'Stop learning from sent mail?',
+    "Gmail isn't connected any more. Connect it, then switch this on again.",
+  styleMailReconnect:
+    'Gmail needs reconnecting before your sent mail can be read.',
+  styleMailReconnectAction: 'Open Connected apps',
+  styleMailUnreadable:
+    "Your style notes can't be opened right now, so nothing was changed. Try again later.",
+  styleMailOffline:
+    "You're offline. Connect to the internet and switch this on again.",
+  styleMailOffConfirmTitle: 'Remove the notes from your sent mail?',
   styleMailOffConfirm:
-    'Work email, Personal email and the notes for each person are removed, including any you changed or added there. Your other style notes stay.',
+    'Work email, Personal email and the notes for each person are removed, including any you changed, added or removed there. Your other style notes stay, and you can undo this right after.',
   styleMailOffAction: 'Remove them',
   styleMailRemoved: 'Removed the notes from your sent mail',
   styleMailRemoveFailed: "The notes couldn't be removed. Try again.",
   styleMailUndoneFailed: "The notes couldn't be put back.",
   styleMailSeenIn: (count: number) => `Seen in ${count} of your sent emails`,
   styleMailWithWho: (name: string) => `With ${name}`,
+  styleMailGroupsTitle: 'From your sent mail',
   askSeesYou: 'Ask about what is kept about you',
   chipSeesYou: 'About you',
   backToSeesYou: (assistant: string) => `Back to How ${assistant} sees you`,
