@@ -3959,6 +3959,7 @@ export const PAIRING_BILL_WORDS = {
   ranged:
     'Uses the high end of its range, and follows the bill when it changes.',
   follows: 'Follows the bill when its amount changes.',
+  typeShare: 'Type a percent to see what each pay puts in.',
 } as const;
 
 /** What happens to "Pay these first" when the item it pays has stopped. */

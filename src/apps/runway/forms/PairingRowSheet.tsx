@@ -23,6 +23,7 @@ import ItemBadge from '@apps/runway/components/ItemBadge';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import { percentOf } from '@apps/runway/engine/money';
 import { getShareBps } from '@apps/runway/utils/fundingText';
+import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import {
   PAIRING_BILL_WORDS,
   PICK_KIND_HEADINGS,
@@ -131,14 +132,20 @@ function PairingRowSheet({
 
   const getBillLine = () => {
     const bps = getShareBps(row);
-    if (bill === null || bps === null || !picked) return null;
+    if (bill === null || !picked) return null;
+    if (bps === null)
+      return (
+        <p className='text-muted-foreground text-sm'>
+          {PAIRING_BILL_WORDS.typeShare}
+        </p>
+      );
     const shareWord =
       row.share === 'other'
         ? `${bps / 100}%`
         : PAIRING_BILL_WORDS.shareWords[row.share];
     return (
       <div className='text-muted-foreground space-y-1 text-sm'>
-        <p>
+        <p className='text-pretty'>
           <MaskedText>
             {PAIRING_BILL_WORDS.worked(
               shareWord,
@@ -246,6 +253,7 @@ function PairingRowSheet({
             <div className='space-y-3'>
               <PillGroup
                 label={PAIRING_BILL_WORDS.shareLabel}
+                isThin
                 options={SHARE_OPTIONS}
                 value={row.share}
                 onChange={(share) => onChange({ share, amount: '' })}
@@ -253,7 +261,7 @@ function PairingRowSheet({
               {row.share === 'other' && (
                 <AmountField
                   isHero
-                  autoFocus
+                  autoFocus={canFocusFieldOnOpen()}
                   label='Percent'
                   value={row.amount}
                   onChange={(amount) => onChange({ amount })}
