@@ -11,6 +11,7 @@ import {
 import { formatDateOrdinalUTC } from '../../src/utils/formatUtils.ts';
 import {
   AUTO_PAY_WORDS,
+  CARD_FEE_WORDS,
   DEFAULT_CURRENCY_CODE,
   PAID_HISTORY_WORDS,
   HORIZON_END_WORDS,
@@ -58,6 +59,10 @@ import {
 import { getCostLineId } from '../../src/apps/runway/engine/parts.ts';
 import { openMonthEntries } from '../../src/apps/runway/store/listeners/openLedger.ts';
 import { sealJson } from '../../src/apps/runway/security.ts';
+import {
+  CARD_FEE_GROUP_ID,
+  buildFeeBill,
+} from '../../src/apps/runway/engine/cardFees.ts';
 import type {
   AccountBalanceDoc,
   AccountDoc,
@@ -1444,6 +1449,7 @@ async function writeSeedHistory(
   return all.length;
 }
 
+const SEED_FEE_BILL = 'seed-bill-venture-fee';
 const SEED_VENTURE_CARD = 'seed-card-venture';
 const SEED_LINK = 'seed-link-capital-one';
 const SEED_WEALTHFRONT_LINK = 'seed-link-wealthfront';
@@ -1468,6 +1474,11 @@ async function writeSeedCards(
         issuer: 'Capital One',
         name: 'Venture X - Credit Holder XXXXXXX3153',
         dueDay: 14,
+        annualFee: {
+          cents: 39_500,
+          firstDueOn: today + 120 * DAY_MS,
+          billId: SEED_FEE_BILL,
+        },
       },
       createdAt,
     },
@@ -1501,6 +1512,79 @@ async function writeSeedCards(
         linkId: card.id === SEED_VENTURE_CARD ? SEED_LINK : null,
         sealed: await sealJson(card.sealed, encryption),
       } satisfies CardDoc);
+    }),
+  );
+  const feeBill = buildFeeBill({
+    cardId: SEED_VENTURE_CARD,
+    name: CARD_FEE_WORDS.billName('Capital One Venture X'),
+    cents: 39_500,
+    firstDueOn: today + 120 * DAY_MS,
+    priority: 'should',
+    orderIndex: 6,
+  });
+  const feeGroup: GroupSealed = {
+    name: CARD_FEE_WORDS.groupName,
+    startingPriority: null,
+    envelopePriority: null,
+    goalPriority: null,
+    emoji: null,
+  };
+  const feeEntries = [
+    {
+      id: CARD_FEE_GROUP_ID,
+      kind: 'group' as const,
+      payload: feeGroup,
+      summary: CARD_FEE_WORDS.groupStarted,
+    },
+    {
+      id: SEED_FEE_BILL,
+      kind: 'bill' as const,
+      payload: feeBill,
+      summary: CARD_FEE_WORDS.billAdded(
+        feeBill.name,
+        formatCents(39_500),
+        formatDateOrdinalUTC(today + 120 * DAY_MS),
+      ),
+    },
+  ];
+  await Promise.all(
+    feeEntries.map(async (entry) => {
+      batch.set(context.firestore.doc(`${plan}/items/${entry.id}`), {
+        id: entry.id,
+        kind: entry.kind,
+        parentId: null,
+        createdAt,
+        endedAt: null,
+        archivedAt: null,
+        heldReleasedOn: null,
+      });
+      batch.set(
+        context.firestore.doc(`${plan}/versions/seed-version-${entry.id}`),
+        {
+          id: `seed-version-${entry.id}`,
+          itemId: entry.id,
+          kind: entry.kind,
+          createdAt,
+          effectiveFrom: startDate,
+          effectiveUntil: null,
+          changeId: `seed-change-${entry.id}`,
+          sealed: await sealJson(entry.payload, encryption),
+        },
+      );
+      batch.set(
+        context.firestore.doc(`${plan}/changes/seed-change-${entry.id}`),
+        {
+          id: `seed-change-${entry.id}`,
+          kind: 'planChange',
+          createdAt,
+          effectiveFrom: null,
+          itemIds: [entry.id],
+          sealed: await sealJson(
+            { summary: entry.summary, note: null } satisfies ChangeSealed,
+            encryption,
+          ),
+        } satisfies ChangeDoc,
+      );
     }),
   );
   batch.set(context.firestore.doc(`${plan}/links/${SEED_LINK}`), {

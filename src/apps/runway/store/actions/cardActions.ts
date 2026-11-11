@@ -1,4 +1,4 @@
-import { doc, runTransaction } from 'firebase/firestore';
+import { doc, runTransaction, type Transaction } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
 
@@ -7,6 +7,12 @@ import { toDayStamp } from '@apps/runway/engine/dates';
 import { sealJson } from '@apps/runway/security';
 import { markLedgerWrite } from '@apps/runway/store/actions/closingActions';
 import { getStartMoveId } from '@apps/runway/store/actions/moveActions';
+import {
+  applyFeePlan,
+  readFeePlan,
+  sealFeePlan,
+  type FeePlan,
+} from '@apps/runway/store/actions/cardFeeActions';
 import type {
   CardDoc,
   CardPaymentCovers,
@@ -64,15 +70,24 @@ export const getUndoCardPaymentMoveId = (moveId: string) =>
 /** How many earlier payments of one card on one day are looked past, which the device may not have loaded. */
 const MAX_PAYMENT_PROBES = 12;
 
-/** Adds a card, and what it owed on the starting day as a `start` move in the same transaction. */
+/** Changed elsewhere since the form opened: a fee bill worked out from the old card would be wrong. */
+const CARD_CHANGED =
+  'This card changed on another device. Open it again to see it.';
+
+/** A new card's id, made before the form saves so its fee bill can name it. */
+export const newCardId = () => generateUuid();
+
+/** Adds a card, what it owed on the starting day as a `start` move, and its annual fee bill, in one transaction. */
 export async function createCard(
   uid: string,
   encryption: RunwayEncryption,
   input: CardSealed & { owedCents: Cents },
   summary: string,
+  options: { id?: string; fee?: FeePlan | null } = {},
 ): Promise<string> {
-  const id = generateUuid();
+  const id = options.id ?? generateUuid();
   const now = Date.now();
+  const fee = options.fee ? await sealFeePlan(encryption, options.fee) : null;
   const [sealed, startSealed, change] = await Promise.all([
     sealJson(
       {
@@ -81,6 +96,7 @@ export async function createCard(
         dueDay: input.dueDay,
         lastFour: input.lastFour ?? null,
         payFromAccountId: input.payFromAccountId ?? null,
+        annualFee: input.annualFee ?? null,
       } satisfies CardSealed,
       encryption,
     ),
@@ -92,8 +108,10 @@ export async function createCard(
   ]);
   await runTransaction(db, async (transaction) => {
     const plan = await transaction.get(planRef(uid));
+    const feeReads = fee ? await readFeePlan(transaction, uid, fee) : null;
     const data = plan.data() as Partial<PlanDoc> | undefined;
     const startDate = data?.startDate ?? null;
+    if (fee && feeReads) applyFeePlan(transaction, uid, fee, feeReads);
     transaction.set(cardRef(uid, id), {
       id,
       createdAt: now,
@@ -119,14 +137,29 @@ export async function createCard(
   return id;
 }
 
-/** Changes a card's issuer, name, due day, last 4 digits or paying account; only those fields and when it changed are written. */
+/** Refuses when the card was saved elsewhere after `seenUpdatedAt`, the copy the fee plan was worked out from. */
+const readCardFresh = async (
+  transaction: Transaction,
+  uid: string,
+  cardId: string,
+  seenUpdatedAt: number,
+) => {
+  const snapshot = await transaction.get(cardRef(uid, cardId));
+  if (!snapshot.exists()) throw new Error('This card no longer exists.');
+  if ((snapshot.data() as Partial<CardDoc>).updatedAt !== seenUpdatedAt)
+    throw new Error(CARD_CHANGED);
+};
+
+/** Changes a card's issuer, name, due day, last 4 digits, paying account or annual fee, and its fee bill in the same transaction. */
 export async function updateCard(
   uid: string,
   encryption: RunwayEncryption,
   cardId: string,
   input: CardSealed,
   summary: string,
+  options: { fee?: FeePlan | null; seenUpdatedAt?: number } = {},
 ): Promise<void> {
+  const fee = options.fee ? await sealFeePlan(encryption, options.fee) : null;
   const [sealed, change] = await Promise.all([
     sealJson(
       {
@@ -135,27 +168,41 @@ export async function updateCard(
         dueDay: input.dueDay,
         lastFour: input.lastFour ?? null,
         payFromAccountId: input.payFromAccountId ?? null,
+        annualFee: input.annualFee ?? null,
       } satisfies CardSealed,
       encryption,
     ),
     getChangeDoc(encryption, summary, null),
   ]);
   await runTransaction(db, async (transaction) => {
+    if (fee && options.seenUpdatedAt !== undefined)
+      await readCardFresh(transaction, uid, cardId, options.seenUpdatedAt);
+    const feeReads = fee ? await readFeePlan(transaction, uid, fee) : null;
+    if (fee && feeReads) applyFeePlan(transaction, uid, fee, feeReads);
     transaction.update(cardRef(uid, cardId), { sealed, updatedAt: Date.now() });
     transaction.set(changeRef(uid, change.id), change);
   });
 }
 
-/** Hides a card from new charges; what it was charged and paid stays in the ledger. */
+/** Hides a card from new charges, ending its annual fee bill in the same transaction; what it was charged and paid stays in the ledger. */
 export async function archiveCard(
   uid: string,
   encryption: RunwayEncryption,
   cardId: string,
   summary: string,
+  fee: FeePlan | null = null,
 ): Promise<void> {
   const now = Date.now();
-  const change = await getChangeDoc(encryption, summary, null);
+  const [change, sealedFee] = await Promise.all([
+    getChangeDoc(encryption, summary, null),
+    fee ? sealFeePlan(encryption, fee) : Promise.resolve(null),
+  ]);
   await runTransaction(db, async (transaction) => {
+    const feeReads = sealedFee
+      ? await readFeePlan(transaction, uid, sealedFee)
+      : null;
+    if (sealedFee && feeReads)
+      applyFeePlan(transaction, uid, sealedFee, feeReads);
     transaction.update(cardRef(uid, cardId), {
       archivedAt: now,
       updatedAt: now,

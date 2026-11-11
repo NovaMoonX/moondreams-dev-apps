@@ -4,6 +4,7 @@ import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
 import AmountHero from '@/components/AmountHero';
+import DateInput from '@/components/DateInput';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
@@ -20,12 +21,21 @@ import {
   type QuestionControls,
   type QuestionStep,
 } from '@/hooks/useQuestionFlow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
+import { useNow } from '@/hooks/useNow';
+import { fromDateInputValue, toDateInputValue } from '@/utils/dateInputUtils';
+import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { clearFormDraft } from '@lib/app/formDrafts';
 import { getErrorMessage } from '@/utils/errorUtils';
-import { formatCents, parseMoneyToCents } from '@/utils/moneyUtils';
 import {
+  centsToInputValue,
+  formatCents,
+  parseMoneyToCents,
+} from '@/utils/moneyUtils';
+import {
+  CARD_FEE_WORDS,
   CARD_ISSUERS,
+  HELD_WORDS,
   CARD_WORDS,
   FORM_DRAFT_PREFIX,
   FORM_FLOW_WORDS,
@@ -55,7 +65,21 @@ import {
   describeAccountLine,
   isLastFour,
 } from '@apps/runway/utils/accountText';
-import { createCard, updateCard } from '@apps/runway/store/actions/cardActions';
+import {
+  createCard,
+  newCardId,
+  updateCard,
+} from '@apps/runway/store/actions/cardActions';
+import HeldChoiceList from '@apps/runway/components/HeldChoiceList';
+import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextFeeOn } from '@apps/runway/engine/cardFees';
+import type { HeldChoice } from '@apps/runway/engine/endings';
+import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
+import {
+  getFeeHeldCents,
+  getFeePlan,
+  isFeeBillLive,
+} from '@apps/runway/utils/cardFeePlan';
 import {
   selectAccounts,
   selectIsAccountsLoaded,
@@ -93,6 +117,13 @@ interface CardFormData {
   hasNoLastFour: boolean;
   /** The account that pays it; null until one is picked. */
   payFromAccountId: string | null;
+  /** The annual fee as typed. */
+  fee: string;
+  hasNoFee: boolean;
+  /** The fee's next date as the date box holds it. */
+  feeDate: string;
+  /** Where the money set aside for a fee that is cleared goes; null until picked. */
+  feeHeld: HeldChoice | null;
 }
 
 interface CardFormProps {
@@ -114,6 +145,10 @@ const parseCardDraft = (stored: unknown, isEditing: boolean) => {
       lastFour: '',
       hasNoLastFour: isEditing,
       payFromAccountId: null,
+      fee: '',
+      hasNoFee: isEditing,
+      feeDate: '',
+      feeHeld: null,
     }),
     {
       issuerPick: isNullableOneOf([...CARD_ISSUERS, OTHER_VALUE]),
@@ -128,6 +163,10 @@ const parseCardDraft = (stored: unknown, isEditing: boolean) => {
       lastFour: isText,
       hasNoLastFour: isFlag,
       payFromAccountId: isNullableText,
+      fee: isText,
+      hasNoFee: isFlag,
+      feeDate: isText,
+      feeHeld: isNullableOneOf(['free', 'keep']),
     },
   );
   return data;
@@ -137,6 +176,7 @@ const getInitialData = (
   editing: OpenCard | undefined,
   pullAccounts: readonly OpenAccount[],
   isAccountsLoaded: boolean,
+  today: number,
 ): CardFormData => {
   if (!editing) {
     return {
@@ -150,8 +190,13 @@ const getInitialData = (
       lastFour: '',
       hasNoLastFour: false,
       payFromAccountId: null,
+      fee: '',
+      hasNoFee: false,
+      feeDate: '',
+      feeHeld: null,
     };
   }
+  const fee = editing.annualFee ?? null;
   const known = CARD_ISSUERS.find((issuer) => issuer === editing.issuer);
   return {
     issuerPick: known ?? OTHER_VALUE,
@@ -168,6 +213,11 @@ const getInitialData = (
       pullAccounts,
       isAccountsLoaded,
     ),
+    fee: fee === null ? '' : centsToInputValue(fee.cents),
+    hasNoFee: fee === null,
+    feeDate:
+      fee === null ? '' : toDateInputValue(getNextFeeOn(fee.firstDueOn, today)),
+    feeHeld: null,
   };
 };
 
@@ -193,8 +243,12 @@ function CardFormBody({
   const startDate = useAppSelector(
     (state) => state.runway.plan?.startDate ?? null,
   );
+  const today = todayAsUtcDate(useNow(60_000));
+  const assignedByItem = useAppSelector(
+    (state) => selectBalances(state).assignedByItem,
+  );
   const [startData] = useState(() =>
-    getInitialData(editing, pullAccounts, isAccountsLoaded),
+    getInitialData(editing, pullAccounts, isAccountsLoaded, today),
   );
   const draftKey = `${FORM_DRAFT_PREFIX}card:${editing?.id ?? 'new'}`;
   // A new form's draft doesn't depend on the day or the door it was opened from; an edit's is tied to the record.
@@ -260,6 +314,32 @@ function CardFormBody({
     pullAccounts.find((account) => account.id === payFromAccountId)?.name ??
     CARD_WORDS.payFromNone;
   const hasOther = hasUnnamedCardFrom(issuer, cards, editing?.id ?? null);
+  const feeBefore = editing?.annualFee ?? null;
+  const feeCents =
+    formData.fee.trim() === '' ? null : parseMoneyToCents(formData.fee);
+  const isFeeValid =
+    feeCents !== null && feeCents > 0 && feeCents <= MAX_PURCHASE_CENTS;
+  const isFeeAnswered = formData.hasNoFee || isFeeValid;
+  const feeOn =
+    formData.feeDate === ''
+      ? null
+      : (fromDateInputValue(formData.feeDate) ?? null);
+  const isFeeDateAnswered =
+    formData.hasNoFee || (feeOn !== null && feeOn >= today);
+  // An unchanged next date keeps the first date the card was given, so the bill's schedule isn't rewritten.
+  const getFeeFirstDueOn = (on: number) =>
+    feeBefore !== null && getNextFeeOn(feeBefore.firstDueOn, today) === on
+      ? feeBefore.firstDueOn
+      : on;
+  const feeAfter =
+    formData.hasNoFee || !isFeeValid || feeOn === null || feeCents === null
+      ? null
+      : { cents: feeCents, firstDueOn: getFeeFirstDueOn(feeOn) };
+  const feeHeldCents = getFeeHeldCents(assignedByItem, feeBefore);
+  const isFeeBillOpen = useAppSelector((state) =>
+    feeBefore === null ? false : isFeeBillLive(state, feeBefore.billId, today),
+  );
+  const asksFeeHeld = formData.hasNoFee && feeHeldCents > 0 && isFeeBillOpen;
 
   const steps: QuestionStep[] = [
     {
@@ -431,6 +511,99 @@ function CardFormBody({
         </div>
       ),
     },
+    {
+      id: 'annualFee',
+      title: CARD_FEE_WORDS.feeTitle,
+      summaryLabel: CARD_FEE_WORDS.feeLabel,
+      summaryValue: formData.hasNoFee
+        ? CARD_FEE_WORDS.feeNone
+        : isFeeValid
+          ? formatCents(feeCents)
+          : '',
+      isAnswered: isFeeAnswered,
+      blocker: CARD_FEE_WORDS.needsFee,
+      render: ({ moveOn }) => (
+        <div className='space-y-3'>
+          <AmountHero
+            label={CARD_FEE_WORDS.feeLabel}
+            value={formData.fee}
+            onChange={(fee) => set({ fee, hasNoFee: false, feeHeld: null })}
+            hint={CARD_FEE_WORDS.feeHint}
+            disabled={isSaving}
+          />
+          <div className='flex justify-center'>
+            <RevealChip
+              onClick={() => {
+                set({ fee: '', hasNoFee: true });
+                moveOn();
+              }}
+            >
+              {CARD_FEE_WORDS.noFee}
+            </RevealChip>
+          </div>
+        </div>
+      ),
+    },
+    ...(formData.hasNoFee
+      ? []
+      : [
+          {
+            id: 'feeDate',
+            title: CARD_FEE_WORDS.dateTitle,
+            summaryLabel: CARD_FEE_WORDS.dateLabel,
+            summaryValue:
+              feeOn !== null && feeOn >= today
+                ? formatDateOrdinalUTC(feeOn)
+                : '',
+            isAnswered: isFeeDateAnswered,
+            blocker:
+              feeOn !== null && feeOn < today
+                ? CARD_FEE_WORDS.pastDate
+                : CARD_FEE_WORDS.needsDate,
+            render: () => (
+              <DateInput
+                variant='outline'
+                aria-label={CARD_FEE_WORDS.dateLabel}
+                min={toDateInputValue(today)}
+                value={formData.feeDate}
+                onChange={(event) => set({ feeDate: event.target.value })}
+              />
+            ),
+          } satisfies QuestionStep,
+        ]),
+    ...(asksFeeHeld
+      ? [
+          {
+            id: 'feeHeld',
+            title: CARD_FEE_WORDS.heldTitle,
+            summaryLabel: CARD_FEE_WORDS.heldTitle,
+            summaryValue:
+              formData.feeHeld === 'free'
+                ? HELD_WORDS.freeTitle
+                : formData.feeHeld === 'keep'
+                  ? HELD_WORDS.keepTitle
+                  : '',
+            isAnswered: formData.feeHeld !== null,
+            blocker: CARD_FEE_WORDS.needsHeld,
+            render: ({ moveOn }: QuestionControls) => (
+              <div className='space-y-2'>
+                <p className='text-muted-foreground text-sm'>
+                  {mask(CARD_FEE_WORDS.heldCaption(formatCents(feeHeldCents)))}
+                </p>
+                <HeldChoiceList
+                  value={formData.feeHeld}
+                  onChange={(feeHeld) => {
+                    set({ feeHeld });
+                    moveOn();
+                  }}
+                  freeBody={CARD_FEE_WORDS.heldFreeBody}
+                  keepBody={HELD_WORDS.keepBody}
+                />
+              </div>
+            ),
+          } satisfies QuestionStep,
+        ]
+      : []),
     ...(pullAccounts.length >= 2
       ? [
           {
@@ -501,15 +674,23 @@ function CardFormBody({
             ? FORM_FLOW_WORDS.badAmount
             : !isDueAnswered
               ? CARD_WORDS.needsDue
-              : null;
+              : !isFeeAnswered
+                ? CARD_FEE_WORDS.needsFee
+                : !isFeeDateAnswered
+                  ? feeOn !== null && feeOn < today
+                    ? CARD_FEE_WORDS.pastDate
+                    : CARD_FEE_WORDS.needsDate
+                  : asksFeeHeld && formData.feeHeld === null
+                    ? CARD_FEE_WORDS.needsHeld
+                    : null;
 
   const handleSave = async () => {
     if (!user || blocker !== null) return;
     setError(null);
     setIsSaving(true);
     try {
-      const encryption = await getRunwayEncryption(user.uid);
-      const sealed = {
+      const cardId = editing?.id ?? newCardId();
+      const baseSealed = {
         issuer,
         name: hasName ? name : null,
         dueDay: formData.dueDay,
@@ -519,6 +700,32 @@ function CardFormBody({
             ? payFromAccountId
             : (editing?.payFromAccountId ?? null),
       };
+      const feeResult = getFeePlan(store.getState(), {
+        cardId,
+        cardName: getCardName(
+          {
+            ...baseSealed,
+            id: cardId,
+            createdAt: editing?.createdAt ?? Date.now(),
+            updatedAt: editing?.updatedAt ?? Date.now(),
+            archivedAt: null,
+            linkId: editing?.linkId ?? null,
+            annualFee: null,
+          },
+          cards,
+        ),
+        before: feeBefore,
+        after: feeAfter,
+        heldChoice: asksFeeHeld ? formData.feeHeld : null,
+        today,
+      });
+      if (feeResult.kind === 'loading') {
+        setError(CARD_FEE_WORDS.loading);
+        setIsSaving(false);
+        return;
+      }
+      const sealed = { ...baseSealed, annualFee: feeResult.annualFee };
+      const encryption = await getRunwayEncryption(user.uid);
       if (editing) {
         const summary = describeCardChanged(
           getCardName(editing, cards),
@@ -528,8 +735,16 @@ function CardFormBody({
             allAccounts.find((account) => account.id === id)?.name ??
             CARD_WORDS.payFromNone,
         );
-        if (summary !== null) {
-          await updateCard(user.uid, encryption, editing.id, sealed, summary);
+        const changeSummary = summary ?? feeResult.plan?.summary ?? null;
+        if (changeSummary !== null) {
+          await updateCard(
+            user.uid,
+            encryption,
+            editing.id,
+            sealed,
+            changeSummary,
+            { fee: feeResult.plan, seenUpdatedAt: editing.updatedAt },
+          );
           addToast({
             title: CARD_WORDS.saved(
               getCardName({ ...editing, ...sealed }, cards),
@@ -559,6 +774,7 @@ function CardFormBody({
           ),
           owedNow,
         ),
+        { id: cardId, fee: feeResult.plan },
       );
       addToast({
         title: CARD_WORDS.added(

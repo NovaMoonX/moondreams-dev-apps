@@ -4671,6 +4671,46 @@ export const RELEASED_WORDS = {
   manySub: 'They no longer count. History says where each one was.',
 };
 
+/** Words for a card's annual fee and the bill and group Runway keeps in step with it. */
+export const CARD_FEE_WORDS = {
+  groupName: 'Card annual fees',
+  billName: (card: string) => `${card} annual fee`,
+  feeTitle: 'Does it have an annual fee?',
+  feeLabel: 'Annual fee',
+  feeHint: 'It goes on Bills and is saved up for across your pays.',
+  noFee: 'No annual fee',
+  feeNone: 'None',
+  needsFee: 'Enter the fee, or pick No annual fee.',
+  dateTitle: 'When is the fee charged next?',
+  dateLabel: 'Next fee',
+  needsDate: 'Pick the day the fee is charged next.',
+  pastDate: 'Pick today or a later day.',
+  heldTitle: 'Money set aside for the fee',
+  heldCaption: (amount: string) => `${amount} is set aside for the fee`,
+  needsHeld: 'Choose where the money set aside for the fee goes.',
+  heldFreeBody: 'It goes back to Free to Spend from today.',
+  loading: 'Your plan is still loading. Try again in a moment.',
+  changeFee: (from: string, to: string) => `annual fee ${from} to ${to}`,
+  changeFeeDate: (from: string, to: string) => `next fee ${from} to ${to}`,
+  changeNoFee: 'none',
+  groupStarted: 'Started using Card annual fees.',
+  billAdded: (bill: string, amount: string, date: string) =>
+    `Added ${bill}, ${amount} yearly, next on ${date}.`,
+  billChanged: (bill: string, what: string, from: string) =>
+    `${bill}: ${what}, from ${from}.`,
+  billRenamed: (from: string, to: string) => `Renamed ${from} to ${to}.`,
+  billAmount: (from: string, to: string) => `${from} to ${to}`,
+  billDate: (from: string, to: string) => `next on ${to} (was ${from})`,
+  billEnded: (bill: string) => `${bill}: ended with its card's fee.`,
+  groupNote: "Kept in step with your cards' annual fees.",
+  groupNotePlan: 'Kept in step for you.',
+  billChangeSub: 'Priority and Paid from',
+  billCardRow: 'Fee and date',
+  billCardRowSub: (card: string) => `Change it on ${card}`,
+  archiveTitle: (card: string) => `Archive ${card}?`,
+  archiveDo: 'Archive the card',
+} as const;
+
 export const SORTING_WORDS = {
   caption: 'Needs a home',
   label: "I'm not sorting yet",

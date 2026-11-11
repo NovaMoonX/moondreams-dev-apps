@@ -3,6 +3,7 @@ import { formatDateOrdinalUTC } from '@/utils/formatUtils';
 import { formatCents } from '@/utils/moneyUtils';
 import {
   CARD_DUE_WARN_DAYS,
+  CARD_FEE_WORDS,
   CARD_ISSUERS,
   CARD_WORDS,
 } from '@apps/runway/constants';
@@ -14,6 +15,7 @@ import {
   type DueCard,
 } from '@apps/runway/engine/cards';
 import type {
+  CardAnnualFee,
   CardPaymentCovers,
   CardSealed,
   Cents,
@@ -225,6 +227,9 @@ export const describeDueNote = (due: DueCard) =>
 export const describeCardAdded = (name: string, owedCents: Cents) =>
   CARD_WORDS.changeAdded(name, owedCents > 0 ? formatCents(owedCents) : null);
 
+const describeFee = (fee: CardAnnualFee | null) =>
+  fee === null ? CARD_FEE_WORDS.changeNoFee : formatCents(fee.cents);
+
 /** The change-log sentence for a card edited: only what differs, from and to; null when nothing does. */
 export function describeCardChanged(
   name: string,
@@ -265,6 +270,20 @@ export function describeCardChanged(
       : CARD_WORDS.changePayFrom(
           accountNameOf(before.payFromAccountId ?? null),
           accountNameOf(after.payFromAccountId ?? null),
+        ),
+    (before.annualFee?.cents ?? null) === (after.annualFee?.cents ?? null)
+      ? null
+      : CARD_FEE_WORDS.changeFee(
+          describeFee(before.annualFee ?? null),
+          describeFee(after.annualFee ?? null),
+        ),
+    !before.annualFee ||
+    !after.annualFee ||
+    before.annualFee.firstDueOn === after.annualFee.firstDueOn
+      ? null
+      : CARD_FEE_WORDS.changeFeeDate(
+          formatDateOrdinalUTC(before.annualFee.firstDueOn),
+          formatDateOrdinalUTC(after.annualFee.firstDueOn),
         ),
   ].filter((part) => part !== null);
   return parts.length === 0
