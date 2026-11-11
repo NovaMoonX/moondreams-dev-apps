@@ -1194,7 +1194,8 @@ export const HELM_COPY = {
   planUnreadable: 'This plan could not be opened.',
   planTaskGone: 'A task that is done or removed',
   settingsAssistant: 'Your assistant',
-  assistantRow: 'Your assistant',
+  assistantRow: 'Name and tone',
+  assistantSheetTitle: 'Your assistant',
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
