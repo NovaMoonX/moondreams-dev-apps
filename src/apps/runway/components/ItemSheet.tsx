@@ -1294,7 +1294,8 @@ function ItemSheet({
   };
   const openHistory = () => goTo('history');
   const getSetAsideSub = (totalCents: number) => {
-    if (billSetAsideCents >= totalCents) return BILL_WORDS.readyToPay;
+    if (totalCents > 0 && billSetAsideCents >= totalCents)
+      return BILL_WORDS.readyToPay;
     return billSetAsideCents > 0
       ? BILL_SET_ASIDE_WORDS.openSub
       : BILL_SET_ASIDE_WORDS.openSubNone;
@@ -1477,7 +1478,7 @@ function ItemSheet({
         )}
         {canChange &&
           itemKind === 'bill' &&
-          isArchivable &&
+          header?.archivedAt == null &&
           payment !== null &&
           payment.paid === null && (
           <ActionRow
