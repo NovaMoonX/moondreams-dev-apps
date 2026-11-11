@@ -11,7 +11,7 @@ import type {
 /** A bill's Paid from is not what the action being taken back set it to. */
 export class FundedByChanged extends Error {
   constructor() {
-    super('Paid from was changed again since, so nothing was taken back.');
+    super('Set aside from was changed again since, so nothing was taken back.');
   }
 }
 

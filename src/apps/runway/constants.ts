@@ -1462,7 +1462,7 @@ export const DRAFT_CADENCE_WORDS: Record<
 };
 
 export const DRAFT_WORDS = {
-  fundedFrom: 'paid from',
+  fundedFrom: 'from',
   outOfMoney: "This day's money ran out before it got to this item",
   restEmpty: "Nothing was left of this day's money for the rest",
   restAsk: 'The rest',
@@ -1698,7 +1698,7 @@ export const BILL_PAID_FROMS = ['spread', 'lastBefore', 'pay'] as const;
 
 export const PAID_FROM_WORDS = {
   title: 'Which pay covers it?',
-  title2: 'Paid from',
+  title2: 'Set aside from',
   spreadRow: 'Spread across your pays',
   chosenRow: 'Days you chose',
   spreadMeaning: 'Every pay before it is due puts in a share.',
@@ -1710,8 +1710,8 @@ export const PAID_FROM_WORDS = {
       : dates.length <= 3
         ? `This replaces your changes for the ${dates.slice(0, -1).join(', ')} and ${dates[dates.length - 1]} pays.`
         : `This replaces your changes for the ${dates.slice(0, 3).join(', ')} and ${dates.length - 3} more pays.`,
-  summaryLabel: 'Paid from',
-  label: 'Paid from',
+  summaryLabel: 'Set aside from',
+  label: 'Set aside from',
   spread: 'Spread across my pays',
   lastBefore: "The pay right before it's due",
   lastBeforeLower: "the pay right before it's due",
@@ -1736,12 +1736,12 @@ export const PAID_FROM_WORDS = {
   pickAnother: 'Pick another pay',
   changed: (name: string) => `${name} is now spread across your pays`,
   paidFromBack: (name: string, was: string) =>
-    `${name}: Paid from is back to ${was}.`,
+    `${name}: Set aside from is back to ${was}.`,
   undoFailed: 'That could not be undone.',
   pinsLeft: (name: string) =>
     `${name} is now spread, but some per-pay changes are still on.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Paid from, but the per-pay changes could not be put back.`,
+    `${name} is back to its old Set aside from, but the per-pay changes could not be put back.`,
   undo: 'Undo',
   saveFailed: 'This did not save. Nothing was changed.',
 } as const;
@@ -1791,7 +1791,7 @@ export const PAY_SHARE_WORDS = {
   eachTime: 'each time',
   actionSub: (name: string, total: string) =>
     `${name} stays ${total}; only this pay changes`,
-  leftOutDetail: (pay: string) => `Paid from ${pay}`,
+  leftOutDetail: (pay: string) => `Set aside from ${pay}`,
   restSetAside: (cents: string, due: string) =>
     `${cents} · already set aside · due\u00a0${due}`,
   completesIt: (cents: string, due: string) =>
@@ -1799,7 +1799,7 @@ export const PAY_SHARE_WORDS = {
   undoPins: 'Put them back',
   theDatePay: (date: string) => `the ${date} pay`,
   leftOutCarrier: (date: string) => `Comes out of the ${date} pay`,
-  leftOutHeading: 'Paid from another pay',
+  leftOutHeading: 'Set aside from another pay',
   summary: (name: string, cents: string, date: string) =>
     `${name}: this pay puts in ${cents}, for ${date} only.`,
   savedToast: (name: string) => `Changed what this pay puts toward ${name}`,
@@ -1810,9 +1810,9 @@ export const PAY_SHARE_WORDS = {
     `This pay has ${money} left for it, so ${over} would stay short.`,
   savedTitle: 'Saved for this pay',
   withheld: (name: string) =>
-    `Only this pay changed. To choose which pay covers ${name} every time, set its Paid from.`,
+    `Only this pay changed. To choose which pay covers ${name} every time, set its Set aside from.`,
   done: 'Done',
-  setPaidFrom: 'Set Paid from',
+  setPaidFrom: 'Choose the pay',
   pinsClearedToast: (name: string, count: number) =>
     count === 1
       ? `${name}: 1 per-pay change was cleared`
@@ -1822,14 +1822,14 @@ export const PAY_SHARE_WORDS = {
   pinsNotBack: (name: string, count: number) =>
     `${name}: ${count} per-pay ${count === 1 ? 'change was' : 'changes were'} changed again since, so ${count === 1 ? 'it was' : 'they were'} left as is`,
   oneTimePay: (pay: string, name: string) =>
-    `${pay} is one-time and ${name} isn't paid from it. Pick a repeating pay, or change Paid from.`,
+    `${pay} is one-time and ${name} isn't set aside from it. Pick a repeating pay, or change Set aside from.`,
   whyNothing: 'Why this pay puts nothing in',
   leftOutTitle: (name: string, from: string) => `${name} comes from ${from}`,
   leftOutBody: 'This pay puts nothing toward it.',
   firstOnlyTitle: (name: string) => `${name} comes out of this pay first`,
   pairedSub: (name: string) => `What this pay puts toward ${name} first`,
   firstOnlyBody: (from: string) =>
-    `Its Paid from is ${from}, so what this pay puts in is set by Pay these first, not here.`,
+    `It is set aside from ${from}, so what this pay puts in is set by Pay these first, not here.`,
   hiddenEffects: 'Other pays and items may move',
   whyOthers:
     'Other items move because this pay has less or more left for them.',
@@ -1846,11 +1846,11 @@ export const PAY_SHARE_WORDS = {
   resetToast: (name: string) =>
     `${name} is back to the plan's amount for this pay`,
   paidFromBack: (name: string, was: string) =>
-    `${name}: Paid from is back to ${was}.`,
+    `${name}: Set aside from is back to ${was}.`,
   keepPartial: (name: string, pay: string) =>
     `${name} now comes from ${pay}, but some per-pay changes are still on. Tap Try again to clear them.`,
   undoPartial: (name: string) =>
-    `${name} is back to its old Paid from, but this pay's figure could not be restored.`,
+    `${name} is back to its old Set aside from, but this pay's figure could not be restored.`,
 } as const;
 
 /** The levels; tracking is one switch for the whole plan, and Link is Track with a bank linked. */
@@ -2584,7 +2584,7 @@ export const ITEM_SHEET_WORDS = {
   fundsNotice:
     'Everything in your plan is paid from your income. Items here come out of this pay first.',
   fundsBillNote:
-    'For a bill, this is what this pay puts in, whatever its Paid from says.',
+    'For a bill, this is what this pay puts in, whatever its Set aside from says.',
   history: 'History',
   historySub: 'Every change to it, with your reasons',
   notPaid: 'Mark not paid',
@@ -2634,16 +2634,17 @@ export const AUTO_PAY_DAYS = {
 
 /** Bills that pay themselves: the marks the app writes, the charges it matches to them, and the questions it asks when it cannot. */
 export const AUTO_PAY_WORDS = {
-  changeLabel: 'Pays itself',
-  formToggle: 'It pays itself',
-  formSummary: 'pays itself',
+  changeLabel: 'Autopay',
+  formToggle: "It's on autopay",
+  formSummary: 'autopay',
   formLine: 'Counted as paid on its due day',
   paysItselfFromCard: (card: string) =>
-    `Pays itself from ${card}`.replaceAll(' ', '\u00a0'),
-  paysItselfFromBank: 'Pays\u00a0itself\u00a0from\u00a0your\u00a0bank',
+    `Autopay · ${card}`.replaceAll(' ', '\u00a0'),
+  paysItselfFromBank: 'Autopay\u00a0·\u00a0your\u00a0bank',
   dueLinePayer: (due: string, payer: string) => `${due} · ${payer}`,
-  payerBank: 'from your bank',
-  paysItselfLine: 'Pays itself',
+  payerBank: 'autopay',
+  payerCard: (card: string) => `autopay on ${card}`,
+  paysItselfLine: 'Autopay',
   enterAmount: 'Enter what it charged',
   enterAmountSub: (due: string) =>
     `${due}\u2019s payment \u00b7 counted at the top of its range`,
@@ -2675,7 +2676,7 @@ export const AUTO_PAY_WORDS = {
   cardBillsMore: (count: number) => `Show ${count} more`,
   cardBillsFewer: 'Show fewer',
   autoSummary: (name: string, due: string, amount: string) =>
-    `${name} paid itself: ${amount} due\u00a0${due}.`,
+    `${name} was paid by autopay: ${amount} due\u00a0${due}.`,
   correctedSummary: (name: string, due: string, amount: string) =>
     `Changed ${name}'s ${due} payment to ${amount}.`,
   matchedSummary: (name: string, due: string, amount: string) =>
@@ -2824,7 +2825,7 @@ export const PURCHASE_COST_WORDS = {
   forPayment: (due: string) => `For the ${due} payment`,
   paidFor: (due: string) => `for ${due}`,
   boughtIn: (name: string) => `${name}\u00A0· in Spend`,
-  paidWith: (name: string) => `Paid with ${name}`,
+  paidWith: (name: string) => `Charged to ${name}`,
   aPurchase: 'A purchase in Spend',
 } as const;
 
@@ -2917,6 +2918,28 @@ export const SET_HELD_WORDS = {
     `Put ${amount} back in ${name}`,
 } as const;
 
+/** A bill's "Put money aside": money added to what is set aside for its payments, never taken out. */
+export const BILL_SET_ASIDE_WORDS = {
+  open: 'Put money aside',
+  openSub: (held: string) => `${held} set aside so far`,
+  openSubNone: 'Nothing set aside yet',
+  title: (name: string) => `Put money aside for ${name}`,
+  amount: 'Put aside',
+  needsAmount: 'Enter how much to put aside.',
+  action: 'Put it aside',
+  moved: (amount: string, name: string) => `Put ${amount} aside for ${name}`,
+  outsideIn: {
+    title: 'I already have it',
+    body: 'Money you put aside before, in another account or in cash. Free to Spend stays the same.',
+  },
+  setAside: (name: string) => `${name}, set aside`,
+  addTitle: 'Already set aside for it?',
+  addLabel: 'Already set aside',
+  addHint: 'Money you have put aside for its next payment. Leave it empty if none.',
+  notRecorded: (name: string) =>
+    `${name} was added, but what is set aside for it did not record. Open the bill and choose Put money aside.`,
+} as const;
+
 export const PROBLEM_WORDS = {
   title: 'Things to fix',
   one: '1 thing to fix',
@@ -3005,7 +3028,7 @@ export const FORM_FLOW_WORDS = {
   endsTitle: 'Does it end?',
   ends: 'Ends',
   fundingTitle: 'Which income days pay for it?',
-  funding: 'Paid from',
+  funding: 'Set aside from',
   envelopeAmountTitle: 'How much does it get each time?',
   eachTime: 'Each time',
   balance: 'Balance',
@@ -3099,7 +3122,7 @@ export const FORM_FLOW_WORDS = {
   badRange: 'Make the top of the range higher than the low end.',
   badPercent: 'Enter a whole or half percent, up to 100.',
   finishEnding: 'Finish when it ends.',
-  pickDays: 'Paid from: pick at least one income day.',
+  pickDays: 'Pick at least one income day.',
   otherPayday: 'Pick two different days of the month.',
   discardNew: (noun: string) => `Discard this ${noun}?`,
   discardChange: 'Discard this change?',
@@ -4253,7 +4276,7 @@ export const INTEREST_ACCOUNT_KINDS: readonly (typeof ACCOUNT_KINDS)[number][] =
 /** A bill's one "how is it paid" question: a credit card, an account it comes out of, or neither yet. */
 export const BILL_PAY_WORDS = {
   title: 'How do you pay it?',
-  label: 'Paid with',
+  label: 'Charged to',
   cardDetail: 'Credit card',
   fromBank: 'Straight from your bank',
 } as const;
@@ -4552,7 +4575,7 @@ export const CARD_WORDS = {
   beforeTracking: (day: string) => `Pick ${day} or a later day.`,
   markedAllWith: (cards: string) => `Charged to ${cards}.`,
   markedPaidWith: (bill: string, card: string) =>
-    `Marked ${bill} paid with ${card}`,
+    `Marked ${bill} paid, charged to ${card}`,
   freeWaitingHelp:
     "Charged to your cards and not paid yet. It's set aside now, so paying a card doesn't change Free to Spend.",
   freeOnHandHelp:

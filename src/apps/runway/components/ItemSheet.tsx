@@ -16,6 +16,7 @@ import {
   Pause,
   Pencil,
   Pin,
+  PiggyBank,
   PinOff,
   Play,
   ReceiptText,
@@ -78,6 +79,7 @@ import GoalBalanceView, {
 } from '@apps/runway/components/GoalBalanceView';
 import MoveLeftoverView from '@apps/runway/components/MoveLeftoverView';
 import SetHeldView from '@apps/runway/components/SetHeldView';
+import StartingAmountsSheet from '@apps/runway/forms/StartingAmountsSheet';
 import ItemHistoryView from '@apps/runway/components/ItemHistoryView';
 import MemoriesSheet from '@apps/runway/components/MemoriesSheet';
 import { CheckAmountBody } from '@apps/runway/screens/home/CheckAmountScreen';
@@ -115,6 +117,7 @@ import {
   MEMORY_WORDS,
   MOVE_WORDS,
   SET_HELD_WORDS,
+  BILL_SET_ASIDE_WORDS,
   SPEND_WORDS,
   SPILL_WORDS,
   HOME_PIN_WORDS,
@@ -226,6 +229,7 @@ type View =
   | 'group'
   | 'move'
   | 'setHeld'
+  | 'setAside'
   | 'heldIn'
   | 'spill'
   | 'charge'
@@ -334,6 +338,7 @@ const VIEW_NOTES: Record<View, string> = {
   group: '',
   move: '',
   setHeld: '',
+  setAside: '',
   heldIn: '',
   spill: '',
   charge: '',
@@ -457,6 +462,7 @@ function ItemSheet({
     onUndone,
   });
   const [isAskingPaid, setIsAskingPaid] = useState(false);
+  const [isStartOpen, setIsStartOpen] = useState(false);
   const [isCorrecting, setIsCorrecting] = useState(false);
   const [chargeDueOn, setChargeDueOn] = useState<number | null>(null);
   const { confirm } = useActionModal();
@@ -467,6 +473,7 @@ function ItemSheet({
     (state) => selectLearnedNames(state, itemId).length,
   );
   const isSelfPaying = useIsSelfPaying(itemId, payment?.dueOn ?? null, today);
+  const billSetAsideCents = payment?.fundedCents ?? Math.max(0, heldCents);
   const matchedPurchase = useAppSelector((state) =>
     state.runway.purchases.reduce<OpenPurchase | null>(
       (newest, purchase) =>
@@ -1436,6 +1443,26 @@ function ItemSheet({
             onClick={() => openChange(payAction.step)}
           />
         )}
+        {canChange && itemKind === 'bill' && isArchivable && (
+          <ActionRow
+            isGrouped
+            hasChevron
+            icon={<PiggyBank />}
+            label={BILL_SET_ASIDE_WORDS.open}
+            subtitle={
+              billSetAsideCents > 0
+                ? mask(
+                    BILL_SET_ASIDE_WORDS.openSub(
+                      formatCentsShort(billSetAsideCents),
+                    ),
+                  )
+                : BILL_SET_ASIDE_WORDS.openSubNone
+            }
+            onClick={() =>
+              hasStarted ? goTo('setAside') : setIsStartOpen(true)
+            }
+          />
+        )}
         {canChange && maxAction && (
           <ActionRow
             isGrouped
@@ -1497,6 +1524,9 @@ function ItemSheet({
             isDisabled={paid.isBusy}
             onClick={() => void paid.undo()}
           />
+        )}
+        {isStartOpen && (
+          <StartingAmountsSheet isOpen onClose={() => setIsStartOpen(false)} />
         )}
         {isAskingPaid && payment && (
           <PaidAmountSheet
@@ -2034,6 +2064,18 @@ function ItemSheet({
     />
   );
 
+  const billSetAsideView = (
+    <SetHeldView
+      itemId={itemId}
+      kind='bill'
+      name={payload.name}
+      heldCents={billSetAsideCents}
+      account={null}
+      today={today}
+      onBack={() => goTo('menu')}
+    />
+  );
+
   const horizonPlanView = (
     <HorizonPlanView
       source={
@@ -2309,6 +2351,8 @@ function ItemSheet({
                     ? moveView
                     : view === 'setHeld'
                       ? setHeldView
+                      : view === 'setAside'
+                        ? billSetAsideView
                       : view === 'heldIn'
                         ? heldInView
                         : view === 'horizonPlan'

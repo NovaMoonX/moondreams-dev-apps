@@ -21,6 +21,7 @@ import {
 import { ActionTitle } from '@apps/runway/components/ActionSection';
 import { MaskedText } from '@apps/runway/components/MaskedText';
 import {
+  BILL_SET_ASIDE_WORDS,
   MAX_PURCHASE_CENTS,
   MOVE_WORDS,
   SET_HELD_WORDS,
@@ -39,9 +40,9 @@ import { isOfflineFailure } from '@apps/runway/utils/offlineText';
 
 interface SetHeldViewProps {
   itemId: string;
-  kind: 'envelope' | 'goal';
+  kind: 'envelope' | 'goal' | 'bill';
   name: string;
-  /** What the envelope or goal holds now. */
+  /** What the envelope or goal holds now; for a bill, what is set aside for its next payment. */
   heldCents: Cents;
   /** The account that holds it, with what in it is not set aside (null when its balance is not known). */
   account: {
@@ -82,7 +83,7 @@ const describeAccountIn = (
   };
 };
 
-/** The view an envelope's or goal's sheet swaps in to say what it holds now; the person says whether the difference moves with the account that holds it, Free to Spend, or outside the plan. */
+/** The view an envelope's or goal's sheet swaps in to say what it holds now, and a bill's to put money aside (added only: a bill's set-aside money is never taken back out here); the person says whether the difference moves with the account that holds it, Free to Spend, or outside the plan. */
 function SetHeldView({
   itemId,
   kind,
@@ -98,8 +99,9 @@ function SetHeldView({
   const undoMove = useUndoTransfer();
   const inputs = useAppSelector(selectBalanceInputs);
   const [moveId] = useState(newTransferMoveId);
+  const isBill = kind === 'bill';
   const [amount, setAmount] = useState(() =>
-    isHidden ? '' : centsToInputValue(heldCents),
+    isHidden || isBill ? '' : centsToInputValue(heldCents),
   );
   const [isSaving, setIsSaving] = useState(false);
   const isSavingRef = useRef(false);
@@ -114,7 +116,7 @@ function SetHeldView({
     parsed !== null && parsed >= 0 && parsed <= MAX_PURCHASE_CENTS
       ? parsed
       : null;
-  const difference = target === null ? 0 : target - heldCents;
+  const difference = target === null ? 0 : isBill ? target : target - heldCents;
   const cents = Math.abs(difference);
   const isRaising = difference > 0;
   const accountIn =
@@ -165,7 +167,11 @@ function SetHeldView({
         ]),
     {
       choice: 'outside' as const,
-      ...(isRaising ? SET_HELD_WORDS.outsideIn : SET_HELD_WORDS.outsideOut),
+      ...(isBill
+        ? BILL_SET_ASIDE_WORDS.outsideIn
+        : isRaising
+          ? SET_HELD_WORDS.outsideIn
+          : SET_HELD_WORDS.outsideOut),
       isLocked: false,
     },
     ...(!isFreeShown
@@ -186,12 +192,13 @@ function SetHeldView({
   ];
   const isSourceLocked =
     options.find((option) => option.choice === source)?.isLocked ?? false;
-  const amountBlocker =
-    target === null
-      ? SET_HELD_WORDS.needsAmount
-      : difference === 0
-        ? SET_HELD_WORDS.unchanged
-        : null;
+  const getAmountBlocker = () => {
+    if (isBill)
+      return difference > 0 ? null : BILL_SET_ASIDE_WORDS.needsAmount;
+    if (target === null) return SET_HELD_WORDS.needsAmount;
+    return difference === 0 ? SET_HELD_WORDS.unchanged : null;
+  };
+  const amountBlocker = getAmountBlocker();
   const blocker =
     amountBlocker ??
     (source === null || isSourceLocked
@@ -220,7 +227,7 @@ function SetHeldView({
         })
       : before;
   const figure = (value: Cents) =>
-    kind === 'goal'
+    kind !== 'envelope'
       ? formatCents(value)
       : describeEnvelopeFigure('track', value).value;
   const change = (from: Cents, to: Cents) => `${figure(from)} → ${figure(to)}`;
@@ -228,7 +235,12 @@ function SetHeldView({
     blocker !== null || target === null
       ? []
       : [
-          { name, text: change(heldCents, target) },
+          isBill
+            ? {
+                name: BILL_SET_ASIDE_WORDS.setAside(name),
+                text: change(heldCents, heldCents + cents),
+              }
+            : { name, text: change(heldCents, target) },
           ...(before.hasMoney &&
           after.moneyOnHandCents !== before.moneyOnHandCents
             ? [
@@ -289,7 +301,9 @@ function SetHeldView({
         undoText,
       });
       addToast({
-        title: SET_HELD_WORDS.moved(name),
+        title: isBill
+          ? BILL_SET_ASIDE_WORDS.moved(money, name)
+          : SET_HELD_WORDS.moved(name),
         type: 'success',
         action: {
           label: MOVE_WORDS.undo,
@@ -324,9 +338,11 @@ function SetHeldView({
   return (
     <div className='flex flex-1 flex-col gap-3 [&_.form-footer]:mt-auto'>
       <BackLink onBack={onBack} />
-      <ActionTitle>{SET_HELD_WORDS.title(name)}</ActionTitle>
+      <ActionTitle>
+        {isBill ? BILL_SET_ASIDE_WORDS.title(name) : SET_HELD_WORDS.title(name)}
+      </ActionTitle>
       <AmountHero
-        label={SET_HELD_WORDS.amount}
+        label={isBill ? BILL_SET_ASIDE_WORDS.amount : SET_HELD_WORDS.amount}
         value={amount}
         onChange={setAmount}
         disabled={isSaving}
@@ -436,7 +452,7 @@ function SetHeldView({
             disabled={isSaving || blocker !== null}
             onClick={() => void save()}
           >
-            {SET_HELD_WORDS.action}
+            {isBill ? BILL_SET_ASIDE_WORDS.action : SET_HELD_WORDS.action}
           </Button>
         }
       />

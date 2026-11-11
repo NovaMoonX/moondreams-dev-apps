@@ -393,6 +393,8 @@ export interface BillSealed {
   accountId?: string | null;
   /** The bill is charged or pulled on its own: it never asks to be marked paid. Missing or null reads as false; offered from Track up. */
   paysItself?: boolean | null;
+  /** What was set aside for it when it was added, for a plan that has not said where things stand yet; a version written before it existed has none. */
+  startingCents?: Cents | null;
 }
 
 /** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */

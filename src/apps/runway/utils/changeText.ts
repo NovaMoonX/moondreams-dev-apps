@@ -9,6 +9,7 @@ import {
   GROUP_WORDS,
   HORIZON_WORDS,
   MAKE_BILL_WORDS,
+  BILL_PAY_WORDS,
   PAID_FROM_WORDS,
   PRIORITY_LABELS,
   SCHEDULE_LABELS,
@@ -321,11 +322,11 @@ const getParts = (
         billAfter.stanceOverride ?? null,
         (value) => value ?? 'follows the plan',
       ),
-      diff('Paid from', billBefore.fundedBy, billAfter.fundedBy, (value) =>
+      diff(PAID_FROM_WORDS.label, billBefore.fundedBy, billAfter.fundedBy, (value) =>
         describeFundedByChange(value, payNameOf),
       ),
       diff(
-        'Paid by',
+        BILL_PAY_WORDS.label,
         billBefore.paidByCardId ?? null,
         billAfter.paidByCardId ?? null,
         cardNameOf,
