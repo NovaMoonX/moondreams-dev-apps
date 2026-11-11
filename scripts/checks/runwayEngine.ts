@@ -19498,7 +19498,7 @@ console.log('runway engine: ok');
 }
 
 // Horizon: money moved into a bill, the share a cost brings, and the refusals.
-{
+const checkHorizonMoves = () => {
   const nov1 = utc(2026, 11, 1);
   const transfer = (
     moveId: string,
@@ -19900,7 +19900,8 @@ console.log('runway engine: ok');
     null,
     'a cost saved before it had its own priority follows its item',
   );
-}
+};
+checkHorizonMoves();
 
 // Where your cash is (Issue 61).
 {
