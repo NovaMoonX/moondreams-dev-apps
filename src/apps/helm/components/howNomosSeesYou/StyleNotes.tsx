@@ -223,9 +223,7 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
         target.kind !== 'add' && (
           <div className='space-y-1'>
             <p className='text-[15px] break-words'>
-              {target.kind === 'avoid'
-                ? HELM_COPY.styleAvoidLine(target.text)
-                : target.text}
+              {target.kind === 'avoid' ? target.text : target.text}
             </p>
             <p className='text-muted-foreground text-[13px]'>
               {target.kind === 'avoid'
@@ -286,7 +284,8 @@ function StyleNotes() {
           {avoid.map((line) => (
             <li key={`avoid-${line}`}>
               <NoteRow
-                text={HELM_COPY.styleAvoidLine(line)}
+                text={line}
+                detail={HELM_COPY.styleAvoidSource}
                 onOpen={() => setTarget({ kind: 'avoid', text: line })}
               />
             </li>
