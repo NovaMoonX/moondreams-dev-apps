@@ -120,23 +120,32 @@ export async function addStyleTrait(
   text: string,
 ): Promise<StyleResult> {
   const key = `you-${generateUuid()}`;
-  const outcome = await changeStyle(uid, (sealed) =>
-    Object.keys(sealed.traits).length >= STYLE_TRAIT_LIMIT
-      ? 'full'
-      : {
-          ...sealed,
-          traits: {
-            ...sealed.traits,
-            [key]: {
-              text: text.trim().slice(0, STYLE_TRAIT_MAX),
-              isPersonSet: true,
-              exampleCount: 0,
+  const found = { isRepeat: false };
+  const outcome = await changeStyle(uid, (sealed) => {
+    found.isRepeat = Object.values(sealed.traits).some(
+      (entry) => normalizeNote(entry.text) === normalizeNote(text),
+    );
+    return found.isRepeat
+      ? UNCHANGED
+      : Object.keys(sealed.traits).length >= STYLE_TRAIT_LIMIT
+        ? 'full'
+        : {
+            ...sealed,
+            traits: {
+              ...sealed.traits,
+              [key]: {
+                text: text.trim().slice(0, STYLE_TRAIT_MAX),
+                isPersonSet: true,
+                exampleCount: 0,
+              },
             },
-          },
-          removed: forgetRemoved(sealed.removed, text),
-        },
+            removed: forgetRemoved(sealed.removed, text),
+          };
+  });
+  return toResult(
+    outcome,
+    found.isRepeat ? null : () => removeStyleTrait(uid, key),
   );
-  return toResult(outcome, () => removeStyleTrait(uid, key));
 }
 
 /** Changes a note's words; it is the person's from then on, so a later learning run never replaces it. */
