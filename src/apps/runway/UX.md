@@ -394,7 +394,7 @@ The success toast carries one Undo that puts every written bill back as it was (
 
 ## Card annual fees
 
-- **Card form:** two optional questions after Due: "Does it have an annual fee?" (an `AmountHero` with a "No annual fee" reveal chip) and "When is the fee charged next?" (a date, today or later), folded as "Annual fee" and "Next fee". Clearing a fee whose bill holds money adds "Where does its money go?" with the held choices, nothing preselected.
+- **Card form:** two questions after Due: "Does it have an annual fee?" (an `AmountHero` with a "No annual fee" reveal chip that answers it and moves on in one tap, like the name step's "It has no name"; Next names the chip while nothing is answered) and "When is the fee charged next?" (a date, today or later), folded as "Annual fee" and "Next fee". Clearing a fee whose bill holds money adds "Where does its money go?" with the held choices, nothing preselected.
 - **Bills:** the managed "Card annual fees" group appears with the first fee and hides when it has no bills. A fee row reads like any yearly bill ("$45.83 a month" over "$550 yearly · due Mar 11th, 2027") with no card after the date, since the name carries it.
 - **Fee bill sheet:** Change opens on priority with Paid from folded under it; "Fee and date" ("Change it on Capital One Venture X") opens the card's form (Track); no Mark paid, no group move, no End or Archive.
 - **Group sheet:** only the priority rows and one line saying the group follows the cards (at Plan, without card wording).
