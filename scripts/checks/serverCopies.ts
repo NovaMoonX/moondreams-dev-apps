@@ -116,6 +116,11 @@ const COPIES: Copy[] = [
     importRewrites: { '@apps/helm/constants': './topicLimits.js' },
   },
   {
+    src: 'src/apps/helm/utils/stepGroups.ts',
+    dest: 'functions/src/apps/helm/stepGroups.ts',
+    importRewrites: {},
+  },
+  {
     src: 'src/apps/helm/utils/mediaCaps.ts',
     dest: 'functions/src/apps/helm/media/mediaCaps.ts',
     importRewrites: {},
