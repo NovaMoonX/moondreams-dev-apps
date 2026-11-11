@@ -5321,7 +5321,10 @@ export const PLAN_SELECT_WORDS = {
   groupSub: 'Or take them out of their group',
   payOnTitle: 'When do you pay them?',
   payOnSkipped: (names: readonly string[]) =>
-    `${listNames(names)} ${names.length === 1 ? 'is' : 'are'} paid by the week or ${names.length === 1 ? 'has' : 'have'} no due date, so ${names.length === 1 ? 'it keeps its' : 'they keep their'} own.`,
+    `${listNames(names)} ${names.length === 1 ? 'keeps its' : 'keep their'} own pay day.`,
+  feeSkipped: (names: readonly string[]) =>
+    `${listNames(names)} ${names.length === 1 ? 'stays with its card' : 'stay with their cards'}, so ${names.length === 1 ? "it isn't" : "they aren't"} changed.`,
+  feeOnly: 'Annual fee bills are archived with their card.',
   paidFromTitle: 'Which pay covers them?',
   paidFromPinsNote: (count: number) =>
     count === 1

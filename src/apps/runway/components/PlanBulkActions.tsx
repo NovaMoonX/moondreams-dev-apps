@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import {
   Archive,
   CalendarDays,
@@ -149,6 +149,15 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
   };
 
   const changeable = ticked.filter(({ payload }) => !isFeeBill(payload));
+  const feeNames = ticked
+    .filter(({ payload }) => isFeeBill(payload))
+    .map(({ name }) => name);
+  const feeNote =
+    feeNames.length > 0 ? (
+      <p className='text-muted-foreground text-sm'>
+        {PLAN_SELECT_WORDS.feeSkipped(feeNames)}
+      </p>
+    ) : null;
   const applyToAll = (change: (payload: MemberPayload) => MemberPayload) =>
     bulk.plan(ticked, change);
   const applyToChangeable = (
@@ -252,7 +261,13 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
   return (
     <>
       <SelectionBar
-        note={isNothing ? PLAN_SELECT_WORDS.nothing(noun) : null}
+        note={
+          isNothing
+            ? PLAN_SELECT_WORDS.nothing(noun)
+            : changeable.length === 0
+              ? PLAN_SELECT_WORDS.feeOnly
+              : null
+        }
         actions={[
           {
             key: 'archive',
@@ -329,6 +344,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
           sheetTitle={PLAN_SELECT_WORDS.paidWith}
           onClose={backToMenu}
         >
+          {feeNote}
           <PaidWithBody
             cards={shownCards.map((card) => ({
               value: card.id,
@@ -377,6 +393,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
       )}
       {sheet === 'group' && (
         <GroupPickSheet
+          feeNote={feeNote}
           onClose={backToMenu}
           onPick={(groupId) =>
             void save(
@@ -392,6 +409,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
         <ArchiveSheet
           view={view}
           ticked={changeable}
+          feeNote={feeNote}
           heldByItem={heldByItem}
           isSaving={isArchiving}
           onClose={close}
@@ -748,9 +766,11 @@ function PrioritySheet({
 }
 
 function GroupPickSheet({
+  feeNote,
   onClose,
   onPick,
 }: {
+  feeNote: ReactNode;
   onClose: () => void;
   onPick: (groupId: string | null) => void;
 }) {
@@ -764,6 +784,7 @@ function GroupPickSheet({
       sheetTitle={PLAN_SELECT_WORDS.group}
       onClose={onClose}
     >
+      {feeNote}
       <ul className='border-border divide-border bg-card mb-4 max-h-[max(9rem,calc(92dvh-20rem))] divide-y overflow-y-auto rounded-2xl border'>
         {groups
           .filter(({ item }) => !isCardFeeGroup(item.id))
@@ -793,6 +814,7 @@ function GroupPickSheet({
 function ArchiveSheet({
   view,
   ticked,
+  feeNote,
   heldByItem,
   isSaving,
   onClose,
@@ -800,6 +822,7 @@ function ArchiveSheet({
 }: {
   view: SelectView;
   ticked: readonly TickedItem[];
+  feeNote: ReactNode;
   heldByItem: Record<string, number>;
   isSaving: boolean;
   onClose: () => void;
@@ -830,6 +853,7 @@ function ArchiveSheet({
             {PLAN_SELECT_WORDS.archiveBody(ticked.map(({ name }) => name))}
           </p>
         </div>
+        {feeNote}
         {isAsking && (
           <div className='space-y-2'>
             <p className='text-muted-foreground text-xs'>
