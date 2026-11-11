@@ -241,7 +241,6 @@ const useHistoryLayer = (
   }, [isOpen, kind, dialogId]);
 };
 
-/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL (or `address`, pushed with it) carries `param`; every kept entry is written here, so it carries this load's stamp. */
 /** Marks the current entry as a step this page load pushed, so Back may pop it; a mark an earlier load left never counts. */
 export function markHistoryStep(
   flag: string,
@@ -260,6 +259,7 @@ export function isHistoryStep(flag: string) {
   );
 }
 
+/** A screen opened over a layer about to close would take that layer's history entry, so Back would skip the layer; a plain entry pushed first keeps it. Only when the URL (or `address`, pushed with it) carries `param`; every kept entry is written here, so it carries this load's stamp. */
 export function keepEntryFor(param: string, address?: URL) {
   const search = address?.search ?? window.location.search;
   if (!new URLSearchParams(search).has(param)) return;

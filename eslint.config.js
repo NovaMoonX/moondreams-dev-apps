@@ -47,7 +47,7 @@ export default defineConfig([
         },
         {
           selector:
-            "CallExpression[callee.property.name='replaceState'] > ObjectExpression > Property > Literal[value=true]",
+            "CallExpression[callee.property.name=/^(replaceState|pushState)$/] > ObjectExpression > Property > Literal[value=true]",
           message:
             "Mark a Back step with markHistoryStep/isHistoryStep ('@/hooks/useBackHistory'): history.state outlives a reload, so a `true` mark from an earlier load pops onto the old page and loads the app again.",
         },
