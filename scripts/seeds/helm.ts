@@ -2539,7 +2539,7 @@ async function buildProcedures(input: {
       by: 'person',
       reason: 'personEdit',
       at: now - 2 * DAY_MS,
-      summary: 'You changed 1 step',
+      summary: 'You changed Smart shoes',
       title: 'Packing for a work trip',
       steps: withSmartShoes,
     },
