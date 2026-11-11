@@ -11,6 +11,14 @@ The user attaches the planning docs for a new app and runs this command. They ex
 
 Work autonomously. Don't ask questions you can answer from the docs, the code or `CLAUDE.md`. Ask only when a decision is genuinely theirs and blocks progress.
 
+**Post a 🧭 progress line often, so the owner can find where the run stands while scrolling.** Send one whenever a PR opens or its review finishes, when you start the next issue, and whenever an hour has passed without one. Each starts with 🧭, takes three or four short lines and holds no 🚩 or ⚠️ of its own:
+- the PRs opened out of the MVP issues (`41 of 64 PRs open`) and which were merged;
+- the issue being worked now and its step (building, reviewing, fixing, wrapping up);
+- the issues parked or skipped, each with a few words on why;
+- what comes after the MVP (the polish PR, the overview comment).
+
+Write it from `mvp-state.md`, never from memory. Name what remains, not an estimate of how long it will take (owner: "so I know where things stand").
+
 Run this as `orchestrate` describes: you plan and verify each PR, `implementer` agents build the planned chunks, `validator` checks them. Read `CLAUDE.md` and the `docs/conventions/` files its "Read before you touch" table names before writing code. Every rule there applies to every PR, as does every checklist in `.claude/skills/finish-feature-pr/SKILL.md`.
 
 The app's look is one `<app>.css` on a theme class, built per `docs/conventions/app-look.md` (including "Where a visual rule lives" and "Text color is part of the theme"): tokens, radius and field padding, selected-pill tint, and quiet tappable text. Anything every app should get goes in `src/index.css` once, never copied per app.
