@@ -76,7 +76,7 @@ function WhoView({ onBack, onHome, onOpenWho }: WhoViewProps) {
     <div className='helm-card divide-border divide-y overflow-hidden'>
       {toChunks(list).map((chunk, index) => (
         <LazyMount
-          key={index}
+          key={chunk[0].id}
           eager={index === 0}
           estimatedHeight={chunk.length * ROW_HEIGHT}
         >
