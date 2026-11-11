@@ -346,9 +346,19 @@ function ItemRow({
         <Button
           type='button'
           variant='tertiary'
-          className={join(rowClass, 'min-w-0 flex-1')}
+          className={join(
+            rowClass,
+            'min-w-0 flex-1',
+            onLongPress && 'select-none [-webkit-touch-callout:none]',
+          )}
           aria-label={tick && ariaLabel ? `${ariaLabel}. Tick it` : ariaLabel}
-          onClick={tick ? () => tick.onChange(!tick.checked) : onOpen}
+          {...(onLongPress ? longPress : {})}
+          onClick={(event) => {
+            if (onLongPress) longPress.onClick(event);
+            if (event.defaultPrevented) return;
+            if (tick) tick.onChange(!tick.checked);
+            else onOpen?.();
+          }}
         >
           {text}
         </Button>

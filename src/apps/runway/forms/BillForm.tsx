@@ -380,7 +380,7 @@ const getEveryMonths = (data: BillFormData): number | null => {
     : null;
 };
 
-/** A day of the month to pay on means something for a bill paid once or by the month, not by the week. */
+/** A day of the month to pay on means something for a bill paid at most once a month. */
 const canPayOnDay = (frequency: Frequency | null) =>
   frequency !== null &&
   frequency !== 'weekly' &&
@@ -1670,7 +1670,8 @@ function BillFormBody({
         isAccountsLoaded,
       ),
       paysItself: isTracking ? data.paysItself : startData.paysItself,
-      payOnDay: canPayOnDay(data.frequency) ? data.payOnDay : null,
+      payOnDay:
+        canPayOnDay(data.frequency) && !data.isLater ? data.payOnDay : null,
     };
     return result;
   };

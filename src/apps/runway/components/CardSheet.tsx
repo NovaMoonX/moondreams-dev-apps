@@ -81,7 +81,7 @@ function CardBills({ cardId, today, onClose }: CardBillsProps) {
       <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
         {shown.map(({ item, version }) => {
           const payment =
-            (payments[item.id] ?? []).find((entry) => entry.dueOn >= today) ??
+            (payments[item.id] ?? []).find((entry) => entry.payOn >= today) ??
             null;
           const due =
             payment === null

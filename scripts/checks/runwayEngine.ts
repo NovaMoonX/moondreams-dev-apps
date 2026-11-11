@@ -1631,6 +1631,39 @@ const version = (
     ],
     'paid on the 1st, the pay on the 30th before it carries it',
   );
+  {
+    const shortHorizon = utc(2026, 12, 31);
+    const early = planBillPayments(
+      makeBill({
+        schedule: monthly(utc(2027, 1, 3)),
+        fundedBy: { kind: 'lastBefore' },
+        payOnDay: 25,
+      }),
+      monthEndPays,
+      shortHorizon,
+    );
+    assert.deepEqual(
+      [toDayStamp(early[0].dueOn), toDayStamp(early[0].payOn)],
+      ['20270103', '20261225'],
+      'a payment due past the horizon but paid inside it is planned',
+    );
+    const twice = planBillPayments(
+      makeBill({
+        schedule: {
+          kind: 'monthly',
+          anchor: utc(2027, 1, 1),
+          monthDays: [1, 15],
+        },
+        payOnDay: 20,
+      }),
+      monthEndPays,
+      horizon,
+    );
+    assert.ok(
+      twice.every((payment) => payment.payOn === payment.dueOn),
+      'two payments a month ignore a pay day, so they never share one',
+    );
+  }
 
   // A monthly bill on the 31st lands on the last day of shorter months.
   assert.deepEqual(

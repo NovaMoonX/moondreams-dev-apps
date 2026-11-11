@@ -61,6 +61,13 @@ const everyMonthsDates = (anchor: number, to: number, interval: number) => {
   return result;
 };
 
+/** A pay-on day only means something for a schedule with at most one payment a month; two in one month would share a pay day. */
+export const canPayOnSchedule = (schedule: Schedule) =>
+  schedule.kind !== 'weekly' &&
+  schedule.kind !== 'everyOtherWeek' &&
+  schedule.kind !== 'twiceMonthly' &&
+  new Set(schedule.monthDays).size <= 1;
+
 /** The day a payment due on `dueOn` is paid: the last `payOnDay` of a month on or before it (a short month's last day), or the due date itself. */
 export const toPayOn = (dueOn: number, payOnDay: number | null | undefined) => {
   if (!payOnDay) return dueOn;

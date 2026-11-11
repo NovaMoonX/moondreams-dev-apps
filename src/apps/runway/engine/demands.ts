@@ -53,6 +53,7 @@ import {
   getIntervalMonths,
   occurrences,
   selectRuleDays,
+  canPayOnSchedule,
   toPayOn,
 } from './schedule';
 import { matchMovedDates } from './moved';
@@ -664,26 +665,40 @@ const getDueBeyond = (stretch: DraftBillStretch, horizon: number) => {
   ).slice(0, 1);
 };
 
-/** Each payment of a bill up to `horizon` with the stretch in force on its due day; a stretch's dates stop the day before the next begins. */
+/** Each payment of a bill paid by `horizon` with the stretch in force on its due day; a stretch's dates stop the day before the next begins. A pay-on day pays up to a month ahead, so a payment due just past the horizon can still be paid inside it. */
 const getDues = (stretches: readonly DraftBillStretch[], horizon: number) => {
-  const inRange = stretches.flatMap((stretch, index) => {
-    const next = stretches[index + 1];
-    return occurrences(
-      stretch.schedule,
-      stretch.ending,
-      index === 0 ? (stretch.schedule.anchor ?? 0) : stretch.from,
-      next ? Math.min(horizon, next.from - DAY_MS) : horizon,
-    ).map((dueOn) => ({ dueOn, stretch }));
-  });
+  const inRange = stretches
+    .flatMap((stretch, index) => {
+      const next = stretches[index + 1];
+      const payOnDay = canPayOnSchedule(stretch.schedule)
+        ? stretch.payOnDay
+        : null;
+      const reach = payOnDay ? addUtcMonths(horizon, 1) : horizon;
+      return occurrences(
+        stretch.schedule,
+        stretch.ending,
+        index === 0 ? (stretch.schedule.anchor ?? 0) : stretch.from,
+        next ? Math.min(reach, next.from - DAY_MS) : reach,
+      ).map((dueOn) => ({
+        dueOn,
+        stretch,
+        payOn: toPayOn(dueOn, payOnDay),
+      }));
+    })
+    .filter((entry) => entry.payOn <= horizon);
   const last = stretches[stretches.length - 1];
-  const result = [
-    ...inRange,
-    ...getDueBeyond(last, horizon).map((dueOn) => ({ dueOn, stretch: last })),
-  ].map((entry) => ({
-    ...entry,
-    payOn: toPayOn(entry.dueOn, entry.stretch.payOnDay),
-  }));
-  return result;
+  const listed = new Set(inRange.map((entry) => entry.dueOn));
+  const beyond = getDueBeyond(last, horizon)
+    .filter((dueOn) => !listed.has(dueOn))
+    .map((dueOn) => ({
+      dueOn,
+      stretch: last,
+      payOn: toPayOn(
+        dueOn,
+        canPayOnSchedule(last.schedule) ? last.payOnDay : null,
+      ),
+    }));
+  return [...inRange, ...beyond];
 };
 
 /** Of what a payment due after the horizon still needs, the part the income days up to the horizon carry: its share of the time from the window's first day to the due date. */

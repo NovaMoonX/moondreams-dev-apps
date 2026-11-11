@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Archive,
   CalendarDays,
@@ -46,6 +46,7 @@ import {
   usePlanBulk,
   type BulkPlan,
 } from '@apps/runway/hooks/usePlanBulk';
+import { canPayOnSchedule } from '@apps/runway/engine/schedule';
 import type { SelectView } from '@apps/runway/hooks/usePlanSelection';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
@@ -66,6 +67,7 @@ import type {
   GoalSealed,
   Priority,
 } from '@apps/runway/types';
+import { describePayOnDay } from '@apps/runway/utils/billText';
 import { getCardName } from '@apps/runway/utils/cardText';
 import { planGroupPriority } from '@apps/runway/utils/groupPriority';
 
@@ -76,12 +78,11 @@ type Sheet =
 const NO_PAY_WAY = 'none';
 const LEAVE = 'leave';
 
-/** A day of the month to pay on means something only for a dated bill paid once or by the month. */
+/** A day of the month to pay on means something only for a dated bill paid at most once a month. */
 const canPayOnDay = (payload: MemberPayload) =>
   'timing' in payload &&
   payload.timing.schedule.anchor !== null &&
-  payload.timing.schedule.kind !== 'weekly' &&
-  payload.timing.schedule.kind !== 'everyOtherWeek';
+  canPayOnSchedule(payload.timing.schedule);
 
 export interface TickedItem {
   itemId: string;
@@ -103,6 +104,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
   const bulk = usePlanBulk(view);
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [isArchiving, setIsArchiving] = useState(false);
+  const archivingRef = useRef(false);
   const isTracking = isTrackingLevel(useAppSelector(selectLevel));
   const allCards = useAppSelector(selectAllCards);
   const accounts = useAppSelector(selectAccounts);
@@ -119,6 +121,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
   const hasPaidWith = isTracking || shownAccounts.length > 0;
 
   const close = () => setSheet(null);
+  const backToMenu = () => setSheet('menu');
 
   const save = async (
     plans: readonly BulkPlan[],
@@ -130,6 +133,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
       return;
     }
     const failed = await bulk.run(plans, options);
+    if (failed === null) return;
     const tickedIds = ticked.map(({ itemId }) => itemId);
     close();
     onSaved(
@@ -142,7 +146,8 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
     bulk.plan(ticked, change);
 
   const archive = async (heldChoice: HeldChoice | null) => {
-    if (!user || isArchiving) return;
+    if (!user || archivingRef.current) return;
+    archivingRef.current = true;
     setIsArchiving(true);
     const today = todayAsUtcDate();
     const encryption = await getRunwayEncryption(user.uid).catch(() => null);
@@ -165,6 +170,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
       : ticked.map(
           () => ({ status: 'rejected', reason: null }) as PromiseRejectedResult,
         );
+    archivingRef.current = false;
     setIsArchiving(false);
     const failed = ticked.filter(
       (_, index) => results[index].status === 'rejected',
@@ -280,7 +286,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
         <PayOnSheet
           ticked={ticked}
           isSaving={bulk.isWriting}
-          onClose={close}
+          onClose={backToMenu}
           onSave={(payOnDay) =>
             void save(
               applyToAll((payload) =>
@@ -294,7 +300,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
         <PaidFromSheet
           ticked={ticked}
           isSaving={bulk.isWriting}
-          onClose={close}
+          onClose={backToMenu}
           onSave={(kind) =>
             void save(
               applyToAll((payload) =>
@@ -311,7 +317,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
         <SmallSheet
           title={PLAN_SELECT_WORDS.paidWithTitle}
           sheetTitle={PLAN_SELECT_WORDS.paidWith}
-          onClose={close}
+          onClose={backToMenu}
         >
           <PaidWithBody
             cards={shownCards.map((card) => ({
@@ -325,7 +331,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             }))}
             isTracking={isTracking}
             isSaving={bulk.isWriting}
-            onClose={close}
+            onClose={backToMenu}
             onSave={(payWay, paysItself) =>
               void save(
                 applyToAll((payload) => {
@@ -355,13 +361,13 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
           view={view}
           ticked={ticked}
           isSaving={bulk.isWriting}
-          onClose={close}
+          onClose={backToMenu}
           onSave={(plans) => void save(plans)}
         />
       )}
       {sheet === 'group' && (
         <GroupPickSheet
-          onClose={close}
+          onClose={backToMenu}
           onPick={(groupId) =>
             void save(
               applyToAll((payload) => ({
@@ -482,6 +488,9 @@ function PayOnSheet({
           onPick={setDay}
         />
       )}
+      {mode === 'day' && day !== null && (
+        <p className='text-muted-foreground text-sm'>{describePayOnDay(day)}</p>
+      )}
       {skipped.length > 0 && (
         <p className='text-muted-foreground text-sm'>
           {PLAN_SELECT_WORDS.payOnSkipped(skipped)}
@@ -489,6 +498,7 @@ function PayOnSheet({
       )}
       <Footer
         isDisabled={!isReady}
+        note={!isReady ? PLAN_SELECT_WORDS.pickToContinue : null}
         isSaving={isSaving}
         onClose={onClose}
         onSave={() => onSave(mode === 'day' ? day : null)}
@@ -549,7 +559,11 @@ function PaidFromSheet({
       />
       <Footer
         note={
-          pinCount > 0 ? PLAN_SELECT_WORDS.paidFromPinsNote(pinCount) : null
+          kind === null
+            ? PLAN_SELECT_WORDS.pickToContinue
+            : pinCount > 0
+              ? PLAN_SELECT_WORDS.paidFromPinsNote(pinCount)
+              : null
         }
         isDisabled={kind === null}
         isSaving={isSaving}
@@ -621,6 +635,7 @@ function PaidWithBody({
       )}
       <Footer
         isDisabled={!isReady}
+        note={!isReady ? PLAN_SELECT_WORDS.pickToContinue : null}
         isSaving={isSaving}
         onClose={onClose}
         onSave={() =>
@@ -713,6 +728,7 @@ function PrioritySheet({
       )}
       <Footer
         isDisabled={choice === null}
+        note={choice === null ? PLAN_SELECT_WORDS.pickToContinue : null}
         isSaving={isSaving}
         onClose={onClose}
         onSave={() => choice && onSave(planFor(choice))}
@@ -808,7 +824,7 @@ function ArchiveSheet({
               <MaskedText>
                 {PLAN_SELECT_WORDS.archiveHeld(
                   formatCents(heldCents),
-                  holding.length,
+                  holding.map(({ name }) => name),
                   ticked.length,
                 )}
               </MaskedText>
@@ -886,10 +902,12 @@ export function PlanSelectHeader({
         aria-label={PLAN_SELECT_WORDS.hint}
         className='flex flex-wrap items-center gap-2'
       >
-        <Pill isThin isSelected={isAll} onClick={() => onToggle(allIds)}>
-          {PLAN_SELECT_WORDS.selectAll}
-        </Pill>
-        {count > 0 && !isAll && (
+        {!isAll && (
+          <Pill isThin isSelected={false} onClick={() => onToggle(allIds)}>
+            {PLAN_SELECT_WORDS.selectAll}
+          </Pill>
+        )}
+        {count > 0 && (
           <Pill isThin isSelected={false} onClick={() => onToggle(tickedIds)}>
             {PLAN_SELECT_WORDS.clearAll}
           </Pill>

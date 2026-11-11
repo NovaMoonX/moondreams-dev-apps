@@ -193,7 +193,7 @@ export function findAutoMarks(input: {
           billId: bill.id,
           billName: bill.name,
           dueOn: payment.dueOn,
-          paidOn: payment.payOn ?? payment.dueOn,
+          paidOn: Math.max(payment.payOn ?? payment.dueOn, bill.since),
           amountCents: payment.highCents,
           isEstimate: payment.lowCents !== payment.highCents,
           cardId: bill.cardId,

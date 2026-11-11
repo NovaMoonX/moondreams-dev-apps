@@ -5305,6 +5305,9 @@ export const PLAN_SELECT_WORDS = {
     `Updated ${count} ${count === 1 ? noun[0] : noun[1]}`,
   updatedPartly: (done: number, total: number, failed: readonly string[]) =>
     `Updated ${done} of ${total}. ${listNames(failed)} did not save and ${failed.length === 1 ? 'is' : 'are'} still selected.`,
+  pinsKept: (names: readonly string[]) =>
+    `${listNames(names)} kept ${names.length === 1 ? 'its' : 'their'} amounts per pay. Open ${names.length === 1 ? 'it' : 'each'} to clear them.`,
+  pickToContinue: 'Pick one to continue.',
   failed: 'That did not save. Nothing was changed.',
   undo: 'Undo',
   undone: 'Put back as they were',
@@ -5315,12 +5318,12 @@ export const PLAN_SELECT_WORDS = {
     `Archive ${count} ${count === 1 ? noun[0] : noun[1]}?`,
   archiveBody: (names: readonly string[]) =>
     `${listNames(names)} ${names.length === 1 ? 'leaves' : 'leave'} your plan from today. ${names.length === 1 ? 'Its' : 'Their'} history stays.`,
-  archiveHeld: (amount: string, holding: number, total: number) =>
+  archiveHeld: (amount: string, holding: readonly string[], total: number) =>
     total === 1
       ? `It holds ${amount}`
-      : holding === 1
-        ? `One of them holds ${amount}`
-        : `${holding} of them hold ${amount} together`,
+      : holding.length === 1
+        ? `${holding[0]} holds ${amount}`
+        : `${listNames(holding)} hold ${amount} together`,
   archiveConfirm: (count: number, noun: readonly [string, string]) =>
     `Archive ${count} ${count === 1 ? noun[0] : noun[1]}`,
   archived: (count: number, noun: readonly [string, string]) =>

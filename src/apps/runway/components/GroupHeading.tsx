@@ -79,8 +79,12 @@ function GroupHeading({
           type='button'
           variant='tertiary'
           aria-label={label}
-          className='text-foreground! flex h-auto min-h-11 min-w-0 flex-1 flex-col items-start justify-start gap-0 px-2! py-1.5! text-left font-normal whitespace-normal'
-          onClick={select.onToggle}
+          className='text-foreground! flex h-auto min-h-11 min-w-0 flex-1 flex-col items-start justify-start gap-0 px-2! py-1.5! text-left font-normal whitespace-normal select-none [-webkit-touch-callout:none]'
+          {...(onHold ? longPress : {})}
+          onClick={(event) => {
+            if (onHold) longPress.onClick(event);
+            if (!event.defaultPrevented) select.onToggle();
+          }}
         >
           <span className='line-clamp-2 text-base font-semibold break-words'>
             {emoji && `${emoji} `}

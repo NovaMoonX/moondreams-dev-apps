@@ -52,6 +52,7 @@ export interface BulkPlan {
 
 interface Written extends BulkPlan {
   pins: BillPin[];
+  isPinKept: boolean;
 }
 
 /** An item's stretches from `from` on, read from the store as it is now. */
@@ -75,6 +76,7 @@ export function usePlanBulk(view: SelectView) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [isWriting, setIsWriting] = useState(false);
+  const writingRef = useRef(false);
   const handledUndos = useRef(new Set<readonly Written[]>());
   const kind = KIND_OF[view];
   const noun = PLAN_SELECT_WORDS.noun[view];
@@ -154,11 +156,17 @@ export function usePlanBulk(view: SelectView) {
     handledUndos.current.add(written);
     try {
       const today = todayAsUtcDate();
-      const isUntouched = (entry: Written) =>
-        isSameValue(
-          readStretches(kind, entry.itemId, entry.written[0].effectiveFrom),
+      const isUntouched = (entry: Written) => {
+        const starts = new Set(entry.written.map((s) => s.effectiveFrom));
+        return isSameValue(
+          readStretches(
+            kind,
+            entry.itemId,
+            entry.written[0].effectiveFrom,
+          ).filter((stretch) => starts.has(stretch.effectiveFrom)),
           entry.written,
         );
+      };
       const untouched = written.filter(isUntouched);
       const results = await Promise.allSettled(
         untouched.map(async (entry) => {
@@ -167,7 +175,7 @@ export function usePlanBulk(view: SelectView) {
             entry,
             entry.original,
             entry.written[0].payload,
-            today,
+            Math.max(entry.written[0].effectiveFrom, today),
           );
           if (entry.pins.length === 0) return;
           const encryption = await getRunwayEncryption(uid);
@@ -206,12 +214,13 @@ export function usePlanBulk(view: SelectView) {
     }
   };
 
-  /** Saves every plan; a bill whose Paid from changes also loses its per-pay figures from today, put back by the Undo. Returns the ids that did not save. */
+  /** Saves every plan; a bill whose Paid from changes also loses its per-pay figures from today, put back by the Undo. Returns the ids that did not save, or null when nothing ran (a save already running). */
   const run = async (
     plans: readonly BulkPlan[],
     options: { clearsPins?: boolean } = {},
-  ): Promise<string[]> => {
-    if (!user || isWriting || plans.length === 0) return [];
+  ): Promise<string[] | null> => {
+    if (!user || writingRef.current || plans.length === 0) return null;
+    writingRef.current = true;
     const uid = user.uid;
     const today = todayAsUtcDate();
     setIsWriting(true);
@@ -222,27 +231,27 @@ export function usePlanBulk(view: SelectView) {
           entry,
           entry.written,
           entry.original[0].payload,
-          today,
+          Math.max(entry.written[0].effectiveFrom, today),
         );
         if (!options.clearsPins || kind !== 'bill')
-          return { ...entry, pins: [] };
+          return { ...entry, pins: [], isPinKept: false };
         const pins = getBillPins(
           store.getState().runway.days,
           entry.itemId,
           today,
         );
-        if (pins.length === 0) return { ...entry, pins: [] };
-        const encryption = await getRunwayEncryption(uid);
-        const cleared = await clearBillPins(
-          uid,
-          encryption,
-          entry.itemId,
-          entry.name,
-          pins,
-        ).catch(() => [] as BillPin[]);
-        return { ...entry, pins: cleared };
+        if (pins.length === 0) return { ...entry, pins: [], isPinKept: false };
+        const cleared = await getRunwayEncryption(uid)
+          .then((encryption) =>
+            clearBillPins(uid, encryption, entry.itemId, entry.name, pins),
+          )
+          .catch(() => null);
+        return cleared === null
+          ? { ...entry, pins: [], isPinKept: true }
+          : { ...entry, pins: cleared, isPinKept: false };
       }),
     );
+    writingRef.current = false;
     setIsWriting(false);
     const written = results.flatMap((result) =>
       result.status === 'fulfilled' ? [result.value] : [],
@@ -250,6 +259,9 @@ export function usePlanBulk(view: SelectView) {
     const failed = plans.filter(
       (_, index) => results[index].status === 'rejected',
     );
+    const kept = written
+      .filter((entry) => entry.isPinKept)
+      .map((entry) => entry.name);
     if (written.length === 0) {
       const reason = results.find((result) => result.status === 'rejected');
       addToast({
@@ -271,7 +283,9 @@ export function usePlanBulk(view: SelectView) {
               plans.length,
               failed.map(({ name }) => name),
             ),
-      type: failed.length === 0 ? 'success' : 'warning',
+      description:
+        kept.length === 0 ? undefined : PLAN_SELECT_WORDS.pinsKept(kept),
+      type: failed.length === 0 && kept.length === 0 ? 'success' : 'warning',
       action: {
         label: PLAN_SELECT_WORDS.undo,
         onClick: () => void undo(uid, written),
