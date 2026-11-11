@@ -61,13 +61,14 @@ export function getPurchaseTitle(
   return isRefund(purchase) && !isHidden ? `Refund to ${where}` : where;
 }
 
-/** Where a purchase's money went, in a row's words: its envelopes, or "Not counted" when it is left out of spending. */
+/** Where a purchase's money went, in a row's words: its envelopes, or `emptyWhere` ("Not counted" unless the caller knows better) when it has none. */
 export function describePurchaseWhere(
   purchase: OpenPurchase,
   envelopes: string,
   isHidden = false,
+  emptyWhere = NOT_COUNTED,
 ) {
-  if (purchase.lines.length === 0 || envelopes === '') return NOT_COUNTED;
+  if (purchase.lines.length === 0 || envelopes === '') return emptyWhere;
   return isRefund(purchase) && !isHidden ? `refund to ${envelopes}` : envelopes;
 }
 
@@ -76,10 +77,11 @@ export function getPurchaseFacts(
   purchase: OpenPurchase,
   envelopes: string,
   isHidden = false,
+  emptyWhere = NOT_COUNTED,
 ): string[] {
   const label = purchase.label?.trim() || null;
   const merchant = purchase.merchant?.trim() || null;
-  const where = describePurchaseWhere(purchase, envelopes, isHidden);
+  const where = describePurchaseWhere(purchase, envelopes, isHidden, emptyWhere);
   if (label === null && merchant === null)
     return purchase.lines.length === 0 ? [where] : [];
   return [label !== null ? merchant : null, where].filter(

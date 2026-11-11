@@ -67,38 +67,63 @@ assert.equal(
   'apps/runway/server/u1/notified/needsHome_2026-03-10',
 );
 
-// Sorting switch: money in always counts, a charge only after the switch's moment and while it is off.
-const rows = [
-  { createdAt: 100, date: 0, amountCents: 500 },
-  { createdAt: 300, date: 0, amountCents: 700 },
-  { createdAt: 100, date: 0, amountCents: -900 },
-];
+// Sorting switch: a charge counts only after the switch's moment and while it is off; no switch counts every charge.
+const row = (createdAt: number, date: number, amountCents: number) => ({
+  createdAt,
+  date,
+  amountCents,
+  isOnCard: false,
+  isPending: false,
+});
+const rows = [row(100, 0, 500), row(300, 0, 700)];
 const DAY = 24 * 60 * 60 * 1000;
 assert.equal(readSorting(undefined), null);
 assert.equal(readSorting({ isPaused: 'yes', from: 1 }), null);
-assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 1);
-assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 2);
+assert.equal(countWaiting(rows, { isPaused: true, from: 200 }), 0);
+assert.equal(countWaiting(rows, { isPaused: false, from: 200 }), 1);
+assert.equal(countWaiting(rows, null), 2);
 const paused = { isPaused: true, from: 200 };
-// A quiet charge that money in of its amount may pair with (within three days) still counts, as the screen keeps it.
+// Money in with nothing to pair and not on a card is counted already and never waits.
+assert.equal(countWaiting([row(100, 0, -900)], null), 0);
+// Money in on a card still asks (card payment, refund or unseen account).
+assert.equal(countWaiting([{ ...row(100, 0, -900), isOnCard: true }], null), 1);
+// A quiet charge and money in of its amount within three days are a possible move: both count, as the screen keeps them.
 assert.equal(
-  countWaiting(
-    [...rows, { createdAt: 100, date: 2 * DAY, amountCents: 900 }],
-    paused,
-  ),
+  countWaiting([row(100, 0, -900), row(100, 2 * DAY, 900)], paused),
   2,
 );
-// The same amount weeks apart is no move, so the quiet charge stays quiet.
+// The same amount weeks apart is no move: the charge stays quiet and the money in doesn't wait.
+assert.equal(
+  countWaiting([row(100, 0, -900), row(100, 40 * DAY, 900)], paused),
+  0,
+);
+// Pending money in is on its way: it never counts, even on a card, and a pending charge is never the other side of a move.
 assert.equal(
   countWaiting(
-    [...rows, { createdAt: 100, date: 40 * DAY, amountCents: 900 }],
+    [{ ...row(100, 0, -900), isOnCard: true, isPending: true }],
+    null,
+  ),
+  0,
+);
+assert.equal(
+  countWaiting(
+    [row(100, 0, -900), { ...row(100, 2 * DAY, 900), isPending: true }],
     paused,
+  ),
+  1,
+);
+// Card money in that a pending charge of its amount may be the other side of waits with it and doesn't count.
+assert.equal(
+  countWaiting(
+    [
+      { ...row(100, 0, -900), isOnCard: true },
+      { ...row(100, DAY, 900), isPending: true },
+    ],
+    null,
   ),
   1,
 );
 // An unreadable document reads as 0 cents and counts.
-assert.equal(
-  countWaiting([{ createdAt: 100, date: 0, amountCents: 0 }], paused),
-  1,
-);
+assert.equal(countWaiting([row(100, 0, 0)], paused), 1);
 
 console.log('runwayNotifyText: ok');

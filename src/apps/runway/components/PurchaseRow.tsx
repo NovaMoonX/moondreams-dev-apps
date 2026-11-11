@@ -17,6 +17,8 @@ interface PurchaseRowProps {
   looks: ReadonlyMap<string, { name: string; emoji: string | null }>;
   /** The card or account it was paid with, shown after the day. */
   paidWith?: string | null;
+  /** What a row with no envelopes says instead of "Not counted". */
+  emptyWhere?: string;
   onOpen: () => void;
 }
 
@@ -25,6 +27,7 @@ function PurchaseRow({
   purchase,
   looks,
   paidWith = null,
+  emptyWhere,
   onOpen,
 }: PurchaseRowProps) {
   const { isHidden } = useValuesHidden();
@@ -49,7 +52,7 @@ function PurchaseRow({
   const detail = [
     date,
     ...(paidWith ? [paidWith] : []),
-    ...getPurchaseFacts(purchase, shortEnvelopes, isHidden),
+    ...getPurchaseFacts(purchase, shortEnvelopes, isHidden, emptyWhere),
   ].join(' · ');
   const amount = refund
     ? `+${formatCents(-purchase.amountCents)}`
