@@ -49,7 +49,6 @@ function AssistantForm({
     savedName === DEFAULT_ASSISTANT_NAME ? '' : savedName,
   );
   const [tone, setTone] = useState<AssistantTone>(savedTone);
-  const [isSaving, setIsSaving] = useState(false);
   const typedName = readAssistantName(text);
   const isNameValid = text.trim() === '' || typedName !== null;
   const nextName = typedName ?? DEFAULT_ASSISTANT_NAME;
@@ -63,21 +62,17 @@ function AssistantForm({
     );
   };
 
-  const save = async () => {
-    if (!user || !isNameValid || isSaving) return;
-    setIsSaving(true);
-    try {
-      await setAssistantNameAndTone(
-        user.uid,
-        nextName === DEFAULT_ASSISTANT_NAME ? null : nextName,
-        tone,
-      );
-      onSaved();
-    } catch (error) {
+  const save = () => {
+    if (!user || !isNameValid) return;
+    setAssistantNameAndTone(
+      user.uid,
+      nextName === DEFAULT_ASSISTANT_NAME ? null : nextName,
+      tone,
+    ).catch((error) => {
       console.error('Helm assistant name and tone were not saved', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
-      setIsSaving(false);
-    }
+    });
+    onSaved();
   };
 
   return (
@@ -96,18 +91,20 @@ function AssistantForm({
           errorMessage={isNameValid ? undefined : HELM_COPY.assistantNameError}
           onChange={(event) => change(event.target.value, tone)}
         />
-        <p className='text-muted-foreground text-[13px] text-pretty'>
-          {HELM_COPY.assistantNameHint}
-        </p>
+        {isNameValid && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.assistantNameHint}
+          </p>
+        )}
         {text !== '' && (
           <Button
             type='button'
             variant='tertiary'
             size='sm'
+            className='-ml-2'
             onClick={() => change('', tone)}
-            disabled={isSaving}
           >
-            {HELM_COPY.assistantUseDefault}
+            {HELM_COPY.assistantUseDefault(DEFAULT_ASSISTANT_NAME)}
           </Button>
         )}
       </div>
@@ -126,9 +123,8 @@ function AssistantForm({
               key={option.value}
               value={option.value}
               hideInput
-              disabled={isSaving}
               className={join(
-                'rounded-xl !border px-3 py-2.5 text-left transition-none focus-within:!border-solid',
+                'has-[:focus-visible]:ring-primary rounded-xl !border px-3 py-2.5 text-left transition-none focus-within:!border-solid has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-offset-2',
                 tone === option.value
                   ? '!border-primary bg-primary/5'
                   : 'bg-card !border-border',
@@ -146,22 +142,12 @@ function AssistantForm({
       </div>
       <ModalFooterActions
         cancelAction={
-          <Button
-            type='button'
-            variant='tertiary'
-            onClick={requestClose}
-            disabled={isSaving}
-          >
+          <Button type='button' variant='tertiary' onClick={requestClose}>
             {HELM_COPY.talkCancel}
           </Button>
         }
         rightActions={
-          <Button
-            type='button'
-            onClick={() => void save()}
-            loading={isSaving}
-            disabled={!isNameValid}
-          >
+          <Button type='button' onClick={save} disabled={!isNameValid}>
             {HELM_COPY.assistantSave}
           </Button>
         }

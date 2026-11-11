@@ -593,11 +593,17 @@ async function readPeople(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     timeZone: string;
     capturedAt: number;
   },
 ): Promise<PeopleInput | undefined> {
   const { firestore, base, key, captureRef, mentions, places } = input;
+  const assistantNames = [
+    input.assistantName,
+    input.calledAs,
+    DEFAULT_ASSISTANT_NAME,
+  ].filter((name) => name !== null);
   if (mentions.length === 0 && places.length === 0) return undefined;
   const [whoSnap, placeSnap] = await Promise.all(
     ['who', 'places'].map((name) =>
@@ -671,8 +677,8 @@ async function readPeople(
     logger.warn('helm.sort.peopleUnreadable', unreadable);
   }
   const matched = new Set(
-    matchWho({ mentions, known, assistantName: input.assistantName }).flatMap(
-      (match) => (match.kind === 'match' ? [match.id] : []),
+    matchWho({ mentions, known, assistantNames }).flatMap((match) =>
+      match.kind === 'match' ? [match.id] : [],
     ),
   );
   const zone = toKnownZone(input.timeZone);
@@ -713,6 +719,7 @@ async function readPeople(
     known: withHistory,
     knownPlaces,
     assistantName: input.assistantName,
+    assistantNames,
     dayKey: String(getDayIn(input.capturedAt, zone)),
     capturedAt: input.capturedAt,
   };
@@ -1427,6 +1434,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       mentions: [],
       places: [],
       assistantName: null,
+      calledAs: null,
       searched: createSearchedLog(),
       hasMore: false,
       base,
@@ -2064,6 +2072,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     mentions: reply.mentions,
     places: reply.places,
     assistantName,
+    calledAs: combined.reading.addressedAs?.text ?? null,
     searched,
     hasMore: reply.hasMore,
     base,
@@ -2175,6 +2184,7 @@ async function writeResult(
     mentions: MentionRead[];
     places: PlaceRead[];
     assistantName: string | null;
+    calledAs: string | null;
     searched: SearchedLog;
     hasMore: boolean;
     base: string;
@@ -2211,6 +2221,7 @@ async function writeResult(
     mentions,
     places,
     assistantName,
+    calledAs,
     searched,
     hasMore,
     base,
@@ -2485,6 +2496,7 @@ async function writeResult(
             mentions,
             places,
             assistantName,
+            calledAs,
             timeZone,
             capturedAt: capture.createdAt,
           })
@@ -2518,7 +2530,7 @@ async function writeResult(
                   ? matchWho({
                       mentions: people.mentions,
                       known: people.known,
-                      assistantName: people.assistantName,
+                      assistantNames: people.assistantNames,
                     }).flatMap((match, index): [string, string][] =>
                       match.kind === 'match'
                         ? [[people.mentions[index].ref, match.id]]

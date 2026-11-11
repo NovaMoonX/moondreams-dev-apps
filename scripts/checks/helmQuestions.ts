@@ -123,6 +123,7 @@ const plan = (people: Partial<PeopleInput>, commands: unknown[]) =>
       known: [],
       knownPlaces: [],
       assistantName: null,
+      assistantNames: [],
       dayKey: '2026-11-10',
       capturedAt: 4000,
       ...people,

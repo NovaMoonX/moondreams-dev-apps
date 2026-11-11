@@ -1199,13 +1199,12 @@ export const HELM_COPY = {
   assistantLine: (name: string, tone: string) => `${name} · ${tone}`,
   assistantNameLabel: 'Name',
   assistantNameHint:
-    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. This is also the name you say to wake it.',
-  assistantNameError:
-    'Use 1 to 16 letters, numbers, spaces, hyphens or apostrophes.',
-  assistantUseDefault: 'Use the default name',
-  assistantToneLabel: 'How it sounds',
+    'Up to 16 letters, numbers, spaces, hyphens or apostrophes. With Hey on in Voice service, it is also the name you say.',
+  assistantNameError: 'Letters, numbers, spaces, hyphens or apostrophes only.',
+  assistantUseDefault: (name: string) => `Use the default name (${name})`,
+  assistantToneLabel: 'How it answers',
   assistantToneHint:
-    'This shapes the answers it writes. Names, dates and what it files read the same in every tone.',
+    'Shapes its written answers. Names, dates and what it files never change.',
   assistantSave: 'Save',
   settingsPlanning: 'Planning',
   yourDayRow: 'Your day',

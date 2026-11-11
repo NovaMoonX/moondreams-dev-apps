@@ -143,7 +143,7 @@ const findMatch = (
       aliases: who.aliases,
       lastMentionedAt: who.lastMentionedAt,
     })),
-    assistantName: null,
+    assistantNames: [],
   })[0];
   return (
     people.find(isSameContact) ??

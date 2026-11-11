@@ -236,10 +236,10 @@ The owner's words: "Agent should be able to ask different types of questions, li
 
 - **Where.** Settings → "Your assistant": the name, tone and the "Hey [name]" switch ("Nomos · Composed"). Nothing asks for them at first run.
 - **Rename.** One text field, 1 to 16 characters, letters, numbers, spaces, hyphens and apostrophes. Clearing it, or "Use the default name", goes back to Nomos. The new name shows everywhere at once and is the name the assistant answers to: the wake phrase becomes "Hey [name]", and a turn that opens with the name drops it. Activity reads the current name for every line, old ones included.
-- **A name you can call.** When the wake phrase is on, the rename field adds "Say 'Hey [name]' to try it" and listens once; a name the phone's recognition doesn't catch twice in a row says "Your phone has trouble hearing 'Hey Sam'. Tap to talk still works." The rename is never refused for it. The wake phrase always follows the name.
+- **A name you can call.** (Not built yet: the rename sheet says the name is what you say once Hey is on in Voice service.) When the wake phrase is on, the rename field adds "Say 'Hey [name]' to try it" and listens once; a name the phone's recognition doesn't catch twice in a row says "Your phone has trouble hearing 'Hey Sam'. Tap to talk still works." The rename is never refused for it. The wake phrase always follows the name.
 - **Copy works for any name.** No line uses a pronoun for the assistant (no he, she, his, her), a possessive of its name, or a sentence that only reads right with "Nomos". The assistant's mark is the first letter of the chosen name (a feather when it doesn't start with a letter).
 - **The name isn't a person.** It is never matched to someone in Memory, so naming it "Sam" never touches the two Sams.
-- **Tone.** Four choices, each shown and played with the same sample answer before saving (a fixed sample, no AI call):
+- **Tone.** Four choices, each shown (playing it aloud is not built yet) with the same sample answer before saving (a fixed sample, no AI call):
   - **Composed** (the default): plain, complete sentences. "Your cake tasting is today at 3:00 PM at Sweet Layer Bakery."
   - **Warm**: friendlier, a few more words. "Your cake tasting is today at 3:00 PM at Sweet Layer Bakery. Hope it's a good one."
   - **Brief**: the fewest words. "Cake tasting: today, 3:00 PM, Sweet Layer Bakery."
