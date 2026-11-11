@@ -1738,8 +1738,8 @@ const version = (
         undefined,
         () => 'the pay on the 30th',
       ),
-      'Paid from spread across your pays to the pay on the 30th',
-      'a Paid from change reads as plain words',
+      'Set aside from spread across your pays to the pay on the 30th',
+      'a Set aside from change reads as plain words',
     );
     // A window with no pin of its own spreads as before, whatever is pinned in other months.
     assert.deepEqual(

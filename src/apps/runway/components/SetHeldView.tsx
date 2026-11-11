@@ -83,7 +83,7 @@ const describeAccountIn = (
   };
 };
 
-/** The view an envelope's or goal's sheet swaps in to say what it holds now, and a bill's to put money aside (added only: a bill's set-aside money is never taken back out here); the person says whether the difference moves with the account that holds it, Free to Spend, or outside the plan. */
+/** What an envelope or goal holds now, or money put aside for a bill (only ever added: a bill's set-aside is never taken back out here). */
 function SetHeldView({
   itemId,
   kind,
