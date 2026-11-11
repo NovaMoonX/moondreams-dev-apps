@@ -26,7 +26,8 @@ export type HelmView =
   | 'procedure'
   | 'run'
   | 'howNomosSeesYou'
-  | 'comingUp';
+  | 'comingUp'
+  | 'search';
 
 export type Sealed = EncryptedFieldPayload;
 

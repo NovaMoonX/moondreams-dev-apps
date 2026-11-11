@@ -1,6 +1,6 @@
 import type { Ref } from 'react';
 
-import { Settings2 } from 'lucide-react';
+import { Search, Settings2 } from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
 import { useAppDispatch, useAppSelector } from '@/store';
@@ -19,6 +19,7 @@ interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
   onComposerFocusChange: (isFocused: boolean) => void;
   onOpenSettings: () => void;
+  onOpenSearch: () => void;
 }
 
 const WAITING_PLACEHOLDER: Record<KeyStatus, string | null> = {
@@ -32,6 +33,7 @@ function HomeSurface({
   composerRef,
   onComposerFocusChange,
   onOpenSettings,
+  onOpenSearch,
 }: HomeSurfaceProps) {
   const name = useAssistantName();
   const dispatch = useAppDispatch();
@@ -48,7 +50,12 @@ function HomeSurface({
     <main className='flex flex-1 flex-col gap-8'>
       <div className='relative flex flex-col items-center gap-2 pt-10 text-center'>
         {keyStatus === 'ready' && (
-          <div className='absolute top-0 right-0'>
+          <div className='absolute top-0 right-0 flex items-center gap-2'>
+            <HeaderIconButton
+              icon={<Search className='size-4' aria-hidden='true' />}
+              label={HELM_COPY.searchTitle}
+              onClick={onOpenSearch}
+            />
             <HeaderIconButton
               icon={<Settings2 className='size-4' aria-hidden='true' />}
               label={HELM_COPY.settingsTitle}

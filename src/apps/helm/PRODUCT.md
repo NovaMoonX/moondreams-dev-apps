@@ -732,7 +732,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [ ] Today, one view among the others: a few tasks suggested for real gaps, rest days, "I'm home", a version without a calendar (O, N)
 - [x] Answers from your own records with their sources, short when spoken; general knowledge only when they don't say, clearly marked, with a stronger caution on health (O, C)
 - [x] Rename the assistant and choose one of four tones (O) (issue 58)
-- [ ] Activity: every turn and change, with Undo; Search across everything Helm keeps (O, C)
+- [x] Activity: every turn and change, with Undo; Search across everything Helm keeps (O, C) (issue 59 built Search: one field over people, tasks open and done, dates and moments, facts, notes, topics, projects, procedures, places, photo captions and connected apps' copies, from home and from Browse)
 - [ ] Trust this browser so Helm opens offline for up to 30 days at a time; the site's Sign out everywhere (O)
 - [ ] Everything stored encrypted, kept files and photos included; delete all of my Helm data (O, N, C)
 - [ ] Connected apps: connect, choose what each may read, see status and errors, disconnect with or without deleting copies; the site's account page lists every connection; every copied thing shows its source (O, N)

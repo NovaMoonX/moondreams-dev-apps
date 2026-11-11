@@ -10,6 +10,7 @@ import {
   Link2,
   ListChecks,
   MapPin,
+  Search,
   Settings2,
   UserRound,
   Users,
@@ -47,6 +48,7 @@ const VIEW_ENTRIES: Record<
   procedure: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   run: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
+  search: { label: HELM_COPY.searchTitle, icon: Search },
 };
 
 interface BrowseTileProps {

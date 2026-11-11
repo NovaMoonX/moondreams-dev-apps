@@ -2453,6 +2453,36 @@ export const HELM_COPY = {
   taskProjectRow: 'Project',
   resultProjectLine: (emoji: string | null, name: string) =>
     `Project · ${emoji ? `${emoji} ` : ''}${name}`,
+  searchTitle: 'Search',
+  searchEverything: 'Search everything',
+  searchPlaceholder: 'Search people, tasks, notes…',
+  searchHint: (assistant: string) =>
+    `Find anything you have told ${assistant}: people, tasks, dates, facts, notes and more.`,
+  searchNothing: (query: string, assistant: string) =>
+    `Nothing matches "${query}". Searched your people, tasks, dates, facts, notes, topics, projects, procedures, places, photos and connected apps. Mail and Drive are searched only when you ask ${assistant}.`,
+  searchLookingDone: 'Still looking through done tasks…',
+  searchLookingDates: 'Still looking through older dates…',
+  searchFailedDone:
+    "Couldn't look through done tasks. Open Search again to retry.",
+  searchFailedDates:
+    "Couldn't look through older dates. Open Search again to retry.",
+  searchGroupPeople: 'People',
+  searchGroupTasks: 'Tasks',
+  searchGroupDates: 'Dates',
+  searchGroupFacts: 'Facts',
+  searchGroupNotes: 'Notes',
+  searchGroupTopics: 'Topics',
+  searchGroupProjects: 'Projects',
+  searchGroupProcedures: 'Procedures',
+  searchGroupPlaces: 'Places',
+  searchGroupMedia: 'Photos and files',
+  searchGroupSynced: 'From your apps',
+  searchShowAll: (count: number) => `Show all ${count.toLocaleString('en-US')}`,
+  searchShowFewer: 'Show fewer',
+  searchFirstShown: (count: number) =>
+    `Showing the first ${count.toLocaleString('en-US')}. Add a word to narrow it.`,
+  searchLooseNote: 'Loose note',
+  searchOpenResult: (title: string) => `Open ${title}`,
 } as const;
 
 export const PLANNER_COPY = {

@@ -18,6 +18,8 @@ import { selectSelfFacts } from '@apps/helm/store/selectors/factSelectors';
 import type { OpenFact } from '@apps/helm/types';
 
 interface HowNomosSeesYouProps {
+  /** Where Back lands when it is not Home. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
 }
@@ -31,7 +33,11 @@ const topicsOf = (facts: OpenFact[], kind: OpenFact['kind']) => [
 ];
 
 /** What the assistant believes about the person: who they are, their preferences and favorites, each opening its fact to confirm, correct or forget. */
-function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
+function HowNomosSeesYou({
+  backLabel = 'Home',
+  onBack,
+  onHome,
+}: HowNomosSeesYouProps) {
   const assistant = useAssistantName();
   const now = useNow(60_000);
   const facts = useAppSelector(selectSelfFacts);
@@ -61,7 +67,7 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
 
   return (
     <>
-      <HelmHeader backLabel='Home' onBack={onBack} onHome={onHome} />
+      <HelmHeader backLabel={backLabel} onBack={onBack} onHome={onHome} />
       <main className='space-y-4 pt-4'>
         <div className='flex items-start justify-between gap-3'>
           <h1 className='helm-serif text-[28px] leading-[34px] text-pretty'>

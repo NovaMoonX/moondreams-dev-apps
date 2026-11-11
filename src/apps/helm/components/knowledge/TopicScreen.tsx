@@ -61,6 +61,8 @@ const HEADING_CLASS = {
 
 interface TopicScreenProps {
   topicId: string | null;
+  /** Where Back lands when it is not Knowledge. */
+  backLabel?: string;
   onBack: () => void;
   onHome: () => void;
   onOpenTopic: (topicId: string) => void;
@@ -82,6 +84,7 @@ const moveFailure = (kind: Exclude<TopicMove['kind'], 'moved'>) =>
 /** One topic: its path, how much it holds, its subtopics and its notes, with a menu to rename, add under, move or delete it. */
 function TopicScreen({
   topicId,
+  backLabel = HELM_COPY.knowledgeTitle,
   onBack,
   onHome,
   onOpenTopic,
@@ -356,7 +359,7 @@ function TopicScreen({
   return (
     <>
       <HelmHeader
-        backLabel={parent ? parent.name : HELM_COPY.knowledgeTitle}
+        backLabel={parent ? parent.name : backLabel}
         onBack={leave}
         onHome={onHome}
         menu={menu}
