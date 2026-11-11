@@ -394,7 +394,7 @@ export function useRunwayUrlState() {
     window.history.replaceState(window.history.state, '', address);
     closeView();
     if (section) showPlanSection(section);
-    showTab(tab);
+    return showTab(tab);
   };
 
   const state = {

@@ -302,6 +302,8 @@ export interface AccountPairMatches {
   offers: Map<string, { otherId: string; kind: PurchasePairKind }[]>;
 }
 
+const CARD_PAYMENT_CATEGORY = 'LOAN_PAYMENTS_CREDIT_CARD_PAYMENT';
+
 const isPairCandidate = (purchase: OpenPurchase, isOffer: boolean) =>
   purchase.source === 'link' &&
   purchase.needsHome &&
@@ -331,7 +333,7 @@ const getPairKind = (
     : null;
 };
 
-/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when the money out has that one money in and the money in has that one money out, or when each has several but exactly one of its own is on a route the person paired by hand before (so one remembered of two settles it, both or neither leaves it asking); otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
+/** Pairs posted money out of a linked account waiting in Needs a home with the same amount in to another linked account or a linked card within three days. A pair is clear only when a route the person paired by hand before settles it (each side has several but exactly one of its own is on the route, so one remembered of two settles it, both or neither leaves it asking), or when it is a card payment both sides of which the bank flags as one and each has no other such card candidate, or when the money out has that one money in and the money in has that one money out; routes win over the card, the card over plain uniqueness, and no purchase is in two clear pairs; otherwise both sides are offered each other, nearest day first (as offers, a clear pair is offered too). Pending purchases and ones already paired or linked to a pay day never pair, and neither do ones the person already answered, except as offers (`isOffer`): a send-back stops only the automatic pass, never the person pairing them again. The result does not depend on the order of the input. */
 export function findAccountPairs(
   waiting: readonly OpenPurchase[],
   isOffer = false,
@@ -371,7 +373,30 @@ export function findAccountPairs(
         ? [[out.id, { inId: into.id, kind }]]
         : [],
   );
-  const clear = new Map([...byRoutes, ...byLinks]);
+  const isCardLink = ({ out, into, kind }: (typeof links)[number]) =>
+    kind === 'cardPayment' &&
+    out.category === CARD_PAYMENT_CATEGORY &&
+    into.category === CARD_PAYMENT_CATEGORY;
+  const cardLinks = links.filter(isCardLink);
+  const byCard = cardLinks.flatMap(
+    ({ out, into, kind }): [string, AccountPair][] =>
+      cardLinks.filter((link) => link.out.id === out.id).length === 1 &&
+      cardLinks.filter((link) => link.into.id === into.id).length === 1
+        ? [[out.id, { inId: into.id, kind }]]
+        : [],
+  );
+  const addFree = (
+    picked: Map<string, AccountPair>,
+    [outId, pair]: [string, AccountPair],
+  ) =>
+    picked.has(outId) ||
+    [...picked.values()].some(({ inId }) => inId === pair.inId)
+      ? picked
+      : picked.set(outId, pair);
+  const clear = [byRoutes, byCard, byLinks].reduce(
+    (picked, picks) => picks.reduce(addFree, picked),
+    new Map<string, AccountPair>(),
+  );
   const taken = new Set([
     ...clear.keys(),
     ...[...clear.values()].map(({ inId }) => inId),
@@ -421,4 +446,42 @@ export function findLostPairs(
       ? purchase.date - PAIR_DAYS * DAY_MS >= readFrom
       : !isPairIntact(purchase, other);
   });
+}
+
+/** Posted money in that may be the other side of a pending money out (same amount, another account or a card, within three days), by the money in's id. Both wait: a pending purchase gets a new id when it posts, so it is never paired itself. */
+export function findPendingMoveHolds(
+  purchases: readonly OpenPurchase[],
+): Map<string, string> {
+  const sorted = [...purchases].sort((a, b) => compareKeys(a.id, b.id));
+  const pendingOuts = sorted.filter(
+    (purchase) =>
+      purchase.source === 'link' &&
+      purchase.status === 'pending' &&
+      purchase.amountCents > 0 &&
+      purchase.accountId !== null &&
+      (purchase.paidByCardId ?? null) === null,
+  );
+  return new Map(
+    sorted
+      .filter(
+        (into) =>
+          into.source === 'link' &&
+          into.status === 'posted' &&
+          into.amountCents < 0 &&
+          into.pairedWithId === null &&
+          into.needsHome &&
+          into.incomeDayId === null &&
+          ((into.paidByCardId ?? null) !== null || into.accountId !== null),
+      )
+      .flatMap((into): [string, string][] => {
+        const out = pendingOuts.find(
+          (candidate) =>
+            candidate.amountCents === -into.amountCents &&
+            (candidate.accountId !== into.accountId ||
+              (into.paidByCardId ?? null) !== null) &&
+            Math.abs(candidate.date - into.date) <= PAIR_DAYS * DAY_MS,
+        );
+        return out === undefined ? [] : [[into.id, out.id]];
+      }),
+  );
 }

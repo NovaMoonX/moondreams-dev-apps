@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Ban, Wallet } from 'lucide-react';
+import { CircleCheck, Wallet } from 'lucide-react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
@@ -19,24 +19,38 @@ import {
   describePurchaseReturned,
 } from '@apps/runway/utils/purchaseText';
 
-const getSubtitle = (purchase: OpenPurchase, isKeepFree: boolean) => {
-  if (isKeepFree) return NEEDS_HOME_WORDS.keepFreeSub;
+const getWords = (purchase: OpenPurchase, isKeepFree: boolean) => {
+  if (isKeepFree) {
+    return {
+      label: NEEDS_HOME_WORDS.keepFree,
+      subtitle: NEEDS_HOME_WORDS.keepFreeSub,
+      done: NEEDS_HOME_WORDS.keptFree,
+    };
+  }
   return purchase.amountCents > 0
-    ? NEEDS_HOME_WORDS.leaveOutSub
-    : NEEDS_HOME_WORDS.leaveOutMoneyInSub;
+    ? {
+        label: NEEDS_HOME_WORDS.unseenOut,
+        subtitle: NEEDS_HOME_WORDS.unseenOutSub,
+        done: NEEDS_HOME_WORDS.savedMove,
+      }
+    : {
+        label: NEEDS_HOME_WORDS.notPay,
+        subtitle: NEEDS_HOME_WORDS.notPaySub,
+        done: NEEDS_HOME_WORDS.savedIn,
+      };
 };
 
 interface LeaveOutRowProps {
   purchase: OpenPurchase;
   onDone: () => void;
-  /** Keeps a charge counted in Free to Spend with no envelope, instead of taking it out of spending. */
+  /** Keeps a charge counted in Free to Spend with no envelope, instead of marking it as no spending or income. */
   isKeepFree?: boolean;
   /** The row's own words where the usual ones would not fit the question asked. */
   label?: string;
   subtitle?: string;
 }
 
-/** Takes a waiting purchase out of spending, whether it is money in or a charge, or keeps a charge in Free to Spend; a failure reads in the row's own subtitle. */
+/** Settles a waiting purchase as neither spending nor income (money in that is not a pay, a move to or from an account Runway doesn't see), or keeps a charge in Free to Spend. At Link the balance already counts either, so only Spend and income change; a failure reads in the row's own subtitle. */
 function LeaveOutRow({
   purchase,
   onDone,
@@ -48,6 +62,7 @@ function LeaveOutRow({
   const { addToast } = useToast();
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const words = getWords(purchase, isKeepFree);
 
   const leaveOut = async () => {
     if (!user || isBusy) return;
@@ -85,9 +100,7 @@ function LeaveOutRow({
         updatedAt,
       };
       addToast({
-        title: isKeepFree
-          ? NEEDS_HOME_WORDS.keptFree
-          : NEEDS_HOME_WORDS.leftOut,
+        title: words.done,
         type: 'success',
         action: {
           label: NEEDS_HOME_WORDS.undo,
@@ -122,12 +135,9 @@ function LeaveOutRow({
     <ActionRow
       isGrouped
       isRoomy
-      icon={isKeepFree ? <Wallet /> : <Ban />}
-      label={
-        label ??
-        (isKeepFree ? NEEDS_HOME_WORDS.keepFree : NEEDS_HOME_WORDS.leaveOut)
-      }
-      subtitle={error ?? subtitle ?? getSubtitle(purchase, isKeepFree)}
+      icon={isKeepFree ? <Wallet /> : <CircleCheck />}
+      label={label ?? words.label}
+      subtitle={error ?? subtitle ?? words.subtitle}
       isDisabled={isBusy}
       onClick={() => void leaveOut()}
     />

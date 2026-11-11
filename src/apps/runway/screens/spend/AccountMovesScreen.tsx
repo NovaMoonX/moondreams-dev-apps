@@ -16,7 +16,7 @@ import ItemRow from '@apps/runway/components/ItemRow';
 import LeaveOutRow from '@apps/runway/components/LeaveOutRow';
 import PairOffer from '@apps/runway/components/PairOffer';
 import SheetHead from '@apps/runway/components/SheetHead';
-import { PAIR_WORDS } from '@apps/runway/constants';
+import { NEEDS_HOME_WORDS, PAIR_WORDS } from '@apps/runway/constants';
 import { useUnpairAccounts } from '@apps/runway/hooks/useBankMatch';
 import {
   selectAccountPairs,
@@ -130,7 +130,7 @@ const getMoveTitle = (purchase: OpenPurchase) =>
   purchase.bankName?.trim() ||
   PAIR_WORDS.screenTitle;
 
-/** A card payment or move the bank flagged that is not paired yet: pair it with its other side, say it is spending, or leave it out. */
+/** A card payment or move the bank flagged that is not paired yet: pair it with its other side, say it is spending, or say the other side is an account Runway doesn't see. */
 function WaitingMoveSheet({
   purchase,
   onClose,
@@ -161,7 +161,6 @@ function WaitingMoveSheet({
         <PairOffer
           purchase={purchase}
           onDone={onClose}
-          elseSubtitle={PAIR_WORDS.waitingSheet}
         >
           <ActionGroup isRoomy>
             {isOut && (
@@ -173,7 +172,11 @@ function WaitingMoveSheet({
                 subtitle={PAIR_WORDS.isSpendingSub}
               />
             )}
-            <LeaveOutRow purchase={purchase} onDone={onClose} />
+            <LeaveOutRow
+              purchase={purchase}
+              onDone={onClose}
+              label={isOut ? undefined : NEEDS_HOME_WORDS.unseenIn}
+            />
           </ActionGroup>
         </PairOffer>
       </div>

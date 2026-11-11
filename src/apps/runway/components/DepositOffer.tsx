@@ -25,7 +25,7 @@ interface DepositOfferProps {
   onDone: () => void;
 }
 
-/** The pay days a waiting deposit may be, when none is clearly it: tapping one links the deposit to that day. */
+/** The pay days a waiting deposit may be, when none is clearly it: tapping one links the deposit to that day. Draws nothing when no pay day is close. */
 function DepositOffer({ deposit, onDone }: DepositOfferProps) {
   const { user } = useAuth();
   const { isHidden } = useValuesHidden();
@@ -81,18 +81,11 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
     }
   };
 
+  if (offered.length === 0) return null;
   const received = -deposit.amountCents;
   return (
     <div className='space-y-2'>
-      <div>
-        <p className='text-sm font-medium'>{DEPOSIT_WORDS.whichTitle}</p>
-        {offered.length === 0 && (
-          <p className='text-muted-foreground text-xs'>
-            {DEPOSIT_WORDS.noneNear}
-          </p>
-        )}
-      </div>
-      {offered.length > 0 && (
+      <p className='text-sm font-medium'>{DEPOSIT_WORDS.whichTitle}</p>
         <ul className='border-border divide-border bg-card divide-y rounded-2xl border'>
           {offered.map(({ day, named }) => {
             const { lowCents, highCents } = day.amount;
@@ -133,7 +126,6 @@ function DepositOffer({ deposit, onDone }: DepositOfferProps) {
             );
           })}
         </ul>
-      )}
       {error && (
         <p className='text-destructive text-sm' role='alert'>
           {error}
