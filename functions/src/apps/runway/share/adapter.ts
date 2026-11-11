@@ -394,6 +394,8 @@ export function createRunwayAdapter(
         totalCents: read.totalCents,
         currency: read.currency,
         isPartial: read.isPartial,
+        from: read.from,
+        to: read.to,
       };
     },
     deepLink: () => '/runway',

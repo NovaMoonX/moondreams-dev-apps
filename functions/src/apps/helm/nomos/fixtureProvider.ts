@@ -5,6 +5,7 @@ import {
 } from '../../../ai/modelProvider.js';
 import { EMPTY_USAGE } from '../../../ai/models.js';
 import { toSenderName } from './answerGuards.js';
+import { getLocalDay, toKnownZone } from '../syncedCopies.js';
 import type { CaptureReading } from './commands.js';
 
 const SPLIT_RE = /\n|,(?!\d)|\band\b/gi;
@@ -398,11 +399,25 @@ async function readMailAnswer(
 const SPEND_QUESTION_RE =
   /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+(?!(?:last|this|recently|in|on|over|during)\b)[\p{L}][\p{L}&'.-]*)?)/iu;
 
+const SPEND_ASK_RE = /\b(?:spend|spent)\b/i;
+
 const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 
-const toSpendRange = (question: string, now: number) => {
-  const today = new Date(now);
-  const [year, month] = [today.getUTCFullYear(), today.getUTCMonth()];
+const SPEND_DAY = new Intl.DateTimeFormat('en-US', {
+  month: 'short',
+  day: 'numeric',
+  timeZone: 'UTC',
+});
+
+const toSpendDay = (day: string) =>
+  SPEND_DAY.format(Date.parse(`${day}T00:00:00Z`));
+
+const toSpendRange = (question: string, now: number, timeZone: string) => {
+  const today = getLocalDay(now, toKnownZone(timeZone));
+  const [year, month] = [
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth(),
+  ];
   if (/last month/i.test(question)) {
     return {
       from: toDayText(Date.UTC(year, month - 1, 1)),
@@ -410,25 +425,31 @@ const toSpendRange = (question: string, now: number) => {
     };
   }
   return /this month/i.test(question)
-    ? { from: toDayText(Date.UTC(year, month, 1)), to: toDayText(now) }
-    : { from: toDayText(now - 30 * 86_400_000), to: toDayText(now) };
+    ? { from: toDayText(Date.UTC(year, month, 1)), to: toDayText(today) }
+    : { from: toDayText(today - 30 * 86_400_000), to: toDayText(today) };
 };
 
 interface SpendResult {
   records?: { alias?: string; payee: string; amount: string }[];
   matchedCount?: number;
   total?: string;
+  from?: string | null;
+  to?: string | null;
 }
 
-/** The emulator's stand-in for a model that looks up transactions: asks for one payee over a stretch of days and files the total with the first rows as quotes. Null when the lookup is not offered or finds nothing. */
 async function readSpendAnswer(
   text: string,
   client: ToolLoopRequest['mcpClient'] | undefined,
   toolCalls: string[],
+  timeZone: string,
 ) {
   const question = text.trim();
-  const payee = SPEND_QUESTION_RE.exec(question)?.[1];
-  if (!client || !payee) return null;
+  const named = SPEND_QUESTION_RE.exec(question)?.[1];
+  const isAnyPayee =
+    named === undefined &&
+    question.endsWith('?') &&
+    SPEND_ASK_RE.test(question);
+  if (!client || (named === undefined && !isAnyPayee)) return null;
   const offered = (await client.listTools().catch(() => ({ tools: [] }))).tools;
   if (!offered.some((tool) => tool.name === 'search_app_records')) return null;
   const found = await callJson<SpendResult>(
@@ -438,19 +459,28 @@ async function readSpendAnswer(
     {
       app: 'app:runway',
       category: 'transactions',
-      payee,
-      ...toSpendRange(question, Date.now()),
+      ...(named !== undefined && { payee: named }),
+      ...toSpendRange(question, Date.now(), timeZone),
     },
   );
-  const aliases = (found?.records ?? []).flatMap((record) =>
+  if (!found || typeof found.matchedCount !== 'number') return null;
+  const range =
+    found.from && found.to
+      ? ` between ${toSpendDay(found.from)} and ${toSpendDay(found.to)}`
+      : '';
+  const at = named === undefined ? '' : ` at ${named}`;
+  const aliases = (found.records ?? []).flatMap((record) =>
     record.alias ? [record.alias] : [],
   );
-  if (!found || !found.matchedCount || aliases.length === 0) return null;
+  const count = `${found.matchedCount} ${found.matchedCount === 1 ? 'purchase' : 'purchases'}`;
   return [
     toAnswer({
       scope: 'yourThings',
       question,
-      fromRecordsText: `You spent ${found.total} at ${payee} across ${found.matchedCount} ${found.matchedCount === 1 ? 'purchase' : 'purchases'}.`,
+      fromRecordsText:
+        found.matchedCount === 0
+          ? `No purchases${at}${range}.`
+          : `You spent ${found.total}${at}${range} across ${count}.`,
       quoteAliases: aliases.slice(0, 3),
     }),
   ];
@@ -1769,7 +1799,15 @@ function createTextFixtureProvider(
           toolCalls,
         };
       }
-      const spend = await readSpendAnswer(text, mcpClient, toolCalls);
+      const spend = await readSpendAnswer(
+        text,
+        mcpClient,
+        toolCalls,
+        readBlock<{ timeZone?: string }>(
+          messageText(messages[0]?.content ?? ''),
+          'context',
+        )?.timeZone ?? 'UTC',
+      );
       if (spend) {
         return {
           terminalInput: { commands: spend },

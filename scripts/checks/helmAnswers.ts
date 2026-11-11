@@ -1624,6 +1624,8 @@ const tests: [string, () => void | Promise<void>][] = [
               totalCents: 264_000,
               currency: 'USD',
               isPartial: false,
+              from: '2026-10-01',
+              to: '2026-10-31',
             },
           };
         },
@@ -1674,6 +1676,8 @@ const tests: [string, () => void | Promise<void>][] = [
         records: { alias?: string; kind: string; amount: string }[];
         matchedCount: number;
         total: string;
+        from: string;
+        to: string;
       };
       assert.deepEqual(calls, [
         {
@@ -1685,6 +1689,7 @@ const tests: [string, () => void | Promise<void>][] = [
         },
       ]);
       assert.equal(result.matchedCount, 31);
+      assert.deepEqual([result.from, result.to], ['2026-10-01', '2026-10-31']);
       assert.equal(result.total, '$2,640.00');
       assert.equal(result.records.length, 7);
       assert.deepEqual(
@@ -1706,7 +1711,7 @@ const tests: [string, () => void | Promise<void>][] = [
         deepLink: '/runway',
       });
       const [line] = searched.entries();
-      assert.equal(line.label, 'Runway (transactions)');
+      assert.equal(line.label, 'your Runway transactions');
       assert.equal(line.found, 31);
       assert.equal(line.failed, null);
       const built = buildAnswer(
@@ -1731,6 +1736,172 @@ const tests: [string, () => void | Promise<void>][] = [
       assert.equal(built.answer.quotes[0].sourceLabel, 'Runway \u00b7 Costco');
       assert.equal(built.answer.quotes[0].deepLink, '/runway');
       assert.deepEqual(built.quotedSourceKeys, ['app:runway|site']);
+      const east = buildHelmTools({
+        ...scope,
+        timeZone: 'Pacific/Kiritimati',
+        siteGrants: SITE,
+      }).find((entry) => entry.name === 'search_app_records');
+      calls.length = 0;
+      await east?.run({ app: 'app:runway', category: 'transactions' } as never);
+      assert.equal(
+        (calls[0] as { args: { to: string } }).args.to,
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Pacific/Kiritimati',
+        }).format(Date.now()),
+        'a missing last day is the local today of the person',
+      );
+    },
+  ],
+  [
+    'a spend question names the range it read, says so when nothing matched, and never falls through to a task',
+    async () => {
+      const SITE = [
+        {
+          connectorId: 'app:runway',
+          categories: [{ id: 'transactions', label: 'Transactions' }],
+        },
+      ];
+      const calls: { args: Record<string, unknown> }[] = [];
+      const ask = async (text: string, matchedCount: number) => {
+        calls.length = 0;
+        const quotes = createQuoteBook();
+        const searched = createSearchedLog();
+        const live: LiveReads = {
+          searchLive: async () => ({ ok: false, reason: 'failed' }),
+          readLive: async () => ({ ok: false, reason: 'failed' }),
+          querySiteLive: async (_firestore, input) => {
+            calls.push(input as never);
+            return {
+              ok: true,
+              result: {
+                records: Array.from({ length: matchedCount }, (_, day) => ({
+                  sourceRef: `purchases/${day}`,
+                  kind: 'transaction' as const,
+                  title: 'Costco',
+                  subtitle: null,
+                  detail: null,
+                  startAt: null,
+                  endAt: null,
+                  isAllDay: true,
+                  dueAt: null,
+                  timeZone: null,
+                  placeLabel: null,
+                  amountCents: 8_800,
+                  currency: 'USD',
+                  sourceUpdatedAt: null,
+                  extra: { category: 'Groceries' },
+                })),
+                matchedCount,
+                totalCents: matchedCount * 8_800,
+                currency: 'USD',
+                isPartial: false,
+                from: '2026-10-01',
+                to: '2026-10-31',
+              },
+            };
+          },
+          isLiveDeepLink,
+        };
+        const { createHelmMcpServer } =
+          await import('../../functions/src/apps/helm/mcp/server.ts');
+        const server = await createHelmMcpServer({
+          uid: 'u1',
+          key: {} as never,
+          aliases: createAliasBook('t'),
+          synced: createSyncedBook(),
+          timeZone: 'UTC',
+          firestore: {} as never,
+          siteGrants: SITE,
+          quotes,
+          searched,
+          live,
+        });
+        const loop = await createFixtureProvider(text, READING).runToolLoop({
+          role: 'interpret',
+          system: '',
+          messages: [{ role: 'user', content: '' }],
+          mcpClient: server.client,
+          terminalTool: {
+            name: 'file_results',
+            description: '',
+            inputSchema: {},
+          },
+          limits: { maxTurns: 1, maxToolCalls: 4, maxMillis: 5_000 },
+        } as never);
+        await server.close();
+        const [command] = (
+          loop.terminalInput as {
+            commands: { kind: string; fromRecordsText: string }[];
+          }
+        ).commands;
+        return { loop, command, quotes, searched };
+      };
+      const hit = await ask('What did I spend at Costco last month?', 1);
+      assert.equal(hit.command.kind, 'answer');
+      assert.equal(
+        hit.command.fromRecordsText,
+        'You spent $88.00 at Costco between Oct 1 and Oct 31 across 1 purchase.',
+      );
+      assert.equal(
+        hit.quotes.get('q1')?.at,
+        null,
+        'a row with no day has none',
+      );
+      const none = await ask('What did I spend at Costco last month?', 0);
+      assert.equal(
+        none.command.fromRecordsText,
+        'No purchases at Costco between Oct 1 and Oct 31.',
+      );
+      const built = buildAnswer(
+        {
+          question: 'What did I spend at Costco last month?',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: none.command.fromRecordsText,
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [],
+        } as never,
+        (code) => assert.fail(`dropped as ${code}`),
+        none.searched.entries(),
+      );
+      assert.equal(built.answer.fromRecords, none.command.fromRecordsText);
+      const dropped: string[] = [];
+      const unsearched = buildAnswer(
+        {
+          question: 'q',
+          scope: 'yourThings',
+          isHealth: false,
+          fromRecordsText: 'No purchases.',
+          generalText: null,
+          generalSpoken: null,
+          differsFromNoteId: null,
+          differsSays: null,
+          suggestedTopicId: null,
+          noteIds: [],
+          sources: [],
+          syncedKeys: [],
+          quotes: [],
+        } as never,
+        (code) => dropped.push(code),
+        [],
+      );
+      assert.equal(unsearched.answer.fromRecords, null);
+      assert.deepEqual(dropped, ['answer-unsourced']);
+      const anyone = await ask('What did I spend recently?', 2);
+      assert.equal(anyone.command.kind, 'answer');
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0].args.payee, null, 'no payee asks for every payee');
+      assert.equal(
+        anyone.command.fromRecordsText,
+        'You spent $176.00 between Oct 1 and Oct 31 across 2 purchases.',
+      );
     },
   ],
   [

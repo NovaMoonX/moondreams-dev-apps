@@ -2317,7 +2317,6 @@ assert.equal(
   '/runway',
 );
 
-// Transactions: asked for live, read in the function, and only a day, payee, amount, currency and category leave.
 const dayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 const TX_SECRETS = [
   'TX NOTE SECRET',
@@ -2350,6 +2349,7 @@ const txDoc = (
   id: string,
   daysAgo: number,
   fields: Record<string, unknown>,
+  docFields: Record<string, unknown> = {},
 ) =>
   runwayPlans
     .doc(uid)
@@ -2359,6 +2359,7 @@ const txDoc = (
       date: TODAY - daysAgo * DAY,
       accountId: TX_SECRETS[4],
       sealed: sealTx({ ...baseTx, ...fields }),
+      ...docFields,
     });
 const txLine = (envelopeId: string | null, cents: number) => ({
   envelopeId,
@@ -2428,8 +2429,28 @@ await Promise.all([
   txDoc(OWNER, 'card-payment', 5, {
     merchant: 'Costco Card Payment',
     amountCents: 20_000,
+    pairedWithId: 'card-side',
     cardPaymentMoveId: 'move-1',
   }),
+  txDoc(OWNER, 'bill-charge', 7, {
+    merchant: 'Costco Insurance',
+    amountCents: 2_500,
+    billRef: { billId: 'bill-1', dueOn: '2026-11-01' },
+  }),
+  txDoc(
+    OWNER,
+    'waiting-credit',
+    8,
+    { merchant: 'Costco Waiting Credit', amountCents: -1_100 },
+    { needsHome: true },
+  ),
+  txDoc(
+    OWNER,
+    'waiting-charge',
+    9,
+    { merchant: "Trader Joe's", amountCents: 1_900 },
+    { needsHome: true },
+  ),
   txDoc(OWNER, 'target', 6, {
     merchant: 'Target',
     amountCents: 4_000,
@@ -2455,13 +2476,17 @@ assert.deepEqual(
   costco.records.map((record) => [record.title, record.amountCents]),
   [
     ['Costco Wholesale', -500],
+    ['Costco Gift Card', -900],
     ['Gas at Costco', 1_200],
+    ['Costco Insurance', 2_500],
     ['Costco Wholesale', 8_800],
   ],
-  'newest first; deposits, transfers and card payments are left out',
+  'newest first; deposits and pairs are left out, a credit, a bill charge and a charge with no lines stay in',
 );
-assert.equal(costco.matchedCount, 3);
-assert.equal(costco.totalCents, 9_500, 'a refund subtracts');
+assert.equal(costco.matchedCount, 5);
+assert.equal(costco.totalCents, 11_100, 'a refund and a credit subtract');
+assert.equal(costco.from, dayText(TODAY - 30 * DAY));
+assert.equal(costco.to, dayText(TODAY));
 assert.equal(costco.currency, 'USD');
 assert.equal(costco.isPartial, false);
 costco.records.forEach((record) => {
@@ -2476,15 +2501,22 @@ costco.records.forEach((record) => {
 });
 assert.deepEqual(
   costco.records.map((record) => record.extra.category),
-  ['Food', 'Free to Spend', 'Food'],
+  ['Food', 'Free to Spend', 'Free to Spend', 'Bill', 'Food'],
   'the envelope is named by its newest version',
 );
-assert.equal(costco.records[2]?.startAt, TODAY - 18 * DAY);
+assert.equal(costco.records[4]?.startAt, TODAY - 18 * DAY);
 const costcoOutput = JSON.stringify(costco);
 [...TX_SECRETS, 'Costco Payroll', 'Savings Transfer', 'Card Payment'].forEach(
   (secret) =>
     assert.ok(!costcoOutput.includes(secret), `Transactions have ${secret}`),
 );
+const apostrophe = await queryTx(OWNER, { payee: 'Trader Joes' });
+assert.deepEqual(
+  apostrophe.records.map((record) => [record.title, record.amountCents]),
+  [["Trader Joe's", 1_900]],
+  'a payee typed without its apostrophe still fits, and a waiting charge counts',
+);
+assert.equal((await queryTx(OWNER, { payee: "Trader Joe's" })).matchedCount, 1);
 const everyone = await queryTx(OWNER, {
   payee: null,
   from: dayText(TODAY - 30 * DAY),
@@ -2516,6 +2548,36 @@ const longRange = await queryTx(OWNER, {
   to: dayText(TODAY),
 });
 assert.equal(longRange.matchedCount, 3, 'the oldest 13+ months are cut off');
+assert.equal(longRange.from, '2025-10-10', 'the range read is named');
+const clamped = await queryTx(OWNER, { from: '2020-01-01', to: '2026-03-31' });
+assert.equal(clamped.from, '2025-02-28', '13 months before a 31st clamps');
+const edge = (from: string) =>
+  queryTx(OWNER, { from, to: '2026-11-30' }).then((read) => read.from);
+assert.equal(
+  await edge('2025-10-29'),
+  '2025-10-30',
+  'one day past the cap is cut',
+);
+assert.equal(
+  await edge('2025-10-30'),
+  '2025-10-30',
+  'the cap day itself stays',
+);
+assert.equal(await edge('2025-11-15'), '2025-11-15');
+const leap = await queryTx(OWNER, { from: '2020-01-01', to: '2025-03-31' });
+assert.equal(leap.from, '2024-02-29', 'a leap February keeps its 29th');
+const noEnd = await queryTx(OWNER, {});
+assert.deepEqual(
+  [noEnd.from, noEnd.to],
+  [dayText(TODAY - 30 * DAY), dayText(TODAY)],
+  'no range names the default days',
+);
+const monthEnd = await queryTx(OWNER, { to: '2026-12-31' });
+assert.equal(
+  monthEnd.from,
+  '2026-12-01',
+  'a 31-day month ends 30 days after its first',
+);
 assert.deepEqual(
   (await queryTx(OWNER, { from: '2026-11-09', to: '2026-11-01' })).records,
   [],
@@ -2530,7 +2592,6 @@ await assert.rejects(
   /Unknown category/,
 );
 
-// Twenty rows come back, and the count and total cover every match.
 await runwayPlanWith('runway-many', null);
 await Promise.all(
   Array.from({ length: 25 }, (_, index) =>
@@ -2551,7 +2612,6 @@ assert.deepEqual(
   [...manyDays].sort((a, b) => b - a),
 );
 
-// A long history is read only as far as the scan cap, and says so.
 await runwayPlanWith('runway-huge', null);
 await Promise.all(
   [0, 1].map(async (half) => {
@@ -2575,15 +2635,51 @@ const huge = await queryTx('runway-huge', { payee: 'Huge' });
 assert.equal(huge.matchedCount, 500);
 assert.equal(huge.isPartial, true);
 
-// Someone else's plan, or a key that does not open it, yields nothing.
+await runwayPlanWith('runway-unreadable', null);
+await Promise.all([
+  txDoc('runway-unreadable', 'fine', 1, { merchant: 'Fine', amountCents: 100 }),
+  runwayPlans
+    .doc('runway-unreadable')
+    .collection('purchases')
+    .doc('garbled')
+    .set({ date: TODAY - DAY, sealed: { value: 'x', nonce: 'y' } }),
+]);
+const unreadable = await queryTx('runway-unreadable', {});
+assert.equal(unreadable.matchedCount, 1);
+assert.equal(
+  unreadable.isPartial,
+  true,
+  'a purchase that would not open is said',
+);
+const readable = await queryTx(OWNER, {});
+assert.equal(readable.isPartial, false);
+
+await runwayPlanWith('runway-exact', null);
+await Promise.all(
+  Array.from({ length: 500 }, (_, index) =>
+    txDoc('runway-exact', `exact-${index}`, index % 25, {
+      merchant: 'Exact',
+      amountCents: 10,
+    }),
+  ),
+);
+const exact = await queryTx('runway-exact', { payee: 'Exact' });
+assert.equal(exact.matchedCount, 500);
+assert.equal(exact.isPartial, false, 'exactly the scan cap is not a cut');
+
 await txDoc(WRONG_RUNWAY_UID, 'wrong-key', 1, {
   merchant: 'Costco Wholesale',
   amountCents: 100,
 });
-assert.deepEqual((await queryTx(WRONG_RUNWAY_UID, {})).records, []);
+const wrongKey = await queryTx(WRONG_RUNWAY_UID, {});
+assert.deepEqual(wrongKey.records, []);
+assert.equal(
+  wrongKey.isPartial,
+  true,
+  'a purchase that cannot be opened is said',
+);
 await assert.rejects(() => queryTx(OTHER, {}));
 
-// The router refuses a category that is off or unknown before the source is asked.
 const txGrant = (isOn: boolean, status: string) =>
   firestore.doc('connections/tx-owner/grants/helm__app:runway__site').set({
     readerAppId: 'helm',

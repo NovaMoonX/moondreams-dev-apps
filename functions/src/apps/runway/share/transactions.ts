@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import {
   createOptionMatcher,
@@ -34,6 +35,8 @@ export interface TransactionRead {
   totalCents: number;
   currency: string | null;
   isPartial: boolean;
+  from: string | null;
+  to: string | null;
 }
 
 interface Opened {
@@ -74,11 +77,18 @@ const readDay = (value: unknown) => {
 
 const monthsBefore = (day: number, months: number) => {
   const at = new Date(day);
-  at.setUTCMonth(at.getUTCMonth() - months);
-  return at.getTime();
+  const first = new Date(
+    Date.UTC(at.getUTCFullYear(), at.getUTCMonth() - months, 1),
+  );
+  const year = first.getUTCFullYear();
+  const month = first.getUTCMonth();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return Date.UTC(year, month, Math.min(at.getUTCDate(), lastDay));
 };
 
-/** The days asked for as UTC midnights, a missing or malformed end defaulting to today and a missing start to 30 days before it, and a longer stretch than 13 months cut to its newest 13. */
+const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
+
+/** The days asked for as UTC midnights, defaulting to the last 30 days and cut to the newest 13 months. */
 export const readRange = (args: unknown, now: number) => {
   const asked = asObject(args);
   const today = Math.floor(now / DAY_MS) * DAY_MS;
@@ -95,10 +105,12 @@ const readPayeeFilter = (args: unknown) => readText(asObject(args)?.payee);
 const readPayee = (sealed: Record<string, unknown>) =>
   readText(sealed.label) ?? readText(sealed.merchant);
 
-/** A typed payee fits a name when the matcher settles on it, or when each of its words is a whole word of the name ("Costco" for "Costco Wholesale"). */
-const isPayeeMatch = (typed: string, names: string[]) => {
+const stripApostrophes = (text: string) => text.replace(/['\u2019]/g, '');
+
+const isPayeeMatch = (rawTyped: string, rawNames: string[]) => {
+  const typed = stripApostrophes(rawTyped);
   const wanted = toComparable(typed).split(' ').filter(Boolean);
-  return names.some((name) => {
+  return rawNames.map(stripApostrophes).some((name) => {
     const words = new Set(toComparable(name).split(' '));
     return (
       payeeMatcher.match(typed, [name]) !== null ||
@@ -107,15 +119,13 @@ const isPayeeMatch = (typed: string, names: string[]) => {
   });
 };
 
-const isCounted = (sealed: Record<string, unknown>) => {
+const isCounted = (sealed: Record<string, unknown>, needsHome: boolean) => {
   const amount = sealed.amountCents;
   if (typeof amount !== 'number' || !Number.isSafeInteger(amount)) return false;
   const isLinked =
     typeof sealed.incomeDayId === 'string' ||
-    typeof sealed.pairedWithId === 'string' ||
-    typeof sealed.cardPaymentMoveId === 'string';
-  if (isLinked) return false;
-  return amount > 0 || (amount < 0 && typeof sealed.refundOfId === 'string');
+    typeof sealed.pairedWithId === 'string';
+  return !isLinked && !(needsHome && amount < 0);
 };
 
 const readLines = (sealed: Record<string, unknown>) =>
@@ -185,7 +195,7 @@ const readCurrency = async (
   );
 };
 
-/** The person's spending and refunds in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned. */
+/** The person's purchases in a range of days, newest first, each with only its day, payee, amount and category; the total covers every match, not only the rows returned. */
 export async function readTransactions(
   firestore: Firestore,
   keyring: Keyring,
@@ -201,6 +211,8 @@ export async function readTransactions(
     totalCents: 0,
     currency: null,
     isPartial: false,
+    from: toDayText(from),
+    to: toDayText(to),
   };
   if (from > to) return empty;
   const planKey = await unwrapPlanKey(firestore, keyring, uid);
@@ -209,19 +221,33 @@ export async function readTransactions(
     .where('date', '>=', from)
     .where('date', '<=', to)
     .orderBy('date', 'desc')
-    .limit(SCAN_LIMIT)
+    .limit(SCAN_LIMIT + 1)
     .get();
-  const opened = snapshot.docs.flatMap((doc): Opened[] => {
-    const sealed = doc.get('sealed');
-    const date = doc.get('date');
-    if (!isSealed(sealed) || typeof date !== 'number') return [];
-    try {
-      const fields = openWithKey(planKey.key, sealed);
-      return isCounted(fields) ? [{ id: doc.id, date, sealed: fields }] : [];
-    } catch {
-      return [];
-    }
-  });
+  const attempts = snapshot.docs
+    .slice(0, SCAN_LIMIT)
+    .map((doc): Opened | 'unreadable' | null => {
+      const sealed = doc.get('sealed');
+      const date = doc.get('date');
+      if (!isSealed(sealed) || typeof date !== 'number') return 'unreadable';
+      try {
+        const fields = openWithKey(planKey.key, sealed);
+        const needsHome = doc.get('needsHome') === true;
+        return isCounted(fields, needsHome)
+          ? { id: doc.id, date, sealed: fields }
+          : null;
+      } catch {
+        return 'unreadable';
+      }
+    });
+  const opened = attempts.filter(
+    (attempt): attempt is Opened =>
+      typeof attempt === 'object' && attempt !== null,
+  );
+  const unreadable = attempts.filter(
+    (attempt) => attempt === 'unreadable',
+  ).length;
+  if (unreadable > 0)
+    logger.warn('runway.share.transactionsUnreadable', { count: unreadable });
   const matched = opened.filter(({ sealed }) => {
     if (payee === null) return true;
     const names = [readText(sealed.label), readText(sealed.merchant)].filter(
@@ -252,7 +278,7 @@ export async function readTransactions(
     if (lines.length > 1) return 'Split';
     const [only] = lines;
     if (!only || only.envelopeId === null) return FREE_TO_SPEND;
-    return names.get(only.envelopeId) ?? null;
+    return names.get(only.envelopeId) ?? FREE_TO_SPEND;
   };
   return {
     rows: shown.map(({ id, date, sealed }) => ({
@@ -268,6 +294,8 @@ export async function readTransactions(
       0,
     ),
     currency,
-    isPartial: snapshot.size >= SCAN_LIMIT,
+    isPartial: snapshot.size > SCAN_LIMIT || unreadable > 0,
+    from: toDayText(from),
+    to: toDayText(to),
   };
 }

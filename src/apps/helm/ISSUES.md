@@ -747,10 +747,10 @@ Drive connects on its own tap, behind the same switch. A question that needs a d
 
 **Prerequisites:** 25, 28
 **Target PR Size:** ~250 lines (S)
-**Files:** `src/apps/runway/share/manifest.ts` (`transactions`, off), `functions/src/apps/runway/share/adapter.ts` (`query`), `functions/src/connections/liveRouter.ts` (site adapters' live categories), `functions/src/apps/helm/mcp/tools/searchAppRecords.ts`, `functions/src/apps/helm/mcp/buildTools.ts`, `src/lib/connections/contract.ts` (`transaction` kind), `functions/src/vendor/connectionsContract.ts`, `scripts/connections/adapterMatrix.ts`, `scripts/seeds/helm.ts`
+**Files:** `src/apps/runway/share/manifest.ts` (`transactions`, off), `functions/src/apps/runway/share/adapter.ts` (`query`), `functions/src/connections/liveRouter.ts` (site adapters' live categories), `functions/src/apps/runway/share/transactions.ts`, `functions/src/apps/helm/mcp/buildTools.ts` (`search_app_records`), `scripts/connections/adapterMatrix.ts`, `scripts/seeds/helm.ts`
 **Context:** `TECHNICAL.md` section 19 ("Runway and Worth the Wait", "Read when asked"); decisions.md "Round 5 owner answers" (Transactions offered, off).
 ### Description
-Runway's connection page offers "Transactions: the date, who you paid, the amount and its category", off until switched on. Once on, "what did I spend at Costco last month?" is answered from Runway with the rows quoted ("Looked in Runway just now. Nothing is kept."), and nothing is copied into Helm.
+Runway's connection page offers "Transactions: the date, who you paid, the amount and its category", off until switched on. Once on, "what did I spend at Costco last month?" is answered from Runway with the rows quoted ("Looked in your Runway transactions just now."), and nothing is copied into Helm; only the rows the answer quotes (up to 5) are kept with it, blanked when the connection ends.
 ### Possible Approach
 1. The adapter's live `query` opens purchases within the asked range on the server under Runway's key, keeps spending and refunds, matches the payee with `createOptionMatcher`, and returns at most 20 rows plus the count and total.
 2. The live router serves a site adapter's live category with no token; `search_app_records` is offered only while the category is on.

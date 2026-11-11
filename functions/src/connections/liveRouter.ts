@@ -367,7 +367,6 @@ export const readLive = async (
 
 export interface SiteLiveGrant {
   connectorId: string;
-  /** The live categories the person has switched on, with the labels they know them by. */
   categories: { id: string; label: string }[];
 }
 
@@ -387,7 +386,6 @@ const siteGrantPath = (uid: string, readerAppId: string, connectorId: string) =>
     SITE_ACCOUNT_ID,
   )}`;
 
-/** The site apps the person lets a reader app ask about, each with the live categories switched on; none for a grant that ended or lost access. */
 export const listSiteLiveGrants = async (
   firestore: Firestore,
   uid: string,
@@ -430,19 +428,19 @@ export const querySiteLive = async (
     ({ id }) => id === input.category,
   );
   if (!adapter?.query || !isLiveCategory) return NOT_GRANTED;
-  const snapshot = await firestore
-    .doc(siteGrantPath(input.uid, input.readerAppId, input.connectorId))
-    .get();
-  const grant = readGrant(snapshot.data());
-  if (
-    !snapshot.exists ||
-    grant.status !== 'live' ||
-    grant.categories[input.category]?.isOn !== true
-  ) {
-    return NOT_GRANTED;
-  }
-  const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
   try {
+    const snapshot = await firestore
+      .doc(siteGrantPath(input.uid, input.readerAppId, input.connectorId))
+      .get();
+    const grant = readGrant(snapshot.data());
+    if (
+      !snapshot.exists ||
+      grant.status !== 'live' ||
+      grant.categories[input.category]?.isOn !== true
+    ) {
+      return NOT_GRANTED;
+    }
+    const ctx = { uid: input.uid, accountId: SITE_ACCOUNT_ID, grant };
     if ((await adapter.status(ctx)) !== 'ok') return NOT_GRANTED;
     return {
       ok: true,

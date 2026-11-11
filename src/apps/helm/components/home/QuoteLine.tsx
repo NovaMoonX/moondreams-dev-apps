@@ -48,14 +48,14 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
       ? quote.deepLink
       : null;
   return (
-    <div className='flex flex-col gap-1.5 py-2.5'>
+    <div className='border-muted-foreground/40 my-2.5 flex flex-col gap-1.5 border-l-2 pl-3'>
       <p className='text-muted-foreground text-[13px] text-pretty break-words'>
         {HELM_COPY.quoteFrom(
           quote.sourceLabel,
           quote.at === null ? null : formatQuoteDay(quote.at, isApp),
         )}
       </p>
-      <blockquote className='border-border border-l-2 pl-3 text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
+      <blockquote className='text-[15px] leading-[21px] break-words whitespace-pre-wrap'>
         {`“${quote.text}”`}
       </blockquote>
       {route && (

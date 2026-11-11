@@ -130,8 +130,15 @@ export function buildAnswer(
       index,
   );
   const hasRecordsText = !!command.fromRecordsText;
+  const hasEmptyAppSearch = searched.some(
+    (entry) =>
+      entry.found === 0 &&
+      entry.failed === null &&
+      readConnectorAppId(entry.connectorId) !== null,
+  );
   const fromRecords =
-    command.fromRecordsText && sources.length + quotes.length > 0
+    command.fromRecordsText &&
+    (sources.length + quotes.length > 0 || hasEmptyAppSearch)
       ? oneLine(command.fromRecordsText)
       : null;
   if (hasRecordsText && !fromRecords) onDrop('answer-unsourced');

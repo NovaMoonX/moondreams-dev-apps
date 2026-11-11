@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { CalendarCheck, CalendarDays, Tag } from 'lucide-react';
 
 import AppLogo from '@/components/AppLogo';
@@ -40,6 +41,7 @@ import {
   formatUpdatedAt,
   getGrantCopyCount,
   getNewestOkAt,
+  isLiveCategory,
   isStale,
 } from '@apps/helm/utils/synced';
 
@@ -271,6 +273,12 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const hasError = Object.values(grant.categoryState).some(
     (state) => state.lastError !== null,
   );
+  const onIds = Object.entries(grant.categories)
+    .filter(([, entry]) => entry.isOn)
+    .map(([id]) => id);
+  const isLiveOnly =
+    onIds.length > 0 &&
+    onIds.every((id) => isLiveCategory(grant.connectorId, id));
   const freshnessLine = (categoryId: string, mode: 'sync' | 'live') => {
     if (mode === 'live') return HELM_COPY.connectionLiveLine;
     const state = grant.categoryState[categoryId];
@@ -422,7 +430,14 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     {isOn &&
                       !isContactsGrant &&
                       freshnessLine(category.id, category.mode) && (
-                        <span className='text-muted-foreground block text-[13px] text-pretty'>
+                        <span
+                          className={join(
+                            'text-muted-foreground block text-pretty',
+                            category.mode === 'live'
+                              ? 'mt-1 text-xs'
+                              : 'text-[13px]',
+                          )}
+                        >
                           {freshnessLine(category.id, category.mode)}
                         </span>
                       )}
@@ -557,7 +572,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
             </li>
           )}
         </ul>
-        {!hasStopped && !isContactsGrant && (
+        {!hasStopped && !isContactsGrant && !isLiveOnly && (
           <div className='flex items-center justify-between gap-3'>
             <p className='text-muted-foreground min-w-0 text-[13px] text-pretty'>
               {newestOkAt === null

@@ -32,6 +32,7 @@ import type { LiveQueryResult } from '../../../connections/registry.js';
 import { formatMoney } from '../../../utils/formatMoney.js';
 import {
   connectorLabel,
+  getLocalDay,
   parseDay,
   readRecentCopies,
   readSyncedEvents,
@@ -85,7 +86,6 @@ export interface HelmToolScope {
   timeZone?: string;
   firestore: Firestore;
   liveGrants?: LiveGrant[];
-  /** Offers `search_app_records` for the apps the person lets Helm look in. */
   siteGrants?: SiteLiveGrant[];
   quotes?: QuoteBook;
   searched?: SearchedLog;
@@ -234,12 +234,16 @@ const searchAppRecordsShape = {
     .string()
     .max(10)
     .optional()
-    .describe('First day to include, YYYY-MM-DD; defaults to 30 days ago.'),
+    .describe(
+      'First day to include, YYYY-MM-DD; defaults to 30 days before the last day.',
+    ),
   to: z
     .string()
     .max(10)
     .optional()
-    .describe('Last day to include, YYYY-MM-DD; defaults to today.'),
+    .describe(
+      "Last day to include, YYYY-MM-DD; defaults to the person's today.",
+    ),
 };
 
 const UNTRUSTED_DOCUMENTS =
@@ -416,10 +420,15 @@ export function buildHelmTools(scope: HelmToolScope) {
     return Promise.all(
       grants.map(async (doc) => {
         const grant = doc.data() as ConnectionGrant;
+        const manifestCategories =
+          SOURCE_ADAPTERS[grant.connectorId]?.manifest.categories ?? [];
         const labels = new Map(
-          (SOURCE_ADAPTERS[grant.connectorId]?.manifest.categories ?? []).map(
-            (category) => [category.id, category.label],
-          ),
+          manifestCategories.map((category) => [category.id, category.label]),
+        );
+        const liveIds = new Set(
+          manifestCategories
+            .filter((category) => category.mode === 'live')
+            .map((category) => category.id),
         );
         const account =
           grant.accountId === 'site'
@@ -441,13 +450,22 @@ export function buildHelmTools(scope: HelmToolScope) {
           account: accountLabel,
           status: grant.status,
           lastSyncAt: toIso(grant.lastSyncAt),
-          categories: Object.entries(grant.categories).map(([id, entry]) => ({
-            label: labels.get(id) ?? id,
-            isOn: entry.isOn,
-            lastOkAt: toIso(grant.categoryState[id]?.lastOkAt ?? null),
-            count: grant.categoryState[id]?.count ?? 0,
-            hasError: !!grant.categoryState[id]?.lastError,
-          })),
+          categories: Object.entries(grant.categories).map(([id, entry]) =>
+            liveIds.has(id)
+              ? {
+                  label: labels.get(id) ?? id,
+                  isOn: entry.isOn,
+                  readWhenAsked: true,
+                }
+              : {
+                  label: labels.get(id) ?? id,
+                  isOn: entry.isOn,
+                  readWhenAsked: false,
+                  lastOkAt: toIso(grant.categoryState[id]?.lastOkAt ?? null),
+                  count: grant.categoryState[id]?.count ?? 0,
+                  hasError: !!grant.categoryState[id]?.lastError,
+                },
+          ),
         };
       }),
     );
@@ -479,7 +497,7 @@ export function buildHelmTools(scope: HelmToolScope) {
   const connectionStatus: HelmTool<typeof connectionStatusShape> = {
     name: 'connection_status',
     description:
-      "Says when one connection last updated and whether it is working, with each category's last update and count. Use an alias from list_connections.",
+      "Says when one connection last updated and whether it is working, with each category's last update and count; a category marked readWhenAsked is looked at only when a question needs it, so it has no update time or count. Use an alias from list_connections.",
     shape: connectionStatusShape,
     run: async ({ alias }) => {
       const found = (await readConnections()).find(
@@ -618,7 +636,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         alias,
         from: entry.from,
         subject: entry.title,
-        at: toLocalText(entry.at, timeZone),
+        at: entry.at === null ? null : toLocalText(entry.at, timeZone),
         text: result.item.text.slice(0, MAX_MAIL_TEXT_CHARS),
       };
     },
@@ -768,7 +786,7 @@ export function buildHelmTools(scope: HelmToolScope) {
         };
       }
       const router = await readLiveReads();
-      const label = `${connectorLabel(app)} (${offered.label.toLowerCase()})`;
+      const label = `your ${connectorLabel(app)} ${offered.label.toLowerCase()}`;
       const appPath = `/${readConnectorAppId(app) ?? ''}`;
       const log = (found: number, failure: string | null) =>
         searched.record({
@@ -788,7 +806,7 @@ export function buildHelmTools(scope: HelmToolScope) {
               args: {
                 payee: payee ?? null,
                 from: from ?? null,
-                to: to ?? null,
+                to: to ?? toDayText(getLocalDay(Date.now(), timeZone)),
               },
             })
             .catch((): LiveFailure => ({ ok: false, reason: 'failed' }))
@@ -802,8 +820,15 @@ export function buildHelmTools(scope: HelmToolScope) {
         );
         return { error: 'Nothing could be read from that app right now.' };
       }
-      const { records, matchedCount, totalCents, currency, isPartial } =
-        result.result;
+      const {
+        records,
+        matchedCount,
+        totalCents,
+        currency,
+        isPartial,
+        from: readFrom,
+        to: readTo,
+      } = result.result;
       log(matchedCount, null);
       const money = (cents: number) => formatMoney(cents, currency ?? 'USD');
       const rows = records.slice(0, MAX_RECORD_ROWS).map((entry, index) => {
@@ -827,7 +852,7 @@ export function buildHelmTools(scope: HelmToolScope) {
               ref: entry.sourceRef,
               title: entry.title,
               from: entry.title,
-              at: entry.startAt ?? 0,
+              at: entry.startAt ?? null,
               snippet,
               deepLink: router.isLiveDeepLink(app, appPath) ? appPath : null,
             }),
@@ -841,6 +866,8 @@ export function buildHelmTools(scope: HelmToolScope) {
       });
       return {
         records: rows,
+        from: readFrom,
+        to: readTo,
         matchedCount,
         total: totalCents === null ? null : money(totalCents),
         ...(isPartial && {

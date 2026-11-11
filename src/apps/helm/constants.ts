@@ -1125,8 +1125,7 @@ export const HELM_COPY = {
   quoteDisconnected: 'This email was disconnected',
   quoteDocumentDisconnected: 'This document was disconnected',
   quoteRecordDisconnected: 'This record was disconnected',
-  searchedLine: (where: string, when: string) =>
-    `Looked in ${where} ${when}. Only what this answer quotes is kept.`,
+  searchedLine: (where: string, when: string) => `Looked in ${where} ${when}.`,
   searchedJustNow: 'just now',
   searchedFailed: (account: string, why: string) =>
     `Couldn't look in ${account}: ${why}`,

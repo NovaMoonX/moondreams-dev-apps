@@ -73,7 +73,7 @@ export interface QuoteEntry {
   ref: string;
   title: string;
   from: string;
-  at: number;
+  at: number | null;
   snippet: string;
   deepLink: string | null;
 }

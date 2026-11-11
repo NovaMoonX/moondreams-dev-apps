@@ -45,7 +45,6 @@ const isDocumentLink = (link: string) => {
   }
 };
 
-/** A site app's own route: its path and nothing else (no host, no other app's path). */
 const isSiteLink = (connectorId: string, link: string) => {
   const appId = connectorId.startsWith('app:') ? connectorId.slice(4) : '';
   return appId !== '' && /^[a-z0-9-]+$/.test(appId) && link === `/${appId}`;

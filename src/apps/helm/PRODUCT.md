@@ -496,7 +496,7 @@ Each source shares as little as serves the people above. **On** is what a new co
 | Going Once | Pickups you're meeting, and where each sale stands | Pickups set (event: the thing and the day); your sales (project: name and how many are available, pending, sold) | | Buyers' names, contacts and messages; floor prices; private notes; prices paid |
 | Nine Lives | What's coming up for your cats | Your cats (pet: name); vet visits coming up (event: cat, clinic, time); vaccination and preventive due dates (task: cat, what, when); clinics (place: name, phone, address) | Conditions and symptoms per cat (knowledge) | Uploaded records and documents, expenses, weights, litter logs |
 | Pinch | What you're eating and what you need to buy | Planned meals (event: meal, day, slot); the shopping list's unticked items (task) | Food near its date in the fridge, freezer or pantry (task) | Recipes' text, prices and costs, nutrition, cooking history |
-| Runway | Whether money is fine for what you're planning, and, if you choose, what you spent | Money summary (money summary: Free to Spend now, the next income day and what is due before it, as one total) | Bills coming up (task: name, amount, due day); Horizon events (project: name, target, set aside so far); Transactions (date, where, amount, envelope), read when a question needs them and never kept | Accounts and balances, cards, income sources, receipts, bank sign-ins |
+| Runway | Whether money is fine for what you're planning, and, if you choose, what you spent | Money summary (money summary: Free to Spend now, the next income day and what is due before it, as one total) | Bills coming up (task: name, amount, due day); Horizon events (project: name, target, set aside so far); Transactions (date, where, amount, category), read only when a question asks; only the rows an answer quotes are kept (up to 5, blanked when the connection ends) | Accounts and balances, cards, income sources, receipts, bank sign-ins |
 | Waypoint | Your trips, their plans, and what's yours to do | Trips you're in (trip: name, dates, places); the timeline's activities, flights, drives, stays and rentals (event and place, in the trip's time zone); Before the Road tasks assigned to you or private to you (task) | What you owe and are owed per trip (money summary) | Other members' private tasks, contact details and suggestions; expense lines; receipts; the album |
 | Worth the Wait | Counts only, by design | | Box counts (each box's name and emoji, how many items it holds, how many are revealed and how many not yet), counted without reading any item | Any item's words, revealed or not, yours or theirs; who wrote what; invite codes |
 | Google Calendar | Fixed events Today plans around | Events from the calendars you pick (event: title, time, calendar) | | Descriptions, guests, locations, attachments |
@@ -546,7 +546,7 @@ A source that adds something later adds it **Off**, and the connection's page sa
 - **Gmail and Drive** are read only when a question needs them, from the moment they are connected; each answer says when they were searched. Gmail's sent-mail style switch starts off (How You Write, In Detail).
 - **Google Contacts** reads nothing until the person ticks people in its picker, and only those.
 - **Worth the Wait** connects with nothing on; its one category, Box counts, says what it holds before it is switched on: "Helm will see your boxes and how many things are in each, and how many are revealed. It never sees what anyone wrote."
-- **Runway's Transactions** starts off; its switch says what turning it on means: "Lets Helm answer questions like 'what did I spend at Costco?'. Helm reads each purchase's date, place, amount and envelope when a question needs them, and keeps none of them."
+- **Runway's Transactions** starts off; its switch says what turning it on means: "Lets Helm answer questions like 'what did I spend at Costco?'. Helm reads each purchase's date, place, amount and category only when you ask, and keeps just the few an answer quotes (up to 5, blanked when the connection ends)."
 
 ### Keeping and Deleting, In Detail
 
@@ -556,7 +556,7 @@ The owner's blueprint stopped at "distinguish live data"; this is how long Helm 
 |---|---|---|
 | A copy from a site app or Google Calendar | While connected: what is current or coming up, and the last 30 days; older drops out at the next sync | Disconnect with the box ticked, Delete all my Helm data, or deleting it in its app |
 | A copy after a disconnect, box unticked | 90 days, then deleted | "Delete now" on the connection's row |
-| Mail, Drive and Runway transactions read to answer | Only while answering; never stored | Nothing to delete, beyond quotes |
+| Mail, Drive and Runway transactions read to answer | Only while answering; only the rows an answer quotes are kept (up to 5) | Nothing to delete, beyond quotes, which are blanked when the connection ends |
 | Lines an answer quoted | With the answer in Activity, sealed | Replaced when the source's copies are deleted; gone with Delete all |
 | A past day's events (title and time) | With that day's plan, as today | With Delete all |
 | A connection's grant | Until disconnect or Delete all; held on Helm's server only | Ends at once, and the provider is asked to forget it |
