@@ -2929,6 +2929,12 @@ async function sortRequest(request: CallableRequest): Promise<SortResult> {
             error instanceof NomosReplyError ? error.code : 'unexpected',
           );
     logger.warn('helm.sort.failed', { code: failure.code });
+    if (failure.code === 'unexpected' && error instanceof Error) {
+      logger.error('helm.sort.unexpected', {
+        name: error.name,
+        at: error.stack?.split('\n').slice(1, 4).join(' | ') ?? null,
+      });
+    }
     return failClaim(firestore, captureRef, claim.claimId, failure, {}, mode);
   });
 }

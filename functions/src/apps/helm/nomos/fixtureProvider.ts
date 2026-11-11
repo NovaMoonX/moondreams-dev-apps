@@ -1565,11 +1565,12 @@ function createTextFixtureProvider(
         ]),
       ];
       const entities = readEntities(text, reading);
-      const openProjects =
-        readBlock<string[]>(
+      const openProjects = (
+        readBlock<{ name: string }[]>(
           messageText(messages[0]?.content ?? ''),
           'open_projects',
-        ) ?? [];
+        ) ?? []
+      ).map((project) => project.name);
       const commands = bounds.flatMap(([start, end], index) => {
         const spans = reading.dates.filter(
           (span) => span.start >= start && span.end <= end,
