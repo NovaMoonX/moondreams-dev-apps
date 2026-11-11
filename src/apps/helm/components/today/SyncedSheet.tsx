@@ -3,12 +3,15 @@ import { useState } from 'react';
 import AppToggle from '@/components/AppToggle';
 import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAppSelector } from '@/store';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import SyncedSourceBlock from '@apps/helm/components/connections/SyncedSourceBlock';
+import { RunsSection } from '@apps/helm/components/procedures/RunRows';
 import { DiscrepancyBlock } from '@apps/helm/components/today/DiscrepancyLine';
 import { HELM_COPY } from '@apps/helm/constants';
 import { findOtherTime, findPlace } from '@apps/helm/engine/authority';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { useSourceAppName } from '@apps/helm/hooks/useSourceAppName';
 import { setAllDayEventBusy } from '@apps/helm/store/actions/settingsActions';
 import type { SyncedRecord } from '@apps/helm/types';
@@ -102,6 +105,7 @@ function BusyAllDayRow({ eventId }: { eventId: string }) {
 /** A copied record, read-only: its words, then where it came from. A calendar event also says when it is, and an all-day one can be marked as keeping the person busy. */
 function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
   const { nameOf, sourceNameOf } = useSourceAppName();
+  const { showView } = useHelmUrlState();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const isCalendar = record !== null && isCalendarEvent(record);
@@ -139,6 +143,14 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
           {isCalendar && record.isAllDay && (
             <BusyAllDayRow key={record.id} eventId={record.id} />
           )}
+          <RunsSection
+            field='attachedTo.id'
+            id={record.id}
+            variant='thing'
+            onOpen={(runId) =>
+              afterBackLayersClose(() => void showView('run', runId))
+            }
+          />
           <DiscrepancyBlock record={record} />
           {[record, ...alsoIn].map((copy) => (
             <SyncedSourceBlock

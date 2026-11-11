@@ -14,6 +14,7 @@ import type {
   OpenProject,
   OpenTask,
   OpenProcedure,
+  OpenRun,
   OpenTopic,
   OpenWho,
   PlanDay,
@@ -89,6 +90,8 @@ export interface HelmState {
   topics: LoadedSet<OpenTopic>;
   /** The person's procedures, opened. */
   procedures: LoadedSet<OpenProcedure>;
+  /** The runs still going. */
+  openRuns: LoadedSet<OpenRun>;
   /** The photos kept for people and places, with their nonces opened; the bytes stay in Storage. */
   media: LoadedSet<OpenMedia>;
   /** Copies of other apps' records, opened. */
@@ -150,6 +153,7 @@ const initialState: HelmState = {
   notes: emptyLoadedSet,
   topics: emptyLoadedSet,
   procedures: emptyLoadedSet,
+  openRuns: emptyLoadedSet,
   media: emptyLoadedSet,
   synced: emptyLoadedSet,
   recentExecutions: emptyLoadedSet,
@@ -320,6 +324,16 @@ const helmSlice = createSlice({
     setProceduresFailed: (state) => {
       state.procedures.isFailed = true;
     },
+    setOpenRuns: (state, action: PayloadAction<OpenRun[]>) => {
+      state.openRuns = {
+        items: action.payload,
+        isLoaded: true,
+        isFailed: false,
+      };
+    },
+    setOpenRunsFailed: (state) => {
+      state.openRuns.isFailed = true;
+    },
     setMedia: (state, action: PayloadAction<OpenMedia[]>) => {
       state.media = { items: action.payload, isLoaded: true, isFailed: false };
     },
@@ -446,6 +460,8 @@ export const {
   setTopicsFailed,
   setProcedures,
   setProceduresFailed,
+  setOpenRuns,
+  setOpenRunsFailed,
   setMedia,
   setMediaFailed,
   setSynced,

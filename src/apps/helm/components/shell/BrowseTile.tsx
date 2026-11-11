@@ -45,6 +45,7 @@ const VIEW_ENTRIES: Record<
   topic: { label: HELM_COPY.knowledgeTitle, icon: BookOpen },
   procedures: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   procedure: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
+  run: { label: HELM_COPY.proceduresTitle, icon: ClipboardList },
   howNomosSeesYou: { label: HELM_COPY.seesYouTitle, icon: UserRound },
 };
 

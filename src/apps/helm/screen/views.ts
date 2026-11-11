@@ -70,6 +70,7 @@ export const VIEW_PARENTS: Partial<Record<HelmView, HelmView>> = {
   topic: 'knowledge',
   procedures: 'home',
   procedure: 'procedures',
+  run: 'procedures',
   howNomosSeesYou: 'home',
 };
 
@@ -92,5 +93,6 @@ export const VIEW_KINDS = {
   topic: 'content',
   procedures: 'content',
   procedure: 'content',
+  run: 'content',
   howNomosSeesYou: 'content',
 } satisfies Record<HelmView, 'home' | 'content' | 'utility'>;

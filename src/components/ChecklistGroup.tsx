@@ -3,10 +3,14 @@ import type { ReactNode } from 'react';
 import { Checkbox } from '@moondreamsdev/dreamer-ui/components';
 
 import SectionDivider from '@/components/SectionDivider';
-import { TICK_HIT_CLASS } from '@apps/runway/constants';
+
+/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
+export const TICK_HIT_CLASS =
+  "relative before:absolute before:-inset-[11px] before:content-['']";
 
 interface ChecklistGroupProps {
-  label: string;
+  /** Left out for a group with no name (the lines before the first named group): no divider is drawn. */
+  label?: string;
   /** Ticks every line of the group; left out for a list with one group, where the whole list's box already does it. */
   onToggleAll?: (isDone: boolean) => void;
   doneCount: number;
@@ -24,7 +28,7 @@ function ChecklistGroup({
 }: ChecklistGroupProps) {
   return (
     <div className='space-y-2'>
-      <SectionDivider label={label} />
+      {label && <SectionDivider label={label} />}
       {onToggleAll && (
         <div className='flex min-h-10 items-center gap-3 px-1'>
           <Checkbox
@@ -32,7 +36,7 @@ function ChecklistGroup({
             checked={total > 0 && doneCount === total}
             indeterminate={doneCount > 0 && doneCount < total}
             onCheckedChange={(next) => onToggleAll(Boolean(next))}
-            aria-label={`Tick all of ${label}`}
+            aria-label={label ? `Tick all of ${label}` : 'Tick all'}
           />
           <span className='text-muted-foreground text-sm whitespace-nowrap tabular-nums'>
             {doneCount} of {total}

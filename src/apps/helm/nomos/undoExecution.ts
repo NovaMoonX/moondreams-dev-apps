@@ -48,6 +48,7 @@ import type {
   ProcedureSealed,
   ProcedureVersion,
   ProcedureVersionSealed,
+  RunSealed,
   ProjectSealed,
   Sealed,
   TaskSealed,
@@ -395,7 +396,8 @@ export async function undoExecution(
                 ref.collection === 'projects' ||
                 ref.collection === 'keyDates' ||
                 ref.collection === 'notes' ||
-                ref.collection === 'procedures';
+                ref.collection === 'procedures' ||
+                ref.collection === 'procedureRuns';
               const entry = await transaction.get(docOf(ref));
               if (ref.collection === 'keyDates' && ref.op === 'delete') {
                 const whoId =
@@ -461,6 +463,7 @@ export async function undoExecution(
                       | ProjectSealed
                       | NoteSealed
                       | ProcedureSealed
+                      | RunSealed
                     >(data.sealed as Sealed, encryption)
                   : Promise.reject(new Error('No sealed words.'))
               ).catch(() => null);

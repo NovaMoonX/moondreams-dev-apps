@@ -30,6 +30,7 @@ const withoutPage = (context: ScreenContext): ScreenContext => ({
   visible: [],
   topicId: null,
   procedureId: null,
+  runId: null,
   v: 1,
 });
 

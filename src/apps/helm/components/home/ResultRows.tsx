@@ -16,6 +16,7 @@ import {
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelectors';
+import { selectOpenRunById } from '@apps/helm/store/selectors/runSelectors';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
 
 interface ResultRowsProps {
@@ -27,7 +28,7 @@ interface ResultRowsProps {
   isFlat?: boolean;
 }
 
-/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic or a procedure opens it from home. */
+/** One row per change; after an Undo the taken-back rows are struck, and the ones kept or deleted since say so. A row for a note opens it over this screen, and a row for a topic, a procedure or a run opens it from home. */
 function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
   const takenBack = getTakenBackIds(undo);
   const gone = new Set(undo?.goneIds ?? []);
@@ -35,6 +36,7 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
   const noteById = useAppSelector(selectNoteById);
   const topicById = useAppSelector(selectTopicById);
   const procedureById = useAppSelector(selectProcedureById);
+  const runById = useAppSelector(selectOpenRunById);
   const { showView } = useHelmUrlState();
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
@@ -63,6 +65,12 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
             procedureById.has(line.ref.id)
               ? line.ref.id
               : null;
+          const runId =
+            !isFlat &&
+            line.ref?.collection === 'procedureRuns' &&
+            runById.has(line.ref.id)
+              ? line.ref.id
+              : null;
           const looseDetail =
             refNote && refNote.topicIds.length === 0
               ? HELM_COPY.noteLoose
@@ -83,7 +91,10 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
                     afterBackLayersClose(
                       () => void showView('procedure', procedureId),
                     )
-                : null;
+                : runId
+                  ? () =>
+                      afterBackLayersClose(() => void showView('run', runId))
+                  : null;
           const titleLine = (
             <p
               className={join(

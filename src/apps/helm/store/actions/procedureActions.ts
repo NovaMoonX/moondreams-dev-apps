@@ -32,8 +32,10 @@ import type {
   Sealed,
 } from '@apps/helm/types';
 import {
+  addStep,
   fromProcedure,
   summarizeEdit,
+  updateStep,
   toContent,
   toStoredParts,
   type ProcedureDraft,
@@ -280,6 +282,36 @@ export function saveProcedure(
       restoredFromVersion: null,
       changeSummary: summarizeEdit(toContent(live), content),
     }),
+  );
+}
+
+/** Adds one step, ungrouped, at the end of the routine as a new version; `expectedVersion` is the newest the run's page saw. The step is the words of one a run added for itself. */
+export function addStepFromRun(
+  uid: string,
+  encryption: HelmEncryption,
+  procedureId: string,
+  expectedVersion: number,
+  text: string,
+): Promise<DocumentChange> {
+  const stepId = generateUuid();
+  return writeVersion(
+    uid,
+    encryption,
+    procedureId,
+    expectedVersion,
+    async (live) => {
+      const next = toContent(
+        updateStep(addStep(live, stepId, null), stepId, { text }),
+      );
+      return next.steps.some((step) => step.id === stepId)
+        ? {
+            parts: toStoredParts(next),
+            reason: 'fromRun',
+            restoredFromVersion: null,
+            changeSummary: HELM_COPY.procedureSummaryAdded(1, [text]),
+          }
+        : null;
+    },
   );
 }
 
