@@ -30,7 +30,7 @@ function ChecklistGroup({
     <div className='space-y-2'>
       {label && <SectionDivider label={label} />}
       {onToggleAll && (
-        <div className='flex min-h-10 items-center gap-3 px-1'>
+        <div className='flex min-h-10 items-center gap-3 px-[13px]'>
           <Checkbox
             className={TICK_HIT_CLASS}
             checked={total > 0 && doneCount === total}

@@ -126,6 +126,7 @@ export const RUNS_LISTED = 5;
 export const RUNS_ALL_MAX = 100;
 /** Days ahead a trip or event is offered on Start a run. */
 export const RUN_START_DAYS = 30;
+export const RUN_START_LISTED = 4;
 export const SUBTOPICS_MAX = 20;
 export const NOTE_TOPICS_MAX = 10;
 /** Notes the search field appears from. */
@@ -1971,7 +1972,7 @@ export const HELM_COPY = {
   procedureDelete: 'Delete',
   procedureDeleteTitle: (title: string) => `Delete ${title}?`,
   procedureDeleteConfirm: (count: number) =>
-    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. Its runs stay. You can undo it right after.`,
+    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. Runs on a project or trip stay, and runs on their own go with it. You can undo it right after.`,
   procedureDeleted: (title: string) => `Deleted ${title}`,
   procedureDeletedBack: (title: string) => `${title} is back`,
   procedureDeleteFailed: "That wasn't deleted. Try again.",
@@ -2076,8 +2077,22 @@ export const HELM_COPY = {
   runsHeading: 'Runs',
   runsShowAll: 'Show all runs',
   runsShowFewer: 'Show fewer runs',
-  runNoLongerOnCalendar: (label: string, date: string) =>
-    `From ${label}, ${date}, no longer on your calendar`,
+  runNoLongerThere: (label: string, date: string | null) =>
+    `From ${label}${date === null ? '' : `, ${date}`}, no longer in the app it came from`,
+  runsFailedLine: "Couldn't load runs right now",
+  runStartFor: (name: string) => `For ${name}`,
+  runStartPickTitle: 'Which procedure?',
+  runStartPickHint: "It copies that procedure's steps as they are now.",
+  runStartNow: 'Now',
+  runStartShowMore: 'Show more',
+  runStartShowFewer: 'Show fewer',
+  runStartRunning: (done: number, total: number) =>
+    `Running · ${done} of ${total}`,
+  runNoStepsTitle: 'This procedure has no steps yet',
+  runNoStepsBody: 'Add a step to it, then start a run.',
+  runNoStepsRow: 'No steps yet',
+  runFinishEmptyTitle: 'Finish without ticking anything?',
+  runFinishEmptyMessage: 'It stays in its runs with every step not done.',
   runProcedureGone: 'Its procedure is gone',
   runGone: 'This run is gone.',
   runUnreadable: "This run couldn't be opened.",

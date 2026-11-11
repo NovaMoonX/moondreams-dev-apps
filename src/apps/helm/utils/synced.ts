@@ -130,3 +130,10 @@ export function getDayEvents(
     appEvents: shown.filter((record) => !isCalendarEvent(record)),
   };
 }
+/** A trip's or event's first day: an all-day one is already a UTC day, a timed one is read in the person's zone. */
+export const toFirstDay = (record: SyncedRecord, timeZone: string) =>
+  record.startAt === null
+    ? null
+    : record.isAllDay
+      ? record.startAt
+      : getDueDay({ kind: 'moment', at: record.startAt }, timeZone);
