@@ -18,6 +18,7 @@ import {
   GROUP_WORDS,
   MAKE_BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
+  PLAN_SELECT_WORDS,
   PRIORITY_LABELS,
 } from '@apps/runway/constants';
 import type { BillPayment } from '@apps/runway/engine/demands';
@@ -54,6 +55,10 @@ interface BillRowProps {
   isFaded?: boolean;
   itemId?: string;
   onOpen?: () => void;
+  /** While picking several: the row's tap ticks it and the chevron still opens the bill. */
+  select?: { checked: boolean; onChange: (checked: boolean) => void };
+  /** Press and hold (right-click on a computer): starts picking several with this bill ticked. */
+  onHold?: () => void;
 }
 
 interface BillSheetProps {
@@ -123,6 +128,8 @@ function BillRow({
   isFaded = false,
   onOpen,
   itemId,
+  select,
+  onHold,
 }: BillRowProps) {
   const stance = effectiveStance(planStance, bill.stanceOverride);
   const cents = pick(stance, bill.amount, 'expense');
@@ -183,6 +190,12 @@ function BillRow({
       isHighlighted={isHighlighted}
       isFaded={isFaded}
       itemId={itemId}
+      tick={
+        select && !reorder
+          ? { ...select, label: PLAN_SELECT_WORDS.tick(bill.name) }
+          : undefined
+      }
+      onLongPress={reorder ? undefined : onHold}
     />
   );
 }

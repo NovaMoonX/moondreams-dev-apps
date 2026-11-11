@@ -1,12 +1,18 @@
-import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight } from 'lucide-react';
 
 import HelpTip from '@/components/HelpTip';
 import SensitiveValue from '@/components/SensitiveValue';
+import { useLongPress } from '@/hooks/useLongPress';
 import { useValuesHidden } from '@/hooks/useValuesHidden';
 import { useAppSelector } from '@/store';
 import GroupTotalHelp from '@apps/runway/components/GroupTotalHelp';
-import { GROUP_WORDS } from '@apps/runway/constants';
+import {
+  GROUP_WORDS,
+  PLAN_SELECT_WORDS,
+  TICK_HIT_CLASS,
+} from '@apps/runway/constants';
 import type { GroupFigures } from '@apps/runway/hooks/useGroupFigures';
 import {
   selectPurposeEmojis,
@@ -22,10 +28,22 @@ interface GroupHeadingProps {
   onOpen: () => void;
   /** For a list of balances (goals): what its rows have saved of their targets, shown instead of the monthly figure. */
   saved?: { savedCents: number; targetCents: number };
+  /** While picking several: how many of the group's rows are ticked, and the tap that ticks or clears them all. */
+  select?: { ticked: number; total: number; onToggle: () => void };
+  /** Press and hold (right-click on a computer): starts picking several with the whole group ticked. */
+  onHold?: () => void;
 }
 
 /** The heading of a list's section for one group: its name and combined monthly total, opening the group's sheet. */
-function GroupHeading({ figures, kind, onOpen, saved }: GroupHeadingProps) {
+function GroupHeading({
+  figures,
+  kind,
+  onOpen,
+  saved,
+  select,
+  onHold,
+}: GroupHeadingProps) {
+  const longPress = useLongPress(() => onHold?.());
   const { isHidden } = useValuesHidden();
   const stance = useAppSelector(selectStance);
   const { name } = figures;
@@ -50,6 +68,41 @@ function GroupHeading({ figures, kind, onOpen, saved }: GroupHeadingProps) {
       }
     : describeGroupHeadingLead(total, figures.total, count, otherCount);
 
+  if (select) {
+    const isAll = select.total > 0 && select.ticked === select.total;
+    const label = isAll
+      ? PLAN_SELECT_WORDS.groupUntick(name)
+      : PLAN_SELECT_WORDS.groupTick(name);
+    return (
+      <div className='flex items-start gap-1'>
+        <Button
+          type='button'
+          variant='tertiary'
+          aria-label={label}
+          className='text-foreground! flex h-auto min-h-11 min-w-0 flex-1 flex-col items-start justify-start gap-0 px-2! py-1.5! text-left font-normal whitespace-normal'
+          onClick={select.onToggle}
+        >
+          <span className='line-clamp-2 text-base font-semibold break-words'>
+            {emoji && `${emoji} `}
+            {name}
+          </span>
+          <span className='text-muted-foreground block text-sm'>
+            {PLAN_SELECT_WORDS.groupTicked(select.ticked, select.total)}
+          </span>
+        </Button>
+        <span className='flex min-h-11 shrink-0 items-center pt-1 pr-3'>
+          <Checkbox
+            className={TICK_HIT_CLASS}
+            checked={isAll}
+            indeterminate={select.ticked > 0 && !isAll}
+            onCheckedChange={select.onToggle}
+            aria-label={label}
+          />
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className='flex items-start gap-1'>
       <div className='min-w-0 flex-1 px-2 py-1.5'>
@@ -57,8 +110,15 @@ function GroupHeading({ figures, kind, onOpen, saved }: GroupHeadingProps) {
           type='button'
           variant='tertiary'
           aria-label={GROUP_WORDS.openLabel(name)}
-          className='text-foreground! block h-auto min-h-6 w-full justify-start p-0! text-left text-base font-semibold whitespace-normal'
-          onClick={onOpen}
+          className={join(
+            'text-foreground! block h-auto min-h-6 w-full justify-start p-0! text-left text-base font-semibold whitespace-normal',
+            onHold && 'select-none [-webkit-touch-callout:none]',
+          )}
+          {...(onHold ? longPress : {})}
+          onClick={(event) => {
+            if (onHold) longPress.onClick(event);
+            if (!event.defaultPrevented) onOpen();
+          }}
         >
           <span className='block break-words'>
             <span className='line-clamp-2'>

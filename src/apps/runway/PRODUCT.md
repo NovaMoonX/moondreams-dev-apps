@@ -641,3 +641,7 @@ Every change says from when and shows, before it saves, which coming income days
 - **Receipts:** Images are kept until the person removes them; nothing expires and no scheduled function touches them.
 - **State and tooling:** Slices, listeners, actions and selectors follow the repo's existing pattern, with the app's own reducer composed into the central store.
 - **A bill can wait for its due date.** Adding a bill never needs a date: until it has one, the plan sets nothing aside for it and says so as a thing to fix. A monthly bill without a date still counts in its group's monthly total.
+
+### Changing several at once
+
+A person tidying their plan (moving every auto bill to be paid on the 1st, putting three subscriptions into a group) can press and hold a row, or a group heading, in Bills, Envelopes or Goals to tick several and change them together: Pay on, Paid from and Paid with for bills, Priority and Move to a group for all three, or Archive. Selecting stays in one view, so nothing ticked is ever out of sight, and each change ends in one toast with one Undo (Archive asks first instead).
