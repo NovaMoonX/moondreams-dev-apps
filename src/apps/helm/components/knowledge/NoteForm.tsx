@@ -68,16 +68,21 @@ function NoteFormFields({
   const fieldId = useId();
   const topicById = useAppSelector(selectTopicById);
   const noteCount = useAppSelector((state) => state.helm.notes.items.length);
-  const startTopicIds = (note?.topicIds ?? initialTopicIds).filter((id) =>
-    topicById.has(id),
-  );
-  const [title, setTitle] = useState(note?.title ?? '');
-  const [body, setBody] = useState(note?.body ?? '');
-  const [topicIds, setTopicIds] = useState(startTopicIds);
+  const [start] = useState(() => ({
+    title: note?.title ?? '',
+    body: note?.body ?? '',
+    topicIds: (note?.topicIds ?? initialTopicIds).filter((id) =>
+      topicById.has(id),
+    ),
+  }));
+  const [title, setTitle] = useState(start.title);
+  const [body, setBody] = useState(start.body);
+  const [topicIds, setTopicIds] = useState(start.topicIds);
+  const [newTopicName, setNewTopicName] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const isEmpty = title.trim() === '' && body.trim() === '';
-  const isTouched =
-    title !== (note?.title ?? '') || body !== (note?.body ?? '');
+  const isTouched = title !== start.title || body !== start.body;
+  const isPending = newTopicName.trim() !== '';
 
   const edit =
     <T,>(set: (value: T) => void) =>
@@ -116,7 +121,7 @@ function NoteFormFields({
     });
 
   const save = async () => {
-    if (!user || isBusy || isEmpty) return;
+    if (!user || isBusy || isEmpty || isPending) return;
     setIsBusy(true);
     const words = { title, body, topicIds };
     try {
@@ -127,7 +132,7 @@ function NoteFormFields({
           user.uid,
           encryption,
           note.id,
-          { title: note.title, body: note.body, topicIds: startTopicIds },
+          start,
           words,
         );
         if (result.kind === 'saved') {
@@ -145,7 +150,11 @@ function NoteFormFields({
         const result = await createNote(user.uid, encryption, words, noteCount);
         if (result.kind === 'made') {
           result.written.catch(reportFailure);
-          undoToast(HELM_COPY.noteMadeToast(label), result.undo);
+          undoToast(
+            HELM_COPY.noteMadeToast(label),
+            result.undo,
+            (undone) => undone === true,
+          );
           onClose();
           return;
         }
@@ -179,7 +188,8 @@ function NoteFormFields({
         <Textarea
           id={`${fieldId}-body`}
           variant='outline'
-          rows={8}
+          rows={6}
+          autoExpand
           value={body}
           maxLength={NOTE_BODY_MAX}
           placeholder={HELM_COPY.noteBodyPlaceholder}
@@ -196,10 +206,21 @@ function NoteFormFields({
         <p className='text-muted-foreground text-[13px]'>
           {HELM_COPY.noteTopicsHint}
         </p>
-        <TopicPicker values={topicIds} onChange={edit(setTopicIds)} />
+        <TopicPicker
+          values={topicIds}
+          onChange={edit(setTopicIds)}
+          pendingName={newTopicName}
+          onPendingNameChange={edit(setNewTopicName)}
+        />
       </div>
       <ModalFooterActions
-        note={isEmpty && isTouched ? HELM_COPY.noteNeedsWords : null}
+        note={
+          isPending
+            ? HELM_COPY.topicPickerPending
+            : isEmpty && isTouched
+              ? HELM_COPY.noteNeedsWords
+              : null
+        }
         cancelAction={
           <Button
             type='button'
@@ -214,7 +235,7 @@ function NoteFormFields({
           <Button
             type='button'
             loading={isBusy}
-            disabled={isEmpty}
+            disabled={isEmpty || isPending}
             onClick={() => void save()}
           >
             {HELM_COPY.editSave}

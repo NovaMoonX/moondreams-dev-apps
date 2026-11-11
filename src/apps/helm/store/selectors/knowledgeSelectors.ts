@@ -20,23 +20,6 @@ export const selectNoteById = createSelector(
     new Map(notes.map((note) => [note.id, note])),
 );
 
-/** Notes in no topic, the most recently touched first. */
-export const selectLooseNotes = createSelector([selectAllNotes], (notes) =>
-  notes.filter((note) => note.topicIds.length === 0),
-);
-
-/** Each topic's own notes, the most recently touched first. */
-export const selectNotesByTopic = createSelector(
-  [selectAllNotes],
-  (notes): Map<string, OpenNote[]> =>
-    notes.reduce((byTopic, note) => {
-      note.topicIds.forEach((topicId) =>
-        byTopic.set(topicId, [...(byTopic.get(topicId) ?? []), note]),
-      );
-      return byTopic;
-    }, new Map<string, OpenNote[]>()),
-);
-
 export const selectAllTopics = selectTopics;
 
 export const selectTopicById = createSelector(
@@ -45,21 +28,42 @@ export const selectTopicById = createSelector(
     new Map(topics.map((topic) => [topic.id, topic])),
 );
 
+/** Notes in no topic that is loaded, the most recently touched first. */
+export const selectLooseNotes = createSelector(
+  [selectAllNotes, selectTopicById],
+  (notes, topicById) =>
+    notes.filter((note) => !note.topicIds.some((id) => topicById.has(id))),
+);
+
+/** Each loaded topic's own notes, the most recently touched first. */
+export const selectNotesByTopic = createSelector(
+  [selectAllNotes, selectTopicById],
+  (notes, topicById): Map<string, OpenNote[]> =>
+    notes.reduce((byTopic, note) => {
+      note.topicIds
+        .filter((id) => topicById.has(id))
+        .forEach((topicId) => {
+          const list = byTopic.get(topicId);
+          if (list) list.push(note);
+          else byTopic.set(topicId, [note]);
+        });
+      return byTopic;
+    }, new Map<string, OpenNote[]>()),
+);
 /** The topics as a tree, each level A to Z. */
 export const selectTopicTree = createSelector([selectTopics], (topics) =>
   buildTopicTree(topics),
 );
 
-/** How many topics sit directly under each one. */
+/** The topics sitting directly under each one. */
 export const selectSubtopicsByParent = createSelector(
   [selectTopics],
   (topics): Map<string, OpenTopic[]> =>
     topics.reduce((byParent, topic) => {
       if (topic.parentId !== null) {
-        byParent.set(topic.parentId, [
-          ...(byParent.get(topic.parentId) ?? []),
-          topic,
-        ]);
+        const list = byParent.get(topic.parentId);
+        if (list) list.push(topic);
+        else byParent.set(topic.parentId, [topic]);
       }
       return byParent;
     }, new Map<string, OpenTopic[]>()),

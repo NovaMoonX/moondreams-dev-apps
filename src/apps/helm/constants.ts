@@ -1564,7 +1564,11 @@ export const HELM_COPY = {
           ...(subtopics > 0
             ? [`${subtopics} ${subtopics === 1 ? 'subtopic' : 'subtopics'}`]
             : []),
-          ...(notes > 0 ? [`${notes} ${notes === 1 ? 'note' : 'notes'}`] : []),
+          ...(notes > 0
+            ? [
+                `${notes} ${notes === 1 ? 'note' : 'notes'}${subtopics > 0 ? ' of its own' : ''}`,
+              ]
+            : []),
         ].join(' · '),
   askTopic: 'Ask about this topic',
   chipTopic: (name: string) => `About this topic: ${name}`,
@@ -1581,7 +1585,6 @@ export const HELM_COPY = {
   topicMenuDelete: 'Delete topic',
   topicAddTitle: 'New topic',
   topicSubAddTitle: 'New subtopic',
-  topicEditTitle: 'Change topic',
   topicNameField: 'Name',
   topicEmojiField: 'Emoji',
   topicNamePlaceholder: 'Car care',
@@ -1602,7 +1605,14 @@ export const HELM_COPY = {
       ? `Moved ${name} to the top level`
       : `Moved ${name} under ${parent}`,
   topicMoveRefused: "That move isn't allowed.",
-  topicDeleteConfirm: (name: string, subtopics: number, notes: number) =>
+  topicMoveLimits: `Topics go three levels deep, with up to ${SUBTOPICS_MAX} subtopics each.`,
+  topicDeleteTitle: (name: string) => `Delete ${name}?`,
+  topicDeleteConfirm: (
+    name: string,
+    subtopics: number,
+    notes: number,
+    parentName: string | null,
+  ) =>
     [
       subtopics === 0 && notes === 0
         ? `${name} has nothing in it.`
@@ -1615,7 +1625,7 @@ export const HELM_COPY = {
               : []),
           ].join(' and ')}.`,
       subtopics > 0
-        ? `The ${subtopics === 1 ? 'subtopic moves' : 'subtopics move'} up a level${notes > 0 ? '; the notes stay, loose or in their other topics.' : '.'}`
+        ? `The ${subtopics === 1 ? 'subtopic moves' : 'subtopics move'} ${parentName === null ? 'to the top level' : `up to ${parentName}`}${notes > 0 ? '; the notes stay, loose or in their other topics.' : '.'}`
         : notes > 0
           ? `The ${notes === 1 ? 'note stays' : 'notes stay'}, loose or in ${notes === 1 ? 'its' : 'their'} other topics.`
           : '',
@@ -1625,6 +1635,10 @@ export const HELM_COPY = {
   topicDeleteAction: 'Delete topic',
   topicDeletedToast: (name: string) => `Deleted ${name}`,
   topicDeletedBack: (name: string) => `${name} is back`,
+  topicDeletedBackSkipped: (name: string) =>
+    `${name} is back. Notes already in 10 topics stay as they are.`,
+  topicRestorePartial: (name: string) =>
+    `${name} is back, but some notes or subtopics couldn't be put back.`,
   topicUndoFailed: "That couldn't be put back. Try again.",
   topicDeleteNeedsConnection: 'Deleting a topic needs a connection.',
   topicDeletePartial: (name: string) =>
@@ -1663,6 +1677,7 @@ export const HELM_COPY = {
   noteUndoFailed: "That couldn't be put back. Try again.",
   noteDeleteFailed: "That wasn't deleted. Try again.",
   topicPickerNew: '+ New topic',
+  topicPickerPending: 'Add or clear the new topic.',
   topicPickerNamePlaceholder: 'Topic name',
   topicPickerFull:
     'A note goes in up to 10 topics. Take one off to pick another.',

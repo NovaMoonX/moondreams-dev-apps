@@ -10,15 +10,23 @@ interface LinkedTextProps {
 }
 
 const LINK = /(https?:\/\/[^\s<>"']+)/g;
-const TRAILING_PUNCTUATION = /[.,;:!?)\]}]+$/;
+const count = (text: string, mark: string) => text.split(mark).length - 1;
 
-/** Plain runs and web links in order; punctuation that ends a sentence stays outside the link. */
+const trimTrailing = (url: string): string => {
+  const last = url.slice(-1);
+  const isUnmatchedParen = last === ')' && count(url, ')') > count(url, '(');
+  return /[.,;:!?\]}]/.test(last) || isUnmatchedParen
+    ? trimTrailing(url.slice(0, -1))
+    : url;
+};
+
+/** Plain runs and web links in order; punctuation that ends a sentence, and a closing bracket with no opening one, stays outside the link. */
 const splitLinks = (text: string) =>
   text.split(LINK).flatMap((part, index) => {
     if (index % 2 === 0)
       return part ? [{ kind: 'text' as const, value: part }] : [];
-    const trailing = part.match(TRAILING_PUNCTUATION)?.[0] ?? '';
-    const href = part.slice(0, part.length - trailing.length);
+    const href = trimTrailing(part);
+    const trailing = part.slice(href.length);
     return [
       { kind: 'link' as const, value: href },
       ...(trailing ? [{ kind: 'text' as const, value: trailing }] : []),

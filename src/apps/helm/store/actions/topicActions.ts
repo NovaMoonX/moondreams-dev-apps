@@ -13,7 +13,11 @@ import {
 import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils';
-import { NOTE_TOPICS_MAX, TOPIC_NAME_MAX } from '@apps/helm/constants';
+import {
+  NOTE_TOPICS_MAX,
+  TOPIC_DEPTH_MAX,
+  TOPIC_NAME_MAX,
+} from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
 import type {
   HelmEncryption,
@@ -42,7 +46,7 @@ const userOf = (uid: string) => doc(db, 'apps', 'helm', 'users', uid);
 const topicsOf = (uid: string) => collection(userOf(uid), 'topics');
 const notesOf = (uid: string) => collection(userOf(uid), 'notes');
 
-const isUnavailable = (error: unknown) =>
+export const isUnavailable = (error: unknown) =>
   typeof error === 'object' &&
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
@@ -70,7 +74,7 @@ export type TopicMade =
   | { kind: 'made'; id: string; written: Promise<void> }
   | { kind: 'empty' | 'offline' | CreateRefusal };
 
-/** Makes a topic, at the top or under another. Refused past 100 topics, 20 subtopics in one or three levels. A top-level one is handed back unawaited so it works offline; a subtopic re-reads its parent in a transaction (its depth may have changed) and needs a connection. */
+/** Makes a topic at the top or under another. A top-level one is handed back unawaited; a subtopic re-reads its parent in a transaction and needs a connection. */
 export async function createTopic(
   uid: string,
   encryption: HelmEncryption,
@@ -124,7 +128,7 @@ export async function createTopic(
 
 export type TopicRename = 'saved' | 'offline' | 'missing' | 'unreadable';
 
-/** Changes a topic's name and emoji, re-reading it in a transaction so its document and anything changed on another device meanwhile are kept. Needs a connection. */
+/** Changes a topic's name and emoji in a transaction, keeping the rest of the document. Needs a connection. */
 export async function renameTopic(
   uid: string,
   encryption: HelmEncryption,
@@ -165,7 +169,7 @@ export type TopicMove =
   | { kind: 'moved'; undo: () => Promise<TopicMove> }
   | { kind: 'offline' | 'missing' | 'changed' | MoveRefusal };
 
-/** Moves a topic, with every topic under it, in one transaction. It re-reads the topic, its subtopics and the new parent, refuses when any is no longer as the caller saw it, checks the move again with the topic tree and writes the new parent and every depth. Undo moves it back under the same rule. Needs a connection. */
+/** Moves a topic and everything under it in one transaction, refusing when any of them or the new parent changed since the caller saw it. Undo moves it back under the same rule. Needs a connection. */
 export async function moveTopic(
   uid: string,
   topicId: string,
@@ -238,34 +242,35 @@ export class TopicDeletePartialError extends Error {
   }
 }
 
-export type TopicRestore = 'restored' | 'exists';
+export type TopicRestore = 'restored' | 'exists' | 'partial' | 'skipped';
 
-/** Re-adds a topic id to the notes that still exist, skipping one that already holds ten topics. */
+/** Re-adds a topic id to the notes that still exist and returns how many already held ten topics and were skipped. */
 const refile = (uid: string, topicId: string, noteIds: string[]) =>
   toChunks(noteIds).reduce(
     (chain, chunk) =>
-      chain.then(() =>
-        runTransaction(db, async (transaction) => {
+      chain.then(async (skipped) => {
+        const left = await runTransaction(db, async (transaction) => {
           const snapshots = await Promise.all(
             chunk.map((id) => transaction.get(doc(notesOf(uid), id))),
           );
-          snapshots
-            .filter(
-              (snapshot) =>
-                snapshot.exists() &&
-                (snapshot.data() as Note).topicIds.length < NOTE_TOPICS_MAX,
-            )
-            .forEach((snapshot) =>
-              transaction.update(snapshot.ref, {
-                topicIds: arrayUnion(topicId),
-              }),
-            );
-        }),
-      ),
-    Promise.resolve(),
+          const existing = snapshots.filter((snapshot) => snapshot.exists());
+          const room = existing.filter(
+            (snapshot) =>
+              (snapshot.data() as Note).topicIds.length < NOTE_TOPICS_MAX,
+          );
+          room.forEach((snapshot) =>
+            transaction.update(snapshot.ref, {
+              topicIds: arrayUnion(topicId),
+            }),
+          );
+          return existing.length - room.length;
+        });
+        return skipped + left;
+      }),
+    Promise.resolve(0),
   );
 
-/** Deletes a topic, keeping every note: each note drops the topic and stays loose or in its other topics, each subtopic takes the deleted topic's parent and every topic under them is one level shallower. Chunks of 400 re-read what they touch, notes first and the topic last, so a failure never deletes the topic while notes still name it. Undo puts the topic back, re-files the notes that still exist and moves the subtopics back under it only where each is still as the delete left it. Needs a connection. */
+/** Deletes a topic and keeps every note; each subtopic moves up a level. Notes go first and the topic last, so a failure never deletes a topic notes still name. Undo puts it all back where it is still as the delete left it. Needs a connection. */
 export async function deleteTopic(
   uid: string,
   topicId: string,
@@ -300,24 +305,23 @@ export async function deleteTopic(
     await toChunks(noteIds).reduce(
       (chain, chunk) =>
         chain.then(async () => {
-          const done = await runTransaction(db, async (transaction) => {
+          cut.push(...chunk);
+          await runTransaction(db, async (transaction) => {
             const snapshots = await Promise.all(
               chunk.map((id) => transaction.get(doc(notesOf(uid), id))),
             );
-            return snapshots.flatMap((snapshot) => {
-              if (
-                !snapshot.exists() ||
-                !(snapshot.data() as Note).topicIds.includes(topicId)
-              ) {
-                return [];
-              }
-              transaction.update(snapshot.ref, {
-                topicIds: arrayRemove(topicId),
-              });
-              return [snapshot.id];
-            });
+            snapshots
+              .filter(
+                (snapshot) =>
+                  snapshot.exists() &&
+                  (snapshot.data() as Note).topicIds.includes(topicId),
+              )
+              .forEach((snapshot) =>
+                transaction.update(snapshot.ref, {
+                  topicIds: arrayRemove(topicId),
+                }),
+              );
           });
-          cut.push(...done);
         }),
       Promise.resolve(),
     );
@@ -351,7 +355,7 @@ export async function deleteTopic(
   } catch (error) {
     await abandon(error);
   }
-  const restoreChildren = (placements: TopicPlacement[]) =>
+  const restoreChildren = (placements: TopicPlacement[], shift: number) =>
     runTransaction(db, async (transaction) => {
       const snapshots = await Promise.all(
         placements.map((entry) =>
@@ -365,12 +369,13 @@ export async function deleteTopic(
         if (
           live &&
           seen &&
+          seen.depth + shift <= TOPIC_DEPTH_MAX &&
           live.parentId === after.parentId &&
           live.depth === after.depth
         ) {
           transaction.update(snapshot.ref, {
             parentId: seen.parentId,
-            depth: seen.depth,
+            depth: seen.depth + shift,
             lastEditedAt: Date.now(),
           });
         }
@@ -379,15 +384,40 @@ export async function deleteTopic(
   return {
     noteCount: cut.length,
     restore: async (): Promise<TopicRestore> => {
-      const isBack = await runTransaction(db, async (transaction) => {
-        if ((await transaction.get(ref)).exists()) return false;
-        transaction.set(ref, { ...raw, lastEditedAt: Date.now() });
-        return true;
+      const back = await runTransaction(db, async (transaction) => {
+        if ((await transaction.get(ref)).exists()) return null;
+        const parentId = (raw.parentId as string | null) ?? null;
+        const parent =
+          parentId === null
+            ? null
+            : await transaction.get(doc(topicsOf(uid), parentId));
+        const parentDepth = parent?.exists()
+          ? (parent.data() as Topic).depth
+          : null;
+        const isOrphan =
+          parentId !== null &&
+          (parentDepth === null || parentDepth >= TOPIC_DEPTH_MAX);
+        const depth = toDepth(
+          isOrphan || parentDepth === null ? 1 : parentDepth + 1,
+        );
+        transaction.set(ref, {
+          ...raw,
+          ...(isOrphan ? { parentId: null } : {}),
+          depth,
+          lastEditedAt: Date.now(),
+        });
+        return { shift: depth - topic.depth };
       });
-      if (!isBack) return 'exists';
-      await restoreChildren(lifted);
-      await refile(uid, topicId, cut);
-      return 'restored';
+      if (!back) return 'exists';
+      const settle = <T>(step: () => Promise<T>) =>
+        step().catch((error: unknown) => {
+          console.error('Helm topic was not fully put back', error);
+          return null;
+        });
+      const children = await settle(() => restoreChildren(lifted, back.shift));
+      const skipped = await settle(() => refile(uid, topicId, cut));
+      if (children === null || skipped === null) return 'partial';
+      return skipped > 0 ? 'skipped' : 'restored';
     },
   };
 }

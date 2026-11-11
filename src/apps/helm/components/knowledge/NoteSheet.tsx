@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -11,7 +11,7 @@ import ModalFooterActions from '@/components/ModalFooterActions';
 import Pill from '@/components/Pill';
 import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -23,7 +23,7 @@ import {
 } from '@apps/helm/store/selectors/knowledgeSelectors';
 
 interface NoteSheetProps {
-  /** The note to show, read live from the store; null keeps the sheet closed. A note that is gone closes it. */
+  /** The note to show, read live from the store; null keeps the sheet closed. A note that is gone closes it and calls `onClose`. */
   noteId: string | null;
   onClose: () => void;
 }
@@ -36,8 +36,18 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
   const { showView } = useHelmUrlState();
   const note = useAppSelector(selectNoteById).get(noteId ?? '') ?? null;
   const topicById = useAppSelector(selectTopicById);
-  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const isEditing = editingId === note?.id;
   const title = note ? note.title || HELM_COPY.noteUntitled : '';
+
+  useEffect(() => {
+    if (!noteId) return;
+    return store.subscribe(() => {
+      if (selectNoteById(store.getState()).has(noteId)) return;
+      setEditingId(null);
+      onClose();
+    });
+  }, [noteId, onClose]);
 
   const remove = async () => {
     if (!user || !note) return;
@@ -126,7 +136,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                     <Button
                       type='button'
                       variant='secondary'
-                      onClick={() => setIsEditing(true)}
+                      onClick={() => setEditingId(note.id)}
                     >
                       {HELM_COPY.noteEdit}
                     </Button>
@@ -167,8 +177,8 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
         )}
       </DetailSheet>
       <NoteForm
-        isOpen={note !== null && isEditing}
-        onClose={() => setIsEditing(false)}
+        isOpen={isEditing}
+        onClose={() => setEditingId(null)}
         onSaved={onClose}
         note={note}
       />

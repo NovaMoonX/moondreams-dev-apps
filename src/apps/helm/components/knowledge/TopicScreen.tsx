@@ -20,6 +20,7 @@ import { HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
   deleteTopic,
+  isUnavailable,
   moveTopic,
   TopicDeletePartialError,
   type TopicMove,
@@ -144,11 +145,12 @@ function TopicScreen({
       return;
     }
     const isConfirmed = await confirm({
-      title: HELM_COPY.topicMenuDelete,
+      title: HELM_COPY.topicDeleteTitle(topic.name),
       message: HELM_COPY.topicDeleteConfirm(
         topic.name,
         subtopicList.length,
         notes.length,
+        parent?.name ?? null,
       ),
       confirmText: HELM_COPY.topicDeleteAction,
       destructive: true,
@@ -174,8 +176,12 @@ function TopicScreen({
                   title:
                     outcome === 'exists'
                       ? HELM_COPY.restoreExists
-                      : HELM_COPY.topicDeletedBack(topic.name),
-                  type: 'info',
+                      : outcome === 'partial'
+                        ? HELM_COPY.topicRestorePartial(topic.name)
+                        : outcome === 'skipped'
+                          ? HELM_COPY.topicDeletedBackSkipped(topic.name)
+                          : HELM_COPY.topicDeletedBack(topic.name),
+                  type: outcome === 'partial' ? 'error' : 'info',
                 }),
               (error: unknown) => {
                 console.error('Helm deleted topic was not restored', error);
@@ -187,11 +193,12 @@ function TopicScreen({
     } catch (error) {
       console.error('Helm topic was not deleted', error);
       addToast({
-        title:
-          error instanceof TopicDeletePartialError
+        title: isUnavailable(error)
+          ? HELM_COPY.topicDeleteNeedsConnection
+          : error instanceof TopicDeletePartialError
             ? HELM_COPY.topicDeletePartial(topic.name)
             : HELM_COPY.topicDeleteFailed,
-        type: 'error',
+        type: isUnavailable(error) ? 'info' : 'error',
       });
     }
   };

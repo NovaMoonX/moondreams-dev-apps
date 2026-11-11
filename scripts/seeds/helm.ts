@@ -61,6 +61,7 @@ import type {
   TaskDue,
   TaskSealed,
   Topic,
+  TopicDepth,
   TopicSealed,
 } from '../../src/apps/helm/types.ts';
 import {
@@ -1554,7 +1555,7 @@ async function buildProjects(input: {
   return { projects, tasks };
 }
 
-/** Alex's Knowledge: eight topics two levels deep (🚗 Car care › Washing and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. */
+/** Alex's Knowledge: nine topics up to three levels deep (🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-one typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. */
 async function buildKnowledge(input: {
   now: number;
   encryption: HelmEncryption;
@@ -1565,11 +1566,12 @@ async function buildKnowledge(input: {
     name: string,
     emoji: string | null,
     parentId: string | null,
+    depth: TopicDepth = parentId === null ? 1 : 2,
   ): Promise<{ id: string; topic: Topic }> => ({
     id,
     topic: {
       parentId,
-      depth: parentId === null ? 1 : 2,
+      depth,
       projectIds: [],
       version: 0,
       docState: 'empty',
@@ -1600,6 +1602,13 @@ async function buildKnowledge(input: {
       'Tomatoes',
       null,
       'seed-topic-garden',
+    ),
+    topicOf(
+      'seed-topic-car-ceramic',
+      'Ceramic coat',
+      null,
+      'seed-topic-car-washing',
+      3,
     ),
   ]);
   const noteOf = async (
@@ -1635,6 +1644,7 @@ async function buildKnowledge(input: {
   const wedding = 'seed-topic-wedding';
   const garden = 'seed-topic-garden';
   const tomatoes = 'seed-topic-garden-tomatoes';
+  const ceramic = 'seed-topic-car-ceramic';
   const notes = await Promise.all([
     noteOf(
       1,
@@ -1756,6 +1766,12 @@ async function buildKnowledge(input: {
       'Parking by the dentist',
       'The garage on Elm is cheaper than the meter, and the validation is at the front desk.',
       [],
+    ),
+    noteOf(
+      21,
+      'Ceramic coat aftercare',
+      'Wait a week before the first wash, then use a pH-neutral soap and skip the automatic wash.',
+      [ceramic],
     ),
   ]);
   return { topics, notes };

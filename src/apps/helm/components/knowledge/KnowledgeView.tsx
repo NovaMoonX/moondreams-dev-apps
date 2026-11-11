@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { ChevronRight, Plus } from 'lucide-react';
@@ -21,8 +21,8 @@ import {
   selectLooseNotes,
   selectTopicTree,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
-import type { OpenNote, OpenTopic } from '@apps/helm/types';
-import type { TopicNode } from '@apps/helm/utils/topicTree';
+import type { OpenTopic } from '@apps/helm/types';
+import { pathOf, type TopicNode } from '@apps/helm/utils/topicTree';
 
 interface KnowledgeViewProps {
   onBack: () => void;
@@ -44,20 +44,6 @@ const fold = (text: string) =>
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
-
-/** A loose match: every word typed is somewhere in the title, the body or the name of a topic the note is in. */
-const matches = (
-  note: OpenNote,
-  query: string,
-  topicNames: ReadonlyMap<string, string>,
-) => {
-  const names = note.topicIds.map((id) => topicNames.get(id) ?? '');
-  const haystack = fold([note.title, note.body, ...names].join(' '));
-  return fold(query)
-    .split(/\s+/)
-    .filter(Boolean)
-    .every((word) => haystack.includes(word));
-};
 
 /** Knowledge: the topic tree, A to Z, a door to the notes in no topic, and every note searchable once there are a few. */
 function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
@@ -86,9 +72,24 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
   const isEmpty = isLoaded && rows.length === 0 && notes.length === 0;
   const isSearching =
     notes.length >= KNOWLEDGE_SEARCH_FROM && query.trim() !== '';
-  const topicNames = new Map(allTopics.map((topic) => [topic.id, topic.name]));
+  const searchable = useMemo(() => {
+    const names = new Map(allTopics.map((topic) => [topic.id, topic.name]));
+    return notes.map((note) => ({
+      note,
+      text: fold(
+        [
+          note.title,
+          note.body,
+          ...note.topicIds.map((id) => names.get(id) ?? ''),
+        ].join(' '),
+      ),
+    }));
+  }, [notes, allTopics]);
+  const words = fold(query).split(/\s+/).filter(Boolean);
   const found = isSearching
-    ? notes.filter((note) => matches(note, query, topicNames))
+    ? searchable
+        .filter(({ text }) => words.every((word) => text.includes(word)))
+        .map(({ note }) => note)
     : [];
 
   return (
@@ -131,7 +132,14 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
             <ul className='helm-card divide-border divide-y overflow-hidden'>
               {found.map((note) => (
                 <li key={note.id}>
-                  <NoteRow note={note} onOpen={setOpenNoteId} />
+                  <NoteRow
+                    note={note}
+                    onOpen={setOpenNoteId}
+                    topicLine={note.topicIds
+                      .map((id) => pathOf(id, allTopics).join(' › '))
+                      .filter(Boolean)
+                      .join(', ')}
+                  />
                 </li>
               ))}
             </ul>
@@ -158,14 +166,14 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
             )}
             <Button
               type='button'
-              variant='tertiary'
+              variant='secondary'
               size='sm'
               onClick={() => setIsMakingTopic(true)}
             >
               <Plus className='size-4' aria-hidden='true' />
               {HELM_COPY.topicNew}
             </Button>
-            {loose.length > 0 && (
+            {isLoaded && loose.length > 0 && (
               <Button
                 type='button'
                 variant='secondary'
@@ -187,13 +195,25 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
           overlay
           title={HELM_COPY.looseNotesTitle}
           onClose={() => setIsLooseOpen(false)}
+          headerAction={
+            <Button
+              type='button'
+              variant='secondary'
+              size='sm'
+              className="relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+              onClick={() => setIsMakingNote(true)}
+            >
+              <Plus className='size-4' aria-hidden='true' />
+              {HELM_COPY.noteNew}
+            </Button>
+          }
         >
           {loose.length === 0 ? (
             <p className='text-muted-foreground text-[15px]'>
               {HELM_COPY.looseNotesEmpty}
             </p>
           ) : (
-            <ul className='helm-card divide-border divide-y overflow-hidden'>
+            <ul className='divide-border divide-y'>
               {loose.map((note) => (
                 <li key={note.id}>
                   <NoteRow note={note} onOpen={setOpenNoteId} />

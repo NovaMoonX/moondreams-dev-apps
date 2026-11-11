@@ -203,6 +203,7 @@ function HelmApp() {
         )}
         {!isLocked && view === 'topic' && (
           <TopicScreen
+            key={item}
             topicId={item}
             onBack={goBackToOrigin}
             onHome={goHome}

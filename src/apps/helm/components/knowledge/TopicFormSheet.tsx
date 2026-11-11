@@ -133,19 +133,21 @@ function TopicForm({
 
   return (
     <div className='space-y-4'>
-      <div className='space-y-1.5'>
-        <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
-          {HELM_COPY.topicNameField}
-        </label>
-        <div className='flex items-start gap-3'>
+      <div className='flex items-start gap-3'>
+        <div className='space-y-1.5'>
+          <p className='text-sm font-medium'>{HELM_COPY.topicEmojiField}</p>
           <EmojiField
             value={emoji}
             ariaLabel={HELM_COPY.topicEmojiField}
             onChange={(value) => edit(setEmoji)(toFirstEmoji(value))}
           />
+        </div>
+        <div className='min-w-0 flex-1 space-y-1.5'>
+          <label htmlFor={`${fieldId}-name`} className='text-sm font-medium'>
+            {HELM_COPY.topicNameField}
+          </label>
           <Input
             id={`${fieldId}-name`}
-            className='min-w-0 flex-1'
             value={name}
             maxLength={TOPIC_NAME_MAX}
             placeholder={HELM_COPY.topicNamePlaceholder}
@@ -196,7 +198,7 @@ function TopicFormSheet({
       onClose={requestClose}
       title={
         topic
-          ? HELM_COPY.topicEditTitle
+          ? HELM_COPY.topicMenuRename
           : parentId
             ? HELM_COPY.topicSubAddTitle
             : HELM_COPY.topicAddTitle

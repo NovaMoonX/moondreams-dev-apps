@@ -88,7 +88,7 @@ export function subtreeHeight<T extends TreeTopic>(
   return levels([topicId], new Set([topicId]));
 }
 
-/** The depth of every topic in the subtree if its root went under `parentId` (null for the top level), found from the tree's shape and never from stored depths. */
+/** The depth of every topic in the subtree if its root went under `parentId` (null for the top level), counted from the tree's shape below it and the new parent's stored depth. */
 export function depthAfterMove<T extends TreeTopic>(
   topicId: string,
   parentId: string | null,
@@ -144,7 +144,7 @@ export function moveRefusal<T extends TreeTopic>(
   return null;
 }
 
-/** The topics this one may be moved under (the top level is `moveRefusal(id, null, …)`). */
+/** The topics this one may be moved under; the top level is checked on its own. */
 export function legalParents<T extends TreeTopic>(
   topicId: string,
   topics: readonly T[],

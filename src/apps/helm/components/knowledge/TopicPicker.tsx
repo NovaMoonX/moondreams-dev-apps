@@ -19,19 +19,26 @@ import { pathOf } from '@apps/helm/utils/topicTree';
 interface TopicPickerProps {
   values: string[];
   onChange: (values: string[]) => void;
+  /** The new topic's name as typed and not yet added; held by the form so unsaved typing counts. */
+  pendingName: string;
+  onPendingNameChange: (name: string) => void;
 }
 
 const createFailure = (kind: string) =>
   kind === 'full' ? HELM_COPY.topicsFull : HELM_COPY.editFailed;
 
-/** The topics a note is filed under: every topic as a pill (its path when two share a name), up to ten, and "+ New topic" to make one at the top level and pick it. */
-function TopicPicker({ values, onChange }: TopicPickerProps) {
+/** The topics a note is filed under: every topic as a pill (a subtopic by its path), up to ten, and "+ New topic" to make one at the top level and pick it. */
+function TopicPicker({
+  values,
+  onChange,
+  pendingName: name,
+  onPendingNameChange: setName,
+}: TopicPickerProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const fieldId = useId();
   const topics = useAppSelector(selectAllTopics);
   const [isNaming, setIsNaming] = useState(false);
-  const [name, setName] = useState('');
   const [isBusy, setIsBusy] = useState(false);
   const isFull = values.length >= NOTE_TOPICS_MAX;
 
@@ -44,9 +51,7 @@ function TopicPicker({ values, onChange }: TopicPickerProps) {
     .map((topic) => ({
       value: topic.id,
       label:
-        topics.filter((other) => other.name === topic.name).length > 1
-          ? pathOf(topic.id, topics).join(' › ')
-          : topic.name,
+        topic.depth > 1 ? pathOf(topic.id, topics).join(' › ') : topic.name,
       emoji: topic.emoji ?? undefined,
     }));
 

@@ -38,6 +38,10 @@ function TopicMoveSheet({
   const parents = flatten(buildTopicTree(topics)).filter((entry) =>
     legal.has(entry.id),
   );
+  const isLimited = topics.some((entry) => {
+    const refusal = moveRefusal(topic.id, entry.id, topics);
+    return refusal === 'tooDeep' || refusal === 'tooMany';
+  });
   const canGoToTop = moveRefusal(topic.id, null, topics) === null;
 
   return (
@@ -94,6 +98,11 @@ function TopicMoveSheet({
             </li>
           ))}
         </ul>
+        {isLimited && (
+          <p className='text-muted-foreground text-[13px] text-pretty'>
+            {HELM_COPY.topicMoveLimits}
+          </p>
+        )}
       </div>
     </FormSheet>
   );

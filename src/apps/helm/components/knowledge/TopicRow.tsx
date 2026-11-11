@@ -17,7 +17,7 @@ interface TopicRowProps {
   onOpen: (topicId: string) => void;
 }
 
-const INDENT = ['pl-4', 'pl-14', 'pl-24'] as const;
+const INDENT = ['pl-4', 'pl-20', 'pl-36'] as const;
 
 /** One topic: its emoji and name, with how many subtopics and notes it holds. */
 function TopicRow({ topic, indent, onOpen }: TopicRowProps) {

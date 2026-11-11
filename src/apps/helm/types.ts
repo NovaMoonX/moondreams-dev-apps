@@ -593,7 +593,7 @@ export interface TopicSection {
   sources: TopicSource[];
 }
 
-/** `apps/helm/users/{uid}/topics/{id}`: a place notes are filed under; its document is written in a later issue. */
+/** `apps/helm/users/{uid}/topics/{id}`: a place notes are filed under. */
 export interface Topic {
   parentId: string | null;
   depth: TopicDepth;

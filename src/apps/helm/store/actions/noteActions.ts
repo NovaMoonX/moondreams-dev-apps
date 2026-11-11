@@ -55,11 +55,11 @@ export type NoteMade =
       kind: 'made';
       id: string;
       written: Promise<void>;
-      undo: () => Promise<void>;
+      undo: () => Promise<boolean>;
     }
   | { kind: NoteRefusal };
 
-/** Keeps a note written by hand. At most 1,000 notes (counted from the store) and 10 topics each. The write is handed back unawaited so it works offline; Undo deletes it. */
+/** Keeps a note written by hand, up to 1,000 notes and 10 topics each. The write is handed back unawaited; Undo deletes it only while it is untouched. */
 export async function createNote(
   uid: string,
   encryption: HelmEncryption,
@@ -96,7 +96,14 @@ export async function createNote(
     kind: 'made',
     id,
     written: setDoc(ref, note),
-    undo: () => deleteDoc(ref),
+    undo: () =>
+      runTransaction(db, async (transaction) => {
+        const live = await transaction.get(ref);
+        if (!live.exists()) return true;
+        if ((live.data() as Note).lastEditedAt !== null) return false;
+        transaction.delete(ref);
+        return true;
+      }),
   };
 }
 
@@ -109,7 +116,7 @@ export type NoteEdit =
 const sameIds = (left: string[], right: string[]) =>
   left.length === right.length && left.every((id) => right.includes(id));
 
-/** Changes a note in one transaction that re-reads it and writes only the fields the person changed (title, body, topics), so words changed on another device meanwhile are kept. Any hand edit sets `checkedAt`. Undo puts back only the fields still as this edit left them. Needs a connection. */
+/** Changes a note in one transaction that writes only the fields the person changed, so another device's edits are kept. Undo puts back only fields still as this edit left them. Needs a connection. */
 export async function editNote(
   uid: string,
   encryption: HelmEncryption,
@@ -213,7 +220,7 @@ export async function editNote(
 
 export type NoteRestore = 'restored' | 'exists';
 
-/** Deletes a note. The write is handed back unawaited; Undo puts the same document back under its id while the id is free, keeping only the topics that still exist. */
+/** Deletes a note. Undo puts it back under its id while the id is free, keeping only the topics that still exist. */
 export async function deleteNote(uid: string, noteId: string) {
   const ref = doc(notesOf(uid), noteId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
@@ -229,9 +236,7 @@ export async function deleteNote(uid: string, noteId: string) {
         ),
       )
     ).flat();
-    setDoc(ref, { ...raw, topicIds: kept, lastEditedAt: Date.now() }).catch(
-      () => undefined,
-    );
+    await setDoc(ref, { ...raw, topicIds: kept, lastEditedAt: Date.now() });
     return 'restored';
   };
   return { write, restore };
