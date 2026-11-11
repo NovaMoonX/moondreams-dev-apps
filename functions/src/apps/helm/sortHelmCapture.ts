@@ -1464,9 +1464,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       upcoming,
       projects,
       topics,
-      notes: isQuestion(combined.text.trim())
-        ? hinted
-        : hinted.map(({ id, title }) => ({ id, title })),
+      notes: toContextNotes(hinted, combined.text),
     });
     const provider = pickProvider(combined.text, combined.reading);
     const liveGrants =
@@ -2369,6 +2367,12 @@ const readInput = (data: unknown) => {
     noteIds: noteIds as string[],
   };
 };
+
+/** The hinted notes as the model sees them: bodies only when the turn is a question, titles alone otherwise. */
+export const toContextNotes = (hinted: HintedNote[], text: string) =>
+  isQuestion(text.trim())
+    ? hinted
+    : hinted.map(({ id, title }) => ({ id, title }));
 
 export const sortHelmCapture = onCall(
   {

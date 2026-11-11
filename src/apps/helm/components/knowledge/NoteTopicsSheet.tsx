@@ -24,7 +24,7 @@ const refusalLine = (kind: 'missing' | 'tooMany' | 'offline') =>
       ? HELM_COPY.noteTopicsFull
       : HELM_COPY.topicGone;
 
-function NoteTopicsFields({
+export function NoteTopicsFields({
   note,
   onClose,
 }: Pick<NoteTopicsSheetProps, 'note' | 'onClose'>) {

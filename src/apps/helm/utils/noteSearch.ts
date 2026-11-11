@@ -33,7 +33,7 @@ const toCounts = (words: string[]) =>
 
 type Rankable = Pick<OpenNote, 'id' | 'title' | 'body' | 'topicIds'>;
 
-/** A note's words counted once per version of it, so ranking again after a keystroke or a send only re-reads notes that changed. */
+/** A note's words counted once per note object, so ranking again while the store hands back the same objects only re-reads notes that changed. */
 const COUNTED = new WeakMap<
   object,
   {
@@ -117,11 +117,14 @@ export function pickFittingTopic(
   return own.length === 1 ? own[0] : null;
 }
 
-/** Up to five topics for the words, the ones whose name or outline shares the most with them first and the rest as they come. */
+/** Up to five topics for the words: the ones whose name or outline, or whose filed notes, share the most with them first; with nothing shared, the top-level topics holding the most notes. */
 export function rankTopicChoices<
-  T extends Pick<OpenTopic, 'id' | 'name' | 'overview' | 'sections'>,
->(text: string, topics: T[]): T[] {
-  const ranked = rankNotes(
+  T extends Pick<
+    OpenTopic,
+    'id' | 'name' | 'overview' | 'sections' | 'parentId'
+  >,
+>(text: string, topics: T[], notes: Rankable[]): T[] {
+  const own = scoreNotes(
     text,
     topics.map((topic) => ({
       id: topic.id,
@@ -136,9 +139,32 @@ export function rankTopicChoices<
       topicIds: [],
     })),
     [],
-  ).flatMap((id) => topics.filter((topic) => topic.id === id));
+  );
+  const filed = scoreNotes(text, notes, topics).flatMap((entry) =>
+    (notes.find((note) => note.id === entry.id)?.topicIds ?? []).map((id) => ({
+      id,
+      score: entry.score,
+    })),
+  );
+  const scores = [...own, ...filed].reduce(
+    (totals, entry) =>
+      totals.set(entry.id, (totals.get(entry.id) ?? 0) + entry.score),
+    new Map<string, number>(),
+  );
+  const counts = notes
+    .flatMap((note) => note.topicIds)
+    .reduce(
+      (totals, id) => totals.set(id, (totals.get(id) ?? 0) + 1),
+      new Map<string, number>(),
+    );
+  const byCount = (a: T, b: T) =>
+    Number(b.parentId === null) - Number(a.parentId === null) ||
+    (counts.get(b.id) ?? 0) - (counts.get(a.id) ?? 0);
+  const ranked = topics
+    .filter((topic) => (scores.get(topic.id) ?? 0) > 0)
+    .sort((a, b) => (scores.get(b.id) ?? 0) - (scores.get(a.id) ?? 0));
   return [
     ...ranked,
-    ...topics.filter((topic) => !ranked.includes(topic)),
+    ...topics.filter((topic) => !ranked.includes(topic)).sort(byCount),
   ].slice(0, MAX_TOPIC_CHOICES);
 }

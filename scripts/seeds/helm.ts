@@ -787,6 +787,15 @@ const buildAnswers = (now: number): CaptureAnswer[] => {
         'Ibuprofen and similar pain relievers can raise blood pressure and may make metoprolol work less well.',
       isHealth: true,
     },
+    {
+      ...EMPTY_ANSWER,
+      question: 'Why does cream cheese frosting go runny?',
+      scope: 'theWorld',
+      fromRecords: null,
+      general:
+        'Usually the butter or cream cheese was too warm, or the cream cheese was a spreadable tub with extra water. Chill it for 20 minutes and beat again.',
+      suggestedTopicId: 'seed-topic-kitchen-baking',
+    },
   ];
 };
 

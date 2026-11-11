@@ -9,6 +9,7 @@ import { createFixtureProvider } from '../../functions/src/apps/helm/nomos/fixtu
 import { normalizeNomosReply } from '../../functions/src/apps/helm/nomos/normalizeNomosReply.ts';
 import { NOTES_CONTEXT_CHARS } from '../../functions/src/apps/helm/nomos/commands.ts';
 import { readHintedNotes } from '../../functions/src/apps/helm/noteStore.ts';
+import { toContextNotes } from '../../functions/src/apps/helm/sortHelmCapture.ts';
 import type { OpenNote, OpenTopic } from '../../src/apps/helm/types.ts';
 import {
   pickFittingTopic,
@@ -161,6 +162,7 @@ const topicOf = (id: string, name: string): OpenTopic =>
   ({
     id,
     name,
+    parentId: null,
     overview: null,
     sections: [],
     isUnreadable: false,
@@ -216,9 +218,27 @@ test('topic choices put overlapping topics first and stop at five', () => {
   const topics = Array.from({ length: 8 }, (_, index) =>
     topicOf(`t${index}`, `Topic ${index}`),
   ).concat(topicOf('kitchen', 'Kitchen cakes'));
-  const choices = rankTopicChoices('cakes in the fridge', topics);
+  const choices = rankTopicChoices('cakes in the fridge', topics, []);
   assert.equal(choices.length, 5);
   assert.equal(choices[0].id, 'kitchen');
+});
+
+test('topic choices also score through the notes filed in them, and with nothing shared lead with the fullest top-level topics', () => {
+  const topics = [
+    topicOf('a', 'Alpha'),
+    topicOf('b', 'Bravo'),
+    topicOf('c', 'Charlie'),
+  ];
+  const filed = [
+    note('n1', 'Cake storage', 'Cakes keep 3 days in the fridge', ['c']),
+    note('n2', 'Spare', 'Nothing alike', ['b']),
+    note('n3', 'Spare two', 'Nothing alike either', ['b']),
+  ];
+  assert.equal(
+    rankTopicChoices('cakes in the fridge', topics, filed)[0].id,
+    'c',
+  );
+  assert.equal(rankTopicChoices('zebra', topics, filed)[0].id, 'b');
 });
 
 const BASE = 'apps/helm/users/me';
@@ -384,6 +404,22 @@ test('the emulator cites a kept note, and gives a general answer that differs fr
   const general = await asked('What is a baking roux?');
   assert.equal(general?.suggestedTopicId, 'baking');
   assert.deepEqual(general?.noteIds, []);
+});
+
+test('a question sends the hinted notes with their bodies, anything else sends titles only', () => {
+  const hinted = [
+    {
+      id: 'cake',
+      title: 'Cake',
+      body: 'Keeps 3 days',
+      isUnchecked: true,
+      topicIds: ['baking'],
+    },
+  ];
+  assert.deepEqual(toContextNotes(hinted, 'How long do cakes keep?'), hinted);
+  assert.deepEqual(toContextNotes(hinted, 'Remember the cake tin is blue'), [
+    { id: 'cake', title: 'Cake' },
+  ]);
 });
 
 const failures: string[] = [];

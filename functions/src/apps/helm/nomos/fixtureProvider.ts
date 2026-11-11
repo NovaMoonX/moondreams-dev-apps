@@ -545,7 +545,7 @@ function readNoteAnswer(question: string, words: string[], message: string) {
         generalText: DIFFERING_GENERAL.text,
         generalSpoken: DIFFERING_GENERAL.spoken,
         differsFromNoteAlias: found.alias,
-        differsSays: says.slice(0, 80),
+        differsSays: says.split(/(?<=[.!?])\s/)[0].slice(0, 80),
       })
     : toAnswer({ scope: 'yourThings', question, ...records });
 }

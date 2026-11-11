@@ -135,6 +135,33 @@ function Composer({
   const shownDrop =
     lastDrop && readKeys.includes(lastDrop.key) ? lastDrop : null;
   const stopKeepingInView = useRef<(() => void) | null>(null);
+  const press = useRef<{ isDown: boolean; pendingBlur: (() => void) | null }>({
+    isDown: false,
+    pendingBlur: null,
+  });
+
+  // A press that takes focus off the field must not change the layout under the finger, or the click lands on what moved into its place.
+  useEffect(() => {
+    const state = press.current;
+    const down = () => {
+      state.isDown = true;
+    };
+    const up = () => {
+      state.isDown = false;
+      const finish = state.pendingBlur;
+      state.pendingBlur = null;
+      if (finish) setTimeout(finish, 0);
+    };
+    document.addEventListener('pointerdown', down, true);
+    document.addEventListener('pointerup', up, true);
+    document.addEventListener('pointercancel', up, true);
+    return () => {
+      document.removeEventListener('pointerdown', down, true);
+      document.removeEventListener('pointerup', up, true);
+      document.removeEventListener('pointercancel', up, true);
+      state.pendingBlur = null;
+    };
+  }, []);
 
   // A field removed while focused gets no blur, so leaving home mid-typing must hand the dock back too.
   useEffect(
@@ -293,11 +320,17 @@ function Composer({
           stopKeepingInView.current = () =>
             window.visualViewport?.removeEventListener('resize', keepInView);
         }}
-        onBlur={() => {
-          setIsFocused(false);
-          stopKeepingInView.current?.();
-          stopKeepingInView.current = null;
-          onFocusChange(false);
+        onBlur={(event) => {
+          const field = event.currentTarget;
+          const finish = () => {
+            if (document.activeElement === field) return;
+            setIsFocused(false);
+            stopKeepingInView.current?.();
+            stopKeepingInView.current = null;
+            onFocusChange(false);
+          };
+          if (press.current.isDown) press.current.pendingBlur = finish;
+          else finish();
         }}
       />
       <ReadChips

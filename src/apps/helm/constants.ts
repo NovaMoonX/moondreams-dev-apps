@@ -687,8 +687,12 @@ export const HELM_COPY = {
     place ? `Your note · ${place}` : 'Your note',
   answerNoteNotChecked: 'Saved from a general answer · Not checked',
   answerNoteChecked: 'Saved from a general answer · Checked by you',
-  answerDiffersFromNote: (title: string, says: string) =>
-    title ? `Your note '${title}' says ${says}.` : `Your note says ${says}.`,
+  answerDiffersFromNote: (title: string, says: string) => {
+    const said = says.replace(/[\s.!?,;:]+$/, '');
+    return title
+      ? `Your note '${title}' says: ${said}`
+      : `Your note says: ${said}`;
+  },
   saveToKnowledge: 'Save to my knowledge',
   saveAlreadyKept: (title: string) => `Already in your notes: ${title}`,
   saveAlreadyKeptOpen: 'Open',
@@ -699,6 +703,7 @@ export const HELM_COPY = {
   savedChangeTopic: 'Change topic',
   savedWhichTopic: 'Which topic should this go in?',
   savedNewTopic: 'New topic',
+  savedMoreTopics: 'More topics',
   savedSkip: 'Skip',
   savedTopicParent: 'Under (optional)',
   savedTopicTopLevel: 'Top level',
@@ -711,6 +716,8 @@ export const HELM_COPY = {
   noteIChecked: 'I checked this',
   noteCheckFailed: "That wasn't marked. Try again.",
   noteChangeTopicTitle: 'Change topic',
+  noteInNoTopic: 'In no topic ·',
+  notePutInOne: 'Put it in one',
   quoteFrom: (label: string, day: string | null) =>
     day === null ? label : `${label}\u00a0· ${day}`,
   quoteOpen: 'Open in Gmail',

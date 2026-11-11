@@ -174,6 +174,12 @@ const toText = (value: unknown, cap: number) =>
     ? cutAtWord(value.replace(/\s+/g, ' ').trim(), cap) || null
     : null;
 
+const toCutText = (value: unknown, cap: number) => {
+  const whole = toText(value, Number.MAX_SAFE_INTEGER);
+  if (!whole || whole.length <= cap) return whole;
+  return `${cutAtWord(whole, cap - 1).replace(/[\s.!?,;:]+$/, '')}…`;
+};
+
 const toSource = (
   alias: unknown,
   aliases: AliasBook,
@@ -248,7 +254,7 @@ const readAnswer = (
       typeof item.differsFromNoteAlias === 'string'
         ? (notes?.idOf(item.differsFromNoteAlias) ?? null)
         : null,
-    differsSays: toText(item.differsSays, DIFFERS_SAYS_CAP),
+    differsSays: toCutText(item.differsSays, DIFFERS_SAYS_CAP),
     suggestedTopicId:
       typeof item.suggestedTopicAlias === 'string'
         ? (topics?.idOf(item.suggestedTopicAlias) ?? null)

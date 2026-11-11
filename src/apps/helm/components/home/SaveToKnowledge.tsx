@@ -121,6 +121,7 @@ function SaveToKnowledge({
         onAnswered={() => setIsAsking(false)}
         onUndo={() => void undo()}
         isUndoing={isUndoing}
+        isSaving={isSaving}
       />
     );
   }
@@ -134,6 +135,7 @@ function SaveToKnowledge({
           type='button'
           variant='tertiary'
           size='sm'
+          className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
           onClick={() => setIsOpen(true)}
         >
           {HELM_COPY.saveAlreadyKeptOpen}
@@ -150,7 +152,7 @@ function SaveToKnowledge({
       type='button'
       variant='secondary'
       size='sm'
-      className='self-start'
+      className="relative self-start after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
       loading={isSaving || !notes.isLoaded || !topics.isLoaded}
       onClick={() => void save()}
     >

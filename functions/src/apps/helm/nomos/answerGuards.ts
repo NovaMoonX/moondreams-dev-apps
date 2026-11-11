@@ -121,7 +121,7 @@ export function buildAnswer(
     const copy = notes.get(id);
     return copy ? [{ kind: 'note', id, ...copy }] : [];
   });
-  const sources = dedupe([...command.sources, ...cited]).slice(0, MAX_SOURCES);
+  const sources = dedupe([...cited, ...command.sources]).slice(0, MAX_SOURCES);
   const quotes = command.quotes.filter(
     (quote, index) =>
       command.quotes.findIndex((other) => other.alias === quote.alias) ===

@@ -35,8 +35,8 @@ const toSource = (value: unknown): SourceRef[] => {
   }
   if (value.kind === 'note') {
     const id = toText(value.id);
-    const title = toText(value.title);
-    return id && title
+    const title = toText(value.title) ?? '';
+    return id
       ? [
           {
             kind: 'note',

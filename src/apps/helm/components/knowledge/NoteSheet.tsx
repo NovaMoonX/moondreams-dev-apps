@@ -15,6 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
+import { NoteTopicsFields } from '@apps/helm/components/knowledge/NoteTopicsSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import {
@@ -41,7 +42,9 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
   const note = useAppSelector(selectNoteById).get(noteId ?? '') ?? null;
   const topicById = useAppSelector(selectTopicById);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [filingId, setFilingId] = useState<string | null>(null);
   const isEditing = editingId === note?.id;
+  const isFiling = filingId === note?.id;
   const title = note ? note.title || HELM_COPY.noteUntitled : '';
 
   useEffect(() => {
@@ -49,6 +52,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
     return store.subscribe(() => {
       if (selectNoteById(store.getState()).has(noteId)) return;
       setEditingId(null);
+      setFilingId(null);
       onClose();
     });
   }, [noteId, onClose]);
@@ -140,7 +144,8 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
         onClose={onClose}
         title={title}
         footer={
-          note && (
+          note &&
+          !isFiling && (
             <div className='px-6 pt-2 pb-3'>
               <ModalFooterActions
                 leftActions={
@@ -151,15 +156,6 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
                 }
                 rightActions={
                   <>
-                    {note.isFromGeneralAnswer && note.checkedAt === null && (
-                      <Button
-                        type='button'
-                        variant='secondary'
-                        onClick={() => void check()}
-                      >
-                        {HELM_COPY.noteIChecked}
-                      </Button>
-                    )}
                     <CopyTextButton
                       variant='secondary'
                       label={HELM_COPY.noteCopy}
@@ -181,7 +177,10 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
           )
         }
       >
-        {note && (
+        {note && isFiling && (
+          <NoteTopicsFields note={note} onClose={() => setFilingId(null)} />
+        )}
+        {note && !isFiling && (
           <div className='space-y-4'>
             {note.hasHealthCaution && (
               <p className='bg-muted text-foreground flex items-start gap-2 rounded-[10px] px-3 py-2.5 text-[13px] leading-[18px] font-semibold text-pretty'>
@@ -195,9 +194,38 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
             {note.body && (
               <LinkedText text={note.body} className='text-[15px]' />
             )}
-            <p className='text-muted-foreground text-[13px]'>
-              {origin.join(' · ')}
-            </p>
+            <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
+              <p className='text-muted-foreground min-w-0 text-[13px]'>
+                {origin.join(' · ')}
+              </p>
+              {note.isFromGeneralAnswer && note.checkedAt === null && (
+                <Button
+                  type='button'
+                  variant='secondary'
+                  size='sm'
+                  className='relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[""]'
+                  onClick={() => void check()}
+                >
+                  {HELM_COPY.noteIChecked}
+                </Button>
+              )}
+            </div>
+            {note.topicIds.length === 0 && (
+              <div className='flex flex-wrap items-center gap-x-1.5'>
+                <span className='text-muted-foreground text-[13px]'>
+                  {HELM_COPY.noteInNoTopic}
+                </span>
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  className='relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-[""]'
+                  onClick={() => setFilingId(note.id)}
+                >
+                  {HELM_COPY.notePutInOne}
+                </Button>
+              </div>
+            )}
             {topics.length > 0 && (
               <div className='flex flex-wrap gap-2'>
                 {topics.map((topic) => (

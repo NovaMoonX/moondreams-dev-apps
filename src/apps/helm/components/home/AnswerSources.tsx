@@ -238,6 +238,7 @@ function SyncedSourceRow({
 function NoteSourceRow({ source, canOpen }: RowProps & { source: NoteSource }) {
   const note = useAppSelector(selectNoteById).get(source.id) ?? null;
   const topics = useAppSelector(selectAllTopics);
+  const isLoaded = useAppSelector((state) => state.helm.notes.isLoaded);
   const [isOpen, setIsOpen] = useState(false);
   const liveTopic = note
     ? topics.find((topic) => note.topicIds.includes(topic.id))
@@ -245,14 +246,35 @@ function NoteSourceRow({ source, canOpen }: RowProps & { source: NoteSource }) {
   const place = liveTopic
     ? `${liveTopic.emoji ? `${liveTopic.emoji} ` : ''}${pathOf(liveTopic.id, topics).join(' › ')}`
     : null;
-  if (!note) {
+  if (!note && isLoaded) {
     return (
       <p className='text-muted-foreground py-2.5 text-[13px]'>
         {HELM_COPY.answerNoteGone}
       </p>
     );
   }
-  const title = note.isUnreadable ? HELM_COPY.unreadable : note.title;
+  if (!note) {
+    return (
+      <PlainRow
+        mark={
+          <span className='bg-muted text-muted-foreground flex size-9 shrink-0 items-center justify-center rounded-lg'>
+            <BookOpen className='size-5' aria-hidden='true' />
+          </span>
+        }
+        title={source.title || HELM_COPY.noteUntitled}
+        detail={[
+          HELM_COPY.answerNoteMark(
+            source.topicPath
+              ? `${source.topicEmoji ? `${source.topicEmoji} ` : ''}${source.topicPath}`
+              : null,
+          ),
+        ]}
+      />
+    );
+  }
+  const title = note.isUnreadable
+    ? HELM_COPY.unreadable
+    : note.title || HELM_COPY.noteUntitled;
   const detail = [
     HELM_COPY.answerNoteMark(place),
     ...(note.isFromGeneralAnswer

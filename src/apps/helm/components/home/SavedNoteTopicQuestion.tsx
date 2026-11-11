@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Button, Input, Select } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
@@ -10,7 +10,10 @@ import { HELM_COPY, TOPIC_NAME_MAX } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { fileNoteInTopics } from '@apps/helm/store/actions/noteActions';
 import { createTopic } from '@apps/helm/store/actions/topicActions';
-import { selectAllTopics } from '@apps/helm/store/selectors/knowledgeSelectors';
+import {
+  selectAllNotes,
+  selectAllTopics,
+} from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenNote } from '@apps/helm/types';
 import { rankTopicChoices } from '@apps/helm/utils/noteSearch';
 import { createRefusal, pathOf } from '@apps/helm/utils/topicTree';
@@ -18,6 +21,7 @@ import { createRefusal, pathOf } from '@apps/helm/utils/topicTree';
 interface SavedNoteTopicQuestionProps {
   note: OpenNote;
   onDone: () => void;
+  onMore: () => void;
 }
 
 const TOP_LEVEL = 'top';
@@ -36,22 +40,49 @@ const refusalLine = (kind: string) =>
             : HELM_COPY.editFailed;
 
 /** "Which topic should this go in?" for a note saved loose: the likeliest topics as pills, a new topic (a name and an optional parent) and Skip, which leaves it loose. */
-function SavedNoteTopicQuestion({ note, onDone }: SavedNoteTopicQuestionProps) {
+function SavedNoteTopicQuestion({
+  note,
+  onDone,
+  onMore,
+}: SavedNoteTopicQuestionProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const topics = useAppSelector(selectAllTopics);
+  const notes = useAppSelector(selectAllNotes);
   const [isNaming, setIsNaming] = useState(false);
   const [name, setName] = useState('');
   const [parentId, setParentId] = useState(TOP_LEVEL);
   const [isBusy, setIsBusy] = useState(false);
-  const readable = topics.filter((topic) => !topic.isUnreadable);
-  const choices = rankTopicChoices(`${note.title} ${note.body}`, readable);
-  const parents = readable
-    .filter((topic) => createRefusal(topic.id, readable) === null)
-    .map((topic) => ({
-      value: topic.id,
-      text: pathOf(topic.id, readable).join(' › '),
-    }));
+  const readable = useMemo(
+    () => topics.filter((topic) => !topic.isUnreadable),
+    [topics],
+  );
+  const readableNotes = useMemo(
+    () => notes.filter((entry) => !entry.isUnreadable),
+    [notes],
+  );
+  const choices = useMemo(
+    () =>
+      rankTopicChoices(
+        `${note.title} ${note.body}`,
+        readable,
+        readableNotes,
+      ).map((topic) => ({
+        topic,
+        label: pathOf(topic.id, readable).join(' › '),
+      })),
+    [note.title, note.body, readable, readableNotes],
+  );
+  const parents = useMemo(
+    () =>
+      readable
+        .filter((topic) => createRefusal(topic.id, readable) === null)
+        .map((topic) => ({
+          value: topic.id,
+          text: pathOf(topic.id, readable).join(' › '),
+        })),
+    [readable],
+  );
 
   const file = async (topicId: string) => {
     if (!user) return;
@@ -165,16 +196,19 @@ function SavedNoteTopicQuestion({ note, onDone }: SavedNoteTopicQuestionProps) {
         </div>
       ) : (
         <div className='flex flex-wrap gap-2'>
-          {choices.map((topic) => (
+          {choices.map(({ topic, label }) => (
             <Pill
               key={topic.id}
               isSelected={false}
               emoji={topic.emoji ?? undefined}
               onClick={() => void run(() => file(topic.id))}
             >
-              {topic.name}
+              {label}
             </Pill>
           ))}
+          <Pill isSelected={false} onClick={onMore}>
+            {HELM_COPY.savedMoreTopics}
+          </Pill>
           <Pill isSelected={false} onClick={() => setIsNaming(true)}>
             {HELM_COPY.savedNewTopic}
           </Pill>
@@ -183,6 +217,7 @@ function SavedNoteTopicQuestion({ note, onDone }: SavedNoteTopicQuestionProps) {
             variant='tertiary'
             size='sm'
             rounded='full'
+            className="relative after:absolute after:-inset-x-1 after:-inset-y-1.5 after:content-['']"
             onClick={onDone}
           >
             {HELM_COPY.savedSkip}
