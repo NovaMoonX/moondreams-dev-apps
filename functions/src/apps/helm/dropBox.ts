@@ -6,14 +6,13 @@ import type { SealedPayload } from '../../appKeys/seal.js';
 
 const { subtle } = webcrypto;
 
-/** Must match the device's `utils/dropBox.ts`; `check:helm-drop-box` seals there and opens here. */
+/** Must match the device's drop-box sealing; the check script seals there and opens here. */
 const CURVE = 'P-256';
 const NO_SALT = new Uint8Array(0);
 
 export const DROP_BOX_MAX_ITEMS = 20;
 export const DROP_BOX_MAX_ENVELOPE_CHARS = 12 * 1024;
 export const DROP_BOX_TEXT_MAX_CHARS = 4_000;
-const FUTURE_SLACK_MS = 5 * 60 * 1000;
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 const NONCE_CHARS = 16;
@@ -174,7 +173,7 @@ export async function openEnvelope(
   return JSON.parse(new TextDecoder().decode(plain)) as unknown;
 }
 
-/** What an opened envelope must hold to become a capture; `null` otherwise. The words are trimmed and capped like a direct turn's. */
+/** What an opened envelope must hold to become a capture; `null` otherwise. The words are trimmed and capped like a direct turn's, and a time ahead of now is stored as now. */
 export function readPayload(
   value: unknown,
   envelope: DropBoxEnvelope,
@@ -192,8 +191,7 @@ export function readPayload(
     Array.isArray(payload.reading) ||
     !INPUT_MODES.some((mode) => mode === payload.inputMode) ||
     payload.createdAt !== envelope.createdAt ||
-    envelope.createdAt <= 0 ||
-    envelope.createdAt > now + FUTURE_SLACK_MS
+    envelope.createdAt <= 0
   ) {
     return null;
   }
@@ -202,16 +200,16 @@ export function readPayload(
     text,
     reading: payload.reading,
     inputMode: payload.inputMode as DropBoxPayload['inputMode'],
-    createdAt: envelope.createdAt,
+    createdAt: Math.min(envelope.createdAt, now),
   };
 }
 
-/** Splits what was opened into what to create, what the person's Helm already holds and what can never import; a repeated id creates nothing. */
+/** Splits what was opened into what to create, what the person already holds and what can never import; a repeated id creates nothing. */
 export function planImport(
   opened: { id: string; payload: DropBoxPayload | null }[],
   existing: ReadonlySet<string>,
 ) {
-  return opened.reduce(
+  const planned = opened.reduce(
     (plan, { id, payload }) => {
       if (payload === null)
         return { ...plan, rejected: [...plan.rejected, id] };
@@ -232,9 +230,17 @@ export function planImport(
       rejected: [] as string[],
     },
   );
+  const held = Array.from(new Set(planned.held));
+  return {
+    toCreate: planned.toCreate,
+    held,
+    rejected: Array.from(new Set(planned.rejected)).filter(
+      (id) => !held.includes(id),
+    ),
+  };
 }
 
-/** The turn as a direct capture would be written, minus anything the device alone knows; it is unseen so it lands in "New since you looked" once sorted. */
+/** The turn as a direct capture would be written, minus anything the device alone knows; it is unseen so it counts as new once sorted. */
 export function buildDropBoxCapture(
   payload: DropBoxPayload,
   sealed: SealedPayload,

@@ -1,6 +1,6 @@
 import type { CaptureReading } from '@apps/helm/types';
 
-/** Must match `functions/src/apps/helm/dropBox.ts`; `check:helm-drop-box` seals here and opens there. */
+/** Must match the server's drop-box opening; the check script seals here and opens there. */
 const CURVE = 'P-256';
 const NO_SALT = new Uint8Array(0);
 const NONCE_BYTES = 12;

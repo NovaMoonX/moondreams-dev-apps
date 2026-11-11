@@ -78,6 +78,14 @@ const RECORD = 'record';
 
 const HOME_DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
+/** The kept draft and the words typed while waiting, the draft first unless the words already hold it. */
+const startingText = (restored: string | null, held: string) =>
+  restored === null || held.includes(restored)
+    ? held || (restored ?? '')
+    : held
+      ? `${restored}\n${held}`
+      : restored;
+
 const parseDraft = (stored: unknown) =>
   typeof stored === 'string' && stored.length > 0 ? stored : null;
 
@@ -85,10 +93,14 @@ interface ComposerProps {
   /** Lets the dock's Type and Talk put the cursor here. */
   fieldRef: Ref<HTMLTextAreaElement>;
   onFocusChange: (isFocused: boolean) => void;
-  /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft. */
+  /** Without the data key nothing typed could be kept sealed, so the field waits; it remounts once the key is here, starting from the kept draft and the words typed while waiting. */
   isReady: boolean;
-  /** With no key but the person's drop-box key kept on this device, the field takes words and keeps them sealed on this device until Helm is online; photos and voice notes wait. */
+  /** Offline or refused, with the drop-box key kept on this device: the field takes words and keeps them sealed there until the connection is back; photos and voice notes wait. */
   isOutbox?: boolean;
+  /** The words typed before this field was mounted again for the key; only home holds them. */
+  heldText?: string;
+  /** Hands the owner the words as they change, so a remount keeps them. */
+  onTextChange?: (text: string) => void;
   /** Says why the field waits when the key can't come yet (offline, or refused). */
   waitingPlaceholder: string | null;
   /** The page the words are asked from, stamped on the turn; null from home. */
@@ -103,6 +115,8 @@ function Composer({
   onFocusChange,
   isReady,
   isOutbox = false,
+  heldText = '',
+  onTextChange,
   waitingPlaceholder,
   screen,
   draftKey = HOME_DRAFT_KEY,
@@ -116,7 +130,11 @@ function Composer({
     base: null,
     parse: parseDraft,
   });
-  const [text, setText] = useState(restored ?? '');
+  const [text, setText] = useState(() => startingText(restored, heldText));
+  const changeText = (next: string) => {
+    setText(next);
+    onTextChange?.(next);
+  };
   // Kept on unmount too: leaving home for another view, or the phone closing the page, finds the words still here.
   useKeepFormDraft({
     key: isReady ? draftKey : null,
@@ -276,11 +294,10 @@ function Composer({
         inputMode: 'typed',
         createdAt,
       });
-      setText('');
+      changeText('');
       setDismissed([]);
       setFixedDays({});
       setLastDrop(null);
-      addToast({ title: HELM_COPY.outboxSaved(name), type: 'info' });
     } catch (error) {
       console.error('Helm could not keep this on the device', error);
       addToast({ title: HELM_COPY.outboxNotKept(name), type: 'error' });
@@ -352,7 +369,7 @@ function Composer({
       });
       recordSentTurn(uid, turn, id);
       attachments.clear();
-      setText('');
+      changeText('');
       setDismissed([]);
       setFixedDays({});
       setLastDrop(null);
@@ -386,7 +403,7 @@ function Composer({
     const before = text.slice(0, from);
     const spacer = before.length > 0 && !/\s$/.test(before) ? ' ' : '';
     const added = `${spacer}${insert}`;
-    setText(`${before}${added}${text.slice(to)}`);
+    changeText(`${before}${added}${text.slice(to)}`);
     setTypedAt(Date.now());
     const caret = before.length + added.length;
     requestAnimationFrame(() => field.setSelectionRange(caret, caret));
@@ -491,7 +508,7 @@ function Composer({
           onChange={(event) => {
             if (voice.notice !== null) voice.clearNotice();
             if (attachments.notice !== null) attachments.say(null);
-            setText(event.target.value);
+            changeText(event.target.value);
             setTypedAt(Date.now());
           }}
           onKeyDown={handleKeyDown}
@@ -593,7 +610,7 @@ function Composer({
                 setIsSavingNote(true);
                 void saveAsNote(text)
                   .then((isTaken) => {
-                    if (isTaken) setText('');
+                    if (isTaken) changeText('');
                   })
                   .finally(() => setIsSavingNote(false));
               }}

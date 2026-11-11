@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import { useState, type Ref } from 'react';
 
 import { Search, Settings2 } from 'lucide-react';
 
@@ -11,7 +11,7 @@ import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
 import { HELM_COPY } from '@apps/helm/constants';
-import OutboxList from '@apps/helm/components/inbox/OutboxRow';
+import OutboxSummary from '@apps/helm/components/inbox/OutboxRow';
 import {
   useCanUseDropBox,
   useOutboxEntries,
@@ -55,7 +55,11 @@ function HomeSurface({
   const keyRefusals = useAppSelector((state) => state.helm.keyRefusals);
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const canSaveOffline = useCanUseDropBox(uid) && keyStatus !== 'ready';
+  const canSaveOffline =
+    useCanUseDropBox(uid) &&
+    (keyStatus === 'offline' || keyStatus === 'failed');
+  // Words typed while waiting carry over to the field once the key is here.
+  const [typedWaiting, setTypedWaiting] = useState('');
   const outbox = useOutboxEntries(uid);
   const { sessions, openSessionId } = useSession();
   const { isLoaded: isCapturesLoaded, isFailed: isCapturesFailed } =
@@ -112,7 +116,7 @@ function HomeSurface({
         {keyStatus === 'offline' && (
           <NeedsConnectionState name={name} canSave={canSaveOffline} />
         )}
-        {keyStatus !== 'ready' && <OutboxList entries={outbox} />}
+        <OutboxSummary uid={uid} entries={outbox} />
         {keyStatus === 'failed' && (
           <CannotOpenState
             isRetrying={isKeyRetrying}
@@ -129,6 +133,8 @@ function HomeSurface({
             onFocusChange={onComposerFocusChange}
             isReady={keyStatus === 'ready'}
             isOutbox={canSaveOffline}
+            heldText={typedWaiting}
+            onTextChange={setTypedWaiting}
             waitingPlaceholder={getWaitingPlaceholder(
               keyStatus,
               canSaveOffline,

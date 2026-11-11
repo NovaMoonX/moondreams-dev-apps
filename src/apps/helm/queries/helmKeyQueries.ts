@@ -1,7 +1,7 @@
 import { queryOptions } from '@tanstack/react-query';
 import { httpsCallable } from 'firebase/functions';
 
-import { functions } from '@lib/firebase/config';
+import { auth, functions } from '@lib/firebase/config';
 import { queryClient } from '@lib/query/queryClient';
 
 import { normalizeHelmEncryption } from '@apps/helm/security';
@@ -27,10 +27,12 @@ export const helmKeyQueryOptions = (uid: string) =>
       if (!encryption) {
         throw new Error('The key did not arrive in the expected shape.');
       }
-      void keepDropBoxKey(
-        uid,
-        (response.data as { dropBoxKey?: unknown } | null)?.dropBoxKey,
-      );
+      if (auth.currentUser?.uid === uid) {
+        void keepDropBoxKey(
+          uid,
+          (response.data as { dropBoxKey?: unknown } | null)?.dropBoxKey,
+        );
+      }
       return encryption;
     },
     staleTime: Infinity,

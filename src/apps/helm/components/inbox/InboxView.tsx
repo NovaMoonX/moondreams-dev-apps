@@ -12,7 +12,6 @@ import { formatDate, formatTime } from '@/utils/formatUtils';
 import HeldCaptureCard from '@apps/helm/components/inbox/HeldCaptureCard';
 import QuestionSheet from '@apps/helm/components/home/QuestionSheet';
 import HeldRow from '@apps/helm/components/inbox/HeldRow';
-import OutboxList from '@apps/helm/components/inbox/OutboxRow';
 import TurnCard from '@apps/helm/components/home/TurnCard';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -26,7 +25,6 @@ import {
   selectNewSinceLooked,
 } from '@apps/helm/store/selectors/captureSelectors';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
-import { useOutboxEntries } from '@apps/helm/hooks/useCaptureOutbox';
 import type { OpenCapture } from '@apps/helm/types';
 import { getJoinedOf } from '@apps/helm/utils/sessions';
 
@@ -43,7 +41,6 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
   const unseen = useAppSelector(selectNewSinceLooked);
   const held = useAppSelector(selectHeldItems);
   const allCaptures = useAppSelector(selectAllCaptures);
-  const outbox = useOutboxEntries(user?.uid ?? null);
   const { isLoaded, isFailed } = useAppSelector(
     (state) => state.helm.unseenCaptures,
   );
@@ -88,7 +85,6 @@ function InboxView({ onBack, onHome }: InboxViewProps) {
             {HELM_COPY.waitingCheckFailed}
           </p>
         )}
-        <OutboxList entries={outbox} />
         {held.needsYou.length > 0 && (
           <ul className='helm-card divide-border divide-y overflow-hidden'>
             {held.needsYou.map((item) => (

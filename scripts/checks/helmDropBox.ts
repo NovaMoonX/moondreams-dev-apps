@@ -117,8 +117,18 @@ assert.equal(
 );
 const future = { ...envelope, createdAt: NOW + 3_600_000 };
 assert.equal(
-  readPayload({ ...payload(), createdAt: future.createdAt }, future, NOW),
-  null,
+  readPayload({ ...payload(), createdAt: future.createdAt }, future, NOW)
+    ?.createdAt,
+  NOW,
+  'a time ahead of now is stored as now',
+);
+assert.equal(
+  readPayload(
+    { ...payload(), createdAt: NOW - 5 },
+    { ...envelope, createdAt: NOW - 5 },
+    NOW,
+  )?.createdAt,
+  NOW - 5,
 );
 assert.equal(
   readPayload({ ...payload(), text: '  padded  ' }, envelope, NOW)?.text,
@@ -174,8 +184,17 @@ const plan = planImport(
   new Set(['capture-0001']),
 );
 assert.deepEqual(plan.toCreate, [second], 'only the one not held is created');
-assert.deepEqual(plan.held, ['capture-0001', 'capture-0002', 'capture-0002']);
+assert.deepEqual(plan.held, ['capture-0001', 'capture-0002']);
 assert.deepEqual(plan.rejected, ['item-3']);
+const both = planImport(
+  [
+    { id: 'capture-0002', payload: null },
+    { id: 'capture-0002', payload: second },
+  ],
+  new Set(),
+);
+assert.deepEqual(both.held, ['capture-0002'], 'held wins over rejected');
+assert.deepEqual(both.rejected, []);
 const retry = planImport(
   [{ id: 'capture-0002', payload: second }],
   new Set(['capture-0001', 'capture-0002']),

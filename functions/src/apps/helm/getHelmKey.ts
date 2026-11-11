@@ -76,22 +76,21 @@ export const getHelmKey = onCall(
     const firestore = getFirestore();
     const ref = firestore.doc(wrappedKeyPath(uid));
     const dropBoxRef = firestore.doc(dropBoxKeyPath(uid));
-    // Made outside the transaction, which may run again; one that is not needed is dropped.
-    const freshPair = await createDropBoxPair();
+    // Made outside the transaction, which may run again, and only when no key is stored yet.
+    const hasDropBox = (await dropBoxRef.get()).exists;
+    const freshPair = hasDropBox ? null : await createDropBoxPair();
 
     // A drop-box key that won't open never fails the data key: the public half is still returned and nothing is replaced.
-    const settleDropBox = (
+    const settleDropBox = async (
       transaction: Transaction,
       reference: DocumentReference,
       stored: DropBoxKeyDoc | null,
     ) => {
       const now = Date.now();
       if (!stored) {
-        transaction.create(
-          reference,
-          wrapDropBoxKey(keyring, uid, freshPair, now),
-        );
-        return freshPair.publicJwk;
+        const pair = freshPair ?? (await createDropBoxPair());
+        transaction.create(reference, wrapDropBoxKey(keyring, uid, pair, now));
+        return pair.publicJwk;
       }
       if (stored.masterKeyId !== keyring.current) {
         try {
@@ -120,7 +119,7 @@ export const getHelmKey = onCall(
         transaction.get(dropBoxRef),
       ]);
       const now = Date.now();
-      const dropBoxKey = settleDropBox(
+      const dropBoxKey = await settleDropBox(
         transaction,
         dropBoxRef,
         dropBoxSnapshot.exists

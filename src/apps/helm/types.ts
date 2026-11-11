@@ -267,7 +267,7 @@ export interface Capture {
   answersQuestion: { captureId: string; questionId: string } | null;
   /** Which voice said the turn's spoken line ('natural' or 'system'); null until one did. */
   ttsProvider: string | null;
-  /** How the turn reached the person's Helm: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
+  /** How the turn reached the person's account: written by the device ('direct') or imported from the drop box. A turn made before the field reads as 'direct'. */
   arrivedVia: 'direct' | 'dropBox';
   medium: 'web';
   sessionId: string;

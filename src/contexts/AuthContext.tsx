@@ -43,7 +43,10 @@ import {
   keepAccountSession,
   loadAccountSessions,
 } from '@/lib/auth/accountSessions';
-import { getSignOutQuestions } from '@/lib/auth/signOutChecks';
+import {
+  clearPendingDeviceWork,
+  getSignOutQuestions,
+} from '@/lib/auth/signOutChecks';
 import { forgetDeviceSecretsFor } from '@/lib/security';
 import { forgetThisBrowserFor } from '@/lib/security/trustedBrowsers';
 import {
@@ -158,6 +161,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       previousUserIdRef.current = nextUserId;
       // Signed out from anywhere (another tab, an expired session) starts again from Home, not the app's page.
       if (previousUserId && !nextUserId) {
+        clearPendingDeviceWork(previousUserId);
         void forgetDeviceSecretsFor(previousUserId).catch(() => undefined);
       }
       if (previousUserId && !nextUserId && isLeavingPage) {
@@ -407,6 +411,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   }, []);
 
   const forgetAccount = useCallback((uid: string) => {
+    clearPendingDeviceWork(uid);
     void dropAccountSession(uid);
     setRememberedAccounts(forgetSavedAccount(uid));
   }, []);
@@ -414,13 +419,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const logOut = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     if (uid) {
-      const questions = await getSignOutQuestions(uid);
+      const questions = getSignOutQuestions(uid);
       const isConfirmed = await questions.reduce(
         async (previous, question) =>
           (await previous) && confirm({ ...question, destructive: true }),
         Promise.resolve(true),
       );
       if (!isConfirmed) return;
+      clearPendingDeviceWork(uid);
     }
     if (uid) {
       const userStatusRef = ref(realtimeDb, `status/${uid}`);

@@ -509,26 +509,37 @@ export const HELM_COPY = {
     `You can still tell ${name} things; they wait here.`,
   outboxNeedsConnection: (name: string) =>
     `${name} needs a connection to keep this`,
-  outboxNoAttach: 'Photos and voice notes need a connection.',
-  outboxSaved: (name: string) =>
-    `Saved on this device. ${name} will sort it once you're back online.`,
+  outboxNoAttach:
+    "Photos and voice notes need a connection. Add them once you're back online.",
   outboxNotKept: (name: string) =>
     `Couldn't keep this on this device. ${name} needs a connection to keep it. Your words are still in the field.`,
-  outboxRowTitle: 'Saved on this device',
+  outboxRowTitle: "Sealed until it's sent, so the words don't show here",
   outboxRowLine: (time: string) => `${time} · sorted once you're back online`,
   outboxCount: (count: number) =>
     count === 1
       ? '1 thing saved on this device'
       : `${count} things saved on this device`,
+  outboxSheetTitle: 'Saved on this device',
+  outboxRemove: 'Remove',
+  outboxRemoveTitle: 'Remove this?',
+  outboxRemoveBody: (words: string | null, time: string) =>
+    words === null
+      ? `This takes what you typed at ${time} off this device. It hasn't been sent, so it's gone for good.`
+      : `This takes “${words}” off this device. It hasn't been sent, so it's gone for good.`,
+  outboxRemoveFailed: "Couldn't remove it. Try again.",
+  outboxSentLocked: "Sent. You'll see them once your things open.",
   outboxRejected: (count: number) =>
     count === 1
       ? "1 thing saved on this device couldn't be kept."
       : `${count} things saved on this device couldn't be kept.`,
-  outboxSignOutTitle: 'Sign out?',
+  outboxSignOutTitle: (count: number) =>
+    count === 1
+      ? 'Sign out and lose 1 thing?'
+      : `Sign out and lose ${count} things?`,
   outboxSignOutBody: (count: number, name: string) =>
     count === 1
-      ? `1 thing you told ${name} hasn't been saved yet. Sign out anyway?`
-      : `${count} things you told ${name} haven't been saved yet. Sign out anyway?`,
+      ? `1 thing you told ${name} is still waiting on this device to be sent. Signing out deletes it.`
+      : `${count} things you told ${name} are still waiting on this device to be sent. Signing out deletes them.`,
   outboxSignOutConfirm: 'Sign out anyway',
   outboxStay: 'Stay',
   arrivedViaDropBox:
