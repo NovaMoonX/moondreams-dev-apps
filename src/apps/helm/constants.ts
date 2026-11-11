@@ -1349,6 +1349,29 @@ export const HELM_COPY = {
   styleRemoved: 'Removed the note',
   styleGone: 'That note is already gone.',
   styleUndoneFailed: 'The note could not be put back.',
+  styleMailTitle: 'Learn how I write from my sent mail',
+  styleMailBody:
+    'Reads up to 300 emails you sent in the last 6 months, once, and keeps only a few short notes about how you write. The emails themselves are never kept.',
+  styleMailReading: 'Reading your sent mail…',
+  styleMailNotEnough:
+    "There isn't enough sent mail yet to learn from. Try again after you've sent a few more emails.",
+  styleMailBusy:
+    "You've asked a lot in the last few minutes. Try this again a little later.",
+  styleMailNothingLearned:
+    'Your sent mail was read, but there was nothing clear enough to note yet.',
+  styleMailFailed: "Your sent mail couldn't be read. Try again in a moment.",
+  styleMailNeedsGmail: 'Connect Gmail first',
+  styleMailNeedsGmailBody:
+    'To learn from your sent mail, connect Gmail under Connected apps, then come back and switch this on.',
+  styleMailOffConfirmTitle: 'Stop learning from sent mail?',
+  styleMailOffConfirm:
+    'The notes learned from your sent mail are removed. Nothing else changes, and the notes you wrote or that came from what you type stay.',
+  styleMailOffAction: 'Remove them',
+  styleMailRemoved: 'Removed the notes from your sent mail',
+  styleMailRemoveFailed: "The notes couldn't be removed. Try again.",
+  styleMailUndoneFailed: "The notes couldn't be put back.",
+  styleMailSeenIn: (count: number) => `Seen in ${count} of your sent emails`,
+  styleMailWithWho: (name: string) => `With ${name}`,
   askSeesYou: 'Ask about what is kept about you',
   chipSeesYou: 'About you',
   backToSeesYou: (assistant: string) => `Back to How ${assistant} sees you`,

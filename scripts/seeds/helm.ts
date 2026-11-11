@@ -2828,11 +2828,11 @@ async function buildRuns(input: {
   ];
 }
 
-/** Alex's general writing style, learned from 34 typed messages: four learned traits, one the person set, and two lines to avoid. One document at `style/general`. */
+/** Alex's writing style: `style/general`, learned from 34 typed messages (four learned traits, one the person set, and two lines to avoid), plus two learned from sent mail: `style/mail-work` (Work email, 3 traits) and `style/mail-who-seed-who-sam-rivera` (Sam Rivera, 2 traits). Three documents. */
 async function buildStyle(input: {
   now: number;
   encryption: HelmEncryption;
-}): Promise<{ id: string; style: StyleProfile }> {
+}): Promise<{ id: string; style: StyleProfile }[]> {
   const { now, encryption } = input;
   const editedAt = now - 2 * DAY_MS;
   const words: StyleSealed = {
@@ -2867,19 +2867,78 @@ async function buildStyle(input: {
     avoid: ['No exclamation marks', 'No emoji'],
     removed: [],
   };
-  return {
-    id: 'general',
+  const fromMail = async (
+    id: string,
+    audienceWhoId: string | null,
+    label: string,
+    traits: [string, string, number][],
+    sampleCount: number,
+  ) => ({
+    id,
     style: {
-      scope: 'general',
-      audienceWhoId: null,
-      learnedFrom: ['helmText'],
-      sampleCount: 34,
-      personEditedAt: editedAt,
-      createdAt: now - 6 * DAY_MS,
-      lastEditedAt: editedAt,
-      sealed: await sealJson<StyleSealed>(words, encryption),
+      scope: audienceWhoId ? ('audience' as const) : ('occasion' as const),
+      audienceWhoId,
+      learnedFrom: ['sentMail' as const],
+      sampleCount,
+      personEditedAt: null,
+      createdAt: now - DAY_MS,
+      lastEditedAt: now - DAY_MS,
+      sealed: await sealJson<StyleSealed>(
+        {
+          label,
+          traits: Object.fromEntries(
+            traits.map(([traitId, text, exampleCount]) => [
+              traitId,
+              { text, isPersonSet: false, exampleCount },
+            ]),
+          ),
+          avoid: [],
+          removed: [],
+        },
+        encryption,
+      ),
     },
-  };
+  });
+  return [
+    {
+      id: 'general',
+      style: {
+        scope: 'general',
+        audienceWhoId: null,
+        learnedFrom: ['helmText'],
+        sampleCount: 34,
+        personEditedAt: editedAt,
+        createdAt: now - 6 * DAY_MS,
+        lastEditedAt: editedAt,
+        sealed: await sealJson<StyleSealed>(words, encryption),
+      },
+    },
+    await fromMail(
+      'mail-work',
+      null,
+      'Work email',
+      [
+        [
+          'bullet-points-for-steps',
+          'Bullet points for anything with steps',
+          31,
+        ],
+        ['opens-with-the-persons-name', "Opens with the person's name", 44],
+        ['signs-thanks-alex', "Signs 'Thanks, Alex'", 38],
+      ],
+      120,
+    ),
+    await fromMail(
+      'mail-who-seed-who-sam-rivera',
+      'seed-who-sam-rivera',
+      'Sam Rivera',
+      [
+        ['first-name-and-a-quick-hello', 'First name and a quick hello', 9],
+        ['short-and-to-the-point', 'Short and to the point', 11],
+      ],
+      14,
+    ),
+  ];
 }
 
 /** Alex's three turns that sent a photo: the venue's quote, kept on a task the turn made (with its Execution), a screenshot the assistant let go that is deleted in 20 hours unless kept, and a receipt whose photo is already deleted. Seven documents plus the two sealed objects of the first two photos. */
@@ -5368,7 +5427,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         ? await buildStyle({ now: context.now, encryption })
         : null;
       if (style) {
-        batch.set(person.collection('style').doc(style.id), style.style);
+        style.forEach((entry) =>
+          batch.set(person.collection('style').doc(entry.id), entry.style),
+        );
       }
       const peopleCount = people
         ? (photoTurns
@@ -5403,7 +5464,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             ? procedures.procedures.length + procedures.versions.length
             : 0) +
           (runs ? runs.length : 0) +
-          (style ? 1 : 0)
+          (style ? style.length : 0)
         : 0;
       const backToBackCount =
         peopleCount +

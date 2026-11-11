@@ -724,7 +724,7 @@ Each MVP line names its person: **O** the owner, **N** the nurse, **C** the pare
 - [x] Facts with their source, said or inferred; contradictions kept side by side until you choose (O, C)
 - [x] Your preferences, favorites and who you are, kept as facts about you (O)
 - [ ] How [name] sees you: who you are, what you like, how you write and how you like answers, every line editable (O)
-- [ ] How you write: style notes learned from what you type in Helm and, if you switch it on, your sent mail (O) (issue 56 built the notes learned from what you type, shown and edited under How you write; sent mail follows in issue 57)
+- [x] How you write: style notes learned from what you type in Helm and, if you switch it on, your sent mail (O) (issue 56 built the notes learned from what you type, shown and edited under How you write; issue 57 built the sent-mail switch and the notes by occasion and person)
 - [ ] Knowledge: topics as living documents written from what you tell it, nested up to three levels, each part showing where it came from, with a history of versions and Undo; ask about one while reading, tell it what to change; loose notes for what fits no topic (O, C)
 - [ ] Filing knowledge: asked which topic the first time, then filed there on its own with Undo; parents proposed for related topics (O)
 - [x] Save to my knowledge, and notes cited in answers before any general knowledge (O, C)

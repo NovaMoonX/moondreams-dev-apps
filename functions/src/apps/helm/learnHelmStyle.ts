@@ -17,10 +17,14 @@ import {
   STYLE_LEARNER_PROMPT,
   SUBMIT_STYLE_TOOL,
   buildStyleMessage,
+  mergeLearned,
+  toMailBatches,
+  toMailGroups,
   createStyleFixtureProvider,
   mergeStyle,
   readStyleReply,
   toStyleWords,
+  type MailGroup,
 } from './styleLearner.js';
 import { askTopicModel } from './topicModel.js';
 
@@ -49,19 +53,20 @@ const pickStyleProvider = (): ModelProvider | null => {
   return isRunningInEmulator() ? createStyleFixtureProvider() : null;
 };
 
+const STYLE_CALLABLE = {
+  region: 'us-central1',
+  maxInstances: 5,
+  minInstances: 0,
+  enforceAppCheck: true,
+  secrets: [HELM_MASTER_KEYS, ANTHROPIC_API_KEY],
+  cors: [
+    'https://apps.moondreams.dev',
+    /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
+  ],
+};
+
 export const learnHelmStyle = onCall(
-  {
-    region: 'us-central1',
-    maxInstances: 5,
-    minInstances: 0,
-    timeoutSeconds: 90,
-    enforceAppCheck: true,
-    secrets: [HELM_MASTER_KEYS, ANTHROPIC_API_KEY],
-    cors: [
-      'https://apps.moondreams.dev',
-      /^https:\/\/moondreams-dev-apps.*\.web\.app$/,
-    ],
-  },
+  { ...STYLE_CALLABLE, timeoutSeconds: 90 },
   async (request): Promise<LearnStyleResult> => {
     const uid = request.auth?.uid;
     if (!uid) {
@@ -205,5 +210,231 @@ export const learnHelmStyle = onCall(
       traits: traitCount,
     });
     return { status: 'learned', traitCount };
+  },
+);
+
+export interface LearnMailStyleResult {
+  status: 'learned' | 'notEnough' | 'busy';
+  groups: number;
+}
+
+const MAX_SENT_MAIL = 300;
+const MIN_SENT_MAIL = 10;
+const MAIL_STYLE_BATCH_LIMITS = { ...STYLE_LIMITS, maxMillis: 60_000 };
+
+const MAIL_LABELS: Record<string, string> = {
+  'mail-work': 'Work email',
+  'mail-personal': 'Personal email',
+};
+
+const readWhoAddresses = async (
+  firestore: FirebaseFirestore.Firestore,
+  base: string,
+  key: Parameters<typeof openForHelm>[0],
+) => {
+  const snapshot = await firestore.collection(`${base}/who`).get();
+  return snapshot.docs.flatMap((doc) => {
+    if (doc.get('isSelf') === true || !doc.get('sealed')) return [];
+    try {
+      const words = openForHelm(key, doc.get('sealed') as SealedPayload);
+      const { name, email } = words;
+      return typeof name === 'string' &&
+        typeof email === 'string' &&
+        email.trim() !== ''
+        ? [{ whoId: doc.id, name, address: email.trim().toLowerCase() }]
+        : [];
+    } catch {
+      return [];
+    }
+  });
+};
+
+export const learnHelmMailStyle = onCall(
+  { ...STYLE_CALLABLE, timeoutSeconds: 180 },
+  async (request): Promise<LearnMailStyleResult> => {
+    const uid = request.auth?.uid;
+    if (!uid) {
+      throw new HttpsError('unauthenticated', 'Sign in to open Helm.');
+    }
+    const firestore = getFirestore();
+    const base = `apps/helm/users/${uid}`;
+    const key = await unwrapHelmKey(firestore, loadKeyringOrFail(), uid).catch(
+      () => {
+        throw new HttpsError(
+          'failed-precondition',
+          "Helm can't open your things right now.",
+        );
+      },
+    );
+    const { listLiveGrants, withLiveAccess } =
+      await import('../../connections/liveRouter.js');
+    const { listSentMail } = await import('../../connections/google/gmail.js');
+    const grant = (await listLiveGrants(firestore, uid, 'helm')).find(
+      (entry) => entry.connectorId === 'google:gmail',
+    );
+    if (!grant) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Connect Gmail to Helm first, then try again.',
+      );
+    }
+    const provider = pickStyleProvider();
+    if (!provider) throw new HttpsError('unavailable', 'Try again later.');
+
+    const read = await withLiveAccess(
+      firestore,
+      {
+        uid,
+        readerAppId: 'helm',
+        connectorId: grant.connectorId,
+        accountId: grant.accountId,
+      },
+      (token, email) => listSentMail(token, email, { max: MAX_SENT_MAIL }),
+    );
+    if (!read.ok) {
+      throw read.reason === 'failed'
+        ? new HttpsError(
+            'unavailable',
+            "Your sent mail couldn't be read just now. Try again later.",
+          )
+        : new HttpsError(
+            'failed-precondition',
+            'Helm needs Gmail reconnected before it can read your sent mail.',
+          );
+    }
+    const mails = read.value;
+    if (mails.length < MIN_SENT_MAIL) {
+      logger.info('helm.style.mail.notEnough', { messages: mails.length });
+      return { status: 'notEnough', groups: 0 };
+    }
+
+    const whos = await readWhoAddresses(firestore, base, key);
+    const groups = toMailGroups(
+      mails,
+      new Map(whos.map((who) => [who.address, who.whoId])),
+    );
+    const batchesByGroup = toMailBatches(groups);
+    const batchCount = batchesByGroup.reduce(
+      (total, batches) => total + batches.length,
+      0,
+    );
+    const now = Date.now();
+    const holds = await Array.from({ length: batchCount }).reduce<
+      Promise<(string | null)[]>
+    >(async (done) => {
+      const held = await done;
+      return held.some(Boolean)
+        ? held
+        : [...held, await reserveAiCall(firestore, uid, now, 'quick')];
+    }, Promise.resolve([]));
+    if (holds.some(Boolean)) return { status: 'busy', groups: 0 };
+
+    const replies = await Promise.all(
+      batchesByGroup.map((batches) =>
+        Promise.all(
+          batches.map(async (texts) =>
+            readStyleReply(
+              await askTopicModel(firestore, provider, 'style', {
+                system: STYLE_LEARNER_PROMPT,
+                message: buildStyleMessage(texts),
+                terminalTool: SUBMIT_STYLE_TOOL,
+                limits: MAIL_STYLE_BATCH_LIMITS,
+              }),
+              texts,
+            ),
+          ),
+        ),
+      ),
+    );
+    const learned = groups.flatMap((group, index) => {
+      const read = replies[index].flatMap((reply) => (reply ? [reply] : []));
+      const merged = mergeLearned(read);
+      return read.length > 0 &&
+        (merged.traits.length > 0 || merged.avoid.length > 0)
+        ? [
+            {
+              group,
+              learned: merged,
+              sampleCount: batchesByGroup[index].flat().length,
+            },
+          ]
+        : [];
+    });
+    if (replies.flat().every((reply) => !reply)) {
+      logger.warn('helm.style.noReply');
+      throw new HttpsError(
+        'unavailable',
+        "Your writing style couldn't be read just now. Try again later.",
+      );
+    }
+
+    const labelOf = (group: MailGroup) =>
+      MAIL_LABELS[group.id] ??
+      whos.find((who) => who.whoId === group.audienceWhoId)?.name ??
+      'Someone';
+    const written = await firestore.runTransaction(async (transaction) => {
+      const refs = learned.map(({ group }) =>
+        firestore.doc(`${base}/style/${group.id}`),
+      );
+      const current = await Promise.all(
+        refs.map((ref) => transaction.get(ref)),
+      );
+      const prepared = learned.map(
+        ({ group, learned: notes, sampleCount }, index) => {
+          const data = current[index].data();
+          const existing = (() => {
+            try {
+              return data
+                ? toStyleWords(openForHelm(key, data.sealed as SealedPayload))
+                : null;
+            } catch {
+              return null;
+            }
+          })();
+          if (data && !existing) {
+            logger.error('helm.style.unreadable', { uid });
+            throw new HttpsError(
+              'failed-precondition',
+              "Your style notes can't be opened right now, so they were left as they are.",
+            );
+          }
+          const merged = mergeStyle(
+            existing,
+            notes,
+            typeof data?.personEditedAt === 'number',
+          );
+          return {
+            ref: refs[index],
+            doc: {
+              scope: group.scope,
+              audienceWhoId: group.audienceWhoId,
+              learnedFrom: [
+                ...new Set([
+                  ...((data?.learnedFrom as string[] | undefined) ?? []),
+                  'sentMail',
+                ]),
+              ],
+              sampleCount,
+              personEditedAt:
+                typeof data?.personEditedAt === 'number'
+                  ? data.personEditedAt
+                  : null,
+              createdAt:
+                typeof data?.createdAt === 'number' ? data.createdAt : now,
+              lastEditedAt: now,
+              sealed: sealForHelm(key, { ...merged, label: labelOf(group) }),
+            },
+          };
+        },
+      );
+      prepared.forEach(({ ref, doc }) => transaction.set(ref, doc));
+      return prepared.length;
+    });
+    logger.info('helm.style.mail.learned', {
+      messages: mails.length,
+      batches: batchCount,
+      groups: written,
+    });
+    return { status: 'learned', groups: written };
   },
 );

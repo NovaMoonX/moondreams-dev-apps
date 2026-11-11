@@ -1,14 +1,18 @@
 import { useId, useState } from 'react';
 
 import { Button, Input } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import { ChevronRight, Plus } from 'lucide-react';
 
 import DetailSheet from '@/components/DetailSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
+import AppToggle from '@/components/AppToggle';
 import HelpTip from '@/components/HelpTip';
+import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsGateOpen } from '@/hooks/useFeatureGates';
+import { useConnections } from '@/lib/connections/useConnections';
 import { useAppSelector } from '@/store';
 import {
   HELM_COPY,
@@ -23,24 +27,50 @@ import {
   editStyleTrait,
   GENERAL_STYLE_ID,
   removeStyleAvoid,
+  removeMailStyles,
   removeStyleTrait,
   type StyleResult,
 } from '@apps/helm/queries/styleMutations';
+import { learnMailStyle } from '@apps/helm/queries/mailStyleLearning';
+import type { OpenStyle } from '@apps/helm/store/listeners/styleListener';
 
 type Target =
   | { kind: 'add' }
-  | { kind: 'trait'; key: string; text: string; source: string }
-  | { kind: 'avoid'; text: string; source: string };
+  | {
+      kind: 'trait';
+      styleId: string;
+      key: string;
+      text: string;
+      source: string;
+    }
+  | { kind: 'avoid'; styleId: string; text: string; source: string };
 
-const getTraitSource = (trait: {
-  isPersonSet: boolean;
-  exampleCount: number;
-}) =>
+const getTraitSource = (
+  trait: { isPersonSet: boolean; exampleCount: number },
+  isFromMail: boolean,
+) =>
   trait.isPersonSet
     ? trait.exampleCount === 0
       ? HELM_COPY.styleAddedByYou
       : HELM_COPY.styleEditedByYou
-    : HELM_COPY.styleSeenIn(trait.exampleCount);
+    : isFromMail
+      ? HELM_COPY.styleMailSeenIn(trait.exampleCount)
+      : HELM_COPY.styleSeenIn(trait.exampleCount);
+
+const isMailStyle = (entry: OpenStyle) =>
+  entry.learnedFrom.includes('sentMail');
+
+/** Work and personal first, then the people, A to Z. */
+const getMailGroups = (items: OpenStyle[]) =>
+  items
+    .filter((entry) => isMailStyle(entry) && !entry.isUnreadable)
+    .sort(
+      (a, b) =>
+        Number(a.scope === 'audience') - Number(b.scope === 'audience') ||
+        (a.scope === 'audience'
+          ? a.label.localeCompare(b.label)
+          : b.id.localeCompare(a.id)),
+    );
 
 interface NoteSheetProps {
   target: Target | null;
@@ -132,13 +162,13 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
     }
     if (target.kind === 'trait') {
       void run(
-        (uid) => editStyleTrait(uid, target.key, text),
+        (uid) => editStyleTrait(uid, target.key, text, target.styleId),
         HELM_COPY.styleSaved,
       );
       return;
     }
     void run(
-      (uid) => editStyleAvoid(uid, target.text, text),
+      (uid) => editStyleAvoid(uid, target.text, text, target.styleId),
       HELM_COPY.styleSaved,
     );
   };
@@ -148,8 +178,8 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
     void run(
       (uid) =>
         target.kind === 'trait'
-          ? removeStyleTrait(uid, target.key)
-          : removeStyleAvoid(uid, target.text),
+          ? removeStyleTrait(uid, target.key, target.styleId)
+          : removeStyleAvoid(uid, target.text, target.styleId),
       HELM_COPY.styleRemoved,
     );
   };
@@ -236,30 +266,209 @@ function NoteSheet({ target, onClose }: NoteSheetProps) {
   );
 }
 
-/** The writing notes learned from what the person types, each opening a small sheet to edit or remove it, and a way to add one. */
-function StyleNotes() {
-  const style = useAppSelector((state) =>
-    state.helm.style.items.find(
-      (entry) => entry.id === GENERAL_STYLE_ID && !entry.isUnreadable,
-    ),
-  );
-  const isLoaded = useAppSelector((state) => state.helm.style.isLoaded);
-  const [target, setTarget] = useState<Target | null>(null);
-  const traits = Object.entries(style?.traits ?? {}).sort(
+interface NoteListProps {
+  style: OpenStyle | undefined;
+  onOpen: (target: Target) => void;
+}
+
+const sortTraits = (style: OpenStyle | undefined) =>
+  Object.entries(style?.traits ?? {}).sort(
     ([, a], [, b]) =>
       Number(b.isPersonSet) - Number(a.isPersonSet) ||
       b.exampleCount - a.exampleCount,
   );
-  const avoid = style?.avoid ?? [];
-  const isEmpty = traits.length === 0 && avoid.length === 0;
-  const isUnreadable = useAppSelector((state) =>
-    state.helm.style.items.some(
-      (entry) => entry.id === GENERAL_STYLE_ID && entry.isUnreadable,
-    ),
-  );
+
+function NoteList({ style, onOpen }: NoteListProps) {
+  const isFromMail = style ? isMailStyle(style) : false;
+  const styleId = style?.id ?? GENERAL_STYLE_ID;
   const avoidSource = style?.personEditedAt
     ? HELM_COPY.styleEditedByYou
     : HELM_COPY.styleAvoidSource;
+
+  return (
+    <ul className='helm-card divide-border divide-y overflow-hidden'>
+      {sortTraits(style).map(([key, trait]) => (
+        <li key={key}>
+          <NoteRow
+            text={trait.text}
+            detail={getTraitSource(trait, isFromMail)}
+            onOpen={() =>
+              onOpen({
+                kind: 'trait',
+                styleId,
+                key,
+                text: trait.text,
+                source: getTraitSource(trait, isFromMail),
+              })
+            }
+          />
+        </li>
+      ))}
+      {(style?.avoid ?? []).map((line, index) => (
+        <li key={`avoid-${index}-${line}`}>
+          <NoteRow
+            text={line}
+            detail={avoidSource}
+            onOpen={() =>
+              onOpen({
+                kind: 'avoid',
+                styleId,
+                text: line,
+                source: avoidSource,
+              })
+            }
+          />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+type MailFailure =
+  'notEnough' | 'nothingLearned' | 'busy' | 'failed' | 'needsGmail' | null;
+
+const getMailFailureLine = (failure: Exclude<MailFailure, null>) =>
+  failure === 'notEnough'
+    ? HELM_COPY.styleMailNotEnough
+    : failure === 'nothingLearned'
+      ? HELM_COPY.styleMailNothingLearned
+      : failure === 'busy'
+        ? HELM_COPY.styleMailBusy
+        : failure === 'needsGmail'
+          ? HELM_COPY.styleMailNeedsGmailBody
+          : HELM_COPY.styleMailFailed;
+
+/** The switch that learns notes from sent mail once, and removes them again. Hidden until the Gmail gate is open for the person. */
+function MailSwitch({ isOn }: { isOn: boolean }) {
+  const { user } = useAuth();
+  const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const isGateOpen = useIsGateOpen('helm', 'google-mail-and-drive');
+  const { grants } = useConnections({ readerAppId: 'helm' });
+  const [isWorking, setIsWorking] = useState(false);
+  const [failure, setFailure] = useState<MailFailure>(null);
+  const isConnected = grants.some(
+    (grant) => grant.connectorId === 'google:gmail' && grant.status === 'live',
+  );
+
+  if (!isGateOpen) return null;
+
+  const turnOn = async () => {
+    if (isWorking) return;
+    setIsWorking(true);
+    setFailure(null);
+    try {
+      const result = await learnMailStyle();
+      if (result.status !== 'learned') setFailure(result.status);
+      else if (result.groups === 0) setFailure('nothingLearned');
+    } catch (error) {
+      console.error('Helm sent mail was not read', error);
+      setFailure(
+        (error as { code?: unknown }).code === 'functions/failed-precondition'
+          ? 'needsGmail'
+          : 'failed',
+      );
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  const turnOff = async () => {
+    if (!user || isWorking) return;
+    const isConfirmed = await confirm({
+      title: HELM_COPY.styleMailOffConfirmTitle,
+      message: HELM_COPY.styleMailOffConfirm,
+      confirmText: HELM_COPY.styleMailOffAction,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    setIsWorking(true);
+    setFailure(null);
+    try {
+      const removed = await removeMailStyles(user.uid);
+      addToast({
+        title: HELM_COPY.styleMailRemoved,
+        type: 'success',
+        action: removed
+          ? {
+              label: HELM_COPY.undo,
+              onClick: () =>
+                void removed.undo().catch((error: unknown) => {
+                  console.error('Helm mail notes were not put back', error);
+                  addToast({
+                    title: HELM_COPY.styleMailUndoneFailed,
+                    type: 'error',
+                  });
+                }),
+            }
+          : undefined,
+      });
+    } catch (error) {
+      console.error('Helm mail notes were not removed', error);
+      addToast({ title: HELM_COPY.styleMailRemoveFailed, type: 'error' });
+    } finally {
+      setIsWorking(false);
+    }
+  };
+
+  return (
+    <div className='helm-card space-y-2 p-4'>
+      <div className='flex items-center gap-3'>
+        <span className='min-w-0 flex-1'>
+          <span className='block text-[15px] font-medium'>
+            {HELM_COPY.styleMailTitle}
+          </span>
+          <span className='text-muted-foreground block text-[13px] text-pretty'>
+            {HELM_COPY.styleMailBody}
+          </span>
+        </span>
+        {!isOn && !isConnected ? (
+          <LockedButton
+            label={HELM_COPY.styleMailNeedsGmail}
+            title={HELM_COPY.styleMailNeedsGmail}
+            size='sm'
+          >
+            <p>{HELM_COPY.styleMailNeedsGmailBody}</p>
+          </LockedButton>
+        ) : (
+          <AppToggle
+            aria-label={HELM_COPY.styleMailTitle}
+            checked={isOn || isWorking}
+            disabled={isWorking}
+            onCheckedChange={(next) => void (next ? turnOn() : turnOff())}
+          />
+        )}
+      </div>
+      {isWorking && !isOn && (
+        <p className='text-muted-foreground text-[13px]' role='status'>
+          {HELM_COPY.styleMailReading}
+        </p>
+      )}
+      {failure && (
+        <p className='text-[13px] text-pretty' role='status'>
+          {getMailFailureLine(failure)}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The writing notes learned from what the person types, then those learned from sent mail by occasion and person, each opening a small sheet to edit or remove it, and a way to add one. */
+function StyleNotes() {
+  const items = useAppSelector((state) => state.helm.style.items);
+  const isLoaded = useAppSelector((state) => state.helm.style.isLoaded);
+  const [target, setTarget] = useState<Target | null>(null);
+  const style = items.find(
+    (entry) => entry.id === GENERAL_STYLE_ID && !entry.isUnreadable,
+  );
+  const isEmpty =
+    Object.keys(style?.traits ?? {}).length === 0 &&
+    (style?.avoid ?? []).length === 0;
+  const isUnreadable = items.some(
+    (entry) => entry.id === GENERAL_STYLE_ID && entry.isUnreadable,
+  );
+  const mailGroups = getMailGroups([...items]);
+  const isMailOn = items.some(isMailStyle);
 
   if (!isLoaded) return null;
 
@@ -297,36 +506,19 @@ function StyleNotes() {
           {HELM_COPY.styleEmpty}
         </p>
       ) : (
-        <ul className='helm-card divide-border divide-y overflow-hidden'>
-          {traits.map(([key, trait]) => (
-            <li key={key}>
-              <NoteRow
-                text={trait.text}
-                detail={getTraitSource(trait)}
-                onOpen={() =>
-                  setTarget({
-                    kind: 'trait',
-                    key,
-                    text: trait.text,
-                    source: getTraitSource(trait),
-                  })
-                }
-              />
-            </li>
-          ))}
-          {avoid.map((line, index) => (
-            <li key={`avoid-${index}-${line}`}>
-              <NoteRow
-                text={line}
-                detail={avoidSource}
-                onOpen={() =>
-                  setTarget({ kind: 'avoid', text: line, source: avoidSource })
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        <NoteList style={style} onOpen={setTarget} />
       )}
+      <MailSwitch isOn={isMailOn} />
+      {mailGroups.map((group) => (
+        <div key={group.id} className='space-y-1.5'>
+          <h3 className='text-muted-foreground px-1 text-[13px] font-medium'>
+            {group.scope === 'audience'
+              ? HELM_COPY.styleMailWithWho(group.label)
+              : group.label}
+          </h3>
+          <NoteList style={group} onOpen={setTarget} />
+        </div>
+      ))}
       <NoteSheet
         key={target ? JSON.stringify(target) : 'none'}
         target={target}

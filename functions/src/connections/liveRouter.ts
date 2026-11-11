@@ -56,7 +56,7 @@ export type LiveFailure = {
   reason: 'reconnect' | 'notGranted' | 'failed' | 'notReadable';
 };
 
-interface LiveInput {
+export interface LiveInput {
   uid: string;
   readerAppId: string;
   connectorId: string;
@@ -247,6 +247,26 @@ const run = async <T>(
     return { ok: true, value };
   } catch (error) {
     return toFailure(error, op);
+  }
+};
+
+/** Checks the grant, gets the account's token and runs one read that is never cached, for a read whose result must not be kept anywhere. */
+export const withLiveAccess = async <T>(
+  firestore: Firestore,
+  input: LiveInput,
+  read: (token: string, email: string) => Promise<T>,
+): Promise<{ ok: true; value: T } | LiveFailure> => {
+  const checked = await checkGrant(firestore, input);
+  if (!checked.ok) return checked;
+  try {
+    const token = await getGoogleAccessToken(
+      firestore,
+      input.uid,
+      input.accountId,
+    );
+    return { ok: true, value: await read(token, checked.email) };
+  } catch (error) {
+    return toFailure(error, 'access');
   }
 };
 
