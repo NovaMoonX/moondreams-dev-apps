@@ -17,7 +17,7 @@ interface TopicRowProps {
   onOpen: (topicId: string) => void;
 }
 
-const INDENT = ['pl-4', 'pl-9', 'pl-14'] as const;
+const INDENT = ['pl-4', 'pl-14', 'pl-24'] as const;
 
 /** One topic: its emoji and name, with how many subtopics and notes it holds. */
 function TopicRow({ topic, indent, onOpen }: TopicRowProps) {
@@ -34,9 +34,11 @@ function TopicRow({ topic, indent, onOpen }: TopicRowProps) {
       )}
       onClick={() => onOpen(topic.id)}
     >
-      <span className='w-7 shrink-0 text-center text-2xl' aria-hidden='true'>
-        {topic.emoji ?? ''}
-      </span>
+      {topic.emoji && (
+        <span className='w-7 shrink-0 text-center text-2xl' aria-hidden='true'>
+          {topic.emoji}
+        </span>
+      )}
       <span className='min-w-0 flex-1'>
         <span className='text-foreground block text-[15px] leading-[21px] break-words'>
           {topic.name}

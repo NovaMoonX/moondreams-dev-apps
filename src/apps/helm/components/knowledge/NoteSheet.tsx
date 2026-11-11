@@ -106,30 +106,34 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
         title={title}
         footer={
           note && (
-            <ModalFooterActions
-              leftActions={
-                <DeleteIconButton
-                  label={HELM_COPY.noteDelete}
-                  onClick={() => void remove()}
-                />
-              }
-              rightActions={
-                <>
-                  <CopyTextButton
-                    variant='secondary'
-                    label={HELM_COPY.noteCopy}
-                    text={[note.title, note.body].filter(Boolean).join('\n\n')}
+            <div className='px-6 pt-2 pb-3'>
+              <ModalFooterActions
+                leftActions={
+                  <DeleteIconButton
+                    label={HELM_COPY.noteDelete}
+                    onClick={() => void remove()}
                   />
-                  <Button
-                    type='button'
-                    variant='secondary'
-                    onClick={() => setIsEditing(true)}
-                  >
-                    {HELM_COPY.noteEdit}
-                  </Button>
-                </>
-              }
-            />
+                }
+                rightActions={
+                  <>
+                    <CopyTextButton
+                      variant='secondary'
+                      label={HELM_COPY.noteCopy}
+                      text={[note.title, note.body]
+                        .filter(Boolean)
+                        .join('\n\n')}
+                    />
+                    <Button
+                      type='button'
+                      variant='secondary'
+                      onClick={() => setIsEditing(true)}
+                    >
+                      {HELM_COPY.noteEdit}
+                    </Button>
+                  </>
+                }
+              />
+            </div>
           )
         }
       >

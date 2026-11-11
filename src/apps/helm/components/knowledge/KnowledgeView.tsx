@@ -17,6 +17,7 @@ import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
 import {
   selectAllNotes,
+  selectAllTopics,
   selectLooseNotes,
   selectTopicTree,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
@@ -44,9 +45,14 @@ const fold = (text: string) =>
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase();
 
-/** A loose match: every word typed is somewhere in the title or the body. */
-const matches = (note: OpenNote, query: string) => {
-  const haystack = fold(`${note.title} ${note.body}`);
+/** A loose match: every word typed is somewhere in the title, the body or the name of a topic the note is in. */
+const matches = (
+  note: OpenNote,
+  query: string,
+  topicNames: ReadonlyMap<string, string>,
+) => {
+  const names = note.topicIds.map((id) => topicNames.get(id) ?? '');
+  const haystack = fold([note.title, note.body, ...names].join(' '));
   return fold(query)
     .split(/\s+/)
     .filter(Boolean)
@@ -59,6 +65,7 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
   const notesSet = useAppSelector((state) => state.helm.notes);
   const topicsSet = useAppSelector((state) => state.helm.topics);
   const notes = useAppSelector(selectAllNotes);
+  const allTopics = useAppSelector(selectAllTopics);
   const loose = useAppSelector(selectLooseNotes);
   const tree = useAppSelector(selectTopicTree);
   const [query, setQuery] = useState('');
@@ -79,7 +86,10 @@ function KnowledgeView({ onBack, onHome, onOpenTopic }: KnowledgeViewProps) {
   const isEmpty = isLoaded && rows.length === 0 && notes.length === 0;
   const isSearching =
     notes.length >= KNOWLEDGE_SEARCH_FROM && query.trim() !== '';
-  const found = isSearching ? notes.filter((note) => matches(note, query)) : [];
+  const topicNames = new Map(allTopics.map((topic) => [topic.id, topic.name]));
+  const found = isSearching
+    ? notes.filter((note) => matches(note, query, topicNames))
+    : [];
 
   return (
     <>
