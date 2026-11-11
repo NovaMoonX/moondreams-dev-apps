@@ -32,7 +32,9 @@ function Home() {
   );
   const [infoAppId, setInfoAppId] = useState<string | null>(null);
   const [signOutNote, setSignOutNote] = useState(readSignOutNote);
-  useEffect(clearSignOutNote, []);
+  useEffect(() => {
+    if (user) clearSignOutNote();
+  }, [user]);
   const isGrid = !isWide && !isShowingDetails;
   const infoApp = apps.find((app) => app.id === infoAppId) ?? null;
   const starredApps = apps.filter((app) => starredAppIds.includes(app.id));
@@ -88,7 +90,10 @@ function Home() {
             <InlineNotice
               tone='success'
               className='mx-auto max-w-xl text-left'
-              onDismiss={() => setSignOutNote(null)}
+              onDismiss={() => {
+                clearSignOutNote();
+                setSignOutNote(null);
+              }}
             >
               {signOutNote}
             </InlineNotice>
