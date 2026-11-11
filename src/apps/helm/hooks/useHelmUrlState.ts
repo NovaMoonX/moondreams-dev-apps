@@ -31,12 +31,18 @@ const URL_VIEWS = [
 
 const MARKER = 'helmStep';
 const FROM = 'helmFrom';
+const FROM_ITEM = 'helmFromItem';
 const LOAD_ID = generateUuid();
 
 /** A view or sheet reached from home by an entry of its own, so Back can pop to home. */
-const markStep = (from: HelmView) => {
+const markStep = (from: HelmView, fromItem: string | null = null) => {
   window.history.replaceState(
-    { ...window.history.state, [MARKER]: LOAD_ID, [FROM]: from },
+    {
+      ...window.history.state,
+      [MARKER]: LOAD_ID,
+      [FROM]: from,
+      [FROM_ITEM]: fromItem,
+    },
     '',
   );
 };
@@ -111,7 +117,24 @@ export function useHelmUrlState() {
       return;
     }
     await setUrl(target, { history: 'push' });
-    markStep(view);
+    markStep(view, item);
+  };
+
+  /** Back to a record's parent record (a subtopic's topic): pops when the entry beneath is that record, else replaces this entry with it and keeps what lies beneath. */
+  const goUpTo = async (next: (typeof URL_VIEWS)[number], id: string) => {
+    const state = (window.history.state ?? {}) as Record<string, unknown>;
+    if (isStep() && state[FROM] === next && state[FROM_ITEM] === id) {
+      navigate(-1);
+      return;
+    }
+    const wasStep = isStep();
+    const from = state[FROM] as HelmView | undefined;
+    const fromItem = (state[FROM_ITEM] as string | null | undefined) ?? null;
+    await setUrl(
+      { view: next, browse: null, ask: null, grant: null, item: id },
+      { history: 'replace' },
+    );
+    if (wasStep && from) markStep(from, fromItem);
   };
 
   const goHome = () => {
@@ -174,5 +197,6 @@ export function useHelmUrlState() {
     goHome,
     goBack,
     goBackToOrigin,
+    goUpTo,
   };
 }

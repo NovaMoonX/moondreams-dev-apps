@@ -62,6 +62,7 @@ function HelmApp() {
     goBack,
     origin,
     goBackToOrigin,
+    goUpTo,
   } = useHelmUrlState();
 
   useHelmTheme();
@@ -206,6 +207,7 @@ function HelmApp() {
             onBack={goBackToOrigin}
             onHome={goHome}
             onOpenTopic={(topicId) => showView('topic', topicId)}
+            onOpenParent={(topicId) => void goUpTo('topic', topicId)}
           />
         )}
         {!isLocked && view === 'howNomosSeesYou' && (

@@ -44,6 +44,8 @@ interface TopicScreenProps {
   onBack: () => void;
   onHome: () => void;
   onOpenTopic: (topicId: string) => void;
+  /** Back to the parent topic, popping when the person came from it. */
+  onOpenParent: (topicId: string) => void;
 }
 
 const moveFailure = (kind: Exclude<TopicMove['kind'], 'moved'>) =>
@@ -63,6 +65,7 @@ function TopicScreen({
   onBack,
   onHome,
   onOpenTopic,
+  onOpenParent,
 }: TopicScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -80,6 +83,7 @@ function TopicScreen({
   const parent = topic?.parentId
     ? (topics.find((entry) => entry.id === topic.parentId) ?? null)
     : null;
+  const leave = () => (parent ? onOpenParent(parent.id) : onBack());
   const subtopicList = [...(subtopics ?? [])].sort((left, right) =>
     left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }),
   );
@@ -157,7 +161,7 @@ function TopicScreen({
         topics,
         store.getState().helm.notes.items,
       );
-      onBack();
+      leave();
       addToast({
         title: HELM_COPY.topicDeletedToast(topic.name),
         type: 'success',
@@ -221,7 +225,7 @@ function TopicScreen({
     <>
       <HelmHeader
         backLabel={parent ? parent.name : HELM_COPY.knowledgeTitle}
-        onBack={() => (parent ? onOpenTopic(parent.id) : onBack())}
+        onBack={leave}
         onHome={onHome}
         menu={menu}
       />
