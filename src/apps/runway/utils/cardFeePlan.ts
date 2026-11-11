@@ -207,7 +207,9 @@ export function getFeePlan(
           CARD_FEE_WORDS.billDate(
             current.timing.schedule.anchor === null
               ? CARD_FEE_WORDS.changeNoFee
-              : formatDateOrdinalUTC(current.timing.schedule.anchor),
+              : formatDateOrdinalUTC(
+                  getNextFeeOn(current.timing.schedule.anchor, today),
+                ),
             formatDateOrdinalUTC(after.firstDueOn),
           ),
           formatDateOrdinalUTC(today),

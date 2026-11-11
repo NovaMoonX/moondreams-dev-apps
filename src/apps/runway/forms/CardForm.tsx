@@ -247,6 +247,7 @@ function CardFormBody({
   const assignedByItem = useAppSelector(
     (state) => selectBalances(state).assignedByItem,
   );
+  const [openedAt] = useState(() => editing?.updatedAt);
   const [startData] = useState(() =>
     getInitialData(editing, pullAccounts, isAccountsLoaded, today),
   );
@@ -734,6 +735,7 @@ function CardFormBody({
           (id) =>
             allAccounts.find((account) => account.id === id)?.name ??
             CARD_WORDS.payFromNone,
+          today,
         );
         const changeSummary = summary ?? feeResult.plan?.summary ?? null;
         if (changeSummary !== null) {
@@ -743,7 +745,7 @@ function CardFormBody({
             editing.id,
             sealed,
             changeSummary,
-            { fee: feeResult.plan, seenUpdatedAt: editing.updatedAt },
+            { fee: feeResult.plan, seenUpdatedAt: openedAt },
           );
           addToast({
             title: CARD_WORDS.saved(

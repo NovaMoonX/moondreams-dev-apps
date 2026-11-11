@@ -242,14 +242,14 @@ function SavedStart({ uid }: { uid: string }) {
   const addBudget = async (draft: Pick<StartDraft, DraftKind>) => {
     const existing: ExistingNames = {
       sources: sources.map((source) => source.version.payload.name),
-      bills: bills.map(({ version }) => version.payload.name),
+      bills: planBills.map(({ version }) => version.payload.name),
       envelopes: envelopes.map(({ version }) => version.payload.name),
       goals: goals.map(({ version }) => version.payload.name),
       groups: groups.map(({ item, version }) => ({
         id: item.id,
         name: version.payload.name,
       })),
-      topRanks: toTopRanks([...bills, ...envelopes, ...goals]),
+      topRanks: toTopRanks([...planBills, ...envelopes, ...goals]),
       startDate,
       itemCount: items.length,
     };

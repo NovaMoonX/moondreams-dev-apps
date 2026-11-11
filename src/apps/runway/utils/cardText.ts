@@ -8,6 +8,7 @@ import {
   CARD_WORDS,
 } from '@apps/runway/constants';
 import { todayAsUtcDate } from '@apps/runway/engine/dates';
+import { getNextFeeOn } from '@apps/runway/engine/cardFees';
 import {
   collectCardHistory,
   getCardDueState,
@@ -236,6 +237,7 @@ export function describeCardChanged(
   before: CardSealed,
   after: CardSealed,
   accountNameOf: (accountId: string | null) => string,
+  today: DateOnly,
 ): string | null {
   const parts = [
     before.issuer === after.issuer
@@ -282,7 +284,9 @@ export function describeCardChanged(
     before.annualFee.firstDueOn === after.annualFee.firstDueOn
       ? null
       : CARD_FEE_WORDS.changeFeeDate(
-          formatDateOrdinalUTC(before.annualFee.firstDueOn),
+          formatDateOrdinalUTC(
+            getNextFeeOn(before.annualFee.firstDueOn, today),
+          ),
           formatDateOrdinalUTC(after.annualFee.firstDueOn),
         ),
   ].filter((part) => part !== null);
