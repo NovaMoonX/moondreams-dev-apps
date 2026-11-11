@@ -271,7 +271,8 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
   const hasError = Object.values(grant.categoryState).some(
     (state) => state.lastError !== null,
   );
-  const freshnessLine = (categoryId: string) => {
+  const freshnessLine = (categoryId: string, mode: 'sync' | 'live') => {
+    if (mode === 'live') return HELM_COPY.connectionLiveLine;
     const state = grant.categoryState[categoryId];
     if (state?.lastError) return HELM_COPY.syncedCouldNot;
     if (!state || state.lastOkAt === null) return HELM_COPY.syncedWaiting;
@@ -418,11 +419,13 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                     <span className='text-muted-foreground block text-[13px] text-pretty'>
                       {category.detail}
                     </span>
-                    {isOn && !isContactsGrant && freshnessLine(category.id) && (
-                      <span className='text-muted-foreground block text-[13px] text-pretty'>
-                        {freshnessLine(category.id)}
-                      </span>
-                    )}
+                    {isOn &&
+                      !isContactsGrant &&
+                      freshnessLine(category.id, category.mode) && (
+                        <span className='text-muted-foreground block text-[13px] text-pretty'>
+                          {freshnessLine(category.id, category.mode)}
+                        </span>
+                      )}
                   </span>
                   {isOffline ? (
                     locked

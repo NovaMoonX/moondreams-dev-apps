@@ -6128,7 +6128,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         share.categories.map((category) => [
           category.id,
           {
-            lastOkAt: syncedAt,
+            lastOkAt: category.mode === 'live' ? null : syncedAt,
             lastError: null,
             count: runwayCopies.filter((copy) => copy.category === category.id)
               .length,
@@ -6157,6 +6157,27 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
     connectorId: runwayConnectorId,
     grantId: runwayGrantId,
   });
+  // Jamie's plan is the one that tracks spending, so a question about a store has rows to find there.
+  batch.set(
+    context.firestore
+      .collection('connections')
+      .doc(FIXTURE_USERS.partnerTwo.uid)
+      .collection('grants')
+      .doc(runwayGrantId),
+    {
+      ...runwayGrant,
+      categories: {
+        ...runwayGrant.categories,
+        moneySummary: { isOn: false, changedAt: connectedAt },
+      },
+      categoryState: Object.fromEntries(
+        Object.entries(runwayGrant.categoryState).map(([id, state]) => [
+          id,
+          { ...state, count: 0 },
+        ]),
+      ),
+    } satisfies ConnectionGrant,
+  );
 
   const worthTheWaitConnectorId = toAppConnectorId('worth-the-wait');
   const worthTheWaitGrantId = toGrantId(
@@ -6476,6 +6497,7 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       nineLivesCopies.length +
       1 +
       waypointCopies.length +
+      1 +
       1 +
       6,
   };

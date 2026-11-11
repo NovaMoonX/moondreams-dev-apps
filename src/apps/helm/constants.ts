@@ -836,6 +836,8 @@ export const HELM_COPY = {
   syncedMore: (count: number) => `${count} more`,
   syncedFewer: 'Show fewer',
   syncedWaiting: 'Waiting for the first update',
+  connectionLiveLine:
+    'Read only when you ask. Only what an answer quotes is kept.',
   syncedStale: (when: string) => `Last updated ${when} · may be out of date`,
   syncedAllDay: 'All day',
   syncedUpdatedLine: (when: string) => `Updated ${when}`,

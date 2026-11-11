@@ -1,5 +1,5 @@
 import { Button } from '@moondreamsdev/dreamer-ui/components';
-import { ExternalLink } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import ExternalLinkText from '@/components/ExternalLinkText';
@@ -67,7 +67,7 @@ function QuoteLine({ quote }: { quote: AnswerQuote }) {
           onClick={() => afterBackLayersClose(() => navigate(route))}
         >
           {HELM_COPY.syncedOpenIn(nameOf(quote.connectorId))}
-          <ExternalLink className='ml-1 size-3.5' aria-hidden='true' />
+          <ChevronRight className='ml-0.5 size-3.5' aria-hidden='true' />
         </Button>
       )}
       {link && (
