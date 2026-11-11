@@ -4704,7 +4704,7 @@ export const CARD_FEE_WORDS = {
   billEnded: (bill: string) => `${bill}: ended with its card's fee.`,
   groupNote: "Kept in step with your cards' annual fees.",
   groupNotePlan: 'Kept in step for you.',
-  billChangeSub: 'Priority and Paid from',
+  billChangeSub: 'Priority, and from when',
   billCardRow: 'Fee and date',
   billCardRowSub: (card: string) => `Change it on ${card}`,
   archiveTitle: (card: string) => `Archive ${card}?`,
