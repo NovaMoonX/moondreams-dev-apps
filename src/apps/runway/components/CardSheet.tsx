@@ -153,7 +153,7 @@ function CardSheet({ card, onClose, onPay, onChange }: CardSheetProps) {
   const [heldChoice, setHeldChoice] = useState<HeldChoice | null>(null);
   const fee = card.annualFee ?? null;
   const isFeeOpen = useAppSelector((state) =>
-    fee === null ? false : isFeeBillLive(state, fee.billId, today),
+    fee === null ? false : isFeeBillLive(state, fee.billId),
   );
   const feeHeldCents = isFeeOpen
     ? getFeeHeldCents(balances.assignedByItem, fee)

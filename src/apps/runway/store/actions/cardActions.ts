@@ -175,7 +175,7 @@ export async function updateCard(
     getChangeDoc(encryption, summary, null),
   ]);
   await runTransaction(db, async (transaction) => {
-    if (fee && options.seenUpdatedAt !== undefined)
+    if (options.seenUpdatedAt !== undefined)
       await readCardFresh(transaction, uid, cardId, options.seenUpdatedAt);
     const feeReads = fee ? await readFeePlan(transaction, uid, fee) : null;
     if (fee && feeReads) applyFeePlan(transaction, uid, fee, feeReads);

@@ -337,7 +337,7 @@ function CardFormBody({
       : { cents: feeCents, firstDueOn: getFeeFirstDueOn(feeOn) };
   const feeHeldCents = getFeeHeldCents(assignedByItem, feeBefore);
   const isFeeBillOpen = useAppSelector((state) =>
-    feeBefore === null ? false : isFeeBillLive(state, feeBefore.billId, today),
+    feeBefore === null ? false : isFeeBillLive(state, feeBefore.billId),
   );
   const asksFeeHeld = formData.hasNoFee && feeHeldCents > 0 && isFeeBillOpen;
 

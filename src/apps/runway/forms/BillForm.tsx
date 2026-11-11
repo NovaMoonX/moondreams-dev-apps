@@ -1509,7 +1509,6 @@ function BillFormBody({
       ),
     },
   ];
-  // A card's annual fee bill takes its name, amount, date, group and card from the card.
   const steps = isFeeBill
     ? allSteps.filter(({ id }) => id === 'priority' || id === 'funding')
     : allSteps;

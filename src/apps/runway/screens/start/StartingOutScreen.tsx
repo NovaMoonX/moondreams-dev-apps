@@ -39,6 +39,7 @@ import {
   toTopRanks,
   type ExistingNames,
 } from '@apps/runway/store/actions/draftActions';
+import { isCardFeeBill } from '@apps/runway/engine/cardFees';
 import { archiveItem } from '@apps/runway/store/actions/itemActions';
 import type { HeldChoice } from '@apps/runway/engine/endings';
 import { selectBalances } from '@apps/runway/store/selectors/balanceSelectors';
@@ -104,7 +105,10 @@ const getFirstOpenStep = (
 function SavedStart({ uid }: { uid: string }) {
   const today = todayAsUtcDate(useNow(60_000));
   const sources = useAppSelector((state) => selectResolvedPlan(state, today));
-  const bills = useAppSelector((state) => selectBills(state, today));
+  const planBills = useAppSelector((state) => selectBills(state, today));
+  const bills = planBills.filter(
+    ({ version }) => !isCardFeeBill(version.payload),
+  );
   const groups = useAppSelector((state) => selectGroups(state, today));
   const envelopes = useAppSelector((state) => selectEnvelopes(state, today));
   const goals = useAppSelector((state) => selectGoals(state, today));

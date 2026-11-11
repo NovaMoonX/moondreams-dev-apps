@@ -214,6 +214,9 @@ export function applyFeePlan(
   }
   const header = reads.billHeader;
   if (header === null) return;
+  const isStopped =
+    (header.endedAt ?? null) !== null || (header.archivedAt ?? null) !== null;
+  if (isStopped) return;
   if (plan.kind === 'change') {
     const changeId = generateUuid();
     plan.stretches.forEach((stretch, index) => {
@@ -239,8 +242,6 @@ export function applyFeePlan(
     } satisfies ChangeDoc);
     return;
   }
-  if ((header.endedAt ?? null) !== null || (header.archivedAt ?? null) !== null)
-    return;
   const entryId = getEndEntryId(plan.billId, reads.isEndEntryTaken, now);
   transaction.update(itemPath(uid, 'items', plan.billId), {
     endedAt: plan.endedOn,

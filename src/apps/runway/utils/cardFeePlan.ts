@@ -48,17 +48,13 @@ export type FeePlanResult =
   | { kind: 'ready'; plan: FeePlan | null; annualFee: CardAnnualFee | null }
   | { kind: 'loading' };
 
-/** Whether the fee bill is still in the plan today; an ended or archived one is replaced by a new bill. */
-export const isFeeBillLive = (
-  state: RootState,
-  billId: string,
-  today: DateOnly,
-) => {
+/** Whether the fee bill is still open; an ended or archived one is replaced by a new bill. */
+export const isFeeBillLive = (state: RootState, billId: string) => {
   const header = state.runway.items.find((item) => item.id === billId);
   return (
     header !== undefined &&
     header.archivedAt === null &&
-    (header.endedAt === null || header.endedAt >= today)
+    header.endedAt === null
   );
 };
 
@@ -84,8 +80,7 @@ export function getFeePlan(
   const billVersions = runway.versions.filter(
     (version): version is BillVersion => version.kind === 'bill',
   );
-  const isBillLive =
-    before !== null && isFeeBillLive(state, before.billId, today);
+  const isBillLive = before !== null && isFeeBillLive(state, before.billId);
   const stretches =
     before === null || !isBillLive
       ? []
