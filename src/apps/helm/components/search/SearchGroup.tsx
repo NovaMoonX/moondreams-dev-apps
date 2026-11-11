@@ -65,9 +65,7 @@ function SearchGroup({
     <section className='space-y-3'>
       <SectionDivider label={label} />
       {isExpanded ? (
-        <LazyMount estimatedHeight={rows.length * ROW_HEIGHT} eager>
-          {list}
-        </LazyMount>
+        <LazyMount estimatedHeight={rows.length * ROW_HEIGHT}>{list}</LazyMount>
       ) : (
         list
       )}

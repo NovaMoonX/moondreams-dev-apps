@@ -35,5 +35,8 @@ export const helmKeyQueryOptions = (uid: string) =>
 export const getHelmEncryption = (uid: string) =>
   queryClient.fetchQuery(helmKeyQueryOptions(uid));
 
-export const clearHelmKey = () =>
+// Cancelling first discards a read still in flight, so nothing it opened lands after the key is gone.
+export const clearHelmKey = () => {
+  void queryClient.cancelQueries({ queryKey: helmQueryKeys.all });
   queryClient.removeQueries({ queryKey: helmQueryKeys.all });
+};

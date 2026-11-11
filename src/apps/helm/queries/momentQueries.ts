@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
+import { queryClient } from '@lib/query/queryClient';
 import { createSealedReader, type SealedReader } from '@lib/security';
 
 import {
@@ -58,4 +59,11 @@ export const momentsQueryOptions = (uid: string) =>
     staleTime: Infinity,
     gcTime: Infinity,
     retry: false,
+  });
+
+/** Marks the moments read stale after the person adds, edits or removes one, so the next Search reads them again. */
+export const markMomentsStale = (uid: string) =>
+  void queryClient.invalidateQueries({
+    queryKey: momentsQueryOptions(uid).queryKey,
+    refetchType: 'none',
   });

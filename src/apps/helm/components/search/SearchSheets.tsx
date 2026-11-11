@@ -3,6 +3,7 @@ import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
 import UndoSnackbar from '@/components/UndoSnackbar';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
+import { queryClient } from '@lib/query/queryClient';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
@@ -16,6 +17,7 @@ import {
   reopenTask,
   type RestoreResult,
 } from '@apps/helm/store/actions/taskActions';
+import { doneTasksQueryOptions } from '@apps/helm/queries/doneTaskQueries';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { OpenTask } from '@apps/helm/types';
 import type { SearchTarget } from '@apps/helm/utils/searchRecords';
@@ -94,9 +96,15 @@ function SearchSheets({ open, tasks, onClose }: SearchSheetsProps) {
     restore: () => Promise<RestoreResult>,
   ) => {
     forget(taskId);
+    onClose();
+    const doneKey = doneTasksQueryOptions(user?.uid ?? '').queryKey;
+    queryClient.setQueryData(doneKey, (old) =>
+      old?.filter((task) => task.id !== taskId),
+    );
     showUndo(HELM_COPY.deletedTask(title), () => {
       restore()
         .then((result) => {
+          void queryClient.invalidateQueries({ queryKey: doneKey });
           if (result === 'exists') {
             addToast({ title: HELM_COPY.restoreExists, type: 'info' });
           }

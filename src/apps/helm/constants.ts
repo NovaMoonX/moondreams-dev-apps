@@ -2464,6 +2464,8 @@ export const HELM_COPY = {
   searchLookingDates: 'Still looking through older dates…',
   searchFailedDone:
     "Couldn't look through done tasks. Open Search again to retry.",
+  searchFailedPart:
+    "Some of what's kept couldn't be loaded, so a match may be missing. Reopen the app to retry.",
   searchFailedDates:
     "Couldn't look through older dates. Open Search again to retry.",
   searchGroupPeople: 'People',

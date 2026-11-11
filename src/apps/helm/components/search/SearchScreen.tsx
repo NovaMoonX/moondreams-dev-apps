@@ -74,7 +74,34 @@ function SearchScreen({
   const { user } = useAuth();
   const uid = user?.uid ?? '';
   const assistant = useAssistantName();
-  const helm = useAppSelector((state) => state.helm);
+  const who = useAppSelector((state) => state.helm.who.items);
+  const places = useAppSelector((state) => state.helm.places.items);
+  const facts = useAppSelector((state) => state.helm.facts.items);
+  const notes = useAppSelector((state) => state.helm.notes.items);
+  const topics = useAppSelector((state) => state.helm.topics.items);
+  const projects = useAppSelector((state) => state.helm.projects.items);
+  const procedures = useAppSelector((state) => state.helm.procedures.items);
+  const media = useAppSelector((state) => state.helm.media.items);
+  const synced = useAppSelector((state) => state.helm.synced.items);
+  const projectTasks = useAppSelector((state) => state.helm.projectTasks.items);
+  const openTasks = useAppSelector((state) => state.helm.openTasks.items);
+  const byWho = useAppSelector((state) => state.helm.keyDateIndex.byWho);
+  const isPartFailed = useAppSelector((state) =>
+    [
+      state.helm.who,
+      state.helm.places,
+      state.helm.facts,
+      state.helm.notes,
+      state.helm.topics,
+      state.helm.projects,
+      state.helm.procedures,
+      state.helm.media,
+      state.helm.synced,
+      state.helm.projectTasks,
+      state.helm.openTasks,
+      state.helm.keyDateIndex,
+    ].some((slice) => slice.isFailed),
+  );
   const hasQuery = toComparable(query) !== '';
   const doneTasks = useQuery({
     ...doneTasksQueryOptions(uid),
@@ -91,42 +118,37 @@ function SearchScreen({
   const [open, setOpen] = useState<SearchOpen | null>(null);
 
   const tasks = useMemo(
-    () =>
-      mergeTasks(
-        doneTasks.data ?? NONE,
-        helm.projectTasks.items,
-        helm.openTasks.items,
-      ),
-    [doneTasks.data, helm.projectTasks.items, helm.openTasks.items],
+    () => mergeTasks(doneTasks.data ?? NONE, projectTasks, openTasks),
+    [doneTasks.data, projectTasks, openTasks],
   );
   const sources = useMemo<SearchSources>(
     () => ({
-      who: helm.who.items,
-      places: helm.places.items,
+      who,
+      places,
       tasks,
-      facts: helm.facts.items,
-      byWho: helm.keyDateIndex.byWho,
+      facts,
+      byWho,
       moments: moments.data ?? NONE,
-      notes: helm.notes.items,
-      topics: helm.topics.items,
-      projects: helm.projects.items,
-      procedures: helm.procedures.items,
-      media: helm.media.items,
-      synced: helm.synced.items,
+      notes,
+      topics,
+      projects,
+      procedures,
+      media,
+      synced,
     }),
     [
-      helm.who.items,
-      helm.places.items,
+      who,
+      places,
       tasks,
-      helm.facts.items,
-      helm.keyDateIndex.byWho,
+      facts,
+      byWho,
       moments.data,
-      helm.notes.items,
-      helm.topics.items,
-      helm.projects.items,
-      helm.procedures.items,
-      helm.media.items,
-      helm.synced.items,
+      notes,
+      topics,
+      projects,
+      procedures,
+      media,
+      synced,
     ],
   );
   // The field and the page draw first; the index is built in the render after.
@@ -197,10 +219,16 @@ function SearchScreen({
             {HELM_COPY.searchFailedDates}
           </p>
         )}
+        {hasQuery && isPartFailed && (
+          <p className='text-muted-foreground text-[13px]'>
+            {HELM_COPY.searchFailedPart}
+          </p>
+        )}
         {hasQuery &&
           !isIndexing &&
-          !doneTasks.isPending &&
-          !moments.isPending &&
+          !isPartFailed &&
+          doneTasks.isSuccess &&
+          moments.isSuccess &&
           found === 0 && (
             <p className='text-muted-foreground text-[15px] text-pretty'>
               {HELM_COPY.searchNothing(query.trim(), assistant)}
