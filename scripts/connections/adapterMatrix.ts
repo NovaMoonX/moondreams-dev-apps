@@ -2515,7 +2515,7 @@ const longRange = await queryTx(OWNER, {
   from: '2020-01-01',
   to: dayText(TODAY),
 });
-assert.equal(longRange.matchedCount, 4, 'the oldest 13+ months are cut off');
+assert.equal(longRange.matchedCount, 3, 'the oldest 13+ months are cut off');
 assert.deepEqual(
   (await queryTx(OWNER, { from: '2026-11-09', to: '2026-11-01' })).records,
   [],

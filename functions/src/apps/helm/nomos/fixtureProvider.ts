@@ -396,7 +396,7 @@ async function readMailAnswer(
 }
 
 const SPEND_QUESTION_RE =
-  /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+[\p{L}][\p{L}&'.-]*)?)/iu;
+  /\b(?:spend|spent|paid|pay)\b.*?\bat\s+(?:the\s+)?([\p{L}][\p{L}&'.-]*(?:\s+(?!(?:last|this|recently|in|on|over|during)\b)[\p{L}][\p{L}&'.-]*)?)/iu;
 
 const toDayText = (at: number) => new Date(at).toISOString().slice(0, 10);
 
