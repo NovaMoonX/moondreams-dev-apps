@@ -470,7 +470,7 @@ export interface SectionWords {
   markdown: string;
 }
 
-const CLAIM_MS = 90_000;
+export const CLAIM_MS = 90_000;
 
 interface VersionPlan {
   sections: TopicSection[];
@@ -581,49 +581,89 @@ export function saveTopicSection(
   topicId: string,
   sectionId: string | null,
   input: SectionWords,
+  expectedVersion: number | null = null,
 ): Promise<DocumentChange> {
   const words = toSectionWords(input);
-  return writeVersion(uid, encryption, topicId, null, async (topic) => {
-    const at = Date.now();
-    const mark = { kind: 'person' as const, at };
-    const sections =
-      sectionId === null
-        ? [
-            ...topic.sections,
-            {
-              id: generateUuid(),
-              ...words,
-              writtenBy: 'person' as const,
-              sources: [mark],
-            },
-          ]
-        : topic.sections.map((section) =>
-            section.id === sectionId
-              ? {
-                  ...section,
-                  ...words,
-                  writtenBy: 'person' as const,
-                  sources: [...section.sources, mark].slice(
-                    -SECTION_SOURCES_MAX,
-                  ),
-                }
-              : section,
-          );
-    if (sectionId !== null && !topic.sections.some((s) => s.id === sectionId)) {
-      return 'missing';
-    }
-    if (sections.length > TOPIC_SECTIONS_MAX) return 'tooMany';
-    if (documentLength(sections) > TOPIC_DOCUMENT_MAX) return 'tooLong';
-    return {
-      sections,
-      reason: 'personEdit',
-      restoredFromVersion: null,
-      changeSummary:
+  return writeVersion(
+    uid,
+    encryption,
+    topicId,
+    expectedVersion,
+    async (topic) => {
+      const at = Date.now();
+      const mark = { kind: 'person' as const, at };
+      const sections =
         sectionId === null
-          ? HELM_COPY.historySummaryAdded(words.heading)
-          : HELM_COPY.historySummaryEdited(words.heading),
-    };
-  });
+          ? [
+              ...topic.sections,
+              {
+                id: generateUuid(),
+                ...words,
+                writtenBy: 'person' as const,
+                sources: [mark],
+              },
+            ]
+          : topic.sections.map((section) =>
+              section.id === sectionId
+                ? {
+                    ...section,
+                    ...words,
+                    writtenBy: 'person' as const,
+                    sources: [...section.sources, mark].slice(
+                      -SECTION_SOURCES_MAX,
+                    ),
+                  }
+                : section,
+            );
+      if (
+        sectionId !== null &&
+        !topic.sections.some((s) => s.id === sectionId)
+      ) {
+        return 'missing';
+      }
+      if (sections.length > TOPIC_SECTIONS_MAX) return 'tooMany';
+      if (documentLength(sections) > TOPIC_DOCUMENT_MAX) return 'tooLong';
+      return {
+        sections,
+        reason: 'personEdit',
+        restoredFromVersion: null,
+        changeSummary:
+          sectionId === null
+            ? HELM_COPY.historySummaryAdded(words.heading)
+            : HELM_COPY.historySummaryEdited(words.heading),
+      };
+    },
+  );
+}
+
+/** Takes one part out of the document as a new version, so History can bring it back; `expectedVersion` is the newest the caller saw. */
+export function removeTopicSection(
+  uid: string,
+  encryption: HelmEncryption,
+  topicId: string,
+  sectionId: string,
+  expectedVersion: number | null,
+): Promise<DocumentChange> {
+  return writeVersion(
+    uid,
+    encryption,
+    topicId,
+    expectedVersion,
+    async (topic) => {
+      const removed = topic.sections.find(
+        (section) => section.id === sectionId,
+      );
+      if (!removed) return 'missing';
+      return {
+        sections: topic.sections.filter((section) => section.id !== sectionId),
+        reason: 'personEdit',
+        restoredFromVersion: null,
+        changeSummary: HELM_COPY.historySummaryRemoved(
+          removed.heading || removed.markdown.trim().slice(0, 40),
+        ),
+      };
+    },
+  );
 }
 
 /** Writes a version's parts again as the newest version; `expectedVersion` is the newest the caller saw. Restoring the newest's predecessor is Undo, which refuses on the first version. */

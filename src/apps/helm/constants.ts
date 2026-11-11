@@ -690,6 +690,7 @@ export const HELM_COPY = {
   answerTaskGone: 'A task that is done or removed',
   answerSyncedGone: 'Something from a connected app that is no longer there',
   answerOpenSource: (title: string) => `Open ${title}`,
+  answerTopicGone: 'A topic that has since been deleted',
   answerNoteGone: 'A note that has since been deleted',
   answerNoteMark: (place: string | null) =>
     place ? `Your note · ${place}` : 'Your note',
@@ -1717,6 +1718,9 @@ export const HELM_COPY = {
   topicFailedLine: (count: number) =>
     `${count} new ${count === 1 ? "note isn't" : "notes aren't"} in the document yet`,
   topicTryAgain: 'Try again',
+  topicBringThemIn: 'Bring them in',
+  topicSoonLine: (count: number) =>
+    `Couldn't bring ${count === 1 ? 'it' : 'them'} in just now. Try again in a few minutes`,
   topicLimitedLine: (count: number) =>
     `${count} new ${count === 1 ? 'note' : 'notes'} will be added tomorrow`,
   topicReadThemNow: 'Read them now',
@@ -1733,6 +1737,7 @@ export const HELM_COPY = {
   sourceNoteGone: 'A note that is removed',
   sourceMessage: (date: string) => `You said, ${date}`,
   sourceGeneral: 'Saved from a general answer',
+  sourceGeneralNotChecked: 'Saved from a general answer · Not checked',
   sourceFile: 'From a file',
   sourcePerson: (date: string) => `You wrote this, ${date}`,
   sourcesEmpty: 'Nothing is recorded for this part.',
@@ -1751,6 +1756,12 @@ export const HELM_COPY = {
   sectionSaved: 'Saved. This part is yours now.',
   sectionAdded: 'Added your part.',
   sectionGone: 'That part is gone. Open the topic again.',
+  sectionChangedSince: 'This part changed since you opened it',
+  sectionRemoveAria: 'Remove this part',
+  sectionRemoveTitle: 'Remove this part?',
+  sectionRemoveConfirm: 'Remove this part? You can bring it back from History.',
+  sectionRemoveAction: 'Remove',
+  sectionRemoved: 'Removed. You can bring it back from History.',
   historyTitle: (name: string) => `History · ${name}`,
   historyEmpty: 'Nothing has changed yet.',
   historyFailed: "History couldn't be opened.",
@@ -1783,6 +1794,8 @@ export const HELM_COPY = {
   historyVersionTitle: (version: number) => `Version ${version}`,
   historyUndo: 'Undo this change',
   historyUndoHint: 'Puts the document back as it was before this.',
+  historyUndoNotesHint: 'The notes stay below the document.',
+  historyUndone: (summary: string) => `Undid: ${summary}`,
   historyRestore: (version: number) => `Restore version ${version}`,
   historyRestoreHint: 'Writes it again as the newest version. Nothing is lost.',
   historyFirstVersion: 'This is the first version.',
@@ -1790,6 +1803,7 @@ export const HELM_COPY = {
     heading ? `You edited ${heading}` : 'You edited a part',
   historySummaryAdded: (heading: string | null) =>
     heading ? `You added ${heading}` : 'You added a part',
+  historySummaryRemoved: (label: string) => `You removed ${label}`,
   historySummaryRestored: (version: number) => `Put back version ${version}`,
   sectionBusy: 'The document is being updated. Try again in a moment.',
   historyRestored: (version: number) => `Restored version ${version}`,

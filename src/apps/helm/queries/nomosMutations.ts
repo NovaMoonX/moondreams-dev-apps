@@ -117,6 +117,7 @@ export interface TopicWriteResult {
   version: number;
   broughtIn: number;
   waiting: number;
+  retry: 'soon' | 'tomorrow' | null;
 }
 
 const writeHelmTopicCallable = httpsCallable<
@@ -124,10 +125,11 @@ const writeHelmTopicCallable = httpsCallable<
   TopicWriteResult
 >(functions, 'writeHelmTopic');
 
-/** What this tab knows of a topic's write: out now, held back for the day (with how many wait), or not made. A topic with no entry has nothing to report. */
+/** What this tab knows of a topic's write: out now, held back for the day (with how many wait), held back for a few minutes, or not made. A topic with no entry has nothing to report. */
 export type TopicWriteState =
   | { kind: 'writing' }
   | { kind: 'limited'; waiting: number }
+  | { kind: 'soon' }
   | { kind: 'failed' };
 
 const topicWrites = new Map<string, TopicWriteState>();
@@ -154,15 +156,18 @@ export async function writeTopic(topicId: string): Promise<void> {
   if (topicWrites.get(topicId)?.kind === 'writing') return;
   setTopicWrite(topicId, { kind: 'writing' });
   try {
-    const { status, waiting } = (await writeHelmTopicCallable({ topicId }))
-      .data;
+    const { status, waiting, retry } = (
+      await writeHelmTopicCallable({ topicId })
+    ).data;
     setTopicWrite(
       topicId,
       status === 'limited'
         ? { kind: 'limited', waiting }
-        : status === 'failed'
-          ? { kind: 'failed' }
-          : null,
+        : status === 'busy' && retry === 'soon'
+          ? { kind: 'soon' }
+          : status === 'failed'
+            ? { kind: 'failed' }
+            : null,
     );
   } catch (error) {
     console.error('Helm could not write a topic', error);

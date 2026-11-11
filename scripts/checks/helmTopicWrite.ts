@@ -567,6 +567,7 @@ const context = buildContext({
   tasks: [],
   notes: [{ id: 'a1', title: 'Tyre pressure', body: '' }],
   focusedTopic: {
+    id: 'topic-1',
     name: 'Car care',
     sections: [
       {
@@ -592,7 +593,8 @@ const document = JSON.parse(block) as {
   sections: { markdown: string; sourceAliases: string[] }[];
 };
 assert.equal(document.name, 'Car care');
-assert.deepEqual(document.sections[0].sourceAliases, ['n1']);
+assert.deepEqual(document.sections[0].sourceAliases, ['d1', 'n1']);
+assert.equal(context.parts.idOf('d1'), 'topic-1');
 assert.equal(context.notes.idOf('n1'), 'a1');
 assert.equal(
   document.sections.reduce((sum, s) => sum + s.markdown.length, 0),

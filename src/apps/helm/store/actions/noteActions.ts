@@ -74,6 +74,7 @@ export async function createNote(
   encryption: HelmEncryption,
   input: NoteWords,
   noteCount: number,
+  topicById: ReadonlyMap<string, Pick<Topic, 'docState'>> = new Map(),
 ): Promise<NoteMade> {
   const words = toWords(input);
   if (!words.title && !words.body) return { kind: 'empty' };
@@ -101,16 +102,40 @@ export async function createNote(
     ),
   };
   const ref = doc(notesOf(uid), id);
+  const batch = writeBatch(db);
+  batch.set(ref, note);
+  words.topicIds.forEach((topicId) => {
+    const topic = topicById.get(topicId);
+    if (topic) {
+      batch.update(
+        doc(topicsOf(uid), topicId),
+        withNoteAdded(topic.docState, id),
+      );
+    }
+  });
   return {
     kind: 'made',
     id,
-    written: setDoc(ref, note),
+    written: batch.commit(),
     undo: () =>
       runTransaction(db, async (transaction) => {
         const live = await transaction.get(ref);
         if (!live.exists()) return true;
         if ((live.data() as Note).lastEditedAt !== null) return false;
+        const topics = await Promise.all(
+          (live.data() as Note).topicIds.map((topicId) =>
+            transaction.get(doc(topicsOf(uid), topicId)),
+          ),
+        );
         transaction.delete(ref);
+        topics
+          .filter((snapshot) => snapshot.exists())
+          .forEach((snapshot) =>
+            transaction.update(
+              snapshot.ref,
+              withNoteRemoved(snapshot.data() as Topic, id),
+            ),
+          );
         return true;
       }),
   };
@@ -157,6 +182,11 @@ export async function editNote(
         (id) => !after.topicIds.includes(id),
       );
       const isTopicsChanged = addedTopics.length + removedTopics.length > 0;
+      const topicSnapshots = await Promise.all(
+        [...addedTopics, ...removedTopics].map((id) =>
+          transaction.get(doc(topicsOf(uid), id)),
+        ),
+      );
       const topicIds = [
         ...data.topicIds.filter((id) => !removedTopics.includes(id)),
         ...addedTopics.filter((id) => !data.topicIds.includes(id)),
@@ -181,6 +211,15 @@ export async function editNote(
         ...(isTopicsChanged ? { topicIds } : {}),
         checkedAt: now,
         lastEditedAt: now,
+      });
+      topicSnapshots.forEach((snapshot) => {
+        if (!snapshot.exists()) return;
+        transaction.update(
+          snapshot.ref,
+          addedTopics.includes(snapshot.id)
+            ? withNoteAdded((snapshot.data() as Topic).docState, noteId)
+            : withNoteRemoved(snapshot.data() as Topic, noteId),
+        );
       });
       return {
         kind: 'saved',

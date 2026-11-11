@@ -20,7 +20,6 @@ export const MAX_SCREEN_VISIBLE = 20;
 export interface ScreenRefs {
   view: string;
   focusId: string | null;
-  /** The topic a `topic` page shows. */
   topicId?: string;
   /** Each kept id with its 1-based place in the list the client sent, so "the second one" still points at the second row once others drop out. */
   visible: { id: string; position: number }[];

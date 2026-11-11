@@ -219,7 +219,7 @@ export interface PlaceRead {
 
 /** A record an answer rests on, as stored with the answer. */
 export type SourceRef =
-  | { kind: 'task' | 'fact'; id: string }
+  | { kind: 'task' | 'fact' | 'topic'; id: string }
   | {
       kind: 'note';
       id: string;

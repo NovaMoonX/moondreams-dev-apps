@@ -147,7 +147,13 @@ function NoteFormFields({
         }
         addToast({ title: refusalLine(result.kind), type: 'info' });
       } else {
-        const result = await createNote(user.uid, encryption, words, noteCount);
+        const result = await createNote(
+          user.uid,
+          encryption,
+          words,
+          noteCount,
+          topicById,
+        );
         if (result.kind === 'made') {
           result.written.catch(reportFailure);
           undoToast(

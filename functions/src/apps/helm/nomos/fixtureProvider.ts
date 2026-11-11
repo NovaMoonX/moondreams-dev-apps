@@ -550,6 +550,33 @@ function readNoteAnswer(question: string, words: string[], message: string) {
     : toAnswer({ scope: 'yourThings', question, ...records });
 }
 
+interface ListedPart {
+  heading: string | null;
+  markdown: string;
+  sourceAliases: string[];
+}
+
+function readPartAnswer(question: string, words: string[], message: string) {
+  const document = readBlock<{ sections: ListedPart[] }>(
+    message,
+    'topic_document',
+  );
+  const found = document?.sections.find(
+    (part) =>
+      part.sourceAliases.length > 0 &&
+      words.some((word) =>
+        `${part.heading ?? ''} ${part.markdown}`.toLowerCase().includes(word),
+      ),
+  );
+  if (!found) return null;
+  return toAnswer({
+    scope: 'yourThings',
+    question,
+    fromRecordsText: found.markdown.replace(/\s+/g, ' ').trim().slice(0, 1_100),
+    sourceAliases: [found.sourceAliases[0]],
+  });
+}
+
 /** The alias of the first topic whose name shares its first four letters with a word of the question; null when none does. */
 const readSuggestedTopic = (words: string[], message: string) =>
   (readBlock<{ alias: string; name: string }[]>(message, 'your_topics') ?? [])
@@ -579,6 +606,8 @@ function readQuestion(text: string, message: string) {
   const words = lower
     .split(/[^\p{L}\p{N}]+/u)
     .filter((word) => word.length > 2 && !QUESTION_WORDS.has(word));
+  const fromPart = readPartAnswer(question, words, message);
+  if (fromPart) return fromPart;
   const own = readSelfAnswer(question, words, message);
   if (own) return own;
   const fromNote = readNoteAnswer(question, words, message);

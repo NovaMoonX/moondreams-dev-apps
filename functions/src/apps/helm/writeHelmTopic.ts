@@ -62,12 +62,14 @@ const LOOP_LIMITS = { maxTurns: 2, maxToolCalls: 0, maxMillis: 45_000 };
 const MAX_CHILDREN_READ = 20;
 const OUTLINE_CHARS = 300;
 const MAX_DELETES = 400;
+const OVERVIEW_LIMITS = { ...LOOP_LIMITS, maxMillis: 20_000 };
 
 export interface WriteTopicResult {
   status: 'written' | 'current' | 'busy' | 'limited' | 'failed';
   version: number;
   broughtIn: number;
   waiting: number;
+  retry: 'soon' | 'tomorrow' | null;
 }
 
 interface TopicDoc {
@@ -120,11 +122,13 @@ const result = (
   topic: Pick<TopicDoc, 'version' | 'pendingNoteIds'>,
   broughtIn = 0,
   waiting: number = topic.pendingNoteIds.length,
+  retry: WriteTopicResult['retry'] = null,
 ): WriteTopicResult => ({
   status,
   version: topic.version,
   broughtIn,
   waiting,
+  retry,
 });
 
 type Claimed =
@@ -228,6 +232,7 @@ async function askModel(
     system: string;
     message: string;
     terminalTool: typeof SUBMIT_TOPIC_TOOL;
+    limits?: typeof LOOP_LIMITS;
   },
 ) {
   const loop = await provider.runToolLoop({
@@ -236,7 +241,7 @@ async function askModel(
     messages: [{ role: 'user', content: request.message }],
     mcpClient: NO_TOOLS,
     terminalTool: request.terminalTool,
-    limits: LOOP_LIMITS,
+    limits: request.limits ?? LOOP_LIMITS,
     onUsage: async (usage) => {
       const cost = getUsageCost(role, usage);
       if (cost <= 0) return;
@@ -263,7 +268,6 @@ interface NoteWords {
   sourceMediaId: string | null;
 }
 
-/** The notes this write may bring in: still filed under the topic and readable, oldest first. */
 async function readPendingNotes(
   firestore: Firestore,
   base: string,
@@ -345,7 +349,6 @@ async function readCaptureTimes(
   );
 }
 
-/** Notes the document cites that were deleted or are no longer filed under the topic. */
 async function readGoneNotes(
   firestore: Firestore,
   base: string,
@@ -424,17 +427,35 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     return result('current', topic, 0, 0);
   }
 
+  const provider = pickProvider();
+  if (!provider) throw new Error('noModelKey');
   const hasDay = await reserveTopicWrite(firestore, uid, now);
-  const held = hasDay ? await reserveAiCall(firestore, uid, now, 'full') : true;
+  const held = hasDay
+    ? await reserveAiCall(firestore, uid, now, 'full').catch(
+        async (error: unknown) => {
+          await releaseTopicWrite(firestore, uid, now).catch(() =>
+            logger.error('helm.topic.releaseWriteFailed'),
+          );
+          throw error;
+        },
+      )
+    : 'dailyLimit';
   if (held) {
     if (hasDay) await releaseTopicWrite(firestore, uid, now);
     await release(firestore, topicRef, claimId, 'behind');
-    return result('limited', topic);
+    return held === 'recentLimit'
+      ? result('busy', topic, 0, undefined, 'soon')
+      : result('limited', topic, 0, undefined, 'tomorrow');
   }
 
-  const provider = pickProvider();
-  if (!provider) throw new Error('noModelKey');
-  const captureTimes = await readCaptureTimes(firestore, base, notes);
+  const captureTimes = await readCaptureTimes(firestore, base, notes).catch(
+    async (error: unknown) => {
+      await releaseTopicWrite(firestore, uid, now).catch(() =>
+        logger.error('helm.topic.releaseWriteFailed'),
+      );
+      throw error;
+    },
+  );
   const fresh = new Map<string, TopicSource>(
     notes.map((note) => [
       note.id,
@@ -540,7 +561,7 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
       category: 'organize',
       autonomyLevel: AUTOMATIC_LEVEL,
       state: 'succeeded',
-      effectRefs: [{ op: 'update', collection: 'topics', docId: topicId }],
+      effectRefs: [],
       linkedWhoIds: [],
       linkedPlaceIds: [],
       undoesExecutionId: null,
@@ -553,16 +574,7 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
       sealed: seal({
         summary: describeWrite(name, reason, taken.length),
         commands: [],
-        effects: [
-          {
-            written: { version, docState, 'sealed.title': name },
-            previous: {
-              version: current.version,
-              docState: topic.docState,
-              'sealed.title': name,
-            },
-          },
-        ],
+        effects: [],
         undoReport: null,
         spoken: null,
         goneIds: null,
@@ -593,10 +605,10 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     version: committed.version,
     broughtIn: taken.length,
     waiting: committed.waiting,
+    retry: null,
   };
 }
 
-/** Writes the parent's overview when the child's new version is not the one it was written from. */
 async function refreshOverview(
   firestore: Firestore,
   base: string,
@@ -622,7 +634,7 @@ async function refreshOverview(
       const child = toTopicDoc(doc.data());
       const words = openWords(key, child.sealed);
       const childSections = toSections(words);
-      return typeof words.name === 'string'
+      return typeof words.name === 'string' && child.version > 0
         ? [
             {
               id: doc.id,
@@ -639,6 +651,7 @@ async function refreshOverview(
       return [];
     }
   });
+  if (children.length === 0) return;
   const parentWords = openWords(key, parent.sealed);
   const reply = await askModel(firestore, provider, 'topicOverview', {
     system: TOPIC_OVERVIEW_PROMPT,
@@ -651,6 +664,7 @@ async function refreshOverview(
       })),
     }),
     terminalTool: SUBMIT_OVERVIEW_TOOL,
+    limits: OVERVIEW_LIMITS,
   });
   const overview =
     typeof (reply as { overview?: unknown } | null)?.overview === 'string'

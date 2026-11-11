@@ -2,9 +2,11 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 
+import BackLink from '@/components/BackLink';
 import DetailSheet from '@/components/DetailSheet';
+import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
@@ -29,6 +31,11 @@ const ROW =
 
 const whenOf = (at: number) => `${formatDateShort(at)}, ${formatTime(at)}`;
 
+const rowTitle = (entry: OpenTopicVersion) =>
+  entry.reason === 'personEdit' && entry.changeSummary
+    ? entry.changeSummary
+    : HELM_COPY.historyReason(entry.reason);
+
 const failureLine = (kind: Exclude<DocumentChange, 'saved'>) =>
   kind === 'offline'
     ? HELM_COPY.historyNeedsConnection
@@ -47,7 +54,6 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
   const { versions, hasFailed } = useTopicVersions(topic.id);
   const [openVersion, setOpenVersion] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const newest = versions?.[0]?.version ?? null;
   const opened =
     versions?.find((entry) => entry.version === openVersion) ?? null;
   const lineOf = (entry: OpenTopicVersion) =>
@@ -58,20 +64,26 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
       assistant,
     );
 
-  const change = async (target: number) => {
-    if (!user || newest === null || isBusy) return;
+  const change = async (target: number, undoneSummary: string | null) => {
+    if (!user || isBusy) return;
     setIsBusy(true);
     try {
       const result = await restoreTopicVersion(
         user.uid,
         await getHelmEncryption(user.uid),
         topic.id,
-        newest,
+        topic.version,
         target,
       );
       if (result === 'saved') {
         setOpenVersion(null);
-        addToast({ title: HELM_COPY.historyRestored(target), type: 'success' });
+        addToast({
+          title:
+            undoneSummary === null
+              ? HELM_COPY.historyRestored(target)
+              : HELM_COPY.historyUndone(undoneSummary),
+          type: 'success',
+        });
       } else {
         addToast({ title: failureLine(result), type: 'info' });
       }
@@ -82,8 +94,9 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
     setIsBusy(false);
   };
 
-  const isNewest = opened !== null && opened.version === newest;
+  const isNewest = opened !== null && opened.version === topic.version;
   const isFirst = opened !== null && opened.version === 1;
+  const canChange = opened !== null && opened.version <= topic.version;
 
   return (
     <DetailSheet
@@ -97,13 +110,16 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
       viewKey={opened ? `version-${opened.version}` : 'list'}
       footer={
         opened &&
+        canChange &&
         !isFirst && (
           <div className='px-6 pt-2 pb-3'>
             <ModalFooterActions
               note={
-                isNewest
-                  ? HELM_COPY.historyUndoHint
-                  : HELM_COPY.historyRestoreHint
+                !isNewest
+                  ? HELM_COPY.historyRestoreHint
+                  : opened.createdBy === 'nomos'
+                    ? `${HELM_COPY.historyUndoHint} ${HELM_COPY.historyUndoNotesHint}`
+                    : HELM_COPY.historyUndoHint
               }
               rightActions={
                 <Button
@@ -111,7 +127,10 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                   variant='secondary'
                   loading={isBusy}
                   onClick={() =>
-                    void change(isNewest ? opened.version - 1 : opened.version)
+                    void change(
+                      isNewest ? opened.version - 1 : opened.version,
+                      isNewest ? rowTitle(opened) : null,
+                    )
                   }
                 >
                   {isNewest
@@ -126,16 +145,10 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
     >
       {opened ? (
         <div className='space-y-4'>
-          <Button
-            type='button'
-            variant='tertiary'
-            size='sm'
-            className="relative -ml-2 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
-            onClick={() => setOpenVersion(null)}
-          >
-            <ChevronLeft className='size-4' aria-hidden='true' />
-            {HELM_COPY.historyTitle(topic.name)}
-          </Button>
+          <BackLink
+            onBack={() => setOpenVersion(null)}
+            label={HELM_COPY.historyTitle(topic.name)}
+          />
           <div className='space-y-1'>
             <p className='text-foreground text-[15px] font-semibold'>
               {HELM_COPY.historyReason(opened.reason)}
@@ -164,6 +177,16 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
               {HELM_COPY.historyFirstVersion}
             </p>
           )}
+          {opened.sections.map((section) => (
+            <section key={section.id} className='space-y-2'>
+              {section.heading && (
+                <h3 className='text-foreground text-[15px] leading-[21px] font-semibold'>
+                  {section.heading}
+                </h3>
+              )}
+              <MarkdownText text={section.markdown} />
+            </section>
+          ))}
         </div>
       ) : hasFailed ? (
         <p className='text-muted-foreground text-[15px]'>
@@ -186,16 +209,17 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                 >
                   <span className='min-w-0 flex-1'>
                     <span className='text-foreground block text-[15px] leading-[21px] break-words'>
-                      {HELM_COPY.historyReason(entry.reason)}
+                      {rowTitle(entry)}
                     </span>
-                    {entry.changeSummary && (
-                      <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
-                        {entry.changeSummary}
-                      </span>
-                    )}
+                    {entry.changeSummary &&
+                      rowTitle(entry) !== entry.changeSummary && (
+                        <span className='text-muted-foreground line-clamp-2 text-[13px] break-words'>
+                          {entry.changeSummary}
+                        </span>
+                      )}
                     <span className='text-muted-foreground block text-[13px]'>
                       {lineOf(entry)}
-                      {entry.version === newest &&
+                      {entry.version === topic.version &&
                         ` · ${HELM_COPY.historyNewest}`}
                     </span>
                   </span>

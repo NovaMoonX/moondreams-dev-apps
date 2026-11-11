@@ -1,8 +1,9 @@
 import { useId, useState } from 'react';
 
 import { Button, Input, Textarea } from '@moondreamsdev/dreamer-ui/components';
-import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
 
+import DeleteIconButton from '@/components/DeleteIconButton';
 import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,6 +16,7 @@ import {
 } from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
+  removeTopicSection,
   saveTopicSection,
   type DocumentChange,
 } from '@apps/helm/store/actions/topicActions';
@@ -24,6 +26,8 @@ interface SectionEditSheetProps {
   isOpen: boolean;
   onClose: () => void;
   topicId: string;
+  /** The topic's version now; the editor keeps the one it opened on and refuses to overwrite a newer one. */
+  version: number;
   /** The part being changed; null adds a new one at the end. */
   section: TopicSection | null;
 }
@@ -50,6 +54,7 @@ const refusalLine = (kind: Exclude<DocumentChange, 'saved'>) =>
 
 function SectionForm({
   topicId,
+  version,
   section,
   onClose,
   requestClose,
@@ -57,6 +62,9 @@ function SectionForm({
 }: SectionFormProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { confirm } = useActionModal();
+  const [seenVersion] = useState(version);
+  const [isChanged, setIsChanged] = useState(false);
   const fieldId = useId();
   const [heading, setHeading] = useState(section?.heading ?? '');
   const [markdown, setMarkdown] = useState(section?.markdown ?? '');
@@ -85,6 +93,7 @@ function SectionForm({
         topicId,
         section?.id ?? null,
         { heading: heading || null, level: section?.level ?? 2, markdown },
+        section ? seenVersion : null,
       );
       if (result === 'saved') {
         addToast({
@@ -94,12 +103,42 @@ function SectionForm({
         onClose();
         return;
       }
-      addToast({
-        title: refusalLine(result === 'first' ? 'changed' : result),
-        type: 'info',
-      });
+      if (result === 'changed') setIsChanged(true);
+      else addToast({ title: refusalLine(result), type: 'info' });
     } catch (error) {
       console.error('Helm topic part was not saved', error);
+      addToast({ title: HELM_COPY.editFailed, type: 'error' });
+    }
+    setIsBusy(false);
+  };
+
+  const remove = async () => {
+    if (!user || !section || isBusy) return;
+    const isConfirmed = await confirm({
+      title: HELM_COPY.sectionRemoveTitle,
+      message: HELM_COPY.sectionRemoveConfirm,
+      confirmText: HELM_COPY.sectionRemoveAction,
+      destructive: true,
+    });
+    if (!isConfirmed) return;
+    setIsBusy(true);
+    try {
+      const result = await removeTopicSection(
+        user.uid,
+        await getHelmEncryption(user.uid),
+        topicId,
+        section.id,
+        seenVersion,
+      );
+      if (result === 'saved') {
+        addToast({ title: HELM_COPY.sectionRemoved, type: 'success' });
+        onClose();
+        return;
+      }
+      if (result === 'changed') setIsChanged(true);
+      else addToast({ title: refusalLine(result), type: 'info' });
+    } catch (error) {
+      console.error('Helm topic part was not removed', error);
       addToast({ title: HELM_COPY.editFailed, type: 'error' });
     }
     setIsBusy(false);
@@ -139,7 +178,22 @@ function SectionForm({
         </p>
       </div>
       <ModalFooterActions
-        note={isTouched && isMissing ? HELM_COPY.sectionWordsMissing : null}
+        note={
+          isChanged
+            ? HELM_COPY.sectionChangedSince
+            : isTouched && isMissing
+              ? HELM_COPY.sectionWordsMissing
+              : null
+        }
+        leftActions={
+          section ? (
+            <DeleteIconButton
+              label={HELM_COPY.sectionRemoveAria}
+              disabled={isBusy}
+              onClick={() => void remove()}
+            />
+          ) : undefined
+        }
         cancelAction={
           <Button
             type='button'
@@ -165,6 +219,7 @@ function SectionEditSheet({
   isOpen,
   onClose,
   topicId,
+  version,
   section,
 }: SectionEditSheetProps) {
   const [isDirty, setIsDirty] = useState(false);
@@ -183,6 +238,7 @@ function SectionEditSheet({
       {isOpen && (
         <SectionForm
           topicId={topicId}
+          version={version}
           section={section}
           onClose={close}
           requestClose={requestClose}

@@ -10,6 +10,7 @@ import { ChevronRight, Plus } from 'lucide-react';
 import MarkdownText from '@/components/MarkdownText';
 import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import NoteRow from '@apps/helm/components/knowledge/NoteRow';
@@ -29,6 +30,7 @@ import {
   writeTopic,
 } from '@apps/helm/queries/nomosMutations';
 import {
+  CLAIM_MS,
   deleteTopic,
   isUnavailable,
   moveTopic,
@@ -132,9 +134,16 @@ function TopicScreen({
     topic?.id ?? null,
   );
 
+  const now = useNow(15_000);
+  const isStaleClaim =
+    topic !== null &&
+    topic.docState === 'writing' &&
+    topic.writeClaim !== null &&
+    now - topic.writeClaim.at >= CLAIM_MS;
   const isBehind =
     topic !== null &&
     (topic.docState === 'behind' ||
+      isStaleClaim ||
       topic.docState === 'failed' ||
       (topic.docState === 'empty' && notes.length > 0));
   useEffect(() => {
@@ -257,12 +266,15 @@ function TopicScreen({
   const waitingCount =
     topic === null
       ? 0
-      : topic.pendingNoteIds.length > 0
-        ? topic.pendingNoteIds.length
-        : notes.length;
+      : topic.version === 0
+        ? notes.length
+        : topic.pendingNoteIds.length;
   const statusOf = () => {
     if (!topic) return null;
-    if (write?.kind === 'writing' || topic.docState === 'writing') {
+    if (
+      write?.kind === 'writing' ||
+      (topic.docState === 'writing' && !isStaleClaim)
+    ) {
       return { line: HELM_COPY.topicBringingIn(waitingCount), action: null };
     }
     if (write?.kind === 'limited') {
@@ -271,10 +283,25 @@ function TopicScreen({
         action: HELM_COPY.topicReadThemNow,
       };
     }
-    if (write?.kind === 'failed' || topic.docState === 'failed') {
+    if (write?.kind === 'soon') {
+      return {
+        line: HELM_COPY.topicSoonLine(waitingCount),
+        action: HELM_COPY.topicTryAgain,
+      };
+    }
+    if (
+      (write?.kind === 'failed' && topic.docState !== 'current') ||
+      topic.docState === 'failed'
+    ) {
       return {
         line: HELM_COPY.topicFailedLine(waitingCount),
         action: HELM_COPY.topicTryAgain,
+      };
+    }
+    if (isBehind && waitingCount > 0) {
+      return {
+        line: HELM_COPY.topicFailedLine(waitingCount),
+        action: HELM_COPY.topicBringThemIn,
       };
     }
     return null;
@@ -414,11 +441,14 @@ function TopicScreen({
                     setSourcesId(section.id);
                 }}
               >
-                {section.heading && (
-                  <h2 className={HEADING_CLASS[section.level]}>
-                    {section.heading}
-                  </h2>
-                )}
+                {section.heading &&
+                  (section.level === 3 ? (
+                    <h3 className={HEADING_CLASS[3]}>{section.heading}</h3>
+                  ) : (
+                    <h2 className={HEADING_CLASS[section.level]}>
+                      {section.heading}
+                    </h2>
+                  ))}
                 <MarkdownText text={section.markdown} />
                 <Button
                   type='button'
@@ -505,6 +535,7 @@ function TopicScreen({
             }
             onClose={() => setEditing(null)}
             topicId={topic.id}
+            version={topic.version}
             section={editingSection}
           />
           <VersionsSheet

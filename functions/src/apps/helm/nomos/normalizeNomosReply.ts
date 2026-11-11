@@ -185,8 +185,11 @@ const toSource = (
   aliases: AliasBook,
   synced: SyncedBook | undefined,
   facts: AliasBook | undefined,
+  parts: AliasBook | undefined,
 ): SourceRef | null => {
   if (typeof alias !== 'string') return null;
+  const topicId = parts?.idOf(alias);
+  if (topicId) return { kind: 'topic', id: topicId };
   const taskId = aliases.idOf(alias);
   if (taskId) return { kind: 'task', id: taskId };
   const factId = facts?.idOf(alias);
@@ -215,6 +218,7 @@ const readAnswer = (
   facts: AliasBook | undefined,
   notes: AliasBook | undefined,
   topics: AliasBook | undefined,
+  parts: AliasBook | undefined,
 ): AnswerCommand | null => {
   const scope = ANSWER_SCOPES.find((entry) => entry === item.scope);
   const question = toText(item.question, QUESTION_CAP);
@@ -229,7 +233,7 @@ const readAnswer = (
     isHealth: item.isHealth === true,
     fromRecordsText: toText(item.fromRecordsText, ANSWER_TEXT_CAP),
     sources: listed.flatMap((alias: unknown) => {
-      const source = toSource(alias, aliases, synced, facts);
+      const source = toSource(alias, aliases, synced, facts, parts);
       return source ? [source] : [];
     }),
     quotes: listedQuotes.flatMap((alias: unknown) => {
@@ -985,6 +989,7 @@ export function normalizeNomosReply(
     keyDates?: AliasBook;
     topics?: AliasBook;
     notes?: AliasBook;
+    parts?: AliasBook;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -1030,6 +1035,7 @@ export function normalizeNomosReply(
           context.facts,
           context.notes,
           context.topics,
+          context.parts,
         );
         return read ? [read] : [];
       })[0] ?? null;

@@ -1068,7 +1068,6 @@ async function readScreenTasks(
   };
 }
 
-/** The topic the person is reading, opened under their own account, for a question asked from its page; null when there is none or it will not open. */
 async function readFocusedTopic(
   firestore: Firestore,
   base: string,
@@ -1091,6 +1090,7 @@ async function readFocusedTopic(
       : [];
     return typeof words.name === 'string'
       ? {
+          id: topicId,
           name: words.name,
           sections: sections.map((section) => ({
             heading: section.heading,
@@ -1106,7 +1106,6 @@ async function readFocusedTopic(
   }
 }
 
-/** The notes a focused document cites, as titles the answer can name as its sources; their words are already in the document. */
 async function readCitedNotes(
   firestore: Firestore,
   base: string,
@@ -1698,6 +1697,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     keyDates: context.keyDates,
     topics: context.topics,
     notes: context.notes,
+    parts: context.parts,
     captureText: combined.text,
     quotes,
     alreadyMade,

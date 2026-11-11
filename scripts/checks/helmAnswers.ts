@@ -728,6 +728,64 @@ const tests: [string, () => void | Promise<void>][] = [
     },
   ],
   [
+    'a part of a topic document is a citable source, and wins over a note that disagrees',
+    async () => {
+      const text = 'How much air do the tyres need?';
+      const context = buildContext({
+        text,
+        reading: READING,
+        createdAt: Date.UTC(2026, 10, 10, 12),
+        timeZone: 'UTC',
+        tasks: [],
+        notes: [{ id: 'note-1', title: 'Tyres', body: 'Tyres need 30 psi.' }],
+        focusedTopic: {
+          id: 'topic-1',
+          name: 'Car care',
+          sections: [
+            { heading: 'Oil', markdown: 'Every 10,000 km.', noteIds: [] },
+            {
+              heading: 'Tyres',
+              markdown: 'Tyres need 32 psi.',
+              noteIds: ['note-1'],
+            },
+          ],
+        },
+      });
+      assert.equal(context.parts.idOf('d1'), 'topic-1');
+      assert.equal(context.parts.idOf('d2'), 'topic-1');
+      const loop = await createFixtureProvider(text, READING).runToolLoop({
+        role: 'interpret',
+        system: '',
+        messages: [{ role: 'user', content: context.message }],
+        terminalTool: {
+          name: 'file_results',
+          description: '',
+          inputSchema: {},
+        },
+        limits: { maxTurns: 1, maxToolCalls: 1, maxMillis: 5_000 },
+      } as never);
+      const reply = normalizeNomosReply(loop.terminalInput, {
+        reading: READING,
+        aliases: context.aliases,
+        synced: context.synced,
+        notes: context.notes,
+        parts: context.parts,
+      });
+      assert.ok(reply.answer);
+      assert.ok(reply.answer.fromRecordsText?.includes('32 psi'));
+      assert.deepEqual(reply.answer.sources, [
+        { kind: 'topic', id: 'topic-1' },
+      ]);
+      const drops: string[] = [];
+      const built = buildAnswer(reply.answer, (code) => drops.push(code));
+      assert.deepEqual(drops, []);
+      assert.deepEqual(built.answer.sources, [
+        { kind: 'topic', id: 'topic-1' },
+      ]);
+      assert.ok(built.answer.fromRecords?.includes('32 psi'));
+    },
+  ],
+  [
     'the emulator answers each kind of question through the guards',
     async () => {
       const ask = async (text: string, isCake = true) => {

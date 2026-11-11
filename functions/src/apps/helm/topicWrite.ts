@@ -201,7 +201,6 @@ const isHeadingOk = (heading: string | null) =>
   heading === null ||
   (heading.trim() !== '' && heading.length <= MAX_HEADING_CHARS);
 
-/** A kept section keeps its notes: a replacement must cite every note the old words cited, unless that note is gone. */
 const isMissingSource = (
   replaced: TopicSection[],
   sources: TopicSource[],
@@ -368,9 +367,7 @@ const applyOne = (
 export const applyTopicChanges = (input: {
   sections: TopicSection[];
   changes: ModelChange[];
-  /** What each note the model may cite is: the notes of this write and the ones the document already cites. */
   known: Map<string, TopicSource>;
-  /** Notes cited by the document that no longer exist. */
   gone?: ReadonlySet<string>;
   newId: () => string;
 }): ApplyResult => {

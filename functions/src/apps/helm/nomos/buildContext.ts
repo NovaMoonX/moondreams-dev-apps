@@ -115,11 +115,11 @@ export interface ContextInput {
   topics?: ContextTopic[];
   /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
   notes?: ContextNote[];
-  /** The topic document the person is reading, answered from whole. */
   focusedTopic?: ContextFocusedTopic | null;
 }
 
 export interface ContextFocusedTopic {
+  id: string;
   name: string;
   sections: { heading: string | null; markdown: string; noteIds: string[] }[];
 }
@@ -171,10 +171,20 @@ export function buildContext(input: ContextInput): {
   keyDates: AliasBook;
   topics: AliasBook;
   notes: AliasBook;
+  parts: AliasBook;
 } {
   const aliases = createAliasBook('t');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
+  const partIds = new Map<string, string>();
+  const parts: AliasBook = {
+    add: (id) => {
+      const alias = `d${partIds.size + 1}`;
+      partIds.set(alias, id);
+      return alias;
+    },
+    idOf: (alias) => partIds.get(alias) ?? null,
+  };
   const facts = createAliasBook('f');
   const keyDates = createAliasBook('k');
   const synced = createSyncedBook();
@@ -215,10 +225,11 @@ export function buildContext(input: ContextInput): {
     ...(note.isUnchecked ? { savedFromGeneralAnswer: true } : {}),
   }));
   const noteIds = new Set(keptNotes.map((note) => note.id));
-  const topicDocument = input.focusedTopic
+  const focused = input.focusedTopic;
+  const topicDocument = focused
     ? {
-        name: input.focusedTopic.name,
-        sections: input.focusedTopic.sections.reduce<
+        name: focused.name,
+        sections: focused.sections.reduce<
           {
             heading: string | null;
             markdown: string;
@@ -237,9 +248,12 @@ export function buildContext(input: ContextInput): {
                 {
                   heading: section.heading,
                   markdown: section.markdown.slice(0, room),
-                  sourceAliases: section.noteIds
-                    .filter((id) => noteIds.has(id))
-                    .map((id) => notes.add(id)),
+                  sourceAliases: [
+                    parts.add(focused.id),
+                    ...section.noteIds
+                      .filter((id) => noteIds.has(id))
+                      .map((id) => notes.add(id)),
+                  ],
                 },
               ];
         }, []),
@@ -345,7 +359,7 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced, facts, keyDates, topics, notes };
+  return { message, aliases, synced, facts, keyDates, topics, notes, parts };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */
