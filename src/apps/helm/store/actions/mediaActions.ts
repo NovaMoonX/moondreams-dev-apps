@@ -12,9 +12,10 @@ import {
   where,
   writeBatch,
 } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import { getBytes, ref, uploadBytes } from 'firebase/storage';
 
-import { db, storage } from '@lib/firebase/config';
+import { db, functions, storage } from '@lib/firebase/config';
 import { deleteFile } from '@lib/firebase/storage';
 
 import { generateUuid } from '@/utils/idUtils';
@@ -26,6 +27,7 @@ import type {
   HelmEncryption,
   Media,
   MediaAttachment,
+  MediaKind,
   MediaSealed,
   OpenMedia,
   PhotoOwner,
@@ -35,7 +37,10 @@ import {
   LET_GO_WINDOW_MS,
   MEDIA_SWEEP_LIMIT,
 } from '@apps/helm/utils/mediaCaps';
-import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
+import {
+  getMediaObjectPath,
+  getMediaObjectPaths,
+} from '@apps/helm/utils/mediaPath';
 
 export type { PhotoOwner };
 
@@ -72,8 +77,6 @@ const mainOf = (data: DocumentData, owner: PhotoOwner) =>
       ? data.photoMediaId
       : null
     : (idsOf(data, owner)[0] ?? null);
-
-const bytesOf = async (file: File) => new Uint8Array(await file.arrayBuffer());
 
 const uploadSealed = (path: string, bytes: Uint8Array) =>
   uploadBytes(ref(storage, path), bytes, {
@@ -130,33 +133,47 @@ const putObjectsBack = (held: HeldObject[], gone: string[]) =>
     ),
   );
 
-/** Seals a photo and its thumbnail on this device and writes its document as `uploading`, due to be swept in a day, so a failed upload is marked; the objects are uploaded by `upload`, and `letGo` deletes whatever got there. */
+/** What a medium is made of, before it is sealed: the bytes of a photo, PDF or voice note (none for Markdown, whose text goes in the document), a photo's thumbnail, and what the device measured. */
+export interface MediaInput {
+  kind: MediaKind;
+  mimeType: string;
+  file: Blob | null;
+  thumb: Blob | null;
+  durationMs: number | null;
+  pageCount: number | null;
+  fileName: string | null;
+  text: string | null;
+}
+
+const toBytes = async (blob: Blob) => new Uint8Array(await blob.arrayBuffer());
+
+/** Seals a medium on this device and writes its document as `uploading`, due to be swept in a day, so a failed upload is marked (a Markdown file has no object, so it is written as `received`); the objects are uploaded by `upload`, and `letGo` deletes whatever got there. */
 async function startUpload(
   uid: string,
   encryption: HelmEncryption,
-  picture: { file: File; thumb: File },
+  input: MediaInput,
   role: Media['role'],
 ) {
-  if (!picture.file.type.startsWith('image/')) {
+  const { kind, file, thumb } = input;
+  if (kind === 'photo' && !input.mimeType.startsWith('image/')) {
     throw new Error('A photo has to be an image.');
   }
   const id = generateUuid();
-  const paths = [
-    getMediaObjectPath(uid, id, false),
-    getMediaObjectPath(uid, id, true),
-  ];
+  const paths = getMediaObjectPaths(uid, id, kind, thumb !== null);
   const [sealedBytes, sealedThumb] = await Promise.all([
-    bytesOf(picture.file).then((bytes) => sealBytes(bytes, encryption)),
-    bytesOf(picture.thumb).then((bytes) => sealBytes(bytes, encryption)),
+    file ? toBytes(file).then((bytes) => sealBytes(bytes, encryption)) : null,
+    thumb ? toBytes(thumb).then((bytes) => sealBytes(bytes, encryption)) : null,
   ]);
   const now = Date.now();
   const mediaRef = doc(mediaOf(uid), id);
   const uploading: Media = {
-    kind: 'photo',
+    kind,
     role,
-    status: 'uploading',
-    mimeType: picture.file.type,
-    hasThumb: true,
+    status: kind === 'markdown' ? 'received' : 'uploading',
+    mimeType: input.mimeType,
+    hasThumb: sealedThumb !== null,
+    durationMs: input.durationMs,
+    pageCount: input.pageCount,
     attachedTo: [],
     decidedBy: null,
     createdAt: now,
@@ -166,10 +183,12 @@ async function startUpload(
     executionId: null,
     sealed: await sealJson<MediaSealed>(
       {
-        bytesNonce: sealedBytes.nonce,
-        thumbNonce: sealedThumb.nonce,
+        bytesNonce: sealedBytes?.nonce ?? null,
+        thumbNonce: sealedThumb?.nonce ?? null,
         caption: null,
         keyId: encryption.keyId,
+        fileName: input.fileName,
+        text: input.text,
       },
       encryption,
     ),
@@ -180,10 +199,11 @@ async function startUpload(
     now,
     mediaRef,
     upload: () =>
-      Promise.all([
-        uploadSealed(paths[0], sealedBytes.bytes),
-        uploadSealed(paths[1], sealedThumb.bytes),
-      ]),
+      Promise.all(
+        [sealedBytes, sealedThumb].flatMap((sealed, index) =>
+          sealed ? [uploadSealed(paths[index], sealed.bytes)] : [],
+        ),
+      ),
     letGo: async () => {
       const gone = await deleteObjects(paths);
       if (gone.length === paths.length) await deleteDoc(mediaRef);
@@ -201,7 +221,16 @@ export async function addPhoto(
   const { id, now, mediaRef, upload, letGo } = await startUpload(
     uid,
     encryption,
-    picture,
+    {
+      kind: 'photo',
+      mimeType: picture.file.type,
+      file: picture.file,
+      thumb: picture.thumb,
+      durationMs: null,
+      pageCount: null,
+      fileName: null,
+      text: null,
+    },
     'photo',
   );
 
@@ -440,21 +469,23 @@ export async function removePhoto(
   };
 }
 
-/** Uploads a photo sent with a turn, sealed on this device: the document is `uploading` first and `received` once both objects are in. Answers its id; a failure leaves nothing behind, or a document marked to be swept after a day. */
+/** Uploads a photo, PDF, voice note or Markdown file sent with a turn, sealed on this device: the document is `uploading` first and `received` once its objects are in. Answers its id; a failure leaves nothing behind, or a document marked to be swept after a day. */
 export async function uploadAttachment(
   uid: string,
   encryption: HelmEncryption,
-  picture: { file: File; thumb: File },
+  input: MediaInput,
 ) {
   const { id, mediaRef, upload, letGo } = await startUpload(
     uid,
     encryption,
-    picture,
+    input,
     'attachment',
   );
   try {
     await upload();
-    await updateDoc(mediaRef, { status: 'received' });
+    if (input.kind !== 'markdown') {
+      await updateDoc(mediaRef, { status: 'received' });
+    }
     return id;
   } catch (error) {
     await letGo().catch((cleanupError: unknown) =>
@@ -464,16 +495,11 @@ export async function uploadAttachment(
   }
 }
 
-const objectPathsOf = (uid: string, mediaId: string, hasThumb: boolean) => [
-  getMediaObjectPath(uid, mediaId, false),
-  ...(hasThumb ? [getMediaObjectPath(uid, mediaId, true)] : []),
-];
-
-/** Deletes a photo that was picked but not sent: marked to be swept first, then its objects, then its document. */
+/** Deletes a photo, PDF, voice note or Markdown file that was picked but not sent: marked to be swept first, then its objects, then its document. */
 export async function removeAttachment(
   uid: string,
   mediaId: string,
-  hasThumb: boolean,
+  kind: MediaKind,
 ) {
   const mediaRef = doc(mediaOf(uid), mediaId);
   await updateDoc(mediaRef, {
@@ -483,7 +509,7 @@ export async function removeAttachment(
   });
   await eraseObjects(
     mediaRef,
-    objectPathsOf(uid, mediaId, hasThumb).map((path) => ({
+    getMediaObjectPaths(uid, mediaId, kind, kind === 'photo').map((path) => ({
       path,
       bytes: null,
     })),
@@ -495,26 +521,49 @@ const executionsOf = (uid: string) =>
 
 export type KeepResult = 'kept' | 'gone';
 
-/** Keeps a photo the assistant let go: one transaction marks it kept on `target` (or on nothing) and writes the person's Execution, so Undo can take it back. The photo must still be there and let go. */
+export type VoiceNoteWritten =
+  { status: 'ready'; text: string } | { status: 'held'; reason: string | null };
+
+const transcribeCallable = httpsCallable<
+  { mediaId: string; timeZone: string },
+  { status: string; text?: string; reason?: string }
+>(functions, 'transcribeHelmVoiceNote');
+
+/** Has the server write out an uploaded voice note; `held` when today's allowance or the service turned it away. */
+export async function transcribeVoiceNote(
+  mediaId: string,
+  timeZone: string,
+): Promise<VoiceNoteWritten> {
+  const { data } = await transcribeCallable({ mediaId, timeZone });
+  return data.status === 'ready' && typeof data.text === 'string'
+    ? { status: 'ready', text: data.text }
+    : { status: 'held', reason: data.reason ?? null };
+}
+
+/** Keeps a photo, file or recording the assistant let go: one transaction marks it kept on `target` (or on nothing) and writes the person's Execution, so Undo can take it back. The photo must still be there and let go. */
 export async function keepLetGoMedia(
   uid: string,
   encryption: HelmEncryption,
   input: {
     captureId: string;
     mediaId: string;
+    kind: MediaKind;
+    fileName: string | null;
     target: { attachment: MediaAttachment; title: string } | null;
   },
 ): Promise<KeepResult> {
   const { captureId, mediaId, target } = input;
+  const noun = HELM_COPY.mediaNoun(input.kind, input.fileName);
   const mediaRef = doc(mediaOf(uid), mediaId);
   const executionRef = doc(executionsOf(uid));
-  const title = target?.title ?? HELM_COPY.resultPhotoFallback;
+  const title =
+    target?.title ?? HELM_COPY.mediaFallbackTitle(input.kind, input.fileName);
   const now = Date.now();
   const sealed = await sealJson<ExecutionSealed>(
     {
       summary: target
-        ? HELM_COPY.mediaKeptOn(target.title)
-        : HELM_COPY.mediaKeptNoRecord,
+        ? HELM_COPY.mediaKeptOn(noun, target.title)
+        : HELM_COPY.mediaKeptNoRecord(noun),
       commands: [],
       effects: [
         {
@@ -674,7 +723,12 @@ export async function sweepExpiredMedia(
   await Promise.allSettled(
     due.map(async (item) => {
       try {
-        const paths = objectPathsOf(uid, item.id, item.hasThumb);
+        const paths = getMediaObjectPaths(
+          uid,
+          item.id,
+          item.kind,
+          item.hasThumb,
+        );
         const gone = await deleteObjects(paths);
         if (gone.length === paths.length) {
           await deleteDoc(doc(mediaOf(uid), item.id));

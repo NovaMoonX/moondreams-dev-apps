@@ -41,7 +41,7 @@ export const hasReviseCue = (text: string) =>
     .split(' ')
     .some((word) => REVISE_CUES.has(word));
 
-/** Short plain turns go to the quick model; a turn with photos, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
+/** Short plain turns go to the quick model; a turn with photos or files, a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,
   mode,

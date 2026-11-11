@@ -14,14 +14,23 @@ import {
   Textarea,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ArrowUp, Camera, ImagePlus, Paperclip } from 'lucide-react';
+import {
+  ArrowUp,
+  Camera,
+  FileText,
+  ImagePlus,
+  Mic,
+  Paperclip,
+} from 'lucide-react';
 
 import EllipsisDropdown from '@/components/EllipsisDropdown';
 import LockedButton from '@/components/LockedButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
 import { useCanTakePhoto } from '@/hooks/useCanTakePhoto';
 import { useFormDraft, useKeepFormDraft } from '@/hooks/useFormDraft';
 import { readFormDraft, writeFormDraft } from '@lib/app/formDrafts';
+import { formatClock } from '@/utils/durationUtils';
 import { openFileChooser } from '@/utils/fileUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 
@@ -47,6 +56,7 @@ import {
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { store, useAppSelector } from '@/store';
 import { HELM_DRAFT_PREFIX } from '@apps/helm/security';
+import { MAX_VOICE_NOTE_MS } from '@apps/helm/utils/mediaCaps';
 import type { ScreenContext } from '@apps/helm/types';
 import {
   rankStoredNotes,
@@ -62,6 +72,8 @@ import {
 const { option } = DropdownMenuFactories;
 const TAKE_PHOTO = 'take';
 const CHOOSE_PHOTOS = 'choose';
+const CHOOSE_FILE = 'file';
+const RECORD = 'record';
 
 const HOME_DRAFT_KEY = `${HELM_DRAFT_PREFIX}composer`;
 
@@ -126,10 +138,36 @@ function Composer({
   const root = useRef<HTMLDivElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const libraryInput = useRef<HTMLInputElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const canTakePhoto = useCanTakePhoto();
-  const attachments = useTurnAttachments();
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const attachments = useTurnAttachments({
+    timeZone,
+    onTranscript: (words) => {
+      setText((current) =>
+        current.trim().length > 0 ? `${current.trimEnd()} ${words}` : words,
+      );
+      setTypedAt(Date.now());
+    },
+  });
+  const recorder = useAudioRecorder({
+    maxMs: MAX_VOICE_NOTE_MS,
+    onDone: (recording) => {
+      attachments.addVoiceNote(
+        new File(
+          [recording.blob],
+          `voice-note.${recording.mimeType.includes('mp4') ? 'm4a' : 'webm'}`,
+          { type: recording.mimeType },
+        ),
+        recording.durationMs,
+      );
+      if (recording.isCut) {
+        addToast({ title: HELM_COPY.recordStoppedAtLimit, type: 'info' });
+      }
+    },
+  });
+  const isRecording = recorder.state === 'recording';
   // The reading is of the words as they will be sealed, so its offsets match the trimmed text.
   const read = useMemo(
     () =>
@@ -198,7 +236,8 @@ function Composer({
   const length = text.trim().length;
   const isTooLong = length > CAPTURE_MAX_CHARS;
   const hasPhotos = attachments.mediaIds.length > 0;
-  const isHeldBackByPhotos = attachments.isUploading || attachments.hasFailed;
+  const isHeldBackByPhotos =
+    attachments.isUploading || attachments.isWriting || attachments.hasFailed;
   const canSend =
     isReady &&
     (length > 0 || hasPhotos) &&
@@ -206,6 +245,7 @@ function Composer({
     isCapturesLoaded &&
     user !== null &&
     !isTooLong &&
+    !isRecording &&
     !isHeldBackByPhotos;
   const canSaveAsNote = isTooLong && length <= NOTE_BODY_MAX;
   const isNearLimit = length >= CAPTURE_COUNTER_FROM;
@@ -216,6 +256,7 @@ function Composer({
     const sent = text;
     const attachmentIds = attachments.mediaIds;
     const sentChips = attachments.items;
+    const sentVoice = attachments.hasWrittenVoiceNote;
     const next = getNextTurn();
     // A turn with photos starts its own turn and never joins a running one.
     const turn = {
@@ -265,6 +306,9 @@ function Composer({
         noteIds: rankStoredNotes(sent),
         attachmentIds,
         ...turn,
+        ...(sentVoice
+          ? { voice: { sttProvider: 'voiceNote', interruptedCaptureId: null } }
+          : {}),
       });
       recordSentTurn(uid, turn, id);
       attachments.clear();
@@ -313,6 +357,27 @@ function Composer({
     event.target.value = '';
   };
 
+  const startRecording = () => {
+    if (!navigator.onLine) {
+      addToast({ title: HELM_COPY.recordNeedsConnection, type: 'info' });
+      return;
+    }
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    void recorder.start();
+  };
+
+  const chooseAttachment = (value: string) => {
+    if (value === RECORD) startRecording();
+    else if (value === CHOOSE_FILE) openFileChooser(fileInput.current);
+    else
+      openFileChooser(
+        value === TAKE_PHOTO ? cameraInput.current : libraryInput.current,
+        { isCamera: value === TAKE_PHOTO },
+      );
+  };
+
   return (
     <div
       ref={root}
@@ -332,45 +397,87 @@ function Composer({
         </p>
       )}
       {isFocused && isReady && <ShorthandRow onInsert={insertShorthand} />}
-      <Textarea
-        ref={fieldRef}
-        variant='outline'
-        rows={2}
-        aria-label={HELM_COPY.composerLabel(name)}
-        placeholder={waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)}
-        className='helm-field'
-        disabled={!isReady}
-        value={text}
-        onChange={(event) => {
-          if (voice.notice !== null) voice.clearNotice();
-          setText(event.target.value);
-          setTypedAt(Date.now());
-        }}
-        onKeyDown={handleKeyDown}
-        onFocus={(event) => {
-          onFocusChange(true);
-          setIsFocused(true);
-          // The keyboard shrinks the viewport after focus lands, so the field and its Send row are brought back into view each time it does.
-          const block = event.currentTarget.closest('[data-composer]');
-          const keepInView = () => block?.scrollIntoView({ block: 'nearest' });
-          stopKeepingInView.current?.();
-          window.visualViewport?.addEventListener('resize', keepInView);
-          stopKeepingInView.current = () =>
-            window.visualViewport?.removeEventListener('resize', keepInView);
-        }}
-        onBlur={(event) => {
-          const field = event.currentTarget;
-          const finish = () => {
-            if (document.activeElement === field) return;
-            setIsFocused(false);
+      {isRecording ? (
+        <div
+          className='helm-field flex items-center gap-3 px-3 py-3'
+          role='status'
+        >
+          <span
+            className='bg-destructive size-2.5 shrink-0 animate-pulse rounded-full'
+            aria-hidden='true'
+          />
+          <span className='min-w-0 flex-1 text-[15px] tabular-nums'>
+            {HELM_COPY.recordingLabel(formatClock(recorder.elapsedMs))}
+          </span>
+          <Button
+            type='button'
+            variant='tertiary'
+            size='sm'
+            className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+            onClick={recorder.cancel}
+          >
+            {HELM_COPY.recordCancel}
+          </Button>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            rounded='full'
+            className="relative before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']"
+            onClick={recorder.stop}
+          >
+            {HELM_COPY.recordStop}
+          </Button>
+        </div>
+      ) : (
+        <Textarea
+          ref={fieldRef}
+          variant='outline'
+          rows={2}
+          aria-label={HELM_COPY.composerLabel(name)}
+          placeholder={
+            waitingPlaceholder ?? HELM_COPY.composerPlaceholder(name)
+          }
+          className='helm-field'
+          disabled={!isReady}
+          value={text}
+          onChange={(event) => {
+            if (voice.notice !== null) voice.clearNotice();
+            setText(event.target.value);
+            setTypedAt(Date.now());
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={(event) => {
+            onFocusChange(true);
+            setIsFocused(true);
+            // The keyboard shrinks the viewport after focus lands, so the field and its Send row are brought back into view each time it does.
+            const block = event.currentTarget.closest('[data-composer]');
+            const keepInView = () =>
+              block?.scrollIntoView({ block: 'nearest' });
             stopKeepingInView.current?.();
-            stopKeepingInView.current = null;
-            onFocusChange(false);
-          };
-          if (press.current.isDown) press.current.pendingBlur = finish;
-          else finish();
-        }}
-      />
+            window.visualViewport?.addEventListener('resize', keepInView);
+            stopKeepingInView.current = () =>
+              window.visualViewport?.removeEventListener('resize', keepInView);
+          }}
+          onBlur={(event) => {
+            const field = event.currentTarget;
+            const finish = () => {
+              if (document.activeElement === field) return;
+              setIsFocused(false);
+              stopKeepingInView.current?.();
+              stopKeepingInView.current = null;
+              onFocusChange(false);
+            };
+            if (press.current.isDown) press.current.pendingBlur = finish;
+            else finish();
+          }}
+        />
+      )}
+      {recorder.state === 'refused' && (
+        <p className='text-muted-foreground text-[13px]' role='status'>
+          {HELM_COPY.recordNoMicrophone}
+        </p>
+      )}
       <AttachmentChips
         items={attachments.items}
         onRemove={attachments.remove}
@@ -453,48 +560,41 @@ function Composer({
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
           <div className='flex min-w-0 items-center gap-2'>
-            {canTakePhoto ? (
-              <EllipsisDropdown
-                variant='tertiary'
-                placement='top'
-                alignment='start'
-                ariaLabel={HELM_COPY.attachMenuLabel}
-                disabled={!isReady}
-                icon={<Paperclip className='size-4' aria-hidden='true' />}
-                items={[
-                  option({
-                    label: HELM_COPY.attachTake,
-                    value: TAKE_PHOTO,
-                    icon: <Camera className='size-4' aria-hidden='true' />,
-                  }),
-                  option({
-                    label: HELM_COPY.attachChoose,
-                    value: CHOOSE_PHOTOS,
-                    icon: <ImagePlus className='size-4' aria-hidden='true' />,
-                  }),
-                ]}
-                onItemSelect={(value: string) =>
-                  openFileChooser(
-                    value === TAKE_PHOTO
-                      ? cameraInput.current
-                      : libraryInput.current,
-                    { isCamera: value === TAKE_PHOTO },
-                  )
-                }
-              />
-            ) : (
-              <Button
-                type='button'
-                variant='tertiary'
-                size='icon'
-                aria-label={HELM_COPY.attachChoose}
-                disabled={!isReady}
-                className="relative size-8 p-0! before:absolute before:-inset-1 before:content-['']"
-                onClick={() => openFileChooser(libraryInput.current)}
-              >
-                <Paperclip className='size-4' aria-hidden='true' />
-              </Button>
-            )}
+            <EllipsisDropdown
+              variant='tertiary'
+              placement='top'
+              alignment='start'
+              ariaLabel={HELM_COPY.attachMenuLabel}
+              disabled={!isReady || isRecording}
+              icon={<Paperclip className='size-4' aria-hidden='true' />}
+              items={[
+                ...(canTakePhoto
+                  ? [
+                      option({
+                        label: HELM_COPY.attachTake,
+                        value: TAKE_PHOTO,
+                        icon: <Camera className='size-4' aria-hidden='true' />,
+                      }),
+                    ]
+                  : []),
+                option({
+                  label: HELM_COPY.attachChoose,
+                  value: CHOOSE_PHOTOS,
+                  icon: <ImagePlus className='size-4' aria-hidden='true' />,
+                }),
+                option({
+                  label: HELM_COPY.attachChooseFile,
+                  value: CHOOSE_FILE,
+                  icon: <FileText className='size-4' aria-hidden='true' />,
+                }),
+                option({
+                  label: HELM_COPY.attachRecord,
+                  value: RECORD,
+                  icon: <Mic className='size-4' aria-hidden='true' />,
+                }),
+              ]}
+              onItemSelect={chooseAttachment}
+            />
             <span
               className='text-muted-foreground text-[13px] tabular-nums'
               aria-live='polite'
@@ -511,9 +611,11 @@ function Composer({
               className='rounded-full'
             >
               <p>
-                {attachments.isUploading
-                  ? HELM_COPY.attachWaiting
-                  : HELM_COPY.attachFailedBlock}
+                {attachments.isWriting
+                  ? HELM_COPY.attachWaitingVoice
+                  : attachments.isUploading
+                    ? HELM_COPY.attachWaiting
+                    : HELM_COPY.attachFailedBlock}
               </p>
             </LockedButton>
           ) : (
@@ -542,6 +644,15 @@ function Composer({
         ref={libraryInput}
         type='file'
         accept='image/*'
+        multiple
+        className='hidden'
+        tabIndex={-1}
+        onChange={pickPhotos}
+      />
+      <input
+        ref={fileInput}
+        type='file'
+        accept='application/pdf,.md,text/markdown'
         multiple
         className='hidden'
         tabIndex={-1}

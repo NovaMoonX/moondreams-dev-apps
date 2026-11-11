@@ -14,6 +14,7 @@ import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { store, useAppSelector } from '@/store';
 import { formatDateShort } from '@/utils/formatUtils';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import { NoteTopicsFields } from '@apps/helm/components/knowledge/NoteTopicsSheet';
 import { HELM_COPY } from '@apps/helm/constants';
@@ -82,6 +83,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
         user.uid,
         note.id,
         selectAllTopics(store.getState()),
+        store.getState().helm.media.items,
       );
       write.catch((error: unknown) => {
         console.error('Helm note was not deleted', error);
@@ -199,6 +201,7 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
             {note.body && (
               <LinkedText text={note.body} className='text-[15px]' />
             )}
+            <KeptMediaSection record={{ kind: 'note', id: note.id }} />
             <div className='flex flex-wrap items-center gap-x-3 gap-y-1'>
               <p className='text-muted-foreground min-w-0 text-[13px]'>
                 {origin.join(' · ')}

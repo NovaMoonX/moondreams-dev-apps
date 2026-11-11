@@ -1643,7 +1643,33 @@ const wordsOf = (value: string) =>
     ).filter((word) => !FILLER.has(word) && !KEEP_PHOTO_RE.test(word)),
   );
 
-/** Emulator stand-in for photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go, and the usual splitter files the words. */
+const VET_FILE_RE = /\b(vet|visit|booster|appointment|invoice|contract)\b/i;
+const TOPIC_FILE_NAME_RE = /packing|checklist|list/i;
+const TOPIC_WORD_RE = /\btopic\b/i;
+const NOTE_WORD_RE = /\b(note|keep)\b/i;
+const PDF_TASK_REF = '$new9';
+const PDF_TITLE_CHARS = 50;
+
+interface ListedFile {
+  alias: string;
+  kind: string;
+  name: string;
+  text: string | null;
+}
+
+const createTaskCommand = (ref: string, title: string) => ({
+  kind: 'createTask',
+  ref,
+  taskAlias: null,
+  title: title.charAt(0).toUpperCase() + title.slice(1),
+  dueSpanId: null,
+  isUrgent: null,
+  whoRefs: [],
+  placeRefs: [],
+  projectRef: null,
+});
+
+/** Emulator stand-in for photos and files. Photos: words that call the photo a quote, receipt, letter, form or invoice (or say keep) keep each one on the first open task sharing a word with them, else on a task made from the words; any other photo is read and let go. A PDF that speaks of a vet, visit, booster, appointment, invoice or contract is kept on the first open task sharing a word with it, else on a new task named from its first line; any other PDF is let go. A Markdown file is judged by the person's words and the file's name only, never by what it says: "topic", or a name with packing, checklist or list, makes a topic; "note" or "keep" a note; anything else is let go. The usual splitter files the words. */
 export function createFixtureProvider(
   text: string,
   reading: CaptureReading,
@@ -1653,60 +1679,104 @@ export function createFixtureProvider(
     runToolLoop: async (request) => {
       const result = await base.runToolLoop(request);
       const message = messageText(request.messages[0]?.content ?? '');
-      const photos = readBlock<{ alias: string }[]>(message, 'attachments');
+      const attachments =
+        readBlock<{ alias: string; kind: string }[]>(message, 'attachments') ??
+        [];
       if (
-        !photos?.length ||
+        attachments.length === 0 ||
         result.endedBy !== 'terminal' ||
         result.terminalName !== 'file_results'
       ) {
         return result;
       }
+      const files = readBlock<ListedFile[]>(message, 'files') ?? [];
+      const openTasks =
+        readBlock<{ alias: string; title: string }[]>(message, 'open_tasks') ??
+        [];
       const isKeep = KEEP_PHOTO_RE.test(text) && !NOT_KEEP_PHOTO_RE.test(text);
       const mine = wordsOf(text);
-      const task = isKeep
-        ? (
-            readBlock<{ alias: string; title: string }[]>(
-              message,
-              'open_tasks',
-            ) ?? []
-          ).find((entry) =>
+      const photoTask = isKeep
+        ? openTasks.find((entry) =>
             [...wordsOf(entry.title)].some((word) => mine.has(word)),
           )
         : undefined;
       const title = text.trim().replace(/[.!]+$/, '');
-      const made = isKeep && !task && hasMeaning(title);
-      const target = task?.alias ?? '$new1';
-      const media = photos.map(({ alias }) => ({
+      const hasPhotos = attachments.some(({ kind }) => kind === 'photo');
+      const photoMade = isKeep && !photoTask && hasMeaning(title);
+      const toPhoto = ({ alias }: { alias: string }) => ({
         alias,
-        decision: isKeep && (task || made) ? 'keep' : 'discard',
+        decision: isKeep && (photoTask || photoMade) ? 'keep' : 'discard',
         caption: isKeep ? 'A photo you sent' : 'A screenshot',
-        attachTo: isKeep && (task || made) ? [target] : [],
-      }));
-      if (!isKeep) {
+        attachTo:
+          isKeep && (photoTask || photoMade)
+            ? [photoTask?.alias ?? '$new1']
+            : [],
+        asNote: false,
+        asTopic: false,
+        topicAliases: [],
+      });
+      const pdfs = attachments.flatMap(({ alias, kind }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const said = `${file?.name ?? ''} ${file?.text ?? ''}`;
+        return kind === 'pdf' && file && VET_FILE_RE.test(said)
+          ? [
+              {
+                alias,
+                said,
+                firstLine: (file.text ?? file.name).split('\n')[0],
+              },
+            ]
+          : [];
+      });
+      const pdfWords = (said: string) => wordsOf(said);
+      const pdfTask = (said: string) =>
+        openTasks.find((entry) =>
+          [...wordsOf(entry.title)].some((word) => pdfWords(said).has(word)),
+        );
+      const pdfNeedsNew = pdfs.some(({ said }) => !pdfTask(said));
+      const pdfTitle = `Vet visit: ${(pdfs.find(({ said }) => !pdfTask(said))?.firstLine ?? '').slice(0, PDF_TITLE_CHARS).trim()}`;
+      const toFile = ({ alias, kind }: { alias: string; kind: string }) => {
+        const file = files.find((entry) => entry.alias === alias);
+        const pdf = pdfs.find((entry) => entry.alias === alias);
+        const isNotKept = NOT_KEEP_PHOTO_RE.test(text);
+        const asTopic =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (TOPIC_WORD_RE.test(text) ||
+            TOPIC_FILE_NAME_RE.test(file?.name ?? ''));
+        const asNote =
+          kind === 'markdown' &&
+          !isNotKept &&
+          (asTopic || NOTE_WORD_RE.test(text));
+        const isKept = asNote || pdf !== undefined;
         return {
-          ...result,
-          terminalInput: { ...(result.terminalInput as object), media },
+          alias,
+          decision: isKept ? 'keep' : 'discard',
+          caption: isKept ? `Sent as ${file?.name ?? 'a file'}` : null,
+          attachTo: pdf ? [pdfTask(pdf.said)?.alias ?? PDF_TASK_REF] : [],
+          asNote,
+          asTopic,
+          topicAliases: [],
         };
-      }
+      };
+      const media = attachments.map((entry) =>
+        entry.kind === 'photo' ? toPhoto(entry) : toFile(entry),
+      );
+      const usesPhotoPath = hasPhotos && isKeep;
+      const first = usesPhotoPath
+        ? {
+            commands: photoMade ? [createTaskCommand('$new1', title)] : [],
+            ...readEntities(text, reading),
+          }
+        : (result.terminalInput as { commands?: unknown[] });
       return {
         ...result,
         terminalInput: {
-          commands: made
-            ? [
-                {
-                  kind: 'createTask',
-                  ref: '$new1',
-                  taskAlias: null,
-                  title: title.charAt(0).toUpperCase() + title.slice(1),
-                  dueSpanId: null,
-                  isUrgent: null,
-                  whoRefs: [],
-                  placeRefs: [],
-                  projectRef: null,
-                },
-              ]
-            : [],
-          ...readEntities(text, reading),
+          ...first,
+          commands: [
+            ...(first.commands ?? []),
+            ...(pdfNeedsNew ? [createTaskCommand(PDF_TASK_REF, pdfTitle)] : []),
+          ],
           media,
         },
       };

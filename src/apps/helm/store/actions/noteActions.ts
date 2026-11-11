@@ -22,6 +22,10 @@ import {
   NOTES_LIMIT,
 } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
 import { topicsCitingNote } from '@apps/helm/utils/topicSources';
 import type {
   HelmEncryption,
@@ -287,6 +291,7 @@ export async function deleteNote(
   uid: string,
   noteId: string,
   topics: readonly OpenTopic[],
+  media: ReleasablePhoto[],
 ) {
   const ref = doc(notesOf(uid), noteId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
@@ -296,6 +301,16 @@ export async function deleteNote(
     ...topicsCitingNote(topics, noteId),
   ]);
   const write = deleteDoc(ref);
+  const released = planPhotoRelease(
+    media,
+    [{ kind: 'note', id: noteId }],
+    Date.now(),
+  );
+  const mediaRef = (id: string) =>
+    doc(db, 'apps', 'helm', 'users', uid, 'media', id);
+  released.forEach((entry) =>
+    updateDoc(mediaRef(entry.id), entry.forward).catch(() => undefined),
+  );
   topics
     .filter((topic) => marked.has(topic.id))
     .forEach((topic) =>
@@ -317,6 +332,9 @@ export async function deleteNote(
       )
     ).flat();
     await setDoc(ref, { ...raw, topicIds: kept, lastEditedAt: Date.now() });
+    released.forEach((entry) =>
+      updateDoc(mediaRef(entry.id), entry.back).catch(() => undefined),
+    );
     return 'restored';
   };
   return { write, restore };

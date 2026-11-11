@@ -33,11 +33,14 @@ import {
   getLocalDayKey,
   planListen,
   planSpeech,
+  planTranscribe,
+  planTranscribeSettle,
   type ListenUsage,
 } from '../../functions/src/voice/usage.ts';
 import {
   costMicros,
   listenCostMicros,
+  transcribeCostMicros,
   TTS_PRICES,
   VOICE_DAILY_BUDGET_CENTS,
   VOICE_UTTERANCE_MS,
@@ -92,8 +95,9 @@ assert.ok(
     sharedPaths.some((path) =>
       path.endsWith('/voice/providers/geminiTts.ts'),
     ) &&
-    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')),
-  'the voice service, its hook, the providers and the benchmark are among the files scanned',
+    sharedPaths.some((path) => path.endsWith('/voice/benchmark.ts')) &&
+    sharedPaths.some((path) => path.endsWith('/voice/transcribe.ts')),
+  'the voice service, its hook, the providers, the benchmark and the recording reader are among the files scanned',
 );
 ['a recipe', 'Helm', 'the Nomos voice'].forEach((planted) =>
   assert.ok(APP_WORDS.test(planted), `"${planted}" is caught as an app word`),
@@ -1523,6 +1527,91 @@ assert.equal(
   0,
   'a stream still inside its report window is not charged',
 );
+const fiveMinutes = 300_000;
+const transcribePlan = (
+  overrides: Partial<Parameters<typeof planTranscribe>[0]> = {},
+) =>
+  planTranscribe({
+    usage: { listenMs: 0, transcribeMs: 0 },
+    budgetMicros: 0,
+    limits: listenLimits,
+    reserveMs: fiveMinutes,
+    reserveMicros: transcribeCostMicros(fiveMinutes),
+    ...overrides,
+  });
+assert.equal(
+  transcribeCostMicros(60_000),
+  4_300,
+  'a minute of recording is priced at the pre-recorded rate',
+);
+const reserved = transcribePlan();
+assert.deepEqual(
+  [reserved.held, reserved.transcribeMs, reserved.budgetDeltaMicros],
+  [null, fiveMinutes, transcribeCostMicros(fiveMinutes)],
+  'a recording reserves its worst case',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_600_000 - fiveMinutes, transcribeMs: 0 },
+  }).held,
+  null,
+  'a recording that just fits is let through',
+);
+assert.equal(
+  transcribePlan({
+    usage: { listenMs: 3_000_000, transcribeMs: 400_000 },
+  }).held,
+  'listenLimit',
+  'listening and recordings share the day, held when the reserve would pass it',
+);
+assert.deepEqual(
+  transcribePlan({
+    usage: { listenMs: 3_600_000, transcribeMs: 0 },
+  }).budgetDeltaMicros,
+  0,
+  'a held recording charges nothing',
+);
+assert.equal(
+  transcribePlan({
+    budgetMicros: VOICE_DAILY_BUDGET_CENTS * 10_000,
+  }).held,
+  'budgetReached',
+  'the site cap holds a recording',
+);
+assert.equal(
+  plan({ usage: { ...emptyUsage, transcribeMs: 3_600_000 } }).held,
+  'listenLimit',
+  'minutes of recordings count against streamed listening',
+);
+const settledShort = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: 42_000,
+  actualMicros: transcribeCostMicros(42_000),
+});
+assert.equal(
+  settledShort.transcribeMs,
+  42_000,
+  'a short one is charged as long as it was',
+);
+assert.ok(
+  settledShort.budgetDeltaMicros < 0,
+  'and the rest of the reserve comes back',
+);
+const settledLong = planTranscribeSettle({
+  usage: { transcribeMs: fiveMinutes },
+  reservedMs: fiveMinutes,
+  reservedMicros: transcribeCostMicros(fiveMinutes),
+  actualMs: fiveMinutes + 6_000,
+  actualMicros: transcribeCostMicros(fiveMinutes + 6_000),
+});
+assert.equal(
+  settledLong.transcribeMs,
+  fiveMinutes + 6_000,
+  'one longer than the reserve is charged in full',
+);
+assert.ok(settledLong.budgetDeltaMicros > 0, 'and its extra cost is added');
 const burst = Array.from({ length: 300 }).reduce<{
   usage: ListenUsage;
   failures: number;

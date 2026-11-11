@@ -25,6 +25,7 @@ import {
   FACT_QUOTE_CAP,
   MAX_COMMANDS,
   MAX_MEDIA_TARGETS,
+  MAX_MEDIA_TOPICS,
   type MediaDecision,
   type MediaTarget,
   MAX_NOTED_FACTS,
@@ -1267,57 +1268,89 @@ const hasEveryToken = (
 /** Turns the model's reply into commands code can run, or refuses it: every alias must be one offered, every day one the reading made, every @ # ^ name kept. Only the first answer is kept, at most `MAX_ASKS` model-written questions are kept, each checked by its shape (one that can't be shown is dropped and named in `askDropped`), each source and quote alias resolved or dropped; a `remember` is passed on with its aliases resolved or null, for the guards to judge. A sound reply with nothing in it is `[]`; a `planDay` for today through six days ahead is passed on as one day (a past or farther day is dropped and the rest of the reply kept, a second one is ignored); one past the cap files the first `MAX_COMMANDS` and says `hasMore`. With `alreadyMade`, a task whose title is already there is dropped and the names already in those titles are not required again. */
 export type MediaDrop = 'unknownAlias' | 'repeatedAlias';
 
-/** One decision for each photo sent, in the order sent: an unknown or repeated alias is dropped, a caption is cut, a keep with no target that still resolves becomes a discard, and a photo the model left out is let go. */
+/** One decision for each attachment sent, in the order sent: an unknown or repeated alias is dropped, a caption is cut, a keep with no target that still resolves and no note to make becomes a discard, and one the model left out is let go. A note or topic is read only for a Markdown file, a topic implies the note, and the topics it is filed to must be ones offered (at most ten). */
 export function readMedia(
   raw: unknown,
   context: {
-    photoAliases: string[];
+    attachments: { alias: string; kind: string }[];
     aliases: AliasBook;
     facts?: AliasBook;
+    topics?: AliasBook;
     madeRefs: Set<string>;
   },
 ): { decisions: MediaDecision[]; dropped: MediaDrop[] } {
   const items = Array.isArray(raw) ? raw.filter(isRecord) : [];
-  const known = new Set(context.photoAliases);
+  const kinds = new Map(
+    context.attachments.map(({ alias, kind }) => [alias, kind]),
+  );
   const read = items.reduce<{
     byAlias: Map<string, MediaDecision>;
     dropped: MediaDrop[];
   }>(
     (acc, item) => {
       const alias = typeof item.alias === 'string' ? item.alias : '';
-      if (!known.has(alias)) {
+      const kind = kinds.get(alias);
+      if (kind === undefined) {
         return { ...acc, dropped: [...acc.dropped, 'unknownAlias'] };
       }
       if (acc.byAlias.has(alias)) {
         return { ...acc, dropped: [...acc.dropped, 'repeatedAlias'] };
       }
       const targets = readMediaTargets(item.attachTo, context);
-      const isKeep = item.decision === 'keep' && targets.length > 0;
+      const isMarkdown = kind === 'markdown';
+      const asTopic = isMarkdown && item.asTopic === true;
+      const asNote = isMarkdown && (item.asNote === true || asTopic);
+      const topicIds = asNote
+        ? readMediaTopics(item.topicAliases, context)
+        : [];
+      const isKeep = asNote || (item.decision === 'keep' && targets.length > 0);
       return {
         ...acc,
         byAlias: new Map(acc.byAlias).set(alias, {
           alias,
           decision: isKeep ? 'keep' : 'discard',
           caption: isKeep ? toText(item.caption, MEDIA_CAPTION_CAP) : null,
-          targets: isKeep ? targets : [],
+          targets: isKeep && item.decision === 'keep' ? targets : [],
+          asNote,
+          asTopic,
+          topicIds,
         }),
       };
     },
     { byAlias: new Map(), dropped: [] },
   );
   return {
-    decisions: context.photoAliases.map(
-      (alias) =>
+    decisions: context.attachments.map(
+      ({ alias }) =>
         read.byAlias.get(alias) ?? {
           alias,
           decision: 'discard',
           caption: null,
           targets: [],
+          asNote: false,
+          asTopic: false,
+          topicIds: [],
         },
     ),
     dropped: read.dropped,
   };
 }
+
+const readMediaTopics = (
+  raw: unknown,
+  context: { topics?: AliasBook },
+): string[] =>
+  [
+    ...new Set(
+      (Array.isArray(raw) ? raw : []).flatMap((entry: unknown) => {
+        const id =
+          typeof entry === 'string'
+            ? (context.topics?.idOf(entry) ?? null)
+            : null;
+        return id ? [id] : [];
+      }),
+    ),
+  ].slice(0, MAX_MEDIA_TOPICS);
 
 const readMediaTargets = (
   raw: unknown,
@@ -1371,8 +1404,8 @@ export function normalizeNomosReply(
     records?: RecordBook;
     now?: number;
     timeZone?: string;
-    /** The aliases of the photos the turn sent. */
-    photoAliases?: string[];
+    /** The photos and files the turn sent, by alias. */
+    attachments?: { alias: string; kind: string }[];
   },
 ): {
   media: MediaDecision[];
@@ -1506,9 +1539,10 @@ export function normalizeNomosReply(
   }
   const kept = fresh.slice(0, MAX_COMMANDS);
   const { decisions: media, dropped: mediaDropped } = readMedia(raw.media, {
-    photoAliases: context.photoAliases ?? [],
+    attachments: context.attachments ?? [],
     aliases: context.aliases,
     facts: context.facts,
+    topics: context.topics,
     madeRefs: new Set(
       kept.flatMap((command) =>
         command.kind === 'createTask' ? [command.ref] : [],

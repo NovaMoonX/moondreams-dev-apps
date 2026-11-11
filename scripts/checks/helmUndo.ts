@@ -1541,6 +1541,27 @@ test('a made parent stays when it was written, used, or a child stayed under it'
   assert.equal(stayed.updates.length, 0);
 });
 
+test('a topic made from a file goes at the version the import wrote, and stays once it is edited', () => {
+  const imported = [
+    topicEntry(
+      'create',
+      'pack',
+      { 'sealed.title': 'Made Packing list', importedVersion: 1 },
+      null,
+    ),
+  ];
+  const target = (version: number) => [
+    topicTarget('pack', { ...FRESH_PARENT, version }, 'Packing list'),
+  ];
+  const fresh = asWrite(plan(execution(imported), target(1)));
+  assert.deepEqual(
+    fresh.deletes.map((entry) => entry.docId),
+    ['pack'],
+  );
+  const edited = plan(execution(imported), target(2));
+  assert.equal(edited.kind, 'refused');
+});
+
 test('an old filing effect still takes the note back out and ignores the new shapes', () => {
   const filing = topicEntry(
     'update',

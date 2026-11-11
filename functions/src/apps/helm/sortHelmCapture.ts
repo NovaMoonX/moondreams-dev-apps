@@ -58,7 +58,7 @@ import {
   type OpenTopicRecord,
 } from './noteStore.js';
 import { createHelmMcpServer } from './mcp/server.js';
-import { openMedia, type OpenedPhoto } from './media/openMedia.js';
+import { openMedia, type OpenedMedia } from './media/openMedia.js';
 import { sweepExpiredMedia } from './media/sweepMedia.js';
 import {
   createQuoteBook,
@@ -117,6 +117,7 @@ import {
   NOTHING_CHANGED_LINE,
   buildAnswerKeptLine,
   buildPhotosNotOpenedLine,
+  buildFileNotReadLine,
 } from './nomos/summaries.js';
 import {
   buildAnswerExecution,
@@ -1409,7 +1410,13 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           captureId: claimed.captureRef.id,
           listed: capture.attachmentIds,
         })
-      : { photos: [], unopened: [], refused: [] };
+      : {
+          media: [],
+          voiceIds: [],
+          unreadable: [],
+          unopened: [],
+          refused: [],
+        };
 
   const profileRead = firestore.doc(base).get();
   const [profile, openTasks, alreadyMade, screen, earlierTurns, synced] =
@@ -1595,10 +1602,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       notes: toContextNotes(hinted, combined.text),
       focusedTopic: topicDocument ? focusedTopic : null,
       topicDocument,
-      attachments: attached.photos.map((photo) => ({
-        alias: photo.alias,
-        kind: 'photo' as const,
+      attachments: attached.media.map((item) => ({
+        alias: item.alias,
+        kind: item.kind,
       })),
+      files: attached.media.flatMap((item) => (item.file ? [item.file] : [])),
     });
     const topicVersions = new Map<string, number>(
       focusedTopic && topicDocument === 'whole' && hasReviseCue(combined.text)
@@ -1623,7 +1631,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
       liveGrants.length > 0 ? MAIL_PROMPT : null,
       topics.length > 0 ? TOPIC_PROMPT : null,
       mode === 'rest' ? REST_PROMPT : null,
-      attached.photos.length > 0 ? MEDIA_PROMPT : null,
+      attached.media.length > 0 ? MEDIA_PROMPT : null,
       typeof capture.interruptedCaptureId === 'string' &&
       capture.interruptedCaptureId !== ''
         ? INTERRUPTED_PROMPT
@@ -1658,7 +1666,7 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
           messages: [
             {
               role: 'user',
-              content: toMessageContent(context.message, attached.photos),
+              content: toMessageContent(context.message, attached.media),
             },
           ],
           mcpClient: mcp.client,
@@ -1708,7 +1716,11 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
               mode,
               isAnswer: answerTurn !== null,
               hasTopicFocus: focusedTopic !== null,
-              hasMedia: attached.photos.length > 0,
+              hasMedia:
+                attached.media.length +
+                  attached.voiceIds.length +
+                  attached.unreadable.length >
+                0,
             }),
       runOn,
       reserve: (route) => reserveAiCall(firestore, uid, Date.now(), route),
@@ -1804,7 +1816,10 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     quotes,
     alreadyMade,
     timeZone,
-    photoAliases: attached.photos.map((photo) => photo.alias),
+    attachments: attached.media.map((item) => ({
+      alias: item.alias,
+      kind: item.kind,
+    })),
   });
   reply.mediaDropped.forEach((code) =>
     logger.info('helm.media.dropped', { code }),
@@ -1835,10 +1850,16 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     topics,
     hinted,
     media: {
-      photos: attached.photos,
+      items: attached.media,
       decisions: reply.media,
-      letGoIds: [...attached.unopened, ...attached.refused],
+      letGoIds: [
+        ...attached.unopened,
+        ...attached.refused,
+        ...attached.voiceIds,
+        ...attached.unreadable.map((entry) => entry.id),
+      ],
       unopenedCount: attached.unopened.length,
+      unreadableNames: attached.unreadable.map((entry) => entry.name),
     },
     captureText: combined.text,
     planDay: mode === 'full' ? reply.planDay : null,
@@ -1859,27 +1880,35 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
   });
 }
 
-/** The photos a turn sent, as the call read them, and what the model decided about each. */
+/** The photos and files a turn sent, as the call read them, and what the model decided about each. */
 interface SentMedia {
-  photos: OpenedPhoto[];
+  items: OpenedMedia[];
   decisions: MediaDecision[];
-  /** Photos code lets go without a decision: refused over the cap or not opened. */
+  /** Media code lets go without a decision: refused over the cap, not opened, unreadable, or a recording. */
   letGoIds: string[];
   unopenedCount: number;
+  unreadableNames: string[];
 }
 
 const toMessageContent = (
   message: string,
-  photos: OpenedPhoto[],
+  media: OpenedMedia[],
 ): string | ToolLoopContent[] =>
-  photos.length === 0
+  media.every((item) => item.blocks.length === 0)
     ? message
     : [
         { type: 'text', text: message },
-        ...photos.flatMap((photo): ToolLoopContent[] => [
-          { type: 'text', text: `Photo ${photo.alias}:` },
-          photo.block,
-        ]),
+        ...media.flatMap((item): ToolLoopContent[] =>
+          item.blocks.length === 0
+            ? []
+            : [
+                {
+                  type: 'text',
+                  text: `${item.kind === 'photo' ? 'Photo' : 'File'} ${item.alias}:`,
+                },
+                ...item.blocks,
+              ],
+        ),
       ];
 
 const TITLE_SHOWN_CHARS = 80;
@@ -2293,7 +2322,7 @@ async function writeResult(
     const mediaIds = sentMedia
       ? [
           ...new Set([
-            ...sentMedia.photos.map((photo) => photo.id),
+            ...sentMedia.items.map((item) => item.id),
             ...sentMedia.letGoIds,
           ]),
         ]
@@ -2437,12 +2466,12 @@ async function writeResult(
         sentMedia && !isStale
           ? ({
               decisions: sentMedia.decisions,
-              photos: new Map(
-                sentMedia.photos
-                  .filter((photo) => stillReceived.has(photo.id))
-                  .map((photo) => [
-                    photo.alias,
-                    { id: photo.id, words: photo.words },
+              items: new Map(
+                sentMedia.items
+                  .filter((item) => stillReceived.has(item.id))
+                  .map((item) => [
+                    item.alias,
+                    { id: item.id, kind: item.kind, words: item.words },
                   ]),
               ),
               letGoIds: sentMedia.letGoIds.filter((id) =>
@@ -2474,16 +2503,18 @@ async function writeResult(
           effects: [...written.effects, home.effect],
         }
       : written;
-    const plan =
-      sentMedia && sentMedia.unopenedCount > 0
-        ? {
-            ...withHome,
-            notKept: [
-              ...withHome.notKept,
-              buildPhotosNotOpenedLine(sentMedia.unopenedCount),
-            ],
-          }
-        : withHome;
+    const plan = sentMedia
+      ? {
+          ...withHome,
+          notKept: [
+            ...withHome.notKept,
+            ...(sentMedia.unopenedCount > 0
+              ? [buildPhotosNotOpenedLine(sentMedia.unopenedCount)]
+              : []),
+            ...sentMedia.unreadableNames.map(buildFileNotReadLine),
+          ],
+        }
+      : withHome;
     const isFiling = plan.effects.length > 0 || plan.lines.length > 0;
     if (
       !isFiling &&
@@ -2598,6 +2629,12 @@ async function writeResult(
       plan.topicCreates.forEach(({ id, data }) =>
         transaction.create(firestore.doc(`${base}/topics/${id}`), data),
       );
+      plan.topicVersionCreates.forEach(({ topicId, id, data }) =>
+        transaction.create(
+          firestore.doc(`${base}/topics/${topicId}/versions/${id}`),
+          data,
+        ),
+      );
       plan.topicUpdates.forEach(({ id, docState, addPendingIds }) =>
         transaction.update(firestore.doc(`${base}/topics/${id}`), {
           docState,
@@ -2702,7 +2739,7 @@ async function writeResult(
       hasMedia:
         !isStale &&
         !!sentMedia &&
-        sentMedia.photos.length + sentMedia.letGoIds.length > 0,
+        sentMedia.items.length + sentMedia.letGoIds.length > 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

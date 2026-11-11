@@ -2,7 +2,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { logger } from 'firebase-functions';
 
 import { isMediaExpired, MEDIA_SWEEP_LIMIT } from './mediaCaps.js';
-import { mediaObjectPath, type MediaBucket } from './openMedia.js';
+import { mediaObjectPaths, type MediaBucket } from './openMedia.js';
 
 const SWEPT_STATUSES = ['uploading', 'received', 'discarded'];
 
@@ -43,10 +43,8 @@ export async function sweepExpiredMedia(input: {
             return null;
           }
           await Promise.all(
-            [false, true].map((isThumb) =>
-              bucket
-                .file(mediaObjectPath(uid, snapshot.id, isThumb))
-                .delete({ ignoreNotFound: true }),
+            mediaObjectPaths(uid, snapshot.id, fresh.get('kind')).map((path) =>
+              bucket.file(path).delete({ ignoreNotFound: true }),
             ),
           );
           await snapshot.ref.delete({ lastUpdateTime: fresh.updateTime });

@@ -14,10 +14,11 @@ export interface TerminalTool {
   inputSchema: Record<string, unknown>;
 }
 
-/** One part of a message: words, or a picture as base64. */
+/** One part of a message: words, a picture or a PDF as base64. */
 export type ToolLoopContent =
   | { type: 'text'; text: string }
-  | { type: 'image'; mediaType: 'image/webp'; data: string };
+  | { type: 'image'; mediaType: 'image/webp'; data: string }
+  | { type: 'document'; mediaType: 'application/pdf'; data: string };
 
 /** The words of a message, whichever shape it has. */
 export const messageText = (content: string | ToolLoopContent[]): string =>

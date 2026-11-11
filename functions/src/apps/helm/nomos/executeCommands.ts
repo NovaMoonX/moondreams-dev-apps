@@ -43,6 +43,12 @@ import {
   type PlannedVersion,
 } from './planTopicCommands.js';
 import { LET_GO_WINDOW_MS } from '../media/mediaCaps.js';
+import {
+  fitsTopic,
+  markdownTitle,
+  splitMarkdownSections,
+} from '../media/markdownSections.js';
+import { TOPICS_LIMIT } from '../topicLimits.js';
 import { toNoteSource } from '../topicWrite.js';
 import type { LiveTopic } from '../topicVersionStore.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
@@ -75,6 +81,9 @@ import {
   buildWhichIsTrueQuestion,
   describeFacts,
   describeKeptPhotos,
+  buildFileNoteLine,
+  buildFileTopicLine,
+  FILE_TOPIC_TOO_LONG_LINE,
   describeKeyDates,
   describeProjects,
   summarize,
@@ -190,12 +199,19 @@ export interface Effect {
   previous: Record<string, unknown> | null;
 }
 
-/** The photos a turn sent, as the transaction read them, and what the model decided about each. */
+/** The media a turn sent, as the transaction read them, and what the model decided about each. */
 export interface MediaInput {
   decisions: MediaDecision[];
-  /** Each photo still `received` when the transaction read it, by alias. */
-  photos: Map<string, { id: string; words: Record<string, unknown> }>;
-  /** Photos code let go without a decision: refused over the cap or not opened. */
+  /** Each photo or file still `received` when the transaction read it, by alias. */
+  items: Map<
+    string,
+    {
+      id: string;
+      kind: 'photo' | 'pdf' | 'markdown';
+      words: Record<string, unknown>;
+    }
+  >;
+  /** Media code let go without a decision: refused over the cap, not opened, unreadable or a recording. */
   letGoIds: string[];
   /** The existing records a keep may name, by `task:id` or `fact:id`, with the title each shows under. */
   titles: Map<string, string>;
@@ -203,22 +219,213 @@ export interface MediaInput {
 }
 
 export interface MediaPlan {
-  /** Photos kept, written in the turn's one execution. */
+  /** Media kept, written in the turn's one execution. */
   kept: { id: string; data: Record<string, unknown> }[];
-  /** Photos let go, written in the same transaction but never an effect, so Undo cannot bring one back as received. */
+  /** Media let go, written in the same transaction but never an effect, so Undo cannot bring one back as received. */
   letGo: { id: string; data: Record<string, unknown> }[];
   effectRefs: EffectRef[];
   effects: Effect[];
   keptTitles: string[];
+  keptKinds: string[];
 }
 
 const toMediaKey = (target: MediaTarget) => `${target.kind}:${target.ref}`;
 
-/** Decides each photo: a keep goes on the records it names that still resolve (at most what the effects have room for), every other photo is let go for a day. */
+/** A Markdown file the turn keeps as a note, and as a topic when it can be one. */
+export interface FileImport {
+  alias: string;
+  mediaId: string;
+  fileName: string;
+  noteId: string;
+  noteTitle: string;
+  noteData: Record<string, unknown>;
+  filedTopicIds: string[];
+  topic: {
+    id: string;
+    name: string;
+    data: Record<string, unknown>;
+    version: Record<string, unknown>;
+  } | null;
+  lines: ResultNote[];
+  summary: string;
+}
+
+const IMPORT_TOPIC_NAME_CAP = 40;
+
+/** Turns each Markdown file the model asked to keep as a note into the note, and, for `asTopic`, a topic at version 1 whose sections are the file's own, each written by the person and citing the file. A file is skipped when the notes, topics or effects have no room; a file too long for a topic stays a note and says so. */
+export function planFileKnowledge(input: {
+  decisions: MediaDecision[];
+  items: MediaInput['items'];
+  topics: ReadonlyMap<string, NoteTopicState> | undefined;
+  noteCount: number;
+  topicCount: number;
+  room: number;
+  captureId: string;
+  executionId: string;
+  now: number;
+  newId: () => string;
+  seal: (fields: Record<string, unknown>) => SealedPayload;
+}): { imports: FileImport[]; notKept: string[] } {
+  const { now, seal } = input;
+  return input.decisions.reduce<{
+    imports: FileImport[];
+    notKept: string[];
+    used: number;
+  }>(
+    (acc, decision) => {
+      const item = input.items.get(decision.alias);
+      const text = item?.words.text;
+      if (
+        !item ||
+        item.kind !== 'markdown' ||
+        !decision.asNote ||
+        typeof text !== 'string'
+      ) {
+        return acc;
+      }
+      if (input.noteCount + acc.imports.length >= NOTES_LIMIT) {
+        return {
+          ...acc,
+          notKept: acc.notKept.includes(NOTES_FULL_LINE)
+            ? acc.notKept
+            : [...acc.notKept, NOTES_FULL_LINE],
+        };
+      }
+      const fileName =
+        typeof item.words.fileName === 'string' && item.words.fileName
+          ? item.words.fileName
+          : 'file';
+      const sections = splitMarkdownSections(text);
+      const topicsMade = acc.imports.filter((entry) => entry.topic).length;
+      const isTopicWanted =
+        decision.asTopic && input.topicCount + topicsMade < TOPICS_LIMIT;
+      const canBeTopic = isTopicWanted && fitsTopic(sections);
+      const filed = decision.topicIds
+        .filter((id) => input.topics?.has(id))
+        .slice(0, NOTE_TOPICS_CAP);
+      const cost = 2 + (canBeTopic ? 1 : 0) + filed.length;
+      if (acc.used + cost > input.room) return acc;
+      const noteId = input.newId();
+      const noteTitle = markdownTitle(text, fileName);
+      const topicId = canBeTopic ? input.newId() : null;
+      const topicName = noteTitle.slice(0, IMPORT_TOPIC_NAME_CAP).trimEnd();
+      const source = {
+        kind: 'file' as const,
+        mediaId: item.id,
+        noteId,
+      };
+      const topicSections = sections.map((section) => ({
+        id: input.newId(),
+        heading: section.heading,
+        level: section.level,
+        markdown: section.markdown,
+        writtenBy: 'person' as const,
+        sources: [source],
+      }));
+      const noteLine = buildFileNoteLine(fileName);
+      const topicLine = buildFileTopicLine(topicName, fileName);
+      return {
+        used: acc.used + cost,
+        notKept: acc.notKept,
+        imports: [
+          ...acc.imports,
+          {
+            alias: decision.alias,
+            mediaId: item.id,
+            fileName,
+            noteId,
+            noteTitle,
+            filedTopicIds: filed,
+            noteData: {
+              topicIds: topicId ? [topicId, ...filed] : filed,
+              source: 'importedFile',
+              isFromGeneralAnswer: false,
+              checkedAt: null,
+              hasHealthCaution: false,
+              sourceCaptureId: input.captureId,
+              sourceMediaId: item.id,
+              projectIds: [],
+              createdBy: 'nomos',
+              executionId: input.executionId,
+              createdAt: now,
+              lastEditedAt: null,
+              sealed: seal({ title: noteTitle, body: text }),
+            },
+            topic: topicId
+              ? {
+                  id: topicId,
+                  name: topicName,
+                  data: {
+                    parentId: null,
+                    depth: 1,
+                    projectIds: [],
+                    version: 1,
+                    docState: 'current',
+                    pendingNoteIds: [],
+                    writeClaim: null,
+                    overviewOf: {},
+                    createdBy: 'nomos',
+                    executionId: input.executionId,
+                    createdAt: now,
+                    lastEditedAt: null,
+                    lastWrittenAt: now,
+                    sealed: seal({
+                      name: topicName,
+                      emoji: null,
+                      overview: null,
+                      sections: topicSections,
+                    }),
+                  },
+                  version: {
+                    version: 1,
+                    restoredFromVersion: null,
+                    createdBy: 'nomos',
+                    reason: 'imported',
+                    noteIds: [noteId],
+                    sourceCaptureId: input.captureId,
+                    executionId: input.executionId,
+                    createdAt: now,
+                    sealed: seal({
+                      sections: topicSections,
+                      changeSummary: `Imported from ${fileName}`,
+                      requestQuote: null,
+                      parentName: null,
+                    }),
+                  },
+                }
+              : null,
+            lines: [
+              topicId
+                ? {
+                    text: topicLine,
+                    ref: { collection: 'topics', id: topicId },
+                  }
+                : { text: noteLine, ref: { collection: 'notes', id: noteId } },
+              ...(isTopicWanted && !canBeTopic
+                ? [
+                    {
+                      text: FILE_TOPIC_TOO_LONG_LINE,
+                      ref: { collection: 'notes' as const, id: noteId },
+                    },
+                  ]
+                : []),
+            ],
+            summary: topicId ? topicLine : noteLine,
+          },
+        ],
+      };
+    },
+    { imports: [], notKept: [], used: 0 },
+  );
+}
+
+/** Decides each attachment: a keep goes on the records it names that still resolve (at most what the effects have room for), a Markdown file kept as a note goes on that note, and every other one is let go for a day. */
 export function planMediaDecisions(input: {
   media: MediaInput;
   /** A target's record as it will exist after the turn, or null when it does not. */
   resolve: (target: MediaTarget) => { id: string; title: string } | null;
+  /** The note each Markdown file kept as a note became, by alias. */
+  imported: Map<string, { noteId: string; title: string }>;
   room: number;
   now: number;
   seal: (fields: Record<string, unknown>) => SealedPayload;
@@ -232,8 +439,8 @@ export function planMediaDecisions(input: {
     deleteAfter: now + LET_GO_WINDOW_MS,
   };
   const decided = media.decisions.flatMap((decision) => {
-    const photo = media.photos.get(decision.alias);
-    return photo ? [{ decision, photo }] : [];
+    const item = media.items.get(decision.alias);
+    return item ? [{ decision, photo: item }] : [];
   });
   const planned = decided.reduce<{
     kept: MediaPlan['kept'];
@@ -241,8 +448,10 @@ export function planMediaDecisions(input: {
     effectRefs: EffectRef[];
     effects: Effect[];
     keptTitles: string[];
+    keptKinds: string[];
   }>(
     (acc, { decision, photo }) => {
+      const note = input.imported.get(decision.alias);
       const targets = decision.targets.flatMap((target) => {
         const found = input.resolve(target);
         return found
@@ -250,17 +459,21 @@ export function planMediaDecisions(input: {
           : [];
       });
       if (
-        decision.decision !== 'keep' ||
-        targets.length === 0 ||
-        acc.effects.length >= input.room
+        !note &&
+        (decision.decision !== 'keep' ||
+          targets.length === 0 ||
+          acc.effects.length >= input.room)
       ) {
         return {
           ...acc,
           letGo: [...acc.letGo, { id: photo.id, data: letGoData }],
         };
       }
-      const attachedTo = targets.map(({ kind, id }) => ({ kind, id }));
-      const title = targets[0].title;
+      const attachedTo = [
+        ...(note ? [{ kind: 'note', id: note.noteId }] : []),
+        ...targets.map(({ kind, id }) => ({ kind, id })),
+      ];
+      const title = note ? note.title : targets[0].title;
       const written = {
         'sealed.title': title,
         status: 'kept',
@@ -304,10 +517,18 @@ export function planMediaDecisions(input: {
           { op: 'update', collection: 'media', docId: photo.id },
         ],
         effects: [...acc.effects, { written, previous }],
-        keptTitles: [...acc.keptTitles, title],
+        keptTitles: note ? acc.keptTitles : [...acc.keptTitles, title],
+        keptKinds: note ? acc.keptKinds : [...acc.keptKinds, photo.kind],
       };
     },
-    { kept: [], letGo: [], effectRefs: [], effects: [], keptTitles: [] },
+    {
+      kept: [],
+      letGo: [],
+      effectRefs: [],
+      effects: [],
+      keptTitles: [],
+      keptKinds: [],
+    },
   );
   return {
     ...planned,
@@ -337,8 +558,17 @@ export interface WritePlan {
   /** Photos kept by this turn, and photos let go for a day. */
   mediaKept: { id: string; data: Record<string, unknown> }[];
   mediaLetGo: { id: string; data: Record<string, unknown> }[];
-  /** The title of each record a photo was kept on, for the summary. */
+  /** The title of each record a photo or file was kept on, and what each was, for the summary. */
   mediaKeptTitles: string[];
+  mediaKeptKinds: string[];
+  /** The summary words of each Markdown file kept as a note or topic. */
+  fileSummaries: string[];
+  /** The version records of topics made from files, by topic id. */
+  topicVersionCreates: {
+    topicId: string;
+    id: string;
+    data: Record<string, unknown>;
+  }[];
   topicUpdates: TopicFiling[];
   /** The versions the turn writes for topics, each with the placement it carries. */
   topicVersions: PlannedVersion[];
@@ -1447,9 +1677,83 @@ export function planWrites(input: PlanInput): WritePlan {
     };
   });
 
+  const knowledge = input.media
+    ? planFileKnowledge({
+        decisions: input.media.decisions,
+        items: input.media.items,
+        topics: input.topics,
+        noteCount: (input.noteCount ?? 0) + noteSteps.creates.length,
+        topicCount:
+          (input.topicTree ?? []).length + topicPlan.parentCreates.length,
+        room:
+          MAX_EFFECTS -
+          (effects.length +
+            drafts.size +
+            entities.newWho.length +
+            entities.newPlaces.length),
+        captureId: input.captureId,
+        executionId: input.executionId,
+        now,
+        newId: input.newId,
+        seal,
+      })
+    : { imports: [], notKept: [] };
+  const importFilings = knowledge.imports.reduce(
+    (state, made) => {
+      record(
+        made.noteId,
+        'create',
+        { 'sealed.title': made.summary },
+        null,
+        'notes',
+      );
+      if (made.topic) {
+        record(
+          made.topic.id,
+          'create',
+          {
+            'sealed.title': made.summary,
+            'sealed.name': made.topic.name,
+            importedVersion: 1,
+          },
+          null,
+          'topics',
+        );
+      }
+      return made.filedTopicIds.reduce((inner, topicId) => {
+        const before = inner.working.get(topicId) ?? {
+          docState: input.topics?.get(topicId)?.docState ?? 'empty',
+          pendingNoteIds: input.topics?.get(topicId)?.pendingNoteIds ?? [],
+        };
+        const after = {
+          docState: toBehindState(before.docState),
+          pendingNoteIds: [...before.pendingNoteIds, made.noteId],
+        };
+        record(topicId, 'update', after, before, 'topics');
+        const earlier = inner.filings.get(topicId);
+        return {
+          working: new Map(inner.working).set(topicId, after),
+          filings: new Map(inner.filings).set(topicId, {
+            id: topicId,
+            docState: after.docState,
+            addPendingIds: [...(earlier?.addPendingIds ?? []), made.noteId],
+          }),
+        };
+      }, state);
+    },
+    { working: refiled.working, filings: refiled.filings },
+  );
+  const importedByAlias = new Map(
+    knowledge.imports.map((made) => [
+      made.alias,
+      { noteId: made.noteId, title: made.noteTitle },
+    ]),
+  );
+
   const mediaPlan: MediaPlan = input.media
     ? planMediaDecisions({
         media: input.media,
+        imported: importedByAlias,
         resolve: (target) => {
           const draft =
             target.kind === 'task' ? drafts.get(target.ref) : undefined;
@@ -1461,7 +1765,14 @@ export function planWrites(input: PlanInput): WritePlan {
         now,
         seal,
       })
-    : { kept: [], letGo: [], effectRefs: [], effects: [], keptTitles: [] };
+    : {
+        kept: [],
+        letGo: [],
+        effectRefs: [],
+        effects: [],
+        keptTitles: [],
+        keptKinds: [],
+      };
 
   const isFiling = effects.length + mediaPlan.effects.length > 0;
   const people = input.people;
@@ -1758,14 +2069,32 @@ export function planWrites(input: PlanInput): WritePlan {
     keyDateDeletes: keyDatePlan.deletes,
     projectCreates: projectPlan.creates,
     projectUpdates: projectPlan.updates,
-    noteCreates: noteSteps.creates,
+    noteCreates: [
+      ...noteSteps.creates,
+      ...knowledge.imports.map((made) => ({
+        id: made.noteId,
+        data: made.noteData,
+      })),
+    ],
     mediaKept: mediaPlan.kept,
     mediaLetGo: mediaPlan.letGo,
     mediaKeptTitles: mediaPlan.keptTitles,
-    topicUpdates: [...refiled.filings.values()],
+    mediaKeptKinds: mediaPlan.keptKinds,
+    fileSummaries: knowledge.imports.map((made) => made.summary),
+    topicVersionCreates: knowledge.imports.flatMap((made) =>
+      made.topic
+        ? [{ topicId: made.topic.id, id: '1', data: made.topic.version }]
+        : [],
+    ),
+    topicUpdates: [...importFilings.filings.values()],
     topicVersions: topicPlan.versions,
     topicPlacements: topicPlan.placements,
-    topicCreates: topicPlan.parentCreates,
+    topicCreates: [
+      ...topicPlan.parentCreates,
+      ...knowledge.imports.flatMap((made) =>
+        made.topic ? [{ id: made.topic.id, data: made.topic.data }] : [],
+      ),
+    ],
     topicRetry: topicPlan.retry.length,
     notesMade: noteSteps.creates.length,
     spokenNote:
@@ -1774,7 +2103,10 @@ export function planWrites(input: PlanInput): WritePlan {
         : noteSteps.creates.length === 1
           ? buildSpokenNote(noteSteps.names[0]?.[0] ?? null)
           : `${describeNotes(noteSteps.creates.length)}.`,
-    lines: noteSteps.lines,
+    lines: [
+      ...noteSteps.lines,
+      ...knowledge.imports.flatMap((made) => made.lines),
+    ],
     projectsMade: projectPlan.creates.length,
     rolesSet: projectPlan.rolesSet,
     milestonesAdded: projectPlan.milestonesAdded,
@@ -1782,7 +2114,7 @@ export function planWrites(input: PlanInput): WritePlan {
       isFiling && keyDatePlan.changes.length > 0
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
         : null,
-    notKept,
+    notKept: [...notKept, ...knowledge.notKept],
     topicLines: topicPlan.topicLines,
     linkedWhoIds: isFiling
       ? union(
@@ -2064,7 +2396,8 @@ export function buildExecution(
           plan.milestonesAdded,
         ),
         describeNotes(plan.notesMade),
-        describeKeptPhotos(plan.mediaKeptTitles),
+        describeKeptPhotos(plan.mediaKeptTitles, plan.mediaKeptKinds),
+        ...plan.fileSummaries,
         describeTopicChanges(plan.topicLines.length),
         ...plan.notKept,
         homeLine,

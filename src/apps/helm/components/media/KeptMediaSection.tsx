@@ -1,18 +1,27 @@
 import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { ChevronRight, FileText, Mic } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import { HELM_COPY } from '@apps/helm/constants';
-import type { MediaAttachment } from '@apps/helm/types';
+import { formatClock } from '@/utils/durationUtils';
+import type { MediaAttachment, OpenMedia } from '@apps/helm/types';
 
 interface KeptMediaSectionProps {
   record: MediaAttachment;
 }
 
-/** The photos kept on a task or fact, as a row of thumbnails that each open the photo. Draws nothing while there are none. */
+const getMeta = (media: OpenMedia) =>
+  media.kind === 'pdf'
+    ? HELM_COPY.mediaPdfPages(media.pageCount)
+    : media.kind === 'markdown'
+      ? HELM_COPY.attachMarkdownMeta
+      : HELM_COPY.attachVoiceMeta(formatClock(media.durationMs ?? 0));
+
+/** The photos kept on a task, fact or note, as a row of thumbnails that each open the photo, and a row under them for each PDF, Markdown file or recording. Draws nothing while there are none. */
 function KeptMediaSection({ record }: KeptMediaSectionProps) {
   const items = useAppSelector((state) => state.helm.media.items);
   const [viewedId, setViewedId] = useState<string | null>(null);
@@ -23,35 +32,77 @@ function KeptMediaSection({ record }: KeptMediaSectionProps) {
         (held) => held.kind === record.kind && held.id === record.id,
       ),
   );
+  const photos = shown.filter((entry) => entry.kind === 'photo');
+  const files = shown.filter((entry) => entry.kind !== 'photo');
   const viewed = shown.find((entry) => entry.id === viewedId) ?? null;
   if (shown.length === 0) return null;
 
   return (
     <div>
-      <ul className='-mx-4 flex gap-2 overflow-x-auto px-4'>
-        {shown.map((media, index) => (
-          <li key={media.id} className='shrink-0'>
-            <Button
-              type='button'
-              variant='tertiary'
-              className="relative block size-16 rounded-xl p-0! before:absolute before:-inset-1 before:content-['']"
-              aria-label={HELM_COPY.mediaViewOnRecord(index + 1, shown.length)}
-              onClick={() => setViewedId(media.id)}
-            >
-              <MediaThumb
-                media={media}
-                alt=''
-                className='size-full rounded-xl'
-                fallback={
-                  <span className='text-muted-foreground grid size-full place-items-center p-1 text-center text-[11px]'>
-                    {HELM_COPY.mediaUnreadable}
+      {photos.length > 0 && (
+        <ul className='-mx-4 flex gap-2 overflow-x-auto px-4'>
+          {photos.map((media, index) => (
+            <li key={media.id} className='shrink-0'>
+              <Button
+                type='button'
+                variant='tertiary'
+                className="relative block size-16 rounded-xl p-0! before:absolute before:-inset-1 before:content-['']"
+                aria-label={HELM_COPY.mediaViewOnRecord(
+                  index + 1,
+                  photos.length,
+                )}
+                onClick={() => setViewedId(media.id)}
+              >
+                <MediaThumb
+                  media={media}
+                  alt=''
+                  className='size-full rounded-xl'
+                  fallback={
+                    <span className='text-muted-foreground grid size-full place-items-center p-1 text-center text-[11px]'>
+                      {HELM_COPY.mediaUnreadable}
+                    </span>
+                  }
+                />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {files.length > 0 && (
+        <ul className={photos.length > 0 ? 'mt-2 space-y-1' : 'space-y-1'}>
+          {files.map((media) => (
+            <li key={media.id}>
+              <Button
+                type='button'
+                variant='tertiary'
+                className='h-auto w-full min-w-0 justify-start gap-3 px-0! py-2 text-left font-normal'
+                aria-label={HELM_COPY.mediaViewFile(
+                  media.fileName ?? HELM_COPY.mediaWord(media.kind),
+                )}
+                onClick={() => setViewedId(media.id)}
+              >
+                {media.kind === 'voiceNote' ? (
+                  <Mic className='size-5 shrink-0' aria-hidden='true' />
+                ) : (
+                  <FileText className='size-5 shrink-0' aria-hidden='true' />
+                )}
+                <span className='min-w-0 flex-1'>
+                  <span className='block truncate text-[15px]'>
+                    {media.fileName ?? HELM_COPY.mediaSheetTitle(media.kind)}
                   </span>
-                }
-              />
-            </Button>
-          </li>
-        ))}
-      </ul>
+                  <span className='text-muted-foreground block text-[13px]'>
+                    {getMeta(media)}
+                  </span>
+                </span>
+                <ChevronRight
+                  className='text-muted-foreground size-4 shrink-0'
+                  aria-hidden='true'
+                />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
       {viewed && (
         <KeptMediaViewer
           media={viewed}

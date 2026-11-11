@@ -78,6 +78,7 @@ export const NAME_CAP = 80;
 export const PLAN_DAY_AHEAD = 6;
 export const MAX_EFFECTS = 40;
 export const MAX_MEDIA_TARGETS = 3;
+export const MAX_MEDIA_TOPICS = 10;
 export const TITLE_CAP = 200;
 export const QUESTION_CAP = 200;
 export const ANSWER_TEXT_CAP = 1_200;
@@ -442,6 +443,11 @@ export interface MediaDecision {
   decision: 'keep' | 'discard';
   caption: string | null;
   targets: MediaTarget[];
+  /** A Markdown file only: kept as a note, and as a topic too when `asTopic`. */
+  asNote: boolean;
+  asTopic: boolean;
+  /** The topics the note is filed to, as ids. */
+  topicIds: string[];
 }
 
 /** One flat object per command, every field required and nullable, so the model's reply is checked against it before code reads it. */
@@ -457,13 +463,24 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
       media: {
         type: 'array',
         description:
-          'One entry for each photo in <attachments>, none for a turn with no photos. Keep a photo only when it is worth seeing again on a task or a fact; otherwise discard it.',
+          'One entry for each photo, PDF or Markdown file in <attachments>, none for a turn with none. Keep one only when it is worth seeing again on a task or a fact; otherwise discard it. A recording is never listed.',
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['alias', 'decision', 'caption', 'attachTo'],
+          required: [
+            'alias',
+            'decision',
+            'caption',
+            'attachTo',
+            'asNote',
+            'asTopic',
+            'topicAliases',
+          ],
           properties: {
-            alias: { type: 'string', description: 'A photo alias such as m1.' },
+            alias: {
+              type: 'string',
+              description: 'An attachment alias such as m1.',
+            },
             decision: { type: 'string', enum: ['keep', 'discard'] },
             caption: nullable(
               'string',
@@ -471,7 +488,22 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             attachTo: {
               type: 'array',
-              description: `keep: at most ${MAX_MEDIA_TARGETS} of a task alias from <open_tasks>, a $new ref of a createTask in this reply, or a fact alias from <known_facts>; empty for discard.`,
+              description: `keep: at most ${MAX_MEDIA_TARGETS} of a task alias from <open_tasks>, a $new ref of a createTask in this reply, or a fact alias from <known_facts>; empty for discard or for a file kept as a note or topic.`,
+              items: { type: 'string' },
+            },
+            asNote: {
+              type: 'boolean',
+              description:
+                'Markdown file only: keep its text as a note. false for anything else.',
+            },
+            asTopic: {
+              type: 'boolean',
+              description:
+                'Markdown file only: also make a topic from it. Only when the person asks for a topic or the file plainly is a document to keep. false for anything else.',
+            },
+            topicAliases: {
+              type: 'array',
+              description: `Markdown file kept as a note: at most ${MAX_MEDIA_TOPICS} topic aliases from <your_topics> to file the note to; empty otherwise.`,
               items: { type: 'string' },
             },
           },

@@ -116,8 +116,17 @@ export interface ContextInput {
   topics?: ContextTopic[];
   /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
   notes?: ContextNote[];
-  /** The photos sent with the turn, by alias. */
-  attachments?: { alias: string; kind: 'photo' }[];
+  /** The photos and files sent with the turn, by alias. */
+  attachments?: { alias: string; kind: 'photo' | 'pdf' | 'markdown' }[];
+  /** What the files say, as data: each name and text goes through `toDataJson`, so a file can never close the block. */
+  files?: {
+    alias: string;
+    kind: 'pdf' | 'markdown';
+    name: string;
+    pages: number | null;
+    text: string | null;
+    isCut: boolean;
+  }[];
   focusedTopic?: ContextFocusedTopic | null;
   /** How much of the focused topic's document the model sees; the whole of it when left out. */
   topicDocument?: 'whole' | 'outline' | null;
@@ -394,6 +403,9 @@ export function buildContext(input: ContextInput): {
       : []),
     ...(input.attachments?.length
       ? [`<attachments>${toDataJson(input.attachments)}</attachments>`]
+      : []),
+    ...(input.files?.length
+      ? [`<files>${toDataJson(input.files)}</files>`]
       : []),
     ...(input.alreadyMade
       ? [`<already_made>${toDataJson(input.alreadyMade)}</already_made>`]

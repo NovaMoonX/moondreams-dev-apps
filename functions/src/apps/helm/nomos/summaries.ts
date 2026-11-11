@@ -253,13 +253,34 @@ export const describeNotes = (count: number) =>
 export const buildPhotosNotOpenedLine = (count: number) =>
   count === 1 ? "Couldn't open one photo" : `Couldn't open ${count} photos`;
 
-/** "Kept the photo" or "Kept 2 photos"; the photo's own line under the card names where it went. */
-export const describeKeptPhotos = (titles: string[]) =>
-  titles.length === 0
-    ? null
-    : titles.length === 1
-      ? 'Kept the photo'
-      : `Kept ${titles.length} photos`;
+/** The line for a file that would not read, naming it. */
+export const buildFileNotReadLine = (name: string) =>
+  `Couldn't read ${name}. It may be protected or scanned too faintly.`;
+
+/** What a turn kept of what it was sent: "Kept the photo", "Kept 2 photos", "Kept the PDF" or, for mixed kinds, "Kept 3 files"; each one's own line under the card names where it went. */
+export const describeKeptPhotos = (
+  titles: string[],
+  kinds: string[] = titles.map(() => 'photo'),
+) => {
+  if (titles.length === 0) return null;
+  const word = kinds.every((kind) => kind === kinds[0])
+    ? ({ photo: 'photo', pdf: 'PDF' } as Record<string, string>)[kinds[0]]
+    : undefined;
+  return titles.length === 1
+    ? `Kept the ${word ?? 'file'}`
+    : `Kept ${titles.length} ${word ? `${word}s` : 'files'}`;
+};
+
+/** "Kept {file} as a note", for a Markdown file kept as a note. */
+export const buildFileNoteLine = (name: string) => `Kept ${name} as a note`;
+
+/** "Made the topic {name} from {file}". */
+export const buildFileTopicLine = (topic: string, name: string) =>
+  `Made the topic ${topic} from ${name}`;
+
+/** Said when a file was too long to become a topic. */
+export const FILE_TOPIC_TOO_LONG_LINE =
+  'Kept as a note; too long to make a topic';
 
 /** "Saved a note." or "Saved a note in Kitchen." */
 export const buildSpokenNote = (topicName: string | null) =>

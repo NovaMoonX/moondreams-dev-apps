@@ -690,7 +690,7 @@ export type MediaStatus = 'uploading' | 'received' | 'kept' | 'discarded';
 
 /** A record a medium shows on, by id. */
 export interface MediaAttachment {
-  kind: 'who' | 'place' | 'task' | 'fact';
+  kind: 'who' | 'place' | 'task' | 'fact' | 'note';
   id: string;
 }
 
@@ -700,15 +700,21 @@ export interface PhotoOwner {
   id: string;
 }
 
-/** `apps/helm/users/{uid}/media/{mediaId}`: a photo whose sealed bytes are in Storage. Only the fields photos use so far; the rest of the shape arrives with the media a turn attaches. */
+export type MediaKind = 'photo' | 'pdf' | 'voiceNote' | 'markdown';
+
+/** `apps/helm/users/{uid}/media/{mediaId}`: a photo, PDF, voice note or Markdown file. Its sealed bytes are in Storage, except a Markdown file, whose text is sealed in this document. */
 export interface Media {
-  kind: 'photo';
+  kind: MediaKind;
   /** A who's or place's picture, as opposed to a file a turn brought in. */
   role: 'attachment' | 'photo';
   status: MediaStatus;
   /** Of the original, before sealing. */
   mimeType: string;
   hasThumb: boolean;
+  /** A voice note's recorded length; null on any other kind. */
+  durationMs: number | null;
+  /** A PDF's pages as the device counted them; null on any other kind. */
+  pageCount: number | null;
   attachedTo: MediaAttachment[];
   decidedBy: 'nomos' | 'person' | null;
   createdAt: number;
@@ -723,12 +729,17 @@ export interface Media {
 }
 
 export interface MediaSealed {
-  bytesNonce: string;
+  /** Null for a Markdown file, which has no Storage object. */
+  bytesNonce: string | null;
   thumbNonce: string | null;
   /** The assistant's one line about a photo it kept, up to 200 characters; null on any other. */
   caption: string | null;
   /** The data key that sealed the bytes. */
   keyId: string;
+  /** A PDF's or Markdown file's name, up to 120 characters. */
+  fileName: string | null;
+  /** A Markdown file's text (up to 20,000 characters) or a voice note's transcript (up to 5,000). */
+  text: string | null;
 }
 
 /** A medium after its nonces are opened; one that would not open keeps `isUnreadable` and cannot be shown. */

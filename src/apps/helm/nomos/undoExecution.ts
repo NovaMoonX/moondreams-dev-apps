@@ -26,7 +26,7 @@ import {
   type IndexChange,
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
-import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
+import { getMediaObjectPaths } from '@apps/helm/utils/mediaPath';
 import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
 import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
@@ -42,6 +42,7 @@ import type {
   ExecutionSealed,
   HelmEncryption,
   KeyDateSealed,
+  MediaKind,
   NoteSealed,
   ProjectSealed,
   Sealed,
@@ -336,6 +337,11 @@ const isUnavailable = (error: unknown) =>
   error !== null &&
   (error as { code?: unknown }).code === 'unavailable';
 
+const toMediaKind = (value: unknown): MediaKind =>
+  value === 'pdf' || value === 'voiceNote' || value === 'markdown'
+    ? value
+    : 'photo';
+
 /** Takes an execution back in one transaction that re-reads it and every record it touched, so it only restores what is still as the assistant left it. */
 export async function undoExecution(
   uid: string,
@@ -532,9 +538,23 @@ export async function undoExecution(
           plan.undoSealed,
           encryption,
         );
-        plan.deletes.forEach(({ docId, collection: from }) =>
-          transaction.delete(docOf({ docId, collection: from })),
-        );
+        plan.deletes.forEach(({ docId, collection: from }) => {
+          transaction.delete(docOf({ docId, collection: from }));
+          // A topic made from a file is deleted at the version the import wrote, so its version records go with it.
+          const written = Number(targets.get(docId)?.data?.version);
+          Array.from(
+            { length: from === 'topics' && written > 0 ? written : 0 },
+            (_, index) => index + 1,
+          ).forEach((version) =>
+            transaction.delete(
+              doc(
+                docOf({ docId, collection: from }),
+                'versions',
+                String(version),
+              ),
+            ),
+          );
+        });
         plan.updates.forEach((update, index) =>
           transaction.update(docOf(update), {
             ...Object.fromEntries(
@@ -586,12 +606,12 @@ export async function undoExecution(
           report: plan.report,
           objectPaths: plan.deletes.flatMap(({ docId, collection: from }) =>
             from === 'media'
-              ? [
-                  getMediaObjectPath(uid, docId, false),
-                  ...(targets.get(docId)?.data?.hasThumb === true
-                    ? [getMediaObjectPath(uid, docId, true)]
-                    : []),
-                ]
+              ? getMediaObjectPaths(
+                  uid,
+                  docId,
+                  toMediaKind(targets.get(docId)?.data?.kind),
+                  targets.get(docId)?.data?.hasThumb === true,
+                )
               : [],
           ),
         };

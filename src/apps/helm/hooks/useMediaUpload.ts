@@ -12,9 +12,17 @@ import {
   addPhoto,
   removeAttachment,
   type PhotoOwner,
+  transcribeVoiceNote,
   uploadAttachment,
 } from '@apps/helm/store/actions/mediaActions';
-import { fitAttachments } from '@apps/helm/utils/mediaCaps';
+import {
+  type AttachmentKind,
+  checkMeasured,
+  fitAttachments,
+  kindOfFile,
+  type PickRefusal,
+} from '@apps/helm/utils/mediaCaps';
+import { measurePdf } from '@lib/pdf/pdfPages';
 
 /** Adds a picked photo to a who or place: shrunk on this device (512 px for a who's main photo, 1280 px otherwise), a 512 px thumbnail made, both sealed and uploaded. Says what happened in a toast. */
 export function useMediaUpload(owner: PhotoOwner, isMain: boolean) {
@@ -68,20 +76,80 @@ export function useMediaUpload(owner: PhotoOwner, isMain: boolean) {
 
 export interface TurnAttachment {
   key: string;
-  /** The picked file as shown while it uploads and after. */
-  previewUrl: string;
+  kind: AttachmentKind;
+  /** The picked photo as shown while it uploads and after; null for any other kind. */
+  previewUrl: string | null;
   source: File;
-  status: 'uploading' | 'ready' | 'failed';
+  /** What the device measured: a PDF's pages, a Markdown file's text, a voice note's length. */
+  measured: {
+    pageCount: number | null;
+    text: string | null;
+    durationMs: number | null;
+  };
+  status: 'uploading' | 'transcribing' | 'ready' | 'failed';
+  /** Why a failed chip failed; null while it has not. */
+  failure: 'upload' | 'transcribe' | 'usedUp' | null;
+  /** True once a voice note's words are in the field. */
+  isWritten: boolean;
   mediaId: string | null;
 }
 
-/** The photos picked for the turn being written, in pick order: each is shrunk on this device to 1,600 px with a thumbnail, sealed and uploaded as it is picked, and listed for Send once it is `ready`. A sixth photo is refused before any shrink or upload. */
-export function useTurnAttachments() {
+interface TurnAttachmentsOptions {
+  timeZone: string;
+  /** Receives a voice note's words once they are written out; the caller puts them in its field. */
+  onTranscript: (text: string) => void;
+}
+
+const NO_MEASURE = { pageCount: null, text: null, durationMs: null };
+
+const MIME_OF_KIND = { pdf: 'application/pdf', markdown: 'text/markdown' };
+
+const toPreview = (source: File, kind: AttachmentKind) =>
+  kind === 'photo' ? URL.createObjectURL(source) : null;
+
+const revoke = (entry: TurnAttachment) => {
+  if (entry.previewUrl) URL.revokeObjectURL(entry.previewUrl);
+};
+
+const refusalText = (
+  reason: PickRefusal,
+  file: File,
+  measured: { pages: number | null; chars: number | null } | null = null,
+) => {
+  const kind = kindOfFile(file);
+  if (reason === 'notSupported') return HELM_COPY.attachNotSupported;
+  if (reason === 'tooManyPages') {
+    return HELM_COPY.attachTooManyPages(measured?.pages ?? 0);
+  }
+  if (reason === 'tooLong') {
+    return kind === 'voiceNote'
+      ? HELM_COPY.attachVoiceTooLong
+      : HELM_COPY.attachMarkdownTooLong(measured?.chars ?? 0);
+  }
+  if (reason === 'tooLarge') {
+    return kind === 'pdf'
+      ? HELM_COPY.attachPdfTooLarge
+      : kind === 'voiceNote'
+        ? HELM_COPY.attachVoiceTooLong
+        : HELM_COPY.attachMarkdownTooLarge;
+  }
+  return HELM_COPY.attachTooMany;
+};
+
+/** The photos, PDFs, Markdown files and voice notes picked for the turn being written, in pick order: each is measured on this device (a PDF's pages, a Markdown file's characters), refused before upload when over its cap, sealed and uploaded as it is picked, and listed for Send once it is `ready`. A voice note is then written out and its words handed to `onTranscript`. A sixth item is refused before any work. */
+export function useTurnAttachments({
+  timeZone,
+  onTranscript,
+}: TurnAttachmentsOptions) {
   const { user } = useAuth();
   const { addToast } = useToast();
   const [items, setItems] = useState<TurnAttachment[]>([]);
   const latest = useRef<TurnAttachment[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
+  const transcript = useRef(onTranscript);
+  useEffect(() => {
+    transcript.current = onTranscript;
+  });
 
   const update = (change: (held: TurnAttachment[]) => TurnAttachment[]) => {
     latest.current = change(latest.current);
@@ -96,37 +164,147 @@ export function useTurnAttachments() {
 
   useEffect(
     () => () => {
-      latest.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+      latest.current.forEach(revoke);
     },
     [],
   );
 
-  const run = async (key: string, source: File) => {
-    if (!user) return;
-    patch(key, { status: 'uploading' });
+  const refuse = (
+    key: string,
+    file: File,
+    reason: PickRefusal,
+    measured: {
+      pages: number | null;
+      chars: number | null;
+    },
+  ) => {
+    const text = refusalText(reason, file, measured);
+    addToast({ title: text, type: 'info' });
+    setNotice(text);
+    update((held) => held.filter((entry) => entry.key !== key));
+  };
+
+  const write = async (key: string, mediaId: string) => {
+    patch(key, { status: 'transcribing', failure: null });
     try {
-      const file = await compressImageForUse(source, 'cover');
-      if (!file) throw new Error('This browser could not open the photo.');
-      const thumb =
-        (await compressImageForUse(file, 'thumbnail').catch(() => null)) ??
-        file;
+      const result = await transcribeVoiceNote(mediaId, timeZone);
+      if (!latest.current.some((entry) => entry.key === key)) return;
+      if (result.status === 'ready') {
+        patch(key, { status: 'ready', isWritten: true });
+        transcript.current(result.text);
+        return;
+      }
+      patch(key, {
+        status: 'failed',
+        failure:
+          result.reason === 'listenLimit' || result.reason === 'budgetReached'
+            ? 'usedUp'
+            : 'transcribe',
+      });
+    } catch (failure) {
+      console.error('Helm voice note was not written out', failure);
+      patch(key, { status: 'failed', failure: 'transcribe' });
+    }
+  };
+
+  const measure = async (entry: TurnAttachment) => {
+    if (entry.kind === 'pdf') {
+      const result = await measurePdf(
+        new Uint8Array(await entry.source.arrayBuffer()),
+      );
+      return {
+        ...NO_MEASURE,
+        pageCount: result.status === 'ok' ? result.pageCount : null,
+      };
+    }
+    if (entry.kind === 'markdown') {
+      return { ...NO_MEASURE, text: await entry.source.text() };
+    }
+    return entry.measured;
+  };
+
+  const run = async (key: string) => {
+    const entry = latest.current.find((held) => held.key === key);
+    if (!user || !entry) return;
+    patch(key, { status: 'uploading', failure: null });
+    try {
+      if (entry.mediaId) {
+        await write(key, entry.mediaId);
+        return;
+      }
+      const measured = await measure(entry);
+      const refusal = checkMeasured(entry.kind, {
+        pages: measured.pageCount,
+        chars: measured.text?.length ?? null,
+        durationMs: measured.durationMs,
+      });
+      if (refusal) {
+        refuse(key, entry.source, refusal, {
+          pages: measured.pageCount,
+          chars: measured.text?.length ?? null,
+        });
+        return;
+      }
+      patch(key, { measured });
       const encryption = await getHelmEncryption(user.uid);
+      const isPhoto = entry.kind === 'photo';
+      const file = isPhoto
+        ? await compressImageForUse(entry.source, 'cover')
+        : entry.source;
+      if (!file) throw new Error('This browser could not open the photo.');
+      const thumb = isPhoto
+        ? ((await compressImageForUse(file, 'thumbnail').catch(() => null)) ??
+          file)
+        : null;
       const mediaId = await uploadAttachment(user.uid, encryption, {
-        file,
+        kind: entry.kind,
+        mimeType:
+          isPhoto || entry.kind === 'voiceNote'
+            ? file.type
+            : MIME_OF_KIND[entry.kind as 'pdf' | 'markdown'],
+        file: entry.kind === 'markdown' ? null : file,
         thumb,
+        durationMs: measured.durationMs,
+        pageCount: measured.pageCount,
+        fileName:
+          entry.kind === 'pdf' || entry.kind === 'markdown'
+            ? entry.source.name.slice(0, 120)
+            : null,
+        text: measured.text,
       });
       // Removed while it uploaded: nothing lists it, so it is let go now rather than left for the sweep.
-      if (!latest.current.some((entry) => entry.key === key)) {
-        void removeAttachment(user.uid, mediaId, true).catch((error: unknown) =>
-          console.error('A photo was not removed', error),
+      if (!latest.current.some((held) => held.key === key)) {
+        void removeAttachment(user.uid, mediaId, entry.kind).catch(
+          (error: unknown) =>
+            console.error('An attachment was not removed', error),
         );
         return;
       }
       patch(key, { status: 'ready', mediaId });
+      if (entry.kind === 'voiceNote') await write(key, mediaId);
     } catch (failure) {
-      console.error('Helm photo was not uploaded', failure);
-      patch(key, { status: 'failed' });
+      console.error('Helm attachment was not uploaded', failure);
+      patch(key, { status: 'failed', failure: 'upload' });
     }
+  };
+
+  const enqueue = (
+    accepted: { file: File; kind: AttachmentKind }[],
+    durationMs: number | null,
+  ) => {
+    const added = accepted.map(({ file, kind }): TurnAttachment => ({
+      key: generateUuid(),
+      kind,
+      previewUrl: toPreview(file, kind),
+      source: file,
+      measured: { ...NO_MEASURE, durationMs },
+      status: 'uploading',
+      failure: null,
+      isWritten: false,
+      mediaId: null,
+    }));
+    update((held) => [...held, ...added]);
+    added.forEach((entry) => void run(entry.key));
   };
 
   const add = (picked: File[]) => {
@@ -136,71 +314,77 @@ export function useTurnAttachments() {
       return;
     }
     const { accepted, refused } = fitAttachments(latest.current.length, picked);
-    const reasons = refused.map((entry) => entry.reason);
-    const refusal = reasons.includes('tooMany')
+    const first = refused.find((entry) => entry.reason === 'tooMany');
+    const other = refused[0];
+    const refusal = first
       ? accepted.length > 0
         ? HELM_COPY.attachSomeFit(accepted.length)
         : HELM_COPY.attachTooMany
-      : reasons.includes('notPhoto')
-        ? HELM_COPY.attachNotPhoto
+      : other
+        ? refusalText(other.reason, other.file)
         : null;
     if (refusal) addToast({ title: refusal, type: 'info' });
     setNotice(refusal);
-    const added = accepted.map((source): TurnAttachment => ({
-      key: generateUuid(),
-      previewUrl: URL.createObjectURL(source),
-      source,
-      status: 'uploading',
-      mediaId: null,
-    }));
-    update((held) => [...held, ...added]);
-    added.forEach((entry) => void run(entry.key, entry.source));
+    enqueue(accepted, null);
   };
 
-  const retry = (key: string) => {
-    const found = latest.current.find((entry) => entry.key === key);
-    if (found) void run(key, found.source);
+  /** A voice note just recorded, counted like any pick. */
+  const addVoiceNote = (file: File, durationMs: number) => {
+    const { accepted } = fitAttachments(latest.current.length, [file]);
+    if (accepted.length === 0) {
+      addToast({ title: HELM_COPY.attachTooMany, type: 'info' });
+      setNotice(HELM_COPY.attachTooMany);
+      return;
+    }
+    setNotice(null);
+    enqueue(accepted, durationMs);
   };
+
+  const retry = (key: string) => void run(key);
 
   const remove = (key: string) => {
     const found = latest.current.find((entry) => entry.key === key);
     if (!found || !user) return;
-    URL.revokeObjectURL(found.previewUrl);
+    revoke(found);
     update((held) => held.filter((entry) => entry.key !== key));
     if (found.mediaId) {
-      void removeAttachment(user.uid, found.mediaId, true).catch(
-        (error: unknown) => console.error('A photo was not removed', error),
+      void removeAttachment(user.uid, found.mediaId, found.kind).catch(
+        (error: unknown) =>
+          console.error('An attachment was not removed', error),
       );
     }
   };
 
-  /** Forgets the chips once their photos are sent; the photos stay. */
+  /** Forgets the chips once their files are sent; the files stay. */
   const clear = () => {
-    latest.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    latest.current.forEach(revoke);
     setNotice(null);
     update(() => []);
   };
 
-  /** Puts chips for photos already uploaded back, after the turn that carried them did not send. */
+  /** Puts chips for files already uploaded back, after the turn that carried them did not send. */
   const restore = (sent: TurnAttachment[]) =>
     update((held) => [
       ...held,
       ...sent.map((entry) => ({
         ...entry,
-        previewUrl: URL.createObjectURL(entry.source),
+        previewUrl: toPreview(entry.source, entry.kind),
       })),
     ]);
 
   return {
     items,
     add,
+    addVoiceNote,
     retry,
     remove,
     clear,
     restore,
     notice,
     isUploading: items.some((entry) => entry.status === 'uploading'),
+    isWriting: items.some((entry) => entry.status === 'transcribing'),
     hasFailed: items.some((entry) => entry.status === 'failed'),
+    hasWrittenVoiceNote: items.some((entry) => entry.isWritten),
     mediaIds: items.flatMap((entry) =>
       entry.mediaId !== null ? [entry.mediaId] : [],
     ),

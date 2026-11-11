@@ -1,6 +1,13 @@
 import { formatCentsShort } from '@/utils/moneyUtils';
-import type { TopicVersionReason } from '@apps/helm/types';
-import { MAX_ATTACHMENTS_PER_TURN } from '@apps/helm/utils/mediaCaps';
+import type { MediaKind, TopicVersionReason } from '@apps/helm/types';
+import {
+  MAX_ATTACHMENTS_PER_TURN,
+  MAX_MARKDOWN_BYTES,
+  MAX_MARKDOWN_CHARS,
+  MAX_PDF_BYTES,
+  MAX_PDF_PAGES,
+  MAX_VOICE_NOTE_MS,
+} from '@apps/helm/utils/mediaCaps';
 
 export const DEFAULT_ASSISTANT_NAME = 'Nomos';
 
@@ -232,6 +239,16 @@ const toTopicPhrase = (
       ? `1 change to ${name ?? 'a topic'}`
       : `${count} changes to topics`;
 
+/** What a kept photo, PDF, voice note or file is called in a sentence. */
+const mediaWordOf = (kind: MediaKind) =>
+  kind === 'photo'
+    ? 'photo'
+    : kind === 'pdf'
+      ? 'PDF'
+      : kind === 'voiceNote'
+        ? 'recording'
+        : 'file';
+
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
   talk: 'Talk',
@@ -451,54 +468,128 @@ export const HELM_COPY = {
       .filter(Boolean)
       .join(' '),
   resultPhotoFallback: 'A photo',
-  attachMenuLabel: 'Add a photo',
+  mediaFallbackTitle: (kind: MediaKind, fileName: string | null) =>
+    kind === 'photo'
+      ? 'A photo'
+      : kind === 'pdf'
+        ? 'A PDF'
+        : kind === 'voiceNote'
+          ? 'A recording'
+          : (fileName ?? 'A file'),
+  mediaNoun: (kind: MediaKind, fileName: string | null) =>
+    kind === 'photo'
+      ? 'the photo'
+      : kind === 'pdf'
+        ? 'the PDF'
+        : kind === 'voiceNote'
+          ? 'the recording'
+          : (fileName ?? 'the file'),
+  mediaWord: mediaWordOf,
+  attachMenuLabel: 'Add a photo or file',
   attachTake: 'Take a photo',
   attachChoose: 'Choose photos',
+  attachChooseFile: 'Choose a PDF or Markdown file',
+  attachRecord: 'Record a voice note',
   attachNote: (name: string) =>
     `${name} reads what you send to sort it, and keeps only what's useful. You'll see what it kept.`,
-  attachRemove: 'Remove photo',
+  attachRemove: 'Remove',
   attachFailed: "Didn't upload",
   attachTryAgain: 'Try again',
   attachUploading: 'Uploading',
-  attachTooMany: `Up to ${MAX_ATTACHMENTS_PER_TURN} photos a turn. Remove one to add another.`,
+  attachTooMany: `Up to ${MAX_ATTACHMENTS_PER_TURN} photos or files a turn. Remove one to add another.`,
   attachSomeFit: (added: number) =>
-    `Added ${added}. Up to ${MAX_ATTACHMENTS_PER_TURN} photos a turn.`,
-  attachNotPhoto: 'Only photos and screenshots for now.',
+    `Added ${added}. Up to ${MAX_ATTACHMENTS_PER_TURN} photos or files a turn.`,
+  attachNotSupported: 'Photos, PDFs, Markdown files and voice notes only.',
+  attachTooManyPages: (pages: number) =>
+    `This PDF has ${pages} pages. Send one of up to ${MAX_PDF_PAGES} pages.`,
+  attachPdfTooLarge: `PDFs can be up to ${MAX_PDF_BYTES / 1024 / 1024} MB.`,
+  attachMarkdownTooLong: (chars: number) =>
+    `This file has ${chars.toLocaleString()} characters. Up to ${MAX_MARKDOWN_CHARS.toLocaleString()} can be read.`,
+  attachMarkdownTooLarge: `Markdown files can be up to ${MAX_MARKDOWN_BYTES / 1024} KB.`,
+  attachVoiceTooLong: `Voice notes can be up to ${MAX_VOICE_NOTE_MS / 60_000} minutes.`,
+  attachFileUnreadable: "This file couldn't be opened. Try another.",
   attachNeedsConnection:
-    'Sending a photo needs a connection. Your words stay here.',
-  attachWaiting: 'Waiting for your photos to upload.',
-  attachWaitingTitle: 'Photos are still uploading',
+    'Sending a photo or file needs a connection. Your words stay here.',
+  attachWaiting: 'Waiting for your photos and files to upload.',
+  attachWaitingTitle: 'Still uploading',
+  attachWaitingVoice: 'Waiting for your voice note to be written out.',
   attachFailedBlock:
-    "A photo didn't upload. Try again or remove it, then send.",
+    "A photo or file didn't upload. Try again or remove it, then send.",
   attachThumbLabel: (position: number) => `Photo ${position}`,
-  mediaKeptOn: (record: string) => `Kept the photo on ${record}`,
+  attachFileLabel: (name: string) => name,
+  attachPages: (pages: number) => `${pages} ${pages === 1 ? 'page' : 'pages'}`,
+  attachMarkdownMeta: 'Markdown',
+  attachVoiceMeta: (time: string) => `Voice note · ${time}`,
+  attachVoiceWritten: (time: string) => `Voice note · ${time} · Written out`,
+  attachWritingOut: 'Writing it out…',
+  attachWriteFailed: "Couldn't write this out",
+  attachVoiceUsedUp:
+    'Voice notes are used up for today. Type what it says, or try tomorrow.',
+  recordingLabel: (time: string) => `Recording · ${time}`,
+  recordCancel: 'Cancel',
+  recordStop: 'Stop',
+  recordStoppedAtLimit: 'Voice notes stop at 5 minutes. This one is saved.',
+  recordNoMicrophone:
+    "The microphone isn't available. Allow it in your browser's settings, or type instead.",
+  recordNeedsConnection:
+    'Recording a voice note needs a connection. Your words stay here.',
+  mediaKeptOn: (noun: string, record: string) => `Kept ${noun} on ${record}`,
   mediaSeeOn: (record: string) => `See it on ${record}`,
-  mediaKeptNoRecord: 'Kept the photo',
-  mediaLetGo: "Didn't keep the photo",
+  mediaKeptNoRecord: (noun: string) => `Kept ${noun}`,
+  mediaLetGo: (kind: MediaKind) => `Didn't keep the ${mediaWordOf(kind)}`,
   mediaKeepIt: 'Keep it',
-  mediaKeepFailed: "That photo couldn't be kept. Try again.",
-  mediaKeepGone: 'That photo is already gone.',
-  mediaKeepNeedsConnection: 'Keeping a photo needs a connection.',
-  mediaKeptToast: 'Kept the photo',
+  mediaKeepRecording: 'Keep the recording',
+  mediaReadNotKept: (file: string) => `Read ${file}. Didn't keep it`,
+  mediaVoiceNotKept: "Wrote out your voice note. Didn't keep the recording",
+  mediaKeepFailed: "That couldn't be kept. Try again.",
+  mediaKeepGone: 'That is already gone.',
+  mediaKeepNeedsConnection: 'Keeping this needs a connection.',
+  mediaKeptToast: 'Kept',
   mediaOnRecordTitle: 'Photos',
   mediaFromTurn: (day: string) => `From what you sent on ${day}`,
-  mediaRemovedToast: 'Photo removed',
-  mediaRemoveFailed: "That photo didn't come off. Try again.",
-  mediaRestoreFailed: "That photo couldn't be put back. Try again.",
-  mediaUnreadable: "This photo can't be opened.",
+  mediaRemovedToast: (kind: MediaKind) =>
+    `${mediaWordOf(kind)[0].toUpperCase()}${mediaWordOf(kind).slice(1)} removed`,
+  mediaRemoveFailed: "That didn't come off. Try again.",
+  mediaRestoreFailed: "That couldn't be put back. Try again.",
+  mediaUnreadable: "This can't be opened.",
   mediaNotKeptIn: (hoursLeft: number | null) =>
     hoursLeft === null
       ? 'Not kept'
       : hoursLeft < 1
         ? 'Not kept · deleted in under an hour'
         : `Not kept · deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
-  mediaTookOff: (record: string) => `You took the photo off ${record}`,
-  mediaRemovedNoRecord: 'You removed the photo',
-  mediaGoneTile: 'Photo removed',
-  mediaRemoveSubtitle:
-    'A photo nothing else holds is deleted in 24 hours. You can undo it until then.',
+  mediaTookOff: (record: string) => `You took it off ${record}`,
+  mediaRemovedNoRecord: 'You removed it',
+  mediaGoneTile: 'Removed',
+  mediaVoiceTile: 'Voice note',
+  mediaSeeNote: (title: string) => `See it in Knowledge: ${title}`,
+  mediaNotKeptHours: (hoursLeft: number | null) =>
+    hoursLeft === null
+      ? 'Not kept'
+      : hoursLeft < 1
+        ? 'Deleted in under an hour'
+        : `Deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+  mediaRemove: (kind: MediaKind) =>
+    `Remove ${kind === 'photo' ? 'photo' : kind === 'voiceNote' ? 'recording' : kind === 'pdf' ? 'PDF' : 'file'}`,
+  mediaRemoveSubtitle: (kind: MediaKind) =>
+    `A ${mediaWordOf(kind)} nothing else holds is deleted in 24 hours. You can undo it until then.`,
   mediaViewOnRecord: (position: number, total: number) =>
-    `Photo ${position} of ${total}`,
+    `Item ${position} of ${total}`,
+  mediaOpenPdf: 'Open the PDF',
+  mediaOpenPdfFailed: "The PDF didn't open. Try again.",
+  mediaPdfPages: (pages: number | null) =>
+    pages === null ? 'PDF' : `PDF · ${pages} ${pages === 1 ? 'page' : 'pages'}`,
+  mediaSheetTitle: (kind: MediaKind) =>
+    kind === 'photo'
+      ? 'Photo'
+      : kind === 'pdf'
+        ? 'PDF'
+        : kind === 'voiceNote'
+          ? 'Recording'
+          : 'Markdown file',
+  mediaTranscriptTitle: 'What you said',
+  mediaMarkdownEmpty: 'This file is empty.',
+  mediaViewFile: (name: string) => `Open ${name}`,
   tookBackPhotos: (count: number) =>
     count === 1 ? 'Took back a kept photo' : `Took back ${count} kept photos`,
   undoReportPhotos: (count: number) =>
@@ -1833,6 +1924,7 @@ export const HELM_COPY = {
   sourceGeneral: 'Saved from a general answer',
   sourceGeneralNotChecked: 'Saved from a general answer · Not checked',
   sourceFile: 'From a file',
+  sourceFileNamed: (name: string) => `From ${name}`,
   sourcePerson: (date: string) => `You wrote this, ${date}`,
   sourcesEmpty: 'Nothing is recorded for this part.',
   sourcesEditPart: 'Edit this part',

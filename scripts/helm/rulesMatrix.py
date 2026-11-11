@@ -3,7 +3,7 @@
 
 Reads and writes the profile at apps/helm/users/{uid} as its owner, a second signed-in user and a signed-out
 visitor, and records each HTTP status. The beta tier checks access, not shape: only the owner may read, create and
-update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a photo's readable shape. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
+update it, nobody may delete it, the owner alone may read, list, create, update and delete a turn under captures, tasks, noted facts and day plans follow the same rule, a synced copy is read and listed by its owner and written by no client, an execution may be read, created and updated by its owner but never deleted, and no other path under apps/helm is open to a client. A medium's document is the owner's alone and must have a readable shape: a photo, a PDF, a voice note or a Markdown file, each with its own content type. Storage (when the emulator is up): the owner alone reads, writes and deletes sealed bytes under apps/helm/media/{uid}/, only as application/octet-stream, under 10 MiB + 1 KiB, and never over an object that exists.
 
   npm run check:helm-rules                       # every case behaves as expected
   npm run check:helm-rules -- --out after.json   # statuses, to diff against another rules file's run
@@ -248,7 +248,7 @@ def main():
             admin([rm(dk + '-new-' + a)])
         check(f'{name} create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/{name}/x', doc)]), False)
 
-    # A medium's document is the owner's alone, and the owner may only write a photo's shape.
+    # A medium's document is the owner's alone, and each kind carries its own content type.
     photo = dict(kind='photo', role='photo', status='kept', mimeType='image/webp', hasThumb=True, attachedTo=[dict(kind='who', id='who-1')], decidedBy='person', createdAt=NOW, decidedAt=NOW, deleteAfter=None, sealed=SEAL)
     mk = f'{path}/media/media-1'
     for a, tok in actors.items():
@@ -262,6 +262,20 @@ def main():
     check('media create at another uid [o]', commit(o_tok, [put_new(f'apps/helm/users/{x_uid}/media/m', photo)]), False)
     check('media create with another kind [o]', commit(o_tok, [put_new(mk + '-video', dict(photo, kind='video'))]), False)
     check('media create with a non-image type [o]', commit(o_tok, [put_new(mk + '-pdf', dict(photo, mimeType='application/pdf'))]), False)
+    files = {
+        'pdf': dict(photo, kind='pdf', role='attachment', mimeType='application/pdf', hasThumb=False),
+        'voiceNote': dict(photo, kind='voiceNote', role='attachment', mimeType='audio/webm;codecs=opus', hasThumb=False),
+        'markdown': dict(photo, kind='markdown', role='attachment', mimeType='text/markdown', hasThumb=False),
+    }
+    for kind, doc in files.items():
+        for a, tok in actors.items():
+            check(f'media create a {kind} [{a}]', commit(tok, [put_new(f'{mk}-{kind}-{a}', doc)]), a == 'o')
+            admin([rm(f'{mk}-{kind}-{a}')])
+    check('media create a pdf with an image type [o]', commit(o_tok, [put_new(mk + '-pdf-img', dict(files['pdf'], mimeType='image/png'))]), False)
+    check('media create a voiceNote with a pdf type [o]', commit(o_tok, [put_new(mk + '-vn-pdf', dict(files['voiceNote'], mimeType='application/pdf'))]), False)
+    check('media create a markdown file as html [o]', commit(o_tok, [put_new(mk + '-md-html', dict(files['markdown'], mimeType='text/html'))]), False)
+    check('media create a markdown file as plain text [o]', commit(o_tok, [put_new(mk + '-md-txt', dict(files['markdown'], mimeType='text/plain'))]), True)
+    admin([rm(mk + '-md-txt')])
     check('media create with a missing field [o]', commit(o_tok, [put_new(mk + '-bare', {k: v for k, v in photo.items() if k != 'hasThumb'})]), False)
 
     # An execution is the owner's to read, create and update; nobody deletes one.

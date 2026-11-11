@@ -3,9 +3,15 @@ import { deflateSync } from 'node:zlib';
 
 import { wrapDataKey } from '../../functions/src/appKeys/wrap.ts';
 import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.ts';
+import {
+  markdownTitle,
+  splitMarkdownSections,
+} from '../../functions/src/apps/helm/media/markdownSections.ts';
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   buildFactSource,
+  buildFileTopicLine,
+  describeKeptPhotos,
   buildGroupQuestion,
   buildKeyDateClashQuestion,
   buildWhichIsTrueQuestion,
@@ -27,7 +33,10 @@ import {
 } from '../../src/apps/helm/constants.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
 import { openJson, sealBytes, sealJson } from '../../src/apps/helm/security.ts';
-import { getMediaObjectPath } from '../../src/apps/helm/utils/mediaPath.ts';
+import {
+  getMediaObjectPath,
+  getMediaObjectPaths,
+} from '../../src/apps/helm/utils/mediaPath.ts';
 import {
   getDueDay,
   readCapture,
@@ -45,6 +54,7 @@ import type {
   Fact,
   FactSealed,
   Media,
+  MediaKind,
   MediaSealed,
   Place,
   PlaceSealed,
@@ -1406,6 +1416,8 @@ async function buildSeedPhoto(input: {
     status: 'kept',
     mimeType: 'image/png',
     hasThumb: true,
+    durationMs: null,
+    pageCount: null,
     attachedTo: [attachedTo],
     decidedBy: 'person',
     createdAt: now - 5 * DAY_MS,
@@ -1418,6 +1430,8 @@ async function buildSeedPhoto(input: {
         bytesNonce: bytes.nonce,
         thumbNonce: thumb.nonce,
         caption: null,
+        fileName: null,
+        text: null,
         keyId: encryption.keyId,
       },
       encryption,
@@ -2648,6 +2662,498 @@ async function buildPhotoTurns(input: {
     media,
     task: { id: taskId, task },
     execution: { id: executionId, execution },
+  };
+}
+
+/** A valid PDF with a text layer: one page per list of lines, in Helvetica. */
+function makeTextPdf(pages: string[][]) {
+  const pageObject = (index: number) => 4 + index * 2;
+  const stream = (lines: string[]) =>
+    `BT /F1 14 Tf 72 720 Td 20 TL ${lines
+      .map((line) => `(${line.replace(/[\\()]/g, '\\$&')}) Tj T*`)
+      .join(' ')} ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    `<< /Type /Pages /Kids [${pages.map((_, index) => `${pageObject(index)} 0 R`).join(' ')}] /Count ${pages.length} >>`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    ...pages.flatMap((lines, index) => [
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageObject(index) + 1} 0 R >>`,
+      `<< /Length ${stream(lines).length} >>\nstream\n${stream(lines)}\nendstream`,
+    ]),
+  ];
+  const body = objects.reduce(
+    (acc, object, index) => ({
+      text: `${acc.text}${index + 1} 0 obj\n${object}\nendobj\n`,
+      offsets: [...acc.offsets, acc.text.length],
+    }),
+    { text: '%PDF-1.4\n', offsets: [] as number[] },
+  );
+  const xref = body.offsets
+    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
+    .join('');
+  return new Uint8Array(
+    Buffer.from(
+      `${body.text}xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${xref}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${body.text.length}\n%%EOF\n`,
+      'latin1',
+    ),
+  );
+}
+
+/** A silent mono 8-bit WAV of the given length at 8 kHz. */
+function makeSilentWav(seconds: number) {
+  const samples = 8000 * seconds;
+  const header = Buffer.alloc(44);
+  header.write('RIFF', 0);
+  header.writeUInt32LE(36 + samples, 4);
+  header.write('WAVEfmt ', 8);
+  header.writeUInt32LE(16, 16);
+  header.writeUInt16LE(1, 20);
+  header.writeUInt16LE(1, 22);
+  header.writeUInt32LE(8000, 24);
+  header.writeUInt32LE(8000, 28);
+  header.writeUInt16LE(1, 32);
+  header.writeUInt16LE(8, 34);
+  header.write('data', 36);
+  header.writeUInt32LE(samples, 40);
+  return new Uint8Array(Buffer.concat([header, Buffer.alloc(samples, 0x80)]));
+}
+
+/** Alex's three turns that sent a file, after the photo turns: a two-page vet PDF kept on a task the turn made, a Markdown packing list kept as a note and a topic, and a voice note whose transcript made a task and whose recording was let go (deleted in 20 hours unless kept). Fourteen documents plus the PDF's and the voice note's sealed objects. */
+async function buildFileTurns(input: {
+  uid: string;
+  now: number;
+  timeZone: string;
+  encryption: HelmEncryption;
+}) {
+  const { uid, now, timeZone, encryption } = input;
+  const sessionId = `seed-${uid}-photos`;
+  const seal = <T extends object>(fields: T) => sealJson<T>(fields, encryption);
+  const pdfTurn = 'seed-turn-file-pdf';
+  const pdfMedia = 'seed-media-file-pdf';
+  const pdfTask = 'seed-task-file-vet';
+  const pdfExecution = 'seed-execution-file-pdf';
+  const pdfTitle = 'Vet visit: booster Nov 3';
+  const mdTurn = 'seed-turn-file-markdown';
+  const mdMedia = 'seed-media-file-markdown';
+  const mdNote = 'seed-note-file-packing';
+  const mdTopic = 'seed-topic-file-packing';
+  const mdExecution = 'seed-execution-file-markdown';
+  const mdName = 'packing-list.md';
+  const mdText =
+    "# Packing list\n\n## Clothes\n- Rain jacket\n- Two jumpers\n\n## Tech\n- Charger\n- Adapter\n\n<b>Don't forget the passport</b>\n";
+  const voiceTurn = 'seed-turn-file-voice';
+  const voiceMedia = 'seed-media-file-voice';
+  const voiceTask = 'seed-task-file-vet-call';
+  const voiceExecution = 'seed-execution-file-voice';
+  const voiceText = "Call the vet about Miso's booster on Friday";
+  const voiceTitle = "Call the vet about Miso's booster";
+  const turnOf = async (
+    id: string,
+    index: number,
+    text: string,
+    minutesAgo: number,
+    fields: Pick<Capture, 'attachmentIds' | 'executionIds'> &
+      Partial<Pick<Capture, 'inputMode' | 'sttProvider' | 'ttsProvider'>>,
+  ) => {
+    const createdAt = now - minutesAgo * MINUTE_MS;
+    const reading = readCapture(text, {
+      now: createdAt,
+      timeZone,
+      assistantName: DEFAULT_ASSISTANT_NAME,
+    });
+    const capture: Capture = {
+      inputMode: 'typed',
+      sttProvider: null,
+      interruptedCaptureId: null,
+      answersQuestion: null,
+      ttsProvider: null,
+      medium: 'web',
+      sessionId,
+      turnIndex: index,
+      route: 'full',
+      status: 'sorted',
+      heldReason: null,
+      claimId: null,
+      claimedAt: null,
+      attempts: 0,
+      lastErrorCode: null,
+      questionState: {},
+      turnLeadId: null,
+      joinedCaptureIds: [],
+      seenAt: createdAt + MINUTE_MS,
+      quotedSourceKeys: [],
+      answerSavedNoteId: null,
+      whoIds: [],
+      placeIds: [],
+      planDayKey: null,
+      createdAt,
+      sortedAt: createdAt + SORT_DELAY_MS,
+      screen: null,
+      ...fields,
+      sealed: await seal<CaptureSealed>({
+        text,
+        reading,
+        answer: null,
+        questionAnswer: null,
+      }),
+    };
+    return { id, createdAt, reading, capture };
+  };
+  const [pdf, markdown, voice] = await Promise.all([
+    turnOf(pdfTurn, 3, "The vet's summary from Miso's visit", 75, {
+      attachmentIds: [pdfMedia],
+      executionIds: [pdfExecution],
+    }),
+    turnOf(mdTurn, 4, 'My packing list', 60, {
+      attachmentIds: [mdMedia],
+      executionIds: [mdExecution],
+    }),
+    turnOf(voiceTurn, 5, voiceText, 45, {
+      inputMode: 'voice',
+      sttProvider: 'voiceNote',
+      ttsProvider: 'natural',
+      attachmentIds: [voiceMedia],
+      executionIds: [voiceExecution],
+    }),
+  ]);
+  const sortedAt = (turn: { createdAt: number }) =>
+    turn.createdAt + SORT_DELAY_MS;
+  const buildMedia = async (
+    kind: MediaKind,
+    turn: { id: string; createdAt: number },
+    sealed: Omit<MediaSealed, 'keyId'>,
+    fields: Partial<Media>,
+  ): Promise<Media> => ({
+    kind,
+    role: 'attachment',
+    status: 'kept',
+    mimeType: '',
+    hasThumb: false,
+    durationMs: null,
+    pageCount: null,
+    attachedTo: [],
+    decidedBy: 'nomos',
+    createdAt: turn.createdAt,
+    decidedAt: sortedAt(turn),
+    deleteAfter: null,
+    sourceCaptureId: turn.id,
+    executionId: null,
+    ...fields,
+    sealed: await seal<MediaSealed>({ ...sealed, keyId: encryption.keyId }),
+  });
+  const [pdfBytes, voiceBytes] = await Promise.all([
+    sealBytes(
+      makeTextPdf([
+        [
+          'Miso - vet summary',
+          'Booster given Nov 3',
+          'Weight 4.2 kg, a healthy cat',
+        ],
+        ['Next booster due in 12 months', 'Bring the booster card next time'],
+      ]),
+      encryption,
+    ),
+    sealBytes(makeSilentWav(1), encryption),
+  ]);
+  const media = [
+    {
+      id: pdfMedia,
+      media: await buildMedia(
+        'pdf',
+        pdf,
+        {
+          bytesNonce: pdfBytes.nonce,
+          thumbNonce: null,
+          caption: null,
+          fileName: 'miso-vet-summary.pdf',
+          text: null,
+        },
+        {
+          mimeType: 'application/pdf',
+          pageCount: 2,
+          attachedTo: [{ kind: 'task', id: pdfTask }],
+          executionId: pdfExecution,
+        },
+      ),
+      uploads: getMediaObjectPaths(uid, pdfMedia, 'pdf', false).map((path) => ({
+        path,
+        bytes: pdfBytes.bytes,
+      })),
+    },
+    {
+      id: mdMedia,
+      media: await buildMedia(
+        'markdown',
+        markdown,
+        {
+          bytesNonce: null,
+          thumbNonce: null,
+          caption: null,
+          fileName: mdName,
+          text: mdText,
+        },
+        {
+          mimeType: 'text/markdown',
+          attachedTo: [{ kind: 'note', id: mdNote }],
+          executionId: mdExecution,
+        },
+      ),
+      uploads: [],
+    },
+    {
+      id: voiceMedia,
+      media: await buildMedia(
+        'voiceNote',
+        voice,
+        {
+          bytesNonce: voiceBytes.nonce,
+          thumbNonce: null,
+          caption: null,
+          fileName: null,
+          text: voiceText,
+        },
+        {
+          mimeType: 'audio/wav',
+          durationMs: 1000,
+          status: 'discarded',
+          deleteAfter: now + 20 * 60 * MINUTE_MS,
+        },
+      ),
+      uploads: getMediaObjectPaths(uid, voiceMedia, 'voiceNote', false).map(
+        (path) => ({ path, bytes: voiceBytes.bytes }),
+      ),
+    },
+  ];
+  const buildTask = async (
+    id: string,
+    title: string,
+    due: TaskDue | null,
+    turn: { id: string; createdAt: number },
+    executionId: string,
+  ) => {
+    const task: Task = {
+      status: 'open',
+      importance: null,
+      isUrgent: false,
+      due,
+      durationMinutes: null,
+      energy: null,
+      context: null,
+      projectId: null,
+      milestoneId: null,
+      whoIds: [],
+      placeIds: [],
+      notUntil: null,
+      waitsOnTaskIds: [],
+      waitsOnWhoId: null,
+      stepState: {},
+      mediaIds: [],
+      createdBy: 'nomos',
+      sourceCaptureId: turn.id,
+      executionId,
+      createdAt: sortedAt(turn),
+      lastEditedAt: null,
+      completedAt: null,
+      clearedAt: null,
+      sealed: await seal<TaskSealed>({ title, notes: null, steps: {} }),
+    };
+    return { id, task };
+  };
+  const voiceDue = dueFrom(voice.reading.dates, 'Friday');
+  const tasks = await Promise.all([
+    buildTask(pdfTask, pdfTitle, null, pdf, pdfExecution),
+    buildTask(voiceTask, voiceTitle, voiceDue, voice, voiceExecution),
+  ]);
+  const buildExecution = async (
+    captureId: string,
+    at: number,
+    fields: Pick<Execution, 'effectRefs'> &
+      Pick<ExecutionSealed, 'summary' | 'commands' | 'effects' | 'spoken'> &
+      Partial<Pick<ExecutionSealed, 'lines'>>,
+  ): Promise<Execution> => ({
+    captureId,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: fields.effectRefs,
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: at,
+    decidedAt: at,
+    finishedAt: at,
+    sealed: await seal<ExecutionSealed>({
+      summary: fields.summary,
+      commands: fields.commands,
+      effects: fields.effects,
+      undoReport: null,
+      spoken: fields.spoken,
+      goneIds: null,
+      lines: fields.lines ?? [],
+    }),
+  });
+  const taskEffect = (title: string, due: TaskDue | null) => ({
+    written: { 'sealed.title': title, due, status: 'open', isUrgent: false },
+    previous: null,
+  });
+  const keptEffect = (title: string, attachedTo: Media['attachedTo']) => ({
+    written: {
+      'sealed.title': title,
+      status: 'kept',
+      role: 'attachment',
+      attachedTo,
+      decidedBy: 'nomos',
+      decidedAt: 0,
+      deleteAfter: null,
+    },
+    previous: {
+      'sealed.title': title,
+      status: 'received',
+      role: 'attachment',
+      attachedTo: [],
+      decidedBy: null,
+      decidedAt: null,
+      deleteAfter: null,
+    },
+  });
+  const sections = splitMarkdownSections(mdText).map((section, index) => ({
+    id: `seed-section-file-packing-${index + 1}`,
+    heading: section.heading,
+    level: section.level,
+    markdown: section.markdown,
+    writtenBy: 'person' as const,
+    sources: [{ kind: 'file' as const, mediaId: mdMedia, noteId: mdNote }],
+  }));
+  const noteTitle = markdownTitle(mdText, mdName);
+  const topicLine = buildFileTopicLine(noteTitle, mdName);
+  const mdAt = sortedAt(markdown);
+  const note: Note = {
+    topicIds: [mdTopic],
+    source: 'importedFile',
+    isFromGeneralAnswer: false,
+    checkedAt: null,
+    hasHealthCaution: false,
+    sourceCaptureId: mdTurn,
+    sourceMediaId: mdMedia,
+    projectIds: [],
+    createdBy: 'nomos',
+    executionId: mdExecution,
+    createdAt: mdAt,
+    lastEditedAt: null,
+    sealed: await seal<NoteSealed>({ title: noteTitle, body: mdText }),
+  };
+  const topic: Topic = {
+    parentId: null,
+    depth: 1,
+    projectIds: [],
+    version: 1,
+    docState: 'current',
+    pendingNoteIds: [],
+    writeClaim: null,
+    overviewOf: {},
+    createdBy: 'nomos',
+    executionId: mdExecution,
+    createdAt: mdAt,
+    lastEditedAt: null,
+    lastWrittenAt: mdAt,
+    sealed: await seal<TopicSealed>({
+      name: noteTitle,
+      emoji: null,
+      overview: null,
+      sections,
+    }),
+  };
+  const version: TopicVersion = {
+    version: 1,
+    restoredFromVersion: null,
+    createdBy: 'nomos',
+    reason: 'imported',
+    noteIds: [mdNote],
+    sourceCaptureId: mdTurn,
+    executionId: mdExecution,
+    createdAt: mdAt,
+    sealed: await seal<TopicVersionSealed>({
+      sections,
+      changeSummary: `Imported from ${mdName}`,
+      requestQuote: null,
+      parentName: null,
+    }),
+  };
+  const voiceSpoken = buildSpokenAck({
+    inputMode: 'voice',
+    counts: { made: 1, updated: 0, completed: 0 },
+    messageCount: 1,
+    created: [{ title: voiceTitle, due: voiceDue }],
+    timeZone,
+    now: sortedAt(voice),
+  });
+  const executions = await Promise.all([
+    buildExecution(pdfTurn, sortedAt(pdf), {
+      effectRefs: [
+        { op: 'create', collection: 'tasks', docId: pdfTask },
+        { op: 'update', collection: 'media', docId: pdfMedia },
+      ],
+      summary: [summarize(1), describeKeptPhotos([pdfTitle], ['pdf'])].join(
+        '. ',
+      ),
+      commands: [{ kind: 'createTask', title: pdfTitle, due: null }],
+      effects: [
+        taskEffect(pdfTitle, null),
+        keptEffect(pdfTitle, [{ kind: 'task', id: pdfTask }]),
+      ],
+      spoken: null,
+    }),
+    buildExecution(mdTurn, mdAt, {
+      effectRefs: [
+        { op: 'create', collection: 'notes', docId: mdNote },
+        { op: 'create', collection: 'topics', docId: mdTopic },
+        { op: 'update', collection: 'media', docId: mdMedia },
+      ],
+      summary: topicLine,
+      commands: [],
+      effects: [
+        {
+          written: { 'sealed.title': topicLine },
+          previous: null,
+        },
+        {
+          written: {
+            'sealed.title': topicLine,
+            'sealed.name': noteTitle,
+            importedVersion: 1,
+          },
+          previous: null,
+        },
+        keptEffect(noteTitle, [{ kind: 'note', id: mdNote }]),
+      ],
+      spoken: null,
+      lines: [{ text: topicLine, ref: { collection: 'topics', id: mdTopic } }],
+    }),
+    buildExecution(voiceTurn, sortedAt(voice), {
+      effectRefs: [{ op: 'create', collection: 'tasks', docId: voiceTask }],
+      summary: summarize(1),
+      commands: [{ kind: 'createTask', title: voiceTitle, due: voiceDue }],
+      effects: [taskEffect(voiceTitle, voiceDue)],
+      spoken: voiceSpoken,
+    }),
+  ]);
+  return {
+    captures: [pdf, markdown, voice].map(({ id, capture }) => ({
+      id,
+      capture,
+    })),
+    media,
+    tasks,
+    executions: [pdfExecution, mdExecution, voiceExecution].map(
+      (id, index) => ({ id, execution: executions[index] }),
+    ),
+    notes: [{ id: mdNote, note }],
+    topics: [{ id: mdTopic, topic }],
+    versions: [{ topicId: mdTopic, id: '1', version }],
   };
 }
 
@@ -4287,6 +4793,54 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           photoTurns.execution.execution,
         );
       }
+      const fileTurns = photoTurns
+        ? await buildFileTurns({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
+        : null;
+      if (fileTurns) {
+        fileTurns.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        fileTurns.media.forEach((entry) =>
+          batch.set(person.collection('media').doc(entry.id), entry.media),
+        );
+        await Promise.all(
+          fileTurns.media.flatMap((entry) =>
+            entry.uploads.map((upload) =>
+              uploadSealedSeed(upload.path, upload.bytes),
+            ),
+          ),
+        );
+        fileTurns.tasks.forEach((entry) =>
+          batch.set(person.collection('tasks').doc(entry.id), entry.task),
+        );
+        fileTurns.executions.forEach((entry) =>
+          batch.set(
+            person.collection('executions').doc(entry.id),
+            entry.execution,
+          ),
+        );
+        fileTurns.notes.forEach((entry) =>
+          batch.set(person.collection('notes').doc(entry.id), entry.note),
+        );
+        fileTurns.topics.forEach((entry) =>
+          batch.set(person.collection('topics').doc(entry.id), entry.topic),
+        );
+        fileTurns.versions.forEach((entry) =>
+          batch.set(
+            person
+              .collection('topics')
+              .doc(entry.topicId)
+              .collection('versions')
+              .doc(entry.id),
+            entry.version,
+          ),
+        );
+      }
       const projects = people
         ? await buildProjects({ now: context.now, encryption })
         : null;
@@ -4336,6 +4890,15 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
       const peopleCount = people
         ? (photoTurns
             ? photoTurns.captures.length + photoTurns.media.length + 2
+            : 0) +
+          (fileTurns
+            ? fileTurns.captures.length +
+              fileTurns.media.length +
+              fileTurns.tasks.length +
+              fileTurns.executions.length +
+              fileTurns.notes.length +
+              fileTurns.topics.length +
+              fileTurns.versions.length
             : 0) +
           people.who.length +
           people.places.length +

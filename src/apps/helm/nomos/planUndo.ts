@@ -718,7 +718,7 @@ export function planUndo(input: {
       outcome.kind === 'restored' ? [docId] : [],
     ),
   );
-  // A topic the turn made goes only while nothing but this turn's own moves lives under it.
+  // A topic the turn made goes only while nothing but this turn's own moves lives under it; one made from a file starts at the version the import wrote.
   const madeOutcomes = topicGroups.flatMap(
     ({
       docId,
@@ -736,8 +736,9 @@ export function planUndo(input: {
           other.data?.parentId === docId &&
           !restoredPlacements.has(other.docId),
       );
+      const importedVersion = toNumber(made.effect.written.importedVersion);
       const isUntouched =
-        target.data.version === 0 &&
+        target.data.version === (importedVersion ?? 0) &&
         toIds(target.data.pendingNoteIds).length === 0 &&
         !usedIds.has(docId) &&
         !hasChildren;
