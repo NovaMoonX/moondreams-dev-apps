@@ -66,22 +66,7 @@ function SearchGroup({
 
   return (
     <section className='space-y-3'>
-      <SectionDivider
-        label={label}
-        trailing={
-          isExpanded ? (
-            <Button
-              type='button'
-              variant='tertiary'
-              size='sm'
-              className='text-muted-foreground! relative h-7 px-2 text-[13px] font-normal after:absolute after:-inset-1.5 after:content-[""]'
-              onClick={onToggle}
-            >
-              {HELM_COPY.searchShowFewer}
-            </Button>
-          ) : null
-        }
-      />
+      <SectionDivider label={label} />
       {isExpanded ? (
         <LazyMount estimatedHeight={rows.length * ROW_HEIGHT}>{list}</LazyMount>
       ) : (
