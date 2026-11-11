@@ -34,8 +34,9 @@ export function useRuns(
     if (!uid || !id) return;
     const run = { isStopped: false, stop: null as Unsubscribe | null };
     const fail = (error: unknown) => {
+      if (run.isStopped) return;
       console.error('Helm runs failed', error);
-      if (!run.isStopped) setState({ key, runs: null, hasFailed: true });
+      setState({ key, runs: null, hasFailed: true });
     };
     getHelmEncryption(uid)
       .then((encryption) => {

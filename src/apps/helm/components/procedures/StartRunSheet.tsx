@@ -62,7 +62,7 @@ const toWhen = (record: SyncedRecord) =>
       ? formatDateShortUTC(record.startAt)
       : `${formatDateShort(record.startAt)}, ${formatTime(record.startAt)}`;
 
-/** Trips and events from other apps that are on now or start within the window, each thing once, soonest first. */
+/** Trips and events from other apps that are on now or start within the window, each thing once: trips first, since a meal plan's events would crowd them out, then soonest first. */
 const getOffered = (records: SyncedRecord[], now: number) =>
   mergeSameThings(
     records
@@ -76,7 +76,11 @@ const getOffered = (records: SyncedRecord[], now: number) =>
             ? (record.endAt ?? record.startAt) + DAY_MS
             : (record.endAt ?? record.startAt)) > now,
       )
-      .sort((left, right) => (left.startAt ?? 0) - (right.startAt ?? 0)),
+      .sort(
+        (left, right) =>
+          Number(right.kind === 'trip') - Number(left.kind === 'trip') ||
+          (left.startAt ?? 0) - (right.startAt ?? 0),
+      ),
   )
     .map((entry) => entry.record)
     .slice(0, OFFERED_MAX);
