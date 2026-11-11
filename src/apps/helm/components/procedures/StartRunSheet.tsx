@@ -65,24 +65,23 @@ const toWhen = (record: SyncedRecord) =>
 /** Trips and events from other apps that are on now or start within the window, each thing once: trips first, since a meal plan's events would crowd them out, then soonest first. */
 const getOffered = (records: SyncedRecord[], now: number) =>
   mergeSameThings(
-    records
-      .filter(
-        (record) =>
-          (record.kind === 'trip' || record.kind === 'event') &&
-          record.connectionEndedAt === null &&
-          record.startAt !== null &&
-          record.startAt <= now + RUN_START_DAYS * DAY_MS &&
-          (record.isAllDay
-            ? (record.endAt ?? record.startAt) + DAY_MS
-            : (record.endAt ?? record.startAt)) > now,
-      )
-      .sort(
-        (left, right) =>
-          Number(right.kind === 'trip') - Number(left.kind === 'trip') ||
-          (left.startAt ?? 0) - (right.startAt ?? 0),
-      ),
+    records.filter(
+      (record) =>
+        (record.kind === 'trip' || record.kind === 'event') &&
+        record.connectionEndedAt === null &&
+        record.startAt !== null &&
+        record.startAt <= now + RUN_START_DAYS * DAY_MS &&
+        (record.isAllDay
+          ? (record.endAt ?? record.startAt) + DAY_MS
+          : (record.endAt ?? record.startAt)) > now,
+    ),
   )
     .map((entry) => entry.record)
+    .sort(
+      (left, right) =>
+        Number(right.kind === 'trip') - Number(left.kind === 'trip') ||
+        (left.startAt ?? 0) - (right.startAt ?? 0),
+    )
     .slice(0, OFFERED_MAX);
 
 function StartRunBody({
