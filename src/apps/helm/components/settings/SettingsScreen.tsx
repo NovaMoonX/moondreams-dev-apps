@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 
 import SettingsGroup from '@/components/SettingsGroup';
+import TrustBrowserRow from '@/components/TrustBrowserRow';
 import SettingsRow from '@/components/SettingsRow';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
@@ -19,12 +20,14 @@ import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { useAppSelector } from '@/store';
+import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useConnections } from '@/lib/connections/useConnections';
 import { ASSISTANT_TONES, HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useAssistantTone } from '@apps/helm/hooks/useAssistantTone';
 import { formatClockTime } from '@/utils/formatUtils';
+import { helmAppName, helmTrustStore } from '@apps/helm/queries/helmKeyQueries';
 import { formatUpdatedAt, getNewestOkAt } from '@apps/helm/utils/synced';
 
 interface SettingsScreenProps {
@@ -41,6 +44,7 @@ function SettingsScreen({
   onOpenConnectedApps,
   onOpenSeesYou,
 }: SettingsScreenProps) {
+  const { user } = useAuth();
   const assistant = useAssistantName();
   const tone = useAssistantTone();
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -138,6 +142,18 @@ function SettingsScreen({
             hasChevron
           />
         </SettingsGroup>
+        {user && (
+          <section className='space-y-2'>
+            <h3 className='text-muted-foreground px-1 text-xs font-semibold tracking-wide uppercase'>
+              {HELM_COPY.settingsTrustedBrowsers}
+            </h3>
+            <TrustBrowserRow
+              store={helmTrustStore}
+              uid={user.uid}
+              appName={helmAppName}
+            />
+          </section>
+        )}
         <SettingsGroup title={HELM_COPY.settingsYourData}>
           <SettingsRow
             icon={<History className='size-5' aria-hidden='true' />}

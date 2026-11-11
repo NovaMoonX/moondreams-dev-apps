@@ -56,6 +56,8 @@ export interface HelmState {
   /** Raised by Try again; asking for the key again follows it. */
   keyAttempt: number;
   isKeyRetrying: boolean;
+  /** Set while the app is open on this browser's kept key: when the server last confirmed it (0 when unknown), for the "As of" line. */
+  keptKeyAsOf: number | null;
   /** Refusals in a row, so a Try again that fails again can say so. */
   keyRefusals: number;
   /** The profile, and whether the first snapshot has arrived, so a missing profile is never mistaken for one still loading. */
@@ -138,6 +140,7 @@ const initialState: HelmState = {
   keyStatus: 'loading',
   keyAttempt: 0,
   isKeyRetrying: false,
+  keptKeyAsOf: null,
   keyRefusals: 0,
   profile: null,
   isProfileLoaded: false,
@@ -185,6 +188,9 @@ const helmSlice = createSlice({
       state.isKeyRetrying = false;
       state.keyRefusals =
         action.payload === 'failed' ? state.keyRefusals + 1 : 0;
+    },
+    setKeptKeyAsOf: (state, action: PayloadAction<number | null>) => {
+      state.keptKeyAsOf = action.payload;
     },
     retryKey: (state) => {
       state.keyAttempt += 1;
@@ -492,6 +498,7 @@ export const {
   setStyleFailed,
   clearHelm,
   setKeyStatus,
+  setKeptKeyAsOf,
   retryKey,
 } = helmSlice.actions;
 export const helmReducer = helmSlice.reducer;

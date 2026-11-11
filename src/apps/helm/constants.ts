@@ -496,6 +496,10 @@ export const HELM_COPY = {
   turnSheetTitle: 'What you said',
   nothingWaiting: 'Nothing waiting',
   newSinceLooked: (count: number) => `${count} new since you looked`,
+  settingsTrustedBrowsers: 'Trusted browsers',
+  asOfLine: (time: string) => `As of ${time}`,
+  trustLapsedBody: (app: string) =>
+    `Connect once to keep opening ${app} offline.`,
   needsConnectionTitle: "Your things open once you're back online.",
   needsConnectionBody: (name: string) =>
     `This browser doesn't keep the key to them, so typing to ${name} waits for a connection too.`,

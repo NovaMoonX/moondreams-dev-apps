@@ -4,10 +4,14 @@ import { syncConnections } from '@/lib/connections/connectionCalls';
 import { useConnections } from '@/lib/connections/useConnections';
 import { useAppDispatch, useAppSelector } from '@/store';
 import { unlockSealedFormDrafts } from '@lib/app/formDrafts';
+import { queryClient } from '@lib/query/queryClient';
 import { createSealedReader } from '@lib/security';
 import {
   clearHelmKey,
   getHelmEncryption,
+  helmQueryKeys,
+  isKeptKey,
+  readServerReachedAt,
 } from '@apps/helm/queries/helmKeyQueries';
 import {
   createDraftSealer,
@@ -27,6 +31,7 @@ import {
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setKeyStatus,
+  setKeptKeyAsOf,
   setPlaces,
   setPlacesFailed,
   setProjectTasks,
@@ -93,6 +98,7 @@ import { usePlanOnCapture } from '@apps/helm/hooks/usePlanDays';
 import { HELM_COPY, SYNC_REFRESH_MS } from '@apps/helm/constants';
 import { getRecentWindowStart } from '@apps/helm/utils/sessions';
 import { getPlanDaysWindow } from '@apps/helm/utils/planDays';
+import type { HelmEncryption } from '@apps/helm/types';
 import { isDueForRefresh } from '@apps/helm/utils/synced';
 
 const OFFLINE_CODES = ['functions/unavailable', 'functions/deadline-exceeded'];
@@ -163,7 +169,11 @@ function useSelfWho(uid: string | null, displayName: string | null) {
       if (isMaking.current) return;
       isMaking.current = true;
       getHelmEncryption(uid)
-        .then((encryption) => ensureSelfWho(uid, encryption, name))
+        .then((encryption) =>
+          isKeptKey(encryption)
+            ? undefined
+            : ensureSelfWho(uid, encryption, name),
+        )
         .catch((error: unknown) =>
           console.error('Helm could not make the person', error),
         )
@@ -195,10 +205,16 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
         (error) => console.error('Helm profile listener failed', error),
       ),
     );
-    const ensure = () =>
-      ensureHelmProfile(uid).catch((error: unknown) =>
+    const ensure = () => {
+      // The device's copy of the key only opens what is already here; it never starts a profile.
+      const key = queryClient.getQueryData<HelmEncryption>(
+        helmQueryKeys.key(uid),
+      );
+      if (key && isKeptKey(key)) return;
+      return ensureHelmProfile(uid).catch((error: unknown) =>
         console.error('Helm profile was not created', error),
       );
+    };
     ensure();
     // A first open made offline has its transaction refused; it is tried again once the device is back online.
     window.addEventListener('online', ensure);
@@ -238,6 +254,12 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
           createDraftSealer(encryption),
         );
         if (!isCurrent) return;
+        const isKept = isKeptKey(encryption);
+        dispatch(
+          setKeptKeyAsOf(isKept ? (readServerReachedAt(uid) ?? 0) : null),
+        );
+        // Opened on the device's copy, the server is asked again once the device is back online.
+        if (isKept) window.addEventListener('online', retryOnline);
         dispatch(setKeyStatus('ready'));
         const read = createSealedReader(encryption, openJson);
         stops.push(
