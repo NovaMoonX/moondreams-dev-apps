@@ -1925,7 +1925,8 @@ export const HELM_COPY = {
   procedureCopy: 'Copy as Markdown',
   procedureDelete: 'Delete',
   procedureDeleteTitle: (title: string) => `Delete ${title}?`,
-  procedureDeleteConfirm: 'Delete this procedure? You can undo it right after.',
+  procedureDeleteConfirm: (count: number) =>
+    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. You can undo it right after.`,
   procedureDeleted: (title: string) => `Deleted ${title}`,
   procedureDeletedBack: (title: string) => `${title} is back`,
   procedureDeleteFailed: "That wasn't deleted. Try again.",

@@ -26,7 +26,7 @@ import { selectProcedureById } from '@apps/helm/store/selectors/procedureSelecto
 import { toProcedureMarkdown } from '@apps/helm/utils/procedureMarkdown';
 import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 
-const { option, separator, custom } = DropdownMenuFactories;
+const { option, separator } = DropdownMenuFactories;
 
 interface ProcedureScreenProps {
   procedureId: string | null;
@@ -126,7 +126,7 @@ function ProcedureScreen({
     }
     const isConfirmed = await confirm({
       title: HELM_COPY.procedureDeleteTitle(procedure.title),
-      message: HELM_COPY.procedureDeleteConfirm,
+      message: HELM_COPY.procedureDeleteConfirm(stepCount),
       confirmText: HELM_COPY.procedureDelete,
       destructive: true,
     });
@@ -161,21 +161,18 @@ function ProcedureScreen({
           option({ label: HELM_COPY.procedureHistory, value: 'history' }),
           option({ label: HELM_COPY.procedureCopy, value: 'copy' }),
           separator(),
-          custom(() => (
-            <Button
-              type='button'
-              variant='tertiary'
-              className='text-destructive! hover:bg-destructive/10 w-full justify-start gap-2 rounded-none px-3 py-2 text-sm'
-              onClick={() => void remove()}
-            >
-              <Trash2 className='size-4' aria-hidden='true' />
-              {HELM_COPY.procedureDelete}
-            </Button>
-          )),
+          option({
+            label: HELM_COPY.procedureDelete,
+            value: 'delete',
+            icon: (
+              <Trash2 className='text-destructive size-4' aria-hidden='true' />
+            ),
+          }),
         ],
         onItemSelect: (value: string) => {
           if (value === 'history') setIsHistoryOpen(true);
           else if (value === 'copy') void copy();
+          else if (value === 'delete') void remove();
         },
       }
     : undefined;
