@@ -995,6 +995,47 @@ export const HELM_COPY = {
   voiceNotice:
     "Your speech goes to Deepgram to be turned into words, or to this browser's own listening when that's slow. Deepgram doesn't keep the sound. You can change this in Settings.",
   settingsYourData: 'Your data',
+  deleteAllTitle: (appName: string) => `Delete all my ${appName} data`,
+  deleteAllRowHint: 'Everything it holds for you, for good',
+  deleteAllWorking: 'Deleting. This can take a minute.',
+  deleteAllConfirmTitle: (appName: string) =>
+    `Delete all your ${appName} data?`,
+  deleteAllConfirmBody: (held: string[], assistant: string) =>
+    `This removes ${
+      held.length > 0 ? `your ${held.join(', ')}` : 'everything it holds'
+    }, ends every connection, and deletes the photos and copies from connected apps. ${assistant} starts over as if you had never opened it. This can't be undone.`,
+  deleteAllConfirmAction: 'Delete everything',
+  deleteAllKinds: (counts: {
+    tasks: number;
+    people: number;
+    places: number;
+    projects: number;
+    procedures: number;
+    topics: number;
+    notes: number;
+    photos: number;
+    connections: number;
+  }) =>
+    [
+      [counts.tasks, 'open task', 'open tasks'],
+      [counts.people, 'person or pet', 'people and pets'],
+      [counts.places, 'place', 'places'],
+      [counts.projects, 'project', 'projects'],
+      [counts.procedures, 'procedure', 'procedures'],
+      [counts.topics, 'topic', 'topics'],
+      [counts.notes, 'note', 'notes'],
+      [counts.photos, 'photo', 'photos'],
+      [counts.connections, 'connection', 'connections'],
+    ].flatMap(([count, one, many]) =>
+      count === 0 ? [] : [`${count} ${count === 1 ? one : many}`],
+    ),
+  deleteAllNeedsConnectionBody:
+    'Deleting changes your account on our servers, so it can only start while you are online.',
+  deleteAllFailed:
+    'Not everything was deleted. Run it again and it picks up where it stopped.',
+  deleteAllUnreachable:
+    "The delete couldn't reach the server. Check your connection and run it again; it picks up where it stopped.",
+  deleteAllSignIn: 'Sign in again to delete. Nothing has been removed.',
   activityTitle: 'Activity',
   activityRowHint: 'What was done, and when',
   activityEmpty: (name: string) =>

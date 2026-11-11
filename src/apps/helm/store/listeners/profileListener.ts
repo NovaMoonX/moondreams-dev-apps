@@ -33,7 +33,8 @@ const toProfile = (data: Partial<HelmProfile>): HelmProfile => ({
 
 export function startProfileListener(
   uid: string,
-  onChange: (profile: HelmProfile | null) => void,
+  /** `isFromServer` is false for a snapshot the device answered from its own copy. */
+  onChange: (profile: HelmProfile | null, isFromServer: boolean) => void,
   onError: (error: Error) => void,
 ): Unsubscribe {
   return onSnapshot(
@@ -44,6 +45,7 @@ export function startProfileListener(
         snapshot.exists()
           ? toProfile(snapshot.data() as Partial<HelmProfile>)
           : null,
+        !snapshot.metadata.fromCache,
       ),
     onError,
   );

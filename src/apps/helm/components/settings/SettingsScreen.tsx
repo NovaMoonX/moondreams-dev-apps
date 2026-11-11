@@ -23,6 +23,7 @@ import SettingsRow from '@/components/SettingsRow';
 import AssistantNameToneSheet from '@apps/helm/components/settings/AssistantNameToneSheet';
 import VoiceSettings from '@apps/helm/components/voice/VoiceSettings';
 import ShiftCalendars from '@apps/helm/components/settings/ShiftCalendars';
+import DeleteHelmData from '@apps/helm/components/settings/DeleteHelmData';
 import WhatTheAiSees from '@apps/helm/components/settings/WhatTheAiSees';
 import YourDaySheet from '@apps/helm/components/settings/YourDaySheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
@@ -195,6 +196,7 @@ function SettingsScreen({
             onClick={() => setIsSeesOpen(true)}
             hasChevron
           />
+          <DeleteHelmData connectionCount={grants.length} />
         </SettingsGroup>
       </main>
       <AssistantNameToneSheet

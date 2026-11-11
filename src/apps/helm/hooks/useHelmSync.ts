@@ -19,7 +19,11 @@ import {
   openJson,
 } from '@apps/helm/security';
 import { useStyleLearning } from '@apps/helm/queries/styleLearning';
-import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
+import {
+  ensureHelmProfile,
+  forgetHelmOnDevice,
+  reopenHelmToFirstRun,
+} from '@apps/helm/store/actions/settingsActions';
 import { ensureSelfWho } from '@apps/helm/store/actions/whoActions';
 import {
   clearHelm,
@@ -199,12 +203,21 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
     if (!uid) return;
 
     let isCurrent = true;
+    let hadProfile = false;
     const stops: (() => void)[] = [];
     stops.push(
       startProfileListener(
         uid,
-        (profile) => {
-          if (isCurrent) dispatch(setProfile({ uid, profile }));
+        (profile, isFromServer) => {
+          if (!isCurrent) return;
+          // A profile that existed and is now gone from the server was deleted on another device; a first open never had one.
+          if (profile === null && hadProfile && isFromServer) {
+            isCurrent = false;
+            void forgetHelmOnDevice(uid).finally(reopenHelmToFirstRun);
+            return;
+          }
+          hadProfile = profile !== null;
+          dispatch(setProfile({ uid, profile }));
         },
         (error) => console.error('Helm profile listener failed', error),
       ),

@@ -118,6 +118,7 @@
     "check:helm-search": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmSearch.ts",
     "check:helm-drop-box": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/helmDropBox.ts",
     "check:helm-trust": "tsx scripts/checks/helmTrust.ts",
+    "check:helm-delete": "tsx scripts/checks/helmDelete.ts",
     "check:helm-copy": "tsx scripts/checks/helmCopy.ts",
     "check:yearly-dates": "TSX_TSCONFIG_PATH=./tsconfig.app.json tsx scripts/checks/yearlyDates.ts",
     "check:server-copies": "tsx scripts/checks/serverCopies.ts",
