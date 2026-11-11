@@ -39,3 +39,29 @@ export const getKeepTarget = (executions: OpenExecution[]): KeepTarget | null =>
         ];
       }),
     )[0] ?? null;
+
+/** What the turn's executions kept this photo on: the record's name (null when the effect named none or kept it on nothing); null when none of them kept it. */
+export const getKeptEffect = (
+  executions: OpenExecution[],
+  mediaId: string,
+): { title: string | null } | null =>
+  executions
+    .filter(
+      (execution) =>
+        execution.state === 'succeeded' && execution.category !== 'undo',
+    )
+    .flatMap((execution) =>
+      execution.effectRefs.flatMap((ref, index) => {
+        const written = execution.effects[index]?.written;
+        if (
+          ref.collection !== 'media' ||
+          ref.docId !== mediaId ||
+          written?.status !== 'kept'
+        ) {
+          return [];
+        }
+        const hasRecord =
+          Array.isArray(written.attachedTo) && written.attachedTo.length > 0;
+        return [{ title: hasRecord ? toText(written['sealed.title']) : null }];
+      }),
+    )[0] ?? null;

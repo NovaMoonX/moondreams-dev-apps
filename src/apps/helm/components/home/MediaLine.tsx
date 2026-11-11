@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
 import { ChevronRight, ImageOff } from 'lucide-react';
 
 import UndoSnackbar from '@/components/UndoSnackbar';
@@ -9,6 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useUndoRemoval } from '@/hooks/useUndoRemoval';
 import { useAppSelector } from '@/store';
+import KeptMediaViewer from '@apps/helm/components/media/KeptMediaViewer';
 import MediaThumb from '@apps/helm/components/media/MediaThumb';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -25,9 +27,11 @@ import {
 } from '@apps/helm/store/selectors/captureSelectors';
 import { selectTaskActivity } from '@apps/helm/store/selectors/taskSelectors';
 import type { MediaAttachment, OpenCapture } from '@apps/helm/types';
-import { getKeepTarget } from '@apps/helm/utils/mediaKeep';
+import { isMediaExpired } from '@apps/helm/utils/mediaCaps';
+import { getKeepTarget, getKeptEffect } from '@apps/helm/utils/mediaKeep';
 
 const LINE = 'flex w-full items-baseline gap-2 pl-[30px] text-[13px]';
+const HOUR_MS = 3_600_000;
 const SMALL_ACTION =
   "relative shrink-0 before:absolute before:-inset-x-1 before:-inset-y-2.5 before:content-['']";
 
@@ -35,7 +39,7 @@ interface TurnPhotosProps {
   capture: OpenCapture;
 }
 
-/** The photos sent with a turn, above its words; one that is already deleted is an empty tile. */
+/** The photos sent with a turn, above its words; one that is already deleted is a quiet tile that says so. */
 export function TurnPhotos({ capture }: TurnPhotosProps) {
   const media = useAppSelector((state) => state.helm.media.items);
   if (capture.attachmentIds.length === 0) return null;
@@ -58,11 +62,8 @@ export function TurnPhotos({ capture }: TurnPhotosProps) {
                 }
               />
             ) : (
-              <span className='bg-muted grid size-20 place-items-center rounded-xl'>
-                <ImageOff
-                  className='text-muted-foreground size-5'
-                  aria-hidden='true'
-                />
+              <span className='bg-muted text-muted-foreground grid size-20 place-items-center rounded-xl p-1 text-center text-[11px] leading-tight'>
+                {HELM_COPY.mediaGoneTile}
               </span>
             )}
           </li>
@@ -151,6 +152,7 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
   const facts = useAppSelector((state) => state.helm.facts.items);
   const [isWorking, setIsWorking] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const now = useNow(60_000);
   const uid = user?.uid;
   const keptBy = media?.executionId ?? null;
   const needsLoad = keptBy !== null && !executionsById.has(keptBy);
@@ -166,8 +168,31 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
   ) {
     return null;
   }
-  if (!media || media.status === 'discarded') {
-    const canKeep = media !== undefined && !media.isUnreadable;
+  if (!media || isMediaExpired(media.deleteAfter, now)) {
+    const kept = getKeptEffect(
+      capture.executionIds.flatMap((id) => {
+        const execution = executionsById.get(id);
+        return execution ? [execution] : [];
+      }),
+      mediaId,
+    );
+    if (!kept) return null;
+    return (
+      <p className={join(LINE, 'text-muted-foreground')}>
+        {kept.title
+          ? HELM_COPY.mediaTookOff(kept.title)
+          : HELM_COPY.mediaRemovedNoRecord}
+      </p>
+    );
+  }
+  if (media.status === 'discarded') {
+    const canKeep = !media.isUnreadable;
+    const hoursLeft =
+      media.deleteAfter === null
+        ? null
+        : media.deleteAfter - now <= HOUR_MS
+          ? 0
+          : Math.ceil((media.deleteAfter - now) / HOUR_MS);
     const keep = async () => {
       if (isWorking) return;
       if (!navigator.onLine) {
@@ -196,30 +221,23 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
       }
     };
     return (
-      <div className='flex w-full flex-col items-start gap-0.5'>
-        <p className={LINE}>
-          <span className='text-muted-foreground min-w-0 flex-1'>
-            {HELM_COPY.mediaLetGo}
-          </span>
-          {canKeep && (
-            <Button
-              type='button'
-              variant='secondary'
-              size='sm'
-              disabled={isWorking}
-              className={SMALL_ACTION}
-              onClick={() => void keep()}
-            >
-              {HELM_COPY.mediaKeepIt}
-            </Button>
-          )}
-        </p>
+      <p className={LINE}>
+        <span className='text-muted-foreground min-w-0 flex-1'>
+          {canKeep ? HELM_COPY.mediaNotKeptIn(hoursLeft) : HELM_COPY.mediaLetGo}
+        </span>
         {canKeep && (
-          <p className='text-muted-foreground pl-[30px] text-[13px]'>
-            {HELM_COPY.mediaDeletedSoon}
-          </p>
+          <Button
+            type='button'
+            variant='secondary'
+            size='sm'
+            disabled={isWorking}
+            className={SMALL_ACTION}
+            onClick={() => void keep()}
+          >
+            {HELM_COPY.mediaKeepIt}
+          </Button>
         )}
-      </div>
+      </p>
     );
   }
 
@@ -244,7 +262,7 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
       ? HELM_COPY.mediaKeptOn(title)
       : HELM_COPY.mediaKeptNoRecord;
   const canOpen =
-    record !== null &&
+    record === null ||
     (record.kind === 'fact'
       ? facts.some((entry) => entry.id === record.id)
       : tasksById.has(record.id));
@@ -309,6 +327,13 @@ function MediaLine({ capture, mediaId }: MediaLineProps) {
         <OpenTask
           taskId={record.id}
           isOpen={isOpen}
+          onClose={() => setIsOpen(false)}
+        />
+      )}
+      {record === null && isOpen && (
+        <KeptMediaViewer
+          media={media}
+          record={null}
           onClose={() => setIsOpen(false)}
         />
       )}

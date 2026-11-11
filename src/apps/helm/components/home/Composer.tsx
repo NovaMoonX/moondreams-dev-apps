@@ -205,7 +205,8 @@ function Composer({
     !isSending &&
     isCapturesLoaded &&
     user !== null &&
-    !isTooLong;
+    !isTooLong &&
+    !isHeldBackByPhotos;
   const canSaveAsNote = isTooLong && length <= NOTE_BODY_MAX;
   const isNearLimit = length >= CAPTURE_COUNTER_FROM;
 
@@ -214,6 +215,7 @@ function Composer({
     const { uid } = user;
     const sent = text;
     const attachmentIds = attachments.mediaIds;
+    const sentChips = attachments.items;
     const next = getNextTurn();
     // A turn with photos starts its own turn and never joins a running one.
     const turn = {
@@ -238,6 +240,7 @@ function Composer({
         setFixedDays((current) => ({ ...sentDays, ...current }));
       }
       setText(withSent);
+      attachments.restore(sentChips);
       addToast({ title: HELM_COPY.sendFailed, type: 'error' });
     };
     setIsSending(true);
@@ -373,6 +376,11 @@ function Composer({
         onRemove={attachments.remove}
         onRetry={attachments.retry}
       />
+      {attachments.notice !== null && (
+        <p className='text-muted-foreground text-[13px]' role='status'>
+          {attachments.notice}
+        </p>
+      )}
       {attachments.items.length > 0 && (
         <p className='text-muted-foreground text-[13px] text-pretty'>
           {HELM_COPY.attachNote(name)}
@@ -445,38 +453,48 @@ function Composer({
       {waitingPlaceholder === null && (
         <div className='flex items-center justify-between gap-3'>
           <div className='flex min-w-0 items-center gap-2'>
-            <EllipsisDropdown
-              variant='tertiary'
-              placement='top'
-              alignment='start'
-              ariaLabel={HELM_COPY.attachMenuLabel}
-              disabled={!isReady}
-              icon={<Paperclip className='size-4' aria-hidden='true' />}
-              items={[
-                ...(canTakePhoto
-                  ? [
-                      option({
-                        label: HELM_COPY.attachTake,
-                        value: TAKE_PHOTO,
-                        icon: <Camera className='size-4' aria-hidden='true' />,
-                      }),
-                    ]
-                  : []),
-                option({
-                  label: HELM_COPY.attachChoose,
-                  value: CHOOSE_PHOTOS,
-                  icon: <ImagePlus className='size-4' aria-hidden='true' />,
-                }),
-              ]}
-              onItemSelect={(value: string) =>
-                openFileChooser(
-                  value === TAKE_PHOTO
-                    ? cameraInput.current
-                    : libraryInput.current,
-                  { isCamera: value === TAKE_PHOTO },
-                )
-              }
-            />
+            {canTakePhoto ? (
+              <EllipsisDropdown
+                variant='tertiary'
+                placement='top'
+                alignment='start'
+                ariaLabel={HELM_COPY.attachMenuLabel}
+                disabled={!isReady}
+                icon={<Paperclip className='size-4' aria-hidden='true' />}
+                items={[
+                  option({
+                    label: HELM_COPY.attachTake,
+                    value: TAKE_PHOTO,
+                    icon: <Camera className='size-4' aria-hidden='true' />,
+                  }),
+                  option({
+                    label: HELM_COPY.attachChoose,
+                    value: CHOOSE_PHOTOS,
+                    icon: <ImagePlus className='size-4' aria-hidden='true' />,
+                  }),
+                ]}
+                onItemSelect={(value: string) =>
+                  openFileChooser(
+                    value === TAKE_PHOTO
+                      ? cameraInput.current
+                      : libraryInput.current,
+                    { isCamera: value === TAKE_PHOTO },
+                  )
+                }
+              />
+            ) : (
+              <Button
+                type='button'
+                variant='tertiary'
+                size='icon'
+                aria-label={HELM_COPY.attachChoose}
+                disabled={!isReady}
+                className="relative size-8 p-0! before:absolute before:-inset-1 before:content-['']"
+                onClick={() => openFileChooser(libraryInput.current)}
+              >
+                <Paperclip className='size-4' aria-hidden='true' />
+              </Button>
+            )}
             <span
               className='text-muted-foreground text-[13px] tabular-nums'
               aria-live='polite'

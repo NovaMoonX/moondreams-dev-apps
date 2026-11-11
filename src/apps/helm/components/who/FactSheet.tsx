@@ -8,7 +8,7 @@ import DetailSheet from '@/components/DetailSheet';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import QuestionCard from '@apps/helm/components/home/QuestionCard';
 import SourceRing from '@apps/helm/components/who/SourceRing';
@@ -216,7 +216,8 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           disabled={isWorking}
           onClick={() =>
             void run(
-              () => forgetFact(uid, shown.id),
+              () =>
+                forgetFact(uid, shown.id, store.getState().helm.media.items),
               HELM_COPY.factForgotToast,
               () => {
                 closeSettling();
@@ -321,6 +322,7 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
           <p className='text-muted-foreground text-[13px] text-pretty'>
             {getFactSource(shown, assistant, now)}
           </p>
+          <KeptMediaSection record={{ kind: 'fact', id: shown.id }} />
           {partner && (
             <p className='text-muted-foreground text-[13px] break-words'>
               {HELM_COPY.factDisagrees(partner.statement)}
@@ -342,7 +344,6 @@ function FactSheet({ factId, onClose }: FactSheetProps) {
               )}
             </p>
           ))}
-          <KeptMediaSection record={{ kind: 'fact', id: shown.id }} />
         </div>
       )}
     </DetailSheet>

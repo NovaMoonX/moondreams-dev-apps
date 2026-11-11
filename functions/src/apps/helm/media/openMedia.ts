@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore';
+import { logger } from 'firebase-functions';
 
 import { gcmDecrypt } from '../../../appKeys/gcm.js';
 import type { SealedPayload } from '../../../appKeys/seal.js';
@@ -78,7 +79,7 @@ export async function openMedia(input: {
   refused: string[];
 }> {
   const { firestore, bucket, base, uid, key, captureId, listed } = input;
-  const candidates = listIds(listed);
+  const candidates = listIds(listed).slice(0, 2 * MAX_ATTACHMENTS_PER_TURN);
   const snapshots = candidates.length
     ? await firestore.getAll(
         ...candidates.map((id) => firestore.doc(`${base}/media/${id}`)),
@@ -107,7 +108,10 @@ export async function openMedia(input: {
         );
         const copy = await toWebpCopy(plain, ATTACHMENT_IMAGE_PX);
         return { id, words, data: copy.toString('base64') };
-      } catch {
+      } catch (error) {
+        logger.warn('helm.media.openFailed', {
+          cause: error instanceof Error ? error.name : 'unknown',
+        });
         return null;
       }
     }),

@@ -1,7 +1,6 @@
 import {
   arrayUnion,
   collection,
-  deleteDoc,
   doc,
   type DocumentReference,
   getDoc,
@@ -355,8 +354,16 @@ export async function retryCapture(
 export const sortRestOfCapture = (captureId: string) =>
   sortCapture(captureId, 'rest');
 
-export const deleteCapture = (uid: string, captureId: string) =>
-  deleteDoc(doc(capturesOf(uid), captureId));
+/** Deletes a turn; the photos it carried are let go with it, due in 24 hours. */
+export function deleteCapture(uid: string, captureId: string) {
+  const capture = selectAllCaptures(store.getState()).find(
+    (entry) => entry.id === captureId,
+  );
+  const batch = writeBatch(db);
+  batch.delete(doc(capturesOf(uid), captureId));
+  letGoTurnPhotos(batch, uid, capture?.attachmentIds ?? [], Date.now());
+  return batch.commit();
+}
 
 /** Makes one task from a held turn's words as written (the messages that joined it follow, one per line) and marks the turn and its waiting messages sorted, in one batch handed back unawaited so it works offline. `undo` deletes the task and puts the turn back as it was, only while the task is still open and unedited; it answers whether it did. Refuses a turn a reading may be holding. */
 export async function makeTaskAsWritten(

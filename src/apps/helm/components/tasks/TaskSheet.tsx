@@ -15,7 +15,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useNow } from '@/hooks/useNow';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { toLocalDateInputValue } from '@/utils/dateInputUtils';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
@@ -24,6 +24,7 @@ import {
   PlacementFooter,
 } from '@apps/helm/components/today/Placement';
 import AskAboutThisControl from '@apps/helm/components/shell/AskAboutThisControl';
+import KeptMediaSection from '@apps/helm/components/media/KeptMediaSection';
 import TaskDetails, {
   WhenRow,
   WordsEditor,
@@ -329,7 +330,11 @@ function TaskSheet({
         destructive: true,
       });
       if (!isConfirmed) return;
-      const { write, restore } = await deleteTask(uid, task.id);
+      const { write, restore } = await deleteTask(
+        uid,
+        task.id,
+        store.getState().helm.media.items,
+      );
       run(write);
       close();
       onDeleted(task.id, titleOf, restore);
@@ -654,6 +659,7 @@ function TaskSheet({
           </div>
         )}
         {getCondition()}
+        <KeptMediaSection record={{ kind: 'task', id: task.id }} />
         <div className='space-y-2'>
           {!task.isUnreadable && (
             <SummaryRow

@@ -16,9 +16,12 @@ interface AttachmentChipsProps {
 function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
   if (items.length === 0) return null;
   return (
-    <ul className='flex flex-wrap gap-2'>
+    <ul className='-mx-1 flex gap-2 overflow-x-auto px-1 py-1'>
       {items.map((item, index) => (
-        <li key={item.key} className='flex w-16 flex-col items-start gap-0.5'>
+        <li
+          key={item.key}
+          className='relative flex w-16 shrink-0 flex-col items-start gap-0.5'
+        >
           <span className='bg-muted relative block size-16 overflow-hidden rounded-xl'>
             <FallbackImage
               src={item.previewUrl}
@@ -38,19 +41,17 @@ function AttachmentChips({ items, onRemove, onRetry }: AttachmentChipsProps) {
                 <Loader2 className='size-5 animate-spin' aria-hidden='true' />
               </span>
             )}
-            {item.status !== 'uploading' && (
-              <Button
-                type='button'
-                variant='base'
-                size='icon'
-                aria-label={HELM_COPY.attachRemove}
-                className="bg-background/85 text-foreground absolute top-1 right-1 size-6 min-w-6 rounded-full p-0 before:absolute before:-inset-2 before:content-['']"
-                onClick={() => onRemove(item.key)}
-              >
-                <X className='size-3.5' aria-hidden='true' />
-              </Button>
-            )}
           </span>
+          <Button
+            type='button'
+            variant='base'
+            size='icon'
+            aria-label={HELM_COPY.attachRemove}
+            className="bg-background/85 text-foreground absolute top-1 right-1 size-6 min-w-6 rounded-full p-0 before:absolute before:-inset-2 before:content-['']"
+            onClick={() => onRemove(item.key)}
+          >
+            <X className='size-3.5' aria-hidden='true' />
+          </Button>
           {item.status === 'failed' && (
             <>
               <span className='text-destructive text-[12px] leading-4'>

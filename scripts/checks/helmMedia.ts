@@ -16,6 +16,7 @@ import {
 import {
   buildExecution,
   planMediaDecisions,
+  settleCapture,
   planWrites,
   type MediaInput,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
@@ -208,8 +209,11 @@ const fakeStore = (docs: Record<string, Record<string, unknown>>) => {
     id: path.split('/').pop() as string,
     data: () => docs[path],
     get: (field: string) => docs[path]?.[field],
+    updateTime: 'v1',
     ref: {
-      delete: async () => {
+      get: async () => snapshot(path),
+      delete: async (precondition?: { lastUpdateTime?: unknown }) => {
+        assert.ok(precondition?.lastUpdateTime);
         log.push(`doc:${path}`);
         delete docs[path];
       },
@@ -384,6 +388,24 @@ test('a keep that has no room left is let go', () => {
   assert.equal(made.letGo[0].id, 'p1');
 });
 
+test('a turn of only photo decisions is sorted, never could-not-read', () => {
+  const settle = (hasMedia: boolean) =>
+    settleCapture({
+      mode: 'full',
+      filed: 0,
+      hasMedia,
+      hasMore: false,
+      executionId: null,
+      now: NOW,
+      newId: () => 'q',
+      opened: { text: 'x' },
+      questionState: {},
+      executionIds: [],
+    });
+  assert.equal(settle(true).status, 'sorted');
+  assert.equal(settle(false).status, 'needsYou');
+});
+
 test('a keep on a task this reply makes lands on its new id, in the turn summary', () => {
   const existing = new Map();
   const written = planWrites({
@@ -477,6 +499,37 @@ test('the sweep keeps a let-go photo until 24 hours pass, then deletes objects b
     `doc:${BASE}/media/p1`,
   ]);
   assert.ok(`${BASE}/media/p2` in docs);
+});
+
+test('a photo kept after the sweep listed it is left alone', async () => {
+  const docs: Record<string, Record<string, unknown>> = {
+    [`${BASE}/media/p1`]: { status: 'discarded', deleteAfter: NOW },
+  };
+  const { firestore, log } = fakeStore(docs);
+  const listed = firestore.collection(`${BASE}/media`);
+  const original = listed.get;
+  listed.get = async () => {
+    const result = await original();
+    docs[`${BASE}/media/p1`] = { status: 'kept', deleteAfter: null };
+    return result;
+  };
+  firestore.collection = () => listed;
+  const result = await sweepExpiredMedia({
+    firestore: firestore as never,
+    bucket: {
+      file: () => ({
+        download: async () => [Buffer.alloc(0)],
+        delete: async () => {
+          log.push('object');
+        },
+      }),
+    },
+    uid: 'u1',
+    now: NOW,
+  });
+  assert.deepEqual(result, { deleted: 0, failed: 0 });
+  assert.deepEqual(log, []);
+  assert.ok(`${BASE}/media/p1` in docs);
 });
 
 test('a sweep that cannot delete an object leaves the document', async () => {

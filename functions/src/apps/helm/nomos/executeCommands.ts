@@ -1462,10 +1462,8 @@ export function planWrites(input: PlanInput): WritePlan {
         seal,
       })
     : { kept: [], letGo: [], effectRefs: [], effects: [], keptTitles: [] };
-  effectRefs.push(...mediaPlan.effectRefs);
-  effects.push(...mediaPlan.effects);
 
-  const isFiling = effects.length > 0;
+  const isFiling = effects.length + mediaPlan.effects.length > 0;
   const people = input.people;
   const links = (field: 'whoIds' | 'placeIds') =>
     [
@@ -1793,8 +1791,8 @@ export function planWrites(input: PlanInput): WritePlan {
         )
       : [],
     linkedPlaceIds: isFiling ? union([], [...entities.placeIdOf.values()]) : [],
-    effectRefs,
-    effects,
+    effectRefs: [...effectRefs, ...mediaPlan.effectRefs],
+    effects: [...effects, ...mediaPlan.effects],
     counts,
     questions,
   };
@@ -2147,6 +2145,8 @@ interface SettleInput {
   /** The turn said the person is home, whether or not a home place exists to file it on. */
   hasHome?: boolean;
   hasFacts?: boolean;
+  /** Photos were kept or let go this turn: a turn well taken, not an unread one. */
+  hasMedia?: boolean;
   hasMore: boolean;
   executionId: string | null;
   answer?: {
@@ -2229,6 +2229,7 @@ export function settleCapture(input: SettleInput) {
     !input.hasPlanDay &&
     !input.hasHome &&
     !input.hasFacts &&
+    !input.hasMedia &&
     !input.hadAsks &&
     !input.isAnswerTurn;
   const next = isUnread

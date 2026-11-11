@@ -107,7 +107,7 @@ const holdObjects = (paths: string[]): Promise<HeldObject[]> =>
     })),
   );
 
-/** Deletes the held objects, then the document once every object is gone; answers which objects are gone. A document left behind is already marked discarded and stays until a sweep exists. */
+/** Deletes the held objects, then the document once every object is gone; answers which objects are gone. A document left behind is already marked discarded and the next sweep deletes it. */
 const eraseObjects = async (
   mediaRef: ReturnType<typeof doc>,
   held: HeldObject[],
@@ -557,7 +557,13 @@ export async function keepLetGoMedia(
   };
   return runTransaction(db, async (transaction): Promise<KeepResult> => {
     const data = (await transaction.get(mediaRef)).data();
-    if (!data || data.status !== 'discarded') return 'gone';
+    if (
+      !data ||
+      data.status !== 'discarded' ||
+      isMediaExpired(data.deleteAfter, now)
+    ) {
+      return 'gone';
+    }
     transaction.update(mediaRef, {
       status: 'kept',
       role: 'attachment',
@@ -577,36 +583,39 @@ export interface RemovedKeptPhoto {
   restore: () => Promise<void>;
 }
 
-/** Takes a kept photo off one record. With no record left it is marked discarded and its objects and document are deleted, the sealed bytes held in memory so Undo can put it back. */
+/** Takes a kept photo off one record (or, with none, off the turn that kept it). With nothing left holding it, it is let go for 24 hours like any photo the assistant didn't keep, so the turn's line stays true and Undo puts it back. */
 export async function removeKeptMedia(
   uid: string,
   media: OpenMedia,
-  record: MediaAttachment,
+  record: MediaAttachment | null,
 ): Promise<RemovedKeptPhoto | 'gone'> {
   const mediaRef = doc(mediaOf(uid), media.id);
-  const paths = objectPathsOf(uid, media.id, media.hasThumb);
   const previous = (await getDoc(mediaRef)).data() ?? null;
   if (!previous) return 'gone';
   const remaining = toAttached(previous.attachedTo).filter(
-    (entry) => !(entry.kind === record.kind && entry.id === record.id),
+    (entry) =>
+      record !== null &&
+      !(entry.kind === record.kind && entry.id === record.id),
   );
-  if (remaining.length > 0) {
-    await updateDoc(mediaRef, { attachedTo: remaining });
-    return { restore: () => setDoc(mediaRef, previous) };
-  }
-  const held = await holdObjects(paths);
-  await updateDoc(mediaRef, {
-    status: 'discarded',
-    attachedTo: [],
-    decidedAt: Date.now(),
-    deleteAfter: Date.now() + LET_GO_WINDOW_MS,
-  });
-  const gone = await eraseObjects(mediaRef, held);
+  await updateDoc(
+    mediaRef,
+    remaining.length > 0
+      ? { attachedTo: remaining }
+      : {
+          status: 'discarded',
+          attachedTo: [],
+          decidedAt: Date.now(),
+          deleteAfter: Date.now() + LET_GO_WINDOW_MS,
+        },
+  );
   return {
-    restore: async () => {
-      await putObjectsBack(held, gone);
-      await setDoc(mediaRef, previous);
-    },
+    restore: () =>
+      updateDoc(mediaRef, {
+        attachedTo: previous.attachedTo,
+        status: previous.status,
+        deleteAfter: previous.deleteAfter,
+        decidedAt: previous.decidedAt,
+      }),
   };
 }
 

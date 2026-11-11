@@ -33,6 +33,15 @@ export async function sweepExpiredMedia(input: {
       )
       .map(async (snapshot) => {
         try {
+          const fresh = await snapshot.ref.get();
+          const deleteAfter = fresh.get('deleteAfter');
+          if (
+            !SWEPT_STATUSES.includes(fresh.get('status') as string) ||
+            typeof deleteAfter !== 'number' ||
+            !isMediaExpired(deleteAfter, now)
+          ) {
+            return null;
+          }
           await Promise.all(
             [false, true].map((isThumb) =>
               bucket
@@ -40,7 +49,7 @@ export async function sweepExpiredMedia(input: {
                 .delete({ ignoreNotFound: true }),
             ),
           );
-          await snapshot.ref.delete();
+          await snapshot.ref.delete({ lastUpdateTime: fresh.updateTime });
           return true;
         } catch (error) {
           logger.warn('helm.media.sweepFailed', {
@@ -51,7 +60,7 @@ export async function sweepExpiredMedia(input: {
       }),
   );
   return {
-    deleted: outcomes.filter(Boolean).length,
-    failed: outcomes.filter((done) => !done).length,
+    deleted: outcomes.filter((done) => done === true).length,
+    failed: outcomes.filter((done) => done === false).length,
   };
 }

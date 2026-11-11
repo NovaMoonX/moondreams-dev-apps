@@ -2699,6 +2699,10 @@ async function writeResult(
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,
+      hasMedia:
+        !isStale &&
+        !!sentMedia &&
+        sentMedia.photos.length + sentMedia.letGoIds.length > 0,
       hasMore,
       executionId: isFiling ? executionRef.id : null,
       answer:

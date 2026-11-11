@@ -10,6 +10,7 @@ import {
   type UndoPlan,
   type UndoTarget,
 } from '../../src/apps/helm/nomos/planUndo.ts';
+import { planPhotoRelease } from '../../src/apps/helm/utils/mediaRelease.ts';
 import { buildResultLines } from '../../src/apps/helm/utils/resultLines.ts';
 import type {
   EffectRef,
@@ -1655,6 +1656,75 @@ test('undo of a keep skips a photo the person already removed', () => {
     ]),
   );
   assert.equal(result.reason, 'nothingToTakeBack');
+});
+
+test('a kept photo is not listed as a result line', () => {
+  assert.deepEqual(
+    buildResultLines(execution([KEEP_PHOTO]), new Map(), 'UTC', NOW),
+    [],
+  );
+});
+
+const HELD_PHOTO = {
+  id: 'm1',
+  status: 'kept' as const,
+  attachedTo: [{ kind: 'task' as const, id: 't1' }],
+  decidedAt: EARLIER,
+  deleteAfter: null,
+};
+
+test('deleting a task lets its kept photo go for 24 hours and Undo keeps it again', () => {
+  const [released] = planPhotoRelease(
+    [HELD_PHOTO],
+    [{ kind: 'task', id: 't1' }],
+    NOW,
+  );
+  assert.deepEqual(released.forward, {
+    status: 'discarded',
+    attachedTo: [],
+    decidedAt: NOW,
+    deleteAfter: NOW + 24 * 60 * 60 * 1000,
+  });
+  assert.deepEqual(released.back, {
+    attachedTo: [{ kind: 'task', id: 't1' }],
+    status: 'kept',
+    decidedAt: EARLIER,
+    deleteAfter: null,
+  });
+});
+
+test('deleting a task only takes itself off a photo kept elsewhere too', () => {
+  const [released] = planPhotoRelease(
+    [
+      {
+        ...HELD_PHOTO,
+        attachedTo: [
+          { kind: 'task', id: 't1' },
+          { kind: 'fact', id: 'f1' },
+        ],
+      },
+    ],
+    [{ kind: 'task', id: 't1' }],
+    NOW,
+  );
+  assert.deepEqual(released.forward, {
+    attachedTo: [{ kind: 'fact', id: 'f1' }],
+  });
+  assert.equal(released.back.status, 'kept');
+});
+
+test('deleting a task leaves other photos and discarded ones alone', () => {
+  assert.deepEqual(
+    planPhotoRelease(
+      [
+        { ...HELD_PHOTO, id: 'm2', attachedTo: [{ kind: 'task', id: 't2' }] },
+        { ...HELD_PHOTO, id: 'm3', status: 'discarded', attachedTo: [] },
+      ],
+      [{ kind: 'task', id: 't1' }],
+      NOW,
+    ),
+    [],
+  );
 });
 
 const failures = tests.flatMap(([name, run]) => {

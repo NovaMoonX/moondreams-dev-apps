@@ -81,6 +81,7 @@ export function useTurnAttachments() {
   const { addToast } = useToast();
   const [items, setItems] = useState<TurnAttachment[]>([]);
   const latest = useRef<TurnAttachment[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const update = (change: (held: TurnAttachment[]) => TurnAttachment[]) => {
     latest.current = change(latest.current);
@@ -114,6 +115,13 @@ export function useTurnAttachments() {
         file,
         thumb,
       });
+      // Removed while it uploaded: nothing lists it, so it is let go now rather than left for the sweep.
+      if (!latest.current.some((entry) => entry.key === key)) {
+        void removeAttachment(user.uid, mediaId, true).catch((error: unknown) =>
+          console.error('A photo was not removed', error),
+        );
+        return;
+      }
       patch(key, { status: 'ready', mediaId });
     } catch (failure) {
       console.error('Helm photo was not uploaded', failure);
@@ -129,17 +137,15 @@ export function useTurnAttachments() {
     }
     const { accepted, refused } = fitAttachments(latest.current.length, picked);
     const reasons = refused.map((entry) => entry.reason);
-    if (reasons.includes('tooMany')) {
-      addToast({
-        title:
-          accepted.length > 0
-            ? HELM_COPY.attachSomeFit(accepted.length)
-            : HELM_COPY.attachTooMany,
-        type: 'info',
-      });
-    } else if (reasons.includes('notPhoto')) {
-      addToast({ title: HELM_COPY.attachNotPhoto, type: 'info' });
-    }
+    const refusal = reasons.includes('tooMany')
+      ? accepted.length > 0
+        ? HELM_COPY.attachSomeFit(accepted.length)
+        : HELM_COPY.attachTooMany
+      : reasons.includes('notPhoto')
+        ? HELM_COPY.attachNotPhoto
+        : null;
+    if (refusal) addToast({ title: refusal, type: 'info' });
+    setNotice(refusal);
     const added = accepted.map((source): TurnAttachment => ({
       key: generateUuid(),
       previewUrl: URL.createObjectURL(source),
@@ -171,8 +177,19 @@ export function useTurnAttachments() {
   /** Forgets the chips once their photos are sent; the photos stay. */
   const clear = () => {
     latest.current.forEach((entry) => URL.revokeObjectURL(entry.previewUrl));
+    setNotice(null);
     update(() => []);
   };
+
+  /** Puts chips for photos already uploaded back, after the turn that carried them did not send. */
+  const restore = (sent: TurnAttachment[]) =>
+    update((held) => [
+      ...held,
+      ...sent.map((entry) => ({
+        ...entry,
+        previewUrl: URL.createObjectURL(entry.source),
+      })),
+    ]);
 
   return {
     items,
@@ -180,6 +197,8 @@ export function useTurnAttachments() {
     retry,
     remove,
     clear,
+    restore,
+    notice,
     isUploading: items.some((entry) => entry.status === 'uploading'),
     hasFailed: items.some((entry) => entry.status === 'failed'),
     mediaIds: items.flatMap((entry) =>

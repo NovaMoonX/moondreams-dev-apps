@@ -451,7 +451,6 @@ export const HELM_COPY = {
       .filter(Boolean)
       .join(' '),
   resultPhotoFallback: 'A photo',
-  resultPhotoKept: 'Kept a photo',
   attachMenuLabel: 'Add a photo',
   attachTake: 'Take a photo',
   attachChoose: 'Choose photos',
@@ -474,9 +473,8 @@ export const HELM_COPY = {
   attachThumbLabel: (position: number) => `Photo ${position}`,
   mediaKeptOn: (record: string) => `Kept the photo on ${record}`,
   mediaKeptNoRecord: 'Kept the photo',
-  mediaLetGo: "Read the photo. Didn't keep it",
+  mediaLetGo: "Didn't keep the photo",
   mediaKeepIt: 'Keep it',
-  mediaDeletedSoon: 'Deleted in 24 hours unless you keep it.',
   mediaKeepFailed: "That photo couldn't be kept. Try again.",
   mediaKeepGone: 'That photo is already gone.',
   mediaKeepNeedsConnection: 'Keeping a photo needs a connection.',
@@ -487,6 +485,19 @@ export const HELM_COPY = {
   mediaRemoveFailed: "That photo didn't come off. Try again.",
   mediaRestoreFailed: "That photo couldn't be put back. Try again.",
   mediaUnreadable: "This photo can't be opened.",
+  mediaNotKeptIn: (hoursLeft: number | null) =>
+    hoursLeft === null
+      ? 'Not kept'
+      : hoursLeft < 1
+        ? 'Not kept · deleted in under an hour'
+        : `Not kept · deleted in ${hoursLeft} ${hoursLeft === 1 ? 'hour' : 'hours'}`,
+  mediaTookOff: (record: string) => `You took the photo off ${record}`,
+  mediaRemovedNoRecord: 'You removed the photo',
+  mediaGoneTile: 'Photo removed',
+  mediaRemoveSubtitle:
+    'A photo nothing else holds is deleted in 24 hours. You can undo it until then.',
+  mediaViewOnRecord: (position: number, total: number) =>
+    `Photo ${position} of ${total}`,
   tookBackPhotos: (count: number) =>
     count === 1 ? 'Took back a kept photo' : `Took back ${count} kept photos`,
   undoReportPhotos: (count: number) =>

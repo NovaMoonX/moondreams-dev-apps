@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   deleteField,
   doc,
   getDoc,
@@ -8,6 +7,7 @@ import {
   runTransaction,
   setDoc,
   updateDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 import { db } from '@lib/firebase/config';
@@ -24,6 +24,10 @@ import type {
   TaskWordsChange,
 } from '@apps/helm/types';
 import { toTaskTitle } from '@apps/helm/utils/heldCaptures';
+import {
+  planPhotoRelease,
+  type ReleasablePhoto,
+} from '@apps/helm/utils/mediaRelease';
 import { applyWordsChange, nextStepOrder } from '@apps/helm/utils/taskEdits';
 
 export type WordsResult = 'saved' | 'offline' | 'missing' | 'unreadable';
@@ -208,15 +212,32 @@ export function completeTask(uid: string, taskId: string) {
   return { completedAt, write, undo };
 }
 
-/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. Writes are handed back or left unawaited, so both work offline. */
-export async function deleteTask(uid: string, taskId: string) {
+/** Deletes a task, keeping a copy as it was so `restore` can put it back, only while nothing has taken its id. The photos kept only on it are let go for 24 hours in the same write, and `restore` keeps them again. Writes are handed back or left unawaited, so both work offline. */
+export async function deleteTask(
+  uid: string,
+  taskId: string,
+  photos: ReleasablePhoto[],
+) {
   const ref = doc(tasksOf(uid), taskId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data();
   if (!raw) throw new Error('This task is already gone.');
-  const write = deleteDoc(ref);
+  const released = planPhotoRelease(
+    photos,
+    [{ kind: 'task', id: taskId }],
+    Date.now(),
+  );
+  const mediaRef = (id: string) =>
+    doc(db, 'apps', 'helm', 'users', uid, 'media', id);
+  const batch = writeBatch(db);
+  batch.delete(ref);
+  released.forEach((entry) => batch.update(mediaRef(entry.id), entry.forward));
+  const write = batch.commit();
   const restore = async (): Promise<RestoreResult> => {
     if ((await getDoc(ref)).exists()) return 'exists';
-    setDoc(ref, { ...raw, lastEditedAt: Date.now() }).catch(() => undefined);
+    const back = writeBatch(db);
+    back.set(ref, { ...raw, lastEditedAt: Date.now() });
+    released.forEach((entry) => back.update(mediaRef(entry.id), entry.back));
+    back.commit().catch(() => undefined);
     return 'restored';
   };
   return { write, restore };
