@@ -84,6 +84,11 @@ export const DAY_MS = 24 * 60 * 60 * 1000;
 export const OPEN_TASKS_LIMIT = 150;
 export const FACTS_LIMIT = 300;
 export const FACT_STATEMENT_MAX = 500;
+export const STYLE_TRAIT_MAX = 120;
+export const STYLE_AVOID_MAX = 80;
+export const STYLE_TRAIT_LIMIT = 12;
+/** New typed messages between one learning run and the next. */
+export const STYLE_LEARN_EVERY = 25;
 export const TOPIC_MAX = 40;
 /** The most who and places the app keeps listening to. */
 export const WHO_LIMIT = 2_500;
@@ -1314,6 +1319,31 @@ export const HELM_COPY = {
   seesYouTopicPlaceholder: 'gas station',
   seesYouTopicSuggestions: 'Topics you already use',
   seesYouAddedToast: 'Added to what is kept about you',
+  styleTitle: 'How you write',
+  styleEmpty:
+    'Notes about your writing appear here after about 25 typed messages. You can also add one yourself.',
+  styleBasedOn: (count: number) =>
+    `Based on ${count} ${count === 1 ? 'example' : 'examples'}`,
+  styleAddedByYou: 'Added by you',
+  styleEditedByYou: 'Edited by you',
+  styleAvoidLine: (text: string) => `Avoids: ${text}`,
+  styleAvoidSource: 'Noticed in what you write',
+  styleAdd: 'Add a note',
+  styleAddTitle: 'Add a writing note',
+  styleSheetTitle: 'Writing note',
+  styleField: 'The note',
+  stylePlaceholder: 'Short sentences',
+  styleHelp: 'Describe how you write, in a few words.',
+  styleMissing: 'Write the note first.',
+  styleFull: (limit: number) =>
+    `Up to ${limit} notes. Remove one to add another.`,
+  styleEdit: 'Edit',
+  styleRemove: 'Remove',
+  styleSaved: 'Saved your note',
+  styleAdded: 'Added your note',
+  styleRemoved: 'Removed the note',
+  styleGone: 'That note is already gone.',
+  styleUndoneFailed: 'The note could not be put back.',
   askSeesYou: 'Ask about what is kept about you',
   chipSeesYou: 'About you',
   backToSeesYou: (assistant: string) => `Back to How ${assistant} sees you`,

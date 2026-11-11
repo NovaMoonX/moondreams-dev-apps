@@ -14,6 +14,7 @@ import {
   HELM_DRAFT_PREFIX,
   openJson,
 } from '@apps/helm/security';
+import { useStyleLearning } from '@apps/helm/queries/styleLearning';
 import { ensureHelmProfile } from '@apps/helm/store/actions/settingsActions';
 import { ensureSelfWho } from '@apps/helm/store/actions/whoActions';
 import {
@@ -21,6 +22,8 @@ import {
   retryKey,
   setFacts,
   setFactsFailed,
+  setStyle,
+  setStyleFailed,
   setKeyDateIndex,
   setKeyDateIndexFailed,
   setKeyStatus,
@@ -64,6 +67,7 @@ import {
   startWaitingCapturesListener,
 } from '@apps/helm/store/listeners/captureListener';
 import { startRecentExecutionsListener } from '@apps/helm/store/listeners/executionListener';
+import { startStyleListener } from '@apps/helm/store/listeners/styleListener';
 import { startFactsListener } from '@apps/helm/store/listeners/factListener';
 import { startKeyDateIndexListener } from '@apps/helm/store/listeners/keyDateIndexListener';
 import { sweepExpiredMedia } from '@apps/helm/store/actions/mediaActions';
@@ -211,6 +215,7 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
   useConnectionsRefresh(uid);
   useSelfWho(uid, displayName);
   useKeyDateRepair(uid);
+  useStyleLearning(uid);
 
   const keyAttempt = useAppSelector((state) => state.helm.keyAttempt);
 
@@ -297,6 +302,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm facts listener failed', error);
               dispatch(setFactsFailed());
+            },
+          ),
+          startStyleListener(
+            uid,
+            read,
+            (style) => dispatch(setStyle(style)),
+            (error) => {
+              console.error('Helm writing style listener failed', error);
+              dispatch(setStyleFailed());
             },
           ),
           startWhoListener(

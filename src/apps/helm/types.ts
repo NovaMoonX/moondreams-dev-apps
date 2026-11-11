@@ -62,6 +62,8 @@ export interface HelmProfile {
   selfWhoId: string | null;
   /** Where the person said they are, holding for a few hours from when they said it; never the device's location. */
   currentPlace: { placeId: string; saidAt: number } | null;
+  /** createdAt of the newest typed capture the style learner has read. */
+  styleLearnedThroughAt: number | null;
   createdAt: number;
   lastEditedAt: number | null;
 }
@@ -1117,4 +1119,32 @@ export interface PlanDay {
   reasons: Record<string, string>;
   calendarSnapshot: PlanCalendarEntry[];
   isUnreadable: boolean;
+}
+
+export type StyleScope = 'general' | 'occasion' | 'audience';
+
+export interface StyleProfile {
+  scope: StyleScope;
+  /** Audience: the who it is about (texts to Dana); never made from mail alone. */
+  audienceWhoId: string | null;
+  learnedFrom: ('helmText' | 'sentMail')[];
+  /** How many pieces of writing it rests on. */
+  sampleCount: number;
+  personEditedAt: number | null;
+  createdAt: number;
+  lastEditedAt: number | null;
+  /** StyleSealed. */
+  sealed: Sealed;
+}
+
+export interface StyleSealed {
+  /** "General", "Work email", "Texts to Dana" (at most 40). */
+  label: string;
+  /** At most 12, each text at most 120 characters; exampleCount is how many pieces of writing showed it (0 when the person wrote it). */
+  traits: Record<
+    string,
+    { text: string; isPersonSet: boolean; exampleCount: number }
+  >;
+  /** At most 6, each at most 80 characters: "No exclamation marks". */
+  avoid: string[];
 }
