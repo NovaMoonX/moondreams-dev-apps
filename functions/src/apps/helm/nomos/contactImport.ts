@@ -763,6 +763,7 @@ export const buildImportExecution = (input: {
     effects: input.writes.effects,
     undoReport: null,
     goneIds: null,
+    lines: null,
     spoken: null,
   }),
 });

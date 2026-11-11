@@ -236,6 +236,9 @@ export const NOTE_KEPT_SPOKEN = "That's already in your notes.";
 
 export const NOTES_FULL_LINE = 'Your notes are full (1,000).';
 
+export const NOTES_NOT_KEPT_LINE =
+  'Not kept · too much to save in one go. Try the note on its own.';
+
 /** "Saved a note" or "Saved 2 notes", for the summary of a turn that kept some. */
 export const describeNotes = (count: number) =>
   count === 0 ? null : plural(count, 'Saved a note', `Saved ${count} notes`);
@@ -244,13 +247,21 @@ export const describeNotes = (count: number) =>
 export const buildSpokenNote = (topicName: string | null) =>
   topicName ? `Saved a note in ${topicName}.` : 'Saved a note.';
 
-export const WHICH_TOPIC_WORDS = {
-  prompt: 'Which topics should this go in?',
-};
+const WHICH_TOPIC_TITLE_CAP = 40;
 
-/** "Which topics should this go in: Kitchen or Baking?" */
+/** `Where should "Cakes keep 3 days" go?`, the title cut at 40 characters. */
+export const buildWhichTopicPrompt = (title: string) =>
+  `Where should "${
+    title.length > WHICH_TOPIC_TITLE_CAP
+      ? `${title.slice(0, WHICH_TOPIC_TITLE_CAP).trimEnd()}…`
+      : title
+  }" go?`;
+
+/** "Which topics should this note go in: Kitchen, Baking, or both?" */
 export const buildSpokenWhichTopic = (names: string[]) =>
-  `Which topics should this go in: ${joinOr(names)}?`;
+  `Which topics should this note go in: ${names.join(', ')}, or ${
+    names.length === 2 ? 'both' : 'all of them'
+  }?`;
 
 export interface TopicCandidate {
   id: string;
@@ -260,12 +271,13 @@ export interface TopicCandidate {
 /** The sealed half of the question asked when a note could go in two or more topics: one option per topic and nothing picked, with the filing held until the person answers. */
 export const buildTopicQuestion = (input: {
   noteId: string;
+  title: string;
   candidates: TopicCandidate[];
 }) => ({
   kind: 'whichTopic' as const,
   builtBy: 'code' as const,
   shape: 'pickSeveral' as const,
-  prompt: WHICH_TOPIC_WORDS.prompt,
+  prompt: buildWhichTopicPrompt(input.title),
   options: input.candidates.map((candidate) => ({
     id: candidate.id,
     label: candidate.label,

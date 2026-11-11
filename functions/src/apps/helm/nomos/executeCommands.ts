@@ -52,6 +52,7 @@ import {
   describeNotes,
   NOTE_KEPT_SPOKEN,
   NOTES_FULL_LINE,
+  NOTES_NOT_KEPT_LINE,
   buildPickQuestion,
   buildSpokenPick,
   buildSpokenQuestion,
@@ -1021,7 +1022,7 @@ export function planWrites(input: PlanInput): WritePlan {
     seen: string[];
     working: Map<string, { docState: string; pendingNoteIds: string[] }>;
     filings: Map<string, TopicFiling>;
-    asks: { noteId: string; topicIds: string[] }[];
+    asks: { noteId: string; title: string; topicIds: string[] }[];
     names: string[][];
   }>(
     (acc, note) => {
@@ -1060,10 +1061,15 @@ export function planWrites(input: PlanInput): WritePlan {
         effects.length +
         drafts.size +
         entities.newWho.length +
-        entities.newPlaces.length +
-        acc.creates.length +
-        acc.filings.size;
-      if (reserved + 1 + filedIds.length > MAX_EFFECTS) return acc;
+        entities.newPlaces.length;
+      if (reserved + 1 + filedIds.length > MAX_EFFECTS) {
+        return {
+          ...acc,
+          notKept: acc.notKept.includes(NOTES_NOT_KEPT_LINE)
+            ? acc.notKept
+            : [...acc.notKept, NOTES_NOT_KEPT_LINE],
+        };
+      }
       const id = input.newId();
       const topicNames = filedIds.map(
         (topicId) => input.topics?.get(topicId)?.name ?? '',
@@ -1122,7 +1128,7 @@ export function planWrites(input: PlanInput): WritePlan {
         filings: stepped.filings,
         asks:
           known.length > 1
-            ? [...acc.asks, { noteId: id, topicIds: known }]
+            ? [...acc.asks, { noteId: id, title: note.title, topicIds: known }]
             : acc.asks,
         names: [...acc.names, topicNames],
       };
@@ -1431,7 +1437,8 @@ export function planWrites(input: PlanInput): WritePlan {
               pickQuestions.length,
           ),
         )
-        .map(({ noteId, topicIds }): PlannedQuestion => {
+
+        .map(({ noteId, title, topicIds }): PlannedQuestion => {
           const candidates = topicIds.map((id) => ({
             id,
             label:
@@ -1446,7 +1453,7 @@ export function planWrites(input: PlanInput): WritePlan {
               answeredAt: null,
               skippedAt: null,
             },
-            sealed: buildTopicQuestion({ noteId, candidates }),
+            sealed: buildTopicQuestion({ noteId, title, candidates }),
             spoken: buildSpokenWhichTopic(
               topicIds.map((id) => input.topics?.get(id)?.name ?? ''),
             ),
@@ -1829,6 +1836,7 @@ export function buildAnswerExecution(input: {
       notDone: input.notDone ?? [],
       undoReport: null,
       goneIds: null,
+      lines: null,
       spoken: input.spoken,
     }),
   };

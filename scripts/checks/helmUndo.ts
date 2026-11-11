@@ -83,6 +83,7 @@ const execution = (
   undoReport: null,
   spoken: null,
   goneIds: null,
+  lines: [],
   isUnreadable: false,
   ...overrides,
 });

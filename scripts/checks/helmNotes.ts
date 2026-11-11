@@ -11,6 +11,7 @@ import type { CaptureReading } from '../../functions/src/apps/helm/nomos/command
 import {
   buildExecution,
   planWrites,
+  settleCapture,
   type KeptNote,
   type NoteTopicState,
 } from '../../functions/src/apps/helm/nomos/executeCommands.ts';
@@ -186,7 +187,10 @@ test('two topics save it loose and ask which, with both as options and none tick
     heldCommands: { kind: string; noteId: string }[];
     builtBy: string;
   };
-  assert.equal(sealed.prompt, 'Which topics should this go in?');
+  assert.equal(
+    sealed.prompt,
+    'Where should "Cakes keep 3 days in the fridge" go?',
+  );
   assert.equal(sealed.builtBy, 'code');
   assert.deepEqual(
     sealed.options.map((option) => [option.id, option.label, option.ref]),
@@ -200,7 +204,7 @@ test('two topics save it loose and ask which, with both as options and none tick
   ]);
   assert.equal(
     question.spoken,
-    'Which topics should this go in: Kitchen or Baking?',
+    'Which topics should this note go in: Kitchen, Baking, or both?',
   );
 });
 
@@ -254,6 +258,46 @@ test('the 1,000th note is the last; past it nothing is written', () => {
   const full = run([note()], { noteCount: 1000 }).result;
   assert.equal(full.noteCreates.length, 0);
   assert.ok(full.notKept.includes('Your notes are full (1,000).'));
+});
+
+test('a note refused at the cap is not also a could-not-read question', () => {
+  const { read, result } = run([note()], { noteCount: 1000 });
+  assert.equal(result.noteCreates.length, 0);
+  const settled = settleCapture({
+    mode: 'full',
+    filed: 0,
+    hasMore: false,
+    hasFacts: read.notes.length > 0,
+    executionId: null,
+    now: 5000,
+    newId: () => 'x',
+    opened: { text: TEXT },
+    questionState: {},
+    executionIds: [],
+    questions: result.questions,
+  });
+  assert.equal(settled.status, 'sorted');
+  assert.deepEqual(Object.keys(settled.questionState), []);
+});
+
+test('the model adding a closing period or curly quotes keeps the note, and a word cut in half does not', () => {
+  const quoted = run([
+    note({ bodyQuote: '\u201Ccakes keep 3 days in the fridge.\u201D' }),
+  ]).read;
+  assert.equal(quoted.notes.length, 1);
+  assert.deepEqual(quoted.noteDropped, []);
+  const cut = run([note({ bodyQuote: 'cakes keep 3 days in the frid' })]).read;
+  assert.equal(cut.notes.length, 0);
+  assert.deepEqual(cut.noteDropped, ['notInCapture']);
+  const fact = run([
+    {
+      kind: 'noteFact',
+      statement: 'cakes keep 3 days in the fridge',
+      quote: 'cakes keep 3 days in the fridge',
+    },
+    note(),
+  ]).read;
+  assert.deepEqual(fact.noteDropped, ['isFact']);
 });
 
 test('a saved note reads in the turn summary and its spoken line', () => {
@@ -439,7 +483,7 @@ test('Undo deletes the note and puts the topic back as it was, without an edit s
     {
       docId: 'baking',
       collection: 'topics',
-      fields: { docState: 'empty', pendingNoteIds: ['n-old'] },
+      fields: { pendingNoteIds: ['n-old'] },
       reseal: null,
     },
   ]);
@@ -507,9 +551,91 @@ test('Undo of a filing restores the note topics and the topic marks without touc
     undone.updates.map((update) => [update.docId, update.fields]),
   );
   assert.deepEqual(byDoc.get('n1'), { topicIds: ['cars'] });
-  assert.deepEqual(byDoc.get('baking'), {
+  assert.deepEqual(byDoc.get('baking'), { pendingNoteIds: ['n-old'] });
+});
+
+const TWO_TEXT = 'remember that cakes keep 3 days and bread needs a warm room';
+
+const twoNotes = () =>
+  run(
+    [
+      note({
+        bodyQuote: 'cakes keep 3 days',
+        topicAliases: ['tp2'],
+      }),
+      note({
+        title: 'Bread needs a warm room',
+        bodyQuote: 'bread needs a warm room',
+        topicAliases: ['tp2'],
+      }),
+    ],
+    { text: TWO_TEXT },
+  ).result;
+
+const undoTwo = (targets: [string, UndoTarget][]) => {
+  const result = twoNotes();
+  const undone = planUndo({
+    original: asOpen(result.effectRefs as never, result.effects),
+    targets: new Map(targets),
+    undoExecutionId: 'u1',
+    now: 8000,
+    usedIds: new Set(),
+  });
+  assert.equal(undone.kind, 'write');
+  if (undone.kind !== 'write') throw new Error('expected a write');
+  return undone;
+};
+
+const noteTarget = (id: string, isEdited: boolean): [string, UndoTarget] => [
+  id,
+  {
+    docId: id,
+    data: { lastEditedAt: isEdited ? 7000 : null },
+    opened: { title: 'T', body: 'x' },
+  },
+];
+
+const topicTarget = (pending: string[]): [string, UndoTarget] => [
+  'baking',
+  {
+    docId: 'baking',
+    data: { docState: 'behind', pendingNoteIds: pending, lastEditedAt: null },
+    opened: null,
+  },
+];
+
+test('Undo with one of two notes edited keeps that note pending and the topic behind', () => {
+  const undone = undoTwo([
+    noteTarget('id-1', true),
+    noteTarget('id-2', false),
+    topicTarget(['n-old', 'id-1', 'id-2']),
+  ]);
+  assert.deepEqual(
+    undone.deletes.map((entry) => entry.docId),
+    ['id-2'],
+  );
+  assert.deepEqual(undone.updates[0].fields, {
+    pendingNoteIds: ['n-old', 'id-1'],
+  });
+});
+
+test('Undo removes only its own note from a topic that gained another since, and restores the topic only when nothing is pending', () => {
+  const gained = undoTwo([
+    noteTarget('id-1', false),
+    noteTarget('id-2', false),
+    topicTarget(['n-old', 'id-1', 'id-2', 'later']),
+  ]);
+  assert.deepEqual(gained.updates[0].fields, {
+    pendingNoteIds: ['n-old', 'later'],
+  });
+  const alone = undoTwo([
+    noteTarget('id-1', false),
+    noteTarget('id-2', false),
+    topicTarget(['id-1', 'id-2']),
+  ]);
+  assert.deepEqual(alone.updates[0].fields, {
+    pendingNoteIds: [],
     docState: 'empty',
-    pendingNoteIds: ['n-old'],
   });
 });
 

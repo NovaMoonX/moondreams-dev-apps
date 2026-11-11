@@ -435,6 +435,7 @@ function planSettle(
       effects: entries.map(({ effect }) => effect),
       undoReport: null,
       goneIds: null,
+      lines: null,
       spoken: null,
     }),
   };
@@ -596,6 +597,7 @@ function planSettleKeyDate(
           effects: [effect],
           undoReport: null,
           goneIds: null,
+          lines: null,
           spoken: null,
         }),
       };
@@ -745,6 +747,7 @@ function planFileNote(
             effects: entries.map(({ effect }) => effect),
             undoReport: null,
             goneIds: null,
+            lines: null,
             spoken: null,
           }),
         };
@@ -1005,6 +1008,7 @@ export function planResolve(
             effects: allEffects.map(({ effect }) => effect),
             undoReport: null,
             goneIds: null,
+            lines: null,
             spoken: null,
           }),
         };

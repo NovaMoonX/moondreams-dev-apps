@@ -305,8 +305,9 @@ export const HELM_COPY = {
   moreChips: (count: number) => `+${count} more`,
   changeDayTitle: 'Change the day',
   changeDay: (text: string) => `Change the day for ${text}`,
-  tooLong: (over: number, canSaveAsNote: boolean) =>
-    `Too long by ${over.toLocaleString()} ${over === 1 ? 'character' : 'characters'}. Split it into two${canSaveAsNote ? ', or save it as a note' : ''}.`,
+  tooLong: (over: number) =>
+    `Too long by ${over.toLocaleString()} ${over === 1 ? 'character' : 'characters'}. Split it into two.`,
+  noteLoose: 'Not in a topic yet',
   saveAsNote: 'Save as a note',
   saveAsNoteTooLong: 'Too long to save as a note (20,000 at most).',
   noteSavedFromText: (title: string) => `Saved a note: ${title}`,
@@ -1381,6 +1382,8 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  undoReportNoteUnfiled: 'Took the note back out of those topics.',
+  tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
     `${count === 1 ? '1 note' : `${count} notes`} too.`,
   undoReportProjectsToo: (count: number) =>

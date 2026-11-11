@@ -20,8 +20,13 @@ const toWords = (text: string) =>
     .split(' ')
     .filter((word) => word.length > 1 && !STOPWORDS.has(word));
 
-const countOf = (words: string[], word: string) =>
-  words.filter((entry) => entry === word).length;
+const BODY_WORDS_MAX = 2000;
+
+const toCounts = (words: string[]) =>
+  words.reduce(
+    (counts, word) => counts.set(word, (counts.get(word) ?? 0) + 1),
+    new Map<string, number>(),
+  );
 
 /** The ids of the notes that best match the typed words (at most 8, each scoring above zero), by word overlap with the title (counts double), the body and the names of the topics it is filed in. Lexical only. */
 export function rankNotes(
@@ -32,24 +37,30 @@ export function rankNotes(
   const wanted = [...new Set(toWords(text))];
   if (wanted.length === 0 || notes.length === 0) return [];
   const names = new Map(topics.map((topic) => [topic.id, topic.name]));
-  const entries = notes.map((note) => ({
-    id: note.id,
-    title: toWords(note.title),
-    body: toWords(note.body),
-    topic: toWords(note.topicIds.map((id) => names.get(id) ?? '').join(' ')),
-  }));
+  const entries = notes.map((note) => {
+    const body = toWords(note.body).slice(0, BODY_WORDS_MAX);
+    return {
+      id: note.id,
+      title: toCounts(toWords(note.title)),
+      bodyLength: body.length,
+      body: toCounts(body),
+      topic: toCounts(
+        toWords(note.topicIds.map((id) => names.get(id) ?? '').join(' ')),
+      ),
+    };
+  });
   const average = Math.max(
     1,
-    entries.reduce((sum, entry) => sum + entry.body.length, 0) / entries.length,
+    entries.reduce((sum, entry) => sum + entry.bodyLength, 0) / entries.length,
   );
   return entries
     .map((entry) => {
-      const damping = 1 - DAMPING + (DAMPING * entry.body.length) / average;
+      const damping = 1 - DAMPING + (DAMPING * entry.bodyLength) / average;
       const score = wanted.reduce((sum, word) => {
         const weighted =
-          countOf(entry.title, word) * TITLE_WEIGHT +
-          countOf(entry.body, word) +
-          countOf(entry.topic, word) * TOPIC_WEIGHT;
+          (entry.title.get(word) ?? 0) * TITLE_WEIGHT +
+          (entry.body.get(word) ?? 0) +
+          (entry.topic.get(word) ?? 0) * TOPIC_WEIGHT;
         return (
           sum +
           (weighted === 0 ? 0 : weighted / (weighted + SATURATION * damping))

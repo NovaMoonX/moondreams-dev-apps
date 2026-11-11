@@ -756,8 +756,8 @@ export interface ExecutionSealed {
   spoken: string | null;
   /** The records an undo found deleted, by id; null on every other execution. */
   goneIds: string[] | null;
-  /** Result rows that touch no record (a note already kept); absent on older executions. */
-  lines?: ResultNoteLine[];
+  /** Result rows that touch no record (a note already kept); null on executions that said none. */
+  lines: ResultNoteLine[] | null;
 }
 
 /** An execution after its payload is opened; one that would not open keeps `isUnreadable` and says nothing. */
@@ -768,7 +768,7 @@ export interface OpenExecution extends Omit<Execution, 'sealed'> {
   undoReport: string | null;
   spoken: string | null;
   goneIds: string[] | null;
-  lines?: ResultNoteLine[];
+  lines: ResultNoteLine[];
   isUnreadable: boolean;
 }
 

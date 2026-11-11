@@ -1103,6 +1103,9 @@ const readKeyDate = (
 
 /** Topic words a body word stands for in the emulator, beside the words that share their first four letters. */
 const NOTE_TOPIC_WORDS: Record<string, string> = {
+  bread: 'baking',
+  dough: 'baking',
+  sourdough: 'baking',
   cake: 'baking',
   cookie: 'baking',
   sauce: 'kitchen',

@@ -2,12 +2,12 @@ import { useState } from 'react';
 
 import { Button } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { ChevronRight } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { getTakenBackIds } from '@apps/helm/nomos/planUndo';
-import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { selectNoteById } from '@apps/helm/store/selectors/knowledgeSelectors';
 import type { OpenExecution } from '@apps/helm/types';
 import type { ResultLine } from '@apps/helm/utils/resultLines';
@@ -27,7 +27,6 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
   const gone = new Set(undo?.goneIds ?? []);
   const isUndone = execution.undoneByExecutionId !== null && undo !== null;
   const noteById = useAppSelector(selectNoteById);
-  const { showView } = useHelmUrlState();
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
 
   return (
@@ -39,17 +38,18 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
           const isStruck = isTracked && takenBack.has(docId);
           const isGone = isTracked && !isStruck && gone.has(docId);
           const isKept = isTracked && !isStruck && !isGone;
+          const refNote = line.ref ? noteById.get(line.ref.id) : undefined;
+          const looseDetail =
+            refNote && refNote.topicIds.length === 0
+              ? HELM_COPY.noteLoose
+              : null;
           const note = isGone
             ? HELM_COPY.deletedRow
             : isKept
               ? HELM_COPY.keptRow
-              : line.detail;
-          const open =
-            line.ref?.collection === 'notes' && noteById.has(line.ref.id)
-              ? () => setOpenNoteId(line.ref?.id ?? null)
-              : line.ref?.collection === 'topics'
-                ? () => void showView('topic', line.ref?.id ?? null)
-                : null;
+              : (line.detail ?? looseDetail);
+          const noteId = refNote && line.ref ? line.ref.id : null;
+          const open = noteId ? () => setOpenNoteId(noteId) : null;
           const titleLine = (
             <p
               className={join(
@@ -75,13 +75,21 @@ function ResultRows({ execution, lines, undo, isFlat }: ResultRowsProps) {
                   type='button'
                   variant='tertiary'
                   className={join(
-                    'h-auto w-full min-w-0 flex-col items-start rounded-none border-0 text-left font-normal focus-visible:-outline-offset-2',
+                    'h-auto w-full min-w-0 rounded-none border-0 text-left font-normal focus-visible:-outline-offset-2',
                     isFlat ? 'px-0 py-2.5' : 'px-3.5 py-2.5',
                   )}
                   onClick={open}
                 >
-                  {titleLine}
-                  {detailLine}
+                  <span className='flex w-full items-center gap-2'>
+                    <span className='min-w-0 flex-1'>
+                      {titleLine}
+                      {detailLine}
+                    </span>
+                    <ChevronRight
+                      className='text-muted-foreground size-4 shrink-0'
+                      aria-hidden
+                    />
+                  </span>
                 </Button>
               ) : (
                 <>

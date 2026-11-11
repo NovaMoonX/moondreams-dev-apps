@@ -277,8 +277,7 @@ const readNoteFact = (
   };
 };
 
-const toSpaced = (text: string) =>
-  text.replace(/\s+/g, ' ').trim().toLowerCase();
+export type NoteDrop = 'notInCapture' | 'isFact';
 
 /** A note to keep: its words must be a span of the capture, its topics only ones the person has, and it is dropped when it is only the words of a fact or date said in the same turn. */
 const readNotes = (
@@ -286,11 +285,12 @@ const readNotes = (
   topics: AliasBook | undefined,
   captureText: string | undefined,
   said: string[],
-): CreateNoteCommand[] => {
+): { notes: CreateNoteCommand[]; dropped: NoteDrop[] } => {
   const spoken = new Set(said.map((text) => toComparable(text)));
-  return items
+  const captureWords = ` ${toComparable(captureText ?? '')} `;
+  const read = items
     .filter((item) => item.kind === 'createNote')
-    .flatMap((item): CreateNoteCommand[] => {
+    .map((item): CreateNoteCommand | NoteDrop => {
       const words =
         typeof item.bodyQuote === 'string'
           ? item.bodyQuote.trim().slice(0, NOTE_BODY_CAP)
@@ -298,35 +298,39 @@ const readNotes = (
       if (
         !words ||
         (captureText !== undefined &&
-          !toSpaced(captureText).includes(toSpaced(words))) ||
-        spoken.has(toComparable(words))
+          !captureWords.includes(` ${toComparable(words)} `))
       ) {
-        return [];
+        return 'notInCapture';
       }
+      if (spoken.has(toComparable(words))) return 'isFact';
       const firstLine = words.split('\n').find((line) => line.trim()) ?? words;
-      return [
-        {
-          kind: 'createNote',
-          title:
-            toText(item.title, NOTE_TITLE_CAP) ??
-            cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
-          body: words,
-          topicIds: [
-            ...new Set(
-              (Array.isArray(item.topicAliases)
-                ? item.topicAliases
-                : []
-              ).flatMap((alias: unknown) => {
+      return {
+        kind: 'createNote',
+        title:
+          toText(item.title, NOTE_TITLE_CAP) ??
+          cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
+        body: words,
+        topicIds: [
+          ...new Set(
+            (Array.isArray(item.topicAliases) ? item.topicAliases : []).flatMap(
+              (alias: unknown) => {
                 const id =
                   typeof alias === 'string' ? topics?.idOf(alias) : null;
                 return id ? [id] : [];
-              }),
+              },
             ),
-          ].slice(0, NOTE_TOPICS_CAP),
-        },
-      ];
-    })
-    .slice(0, MAX_NOTES_PER_TURN);
+          ),
+        ].slice(0, NOTE_TOPICS_CAP),
+      };
+    });
+  return {
+    notes: read
+      .filter((entry): entry is CreateNoteCommand => typeof entry !== 'string')
+      .slice(0, MAX_NOTES_PER_TURN),
+    dropped: read.filter(
+      (entry): entry is NoteDrop => typeof entry === 'string',
+    ),
+  };
 };
 
 const MONTH_WORD_RE =
@@ -972,6 +976,7 @@ export function normalizeNomosReply(
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
   askDropped: AskDrop[];
+  noteDropped: NoteDrop[];
   mentions: MentionRead[];
   places: PlaceRead[];
 } {
@@ -1021,12 +1026,17 @@ export function normalizeNomosReply(
       return read ? [read] : [];
     })
     .slice(0, MAX_KEY_DATES);
-  const notes = readNotes(items, context.topics, context.captureText, [
-    ...noteFacts.flatMap((fact) => [fact.statement, fact.quote ?? '']),
-    ...keyDates.flatMap((date) =>
-      date.kind === 'setKeyDate' ? [date.quote ?? ''] : [],
-    ),
-  ]);
+  const { notes, dropped: noteDropped } = readNotes(
+    items,
+    context.topics,
+    context.captureText,
+    [
+      ...noteFacts.flatMap((fact) => [fact.statement, fact.quote ?? '']),
+      ...keyDates.flatMap((date) =>
+        date.kind === 'setKeyDate' ? [date.quote ?? ''] : [],
+      ),
+    ],
+  );
   const projects = readProjects(
     items,
     entities,
@@ -1081,6 +1091,7 @@ export function normalizeNomosReply(
       : null,
     asks,
     askDropped,
+    noteDropped,
     mentions: entities.mentions,
     places: entities.places,
   };

@@ -1627,6 +1627,9 @@ async function sortClaimed(claimed: Claimed): Promise<SortResult> {
     timeZone,
   });
   reply.askDropped.forEach((code) => logger.info('helm.ask.dropped', { code }));
+  reply.noteDropped.forEach((code) =>
+    logger.info('helm.sort.noteDropped', { code }),
+  );
   const answer = mode === 'full' ? reply.answer : null;
   const commands = reply.commands.filter(
     (command) => decide(command) === 'automatic',
@@ -2210,8 +2213,7 @@ async function writeResult(
       hasFacts:
         noteFacts.length +
           keyDates.length +
-          written.noteCreates.length +
-          written.lines.length +
+          notes.length +
           written.projectCreates.length +
           written.projectUpdates.length >
           0 && !isStale,

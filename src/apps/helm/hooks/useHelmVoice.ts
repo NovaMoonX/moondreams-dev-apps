@@ -41,6 +41,7 @@ import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
 import {
   loadExecutionsById,
   markCaptureSpoken,
+  rankStoredNotes,
   sendCapture,
   skipQuestion,
 } from '@apps/helm/store/actions/captureActions';
@@ -315,7 +316,13 @@ export function useHelmVoice() {
     const isModel = question.builtBy === 'model';
     const optionId =
       answer?.value.shape === 'pickOne' ? answer.value.optionId : null;
-    if (isModel ? answer === null : optionId === null) {
+    const choice =
+      answer?.value.shape === 'pickSeveral' && question.kind === 'whichTopic'
+        ? { optionIds: answer.value.optionIds }
+        : optionId !== null
+          ? { optionId }
+          : null;
+    if (isModel ? answer === null : choice === null) {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
       if (!isShort || askedAgain.current.has(askedKey)) return false;
       askedAgain.current.add(askedKey);
@@ -331,14 +338,14 @@ export function useHelmVoice() {
     if (isModel) {
       return answerAsTurn(asked, answer?.value ?? null, text, sttProvider);
     }
-    if (optionId === null) return false;
+    if (choice === null) return false;
     if (question.kind === 'whichIsTrue' && optionId === 'none') {
       say(HELM_COPY.whichIsTrueNoneVoice);
       return true;
     }
     const result = await resolveQuestion(asked.captureId, asked.id, {
       by: 'voice',
-      optionId,
+      ...choice,
     });
     if (result.kind === 'done') {
       say(
@@ -450,6 +457,7 @@ export function useHelmVoice() {
         screen: screen.current,
         answersQuestion: null,
         questionAnswer: null,
+        noteIds: rankStoredNotes(text),
         ...turn,
         voice: {
           sttProvider,

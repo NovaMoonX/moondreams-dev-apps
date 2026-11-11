@@ -12,15 +12,22 @@ const toTitle = (text: string) =>
     .trim()
     .slice(0, NOTE_TITLE_MAX);
 
-/** Keeps typed words that are too long for a turn as a note, with no reading by the assistant. Returns whether the words were taken (kept, or already in the notes) so the caller clears its field. */
+/** Keeps typed words that are too long for a turn as a note, with no reading by the assistant. Returns whether the words were taken (kept, or already in the notes). */
 export function useSaveAsNote(onOpen: (noteId: string) => void) {
   const { user } = useAuth();
   const { addToast } = useToast();
 
   return async (text: string): Promise<boolean> => {
     const body = text.trim();
-    if (!user || body === '' || body.length > NOTE_BODY_MAX) return false;
     const { notes } = store.getState().helm;
+    if (
+      !user ||
+      !notes.isLoaded ||
+      body === '' ||
+      body.length > NOTE_BODY_MAX
+    ) {
+      return false;
+    }
     const title = toTitle(body);
     const kept = notes.items.find(
       (note) =>

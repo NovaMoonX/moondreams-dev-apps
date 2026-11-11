@@ -97,6 +97,7 @@ function Composer({
   });
   const [isSending, setIsSending] = useState(false);
   const [openNoteId, setOpenNoteId] = useState<string | null>(null);
+  const [isSavingNote, setIsSavingNote] = useState(false);
   const saveAsNote = useSaveAsNote(setOpenNoteId);
   // The clock the words are read against, taken when they last changed.
   const [typedAt, setTypedAt] = useState(() => Date.now());
@@ -332,7 +333,7 @@ function Composer({
       )}
       {isTooLong && (
         <p className='text-destructive text-[13px]' aria-live='polite'>
-          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS, canSaveAsNote)}
+          {HELM_COPY.tooLong(length - CAPTURE_MAX_CHARS)}
         </p>
       )}
       {isTooLong && (
@@ -343,12 +344,16 @@ function Composer({
               variant='secondary'
               size='sm'
               rounded='full'
-              disabled={!isReady || !user}
-              onClick={() =>
-                void saveAsNote(text).then((isTaken) => {
-                  if (isTaken) setText('');
-                })
-              }
+              disabled={!isReady || !user || isSavingNote}
+              className="relative before:absolute before:-inset-x-1 before:-inset-y-1.5 before:content-['']"
+              onClick={() => {
+                setIsSavingNote(true);
+                void saveAsNote(text)
+                  .then((isTaken) => {
+                    if (isTaken) setText('');
+                  })
+                  .finally(() => setIsSavingNote(false));
+              }}
             >
               {HELM_COPY.saveAsNote}
             </Button>

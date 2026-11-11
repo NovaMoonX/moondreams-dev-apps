@@ -500,29 +500,61 @@ export function planUndo(input: {
         ),
       })),
   ];
-  // A topic a note was filed in goes back only with that note, and a topic that changed since just stays marked.
-  const isNoteTakenBack = recordOutcomes.some(
-    ({ docId, outcome }) =>
+  // A topic loses only the notes this undo took back; its state goes back only when nothing else is pending and it is still as the turn left it.
+  const takenBackNoteIds = new Set(
+    recordOutcomes.flatMap(({ docId, outcome }) =>
       collectionOf.get(docId) === 'notes' &&
-      (outcome.kind === 'deleted' || outcome.kind === 'restored'),
+      (outcome.kind === 'deleted' || outcome.kind === 'restored')
+        ? [docId]
+        : [],
+    ),
   );
+  const toIds = (value: unknown) =>
+    Array.isArray(value)
+      ? value.filter((id): id is string => typeof id === 'string')
+      : [];
   const topicOutcomes = groups
     .filter(([docId]) => isTopicDoc(docId))
-    .map(([docId, entries]) => {
-      const outcome = planRecord(
-        targetOf(docId),
-        entries,
-        now,
-        original.createdAt,
-        false,
-        false,
+    .map(([docId, entries]): { docId: string; outcome: RecordOutcome } => {
+      const target = targetOf(docId);
+      const first = entries[0]?.effect;
+      const last = entries[entries.length - 1]?.effect;
+      const pending = toIds(target.data?.pendingNoteIds);
+      const left = pending.filter((id) => !takenBackNoteIds.has(id));
+      if (
+        !target.data ||
+        !first?.previous ||
+        !last ||
+        left.length === pending.length
+      ) {
+        return { docId, outcome: { kind: 'skipped' } };
+      }
+      const isOurs = target.data.docState === last.written.docState;
+      const isBack = left.length === 0 && isOurs;
+      const title = toTitle(
+        target,
+        entries.map((entry) => entry.effect),
       );
-      const isQuiet =
-        !isNoteTakenBack ||
-        (outcome.kind !== 'restored' && outcome.kind !== 'deleted');
+      const fields: Values = {
+        pendingNoteIds: left,
+        ...(isBack ? { docState: first.previous.docState } : {}),
+      };
       return {
         docId,
-        outcome: isQuiet ? ({ kind: 'skipped' } as RecordOutcome) : outcome,
+        outcome: {
+          kind: 'restored',
+          title,
+          fields,
+          reseal: null,
+          effect: {
+            written: { ...fields, 'sealed.title': title },
+            previous: {
+              pendingNoteIds: pending,
+              ...(isBack ? { docState: target.data.docState } : {}),
+              'sealed.title': title,
+            },
+          },
+        },
       };
     });
   // A photo an import added goes with its person: when the person is taken back or restored, or already gone.
@@ -582,7 +614,13 @@ export function planUndo(input: {
     collectionOf.get(docId) === 'projects';
   const isNoteDoc = (docId: string) => collectionOf.get(docId) === 'notes';
   const projectsDone = done.filter(({ docId }) => isProjectDoc(docId));
-  const notesDone = done.filter(({ docId }) => isNoteDoc(docId));
+  const notesDeleted = done.filter(
+    ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'deleted',
+  );
+  const notesUnfiled = done.filter(
+    ({ docId, outcome }) => isNoteDoc(docId) && outcome.kind === 'restored',
+  );
+  const notesDone = [...notesDeleted, ...notesUnfiled];
   const factsDone = done.filter(({ docId }) => isFactDoc(docId));
   const datesDone = done.filter(({ docId }) => isKeyDateDoc(docId));
   const records = done.filter(({ docId }) =>
@@ -623,8 +661,14 @@ export function planUndo(input: {
   const datesToo =
     dateCount > 0 ? HELM_COPY.undoReportKeyDatesToo(dateCount) : '';
   const projectCount = projectsDone.length;
-  const noteCount = notesDone.length;
-  const notesToo = noteCount > 0 ? HELM_COPY.undoReportNotesToo(noteCount) : '';
+  const noteCount = notesDeleted.length;
+  const unfiledCount = notesUnfiled.length;
+  const notesToo = [
+    noteCount > 0 ? HELM_COPY.undoReportNotesToo(noteCount) : '',
+    unfiledCount > 0 ? HELM_COPY.undoReportNoteUnfiled : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
   const projectsToo = [
     projectCount > 0 ? HELM_COPY.undoReportProjectsToo(projectCount) : '',
     notesToo,
@@ -639,7 +683,14 @@ export function planUndo(input: {
   const report =
     records.length === 0 && factCount === 0 && dateCount === 0
       ? isNotesOnly
-        ? HELM_COPY.undoReportNotes(noteCount, kept.length, gone)
+        ? [
+            noteCount > 0
+              ? HELM_COPY.undoReportNotes(noteCount, kept.length, gone)
+              : '',
+            unfiledCount > 0 ? HELM_COPY.undoReportNoteUnfiled : '',
+          ]
+            .filter(Boolean)
+            .join(' ')
         : [
             HELM_COPY.undoReportProjects(projectCount, kept.length, gone),
             notesToo,
@@ -734,7 +785,9 @@ export function planUndo(input: {
       summary:
         records.length === 0
           ? isNotesOnly
-            ? HELM_COPY.tookBackNotes(noteCount)
+            ? noteCount > 0
+              ? HELM_COPY.tookBackNotes(noteCount)
+              : HELM_COPY.tookBackNoteUnfiled
             : factCount === 0
               ? HELM_COPY.tookBackKeyDates(dateCount)
               : HELM_COPY.tookBackFacts(factCount)
@@ -754,6 +807,7 @@ export function planUndo(input: {
       undoReport: report,
       spoken: null,
       goneIds,
+      lines: null,
     },
     takenBack: [...records, ...factsDone, ...datesDone, ...notesDone].map(
       ({ outcome }) => outcome.title,

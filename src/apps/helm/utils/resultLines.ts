@@ -8,7 +8,7 @@ export interface ResultLine {
   title: string;
   detail: string | null;
   /** The record a tap on the row opens. */
-  ref?: { collection: 'notes' | 'topics'; id: string };
+  ref?: { collection: 'notes'; id: string };
   /** A line the turn said without writing anything, so an Undo has nothing to take back on it. */
   isNoEffect?: boolean;
 }
