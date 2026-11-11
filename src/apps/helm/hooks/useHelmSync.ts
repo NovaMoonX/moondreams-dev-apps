@@ -36,6 +36,8 @@ import {
   setTopicsFailed,
   setProcedures,
   setProceduresFailed,
+  setOpenRuns,
+  setOpenRunsFailed,
   setMedia,
   setMediaFailed,
   setWho,
@@ -70,6 +72,7 @@ import { startPlacesListener } from '@apps/helm/store/listeners/placeListener';
 import { startNotesListener } from '@apps/helm/store/listeners/noteListener';
 import { startProjectsListener } from '@apps/helm/store/listeners/projectListener';
 import { startProceduresListener } from '@apps/helm/store/listeners/procedureListener';
+import { startOpenRunsListener } from '@apps/helm/store/listeners/runListener';
 import { startTopicsListener } from '@apps/helm/store/listeners/topicListener';
 import { startWhoListener } from '@apps/helm/store/listeners/whoListener';
 import { startSyncedListener } from '@apps/helm/store/listeners/syncedListener';
@@ -357,6 +360,15 @@ export function useHelmSync(uid: string | null, displayName: string | null) {
             (error) => {
               console.error('Helm procedures listener failed', error);
               dispatch(setProceduresFailed());
+            },
+          ),
+          startOpenRunsListener(
+            uid,
+            read,
+            (runs) => dispatch(setOpenRuns(runs)),
+            (error) => {
+              console.error('Helm runs listener failed', error);
+              dispatch(setOpenRunsFailed());
             },
           ),
           startMediaListener(

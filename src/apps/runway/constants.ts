@@ -1005,9 +1005,7 @@ export const START_HOLDINGS = [
 ] as const;
 /** The first day of the lookahead is the starting point; a start move's day key in a bill's funded list. */
 export const START_DAY_KEY = 'start';
-/** A 20px tick gets a 40px hit area from a pseudo-element, so a tap near it still ticks it. */
-export const TICK_HIT_CLASS =
-  "relative before:absolute before:-inset-[11px] before:content-['']";
+export { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
 /** Rows of goals or bills the starting amounts list shows before "Show all". */
 export const START_ROWS_PREVIEW = 6;
 

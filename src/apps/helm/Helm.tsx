@@ -18,6 +18,7 @@ import ConnectionPage from '@apps/helm/components/connections/ConnectionPage';
 import ActivityScreen from '@apps/helm/components/activity/ActivityScreen';
 import SettingsScreen from '@apps/helm/components/settings/SettingsScreen';
 import ProcedureScreen from '@apps/helm/components/procedures/ProcedureScreen';
+import RunScreen from '@apps/helm/components/procedures/RunScreen';
 import ProceduresView from '@apps/helm/components/procedures/ProceduresView';
 import KnowledgeView from '@apps/helm/components/knowledge/KnowledgeView';
 import TopicScreen from '@apps/helm/components/knowledge/TopicScreen';
@@ -195,6 +196,7 @@ function HelmApp() {
             onBack={goBackToOrigin}
             onHome={goHome}
             onOpenWho={(whoId) => showView('who', whoId)}
+            onOpenRun={(runId) => showView('run', runId)}
           />
         )}
         {!isLocked && view === 'knowledge' && (
@@ -229,6 +231,21 @@ function HelmApp() {
             procedureId={item}
             backLabel={toBackLabel(HELM_COPY.proceduresTitle)}
             onBack={goBackToOrigin}
+            onHome={goHome}
+            onOpenRun={(runId) => showView('run', runId)}
+          />
+        )}
+        {!isLocked && view === 'run' && (
+          <RunScreen
+            key={item}
+            runId={item}
+            originLabel={origin === null ? null : toBackLabel('')}
+            onBackToOrigin={goBackToOrigin}
+            onBackUp={(procedureId) =>
+              procedureId === null
+                ? void goBack()
+                : void goUpTo('procedure', procedureId)
+            }
             onHome={goHome}
           />
         )}

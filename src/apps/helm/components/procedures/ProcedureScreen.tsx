@@ -5,14 +5,17 @@ import {
   DropdownMenuFactories,
 } from '@moondreamsdev/dreamer-ui/components';
 import { useActionModal, useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { ChevronDown, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Play, Trash2 } from 'lucide-react';
 
+import { afterBackLayersClose } from '@/hooks/useBackHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppSelector } from '@/store';
 import { copyToClipboard } from '@/utils/clipboardUtils';
 import { formatDateShort } from '@/utils/formatUtils';
 import ProcedureForm from '@apps/helm/components/procedures/ProcedureForm';
 import ProcedureVersionsSheet from '@apps/helm/components/procedures/ProcedureVersionsSheet';
+import { RunsSection } from '@apps/helm/components/procedures/RunRows';
+import StartRunSheet from '@apps/helm/components/procedures/StartRunSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import { HELM_COPY, PROCEDURE_FOLD_FROM } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
@@ -33,6 +36,7 @@ interface ProcedureScreenProps {
   backLabel: string;
   onBack: () => void;
   onHome: () => void;
+  onOpenRun: (runId: string) => void;
 }
 
 /** One procedure: its steps in their groups, with Edit under its title and a menu for its history, a Markdown copy and Delete. */
@@ -41,6 +45,7 @@ function ProcedureScreen({
   backLabel,
   onBack,
   onHome,
+  onOpenRun,
 }: ProcedureScreenProps) {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -58,6 +63,7 @@ function ProcedureScreen({
   );
   const [isEditing, setIsEditing] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isStartingRun, setIsStartingRun] = useState(false);
   const [openGroupIds, setOpenGroupIds] = useState<string[]>([]);
 
   useScreenContext(
@@ -204,6 +210,10 @@ function ProcedureScreen({
               )}
             </div>
             <div className='flex flex-wrap items-center gap-2'>
+              <Button type='button' onClick={() => setIsStartingRun(true)}>
+                <Play className='size-4' aria-hidden='true' />
+                {HELM_COPY.runStart}
+              </Button>
               <Button
                 type='button'
                 variant='secondary'
@@ -235,6 +245,12 @@ function ProcedureScreen({
                 </Button>
               )}
             </div>
+            <RunsSection
+              field='procedureId'
+              id={procedure.id}
+              variant='procedure'
+              onOpen={onOpenRun}
+            />
             {blocks.map((block) => {
               const isFolded =
                 isFolding &&
@@ -314,6 +330,12 @@ function ProcedureScreen({
             isOpen={isEditing}
             onClose={() => setIsEditing(false)}
             procedure={procedure}
+          />
+          <StartRunSheet
+            isOpen={isStartingRun}
+            procedure={procedure}
+            onClose={() => setIsStartingRun(false)}
+            onStarted={(runId) => afterBackLayersClose(() => onOpenRun(runId))}
           />
           <ProcedureVersionsSheet
             isOpen={isHistoryOpen}

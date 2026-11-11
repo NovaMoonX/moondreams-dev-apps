@@ -114,6 +114,18 @@ export const PROCEDURE_GROUP_NAME_CAP = 40;
 export const PROCEDURE_VERSIONS_KEPT = 200;
 /** Steps past which a procedure's groups start folded. */
 export const PROCEDURE_FOLD_FROM = 50;
+/** A run holds the procedure's steps and the ones added for it alone, and the server writes the same caps. */
+export const RUN_STEPS_MAX = 80;
+export const RUN_EXTRA_MAX = 20;
+export const RUN_GROUPS_MAX = 12;
+export const RUN_EXTRA_TEXT_CAP = 200;
+/** Open runs listened to for the whole app. */
+export const RUNS_OPEN_LIMIT = 50;
+/** Runs a procedure's page or a project's lists before it says there are more. */
+export const RUNS_LISTED = 5;
+export const RUNS_ALL_MAX = 100;
+/** Days ahead a trip or event is offered on Start a run. */
+export const RUN_START_DAYS = 30;
 export const SUBTOPICS_MAX = 20;
 export const NOTE_TOPICS_MAX = 10;
 /** Notes the search field appears from. */
@@ -278,6 +290,20 @@ const toProcedurePhrase = (count: number, name: string | null) =>
   count === 1
     ? `1 change to ${name ?? 'a procedure'}`
     : `${count} changes to procedures`;
+
+/** What an Undo did to runs, as lowercase parts: a run the turn started is taken back, ticks it wrote are unticked. */
+const toRunParts = (deleted: string[], unticked: number) =>
+  [
+    deleted.length === 0
+      ? ''
+      : `took back ${deleted.length === 1 ? `the run of ${deleted[0]}` : `${deleted.length} runs`}`,
+    unticked === 0
+      ? ''
+      : `unticked ${unticked === 1 ? '1 step' : `${unticked} steps`}`,
+  ].filter(Boolean);
+
+const toCapital = (text: string) =>
+  text.charAt(0).toUpperCase() + text.slice(1);
 
 /** Each kind of medium in a sentence: its word, its titled and "the" forms, its sheet title, and whether its file name stands in for them. */
 const MEDIA_WORDS: Record<
@@ -1693,6 +1719,25 @@ export const HELM_COPY = {
       .join(' '),
   undoReportProceduresToo: (count: number, name: string | null) =>
     `${toProcedurePhrase(count, name)} too.`,
+  undoRunChanges: (deleted: string[], unticked: number) =>
+    toCapital(toRunParts(deleted, unticked).join(' and ')),
+  undoRunPhrase: (deleted: string[], unticked: number) =>
+    toRunParts(deleted, unticked).join(' and '),
+  undoReportRuns: (
+    deleted: string[],
+    unticked: number,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportRunsToo: (deleted: string[], unticked: number) =>
+    `${toRunParts(deleted, unticked).map(toCapital).join('. ')}.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -1926,7 +1971,7 @@ export const HELM_COPY = {
   procedureDelete: 'Delete',
   procedureDeleteTitle: (title: string) => `Delete ${title}?`,
   procedureDeleteConfirm: (count: number) =>
-    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. You can undo it right after.`,
+    `Its ${count === 1 ? 'one step goes' : `${count} steps go`} with it, and its history. Its runs stay. You can undo it right after.`,
   procedureDeleted: (title: string) => `Deleted ${title}`,
   procedureDeletedBack: (title: string) => `${title} is back`,
   procedureDeleteFailed: "That wasn't deleted. Try again.",
@@ -1997,6 +2042,62 @@ export const HELM_COPY = {
   chipProcedures: 'About your procedures',
   backToProcedures: 'Back to Procedures',
   backToProcedure: (title: string) => `Back to ${title}`,
+  runStart: 'Start a run',
+  runStartTitle: 'What is it for?',
+  runStartHint: 'It copies the steps as they are now.',
+  runJustARun: 'Just a run',
+  runJustARunHint: 'Not for a trip, event or project',
+  runStartTrips: 'Coming up',
+  runStartProjects: 'Projects',
+  runStartFailed: "That run wasn't started. Try again.",
+  runFor: (label: string, day: string | null) =>
+    day ? `For ${label} · ${day}` : `For ${label}`,
+  runProgress: (done: number, total: number) => `${done} of ${total}`,
+  runAllSteps: 'All steps',
+  runTickAll: 'Tick all steps',
+  runJustThisTime: 'Just this time',
+  runAddExtra: 'Add a step just this time',
+  runExtraField: 'Step',
+  runExtraAdd: 'Add',
+  runAddToProcedure: 'Add to the procedure',
+  runAddedToProcedure: (title: string) => `Added to ${title}`,
+  runAddToProcedureFailed: "That wasn't added. Try again.",
+  runFinish: 'Finish this run',
+  runFinished: (date: string) => `Finished ${date}`,
+  runReopen: 'Reopen',
+  runDelete: 'Delete run',
+  runDeleteTitle: 'Delete this run?',
+  runDeleteConfirm: 'Its ticks go with it. You can undo it right after.',
+  runDeleted: (title: string) => `Deleted the run of ${title}`,
+  runDeletedBack: 'The run is back',
+  runDeleteFailed: "That wasn't deleted. Try again.",
+  runUndoFailed: "That wasn't put back. Try again.",
+  runTickFailed: "That tick wasn't saved. Try again.",
+  runsHeading: 'Runs',
+  runsShowAll: 'Show all runs',
+  runsShowFewer: 'Show fewer runs',
+  runNoLongerOnCalendar: (label: string, date: string) =>
+    `From ${label}, ${date}, no longer on your calendar`,
+  runProcedureGone: 'Its procedure is gone',
+  runGone: 'This run is gone.',
+  runUnreadable: "This run couldn't be opened.",
+  runFailed: "Your runs couldn't be opened.",
+  runUntitled: 'A run',
+  askAboutRun: 'Ask about this run',
+  chipRun: (title: string) => `About this run: ${title}`,
+  backToRun: (title: string) => `Back to ${title}`,
+  runNeedsConnection: 'Needs a connection to save',
+  runNeedsConnectionBody:
+    'Adding a step is saved with a connection. Ticks work without one and are kept until you are back.',
+  runStartedOn: (date: string) => `Started ${date}`,
+  runRowDetail: (state: string, done: number, total: number) =>
+    `${state} · ${done} of ${total}`,
+  runExtraPlaceholder: 'What else this time?',
+  runExtraSheetTitle: 'Just this time',
+  runExtraSheetHint: 'This step is only on this run.',
+  runAddToProcedureHint: 'Keeps it for every run after this one.',
+  runExtraFull: 'A run holds 20 extra steps',
+  runFinishHint: 'Steps not ticked stay on it as not done.',
   askTopic: 'Ask about this topic',
   chipTopic: (name: string) => `About this topic: ${name}`,
   backToTopic: (name: string) => `Back to ${name}`,
@@ -2151,7 +2252,9 @@ export const HELM_COPY = {
                       ? 'Brought in from a file'
                       : reason === 'sourceRemoved'
                         ? 'Took out what a removed note said'
-                        : 'Restored an earlier version',
+                        : reason === 'fromRun'
+                          ? 'Added from a run'
+                          : 'Restored an earlier version',
   historyRowLine: (
     version: number,
     when: string,

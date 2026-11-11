@@ -24,6 +24,7 @@ export type HelmView =
   | 'topic'
   | 'procedures'
   | 'procedure'
+  | 'run'
   | 'howNomosSeesYou'
   | 'comingUp';
 
@@ -209,6 +210,8 @@ export interface ScreenContext {
   topicId: string | null;
   /** The open procedure's id on the procedure view; null on every other. */
   procedureId: string | null;
+  /** The open run's id on the run view; null on every other. */
+  runId: string | null;
   v: 1;
 }
 
@@ -717,7 +720,7 @@ export interface OpenProcedure
 }
 
 export type ProcedureVersionReason =
-  'created' | 'personEdit' | 'revisedOnRequest' | 'restored';
+  'created' | 'personEdit' | 'revisedOnRequest' | 'restored' | 'fromRun';
 
 /** `procedures/{id}/versions/{n}`: one change to a procedure; never rewritten. */
 export interface ProcedureVersion {
@@ -740,6 +743,44 @@ export interface ProcedureVersionSealed extends ProcedureSealed {
 
 export interface OpenProcedureVersion
   extends Omit<ProcedureVersion, 'sealed'>, ProcedureVersionSealed {
+  id: string;
+}
+
+/** What a run is for: a project, or a trip or event copied from another app; null for a run that is for nothing. */
+export type RunAttachment = { kind: 'project' | 'synced'; id: string } | null;
+
+export interface RunStepPlace extends StepPlace {
+  doneAt: number | null;
+  /** A step added for this run alone. */
+  isExtra: boolean;
+}
+
+export interface RunSealed {
+  title: string;
+  steps: Record<string, StepBody>;
+  groups: Record<string, { name: string }>;
+  /** What the run is for, kept so it still reads after the trip or event leaves the calendar. */
+  attachedLabel: string | null;
+}
+
+/** `apps/helm/users/{uid}/procedureRuns/{id}`: one go at a procedure, holding the steps it started with. */
+export interface ProcedureRun {
+  procedureId: string;
+  procedureVersion: number;
+  attachedTo: RunAttachment;
+  /** The trip's or event's first day, a date-only UTC midnight; null for a run that is for nothing. */
+  dueOn: number | null;
+  stepState: Record<string, RunStepPlace>;
+  groupOrder: string[];
+  startedAt: number;
+  finishedAt: number | null;
+  createdBy: 'person' | 'nomos';
+  executionId: string | null;
+  lastEditedAt: number | null;
+  sealed: Sealed;
+}
+
+export interface OpenRun extends Omit<ProcedureRun, 'sealed'>, RunSealed {
   id: string;
 }
 
@@ -855,7 +896,8 @@ export interface EffectRef {
     | 'projects'
     | 'notes'
     | 'topics'
-    | 'procedures';
+    | 'procedures'
+    | 'procedureRuns';
   docId: string;
 }
 

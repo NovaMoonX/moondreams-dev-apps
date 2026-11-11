@@ -20,7 +20,12 @@ interface ProcedureVersionsSheetProps {
   procedure: OpenProcedure;
 }
 
-const SUMMARY_REASONS = ['personEdit', 'revisedOnRequest', 'restored'];
+const SUMMARY_REASONS = [
+  'personEdit',
+  'revisedOnRequest',
+  'restored',
+  'fromRun',
+];
 
 export function StepBlocks({ blocks }: { blocks: StepGroupBlock[] }) {
   return (

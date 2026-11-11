@@ -13,6 +13,7 @@ import type {
   ProjectSealed,
   TaskSealed,
   ProcedureSealed,
+  RunSealed,
   TopicSealed,
   WhoSealed,
 } from '@apps/helm/types';
@@ -38,6 +39,7 @@ export interface UndoTarget {
     | NoteSealed
     | TopicSealed
     | ProcedureSealed
+    | RunSealed
     | null;
   /** For a date that was removed: whether the person it belonged to is still there; for a topic that was moved: whether its old parent is. */
   isOwnerHere?: boolean;
@@ -419,7 +421,7 @@ const planRecord = (
     Object.keys(updated.sealedFields).length > 0
       ? (updated.opened as Exclude<
           UndoTarget['opened'],
-          NoteSealed | TopicSealed | ProcedureSealed
+          NoteSealed | TopicSealed | ProcedureSealed | RunSealed
         >)
       : null;
   const restoredTitle = toOpenedTitle(updated.opened) || title;
@@ -474,6 +476,13 @@ const toTopicName = (target: UndoTarget, fallback: string) =>
   target.opened && 'sections' in target.opened && target.opened.name
     ? target.opened.name
     : fallback;
+
+const toRunName = (target: UndoTarget, fallback: string) =>
+  target.opened && 'attachedLabel' in target.opened && target.opened.title
+    ? target.opened.title
+    : fallback;
+
+const isTickPath = (path: string) => /^stepState\..+\.doneAt$/.test(path);
 
 const toProcedureName = (target: UndoTarget, fallback: string) =>
   target.opened && 'steps' in target.opened && target.opened.title
@@ -612,6 +621,8 @@ export function planUndo(input: {
   const isTopicDoc = (docId: string) => collectionOf.get(docId) === 'topics';
   const isProcedureDoc = (docId: string) =>
     collectionOf.get(docId) === 'procedures';
+  const isRunDoc = (docId: string) =>
+    collectionOf.get(docId) === 'procedureRuns';
   const isMediaDoc = (docId: string) => collectionOf.get(docId) === 'media';
   const targetOf = (docId: string) =>
     targets.get(docId) ?? { docId, data: null, opened: null };
@@ -947,7 +958,8 @@ export function planUndo(input: {
         !isProjectDoc(docId) &&
         !isNoteDoc(docId) &&
         !isTopicDoc(docId) &&
-        !isProcedureDoc(docId),
+        !isProcedureDoc(docId) &&
+        !isRunDoc(docId),
   );
   const photosLetGo = done.filter(
     ({ docId, outcome }) => isMediaDoc(docId) && outcome.kind === 'restored',
@@ -1002,6 +1014,21 @@ export function planUndo(input: {
     ),
   ];
   const procedureName = procedureNames.length === 1 ? procedureNames[0] : null;
+  const runsDeleted = done.filter(
+    ({ docId, outcome }) => isRunDoc(docId) && outcome.kind === 'deleted',
+  );
+  const runsUnticked = done.filter(
+    ({ docId, outcome }) => isRunDoc(docId) && outcome.kind === 'restored',
+  );
+  const runCount = runsDeleted.length + runsUnticked.length;
+  const runTitles = runsDeleted.map(({ docId, outcome }) =>
+    toRunName(targetOf(docId), outcome.title),
+  );
+  const untickedCount = runsUnticked.reduce(
+    (total, { outcome }) =>
+      total + Object.keys(outcome.effect.written).filter(isTickPath).length,
+    0,
+  );
   if (
     photosLetGo.length === 0 &&
     notesDone.length === 0 &&
@@ -1010,7 +1037,8 @@ export function planUndo(input: {
     datesDone.length === 0 &&
     projectsDone.length === 0 &&
     topicCount === 0 &&
-    procedureCount === 0
+    procedureCount === 0 &&
+    runCount === 0
   ) {
     return refuse(
       'nothingToTakeBack',
@@ -1115,6 +1143,16 @@ export function planUndo(input: {
     dateCount === 0 &&
     projectCount === 0 &&
     topicCount === 0 &&
+    procedureCount === 0 &&
+    runCount === 0;
+  const isRunsOnly =
+    runCount > 0 &&
+    notesDone.length === 0 &&
+    records.length === 0 &&
+    factCount === 0 &&
+    dateCount === 0 &&
+    projectCount === 0 &&
+    topicCount === 0 &&
     procedureCount === 0;
   const photosToo = photoCount > 0 ? HELM_COPY.undoReportPhotosToo : '';
   const withTopics = isTopicsOnly
@@ -1138,9 +1176,14 @@ export function planUndo(input: {
     : procedureCount > 0
       ? `${withTopics} ${HELM_COPY.undoReportProceduresToo(procedureCount, procedureName)}`
       : withTopics;
+  const withRuns = isRunsOnly
+    ? HELM_COPY.undoReportRuns(runTitles, untickedCount, kept.length, gone)
+    : runCount > 0
+      ? `${withProcedures} ${HELM_COPY.undoReportRunsToo(runTitles, untickedCount)}`
+      : withProcedures;
   const report = isPhotosOnly
     ? HELM_COPY.undoReportPhotos(photoCount)
-    : [withProcedures, photosToo].filter(Boolean).join(' ');
+    : [withRuns, photosToo].filter(Boolean).join(' ');
   const baseSummary =
     records.length === 0
       ? isNotesOnly
@@ -1171,6 +1214,11 @@ export function planUndo(input: {
     : procedureCount > 0
       ? `${topicSummary} and ${HELM_COPY.undoProcedurePhrase(procedureCount, procedureName)}`
       : topicSummary;
+  const withRunsSummary = isRunsOnly
+    ? HELM_COPY.undoRunChanges(runTitles, untickedCount)
+    : runCount > 0
+      ? `${summary} and ${HELM_COPY.undoRunPhrase(runTitles, untickedCount)}`
+      : summary;
   const deletes = done.flatMap(({ docId, outcome }) =>
     outcome.kind === 'deleted'
       ? [{ docId, collection: collectionOf.get(docId) ?? 'tasks' }]
@@ -1242,7 +1290,9 @@ export function planUndo(input: {
       finishedAt: now,
     },
     undoSealed: {
-      summary: isPhotosOnly ? HELM_COPY.tookBackPhotos(photoCount) : summary,
+      summary: isPhotosOnly
+        ? HELM_COPY.tookBackPhotos(photoCount)
+        : withRunsSummary,
       commands: [],
       effects: done.map(({ outcome }) => outcome.effect),
       undoReport: report,
@@ -1257,6 +1307,8 @@ export function planUndo(input: {
       ...notesDone,
       ...topicChanges,
       ...procedureChanges,
+      ...runsDeleted,
+      ...runsUnticked,
     ].map(({ outcome }) => outcome.title),
     kept,
     gone,
