@@ -1,16 +1,21 @@
-import { useState, type Ref } from 'react';
+import { useMemo, useState, type Ref } from 'react';
 
-import { Search, Settings2 } from 'lucide-react';
+import { Button } from '@moondreamsdev/dreamer-ui/components';
+import { join } from '@moondreamsdev/dreamer-ui/utils';
+import { CalendarDays, ChevronRight, Search, Settings2 } from 'lucide-react';
 
 import HeaderIconButton from '@/components/HeaderIconButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useNow } from '@/hooks/useNow';
+import { useConnections } from '@/lib/connections/useConnections';
+import { getDeviceTimeZone } from '@/utils/timezoneUtils';
 import { useAppDispatch, useAppSelector } from '@/store';
 import AssistantMark from '@apps/helm/components/activity/AssistantMark';
 import Composer from '@apps/helm/components/home/Composer';
 import ConversationThread from '@apps/helm/components/home/ConversationThread';
 import CannotOpenState from '@apps/helm/components/states/CannotOpenState';
 import NeedsConnectionState from '@apps/helm/components/states/NeedsConnectionState';
-import { HELM_COPY } from '@apps/helm/constants';
+import { DAY_MS, HELM_COPY } from '@apps/helm/constants';
 import OutboxSummary from '@apps/helm/components/inbox/OutboxRow';
 import {
   useCanUseDropBox,
@@ -18,9 +23,13 @@ import {
 } from '@apps/helm/hooks/useCaptureOutbox';
 import { useHelmVoiceContext } from '@apps/helm/hooks/useHelmVoice';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
+import { useHelmUrlState } from '@apps/helm/hooks/useHelmUrlState';
 import { useSession } from '@apps/helm/hooks/useSession';
 import { hasLapsedTrust } from '@apps/helm/queries/helmKeyQueries';
 import { retryKey, type KeyStatus } from '@apps/helm/store/helmSlice';
+import { selectHeldItems } from '@apps/helm/store/selectors/captureSelectors';
+import { formatClock } from '@apps/helm/utils/planDays';
+import { getDayEvents, getLiveRecords } from '@apps/helm/utils/synced';
 
 interface HomeSurfaceProps {
   composerRef: Ref<HTMLTextAreaElement>;
@@ -42,6 +51,101 @@ const getWaitingPlaceholder = (
   }
   return null;
 };
+
+const ROW =
+  'h-11 w-full min-w-0 justify-between! gap-2 rounded-none px-0! text-[15px] font-normal';
+
+/** The next fixed thing today (tomorrow's first once today's are over) and how many questions wait, each a door. */
+function QuietLines({ now }: { now: number }) {
+  const { showView } = useHelmUrlState();
+  const { grants } = useConnections({ readerAppId: 'helm' });
+  const stored = useAppSelector((state) => state.helm.synced.items);
+  const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
+  const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
+  const needsYou = useAppSelector(selectHeldItems).needsYou.length;
+  const nextEvent = useMemo(() => {
+    const records = getLiveRecords(stored, grants, false).filter(
+      (record) =>
+        grants.find((grant) => grant.id === record.grantId)?.status === 'live',
+    );
+    const firstAfter = (at: number, from: number) =>
+      getDayEvents(records, at, timeZone).events.find(
+        (event) =>
+          !event.isAllDay && event.startAt !== null && event.startAt >= from,
+      );
+    const today = firstAfter(now, now);
+    if (today?.startAt != null) {
+      return {
+        label: HELM_COPY.homeNextEvent(
+          formatClock(today.startAt, timeZone),
+          today.sealed.title,
+        ),
+      };
+    }
+    const tomorrow = firstAfter(now + DAY_MS, 0);
+    return tomorrow?.startAt != null
+      ? {
+          label: HELM_COPY.homeNextEventTomorrow(
+            formatClock(tomorrow.startAt, timeZone),
+            tomorrow.sealed.title,
+          ),
+        }
+      : null;
+  }, [stored, grants, now, timeZone]);
+
+  if (!nextEvent && needsYou === 0) return null;
+
+  return (
+    <ul className='divide-border border-border divide-y border-b'>
+      {nextEvent && (
+        <li>
+          <Button
+            type='button'
+            variant='tertiary'
+            className={ROW}
+            onClick={() => void showView('today')}
+          >
+            <span className='flex min-w-0 items-center gap-2'>
+              <CalendarDays
+                className='text-muted-foreground size-4 shrink-0'
+                aria-hidden='true'
+              />
+              <span className='truncate'>{nextEvent.label}</span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        </li>
+      )}
+      {needsYou > 0 && (
+        <li>
+          <Button
+            type='button'
+            variant='tertiary'
+            className={ROW}
+            onClick={() => void showView('inbox')}
+          >
+            <span className='flex min-w-0 items-center gap-2'>
+              <span
+                className='size-2 shrink-0 rounded-full bg-(--helm-verdigris)'
+                aria-hidden='true'
+              />
+              <span className='truncate'>
+                {HELM_COPY.needsYouCount(needsYou)}
+              </span>
+            </span>
+            <ChevronRight
+              className='text-muted-foreground size-4 shrink-0'
+              aria-hidden='true'
+            />
+          </Button>
+        </li>
+      )}
+    </ul>
+  );
+}
 
 function HomeSurface({
   composerRef,
@@ -67,70 +171,90 @@ function HomeSurface({
     useAppSelector((state) => state.helm.recentCaptures);
   const hasTurns = sessions.length > 0;
   const voice = useHelmVoiceContext();
+  const now = useNow(60_000);
+  const todayStart = new Date(now).setHours(0, 0, 0, 0);
 
   return (
-    <main className='flex flex-1 flex-col gap-8'>
-      <div className='relative flex flex-col items-center gap-2 pt-10 text-center'>
-        {keyStatus === 'ready' && (
-          <div className='absolute top-0 right-0 flex items-center gap-2'>
-            <HeaderIconButton
-              icon={<Search className='size-4' aria-hidden='true' />}
-              label={HELM_COPY.searchTitle}
-              onClick={onOpenSearch}
-            />
-            <HeaderIconButton
-              icon={<Settings2 className='size-4' aria-hidden='true' />}
-              label={HELM_COPY.settingsTitle}
-              onClick={onOpenSettings}
-            />
+    <main className='flex flex-1 flex-col pb-10'>
+      <div
+        data-home-header
+        className='bg-background sticky top-0 z-10 -mx-4 px-4 pt-0'
+      >
+        <div className='flex h-[60px] items-center justify-between gap-3'>
+          <div className='flex min-w-0 items-center gap-2'>
+            <AssistantMark name={name} isLarge />
+            <h1 className='helm-serif truncate text-[28px] leading-[34px]'>
+              {name}
+            </h1>
           </div>
-        )}
-        <div className='flex items-center gap-2'>
-          <AssistantMark name={name} isLarge />
-          <h1 className='helm-serif text-[28px] leading-[34px]'>{name}</h1>
+          {keyStatus === 'ready' && (
+            <div className='flex shrink-0 items-center gap-3'>
+              <HeaderIconButton
+                icon={<Search className='size-4' aria-hidden='true' />}
+                label={HELM_COPY.searchTitle}
+                onClick={onOpenSearch}
+              />
+              <HeaderIconButton
+                icon={<Settings2 className='size-4' aria-hidden='true' />}
+                label={HELM_COPY.settingsTitle}
+                onClick={onOpenSettings}
+              />
+            </div>
+          )}
         </div>
-        {keyStatus !== 'offline' && keyStatus !== 'failed' && (
-          <p className='text-muted-foreground text-[15px]'>
+        {keyStatus === 'ready' && <QuietLines now={now} />}
+      </div>
+      <div className='flex flex-1 flex-col gap-8 pt-4'>
+        {!hasTurns && keyStatus !== 'offline' && keyStatus !== 'failed' && (
+          <p className='text-muted-foreground text-center text-[15px]'>
             {HELM_COPY.homeHint}
           </p>
         )}
+        {isCapturesFailed && !isCapturesLoaded && (
+          <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
+            {HELM_COPY.turnsFailed}
+          </p>
+        )}
+        {isCapturesLoaded && !hasTurns && (
+          <p className='helm-card p-4 text-[15px] text-pretty'>
+            {HELM_COPY.firstOpen(name)}
+          </p>
+        )}
+        {hasTurns && (
+          <ConversationThread
+            sessions={sessions}
+            openSessionId={openSessionId}
+            scroll='window'
+            loadsEarlier
+            foldsBefore={todayStart}
+          />
+        )}
+        <div className='mt-auto flex flex-col gap-4'>
+          {keyStatus === 'offline' && (
+            <NeedsConnectionState
+              name={name}
+              canSave={canSaveOffline}
+              isTrustLapsed={uid !== null && hasLapsedTrust(uid)}
+            />
+          )}
+          <OutboxSummary uid={uid} entries={outbox} />
+          {keyStatus === 'failed' && (
+            <CannotOpenState
+              isRetrying={isKeyRetrying}
+              hasRetryFailed={keyRefusals > 1}
+              onRetry={() => dispatch(retryKey())}
+            />
+          )}
+        </div>
       </div>
-      {isCapturesFailed && !isCapturesLoaded && (
-        <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
-          {HELM_COPY.turnsFailed}
-        </p>
-      )}
-      {isCapturesLoaded && !hasTurns && (
-        <p className='helm-card p-4 text-[15px] text-pretty'>
-          {HELM_COPY.firstOpen(name)}
-        </p>
-      )}
-      {hasTurns && (
-        <ConversationThread
-          sessions={sessions}
-          openSessionId={openSessionId}
-          scroll='window'
-          loadsEarlier
-        />
-      )}
-      <div className='mt-auto flex flex-col gap-4'>
-        {keyStatus === 'offline' && (
-          <NeedsConnectionState
-            name={name}
-            canSave={canSaveOffline}
-            isTrustLapsed={uid !== null && hasLapsedTrust(uid)}
-          />
+      {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
+      <div
+        className={join(
+          'pointer-events-none fixed inset-x-0 bottom-[calc(var(--helm-dock-top,env(safe-area-inset-bottom,0px))+8px)] z-30 px-4',
+          voice.state !== 'idle' && 'invisible',
         )}
-        <OutboxSummary uid={uid} entries={outbox} />
-        {keyStatus === 'failed' && (
-          <CannotOpenState
-            isRetrying={isKeyRetrying}
-            hasRetryFailed={keyRefusals > 1}
-            onRetry={() => dispatch(retryKey())}
-          />
-        )}
-        {/* While the voice is in use the dock's words take this place; the field keeps its draft and its room. */}
-        <div className={voice.state === 'idle' ? undefined : 'invisible'}>
+      >
+        <div className="before:from-background pointer-events-auto relative mx-auto max-w-xl before:pointer-events-none before:absolute before:inset-x-[-1rem] before:-top-6 before:bottom-1/2 before:-z-10 before:bg-gradient-to-t before:to-transparent before:content-['']">
           <Composer
             key={keyStatus === 'ready' ? 'ready' : 'waiting'}
             fieldRef={composerRef}

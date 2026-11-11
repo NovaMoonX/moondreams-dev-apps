@@ -62,6 +62,10 @@ interface BrowseTileProps {
   newSinceLooked: number;
   /** Spans the row, so a last tile that would sit alone fills it. */
   isWide: boolean;
+  /** A quiet line under the name, for a tile that carries a state. */
+  stateLine?: string | null;
+  /** The foot row's tile: shorter, so three share one line. */
+  isCompact?: boolean;
   onOpen: (view: HelmView) => void;
 }
 
@@ -73,6 +77,8 @@ function BrowseTile({
   openQuestions,
   newSinceLooked,
   isWide,
+  stateLine = null,
+  isCompact = false,
   onOpen,
 }: BrowseTileProps) {
   const assistant = useAssistantName();
@@ -87,9 +93,10 @@ function BrowseTile({
       type='button'
       variant='tertiary'
       className={join(
-        'helm-card flex h-auto flex-col items-start justify-between gap-3 p-4 text-left',
+        'helm-card flex h-auto w-full flex-col items-start justify-between gap-3 p-4 text-left',
+        isCompact && 'gap-2 p-2.5',
         isWide && 'col-span-2',
-        isSmall ? 'min-h-20' : 'min-h-28',
+        isCompact ? 'min-h-16' : isSmall ? 'min-h-20' : 'min-h-28',
       )}
       onClick={() => onOpen(view)}
     >
@@ -97,13 +104,20 @@ function BrowseTile({
       <span
         className={join(
           'text-foreground',
-          isSmall
-            ? 'text-[15px] font-medium'
-            : 'helm-serif text-[22px] leading-7',
+          isCompact
+            ? 'text-[13px] font-medium break-words'
+            : isSmall
+              ? 'text-[15px] font-medium'
+              : 'helm-serif text-[22px] leading-7',
         )}
       >
         {label}
       </span>
+      {stateLine && (
+        <span className='text-muted-foreground -mt-2 text-[13px] break-words'>
+          {stateLine}
+        </span>
+      )}
       {grows === 'openQuestions' && (
         <span className='text-muted-foreground -mt-2 flex flex-col text-[13px]'>
           {openQuestions > 0 && (

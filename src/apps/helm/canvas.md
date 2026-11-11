@@ -6,23 +6,23 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 ## Look and tokens
 
-"The household's private secretary": ink navy, pewter and silver, white paper, one restrained cool accent (verdigris), serif titles over the site's sans. No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.75:1 light); the dashed edge is at least 4.4:1 against the page and card.
+"The household's private secretary": cool mist paper, deep blue-teal ink, one restrained cool accent (verdigris), serif titles over the site's sans. Its own palette, set apart from every other app (Going Once is cream and forest green, Runway and Waypoint blue). No nautical words. All text pairs below measure at least 4.5:1 (checked; lowest is muted text on the page at 5.6:1 light).
 
 | Token | Light | Dark | Used for |
 |---|---|---|---|
-| background (pewter page) | #F3F4F7 | #0C111B | page |
-| card / popover | #FFFFFF | #151C29 | cards, sheets, menus |
-| foreground (ink) / popover-foreground | #141B2D | #E7EAF0 | text (17.2:1 / 14.2:1 on card) |
-| muted / muted-foreground | #E9EBF0 / #566074 | #1B2331 / #9BA4B5 | quiet fills / meta text (6.3:1 / 6.8:1 on card) |
-| border | #D8DCE4 | #2B3547 | hairlines |
-| primary (ink navy) / fg | #1D2B4C / #FFFFFF | #C3CEE4 / #0C111B | the one filled button, Talk (and Stop), the wave (14.0:1 / 11.9:1) |
-| secondary (pewter tint) / fg | #E7EBF3 / #1D2B4C | #222F47 / #D8DFEC | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (11.7:1 / 10.0:1) |
-| accent (verdigris tint) / fg | #DDEEEA / #1E4D48 | #173834 / #BFE4DD | "Suggested" tag fill, Needs you row tint (7.9:1 / 9.3:1) |
-| verdigris (edge) | #3D7C75 | #71B5AB | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.8:1 / 7.2:1 on card) |
-| tooltip / fg | #141B2D / #FFFFFF | #E7EAF0 / #0C111B | tooltips |
+| background (mist page) | #F3F6F6 | #0D1517 | page |
+| card / popover | #FFFFFF | #152023 | cards, sheets, menus, the composer |
+| foreground (ink) / popover-foreground | #172A2E | #E6EEF0 | text (14.9:1 / 14.1:1 on card) |
+| muted / muted-foreground | #E8EEEF / #52666A | #1A272A / #97AAAE | quiet fills / meta text (6.1:1 / 6.9:1 on card) |
+| border | #DAE3E4 | #273639 | hairlines |
+| primary (deep teal) / fg | #14555E / #FFFFFF | #86CCD6 / #081316 | the one filled button, Talk (and Stop), Send, the wave (8.4:1 / 10.4:1) |
+| secondary (teal tint) / fg | #E3EEF0 / #14555E | #1C2E32 / #CFE5E9 | assistant lines, the reply card, the context chip, selected pills, the listening ring, the mark's disc (7.1:1 / 10.8:1) |
+| accent (verdigris tint) / fg | #DDEFEC / #1B4A44 | #1B3532 / #BFE6DE | "Suggested" tag fill, Needs you row tint (8.4:1 / 9.7:1) |
+| verdigris (edge) | #3D7C75 | #71B5AB | dashed suggestion edge (1.5px, 6/4 dash), "Suggested" text, Needs you dot (4.5:1 on the page / 7.0:1 on card) |
+| tooltip / fg | #172A2E / #FFFFFF | #E6EEF0 / #0D1517 | tooltips |
 | warning text | #9A4B0B | #F2B26B | "overdue" only (6.2:1 / 9.2:1) |
 | destructive | #B42318 | #F97066 | Forget, delete (6.6:1 / 6.1:1) |
-| subview backdrop | #D5D8DF | #080C14 | behind a subview card |
+| subview backdrop | #D6DFE0 | #070C0D | behind a subview card |
 | rings | foreground | foreground | filled = said or confirmed, hollow 1.5px = inferred (10px) |
 
 **Type.** Titles in a serif: **Source Serif 4** 600 (OFL, self-hosted, Latin subset; fallback `"Iowan Old Style", Charter, Georgia, serif`). Page title 28/34 serif 600, letter-spacing -0.01em; sheet title and identity name 22/28 serif 600; section 15/600 sans; row title 15/500; body 15/400; meta 13/400 muted. Figures tabular. Sentence case; no eyebrows.
@@ -92,7 +92,7 @@ The lead publishes these as the **Helm UX** Design artifact. Boards are 390 x 84
 
 ## Row G: "First run: nothing to set up, the first thing told"
 
-**G1 Opening your things.** Pewter page, centred Helm logo 56px (14 radius), under it after 600 ms "Opening your things…" (13 muted). Board note: after 10 s the line becomes "Helm can't reach its server. Your things are safe." with "Try again" (outline).
+**G1 Opening your things.** Mist page, centred Helm logo 56px (14 radius), under it after 600 ms "Opening your things…" (13 muted). Board note: after 10 s the line becomes "Helm can't reach its server. Your things are safe." with "Try again" (outline).
 
 **G2 First open (round 6).** Drawn as Board 1's First run state: home, the `EmptyCard` ("Tap Talk and tell {Name} the first thing on your mind…"), the dock with Talk and Type, no Browse.
 
@@ -190,7 +190,7 @@ Footer note 13 muted: "The other is kept as what it was until today."
 
 **D1 Projects.** As Board 1.
 
-**D2 Wedding · Tasks (Subview).** BackLink "Projects" and ⋯ on the title line. Identity: 💍 in a 40px pewter disc, "Wedding" (28 serif), line "Married at Ridgeline Barn, with both families there", meta "Sat, Jul 10, 2027". Evidence line: "**2 overdue** · Final guest list in 9 days · 14 open". Pill tabs: **Tasks** · Milestones · Checklists · Facts. List:
+**D2 Wedding · Tasks (Subview).** BackLink "Projects" and ⋯ on the title line. Identity: 💍 in a 40px tinted disc, "Wedding" (28 serif), line "Married at Ridgeline Barn, with both families there", meta "Sat, Jul 10, 2027". Evidence line: "**2 overdue** · Final guest list in 9 days · 14 open". Pill tabs: **Tasks** · Milestones · Checklists · Facts. List:
 - "Send Dana the color palette" · "Was due Thursday" (warning)
 - "Book hair trial" · "Was due Friday" (warning)
 - "Pay venue deposit" · "Planned today 10:00 AM"

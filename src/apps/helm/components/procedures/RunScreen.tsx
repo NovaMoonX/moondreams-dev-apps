@@ -351,6 +351,7 @@ function RunScreen({
                     HELM_COPY.runFinished(formatDateShort(run.finishedAt)),
                     done,
                     total,
+                    extras.length,
                   )}
                 </p>
                 <Button

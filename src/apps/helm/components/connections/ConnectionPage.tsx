@@ -9,7 +9,7 @@ import AppToggle from '@/components/AppToggle';
 import InlineNotice from '@/components/InlineNotice';
 import LockedButton from '@/components/LockedButton';
 import SectionHeader from '@/components/SectionHeader';
-import SettingsGroup from '@/components/SettingsGroup';
+import SettingsSection from '@apps/helm/components/settings/SettingsSection';
 import SettingsRow from '@/components/SettingsRow';
 import {
   grantConnection,
@@ -383,7 +383,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 : HELM_COPY.googleReadOnly(name)}
       </p>
       {isGoogle && !isOffline && (
-        <SettingsGroup title={HELM_COPY.connectionAccountLabel}>
+        <SettingsSection title={HELM_COPY.connectionAccountLabel}>
           <SettingsRow
             icon={<Tag className='size-5' aria-hidden='true' />}
             title={HELM_COPY.googleLabelRow}
@@ -405,7 +405,7 @@ function ConnectionPage({ grantId, onBack }: ConnectionPageProps) {
                 hasChevron
               />
             )}
-        </SettingsGroup>
+        </SettingsSection>
       )}
       <section className='flex flex-col gap-3'>
         <SectionHeader title={HELM_COPY.connectionReads(name)} />

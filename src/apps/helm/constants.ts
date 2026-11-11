@@ -465,6 +465,10 @@ export const HELM_COPY = {
   overdueDue: (due: string) => `Overdue · ${due}`,
   unreadable: "Couldn't open this",
   loadingEarlier: 'Opening earlier turns',
+  earlierFold: (count: number) => `Earlier · ${count}`,
+  homeNextEvent: (clock: string, title: string) => `${clock} · ${title}`,
+  homeNextEventTomorrow: (clock: string, title: string) =>
+    `Tomorrow ${clock} · ${title}`,
   earlierFailed: "Couldn't open earlier turns. Try again",
   inboxTitle: 'Needs you',
   inboxNewSince: 'New since you looked',
@@ -840,6 +844,11 @@ export const HELM_COPY = {
     'Read only when you ask. Only what an answer quotes is kept.',
   syncedStale: (when: string) => `Last updated ${when} · may be out of date`,
   syncedAllDay: 'All day',
+  todayTileNext: (time: string, title: string) => `Next: ${time} · ${title}`,
+  todayTileCount: (count: number) =>
+    `${count} ${count === 1 ? 'event' : 'events'} today`,
+  feedGroupTitle: (label: string, count: number) => `${label} · ${count}`,
+  feedGroupDetail: (app: string) => `${app} · all day`,
   syncedUpdatedLine: (when: string) => `Updated ${when}`,
   syncedNow: 'Sync now',
   syncedTryNow: 'Try now',
@@ -955,6 +964,7 @@ export const HELM_COPY = {
   planRestAnyway: 'Plan my day anyway',
   planOverlaps: (title: string) => `Overlaps ${title}`,
   busyAllDayLabel: 'Keeps me busy all day',
+  busyAllDayHint: "While it is on, tasks aren't planned into this day.",
   busyAllDayFailed: "That didn't save. Try again.",
   syncedTentative: 'Tentative',
   sameThingTime: (appName: string, time: string) => `${appName} says ${time}`,
@@ -1284,7 +1294,9 @@ export const HELM_COPY = {
   planPlanIt: 'Plan it',
   planSkipped: (title: string) => `${title} is back in Any time`,
   planPlannedOn: (day: string) =>
-    `Planned ${day === 'Today' || day === 'Tomorrow' ? day.toLowerCase() : day}`,
+    day === 'Today' || day === 'Tomorrow'
+      ? `On ${day.toLowerCase()}'s plan`
+      : `Planned for ${day}`,
   planOpening: (day: string, time: string) => `${day} ${time}`,
   planNoOpenings: 'Nothing fits in the next two days. Pick a day.',
   planDayPicked: (day: string) => `Moved to ${day}`,
@@ -1382,8 +1394,6 @@ export const HELM_COPY = {
   whoGone: 'This page is gone.',
   whoUnreadable: "This page couldn't be opened.",
   whoFactsTitle: 'Facts',
-  whoFactsEmpty: (assistant: string) =>
-    `Nothing noted yet. What you tell ${assistant} about them lands here.`,
   factsAdd: 'Add a fact',
   factsAddTitle: 'Add a fact',
   factStatementField: 'What is true',
@@ -1534,7 +1544,6 @@ export const HELM_COPY = {
   whoTasksTitle: 'Tasks',
   whoTasksEmpty: 'No open tasks.',
   whoMentionsTitle: 'Mentions',
-  whoMentionsEmpty: 'Not mentioned yet.',
   showAllMentions: (count: number) => `Show all ${count}`,
   showFewerMentions: 'Show fewer',
   placeHomeLine: 'Your home',
@@ -1730,8 +1739,7 @@ export const HELM_COPY = {
   photoViewerLabel: 'Photos',
   keyDatesHeading: 'Key dates',
   keyDateAdd: 'Add a date',
-  keyDatesEmpty: (name: string) =>
-    `No key dates yet. Tell ${name} a birthday, or add one.`,
+  keyDateAddRow: 'Add a key date',
   keyDateKindBirthday: 'Birthday',
   keyDateKindAnniversary: 'Anniversary',
   keyDateKindCustom: 'Something else',
@@ -2319,8 +2327,8 @@ export const HELM_COPY = {
   runNeedsConnectionBody:
     'Adding a step is saved with a connection. Ticks work without one and are kept until you are back.',
   runStartedOn: (date: string) => `Started ${date}`,
-  runRowDetail: (state: string, done: number, total: number) =>
-    `${state} · ${done} of ${total}`,
+  runRowDetail: (state: string, done: number, total: number, extras: number) =>
+    `${state} · ${done} of ${total}${extras > 0 ? ` · ${extras} added for this run` : ''}`,
   runExtraPlaceholder: 'What else this time?',
   runExtraSheetTitle: 'Just this time',
   runExtraSheetHint: 'This step is only on this run.',
