@@ -7,6 +7,7 @@ import { useAppSelector } from '@/store';
 import FactKindGroup from '@apps/helm/components/howNomosSeesYou/FactKindGroup';
 import KeyDatesList from '@apps/helm/components/who/KeyDatesList';
 import MomentsPreview from '@apps/helm/components/who/MomentsPreview';
+import StyleNotes from '@apps/helm/components/howNomosSeesYou/StyleNotes';
 import SelfFactAddSheet from '@apps/helm/components/howNomosSeesYou/SelfFactAddSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
 import FactSheet from '@apps/helm/components/who/FactSheet';
@@ -112,6 +113,7 @@ function HowNomosSeesYou({ onBack, onHome }: HowNomosSeesYouProps) {
           now={now}
           onOpen={setOpenId}
         />
+        <StyleNotes />
       </main>
       <FactSheet
         key={openId ?? 'none'}
