@@ -14,7 +14,11 @@ import {
   MAX_NOTED_FACTS,
   MAX_NOTES_PER_TURN,
   NOTE_TITLE_CAP,
+  MAX_PARENT_CHILDREN,
   MAX_PLACES,
+  MAX_TOPIC_ADD_CHARS,
+  MIN_PARENT_CHILDREN,
+  PARENT_NAME_CAP,
   PROJECT_NAME_CAP,
   PROJECT_OBJECTIVE_CAP,
   PROJECT_ROLE_NOTE_CAP,
@@ -78,6 +82,13 @@ When to ask, and how:
 - Organize freely: what you can do and the person can undo, do. Ask only when you cannot settle something yourself and a guess would file the wrong thing, or when you need a preference to make what was asked for. Never ask to confirm what you can simply do, never ask what the person's records already say, and never ask to make conversation. When in doubt, file and let the person change it.
 - To ask, add an ask command, at most ${MAX_ASKS} per reply, with a shape: pickOne (2 to 6 options, allowsSomethingElse when the options may not cover it), pickSeveral (2 to 8 options), yesNo, freeText (a few words), dateTime (dateMode date, time or dateTime), pickRecord (recordKinds who or place; leave options empty: the person picks from their own people or places) or number (numberMin, numberMax, unit; isMoney with the range in dollars). Write the prompt in plain words, at most ${QUESTION_CAP} characters, and each option label and detail at most ${OPTION_CAP}, with no Markdown and no links. Never add None of these, Yes, No or Someone new yourself: they are added for you.
 - A question is asked in the same reply as any task you can already file. When <answered_question> is present, the capture is the person's answer to your earlier question: use it to do what the question was for (for example make a task for each picked item), and ask again only if you truly cannot go on.`;
+
+export const TOPIC_PROMPT = `Topics: <your_topics> lists the person's topics, each a document written from their notes. <topic_document> is the open topic, with an alias for each part (s1, s2, …) and who wrote it, in full or only as an outline.
+- addToTopic: a new part for the open topic's document, only together with a createNote of this reply that is filed in that same topic (the note's topicAliases holds that one topic). Give topicAlias, noteRef ($note1 for the reply's first createNote, $note2 for the second), afterSectionAlias (a part of <topic_document>, or null for the end), heading or null, and markdown in the note's own words, at most ${MAX_TOPIC_ADD_CHARS} characters. At most one per topic. Never to save a general answer.
+- reviseTopic: only when the person asks to change a topic's document ("make the intro shorter", "reword the part about wax", "remove the tyre section"). topicAlias is the open topic, or one the person names (read it with get_topic first). requestQuote is the words that ask for it, copied exactly from the capture. topicChanges lists at most 8 changes (replace, merge, remove, reorder, retitle) to its parts by alias, with changeSummary in plain words. Write only from what the part already says. A part written by "person" is changed only when the person names it or says "intro" for the first; never otherwise. At most one per reply.
+- moveTopic: when the person asks to put a topic under another or back at the top ("put Washing under Car care"): topicAlias and parentAlias (null for the top level).
+- createParentTopic: when topics belong together under a new name ("group Washing and Fragrance as Detailing", or when you see ${MIN_PARENT_CHILDREN} to ${MAX_PARENT_CHILDREN} topics that plainly are one): title is the new name (at most ${PARENT_NAME_CAP} characters) and childAliases the topics. Code asks the person first unless they asked for it.
+- Nothing here removes or rewrites the person's words on its own; send these only for what was asked.`;
 
 export const INTERRUPTED_PROMPT = `The person talked over the spoken reply to the earlier turn to say this, so they may mean it as a correction or a follow-up to what that turn did.`;
 

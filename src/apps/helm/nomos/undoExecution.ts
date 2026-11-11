@@ -27,6 +27,8 @@ import {
   type IndexEntry,
 } from '@apps/helm/utils/keyDateIndex';
 import { getMediaObjectPath } from '@apps/helm/utils/mediaPath';
+import { buildVersionDoc } from '@apps/helm/store/actions/topicActions';
+import { HELM_COPY } from '@apps/helm/constants';
 import { openExecution } from '@apps/helm/store/listeners/executionListener';
 import {
   planReopen,
@@ -44,6 +46,9 @@ import type {
   ProjectSealed,
   Sealed,
   TaskSealed,
+  TopicSealed,
+  TopicVersion,
+  TopicVersionSealed,
   WhoSealed,
 } from '@apps/helm/types';
 
@@ -81,6 +86,9 @@ async function readUsedIds(
       ref.op === 'create' &&
       (ref.collection === 'who' || ref.collection === 'places'),
   );
+  const madeTopics = refs.filter(
+    (ref) => ref.op === 'create' && ref.collection === 'topics',
+  );
   const checks = await Promise.all(
     made.flatMap((ref) => {
       const field = ref.collection === 'who' ? 'whoIds' : 'placeIds';
@@ -98,7 +106,19 @@ async function readUsedIds(
       });
     }),
   );
-  return new Set(checks.flat());
+  const underTopics = await Promise.all(
+    madeTopics.map(async (ref) => {
+      const found = await getDocs(
+        query(
+          collection(userOf(uid), 'topics'),
+          where('parentId', '==', ref.docId),
+          limit(own.size + 1),
+        ),
+      );
+      return found.docs.some((entry) => !own.has(entry.id)) ? [ref.docId] : [];
+    }),
+  );
+  return new Set([...checks.flat(), ...underTopics.flat()]);
 }
 
 type WritePlan = Extract<UndoPlan, { kind: 'write' }>;
@@ -389,6 +409,37 @@ export async function undoExecution(
               const data = entry.exists()
                 ? (entry.data() as Record<string, unknown>)
                 : null;
+              if (ref.collection === 'topics') {
+                const parentId = original.effectRefs
+                  .flatMap((other, index) =>
+                    other.docId === docId
+                      ? [original.effects[index]?.previous?.parentId]
+                      : [],
+                  )
+                  .find((value) => typeof value === 'string');
+                const parent =
+                  typeof parentId === 'string'
+                    ? await transaction.get(
+                        doc(userOf(uid), 'topics', parentId),
+                      )
+                    : null;
+                return [
+                  docId,
+                  {
+                    docId,
+                    data,
+                    opened: await (
+                      data?.sealed
+                        ? openJson<TopicSealed>(
+                            data.sealed as Sealed,
+                            encryption,
+                          )
+                        : Promise.reject(new Error('No sealed words.'))
+                    ).catch(() => null),
+                    isOwnerHere: parent ? parent.exists() : true,
+                  },
+                ];
+              }
               if (!isOpened) return [docId, { docId, data, opened: null }];
               const opened = await (
                 data?.sealed
@@ -422,6 +473,31 @@ export async function undoExecution(
           plan,
           targets,
         );
+        const restoredSections = await Promise.all(
+          plan.versionRestores.map(async ({ docId, to }) => {
+            const earlier = await transaction.get(
+              doc(
+                docOf({ collection: 'topics', docId }),
+                'versions',
+                String(to),
+              ),
+            );
+            return earlier.exists()
+              ? await openJson<TopicVersionSealed>(
+                  (earlier.data() as TopicVersion).sealed,
+                  encryption,
+                ).catch(() => null)
+              : null;
+          }),
+        );
+        const isRestorable = plan.versionRestores.every(
+          ({ docId }, index) =>
+            restoredSections[index] !== null &&
+            targets.get(docId)?.opened != null,
+        );
+        if (!isRestorable) {
+          return { kind: 'refused', reason: 'unreadable', report: null };
+        }
         const questionCaptureId = original.questionRef?.captureId ?? null;
         const captureRef = questionCaptureId
           ? doc(userOf(uid), 'captures', questionCaptureId)
@@ -470,6 +546,34 @@ export async function undoExecution(
               ]),
             ),
             ...resealed[index],
+          }),
+        );
+        await Promise.all(
+          plan.versionRestores.map(async ({ docId, from, to }, index) => {
+            const topicRef = docOf({ collection: 'topics', docId });
+            const sections = restoredSections[index]?.sections ?? [];
+            const opened = targets.get(docId)?.opened as TopicSealed;
+            const at = Date.now();
+            transaction.update(topicRef, {
+              sealed: await sealJson<TopicSealed>(
+                { ...opened, sections },
+                encryption,
+              ),
+              version: from + 1,
+              lastEditedAt: at,
+            });
+            transaction.set(
+              doc(topicRef, 'versions', String(from + 1)),
+              await buildVersionDoc(encryption, {
+                version: from + 1,
+                sections,
+                reason: 'restored',
+                restoredFromVersion: to,
+                changeSummary: HELM_COPY.historySummaryRestored(to),
+                executionId: undoRef.id,
+                now: at,
+              }),
+            );
           }),
         );
         await writeDatesIn(transaction, uid, encryption, plan, dates);

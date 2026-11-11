@@ -9,6 +9,14 @@ import { loadKeyringOrFail } from './sortHelmCapture.js';
 import type { QuestionStateEntry } from './nomos/executeCommands.js';
 import { openKeyDate } from './sortHelmCapture.js';
 import { openTopicRecord } from './noteStore.js';
+import {
+  openLiveTopic,
+  readVersionNumbers,
+  writeTopicVersionIn,
+  type LiveTopic,
+} from './topicVersionStore.js';
+import type { PlacedTopic } from './nomos/planTopicCommands.js';
+import { MAX_CONTEXT_TOPICS } from './nomos/commands.js';
 import { NOTE_TOPICS_CAP } from './nomos/commands.js';
 import type { NoteTopicState } from './nomos/executeCommands.js';
 import { readIndexIn, writeIndexIn } from './keyDateStore.js';
@@ -238,6 +246,7 @@ export const resolveHelmQuestion = onCall(
             factIds?: unknown[];
             keyDateId?: unknown;
             noteId?: unknown;
+            childIds?: unknown;
             kind?: string;
           }[];
         }
@@ -253,6 +262,14 @@ export const resolveHelmQuestion = onCall(
         ID_RE.test(held.noteId)
           ? held.noteId
           : null;
+      const groupIds =
+        held?.kind === 'groupTopics' && Array.isArray(held.childIds)
+          ? (held.childIds as unknown[])
+              .filter(
+                (id): id is string => typeof id === 'string' && ID_RE.test(id),
+              )
+              .slice(0, 20)
+          : [];
       const isPlace = held?.kind === 'linkPlace';
       const isSettle = held?.kind === 'settleFact';
       const isDateSettle = held?.kind === 'settleKeyDate';
@@ -266,6 +283,8 @@ export const resolveHelmQuestion = onCall(
         .filter((id): id is string => typeof id === 'string' && ID_RE.test(id))
         .slice(0, 2);
       const isPick =
+        groupIds.length === 0 &&
+        held?.kind !== 'groupTopics' &&
         !isSettle &&
         !isDateSettle &&
         !isFileNote &&
@@ -292,6 +311,51 @@ export const resolveHelmQuestion = onCall(
         ),
       ]);
       const noteWords = toResolveNote(key, noteSnap);
+      const isGroupYes = groupIds.length > 0 && optionId === 'yes';
+      const [groupSnaps, treeSnap] = await Promise.all([
+        Promise.all(
+          (isGroupYes ? groupIds : []).map((id) =>
+            transaction.get(firestore.doc(`${base}/topics/${id}`)),
+          ),
+        ),
+        isGroupYes
+          ? transaction.get(
+              firestore
+                .collection(`${base}/topics`)
+                .select('parentId', 'depth')
+                .limit(MAX_CONTEXT_TOPICS),
+            )
+          : null,
+      ]);
+      const groupTopics = new Map<string, LiveTopic>(
+        groupSnaps.flatMap((snap): [string, LiveTopic][] => {
+          const data = snap.data();
+          const topic = data ? openLiveTopic(key, snap.id, data) : null;
+          return topic ? [[snap.id, topic]] : [];
+        }),
+      );
+      const groupVersions = new Map<string, number[]>(
+        await Promise.all(
+          [...groupTopics.keys()].map(
+            async (id): Promise<[string, number[]]> => [
+              id,
+              await readVersionNumbers(
+                transaction,
+                firestore.doc(`${base}/topics/${id}`),
+              ),
+            ],
+          ),
+        ),
+      );
+      const groupTree: PlacedTopic[] = (treeSnap?.docs ?? []).map((doc) => ({
+        id: doc.id,
+        parentId:
+          typeof doc.get('parentId') === 'string'
+            ? (doc.get('parentId') as string)
+            : null,
+        depth: Number(doc.get('depth') ?? 1),
+        name: groupTopics.get(doc.id)?.name ?? '',
+      }));
       const [factSnaps, taskSnaps, chosenSnap] = await Promise.all([
         Promise.all(
           factIds.map((id) =>
@@ -418,9 +482,15 @@ export const resolveHelmQuestion = onCall(
                   : null,
               }
             : null,
+        group: isGroupYes
+          ? { topics: groupTopics, tree: groupTree }
+          : undefined,
         newId: () =>
-          firestore.collection(`${base}/${isPlace ? 'places' : 'who'}`).doc()
-            .id,
+          held?.kind === 'groupTopics'
+            ? firestore.collection(`${base}/topics`).doc().id
+            : firestore
+                .collection(`${base}/${isPlace ? 'places' : 'who'}`)
+                .doc().id,
         seal,
       });
       if (result.refused !== null) {
@@ -492,6 +562,47 @@ export const resolveHelmQuestion = onCall(
           }),
         }),
       );
+      if (plan.groupWrite) {
+        const now = Date.now();
+        plan.groupWrite.versions.forEach((version) => {
+          const live = groupTopics.get(version.topicId);
+          if (!live) return;
+          writeTopicVersionIn(transaction, {
+            topicRef: firestore.doc(`${base}/topics/${version.topicId}`),
+            currentVersion: version.currentVersion,
+            existingVersions: groupVersions.get(version.topicId) ?? [],
+            currentWords: live.words,
+            sections: version.sections,
+            reason: version.reason,
+            noteIds: version.noteIds,
+            sourceCaptureId: version.sourceCaptureId,
+            executionId: version.executionId,
+            changeSummary: version.changeSummary,
+            requestQuote: version.requestQuote,
+            parentName: version.parentName,
+            docState: version.docState,
+            pendingNoteIds: version.pendingNoteIds,
+            topicFields: version.topicFields,
+            now,
+            seal,
+          });
+        });
+        const versioned = new Set(
+          plan.groupWrite.versions.map((version) => version.topicId),
+        );
+        plan.groupWrite.placements
+          .filter(({ id }) => !versioned.has(id))
+          .forEach(({ id, parentId, depth }) =>
+            transaction.update(firestore.doc(`${base}/topics/${id}`), {
+              parentId,
+              depth,
+            }),
+          );
+        transaction.create(
+          firestore.doc(`${base}/topics/${plan.groupWrite.parentCreate.id}`),
+          plan.groupWrite.parentCreate.data,
+        );
+      }
       if (plan.whoUpdate) {
         transaction.update(
           firestore.doc(`${base}/who/${plan.whoUpdate.id}`),

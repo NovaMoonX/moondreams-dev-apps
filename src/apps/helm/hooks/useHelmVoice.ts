@@ -38,6 +38,7 @@ import {
 import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { resolveQuestion } from '@apps/helm/queries/nomosMutations';
+import { toQuestionChoice } from '@apps/helm/utils/questionChoice';
 import {
   loadExecutionsById,
   markCaptureSpoken,
@@ -314,14 +315,8 @@ export function useHelmVoice() {
       return true;
     }
     const isModel = question.builtBy === 'model';
-    const optionId =
-      answer?.value.shape === 'pickOne' ? answer.value.optionId : null;
-    const choice =
-      answer?.value.shape === 'pickSeveral' && question.kind === 'whichTopic'
-        ? { optionIds: answer.value.optionIds }
-        : optionId !== null
-          ? { optionId }
-          : null;
+    const choice = toQuestionChoice(question, answer?.value ?? null);
+    const optionId = choice && 'optionId' in choice ? choice.optionId : null;
     if (isModel ? answer === null : choice === null) {
       const isShort = text.trim().split(/\s+/).length <= ASK_AGAIN_MAX_WORDS;
       if (!isShort || askedAgain.current.has(askedKey)) return false;

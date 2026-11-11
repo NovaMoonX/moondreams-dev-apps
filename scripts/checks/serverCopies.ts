@@ -111,6 +111,11 @@ const COPIES: Copy[] = [
     importRewrites: {},
   },
   {
+    src: 'src/apps/helm/utils/topicTree.ts',
+    dest: 'functions/src/apps/helm/topicTree.ts',
+    importRewrites: { '@apps/helm/constants': './topicLimits.js' },
+  },
+  {
     src: 'src/utils/yearlyDateUtils.ts',
     dest: 'functions/src/vendor/yearlyDateUtils.ts',
     importRewrites: {},

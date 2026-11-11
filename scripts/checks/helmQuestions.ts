@@ -26,7 +26,17 @@ import {
 } from '../../functions/src/apps/helm/nomos/resolveQuestion.ts';
 import type { SealedPayload } from '../../functions/src/appKeys/seal.ts';
 import { planUndo } from '../../src/apps/helm/nomos/planUndo.ts';
-import type { OpenExecution } from '../../src/apps/helm/types.ts';
+import {
+  hasOpenChoice,
+  toHeldKind,
+} from '../../src/apps/helm/utils/heldCaptures.ts';
+import { matchSpokenAnswer } from '../../src/apps/helm/utils/questionAnswers.ts';
+import { toQuestionChoice } from '../../src/apps/helm/utils/questionChoice.ts';
+import type {
+  HelmQuestion,
+  OpenCapture,
+  OpenExecution,
+} from '../../src/apps/helm/types.ts';
 
 const KEY = { keyId: 'helm-key-test', keyVersion: 1, key: Buffer.alloc(32, 7) };
 const seal = (fields: Record<string, unknown>) => sealForHelm(KEY, fields);
@@ -862,6 +872,74 @@ test('a settle is undone by the planner: both facts go back to disputed and the 
       .disputedWithId,
     'f-new',
   );
+});
+
+const GROUP_QUESTION: HelmQuestion = {
+  kind: 'groupTopics',
+  builtBy: 'code',
+  shape: 'yesNo',
+  prompt: 'Group Washing and Fragrance under Car care?',
+  options: [
+    { id: 'yes', label: 'Group them', detail: null, ref: null },
+    { id: 'no', label: 'Not now', detail: null, ref: null },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  aboutRef: null,
+  answer: null,
+};
+
+test('a grouping question is answered by voice as the option it names, by tap shape too', () => {
+  const choiceOf = (text: string) => {
+    const answer = matchSpokenAnswer(text, GROUP_QUESTION, {
+      now: 0,
+      timeZone: 'UTC',
+    });
+    return toQuestionChoice(
+      GROUP_QUESTION,
+      answer?.kind === 'answer' ? answer.value : null,
+    );
+  };
+  assert.deepEqual(choiceOf('yes'), { optionId: 'yes' });
+  assert.deepEqual(choiceOf('no'), { optionId: 'no' });
+  assert.equal(choiceOf('maybe the weather is nice'), null);
+  assert.deepEqual(
+    toQuestionChoice(GROUP_QUESTION, {
+      shape: 'yesNo',
+      optionId: 'yes',
+      otherText: null,
+    }),
+    { optionId: 'yes' },
+  );
+  assert.equal(
+    toQuestionChoice(GROUP_QUESTION, {
+      shape: 'pickSeveral',
+      optionIds: ['yes'],
+    }),
+    null,
+  );
+});
+
+test('an open grouping question keeps its turn in Needs you, and answered it does not', () => {
+  const capture = (answeredAt: number | null) =>
+    ({
+      status: 'needsYou',
+      questionState: {
+        q1: {
+          kind: 'groupTopics',
+          shape: 'yesNo',
+          askedAt: 1,
+          answeredAt,
+          skippedAt: null,
+        },
+      },
+    }) as unknown as OpenCapture;
+  assert.equal(hasOpenChoice(capture(null)), true);
+  assert.equal(toHeldKind(capture(null)), 'question');
+  assert.equal(hasOpenChoice(capture(5)), false);
 });
 
 const failures: string[] = [];

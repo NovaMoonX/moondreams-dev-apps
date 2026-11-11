@@ -6,14 +6,17 @@ import {
   getTakenBackIds,
   planReopen,
   planUndo,
+  topicEffectKind,
   type UndoPlan,
   type UndoTarget,
 } from '../../src/apps/helm/nomos/planUndo.ts';
+import { buildResultLines } from '../../src/apps/helm/utils/resultLines.ts';
 import type {
   EffectRef,
   ExecutionEffect,
   OpenExecution,
   TaskSealed,
+  TopicSealed,
 } from '../../src/apps/helm/types.ts';
 
 const NOW = Date.UTC(2026, 10, 9, 17, 0);
@@ -1200,6 +1203,350 @@ test('a project the turn made stays when the person ticked one of its milestones
   );
   assert.equal(result.kind, 'refused');
   assert.deepEqual(result.kept, ['Wedding']);
+});
+
+const topicSealed = (name: string): TopicSealed => ({
+  name,
+  emoji: null,
+  overview: null,
+  sections: [],
+});
+
+const topicTarget = (
+  docId: string,
+  data: Record<string, unknown> | null,
+  name = 'Car care',
+): [string, UndoTarget] => [
+  docId,
+  { docId, data, opened: data ? topicSealed(name) : null },
+];
+
+const topicEntry = (
+  op: EffectRef['op'],
+  docId: string,
+  written: Record<string, unknown>,
+  previous: Record<string, unknown> | null,
+) => ({
+  ref: { op, collection: 'topics', docId } as EffectRef,
+  effect: { written, previous },
+});
+
+const ADDED = 'Added to Car care: Winter tyre size';
+const versionEffect = (change: string, title = ADDED, from = 4) =>
+  topicEntry(
+    'update',
+    'car',
+    { version: from + 1, change, 'sealed.title': title },
+    { version: from, 'sealed.title': title },
+  );
+const noteMade = {
+  ref: { op: 'create', collection: 'notes', docId: 'n1' } as EffectRef,
+  effect: {
+    written: { 'sealed.title': 'Winter tyre size', topicIds: ['car'] },
+    previous: null,
+  },
+};
+const noteTarget = (): [string, UndoTarget] => [
+  'n1',
+  {
+    docId: 'n1',
+    data: { lastEditedAt: null, topicIds: ['car'] },
+    opened: null,
+  },
+];
+
+test('topicEffectKind tells the four topic effect shapes apart', () => {
+  assert.equal(
+    topicEffectKind({
+      written: { docState: 'behind', pendingNoteIds: ['n'] },
+      previous: { docState: 'current', pendingNoteIds: [] },
+    }),
+    'filing',
+  );
+  assert.equal(topicEffectKind(versionEffect('added').effect), 'version');
+  assert.equal(
+    topicEffectKind({
+      written: { parentId: 'x', depth: 2, 'sealed.title': 't' },
+      previous: { parentId: null, depth: 1, 'sealed.title': 't' },
+    }),
+    'placement',
+  );
+  assert.equal(
+    topicEffectKind({
+      written: { depth: 3, 'sealed.title': 't' },
+      previous: { depth: 2, 'sealed.title': 't' },
+    }),
+    'placement',
+  );
+  assert.equal(
+    topicEffectKind({
+      written: {
+        'sealed.title': 'g',
+        'sealed.name': 'Car care',
+        parentId: null,
+      },
+      previous: null,
+    }),
+    'made',
+  );
+});
+
+test('a turn that made a note and added to a topic takes back both, the topic as a new version', () => {
+  const result = asWrite(
+    plan(execution([noteMade, versionEffect('added')]), [
+      noteTarget(),
+      topicTarget('car', { version: 5, writeClaim: null }),
+    ]),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['n1'],
+  );
+  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.equal(
+    result.undoSealed.summary,
+    'Took back 1 note and 1 change to Car care',
+  );
+  assert.equal(result.report, 'Took back 1 note. 1 change to Car care too.');
+  assert.deepEqual(
+    result.undoExecution.effectRefs.map((ref) => [ref.op, ref.collection]),
+    [
+      ['delete', 'notes'],
+      ['update', 'topics'],
+    ],
+  );
+});
+
+test('a version change alone is taken back, and says the topic', () => {
+  const result = asWrite(
+    plan(
+      execution([versionEffect('revised', 'Changed Car care: shorter intro')]),
+      [topicTarget('car', { version: 5, writeClaim: null })],
+    ),
+  );
+  assert.deepEqual(result.versionRestores, [{ docId: 'car', from: 5, to: 4 }]);
+  assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
+  assert.equal(result.report, 'Took back 1 change to Car care.');
+  assert.equal(result.deletes.length, 0);
+});
+
+test('a version is kept after a later version, and while the topic is being written', () => {
+  const later = asRefused(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', { version: 6, writeClaim: null }),
+    ]),
+  );
+  assert.equal(later.reason, 'nothingToTakeBack');
+  assert.deepEqual(later.kept, [ADDED]);
+  const claimed = asRefused(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', {
+        version: 5,
+        writeClaim: { claimId: 'c', at: NOW - 1000 },
+      }),
+    ]),
+  );
+  assert.deepEqual(claimed.kept, [ADDED]);
+  const stale = asWrite(
+    plan(execution([versionEffect('added')]), [
+      topicTarget('car', {
+        version: 5,
+        writeClaim: { claimId: 'c', at: NOW - 200_000 },
+      }),
+    ]),
+  );
+  assert.equal(stale.versionRestores.length, 1);
+});
+
+const MOVED = 'Moved Washing under Car care';
+const placement = () => [
+  topicEntry(
+    'update',
+    'washing',
+    { parentId: 'car', depth: 2, 'sealed.title': MOVED },
+    { parentId: null, depth: 1, 'sealed.title': MOVED },
+  ),
+  topicEntry(
+    'update',
+    'rinse',
+    { depth: 3, 'sealed.title': MOVED },
+    { depth: 2, 'sealed.title': MOVED },
+  ),
+];
+
+test('a move goes back together with its subtree', () => {
+  const result = asWrite(
+    plan(execution(placement()), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+      topicTarget('rinse', { parentId: 'washing', depth: 3 }, 'Rinse'),
+      topicTarget('car', { parentId: null, depth: 1 }),
+    ]),
+  );
+  assert.deepEqual(
+    result.updates.map((entry) => [
+      entry.docId,
+      entry.fields.parentId,
+      entry.fields.depth,
+    ]),
+    [
+      ['washing', null, 1],
+      ['rinse', undefined, 2],
+    ],
+  );
+  assert.equal(result.undoSealed.summary, 'Took back 1 change to Washing');
+});
+
+test('a move is kept whole when any topic in it changed, or the old parent is gone', () => {
+  const moved = refusedKept(
+    plan(execution(placement()), [
+      topicTarget('washing', { parentId: 'car', depth: 2 }, 'Washing'),
+      topicTarget('rinse', { parentId: 'washing', depth: 2 }, 'Rinse'),
+    ]),
+  );
+  assert.deepEqual(moved, [MOVED]);
+  const parentGone = refusedKept(
+    plan(execution(placement()), [
+      [
+        'washing',
+        {
+          docId: 'washing',
+          data: { parentId: 'car', depth: 2 },
+          opened: topicSealed('Washing'),
+          isOwnerHere: false,
+        },
+      ],
+      topicTarget('rinse', { parentId: 'washing', depth: 3 }, 'Rinse'),
+    ]),
+  );
+  assert.deepEqual(parentGone, [MOVED]);
+});
+
+const refusedKept = (result: UndoPlan) => asRefused(result).kept;
+
+const GROUPED = 'Grouped Washing and Fragrance under Car care';
+const grouping = () => [
+  topicEntry(
+    'create',
+    'parent',
+    { 'sealed.title': GROUPED, 'sealed.name': 'Car care', parentId: null },
+    null,
+  ),
+  topicEntry(
+    'update',
+    'washing',
+    { parentId: 'parent', depth: 2, 'sealed.title': GROUPED },
+    { parentId: null, depth: 1, 'sealed.title': GROUPED },
+  ),
+  topicEntry(
+    'update',
+    'washing',
+    { version: 3, change: 'grouped', 'sealed.title': GROUPED },
+    { version: 2, 'sealed.title': GROUPED },
+  ),
+];
+const groupTargets = (parent: Record<string, unknown>, washingDepth = 2) => [
+  topicTarget('parent', parent, 'Car care'),
+  topicTarget(
+    'washing',
+    { parentId: 'parent', depth: washingDepth, version: 3, writeClaim: null },
+    'Washing',
+  ),
+];
+const FRESH_PARENT = {
+  parentId: null,
+  depth: 1,
+  version: 0,
+  pendingNoteIds: [],
+};
+
+test('a grouping goes back as one change: the child moves out, its version is restored, the made parent goes', () => {
+  const result = asWrite(
+    plan(execution(grouping()), groupTargets(FRESH_PARENT)),
+  );
+  assert.deepEqual(
+    result.deletes.map((entry) => entry.docId),
+    ['parent'],
+  );
+  assert.deepEqual(result.versionRestores, [
+    { docId: 'washing', from: 3, to: 2 },
+  ]);
+  assert.equal(result.updates.length, 1);
+  assert.equal(result.undoSealed.summary, 'Took back 1 change to Car care');
+});
+
+test('a made parent stays when it was written, used, or a child stayed under it', () => {
+  const written = asWrite(
+    plan(execution(grouping()), groupTargets({ ...FRESH_PARENT, version: 1 })),
+  );
+  assert.equal(written.deletes.length, 0);
+  assert.deepEqual(written.kept, [GROUPED]);
+  const used = asWrite(
+    plan(
+      execution(grouping()),
+      groupTargets(FRESH_PARENT),
+      new Set(['parent']),
+    ),
+  );
+  assert.equal(used.deletes.length, 0);
+  const stayed = asWrite(
+    plan(execution(grouping()), groupTargets(FRESH_PARENT, 3)),
+  );
+  assert.equal(stayed.deletes.length, 0);
+  assert.equal(stayed.updates.length, 0);
+});
+
+test('an old filing effect still takes the note back out and ignores the new shapes', () => {
+  const filing = topicEntry(
+    'update',
+    'car',
+    { docState: 'behind', pendingNoteIds: ['n1'], 'sealed.title': 'Car care' },
+    { docState: 'current', pendingNoteIds: [], 'sealed.title': 'Car care' },
+  );
+  const result = asWrite(
+    plan(execution([noteMade, filing]), [
+      noteTarget(),
+      topicTarget('car', {
+        docState: 'behind',
+        pendingNoteIds: ['n1'],
+        version: 5,
+      }),
+    ]),
+  );
+  assert.equal(result.versionRestores.length, 0);
+  assert.deepEqual(
+    result.updates.map((entry) => entry.fields),
+    [{ pendingNoteIds: [], docState: 'current' }],
+  );
+});
+
+test('topic effects give one line each, a grouping gives one line, and filing gives none', () => {
+  const linesOf = (entries: { ref: EffectRef; effect: ExecutionEffect }[]) =>
+    buildResultLines(execution(entries), new Map(), 'UTC', NOW).map((line) => [
+      line.title,
+      line.ref?.collection,
+      line.ref?.id,
+    ]);
+  assert.deepEqual(linesOf([noteMade, versionEffect('added')]), [
+    ['Winter tyre size', 'notes', 'n1'],
+    [ADDED, 'topics', 'car'],
+  ]);
+  assert.deepEqual(linesOf(grouping()), [[GROUPED, 'topics', 'parent']]);
+  assert.deepEqual(linesOf(placement()), [[MOVED, 'topics', 'washing']]);
+  assert.deepEqual(
+    linesOf([
+      topicEntry(
+        'update',
+        'car',
+        {
+          docState: 'behind',
+          pendingNoteIds: ['n1'],
+          'sealed.title': 'Car care',
+        },
+        { docState: 'current', pendingNoteIds: [], 'sealed.title': 'Car care' },
+      ),
+    ]),
+    [],
+  );
 });
 
 const failures = tests.flatMap(([name, run]) => {

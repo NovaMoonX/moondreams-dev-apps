@@ -23,6 +23,7 @@ import {
   markNoteChecked,
 } from '@apps/helm/store/actions/noteActions';
 import {
+  selectAllTopics,
   selectNoteById,
   selectTopicById,
 } from '@apps/helm/store/selectors/knowledgeSelectors';
@@ -77,7 +78,11 @@ function NoteSheet({ noteId, onClose }: NoteSheetProps) {
     });
     if (!isConfirmed) return;
     try {
-      const { write, restore } = await deleteNote(user.uid, note.id);
+      const { write, restore } = await deleteNote(
+        user.uid,
+        note.id,
+        selectAllTopics(store.getState()),
+      );
       write.catch((error: unknown) => {
         console.error('Helm note was not deleted', error);
         addToast({ title: HELM_COPY.noteDeleteFailed, type: 'error' });

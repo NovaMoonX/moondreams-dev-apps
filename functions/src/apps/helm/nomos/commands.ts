@@ -3,6 +3,7 @@ import type { QuoteEntry } from './aliases.js';
 import type { SyncedCopy } from '../syncedCopies.js';
 import { SENSITIVE_CATEGORIES } from './sensitive.js';
 import type { MomentPrecision } from '../../../vendor/yearlyDateUtils.js';
+import type { ModelChange } from '../topicWrite.js';
 
 export type TaskDue =
   { kind: 'day'; date: number } | { kind: 'moment'; at: number };
@@ -46,6 +47,14 @@ export const COMMAND_KINDS = [
   'createNote',
 ] as const;
 
+/** The kinds the reply may carry that change a topic; like a note, each is read from its own list and is no `NomosCommand`. */
+export const TOPIC_COMMAND_KINDS = [
+  'addToTopic',
+  'reviseTopic',
+  'moveTopic',
+  'createParentTopic',
+] as const;
+
 export const REMEMBER_FIELDS = ['startAt', 'endAt', 'place'] as const;
 
 export type RememberField = (typeof REMEMBER_FIELDS)[number];
@@ -87,6 +96,11 @@ export const NOTE_BODY_CAP = 20_000;
 export const NOTES_LIMIT = 1_000;
 export const NOTE_TOPICS_CAP = 10;
 export const MAX_NOTES_PER_TURN = 3;
+export const MAX_TOPIC_ADDS_PER_TURN = 3;
+export const MAX_TOPIC_ADD_CHARS = 2_000;
+export const MAX_PARENT_CHILDREN = 20;
+export const MIN_PARENT_CHILDREN = 2;
+export const PARENT_NAME_CAP = 40;
 export const MAX_CONTEXT_TOPICS = 100;
 export const MAX_HINT_NOTES = 8;
 export const NOTES_CONTEXT_CHARS = 6_000;
@@ -332,6 +346,47 @@ export interface CreateNoteCommand {
   topicIds: string[];
 }
 
+/** A new part for a topic's document, written from a note this turn makes (`noteIndex` is its place among the turn's notes), put after one part or at the end. */
+export interface AddToTopicCommand {
+  kind: 'addToTopic';
+  topicId: string;
+  noteIndex: number;
+  afterSectionId: string | null;
+  heading: string | null;
+  markdown: string;
+}
+
+/** A change to a topic's document the person asked for in words, checked against the version the model read. */
+export interface ReviseTopicCommand {
+  kind: 'reviseTopic';
+  topicId: string;
+  changes: ModelChange[];
+  changeSummary: string;
+  requestQuote: string;
+  seenVersion: number;
+}
+
+/** A topic goes under another, or to the top level when `parentId` is null. */
+export interface MoveTopicCommand {
+  kind: 'moveTopic';
+  topicId: string;
+  parentId: string | null;
+}
+
+/** Topics gathered under a new parent; `isAsked` is true only when the person's words asked for it. */
+export interface CreateParentTopicCommand {
+  kind: 'createParentTopic';
+  name: string;
+  childIds: string[];
+  isAsked: boolean;
+}
+
+export type TopicCommand =
+  | AddToTopicCommand
+  | ReviseTopicCommand
+  | MoveTopicCommand
+  | CreateParentTopicCommand;
+
 /** A request to lay out one day, its date already settled to a calendar day in the person's zone; the device makes the plan, so it files no effect. */
 export interface PlanDayCommand {
   kind: 'planDay';
@@ -444,9 +499,22 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             'roleNote',
             'bodyQuote',
             'topicAliases',
+            'topicAlias',
+            'parentAlias',
+            'childAliases',
+            'noteRef',
+            'afterSectionAlias',
+            'heading',
+            'markdown',
+            'changeSummary',
+            'requestQuote',
+            'topicChanges',
           ],
           properties: {
-            kind: { type: 'string', enum: [...COMMAND_KINDS, 'answer', 'ask'] },
+            kind: {
+              type: 'string',
+              enum: [...COMMAND_KINDS, ...TOPIC_COMMAND_KINDS, 'answer', 'ask'],
+            },
             ref: nullable(
               'string',
               'createTask: a name for the new task such as $new1, so a later command can point at it; null otherwise.',
@@ -457,7 +525,7 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
             ),
             title: nullable(
               'string',
-              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters.`,
+              `createTask: the task in plain words, keeping every @, # and ^ name from the capture as written. updateTask: the new title, or null to keep it. createProject: its name the way the person said it, at most 80 characters. addMilestone: the milestone in the person's words, at most ${MILESTONE_TITLE_CAP} characters. createNote: a short name for the note, at most ${NOTE_TITLE_CAP} characters. createParentTopic: the new topic's name, at most ${PARENT_NAME_CAP} characters.`,
             ),
             dueSpanId: nullable(
               'string',
@@ -701,6 +769,88 @@ export const FILE_RESULTS_TOOL: TerminalTool = {
               items: { type: 'string' },
               description:
                 'createNote: the alias of each topic in <your_topics> the note plainly belongs in; empty when none fits. Never invent one.',
+            },
+            topicAlias: nullable(
+              'string',
+              "addToTopic, reviseTopic, moveTopic: the alias of the topic in <your_topics> (the open topic is <topic_document>'s topic); createParentTopic: null.",
+            ),
+            parentAlias: nullable(
+              'string',
+              'moveTopic: the alias of the topic it goes under; null puts it at the top level.',
+            ),
+            childAliases: {
+              type: ['array', 'null'],
+              items: { type: 'string' },
+              description: `createParentTopic: the alias of each of the ${MIN_PARENT_CHILDREN} to ${MAX_PARENT_CHILDREN} topics that go under it; the new parent's name is title.`,
+            },
+            noteRef: nullable(
+              'string',
+              'addToTopic: the ref ($note1 for the first createNote of this reply, $note2 for the second) of the note this part is written from; the note must be filed to the same topic.',
+            ),
+            afterSectionAlias: nullable(
+              'string',
+              'addToTopic: the alias (s1, s2, …) of the part of <topic_document> the new part goes after; null puts it at the end.',
+            ),
+            heading: nullable(
+              'string',
+              "addToTopic: the new part's heading, or null.",
+            ),
+            markdown: nullable(
+              'string',
+              `addToTopic: the new part in the note's own words, at most ${MAX_TOPIC_ADD_CHARS} characters.`,
+            ),
+            changeSummary: nullable(
+              'string',
+              'reviseTopic: what changed, in plain words, at most 200 characters.',
+            ),
+            requestQuote: nullable(
+              'string',
+              'reviseTopic: the words of the capture that ask for the change, copied exactly.',
+            ),
+            topicChanges: {
+              type: ['array', 'null'],
+              description:
+                'reviseTopic: at most 8 changes to the parts of <topic_document>. Never change a part whose writtenBy is "person" unless the request names it.',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                required: [
+                  'kind',
+                  'sectionAlias',
+                  'sectionAliases',
+                  'afterSectionAlias',
+                  'heading',
+                  'level',
+                  'markdown',
+                ],
+                properties: {
+                  kind: {
+                    type: 'string',
+                    enum: ['replace', 'merge', 'remove', 'reorder', 'retitle'],
+                  },
+                  sectionAlias: nullable(
+                    'string',
+                    "replace, retitle: the part's alias; null otherwise.",
+                  ),
+                  sectionAliases: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description:
+                      'merge: the parts to join; remove: the parts to take out; reorder: every part in the new order; [] otherwise.',
+                  },
+                  afterSectionAlias: nullable('string', 'Always null.'),
+                  heading: nullable('string', 'The new heading, or null.'),
+                  level: {
+                    type: ['integer', 'null'],
+                    enum: [1, 2, 3, null],
+                    description: 'The new heading level, or null to keep it.',
+                  },
+                  markdown: nullable(
+                    'string',
+                    'replace, merge: the new words; null otherwise.',
+                  ),
+                },
+              },
             },
           },
         },

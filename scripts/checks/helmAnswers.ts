@@ -741,9 +741,18 @@ const tests: [string, () => void | Promise<void>][] = [
         focusedTopic: {
           id: 'topic-1',
           name: 'Car care',
+          version: 2,
           sections: [
-            { heading: 'Oil', markdown: 'Every 10,000 km.', noteIds: [] },
             {
+              id: 'sec-oil',
+              writtenBy: 'nomos',
+              heading: 'Oil',
+              markdown: 'Every 10,000 km.',
+              noteIds: [],
+            },
+            {
+              id: 'sec-tyres',
+              writtenBy: 'nomos',
               heading: 'Tyres',
               markdown: 'Tyres need 32 psi.',
               noteIds: ['note-1'],

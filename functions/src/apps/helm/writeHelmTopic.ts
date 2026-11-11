@@ -10,10 +10,7 @@ import { logger } from 'firebase-functions';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import type { ModelProvider } from '../../ai/modelProvider.js';
-import { getUsageCost, type ModelRole } from '../../ai/models.js';
-import { createAnthropicProvider } from '../../ai/providers/anthropic.js';
 import type { SealedPayload } from '../../appKeys/seal.js';
-import { isRunningInEmulator } from '../../emulator.js';
 import { HELM_MASTER_KEYS } from './getHelmKey.js';
 import {
   openForHelm,
@@ -22,13 +19,25 @@ import {
   type HelmKey,
 } from './helmKey.js';
 import {
-  recordAiSpend,
   releaseTopicWrite,
   reserveAiCall,
   reserveTopicWrite,
 } from './aiLimits.js';
+import {
+  askTopicModel,
+  pickTopicProvider,
+  TOPIC_LOOP_LIMITS,
+} from './topicModel.js';
 import { AUTOMATIC_LEVEL } from './nomos/policy.js';
 import { ANTHROPIC_API_KEY, loadKeyringOrFail } from './sortHelmCapture.js';
+import {
+  readVersionNumbers,
+  toIds,
+  toSections,
+  toTopicDoc,
+  writeTopicVersionIn,
+  type TopicDoc,
+} from './topicVersionStore.js';
 import {
   MAX_FILED_READ,
   MAX_OVERVIEW_CHARS,
@@ -40,14 +49,13 @@ import {
   buildChangeSummary,
   buildOverviewMessage,
   buildWriteMessage,
-  createTopicFixtureProvider,
   decideClaim,
   pickPendingNotes,
+  dropGoneSources,
   pickReason,
   readChanges,
   sourceNoteId,
   toNoteSource,
-  versionsToDelete,
   type DocState,
   type TopicSection,
   type TopicSource,
@@ -58,11 +66,9 @@ if (getApps().length === 0) {
 }
 
 const ID_RE = /^[A-Za-z0-9_-]{1,128}$/;
-const LOOP_LIMITS = { maxTurns: 2, maxToolCalls: 0, maxMillis: 45_000 };
 const MAX_CHILDREN_READ = 20;
 const OUTLINE_CHARS = 300;
-const MAX_DELETES = 400;
-const OVERVIEW_LIMITS = { ...LOOP_LIMITS, maxMillis: 20_000 };
+const OVERVIEW_LIMITS = { ...TOPIC_LOOP_LIMITS, maxMillis: 20_000 };
 
 export interface WriteTopicResult {
   status: 'written' | 'current' | 'busy' | 'limited' | 'failed';
@@ -71,51 +77,6 @@ export interface WriteTopicResult {
   waiting: number;
   retry: 'soon' | 'tomorrow' | null;
 }
-
-interface TopicDoc {
-  parentId: string | null;
-  docState: DocState;
-  version: number;
-  pendingNoteIds: string[];
-  writeClaim: { claimId: string; at: number } | null;
-  overviewOf: Record<string, number>;
-  sealed: SealedPayload;
-}
-
-const toIds = (value: unknown) =>
-  Array.isArray(value)
-    ? value.filter((entry): entry is string => typeof entry === 'string')
-    : [];
-
-const toDocState = (value: unknown): DocState =>
-  value === 'current' ||
-  value === 'behind' ||
-  value === 'writing' ||
-  value === 'failed'
-    ? value
-    : 'empty';
-
-const toTopicDoc = (data: Record<string, unknown>): TopicDoc => {
-  const claim = data.writeClaim as { claimId?: unknown; at?: unknown } | null;
-  return {
-    parentId: typeof data.parentId === 'string' ? data.parentId : null,
-    docState: toDocState(data.docState),
-    version: typeof data.version === 'number' ? data.version : 0,
-    pendingNoteIds: toIds(data.pendingNoteIds),
-    writeClaim:
-      claim && typeof claim.claimId === 'string' && typeof claim.at === 'number'
-        ? { claimId: claim.claimId, at: claim.at }
-        : null,
-    overviewOf:
-      typeof data.overviewOf === 'object' && data.overviewOf !== null
-        ? (data.overviewOf as Record<string, number>)
-        : {},
-    sealed: data.sealed as SealedPayload,
-  };
-};
-
-const toSections = (words: Record<string, unknown>): TopicSection[] =>
-  Array.isArray(words.sections) ? (words.sections as TopicSection[]) : [];
 
 const result = (
   status: WriteTopicResult['status'],
@@ -213,45 +174,7 @@ const readApiKey = () => {
   }
 };
 
-const pickProvider = (): ModelProvider | null => {
-  const apiKey = readApiKey();
-  if (apiKey) return createAnthropicProvider(apiKey);
-  return isRunningInEmulator() ? createTopicFixtureProvider() : null;
-};
-
-const NO_TOOLS = {
-  listTools: () => Promise.resolve({ tools: [] }),
-  callTool: () => Promise.reject(new Error('No tools here.')),
-} as unknown as Parameters<ModelProvider['runToolLoop']>[0]['mcpClient'];
-
-async function askModel(
-  firestore: Firestore,
-  provider: ModelProvider,
-  role: ModelRole,
-  request: {
-    system: string;
-    message: string;
-    terminalTool: typeof SUBMIT_TOPIC_TOOL;
-    limits?: typeof LOOP_LIMITS;
-  },
-) {
-  const loop = await provider.runToolLoop({
-    role,
-    system: request.system,
-    messages: [{ role: 'user', content: request.message }],
-    mcpClient: NO_TOOLS,
-    terminalTool: request.terminalTool,
-    limits: request.limits ?? LOOP_LIMITS,
-    onUsage: async (usage) => {
-      const cost = getUsageCost(role, usage);
-      if (cost <= 0) return;
-      await recordAiSpend(firestore, Date.now(), cost).catch(() =>
-        logger.error('helm.ai.spendNotRecorded'),
-      );
-    },
-  });
-  return loop.endedBy === 'terminal' ? loop.terminalInput : null;
-}
+const askModel = askTopicModel;
 
 const openWords = (key: HelmKey, sealed: SealedPayload) =>
   openForHelm(key, sealed);
@@ -384,7 +307,40 @@ const describeWrite = (name: string, reason: string, taken: number) =>
     ? `Wrote the first version of ${name}`
     : reason === 'rearranged'
       ? `Rearranged ${name}`
-      : `Brought ${taken} ${taken === 1 ? 'note' : 'notes'} into ${name}`;
+      : reason === 'sourceRemoved'
+        ? `Took out what a removed note said in ${name}`
+        : `Brought ${taken} ${taken === 1 ? 'note' : 'notes'} into ${name}`;
+
+const buildWriteExecution = (
+  now: number,
+  seal: (fields: Record<string, unknown>) => SealedPayload,
+  summary: string,
+) => ({
+  captureId: null,
+  actor: 'nomos',
+  category: 'organize',
+  autonomyLevel: AUTOMATIC_LEVEL,
+  state: 'succeeded',
+  effectRefs: [],
+  linkedWhoIds: [],
+  linkedPlaceIds: [],
+  undoesExecutionId: null,
+  undoneByExecutionId: null,
+  questionRef: null,
+  errorCode: null,
+  createdAt: now,
+  decidedAt: now,
+  finishedAt: now,
+  sealed: seal({
+    summary,
+    commands: [],
+    effects: [],
+    undoReport: null,
+    spoken: null,
+    goneIds: null,
+    lines: null,
+  }),
+});
 
 interface WriteInput {
   firestore: Firestore;
@@ -404,15 +360,68 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
   const words = openWords(key, topic.sealed);
   const name = typeof words.name === 'string' ? words.name : '';
   const sections = toSections(words);
-  const notes = await readPendingNotes(
-    firestore,
-    base,
-    key,
-    topicId,
-    topic.pendingNoteIds,
-  );
+  const [notes, gone] = await Promise.all([
+    readPendingNotes(firestore, base, key, topicId, topic.pendingNoteIds),
+    readGoneNotes(firestore, base, topicId, sections),
+  ]);
   if (notes.length === 0) {
-    const pendingNoteIds: string[] = [];
+    const trimmed = dropGoneSources(sections, gone);
+    const committed = trimmed.changed
+      ? await firestore.runTransaction(async (transaction) => {
+          const [snapshot, existingVersions] = await Promise.all([
+            transaction.get(topicRef),
+            readVersionNumbers(transaction, topicRef),
+          ]);
+          const data = snapshot.data();
+          const current = data ? toTopicDoc(data) : null;
+          if (
+            !current ||
+            current.version !== topic.version ||
+            current.writeClaim?.claimId !== claimId
+          ) {
+            return null;
+          }
+          const executionRef = firestore.collection(`${base}/executions`).doc();
+          const seal = (fields: Record<string, unknown>) =>
+            sealForHelm(key, fields);
+          const version = writeTopicVersionIn(transaction, {
+            topicRef,
+            currentVersion: current.version,
+            existingVersions,
+            currentWords: openWords(key, current.sealed),
+            sections: trimmed.sections,
+            reason: 'sourceRemoved',
+            noteIds: [],
+            sourceCaptureId: null,
+            executionId: executionRef.id,
+            changeSummary: buildChangeSummary('', 'sourceRemoved', 0),
+            requestQuote: null,
+            parentName: null,
+            docState: 'current',
+            pendingNoteIds: [],
+            now,
+            seal,
+          });
+          transaction.set(
+            executionRef,
+            buildWriteExecution(
+              now,
+              seal,
+              describeWrite(name, 'sourceRemoved', 0),
+            ),
+          );
+          return version;
+        })
+      : null;
+    if (trimmed.changed) {
+      if (!committed) throw new Error('topicMoved');
+      return result(
+        'written',
+        { version: committed, pendingNoteIds: [] },
+        0,
+        0,
+      );
+    }
     await firestore.runTransaction(async (transaction) => {
       const claim = (await transaction.get(topicRef)).get('writeClaim') as {
         claimId?: string;
@@ -420,14 +429,14 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
       if (claim?.claimId !== claimId) return;
       transaction.update(topicRef, {
         writeClaim: null,
-        pendingNoteIds,
+        pendingNoteIds: [],
         docState: topic.version === 0 ? 'empty' : 'current',
       });
     });
     return result('current', topic, 0, 0);
   }
 
-  const provider = pickProvider();
+  const provider = pickTopicProvider(readApiKey());
   if (!provider) throw new Error('noModelKey');
   const hasDay = await reserveTopicWrite(firestore, uid, now);
   const held = hasDay
@@ -476,14 +485,22 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     ),
     ...fresh,
   ]);
-  const [reply, gone] = await Promise.all([
-    askModel(firestore, provider, 'topicWrite', {
-      system: TOPIC_WRITE_PROMPT,
-      message: buildWriteMessage({ name, sections, notes }),
-      terminalTool: SUBMIT_TOPIC_TOOL,
+  const cited = new Set(
+    sections.flatMap((section) => section.sources.map(sourceNoteId)),
+  );
+  const reply = await askModel(firestore, provider, 'topicWrite', {
+    system: TOPIC_WRITE_PROMPT,
+    message: buildWriteMessage({
+      name,
+      sections,
+      notes,
+      changedIds: notes.flatMap((note) =>
+        cited.has(note.id) ? [note.id] : [],
+      ),
+      removedIds: [...gone],
     }),
-    readGoneNotes(firestore, base, topicId, sections),
-  ]);
+    terminalTool: SUBMIT_TOPIC_TOOL,
+  });
   const read = readChanges(reply);
   if (!read) throw new Error('noChanges');
   const applied = applyTopicChanges({
@@ -498,15 +515,16 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     refused: applied.refusals.map((refusal) => refusal.code),
   });
   if (applied.applied.length === 0) throw new Error('allRefused');
+  const finalSections = dropGoneSources(applied.sections, gone).sections;
 
   const reason = pickReason(topic.version, applied.applied);
   const taken = notes.map((note) => note.id);
   const executionRef = firestore.collection(`${base}/executions`).doc();
   const seal = (fields: Record<string, unknown>) => sealForHelm(key, fields);
   const committed = await firestore.runTransaction(async (transaction) => {
-    const [snapshot, versionDocs] = await Promise.all([
+    const [snapshot, existingVersions] = await Promise.all([
       transaction.get(topicRef),
-      transaction.get(topicRef.collection('versions').select()),
+      readVersionNumbers(transaction, topicRef),
     ]);
     const data = snapshot.data();
     const current = data ? toTopicDoc(data) : null;
@@ -517,70 +535,31 @@ async function writeClaimed(input: WriteInput): Promise<WriteTopicResult> {
     ) {
       return null;
     }
-    const version = current.version + 1;
     const pendingNoteIds = current.pendingNoteIds.filter(
       (id) => !taken.includes(id),
     );
-    const docState: DocState = pendingNoteIds.length > 0 ? 'behind' : 'current';
-    const currentWords = openWords(key, current.sealed);
-    transaction.update(topicRef, {
-      sealed: seal({ ...currentWords, sections: applied.sections }),
-      version,
-      docState,
-      pendingNoteIds,
-      writeClaim: null,
-      lastWrittenAt: now,
-    });
-    transaction.set(topicRef.collection('versions').doc(String(version)), {
-      version,
-      restoredFromVersion: null,
-      createdBy: 'nomos',
+    const version = writeTopicVersionIn(transaction, {
+      topicRef,
+      currentVersion: current.version,
+      existingVersions,
+      currentWords: openWords(key, current.sealed),
+      sections: finalSections,
       reason,
       noteIds: taken,
       sourceCaptureId: null,
       executionId: executionRef.id,
-      createdAt: now,
-      sealed: seal({
-        sections: applied.sections,
-        changeSummary: buildChangeSummary(read.summary, reason, taken.length),
-        requestQuote: null,
-        parentName: null,
-      }),
+      changeSummary: buildChangeSummary(read.summary, reason, taken.length),
+      requestQuote: null,
+      parentName: null,
+      docState: pendingNoteIds.length > 0 ? 'behind' : 'current',
+      pendingNoteIds,
+      now,
+      seal,
     });
-    versionsToDelete([
-      ...versionDocs.docs.map((doc) => Number(doc.id)),
-      version,
-    ])
-      .slice(0, MAX_DELETES)
-      .forEach((old) =>
-        transaction.delete(topicRef.collection('versions').doc(String(old))),
-      );
-    transaction.set(executionRef, {
-      captureId: null,
-      actor: 'nomos',
-      category: 'organize',
-      autonomyLevel: AUTOMATIC_LEVEL,
-      state: 'succeeded',
-      effectRefs: [],
-      linkedWhoIds: [],
-      linkedPlaceIds: [],
-      undoesExecutionId: null,
-      undoneByExecutionId: null,
-      questionRef: null,
-      errorCode: null,
-      createdAt: now,
-      decidedAt: now,
-      finishedAt: now,
-      sealed: seal({
-        summary: describeWrite(name, reason, taken.length),
-        commands: [],
-        effects: [],
-        undoReport: null,
-        spoken: null,
-        goneIds: null,
-        lines: null,
-      }),
-    });
+    transaction.set(
+      executionRef,
+      buildWriteExecution(now, seal, describeWrite(name, reason, taken.length)),
+    );
     return { version, waiting: pendingNoteIds.length };
   });
   if (!committed) throw new Error('topicMoved');

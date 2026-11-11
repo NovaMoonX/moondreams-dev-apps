@@ -7,7 +7,7 @@ import FormSheet from '@/components/FormSheet';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
 import { useDiscardGuard } from '@/hooks/useDiscardGuard';
-import { useAppSelector } from '@/store';
+import { store, useAppSelector } from '@/store';
 import { canFocusFieldOnOpen } from '@/utils/focusUtils';
 import TopicPicker from '@apps/helm/components/knowledge/TopicPicker';
 import {
@@ -23,7 +23,11 @@ import {
   type NoteEdit,
   type NoteRefusal,
 } from '@apps/helm/store/actions/noteActions';
-import { selectTopicById } from '@apps/helm/store/selectors/knowledgeSelectors';
+import {
+  selectAllTopics,
+  selectTopicById,
+} from '@apps/helm/store/selectors/knowledgeSelectors';
+import { topicsCitingNote } from '@apps/helm/utils/topicSources';
 import type { OpenNote } from '@apps/helm/types';
 
 interface NoteFormSheetProps {
@@ -134,6 +138,7 @@ function NoteFormFields({
           note.id,
           start,
           words,
+          topicsCitingNote(selectAllTopics(store.getState()), note.id),
         );
         if (result.kind === 'saved') {
           undoToast(

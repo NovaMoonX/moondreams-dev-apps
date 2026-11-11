@@ -29,6 +29,9 @@ export const TASK_TITLE_CAP = 200;
 
 /** A turn being read whose claim is older than this is taken over by the next sweep. */
 export const SWEEP_LEASE_MS = 90 * 1000;
+
+/** How long a topic write the server is making holds the topic. */
+export const CLAIM_MS = 90_000;
 /** The window of the ten-minute limit. */
 export const RECENT_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 /** A turn whose reading failed is not tried again by the sweep before this has passed. */
@@ -216,6 +219,11 @@ const forgetMomentsLine = (moments: number) =>
   moments === 0
     ? ''
     : ` ${moments === 1 ? 'Its moment is' : `Its ${moments} moments are`} deleted too.`;
+
+const toTopicPhrase = (count: number, name: string | null) =>
+  count === 1
+    ? `1 change to ${name ?? 'a topic'}`
+    : `${count} changes to topics`;
 
 export const HELM_COPY = {
   homeHint: 'Tap to talk, or type',
@@ -1170,9 +1178,11 @@ export const HELM_COPY = {
       ? 'That changed since.'
       : kind === 'whichTopic'
         ? 'That note or one of those topics was removed.'
-        : kind === 'whichPlace'
-          ? 'That place was removed.'
-          : 'That person was removed.',
+        : kind === 'groupTopics'
+          ? 'Those topics changed since.'
+          : kind === 'whichPlace'
+            ? 'That place was removed.'
+            : 'That person was removed.',
   editUnreadable: "This page couldn't be opened.",
   whoTierTitle: 'How close',
   whoTierHelp: (assistant: string) =>
@@ -1427,6 +1437,24 @@ export const HELM_COPY = {
     ]
       .filter(Boolean)
       .join(' '),
+  undoTopicPhrase: toTopicPhrase,
+  undoTopicChanges: (count: number, name: string | null) =>
+    `Took back ${toTopicPhrase(count, name)}`,
+  undoReportTopics: (
+    count: number,
+    name: string | null,
+    kept: number,
+    gone: number,
+  ) =>
+    [
+      `Took back ${toTopicPhrase(count, name)}.`,
+      kept > 0 ? `Kept ${kept} you changed since.` : '',
+      gone > 0 ? `${gone} ${gone === 1 ? 'was' : 'were'} deleted since.` : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+  undoReportTopicsToo: (count: number, name: string | null) =>
+    `${toTopicPhrase(count, name)} too.`,
   undoReportNoteUnfiled: 'Took the note back out of those topics.',
   tookBackNoteUnfiled: 'Took the note back out of those topics',
   undoReportNotesToo: (count: number) =>
@@ -1782,7 +1810,9 @@ export const HELM_COPY = {
                   ? 'Rearranged'
                   : reason === 'imported'
                     ? 'Brought in from a file'
-                    : 'Restored an earlier version',
+                    : reason === 'sourceRemoved'
+                      ? 'Took out what a removed note said'
+                      : 'Restored an earlier version',
   historyRowLine: (
     version: number,
     when: string,
@@ -1791,6 +1821,7 @@ export const HELM_COPY = {
   ) => `Version ${version} · ${when} · ${byYou ? 'you' : assistant}`,
   historyRestoredFrom: (version: number) => `Back to version ${version}`,
   historyNewest: 'Newest',
+  topicHistoryLine: (when: string, summary: string) => `${when} · ${summary}`,
   historyVersionTitle: (version: number) => `Version ${version}`,
   historyUndo: 'Undo this change',
   historyUndoHint: 'Puts the document back as it was before this.',

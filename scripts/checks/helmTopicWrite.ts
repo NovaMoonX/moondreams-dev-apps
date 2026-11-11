@@ -15,6 +15,7 @@ import {
   SUBMIT_TOPIC_TOOL,
   applyTopicChanges,
   buildChangeSummary,
+  dropGoneSources,
   buildWriteMessage,
   createTopicFixtureProvider,
   decideClaim,
@@ -465,7 +466,7 @@ const note = {
 assert.deepEqual(toNoteSource(note, null), { kind: 'note', noteId: 'n' });
 assert.deepEqual(
   toNoteSource({ ...note, source: 'capture', sourceCaptureId: 'c' }, 5),
-  { kind: 'message', captureId: 'c', at: 5 },
+  { kind: 'message', captureId: 'c', at: 5, noteId: 'n' },
 );
 assert.deepEqual(toNoteSource({ ...note, isFromGeneralAnswer: true }, null), {
   kind: 'general',
@@ -569,18 +570,29 @@ const context = buildContext({
   focusedTopic: {
     id: 'topic-1',
     name: 'Car care',
+    version: 3,
     sections: [
       {
+        id: 'sec-1',
+        writtenBy: 'nomos' as const,
         heading: 'Tyres',
         markdown: 'Front 32 psi.',
         noteIds: ['a1', 'unlisted'],
       },
       {
+        id: 'sec-2',
+        writtenBy: 'nomos' as const,
         heading: 'Huge',
         markdown: 'h'.repeat(MAX_DOC_CHARS + 10),
         noteIds: [],
       },
-      { heading: 'Past the cap', markdown: 'never', noteIds: [] },
+      {
+        id: 'sec-3',
+        writtenBy: 'person' as const,
+        heading: 'Past the cap',
+        markdown: 'never',
+        noteIds: [],
+      },
     ],
   },
 });
@@ -610,6 +622,53 @@ assert.ok(
     timeZone: 'UTC',
     tasks: [],
   }).message.includes('topic_document'),
+);
+
+// A revision may remove a section; a write may not.
+const removing = [
+  change({ kind: 'remove', sectionId: 's1', sectionIds: ['s1'] }),
+];
+assert.ok(codes(removing).length > 0);
+const revised = run(removing, { options: { mode: 'revise' } });
+assert.deepEqual(revised.refusals, []);
+assert.ok(!revised.sections.some((entry) => entry.id === 's1'));
+
+// A person's section is never changed by a revision unless it is named as editable.
+const replacing = [
+  change({ kind: 'replace', sectionId: 'a', markdown: 'Rewritten.' }),
+];
+assert.ok(run(replacing, { options: { mode: 'revise' } }).refusals.length > 0);
+const editable = run(replacing, {
+  options: { mode: 'revise', editablePersonIds: new Set(['a']) },
+});
+assert.deepEqual(editable.refusals, []);
+assert.equal(
+  editable.sections.find((entry) => entry.id === 'a')?.writtenBy,
+  'nomos',
+);
+
+// A section whose only note is gone is taken out in code, one with more stays.
+const withGone = [
+  section('g1', { sources: [noteSource('x')] }),
+  section('g2', { sources: [noteSource('x'), noteSource('y')] }),
+  section('g3', {
+    writtenBy: 'person',
+    sources: [noteSource('x')],
+  }),
+];
+const dropped = dropGoneSources(withGone, new Set(['x']));
+assert.equal(dropped.changed, true);
+assert.deepEqual(
+  dropped.sections.map((entry) => [entry.id, entry.sources.length]),
+  [
+    ['g2', 1],
+    ['g3', 0],
+  ],
+);
+assert.equal(dropGoneSources(withGone, new Set(['z'])).changed, false);
+assert.equal(
+  buildChangeSummary('', 'sourceRemoved', 0),
+  'Took out what a removed note said',
 );
 
 console.log('helm topic write: ok');

@@ -294,6 +294,103 @@ export const buildTopicQuestion = (input: {
   answer: null,
 });
 
+const ADDED_TEXT_CAP = 60;
+
+const joinNames = (names: string[]) =>
+  names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+/** "Added to Car care: Winter tyre size": the heading of the new part, or its first words. */
+export const buildTopicAddedLine = (
+  topicPath: string,
+  heading: string | null,
+  markdown: string,
+) => {
+  const text = (heading ?? markdown).replace(/\s+/g, ' ').trim();
+  return `Added to ${topicPath}: ${
+    text.length > ADDED_TEXT_CAP
+      ? `${text.slice(0, ADDED_TEXT_CAP).trimEnd()}…`
+      : text
+  }`;
+};
+
+/** "Changed Car care: Shortened the opening". */
+export const buildTopicChangedLine = (topicPath: string, summary: string) =>
+  `Changed ${topicPath}: ${summary === '' ? 'Updated the document' : summary}`;
+
+/** "Moved Washing under Car care", or to the top level. */
+export const buildTopicMovedLine = (
+  topicPath: string,
+  parentPath: string | null,
+) =>
+  parentPath === null
+    ? `Moved ${topicPath} to the top level`
+    : `Moved ${topicPath} under ${parentPath}`;
+
+/** "Grouped Washing and Fragrance under Car care". */
+export const buildTopicGroupedLine = (
+  childPaths: string[],
+  parentName: string,
+) => `Grouped ${joinNames(childPaths)} under ${parentName}`;
+
+export const buildTopicBusyLine = (topicPath: string) =>
+  `${topicPath} is being written · Nothing changed`;
+
+export const buildTopicRacedLine = (topicPath: string) =>
+  `${topicPath} changed while this was made · Ask again`;
+
+export const buildTopicUnchangedLine = (topicPath: string) =>
+  `Nothing changed in ${topicPath}`;
+
+export const buildTopicFullLine = (topicPath: string) =>
+  `Not added to ${topicPath} · The document has no more room`;
+
+export const buildTopicNotMovedLine = (
+  refusal: 'unchanged' | 'self' | 'descendant' | 'tooDeep' | 'tooMany',
+  topicPath: string,
+) =>
+  refusal === 'unchanged'
+    ? `${topicPath} is already there`
+    : refusal === 'tooDeep' || refusal === 'tooMany'
+      ? 'Not moved · Topics go three levels deep, with up to 20 subtopics each'
+      : `Not moved · ${topicPath} cannot go inside itself`;
+
+/** "Group Washing and Fragrance under Car care?", written and spoken the same. */
+export const buildGroupPrompt = (childNames: string[], parentName: string) =>
+  `Group ${joinNames(childNames)} under ${parentName}?`;
+
+/** The sealed half of the question asked before a new parent topic is made: yes or not now, with the grouping held until the person answers. */
+export const buildGroupQuestion = (input: {
+  name: string;
+  childIds: string[];
+  childNames: string[];
+}) => ({
+  kind: 'groupTopics' as const,
+  builtBy: 'code' as const,
+  shape: 'yesNo' as const,
+  prompt: buildGroupPrompt(input.childNames, input.name),
+  options: [
+    { id: 'yes', label: 'Group them', detail: null, ref: null },
+    { id: 'no', label: 'Not now', detail: null, ref: null },
+  ],
+  allowsSomethingElse: false,
+  noneOption: false,
+  recordKinds: [],
+  dateMode: null,
+  number: null,
+  heldCommands: [
+    {
+      kind: 'groupTopics',
+      name: input.name,
+      emoji: null,
+      childIds: input.childIds,
+    },
+  ],
+  aboutRef: null,
+  answer: null,
+});
+
 export type PickKind = 'whichPerson' | 'whichPlace';
 
 /** Fixed wording for the "which one?" questions asked when a name fits more than one record. */

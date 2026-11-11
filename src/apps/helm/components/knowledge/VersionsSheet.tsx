@@ -9,15 +9,19 @@ import DetailSheet from '@/components/DetailSheet';
 import MarkdownText from '@/components/MarkdownText';
 import ModalFooterActions from '@/components/ModalFooterActions';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppSelector } from '@/store';
 import { formatDateShort, formatTime } from '@/utils/formatUtils';
 import { HELM_COPY } from '@apps/helm/constants';
 import { useAssistantName } from '@apps/helm/hooks/useAssistantName';
 import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
+import { canUndo } from '@apps/helm/nomos/planUndo';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import {
   restoreTopicVersion,
   type DocumentChange,
 } from '@apps/helm/store/actions/topicActions';
+import { selectExecutionsById } from '@apps/helm/store/selectors/captureSelectors';
+import { takeBack } from '@apps/helm/store/actions/undoActions';
 import type { OpenTopic, OpenTopicVersion } from '@apps/helm/types';
 
 interface VersionsSheetProps {
@@ -31,8 +35,15 @@ const ROW =
 
 const whenOf = (at: number) => `${formatDateShort(at)}, ${formatTime(at)}`;
 
+const SUMMARY_REASONS = [
+  'personEdit',
+  'revisedOnRequest',
+  'sourceRemoved',
+  'addedFromSource',
+];
+
 const rowTitle = (entry: OpenTopicVersion) =>
-  entry.reason === 'personEdit' && entry.changeSummary
+  SUMMARY_REASONS.includes(entry.reason) && entry.changeSummary
     ? entry.changeSummary
     : HELM_COPY.historyReason(entry.reason);
 
@@ -52,6 +63,7 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
   const { addToast } = useToast();
   const assistant = useAssistantName();
   const { versions, hasFailed } = useTopicVersions(topic.id);
+  const executionsById = useAppSelector(selectExecutionsById);
   const [openVersion, setOpenVersion] = useState<number | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const opened =
@@ -94,9 +106,42 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
     setIsBusy(false);
   };
 
+  const takeBackTurn = async (executionId: string, summary: string) => {
+    if (!user || isBusy) return;
+    setIsBusy(true);
+    try {
+      const result = await takeBack(user.uid, executionId);
+      if (result.kind === 'done') {
+        setOpenVersion(null);
+        addToast({ title: HELM_COPY.historyUndone(summary), type: 'success' });
+      } else {
+        addToast({
+          title:
+            result.kind === 'offline'
+              ? HELM_COPY.historyNeedsConnection
+              : result.reason === 'unreadable'
+                ? HELM_COPY.historyRestoreFailed
+                : HELM_COPY.historyChanged,
+          type: 'info',
+        });
+      }
+    } catch (error) {
+      console.error('Helm topic move was not taken back', error);
+      addToast({ title: HELM_COPY.historyRestoreFailed, type: 'error' });
+    }
+    setIsBusy(false);
+  };
+
   const isNewest = opened !== null && opened.version === topic.version;
   const isFirst = opened !== null && opened.version === 1;
   const canChange = opened !== null && opened.version <= topic.version;
+  const turn =
+    isNewest &&
+    (opened.reason === 'moved' || opened.reason === 'grouped') &&
+    opened.executionId
+      ? executionsById.get(opened.executionId)
+      : undefined;
+  const turnId = turn && canUndo(turn) ? turn.id : null;
 
   return (
     <DetailSheet
@@ -127,10 +172,12 @@ function VersionsBody({ topic, onClose }: Omit<VersionsSheetProps, 'isOpen'>) {
                   variant='secondary'
                   loading={isBusy}
                   onClick={() =>
-                    void change(
-                      isNewest ? opened.version - 1 : opened.version,
-                      isNewest ? rowTitle(opened) : null,
-                    )
+                    void (turnId
+                      ? takeBackTurn(turnId, rowTitle(opened))
+                      : change(
+                          isNewest ? opened.version - 1 : opened.version,
+                          isNewest ? rowTitle(opened) : null,
+                        ))
                   }
                 >
                   {isNewest

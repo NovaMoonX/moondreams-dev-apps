@@ -62,6 +62,7 @@ const toSource = (value: unknown): TopicSource[] => {
         kind,
         captureId: source.captureId,
         at: typeof source.at === 'number' ? source.at : 0,
+        noteId: toText(source.noteId),
       },
     ];
   if (kind === 'file' && typeof source.mediaId === 'string')
@@ -194,13 +195,14 @@ async function openVersion(
   }
 }
 
-/** One topic's versions, newest first. Started only while History is open. */
+/** One topic's versions, newest first, up to `max`. Started only while History or the topic's own page is open. */
 export function startTopicVersionsListener(
   uid: string,
   topicId: string,
   read: SealedReader,
   onChange: (versions: OpenTopicVersion[]) => void,
   onError: (error: Error) => void,
+  max: number = TOPIC_VERSIONS_LIMIT,
 ): Unsubscribe {
   const sequence = { latest: 0 };
   const run = { isStopped: false };
@@ -218,7 +220,7 @@ export function startTopicVersionsListener(
         'versions',
       ),
       orderBy('version', 'desc'),
-      limit(TOPIC_VERSIONS_LIMIT),
+      limit(max),
     ),
     async (snapshot) => {
       sequence.latest += 1;

@@ -16,6 +16,7 @@ import { db } from '@lib/firebase/config';
 
 import { generateUuid } from '@/utils';
 import {
+  CLAIM_MS,
   HELM_COPY,
   NOTE_TOPICS_MAX,
   SECTION_HEADING_MAX,
@@ -470,8 +471,6 @@ export interface SectionWords {
   markdown: string;
 }
 
-export const CLAIM_MS = 90_000;
-
 interface VersionPlan {
   sections: TopicSection[];
   reason: TopicVersion['reason'];
@@ -480,6 +479,40 @@ interface VersionPlan {
 }
 
 type VersionStep = VersionPlan | Exclude<DocumentChange, 'saved' | 'offline'>;
+
+/** A topic's version document as the person's device writes it: made by the person, holding every part of the document at that version. */
+export async function buildVersionDoc(
+  encryption: HelmEncryption,
+  input: {
+    version: number;
+    sections: TopicSection[];
+    reason: TopicVersion['reason'];
+    restoredFromVersion: number | null;
+    changeSummary: string;
+    executionId: string | null;
+    now: number;
+  },
+): Promise<TopicVersion> {
+  return {
+    version: input.version,
+    restoredFromVersion: input.restoredFromVersion,
+    createdBy: 'person',
+    reason: input.reason,
+    noteIds: [],
+    sourceCaptureId: null,
+    executionId: input.executionId,
+    createdAt: input.now,
+    sealed: await sealJson<TopicVersionSealed>(
+      {
+        sections: input.sections,
+        changeSummary: input.changeSummary.slice(0, 200),
+        requestQuote: null,
+        parentName: null,
+      },
+      encryption,
+    ),
+  };
+}
 
 const documentLength = (sections: TopicSection[]) =>
   sections.reduce((total, section) => total + section.markdown.length, 0);
@@ -540,25 +573,18 @@ async function writeVersion(
           version,
           lastEditedAt: now,
         });
-        transaction.set(doc(ref, 'versions', String(version)), {
-          version,
-          restoredFromVersion: step.restoredFromVersion,
-          createdBy: 'person',
-          reason: step.reason,
-          noteIds: [],
-          sourceCaptureId: null,
-          executionId: null,
-          createdAt: now,
-          sealed: await sealJson<TopicVersionSealed>(
-            {
-              sections: step.sections,
-              changeSummary: step.changeSummary.slice(0, 200),
-              requestQuote: null,
-              parentName: null,
-            },
-            encryption,
-          ),
-        } satisfies TopicVersion);
+        transaction.set(
+          doc(ref, 'versions', String(version)),
+          await buildVersionDoc(encryption, {
+            version,
+            sections: step.sections,
+            reason: step.reason,
+            restoredFromVersion: step.restoredFromVersion,
+            changeSummary: step.changeSummary,
+            executionId: null,
+            now,
+          }),
+        );
         return 'saved';
       },
     );

@@ -15,8 +15,11 @@ interface TopicVersions {
   hasFailed: boolean;
 }
 
-/** Listens to one topic's versions for as long as the caller is mounted: mount it only while History is open. */
-export function useTopicVersions(topicId: string): TopicVersions {
+/** Listens to one topic's newest versions (every one by default) for as long as the caller is mounted; a null topic listens to nothing. */
+export function useTopicVersions(
+  topicId: string | null,
+  max?: number,
+): TopicVersions {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const [state, setState] = useState<TopicVersions>({
@@ -25,7 +28,7 @@ export function useTopicVersions(topicId: string): TopicVersions {
   });
 
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !topicId) return;
     const run = { isStopped: false, stop: null as Unsubscribe | null };
     const fail = (error: unknown) => {
       console.error('Helm topic history failed', error);
@@ -40,6 +43,7 @@ export function useTopicVersions(topicId: string): TopicVersions {
           createSealedReader(encryption, openJson),
           (versions) => setState({ versions, hasFailed: false }),
           fail,
+          max,
         );
       })
       .catch(fail);
@@ -47,7 +51,7 @@ export function useTopicVersions(topicId: string): TopicVersions {
       run.isStopped = true;
       run.stop?.();
     };
-  }, [uid, topicId]);
+  }, [uid, topicId, max]);
 
   return state;
 }

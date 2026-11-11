@@ -1,4 +1,5 @@
 import type { TerminalTool } from '../../../ai/modelProvider.js';
+import { toComparable } from '../../../vendor/optionMatchUtils.js';
 import type { HeldReason } from '../aiLimits.js';
 
 export type Route = 'quick' | 'full';
@@ -20,18 +21,42 @@ export const isQuestion = (text: string) =>
       .replace(/[^\p{L}']/gu, ''),
   );
 
+const REVISE_CUES = new Set([
+  'shorter',
+  'shorten',
+  'rewrite',
+  'reword',
+  'tidy',
+  'simplify',
+  'remove',
+  'cut',
+  'trim',
+  'change',
+  'intro',
+  'introduction',
+]);
+
+/** Whether the words ask to change a document: one of the cue words, as a word of its own. */
+export const hasReviseCue = (text: string) =>
+  toComparable(text)
+    .split(' ')
+    .some((word) => REVISE_CUES.has(word));
+
 /** Short plain turns go to the quick model; a question, a long turn and "sort the rest" go to the full one. The answer to a question the assistant asked is always quick: the question already says what is wanted. */
 export const pickRoute = ({
   text,
   mode,
   isAnswer = false,
+  hasTopicFocus = false,
 }: {
   text: string;
   mode: 'full' | 'rest';
   isAnswer?: boolean;
+  hasTopicFocus?: boolean;
 }): Route => {
   const trimmed = text.trim();
   if (isAnswer && mode === 'full') return 'quick';
+  if (hasTopicFocus && mode === 'full' && hasReviseCue(trimmed)) return 'full';
   return mode === 'full' &&
     trimmed.length <= MAX_QUICK_CHARS &&
     !isQuestion(trimmed)

@@ -1,4 +1,7 @@
-import { toComparable } from '../../../vendor/optionMatchUtils.js';
+import {
+  createOptionMatcher,
+  toComparable,
+} from '../../../vendor/optionMatchUtils.js';
 import type { AliasBook, QuoteBook, SyncedBook } from './aliases.js';
 import { ASK_WORDS } from './summaries.js';
 import {
@@ -21,6 +24,12 @@ import {
   MAX_COMMANDS,
   MAX_NOTED_FACTS,
   MAX_NOTES_PER_TURN,
+  TOPIC_COMMAND_KINDS,
+  MAX_PARENT_CHILDREN,
+  MAX_TOPIC_ADD_CHARS,
+  MAX_TOPIC_ADDS_PER_TURN,
+  MIN_PARENT_CHILDREN,
+  PARENT_NAME_CAP,
   NOTE_BODY_CAP,
   NOTE_TITLE_CAP,
   NOTE_TOPICS_CAP,
@@ -51,6 +60,7 @@ import {
   type AnswerCommand,
   type CaptureReading,
   type CreateNoteCommand,
+  type TopicCommand,
   type MentionRead,
   type NoteFactCommand,
   type PlaceRead,
@@ -62,6 +72,7 @@ import {
   type TaskDue,
 } from './commands.js';
 import { getDayIn, toKnownZone } from './spoken.js';
+import type { ModelChange } from '../topicWrite.js';
 
 const DAY_MS = 86_400_000;
 
@@ -119,6 +130,16 @@ const KNOWN_KEYS = new Set([
   'roleNote',
   'bodyQuote',
   'topicAliases',
+  'topicAlias',
+  'parentAlias',
+  'childAliases',
+  'noteRef',
+  'afterSectionAlias',
+  'heading',
+  'markdown',
+  'changeSummary',
+  'requestQuote',
+  'topicChanges',
   'shape',
   'prompt',
   'options',
@@ -312,60 +333,74 @@ const readNoteFact = (
 
 export type NoteDrop = 'notInCapture' | 'isFact';
 
+const readNote = (
+  item: Record<string, unknown>,
+  topics: AliasBook | undefined,
+  captureText: string | undefined,
+  captureWords: string,
+  spoken: Set<string>,
+): CreateNoteCommand | NoteDrop => {
+  const words =
+    typeof item.bodyQuote === 'string'
+      ? item.bodyQuote.trim().slice(0, NOTE_BODY_CAP)
+      : '';
+  if (
+    !words ||
+    (captureText !== undefined &&
+      !captureWords.includes(` ${toComparable(words)} `))
+  ) {
+    return 'notInCapture';
+  }
+  if (spoken.has(toComparable(words))) return 'isFact';
+  const firstLine = words.split('\n').find((line) => line.trim()) ?? words;
+  return {
+    kind: 'createNote',
+    title:
+      toText(item.title, NOTE_TITLE_CAP) ??
+      cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
+    body: words,
+    topicIds: [
+      ...new Set(
+        (Array.isArray(item.topicAliases) ? item.topicAliases : []).flatMap(
+          (alias: unknown) => {
+            const id = typeof alias === 'string' ? topics?.idOf(alias) : null;
+            return id ? [id] : [];
+          },
+        ),
+      ),
+    ].slice(0, NOTE_TOPICS_CAP),
+  };
+};
+
 /** A note to keep: its words must be a span of the capture, its topics only ones the person has, and it is dropped when it is only the words of a fact or date said in the same turn. */
 const readNotes = (
   items: Record<string, unknown>[],
   topics: AliasBook | undefined,
   captureText: string | undefined,
   said: string[],
-): { notes: CreateNoteCommand[]; dropped: NoteDrop[] } => {
+): { notes: CreateNoteCommand[]; dropped: NoteDrop[]; itemNos: number[] } => {
   const spoken = new Set(said.map((text) => toComparable(text)));
   const captureWords = ` ${toComparable(captureText ?? '')} `;
   const read = items
     .filter((item) => item.kind === 'createNote')
-    .map((item): CreateNoteCommand | NoteDrop => {
-      const words =
-        typeof item.bodyQuote === 'string'
-          ? item.bodyQuote.trim().slice(0, NOTE_BODY_CAP)
-          : '';
-      if (
-        !words ||
-        (captureText !== undefined &&
-          !captureWords.includes(` ${toComparable(words)} `))
-      ) {
-        return 'notInCapture';
-      }
-      if (spoken.has(toComparable(words))) return 'isFact';
-      const firstLine = words.split('\n').find((line) => line.trim()) ?? words;
-      return {
-        kind: 'createNote',
-        title:
-          toText(item.title, NOTE_TITLE_CAP) ??
-          cutAtWord(firstLine.replace(/\s+/g, ' ').trim(), NOTE_TITLE_CAP),
-        body: words,
-        topicIds: [
-          ...new Set(
-            (Array.isArray(item.topicAliases) ? item.topicAliases : []).flatMap(
-              (alias: unknown) => {
-                const id =
-                  typeof alias === 'string' ? topics?.idOf(alias) : null;
-                return id ? [id] : [];
-              },
-            ),
-          ),
-        ].slice(0, NOTE_TOPICS_CAP),
-      };
-    });
+    .map((item, position) => ({
+      entry: readNote(item, topics, captureText, captureWords, spoken),
+      no: position + 1,
+    }));
+  const kept = read
+    .filter(
+      (row): row is { entry: CreateNoteCommand; no: number } =>
+        typeof row.entry !== 'string',
+    )
+    .slice(0, MAX_NOTES_PER_TURN);
   return {
-    notes: read
-      .filter((entry): entry is CreateNoteCommand => typeof entry !== 'string')
-      .slice(0, MAX_NOTES_PER_TURN),
-    dropped: read.filter(
-      (entry): entry is NoteDrop => typeof entry === 'string',
+    notes: kept.map((row) => row.entry),
+    itemNos: kept.map((row) => row.no),
+    dropped: read.flatMap((row) =>
+      typeof row.entry === 'string' ? [row.entry] : [],
     ),
   };
 };
-
 const MONTH_WORD_RE =
   /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b/i;
 const YEAR_WORD_RE = /(?<!\d)(?:19|20)\d{2}(?!\d)/;
@@ -956,6 +991,233 @@ const readCommand = (
   return { kind, taskId, title, due, hasDue, isUrgent, ...links };
 };
 
+export type TopicDrop =
+  | 'topic-add-unpaired'
+  | 'topic-add-unplaced'
+  | 'topic-add-long'
+  | 'topic-add-extra'
+  | 'topic-revise-unasked'
+  | 'topic-revise-unseen'
+  | 'topic-revise-empty'
+  | 'topic-move-unresolved'
+  | 'topic-group-unresolved';
+
+const GROUP_VERBS = new Set(['put', 'group', 'move']);
+const NAME_WINDOW = 4;
+
+/** Whether the words name a topic: its name, or a close spelling of it, as a run of the turn's own words. */
+export const isNamedIn = (text: string, name: string) => {
+  const words = toComparable(text).split(' ').filter(Boolean).slice(0, 400);
+  const matcher = createOptionMatcher<string>();
+  return words.some((_, start) =>
+    Array.from({ length: NAME_WINDOW }, (__, size) =>
+      words.slice(start, start + size + 1).join(' '),
+    ).some((run) => matcher.match(run, [name]) !== null),
+  );
+};
+
+/** Whether the person asked to group topics: a grouping verb, and either the new parent's name or every child's name in the same words. */
+export const isGroupingAsked = (
+  text: string,
+  name: string,
+  childNames: string[],
+) => {
+  const comparable = toComparable(text);
+  const hasVerb =
+    comparable.split(' ').some((word) => GROUP_VERBS.has(word)) ||
+    /\bmake a topic (of|for|from)\b/.test(comparable);
+  return (
+    hasVerb &&
+    (isNamedIn(text, name) ||
+      (childNames.length > 0 &&
+        childNames.every((childName) => isNamedIn(text, childName))))
+  );
+};
+
+interface TopicReadContext {
+  topics?: AliasBook;
+  sections?: AliasBook;
+  topicNames?: Map<string, string>;
+  focusedTopicId?: string | null;
+  topicVersions?: Map<string, number>;
+  captureText?: string;
+  notes: CreateNoteCommand[];
+  noteItemNos: number[];
+}
+
+const toChange = (
+  item: unknown,
+  sections: AliasBook | undefined,
+): ModelChange => {
+  const raw = (isRecord(item) ? item : {}) as Record<string, unknown>;
+  const idOf = (alias: unknown) =>
+    typeof alias === 'string' ? (sections?.idOf(alias) ?? '') : '';
+  return {
+    kind: typeof raw.kind === 'string' ? raw.kind : '',
+    sectionId: raw.sectionAlias == null ? null : idOf(raw.sectionAlias),
+    sectionIds: Array.isArray(raw.sectionAliases)
+      ? raw.sectionAliases.map(idOf)
+      : [],
+    afterSectionId: null,
+    heading: typeof raw.heading === 'string' ? raw.heading : null,
+    level: typeof raw.level === 'number' ? raw.level : null,
+    markdown: typeof raw.markdown === 'string' ? raw.markdown : null,
+    noteIds: [],
+  };
+};
+
+/** The topic commands of a reply, each checked against the turn: a part is added only from a note the turn makes into the same topic, a revision only on words that ask for it, a parent only when asked and otherwise passed on as a proposal. Every drop is named. */
+const readTopicCommands = (
+  items: Record<string, unknown>[],
+  context: TopicReadContext,
+): { commands: TopicCommand[]; dropped: TopicDrop[] } => {
+  const text = context.captureText ?? '';
+  const captureWords = ` ${toComparable(text)} `;
+  const names = context.topicNames ?? new Map<string, string>();
+  const topicOf = (alias: unknown) =>
+    typeof alias === 'string' ? (context.topics?.idOf(alias) ?? null) : null;
+  const rows = items.flatMap((item) =>
+    (TOPIC_COMMAND_KINDS as readonly unknown[]).includes(item.kind)
+      ? [item]
+      : [],
+  );
+  const read = rows.reduce<{
+    commands: TopicCommand[];
+    dropped: TopicDrop[];
+  }>(
+    (acc, item) => {
+      const drop = (code: TopicDrop) => ({
+        ...acc,
+        dropped: [...acc.dropped, code],
+      });
+      const keep = (command: TopicCommand) => ({
+        ...acc,
+        commands: [...acc.commands, command],
+      });
+      const topicId = topicOf(item.topicAlias);
+      if (item.kind === 'addToTopic') {
+        const no = Number(
+          typeof item.noteRef === 'string'
+            ? item.noteRef.match(/^\$note(\d+)$/)?.[1]
+            : NaN,
+        );
+        const at = context.noteItemNos.indexOf(no);
+        const note = at >= 0 ? context.notes[at] : undefined;
+        const markdown =
+          typeof item.markdown === 'string' ? item.markdown.trim() : '';
+        const adds = acc.commands.filter((c) => c.kind === 'addToTopic');
+        if (
+          !topicId ||
+          !note ||
+          note.topicIds.length !== 1 ||
+          note.topicIds[0] !== topicId ||
+          markdown === ''
+        ) {
+          return drop('topic-add-unpaired');
+        }
+        if (markdown.length > MAX_TOPIC_ADD_CHARS)
+          return drop('topic-add-long');
+        if (
+          adds.length >= MAX_TOPIC_ADDS_PER_TURN ||
+          adds.some((add) => add.topicId === topicId)
+        ) {
+          return drop('topic-add-extra');
+        }
+        const after =
+          typeof item.afterSectionAlias === 'string'
+            ? (context.sections?.idOf(item.afterSectionAlias) ?? null)
+            : null;
+        if (typeof item.afterSectionAlias === 'string' && after === null) {
+          return drop('topic-add-unplaced');
+        }
+        return keep({
+          kind: 'addToTopic',
+          topicId,
+          noteIndex: at,
+          afterSectionId: after,
+          heading: toText(item.heading, 80),
+          markdown,
+        });
+      }
+      if (item.kind === 'reviseTopic') {
+        const quote =
+          typeof item.requestQuote === 'string' ? item.requestQuote.trim() : '';
+        const isQuoted =
+          quote !== '' &&
+          captureWords.includes(` ${toComparable(quote)} `) &&
+          toComparable(quote) !== '';
+        const name = topicId ? names.get(topicId) : undefined;
+        const isAsked =
+          topicId !== null &&
+          (topicId === context.focusedTopicId ||
+            (name !== undefined && isNamedIn(text, name)));
+        if (!topicId || !isQuoted || !isAsked) {
+          return drop('topic-revise-unasked');
+        }
+        const seen = context.topicVersions?.get(topicId);
+        const changes = (
+          Array.isArray(item.topicChanges) ? item.topicChanges : []
+        ).map((change) => toChange(change, context.sections));
+        if (seen === undefined) return drop('topic-revise-unseen');
+        if (
+          changes.length === 0 ||
+          acc.commands.some((command) => command.kind === 'reviseTopic')
+        ) {
+          return drop('topic-revise-empty');
+        }
+        return keep({
+          kind: 'reviseTopic',
+          topicId,
+          changes,
+          changeSummary: (toText(item.changeSummary, 200) ?? '').trim(),
+          requestQuote: quote,
+          seenVersion: seen,
+        });
+      }
+      if (item.kind === 'moveTopic') {
+        const parentId =
+          item.parentAlias == null ? null : topicOf(item.parentAlias);
+        if (!topicId || (item.parentAlias != null && !parentId)) {
+          return drop('topic-move-unresolved');
+        }
+        return parentId === topicId
+          ? drop('topic-move-unresolved')
+          : keep({ kind: 'moveTopic', topicId, parentId });
+      }
+      const name = toText(item.title, PARENT_NAME_CAP);
+      const childIds = [
+        ...new Set(
+          (Array.isArray(item.childAliases) ? item.childAliases : []).flatMap(
+            (alias: unknown) => {
+              const id = topicOf(alias);
+              return id ? [id] : [];
+            },
+          ),
+        ),
+      ];
+      if (
+        !name ||
+        childIds.length < MIN_PARENT_CHILDREN ||
+        childIds.length > MAX_PARENT_CHILDREN
+      ) {
+        return drop('topic-group-unresolved');
+      }
+      return keep({
+        kind: 'createParentTopic',
+        name,
+        childIds,
+        isAsked: isGroupingAsked(
+          text,
+          name,
+          childIds.map((id) => names.get(id) ?? ''),
+        ),
+      });
+    },
+    { commands: [], dropped: [] },
+  );
+  return read;
+};
+
 const toKey = (title: string) => title.trim().toLowerCase();
 
 const hasEveryToken = (
@@ -990,6 +1252,13 @@ export function normalizeNomosReply(
     topics?: AliasBook;
     notes?: AliasBook;
     parts?: AliasBook;
+    /** The open topic's parts, by alias. */
+    sections?: AliasBook;
+    /** Each topic's name, for deciding whether the turn names it. */
+    topicNames?: Map<string, string>;
+    focusedTopicId?: string | null;
+    /** The version of each topic whose document the model read. */
+    topicVersions?: Map<string, number>;
     /** The words of the turn, which a note's words must come from. */
     captureText?: string;
     quotes?: QuoteBook;
@@ -1007,6 +1276,8 @@ export function normalizeNomosReply(
   keyDates: KeyDateCommand[];
   projects: ProjectCommand[];
   notes: CreateNoteCommand[];
+  topicCommands: TopicCommand[];
+  topicDropped: TopicDrop[];
   planDay: PlanDayCommand | null;
   setCurrentPlace: SetCurrentPlaceCommand | null;
   asks: AskCommand[];
@@ -1064,16 +1335,28 @@ export function normalizeNomosReply(
       return read ? [read] : [];
     })
     .slice(0, MAX_KEY_DATES);
-  const { notes, dropped: noteDropped } = readNotes(
+  const {
+    notes,
+    dropped: noteDropped,
+    itemNos: noteItemNos,
+  } = readNotes(items, context.topics, context.captureText, [
+    ...noteFacts.flatMap((fact) => [fact.statement, fact.quote ?? '']),
+    ...keyDates.flatMap((date) =>
+      date.kind === 'setKeyDate' ? [date.quote ?? ''] : [],
+    ),
+  ]);
+  const { commands: topicCommands, dropped: topicDropped } = readTopicCommands(
     items,
-    context.topics,
-    context.captureText,
-    [
-      ...noteFacts.flatMap((fact) => [fact.statement, fact.quote ?? '']),
-      ...keyDates.flatMap((date) =>
-        date.kind === 'setKeyDate' ? [date.quote ?? ''] : [],
-      ),
-    ],
+    {
+      topics: context.topics,
+      sections: context.sections,
+      topicNames: context.topicNames,
+      focusedTopicId: context.focusedTopicId,
+      topicVersions: context.topicVersions,
+      captureText: context.captureText,
+      notes,
+      noteItemNos,
+    },
   );
   const projects = readProjects(
     items,
@@ -1121,6 +1404,8 @@ export function normalizeNomosReply(
     keyDates,
     projects,
     notes,
+    topicCommands,
+    topicDropped,
     planDay,
     setCurrentPlace: items.some(
       (item) => item.kind === 'setCurrentPlace' && item.place === 'home',

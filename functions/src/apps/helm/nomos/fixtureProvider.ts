@@ -1212,6 +1212,122 @@ interface ListedTopic {
 
 const stemOf = (word: string) => word.toLowerCase().slice(0, 4);
 
+interface TopicDocBlock {
+  topic: string;
+  sections: { section: string; writtenBy: 'nomos' | 'person' }[];
+}
+
+const toTopicCommand = (fields: Record<string, unknown>) =>
+  toAnswer({
+    isHealth: null,
+    topicAlias: null,
+    parentAlias: null,
+    childAliases: [],
+    noteRef: null,
+    afterSectionAlias: null,
+    heading: null,
+    markdown: null,
+    changeSummary: null,
+    requestQuote: null,
+    topicChanges: [],
+    ...fields,
+  });
+
+const topicNamed = (topics: ListedTopic[], words: string) =>
+  topics.find((topic) =>
+    words.toLowerCase().includes(topic.name.toLowerCase()),
+  );
+
+/** The emulator's stand-in for the four ways a topic grows: a fact said about a topic, "make the intro shorter" on an open topic, "put Washing under Car care", and "Running and Stretching could go under Fitness". Null for any other words. */
+const readTopicWork = (text: string, message: string) => {
+  const topics = readBlock<ListedTopic[]>(message, 'your_topics') ?? [];
+  const document = readBlock<TopicDocBlock>(message, 'topic_document');
+  const body = text.trim().replace(/[.!]+$/, '');
+  const tyres = topicNamed(topics, 'car care');
+  if (/\bwinter tyres? are\b/i.test(text) && tyres) {
+    return {
+      commands: [
+        toAnswer({
+          kind: 'createNote',
+          title: upperFirst(body),
+          bodyQuote: body,
+          topicAliases: [tyres.alias],
+          isHealth: null,
+        }),
+        toTopicCommand({
+          kind: 'addToTopic',
+          topicAlias: tyres.alias,
+          noteRef: '$note1',
+          heading: 'Winter tyre size',
+          markdown: `${upperFirst(body)}.`,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const first = document?.sections.find((entry) => entry.writtenBy === 'nomos');
+  if (/\bmake the intro shorter\b/i.test(text) && document && first) {
+    return {
+      commands: [
+        toTopicCommand({
+          kind: 'reviseTopic',
+          topicAlias: document.topic,
+          requestQuote: 'make the intro shorter',
+          changeSummary: 'Shortened the intro',
+          topicChanges: [
+            {
+              kind: 'replace',
+              sectionAlias: first.section,
+              sectionAliases: [],
+              afterSectionAlias: null,
+              heading: 'Intro',
+              level: 2,
+              markdown: 'A shorter intro.',
+            },
+          ],
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const move = /\bput (.+?) under (.+?)[.!]*$/i.exec(text);
+  const moved = move ? topicNamed(topics, move[1]) : undefined;
+  const under = move ? topicNamed(topics, move[2]) : undefined;
+  if (moved && under) {
+    return {
+      commands: [
+        toTopicCommand({
+          kind: 'moveTopic',
+          topicAlias: moved.alias,
+          parentAlias: under.alias,
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  const group = /^(.+?) and (.+?) could go under (.+?)[.!]*$/i.exec(text);
+  const children = group
+    ? [topicNamed(topics, group[1]), topicNamed(topics, group[2])]
+    : [];
+  if (group && children.every((child) => child)) {
+    return {
+      commands: [
+        toTopicCommand({
+          kind: 'createParentTopic',
+          title: upperFirst(group[3].trim()),
+          childAliases: children.map((child) => child?.alias),
+        }),
+      ],
+      mentions: [],
+      places: [],
+    };
+  }
+  return null;
+};
+
 /** The emulator's stand-in for "remember that cakes keep 3 days in the fridge" or "note: the wifi at the cabin is …": one createNote of the words after the lead, filed under every topic whose name shares its first four letters with a word of them (or that a few kitchen words stand for). Null for any other words. */
 const readNote = (text: string, message: string) => {
   const match = LEAD_RE.exec(text);
@@ -1293,6 +1409,17 @@ export function createFixtureProvider(
       if (followUp) {
         return {
           terminalInput: { commands: followUp },
+          terminalName: 'file_results',
+          endedBy: 'terminal',
+          errorCode: null,
+          usage: EMPTY_USAGE,
+          toolCalls: [],
+        };
+      }
+      const grown = readTopicWork(text, messages[0]?.content ?? '');
+      if (grown) {
+        return {
+          terminalInput: grown,
           terminalName: 'file_results',
           endedBy: 'terminal',
           errorCode: null,

@@ -12,6 +12,7 @@ import SectionDivider from '@/components/SectionDivider';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { store, useAppSelector } from '@/store';
+import { formatDateShort } from '@/utils/formatUtils';
 import NoteForm from '@apps/helm/components/knowledge/NoteForm';
 import NoteRow from '@apps/helm/components/knowledge/NoteRow';
 import NoteSheet from '@apps/helm/components/knowledge/NoteSheet';
@@ -22,15 +23,15 @@ import TopicMoveSheet from '@apps/helm/components/knowledge/TopicMoveSheet';
 import TopicRow from '@apps/helm/components/knowledge/TopicRow';
 import VersionsSheet from '@apps/helm/components/knowledge/VersionsSheet';
 import HelmHeader from '@apps/helm/components/shell/HelmHeader';
-import { HELM_COPY } from '@apps/helm/constants';
+import { CLAIM_MS, HELM_COPY } from '@apps/helm/constants';
 import { useScreenContext } from '@apps/helm/hooks/useScreenContext';
+import { useTopicVersions } from '@apps/helm/hooks/useTopicVersions';
 import {
   getTopicWriteState,
   subscribeTopicWrites,
   writeTopic,
 } from '@apps/helm/queries/nomosMutations';
 import {
-  CLAIM_MS,
   deleteTopic,
   isUnavailable,
   moveTopic,
@@ -133,6 +134,16 @@ function TopicScreen({
     'page',
     topic?.id ?? null,
   );
+
+  const { versions: newestVersions } = useTopicVersions(topic?.id ?? null, 1);
+  const newest = newestVersions?.[0] ?? null;
+  const historyLine =
+    topic && newest && newest.version === topic.version
+      ? HELM_COPY.topicHistoryLine(
+          formatDateShort(newest.createdAt),
+          newest.changeSummary || HELM_COPY.historyReason(newest.reason),
+        )
+      : null;
 
   const now = useNow(15_000);
   const isStaleClaim =
@@ -385,6 +396,17 @@ function TopicScreen({
               <p className='text-muted-foreground text-[13px]'>
                 {HELM_COPY.topicCountLine(subtopicList.length, notes.length)}
               </p>
+              {historyLine && (
+                <Button
+                  type='button'
+                  variant='tertiary'
+                  size='sm'
+                  className="text-muted-foreground relative block h-auto max-w-full min-w-0 px-0 py-0 text-left text-[13px] font-normal before:absolute before:-inset-x-1 before:-inset-y-2 before:content-['']"
+                  onClick={() => setIsHistoryOpen(true)}
+                >
+                  <span className='block truncate'>{historyLine}</span>
+                </Button>
+              )}
             </div>
             {status && (
               <div className='helm-card flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5'>

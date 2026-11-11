@@ -21,6 +21,7 @@ import {
   type PlaceRead,
   type ProjectCommand,
   type TaskDue,
+  type TopicCommand,
 } from './commands.js';
 import {
   matchProject,
@@ -34,6 +35,13 @@ import {
   type KnownPlace,
   type KnownWho,
 } from './matchEntities.js';
+import {
+  planTopicCommands,
+  type PlacedTopic,
+  type PlannedVersion,
+} from './planTopicCommands.js';
+import { toNoteSource } from '../topicWrite.js';
+import type { LiveTopic } from '../topicVersionStore.js';
 import { readWhoTier, type WhoTierValue } from './whoTier.js';
 import { planKeyDates, type KeyDateRecord } from './planKeyDates.js';
 import type { ByWho } from '../keyDateIndex.js';
@@ -156,7 +164,7 @@ export interface KeptNote {
 /** A line of the turn's card that is no change to a record, with the record it opens. */
 export interface ResultNote {
   text: string;
-  ref: { collection: 'notes'; id: string };
+  ref: { collection: 'notes' | 'topics'; id: string };
 }
 
 /** A topic a note was filed under: it falls behind, with the note waiting to be written in. */
@@ -194,6 +202,13 @@ export interface WritePlan {
   projectUpdates: { id: string; data: Record<string, unknown> }[];
   noteCreates: { id: string; data: Record<string, unknown> }[];
   topicUpdates: TopicFiling[];
+  /** The versions the turn writes for topics, each with the placement it carries. */
+  topicVersions: PlannedVersion[];
+  /** Topics moved with no version of their own: only their place in the tree changes. */
+  topicPlacements: { id: string; parentId: string | null; depth: number }[];
+  topicCreates: { id: string; data: Record<string, unknown> }[];
+  /** Revisions whose topic changed after the model read it. */
+  topicRetry: number;
   /** Notes kept, and the line said aloud for them. */
   notesMade: number;
   spokenNote: string | null;
@@ -207,6 +222,8 @@ export interface WritePlan {
   keyDateIndex: { byWho: ByWho; entryCount: number } | null;
   /** One line for each private detail the turn did not keep. */
   notKept: string[];
+  /** The result line of each change the turn made to a topic. */
+  topicLines: string[];
   /** Every person, pet or organization and place the turn linked, matched or made. */
   linkedWhoIds: string[];
   linkedPlaceIds: string[];
@@ -269,6 +286,13 @@ interface PlanInput {
   /** The notes the device ranked for the words, opened. */
   keptNotes?: KeptNote[];
   noteCount?: number;
+  topicCommands?: TopicCommand[];
+  /** The topics the topic commands name, opened as the transaction read them. */
+  liveTopics?: Map<string, LiveTopic>;
+  /** Every topic's place in the tree, for a move or a grouping. */
+  topicTree?: PlacedTopic[];
+  /** When the capture was said, which a note's mark in a document carries. */
+  capturedAt?: number;
 }
 
 interface Draft {
@@ -1015,7 +1039,42 @@ export function planWrites(input: PlanInput): WritePlan {
   keyDatePlan.effects.forEach(({ ref, effect }) =>
     record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
   );
-  const noteSteps = (input.notes ?? []).slice(0, MAX_NOTES_PER_TURN).reduce<{
+  const turnNotes = (input.notes ?? []).slice(0, MAX_NOTES_PER_TURN);
+  const noteIds = turnNotes.map(() => input.newId());
+  const topicInput = {
+    commands: input.topicCommands ?? [],
+    topics: input.liveTopics ?? new Map<string, LiveTopic>(),
+    tree: input.topicTree ?? [],
+    notes: turnNotes.map((note, index) => ({
+      id: noteIds[index],
+      title: note.title,
+      topicIds: note.topicIds,
+      source: toNoteSource(
+        {
+          id: noteIds[index],
+          source: 'capture',
+          isFromGeneralAnswer: false,
+          sourceCaptureId: input.captureId,
+          sourceMediaId: null,
+          createdAt: now,
+        },
+        input.capturedAt ?? now,
+      ),
+    })),
+    captureId: input.captureId,
+    captureText: input.captureText ?? '',
+    executionId: input.executionId,
+    now,
+    newId: input.newId,
+    seal,
+    questionRoom: MAX_PICK_QUESTIONS,
+  };
+  const skipFiling = planTopicCommands({
+    ...topicInput,
+    madeNoteIds: null,
+    room: MAX_EFFECTS,
+  }).skipFiling;
+  const noteSteps = turnNotes.reduce<{
     creates: { id: string; data: Record<string, unknown> }[];
     lines: ResultNote[];
     notKept: string[];
@@ -1025,7 +1084,7 @@ export function planWrites(input: PlanInput): WritePlan {
     asks: { noteId: string; title: string; topicIds: string[] }[];
     names: string[][];
   }>(
-    (acc, note) => {
+    (acc, note, noteIndex) => {
       const key = toComparable(note.body);
       const kept = (input.keptNotes ?? []).find(
         (entry) => toComparable(entry.body) === key,
@@ -1070,35 +1129,37 @@ export function planWrites(input: PlanInput): WritePlan {
             : [...acc.notKept, NOTES_NOT_KEPT_LINE],
         };
       }
-      const id = input.newId();
+      const id = noteIds[noteIndex];
       const topicNames = filedIds.map(
         (topicId) => input.topics?.get(topicId)?.name ?? '',
       );
       const line = buildNoteLine(note.title, topicNames);
       record(id, 'create', { 'sealed.title': line }, null, 'notes');
-      const stepped = filedIds.reduce(
-        (state, topicId) => {
-          const before = state.working.get(topicId) ?? {
-            docState: input.topics?.get(topicId)?.docState ?? 'empty',
-            pendingNoteIds: input.topics?.get(topicId)?.pendingNoteIds ?? [],
-          };
-          const after = {
-            docState: toBehindState(before.docState),
-            pendingNoteIds: [...before.pendingNoteIds, id],
-          };
-          record(topicId, 'update', after, before, 'topics');
-          const earlier = state.filings.get(topicId);
-          return {
-            working: new Map(state.working).set(topicId, after),
-            filings: new Map(state.filings).set(topicId, {
-              id: topicId,
-              docState: after.docState,
-              addPendingIds: [...(earlier?.addPendingIds ?? []), id],
-            }),
-          };
-        },
-        { working: acc.working, filings: acc.filings },
-      );
+      const stepped = filedIds
+        .filter((topicId) => !skipFiling.has(`${topicId}:${id}`))
+        .reduce(
+          (state, topicId) => {
+            const before = state.working.get(topicId) ?? {
+              docState: input.topics?.get(topicId)?.docState ?? 'empty',
+              pendingNoteIds: input.topics?.get(topicId)?.pendingNoteIds ?? [],
+            };
+            const after = {
+              docState: toBehindState(before.docState),
+              pendingNoteIds: [...before.pendingNoteIds, id],
+            };
+            record(topicId, 'update', after, before, 'topics');
+            const earlier = state.filings.get(topicId);
+            return {
+              working: new Map(state.working).set(topicId, after),
+              filings: new Map(state.filings).set(topicId, {
+                id: topicId,
+                docState: after.docState,
+                addPendingIds: [...(earlier?.addPendingIds ?? []), id],
+              }),
+            };
+          },
+          { working: acc.working, filings: acc.filings },
+        );
       return {
         creates: [
           ...acc.creates,
@@ -1144,12 +1205,28 @@ export function planWrites(input: PlanInput): WritePlan {
       names: [],
     },
   );
+  const topicPlan = planTopicCommands({
+    ...topicInput,
+    madeNoteIds: new Set(noteSteps.creates.map((created) => created.id)),
+    room: Math.max(
+      0,
+      MAX_EFFECTS -
+        (effects.length +
+          drafts.size +
+          entities.newWho.length +
+          entities.newPlaces.length),
+    ),
+  });
+  topicPlan.effects.forEach(({ ref, effect }) =>
+    record(ref.docId, ref.op, effect.written, effect.previous, ref.collection),
+  );
   const notKept = [
     ...new Set([
       ...factSteps.notKept,
       ...keyDatePlan.notKept,
       ...projectPlan.notKept,
       ...noteSteps.notKept,
+      ...topicPlan.notKept,
     ]),
   ];
 
@@ -1459,11 +1536,25 @@ export function planWrites(input: PlanInput): WritePlan {
             ),
           };
         });
+  const groupQuestions = topicPlan.questions.slice(
+    0,
+    Math.max(
+      0,
+      MAX_PICK_QUESTIONS -
+        clashQuestions.length -
+        (isFiling
+          ? disputeQuestions.length +
+            pickQuestions.length +
+            topicQuestions.length
+          : 0),
+    ),
+  );
   const questions = [
     ...clashQuestions,
     ...(!isFiling
       ? []
       : [...disputeQuestions, ...pickQuestions, ...topicQuestions]),
+    ...groupQuestions,
   ];
 
   return {
@@ -1482,6 +1573,10 @@ export function planWrites(input: PlanInput): WritePlan {
     projectUpdates: projectPlan.updates,
     noteCreates: noteSteps.creates,
     topicUpdates: [...noteSteps.filings.values()],
+    topicVersions: topicPlan.versions,
+    topicPlacements: topicPlan.placements,
+    topicCreates: topicPlan.parentCreates,
+    topicRetry: topicPlan.retry.length,
     notesMade: noteSteps.creates.length,
     spokenNote:
       noteSteps.creates.length === 0
@@ -1498,6 +1593,7 @@ export function planWrites(input: PlanInput): WritePlan {
         ? { byWho: keyDatePlan.byWho, entryCount: keyDatePlan.entryCount }
         : null,
     notKept,
+    topicLines: topicPlan.topicLines,
     linkedWhoIds: isFiling
       ? union(
           [...entities.whoIdOf.values()],
@@ -1778,6 +1874,7 @@ export function buildExecution(
           plan.milestonesAdded,
         ),
         describeNotes(plan.notesMade),
+        ...plan.topicLines,
         ...plan.notKept,
         homeLine,
       ]
@@ -1883,6 +1980,7 @@ const isPickKind = (kind: string) =>
   kind === 'whichPlace' ||
   kind === 'whichTopic' ||
   kind === 'whichIsTrue' ||
+  kind === 'groupTopics' ||
   kind === 'asked';
 
 const isOpenMore = ([, entry]: [string, QuestionStateEntry]) =>

@@ -75,6 +75,7 @@ export type QuestionKind =
   | 'whichPlace'
   | 'whichIsTrue'
   | 'whichTopic'
+  | 'groupTopics'
   | 'asked'
   | (string & {});
 
@@ -139,7 +140,13 @@ export interface QuestionNumber {
 
 /** An opened sealed question, built by code (which person or place) or written by the assistant; a code-built one's link is held until it is answered. */
 export interface HelmQuestion {
-  kind: 'whichPerson' | 'whichPlace' | 'whichIsTrue' | 'whichTopic' | 'asked';
+  kind:
+    | 'whichPerson'
+    | 'whichPlace'
+    | 'whichIsTrue'
+    | 'whichTopic'
+    | 'groupTopics'
+    | 'asked';
   builtBy: 'code' | 'model';
   shape: QuestionShape;
   prompt: string;
@@ -591,7 +598,12 @@ export type TopicDepth = 1 | 2 | 3;
 
 export type TopicSource =
   | { kind: 'note'; noteId: string }
-  | { kind: 'message'; captureId: string; at: number }
+  | {
+      kind: 'message';
+      captureId: string;
+      at: number;
+      noteId?: string | null;
+    }
   | { kind: 'file'; mediaId: string; noteId: string | null }
   | { kind: 'general'; noteId: string }
   | { kind: 'person'; at: number };
@@ -644,6 +656,7 @@ export type TopicVersionReason =
   | 'grouped'
   | 'rearranged'
   | 'imported'
+  | 'sourceRemoved'
   | 'restored';
 
 /** `topics/{id}/versions/{n}`: one change to a topic's document; never rewritten. */
@@ -790,7 +803,7 @@ export interface Execution {
 
 export interface ResultNoteLine {
   text: string;
-  ref: { collection: 'notes'; id: string };
+  ref: { collection: 'notes' | 'topics'; id: string };
 }
 
 export interface ExecutionSealed {

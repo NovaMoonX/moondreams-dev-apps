@@ -6,6 +6,7 @@ import { createDigest } from '../../functions/src/apps/helm/nomos/contactImport.
 import { buildSpokenAck } from '../../functions/src/apps/helm/nomos/spoken.ts';
 import {
   buildFactSource,
+  buildGroupQuestion,
   buildKeyDateClashQuestion,
   buildWhichIsTrueQuestion,
   toKeyDateName,
@@ -1617,6 +1618,9 @@ async function buildProjects(input: {
   return { projects, tasks };
 }
 
+const TYRE_TURN_ID = 'seed-turn-tyre-size';
+const TYRE_EXECUTION_ID = 'seed-execution-tyre-size';
+const TYRE_NOTE_ID = 'seed-note-22';
 const CAPTURE_NOTE_ID = 'seed-note-from-capture';
 const CAPTURE_NOTE_TURN_ID = 'seed-turn-note';
 const CAPTURE_NOTE_EXECUTION_ID = 'seed-execution-note';
@@ -1741,12 +1745,14 @@ async function buildNoteTurn(input: {
   return { capture, execution, note };
 }
 
-/** Alex's Knowledge: nine topics up to three levels deep (🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-one typed notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: six parts (a list under Service, a part from each kind of source and a winter-tires part the person wrote) at version 3, with its three versions under `versions/{n}`. */
+/** Alex's Knowledge: eleven topics up to three levels deep (🏃 Running and 🧘 Stretching at the top, waiting on a "Group them under Fitness?" question; 🚗 Car care › Washing › Ceramic coat and Fragrance, 🍰 Kitchen › Baking, 💐 Wedding etiquette, 🌱 Garden › Tomatoes) and twenty-six notes, three of them loose, one in two topics (Washing and Fragrance) and one with a link in its words. Car care has a written document: six parts (a list under Service, a part from each kind of source and a winter-tires part the person wrote) at version 5, with its five versions under `versions/{n}`. */
 async function buildKnowledge(input: {
+  uid: string;
   now: number;
+  timeZone: string;
   encryption: HelmEncryption;
 }) {
-  const { now, encryption } = input;
+  const { uid, now, timeZone, encryption } = input;
   const topicOf = async (
     id: string,
     name: string,
@@ -1757,7 +1763,11 @@ async function buildKnowledge(input: {
       docState: 'empty',
       pendingNoteIds: [],
     },
-    document: { version: number; sections: TopicSection[] } = {
+    document: {
+      version: number;
+      sections: TopicSection[];
+      writtenAt?: number;
+    } = {
       version: 0,
       sections: [],
     },
@@ -1775,7 +1785,8 @@ async function buildKnowledge(input: {
       executionId: null,
       createdAt: now - 40 * DAY_MS,
       lastEditedAt: document.version > 0 ? now - 2 * DAY_MS : null,
-      lastWrittenAt: document.version > 0 ? now - 2 * DAY_MS : null,
+      lastWrittenAt:
+        document.version > 0 ? (document.writtenAt ?? now - 2 * DAY_MS) : null,
       sealed: await sealJson<TopicSealed>(
         { name, emoji, overview: null, sections: document.sections },
         encryption,
@@ -1800,16 +1811,15 @@ async function buildKnowledge(input: {
     writtenBy: 'nomos',
     sources: [{ kind: 'note', noteId: 'seed-note-02' }],
   };
+  const heardMark = {
+    kind: 'message' as const,
+    captureId: 'seed-turn-car-tires',
+    at: now - 9 * DAY_MS,
+    noteId: 'seed-note-02',
+  };
   const tyresHeard: TopicSection = {
     ...tyres,
-    sources: [
-      ...tyres.sources,
-      {
-        kind: 'message',
-        captureId: 'seed-turn-car-tires',
-        at: now - 9 * DAY_MS,
-      },
-    ],
+    sources: [...tyres.sources, heardMark],
   };
   const freshener: TopicSection = {
     id: 'seed-section-car-freshener',
@@ -1837,6 +1847,24 @@ async function buildKnowledge(input: {
     writtenBy: 'person',
     sources: [{ kind: 'person', at: now - 2 * DAY_MS }],
   };
+  const serviceShort: TopicSection = {
+    ...service,
+    markdown: '- **Oil:** synthetic 5W-30, every 5,000 miles.',
+  };
+  const tyreMark = {
+    kind: 'message' as const,
+    captureId: TYRE_TURN_ID,
+    at: now - 20 * MINUTE_MS,
+    noteId: TYRE_NOTE_ID,
+  };
+  const tyreSize: TopicSection = {
+    id: 'seed-section-car-tyre-size',
+    heading: 'Winter tyre size',
+    level: 2,
+    markdown: 'The winter tyres are 205/55 R16.',
+    writtenBy: 'nomos',
+    sources: [tyreMark],
+  };
   const carVersions: {
     reason: TopicVersion['reason'];
     at: number;
@@ -1844,6 +1872,9 @@ async function buildKnowledge(input: {
     noteIds: string[];
     summary: string;
     sections: TopicSection[];
+    requestQuote?: string;
+    sourceCaptureId?: string;
+    executionId?: string;
   }[] = [
     {
       reason: 'firstWritten',
@@ -1869,9 +1900,67 @@ async function buildKnowledge(input: {
       summary: 'You added Winter tires',
       sections: [service, tyresHeard, freshener, booklet, winter],
     },
+    {
+      reason: 'revisedOnRequest',
+      at: now - 25 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [],
+      summary: 'Shortened the Service part',
+      requestQuote: 'make the intro shorter',
+      sections: [serviceShort, tyresHeard, freshener, booklet, winter],
+    },
+    {
+      reason: 'addedFromSource',
+      at: now - 20 * MINUTE_MS,
+      by: 'nomos',
+      noteIds: [TYRE_NOTE_ID],
+      summary: 'Added Winter tyre size',
+      sourceCaptureId: TYRE_TURN_ID,
+      executionId: TYRE_EXECUTION_ID,
+      sections: [
+        serviceShort,
+        tyresHeard,
+        freshener,
+        booklet,
+        tyreSize,
+        winter,
+      ],
+    },
   ];
   const carSections = carVersions[carVersions.length - 1].sections;
-  const versions = await Promise.all(
+  const washingSection: TopicSection = {
+    id: 'seed-section-washing-drying',
+    heading: 'Drying',
+    level: 1,
+    markdown: 'Pat the panels dry, never wipe in circles.',
+    writtenBy: 'nomos',
+    sources: [{ kind: 'note', noteId: 'seed-note-05' }],
+  };
+  const washingWrittenAt = now - 10 * DAY_MS;
+  const washingVersion = {
+    topicId: 'seed-topic-car-washing',
+    id: '1',
+    version: {
+      version: 1,
+      restoredFromVersion: null,
+      createdBy: 'nomos',
+      reason: 'firstWritten',
+      noteIds: ['seed-note-05'],
+      sourceCaptureId: null,
+      executionId: null,
+      createdAt: washingWrittenAt,
+      sealed: await sealJson<TopicVersionSealed>(
+        {
+          sections: [washingSection],
+          changeSummary: 'Wrote the first version from 1 note',
+          requestQuote: null,
+          parentName: null,
+        },
+        encryption,
+      ),
+    } satisfies TopicVersion,
+  };
+  const carHistory = await Promise.all(
     carVersions.map(async (entry, index) => ({
       topicId: 'seed-topic-car',
       id: String(index + 1),
@@ -1881,14 +1970,14 @@ async function buildKnowledge(input: {
         createdBy: entry.by,
         reason: entry.reason,
         noteIds: entry.noteIds,
-        sourceCaptureId: null,
-        executionId: null,
+        sourceCaptureId: entry.sourceCaptureId ?? null,
+        executionId: entry.executionId ?? null,
         createdAt: entry.at,
         sealed: await sealJson<TopicVersionSealed>(
           {
             sections: entry.sections,
             changeSummary: entry.summary,
-            requestQuote: null,
+            requestQuote: entry.requestQuote ?? null,
             parentName: null,
           },
           encryption,
@@ -1896,6 +1985,7 @@ async function buildKnowledge(input: {
       } satisfies TopicVersion,
     })),
   );
+  const versions = [...carHistory, washingVersion];
   const topics = await Promise.all([
     topicOf(
       'seed-topic-car',
@@ -1906,7 +1996,15 @@ async function buildKnowledge(input: {
       { docState: 'current', pendingNoteIds: [] },
       { version: carVersions.length, sections: carSections },
     ),
-    topicOf('seed-topic-car-washing', 'Washing', null, 'seed-topic-car'),
+    topicOf(
+      'seed-topic-car-washing',
+      'Washing',
+      null,
+      'seed-topic-car',
+      2,
+      { docState: 'behind', pendingNoteIds: ['seed-note-05'] },
+      { version: 1, sections: [washingSection], writtenAt: washingWrittenAt },
+    ),
     topicOf('seed-topic-car-fragrance', 'Fragrance', null, 'seed-topic-car'),
     topicOf('seed-topic-kitchen', 'Kitchen', '🍰', null),
     topicOf(
@@ -1935,13 +2033,26 @@ async function buildKnowledge(input: {
       'seed-topic-car-washing',
       3,
     ),
+    topicOf('seed-topic-running', 'Running', '🏃', null),
+    topicOf('seed-topic-stretching', 'Stretching', '🧘', null),
   ]);
   const noteOf = async (
     index: number,
     title: string,
     body: string,
     topicIds: string[],
-    extra: Partial<Pick<Note, 'lastEditedAt' | 'checkedAt'>> = {},
+    extra: Partial<
+      Pick<
+        Note,
+        | 'lastEditedAt'
+        | 'checkedAt'
+        | 'createdAt'
+        | 'source'
+        | 'sourceCaptureId'
+        | 'createdBy'
+        | 'executionId'
+      >
+    > = {},
   ): Promise<{ id: string; note: Note }> => ({
     id: `seed-note-${String(index).padStart(2, '0')}`,
     note: {
@@ -2098,8 +2209,195 @@ async function buildKnowledge(input: {
       'Wait a week before the first wash, then use a pH-neutral soap and skip the automatic wash.',
       [ceramic],
     ),
+    {
+      ...(await noteOf(
+        22,
+        'Winter tyres are 205/55 R16',
+        'The winter tyres are 205/55 R16',
+        [car],
+        {
+          source: 'capture',
+          sourceCaptureId: TYRE_TURN_ID,
+          createdBy: 'nomos',
+          executionId: TYRE_EXECUTION_ID,
+          createdAt: now - 20 * MINUTE_MS,
+        },
+      )),
+      id: TYRE_NOTE_ID,
+    },
+    noteOf(
+      23,
+      'Easy pace for long runs',
+      'If you can not talk, slow down.',
+      ['seed-topic-running'],
+      { createdAt: now - 6 * DAY_MS },
+    ),
+    noteOf(
+      24,
+      'Shoes wear out near 400 miles',
+      'Mark the day the new pair goes on.',
+      ['seed-topic-running'],
+      { createdAt: now - 5 * DAY_MS },
+    ),
+    noteOf(
+      25,
+      'Hamstring stretch after runs',
+      'Lie on your back, one leg up with a towel.',
+      ['seed-topic-stretching'],
+      { createdAt: now - 4 * DAY_MS },
+    ),
+    noteOf(
+      26,
+      'Hold each stretch 30 seconds',
+      'No bouncing, breathe out as you ease in.',
+      ['seed-topic-stretching'],
+      { createdAt: now - 3 * DAY_MS },
+    ),
   ]);
-  return { topics, notes, versions };
+  const baseCapture = (createdAt: number, turnIndex: number, text: string) => ({
+    inputMode: 'typed' as const,
+    sttProvider: null,
+    interruptedCaptureId: null,
+    answersQuestion: null,
+    ttsProvider: null,
+    medium: 'web' as const,
+    sessionId: `seed-${uid}-growth`,
+    turnIndex,
+    route: 'full' as const,
+    heldReason: null,
+    claimId: null,
+    claimedAt: null,
+    attempts: 0,
+    lastErrorCode: null,
+    turnLeadId: null,
+    joinedCaptureIds: [],
+    quotedSourceKeys: [],
+    answerSavedNoteId: null,
+    whoIds: [],
+    placeIds: [],
+    planDayKey: null,
+    createdAt,
+    sortedAt: createdAt + SORT_DELAY_MS,
+    screen: null,
+    reading: readCapture(text, {
+      now: createdAt,
+      timeZone,
+      assistantName: DEFAULT_ASSISTANT_NAME,
+    }),
+  });
+  const tyreText = 'The winter tyres are 205/55 R16';
+  const tyreAt = now - 20 * MINUTE_MS;
+  const tyreBase = baseCapture(tyreAt, 8, tyreText);
+  const tyreLine = 'Added to Car care: Winter tyre size';
+  const tyreCapture: Capture = {
+    ...tyreBase,
+    status: 'sorted',
+    questionState: {},
+    executionIds: [TYRE_EXECUTION_ID],
+    seenAt: tyreAt + MINUTE_MS,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: tyreText,
+        reading: tyreBase.reading,
+        answer: null,
+        questionAnswer: null,
+      },
+      encryption,
+    ),
+  };
+  const tyreExecution: Execution = {
+    captureId: TYRE_TURN_ID,
+    actor: 'nomos',
+    category: 'organize',
+    autonomyLevel: 2,
+    state: 'succeeded',
+    effectRefs: [
+      { op: 'create', collection: 'notes', docId: TYRE_NOTE_ID },
+      { op: 'update', collection: 'topics', docId: 'seed-topic-car' },
+    ],
+    linkedWhoIds: [],
+    linkedPlaceIds: [],
+    undoesExecutionId: null,
+    undoneByExecutionId: null,
+    questionRef: null,
+    errorCode: null,
+    createdAt: tyreBase.sortedAt,
+    decidedAt: tyreBase.sortedAt,
+    finishedAt: tyreBase.sortedAt,
+    sealed: await sealJson<ExecutionSealed>(
+      {
+        summary: tyreLine,
+        commands: [],
+        effects: [
+          {
+            written: {
+              'sealed.title':
+                'Saved a note: Winter tyres are 205/55 R16 · Car care',
+            },
+            previous: null,
+          },
+          {
+            written: {
+              version: 5,
+              change: 'added',
+              'sealed.title': tyreLine,
+            },
+            previous: { version: 4, 'sealed.title': tyreLine },
+          },
+        ],
+        undoReport: null,
+        spoken: null,
+        goneIds: null,
+        lines: [],
+      },
+      encryption,
+    ),
+  };
+  const groupText = 'Did my long run and then stretched';
+  const groupAt = now - 15 * MINUTE_MS;
+  const groupQuestionId = 'seed-question-group-fitness';
+  const groupBase = baseCapture(groupAt, 9, groupText);
+  const groupCapture: Capture = {
+    ...groupBase,
+    status: 'needsYou',
+    questionState: {
+      [groupQuestionId]: {
+        kind: 'groupTopics',
+        shape: 'yesNo',
+        askedAt: groupBase.sortedAt,
+        answeredAt: null,
+        skippedAt: null,
+      },
+    },
+    executionIds: [],
+    seenAt: null,
+    sealed: await sealJson<CaptureSealed>(
+      {
+        text: groupText,
+        reading: groupBase.reading,
+        answer: null,
+        questionAnswer: null,
+        questions: {
+          [groupQuestionId]: buildGroupQuestion({
+            name: 'Fitness',
+            childIds: ['seed-topic-running', 'seed-topic-stretching'],
+            childNames: ['Running', 'Stretching'],
+          }),
+        },
+      },
+      encryption,
+    ),
+  };
+  return {
+    topics,
+    notes,
+    versions,
+    captures: [
+      { id: TYRE_TURN_ID, capture: tyreCapture },
+      { id: 'seed-turn-group-fitness', capture: groupCapture },
+    ],
+    executions: [{ id: TYRE_EXECUTION_ID, execution: tyreExecution }],
+  };
 }
 
 /** Alex's people: themself, two Sams, Dana, a cat and a bakery, five facts on Dana, Sam and Home, four on Alex themself (two preferences, a favorite and who they are), the turn that said Dana's, a home, three tasks that link them, a turn that names the second Sam and a waiting turn that asks which Sam. */
@@ -3715,7 +4013,12 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
         );
       }
       const knowledge = people
-        ? await buildKnowledge({ now: context.now, encryption })
+        ? await buildKnowledge({
+            uid: user.uid,
+            now: context.now,
+            timeZone,
+            encryption,
+          })
         : null;
       if (knowledge) {
         knowledge.topics.forEach((entry) =>
@@ -3734,6 +4037,15 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
             entry.version,
           ),
         );
+        knowledge.captures.forEach((entry) =>
+          batch.set(person.collection('captures').doc(entry.id), entry.capture),
+        );
+        knowledge.executions.forEach((entry) =>
+          batch.set(
+            person.collection('executions').doc(entry.id),
+            entry.execution,
+          ),
+        );
       }
       const peopleCount = people
         ? people.who.length +
@@ -3748,7 +4060,9 @@ export async function seedHelm(context: SeedContext): Promise<SeedResult> {
           (knowledge
             ? knowledge.topics.length +
               knowledge.notes.length +
-              knowledge.versions.length
+              knowledge.versions.length +
+              knowledge.captures.length +
+              knowledge.executions.length
             : 0)
         : 0;
       const backToBackCount =

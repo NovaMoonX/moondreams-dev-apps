@@ -15,6 +15,7 @@ import {
   type Token,
 } from './commands.js';
 import { withoutAddress } from './joinedTurn.js';
+import { hasReviseCue, isQuestion } from './route.js';
 import type { ContextKeyDate, ContextUpcoming } from '../keyDateStore.js';
 import type { ContextProject } from '../projectStore.js';
 import { MAX_CAPTURE_CHARS, MAX_CONTEXT_TASKS } from './prompt.js';
@@ -116,13 +117,31 @@ export interface ContextInput {
   /** The notes the device thinks the turn may be about, at most `MAX_HINT_NOTES`. */
   notes?: ContextNote[];
   focusedTopic?: ContextFocusedTopic | null;
+  /** How much of the focused topic's document the model sees; the whole of it when left out. */
+  topicDocument?: 'whole' | 'outline' | null;
 }
 
 export interface ContextFocusedTopic {
   id: string;
   name: string;
-  sections: { heading: string | null; markdown: string; noteIds: string[] }[];
+  version: number;
+  sections: {
+    id: string;
+    heading: string | null;
+    markdown: string;
+    writtenBy: 'nomos' | 'person';
+    noteIds: string[];
+  }[];
 }
+
+/** How much of the open topic's document the turn gets: all of it for a question or a request to change it, otherwise only its outline, so a new part can be placed; none with no topic open. */
+export const topicDocumentFor = (
+  text: string,
+  hasFocus: boolean,
+): 'whole' | 'outline' | null => {
+  if (!hasFocus) return null;
+  return isQuestion(text.trim()) || hasReviseCue(text) ? 'whole' : 'outline';
+};
 
 export const MAX_TOPIC_DOCUMENT_CHARS = 30_000;
 
@@ -172,8 +191,11 @@ export function buildContext(input: ContextInput): {
   topics: AliasBook;
   notes: AliasBook;
   parts: AliasBook;
+  sections: AliasBook;
+  focus: { id: string; version: number } | null;
 } {
   const aliases = createAliasBook('t');
+  const sectionBook = createAliasBook('s');
   const topics = createAliasBook('tp');
   const notes = createAliasBook('n');
   const partIds = new Map<string, string>();
@@ -226,39 +248,57 @@ export function buildContext(input: ContextInput): {
   }));
   const noteIds = new Set(keptNotes.map((note) => note.id));
   const focused = input.focusedTopic;
-  const topicDocument = focused
-    ? {
-        name: focused.name,
-        sections: focused.sections.reduce<
-          {
-            heading: string | null;
-            markdown: string;
-            sourceAliases: string[];
-          }[]
-        >((kept, section) => {
-          const used = kept.reduce(
-            (sum, entry) => sum + entry.markdown.length,
-            0,
-          );
-          const room = MAX_TOPIC_DOCUMENT_CHARS - used;
-          return room <= 0
-            ? kept
-            : [
-                ...kept,
-                {
-                  heading: section.heading,
-                  markdown: section.markdown.slice(0, room),
-                  sourceAliases: [
-                    parts.add(focused.id),
-                    ...section.noteIds
-                      .filter((id) => noteIds.has(id))
-                      .map((id) => notes.add(id)),
-                  ],
-                },
-              ];
-        }, []),
-      }
-    : null;
+  const documentMode = input.topicDocument ?? 'whole';
+  const topicDocument = !focused
+    ? null
+    : documentMode === 'outline'
+      ? {
+          topic: topics.add(focused.id),
+          name: focused.name,
+          version: focused.version,
+          sections: focused.sections.map((section) => ({
+            section: sectionBook.add(section.id),
+            heading: section.heading,
+            writtenBy: section.writtenBy,
+          })),
+        }
+      : {
+          topic: topics.add(focused.id),
+          name: focused.name,
+          version: focused.version,
+          sections: focused.sections.reduce<
+            {
+              section: string;
+              heading: string | null;
+              writtenBy: 'nomos' | 'person';
+              markdown: string;
+              sourceAliases: string[];
+            }[]
+          >((kept, section) => {
+            const used = kept.reduce(
+              (sum, entry) => sum + entry.markdown.length,
+              0,
+            );
+            const room = MAX_TOPIC_DOCUMENT_CHARS - used;
+            return room <= 0
+              ? kept
+              : [
+                  ...kept,
+                  {
+                    section: sectionBook.add(section.id),
+                    heading: section.heading,
+                    writtenBy: section.writtenBy,
+                    markdown: section.markdown.slice(0, room),
+                    sourceAliases: [
+                      parts.add(focused.id),
+                      ...section.noteIds
+                        .filter((id) => noteIds.has(id))
+                        .map((id) => notes.add(id)),
+                    ],
+                  },
+                ];
+          }, []),
+        };
   const { reading } = input;
   const text = withoutAddress(input.text, reading).slice(0, MAX_CAPTURE_CHARS);
   const message = [
@@ -359,7 +399,18 @@ export function buildContext(input: ContextInput): {
         )}</messages>`
       : `<capture>${toDataJson(text)}</capture>`,
   ].join('\n');
-  return { message, aliases, synced, facts, keyDates, topics, notes, parts };
+  return {
+    message,
+    aliases,
+    synced,
+    facts,
+    keyDates,
+    topics,
+    notes,
+    parts,
+    sections: sectionBook,
+    focus: focused ? { id: focused.id, version: focused.version } : null,
+  };
 }
 
 /** The titles of the tasks an Execution made: its readable refs say which effects were creates, its opened record holds their words. */
