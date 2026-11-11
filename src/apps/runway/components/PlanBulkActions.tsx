@@ -46,6 +46,7 @@ import {
   usePlanBulk,
   type BulkPlan,
 } from '@apps/runway/hooks/usePlanBulk';
+import { isCardFeeBill, isCardFeeGroup } from '@apps/runway/engine/cardFees';
 import { canPayOnSchedule } from '@apps/runway/engine/schedule';
 import type { SelectView } from '@apps/runway/hooks/usePlanSelection';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
@@ -82,7 +83,12 @@ const LEAVE = 'leave';
 const canPayOnDay = (payload: MemberPayload) =>
   'timing' in payload &&
   payload.timing.schedule.anchor !== null &&
-  canPayOnSchedule(payload.timing.schedule);
+  canPayOnSchedule(payload.timing.schedule) &&
+  !isCardFeeBill(payload);
+
+/** A card's annual fee bill follows its card: only its priority and Paid from change here. */
+const isFeeBill = (payload: MemberPayload) =>
+  'timing' in payload && isCardFeeBill(payload);
 
 export interface TickedItem {
   itemId: string;
@@ -142,8 +148,12 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
     );
   };
 
+  const changeable = ticked.filter(({ payload }) => !isFeeBill(payload));
   const applyToAll = (change: (payload: MemberPayload) => MemberPayload) =>
     bulk.plan(ticked, change);
+  const applyToChangeable = (
+    change: (payload: MemberPayload) => MemberPayload,
+  ) => bulk.plan(changeable, change);
 
   const archive = async (heldChoice: HeldChoice | null) => {
     if (!user || archivingRef.current) return;
@@ -153,7 +163,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
     const encryption = await getRunwayEncryption(user.uid).catch(() => null);
     const results = encryption
       ? await Promise.allSettled(
-          ticked.map(({ itemId, name }) =>
+          changeable.map(({ itemId, name }) =>
             archiveItem(
               user.uid,
               encryption,
@@ -167,15 +177,15 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             ),
           ),
         )
-      : ticked.map(
+      : changeable.map(
           () => ({ status: 'rejected', reason: null }) as PromiseRejectedResult,
         );
     archivingRef.current = false;
     setIsArchiving(false);
-    const failed = ticked.filter(
+    const failed = changeable.filter(
       (_, index) => results[index].status === 'rejected',
     );
-    const done = count - failed.length;
+    const done = changeable.length - failed.length;
     addToast({
       title:
         failed.length === 0
@@ -184,7 +194,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             ? PLAN_SELECT_WORDS.failed
             : PLAN_SELECT_WORDS.archivedPartly(
                 done,
-                count,
+                changeable.length,
                 failed.map(({ name }) => name),
               ),
       type: failed.length === 0 ? 'success' : done === 0 ? 'error' : 'warning',
@@ -249,7 +259,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             label: PLAN_SELECT_WORDS.archive,
             icon: <Archive className='h-4 w-4' aria-hidden='true' />,
             isDestructive: true,
-            isDisabled: isNothing || bulk.isWriting,
+            isDisabled: changeable.length === 0 || bulk.isWriting,
             onClick: () => setSheet('archive'),
           },
         ]}
@@ -334,7 +344,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
             onClose={backToMenu}
             onSave={(payWay, paysItself) =>
               void save(
-                applyToAll((payload) => {
+                applyToChangeable((payload) => {
                   if (!('timing' in payload)) return payload;
                   const isCard = shownCards.some(({ id }) => id === payWay);
                   const isAccount = shownAccounts.some(
@@ -370,7 +380,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
           onClose={backToMenu}
           onPick={(groupId) =>
             void save(
-              applyToAll((payload) => ({
+              applyToChangeable((payload) => ({
                 ...payload,
                 groupId,
               })),
@@ -381,7 +391,7 @@ function PlanBulkActions({ view, ticked, onSaved }: PlanBulkActionsProps) {
       {sheet === 'archive' && (
         <ArchiveSheet
           view={view}
-          ticked={ticked}
+          ticked={changeable}
           heldByItem={heldByItem}
           isSaving={isArchiving}
           onClose={close}
@@ -755,17 +765,19 @@ function GroupPickSheet({
       onClose={onClose}
     >
       <ul className='border-border divide-border bg-card mb-4 max-h-[max(9rem,calc(92dvh-20rem))] divide-y overflow-y-auto rounded-2xl border'>
-        {groups.map(({ item, version }) => (
-          <ItemRow
-            key={item.id}
-            name={version.payload.name}
-            emoji={emojis.get(item.id) ?? null}
-            isPrivate={false}
-            ariaLabel={version.payload.name}
-            isAction
-            onOpen={() => onPick(item.id)}
-          />
-        ))}
+        {groups
+          .filter(({ item }) => !isCardFeeGroup(item.id))
+          .map(({ item, version }) => (
+            <ItemRow
+              key={item.id}
+              name={version.payload.name}
+              emoji={emojis.get(item.id) ?? null}
+              isPrivate={false}
+              ariaLabel={version.payload.name}
+              isAction
+              onOpen={() => onPick(item.id)}
+            />
+          ))}
         <ItemRow
           name={PLAN_SELECT_WORDS.noGroup}
           isPrivate={false}

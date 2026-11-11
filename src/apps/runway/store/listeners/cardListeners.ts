@@ -46,6 +46,7 @@ export function startCardsListener(
               dueDay: payload.dueDay ?? null,
               lastFour: payload.lastFour ?? null,
               payFromAccountId: payload.payFromAccountId ?? null,
+              annualFee: payload.annualFee ?? null,
             };
           }),
         );

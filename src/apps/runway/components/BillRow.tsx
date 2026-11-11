@@ -1,6 +1,13 @@
 import { useState } from 'react';
+import { CreditCard } from 'lucide-react';
 
 import { useAppSelector } from '@/store';
+import CardForm from '@apps/runway/forms/CardForm';
+import { isCardFeeBill } from '@apps/runway/engine/cardFees';
+import { isTrackingLevel } from '@apps/runway/engine/level';
+import { selectLevel } from '@apps/runway/store/selectors/levelSelectors';
+import { selectAllCards } from '@apps/runway/store/selectors/runwaySelectors';
+import { getCardName } from '@apps/runway/utils/cardText';
 import {
   formatDateOrdinalUTC,
   formatRelativeDayUTC,
@@ -15,6 +22,7 @@ import BillPaidFromNotice from '@apps/runway/components/BillPaidFromNotice';
 import {
   AUTO_PAY_WORDS,
   BILL_WORDS,
+  CARD_FEE_WORDS,
   GROUP_WORDS,
   MAKE_BILL_WORDS,
   ITEM_SHEET_R2_WORDS,
@@ -157,11 +165,12 @@ function BillRow({
     today,
   );
   const payerCard = useBillCardName(itemId ?? '', payment?.dueOn ?? null);
-  const payer = !isSelfPaying
-    ? null
-    : payerCard === null
-      ? AUTO_PAY_WORDS.payerBank
-      : payerCard;
+  const payer =
+    !isSelfPaying || isCardFeeBill(bill)
+      ? null
+      : payerCard === null
+        ? AUTO_PAY_WORDS.payerBank
+        : payerCard;
   const figureWord = monthly
     ? BILL_WORDS.aMonth
     : figureKind === 'monthly' && bill.timing.schedule.kind === 'once'
@@ -213,6 +222,15 @@ export function BillSheet({
   onClose,
 }: BillSheetProps) {
   const [pickedStep, setPickedStep] = useState<string | null>(null);
+  const [isCardOpen, setIsCardOpen] = useState(false);
+  const isFeeBill = isCardFeeBill(bill);
+  const level = useAppSelector(selectLevel);
+  const cards = useAppSelector(selectAllCards);
+  const feeCard = isFeeBill
+    ? (cards.find(
+        (card) => card.id === bill.cardFeeOf && card.archivedAt === null,
+      ) ?? null)
+    : null;
   const paidFromAction = usePaidFromAction(billId, today);
   const paidWithAction = usePaidWithAction(billId, today);
   const horizonItems = useAppSelector((state) =>
@@ -261,6 +279,17 @@ export function BillSheet({
     Boolean(bill.stanceOverride),
   );
 
+  if (isCardOpen && feeCard !== null) {
+    return (
+      <CardForm
+        isOpen
+        editing={feeCard}
+        onClose={onClose}
+        onCancel={() => setIsCardOpen(false)}
+      />
+    );
+  }
+
   return (
     <ItemSheet
       itemId={billId}
@@ -278,16 +307,34 @@ export function BillSheet({
       secondFact={payerFact}
       help={rangeText}
       quickChange={
-        isUndated
-          ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
-          : {
+        isFeeBill
+          ? {
               label: ITEM_SHEET_R2_WORDS.change,
-              subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
-              step: 'amount',
+              subtitle: CARD_FEE_WORDS.billChangeSub,
+              step: 'priority',
             }
+          : isUndated
+            ? { label: ITEM_SHEET_R2_WORDS.setDueDate, step: 'due' }
+            : {
+                label: ITEM_SHEET_R2_WORDS.change,
+                subtitle: ITEM_SHEET_R2_WORDS.changeBillSub,
+                step: 'amount',
+              }
       }
       maxAction={paidFromAction}
-      payAction={paidWithAction}
+      payAction={isFeeBill ? undefined : paidWithAction}
+      linkAction={
+        feeCard !== null && isTrackingLevel(level)
+          ? {
+              label: CARD_FEE_WORDS.billCardRow,
+              subtitle: CARD_FEE_WORDS.billCardRowSub(
+                getCardName(feeCard, cards),
+              ),
+              icon: <CreditCard />,
+              onOpen: () => setIsCardOpen(true),
+            }
+          : undefined
+      }
       dayAction={dayAction}
       key={pickedStep ?? 'sheet'}
       startsAtStep={pickedStep ?? startsAtStep}

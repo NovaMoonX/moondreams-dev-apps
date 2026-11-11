@@ -17,6 +17,7 @@ import type { SelectView } from '@apps/runway/hooks/usePlanSelection';
 import { getRunwayEncryption } from '@apps/runway/queries/runwayKeyQueries';
 import {
   clearBillPins,
+  PinsPartlyCleared,
   restoreBillPins,
 } from '@apps/runway/store/actions/dayActions';
 import { changeItem } from '@apps/runway/store/actions/itemActions';
@@ -241,14 +242,16 @@ export function usePlanBulk(view: SelectView) {
           today,
         );
         if (pins.length === 0) return { ...entry, pins: [], isPinKept: false };
-        const cleared = await getRunwayEncryption(uid)
+        return getRunwayEncryption(uid)
           .then((encryption) =>
             clearBillPins(uid, encryption, entry.itemId, entry.name, pins),
           )
-          .catch(() => null);
-        return cleared === null
-          ? { ...entry, pins: [], isPinKept: true }
-          : { ...entry, pins: cleared, isPinKept: false };
+          .then((cleared) => ({ ...entry, pins: cleared, isPinKept: false }))
+          .catch((error: unknown) => ({
+            ...entry,
+            pins: error instanceof PinsPartlyCleared ? error.cleared : [],
+            isPinKept: true,
+          }));
       }),
     );
     writingRef.current = false;

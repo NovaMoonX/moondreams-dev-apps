@@ -398,6 +398,8 @@ export interface BillSealed {
   paysItself?: boolean | null;
   /** The day of the month the person pays it, the last one on or before each due date; null (or missing) pays on the due date. */
   payOnDay?: number | null;
+  /** The card whose annual fee this bill is: its name, amount, date, group and card follow the card and are changed only there. Missing or null on any other bill. */
+  cardFeeOf?: string | null;
 }
 
 /** A named collection of bills, envelopes and goals; its members carry its id, so archiving it rewrites none of them. */
@@ -580,6 +582,16 @@ export interface CardSealed {
   lastFour?: string | null;
   /** The account that pays this card; null (or missing) means the plan's one pull account when there is exactly one. */
   payFromAccountId?: string | null;
+  /** The card's annual fee and the bill that plans for it; missing or null when it has none. */
+  annualFee?: CardAnnualFee | null;
+}
+
+export interface CardAnnualFee {
+  cents: Cents;
+  /** The fee's first date in the plan, repeating yearly on that day. */
+  firstDueOn: DateOnly;
+  /** The bill that plans for it, which carries `cardFeeOf` naming this card. */
+  billId: string;
 }
 
 /** Where money is really held: a checking or savings account, a cash account, a brokerage. Archived when it is no longer used. */

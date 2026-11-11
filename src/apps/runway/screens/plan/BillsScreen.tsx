@@ -1,4 +1,5 @@
 import { useState, type CSSProperties } from 'react';
+import { isCardFeeGroup } from '@apps/runway/engine/cardFees';
 import { Receipt, X } from 'lucide-react';
 
 import EmptyCard from '@/components/EmptyCard';
@@ -142,6 +143,7 @@ function BillsScreen() {
         (!isSelecting &&
           needle === '' &&
           !isNarrowed &&
+          !isCardFeeGroup(figures.id) &&
           figures.bills.length +
             figures.envelopes.length +
             figures.goals.length ===
