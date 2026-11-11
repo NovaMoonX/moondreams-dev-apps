@@ -13,8 +13,6 @@ import { useAppSelector } from '@/store';
 const REMINDER_TOAST_DURATION_MS = 7000;
 const FORCE_TOAST_ENABLED =
   import.meta.env.DEV && import.meta.env.VITE_FORCE_REMINDER_TOAST === 'true';
-// The scheduled sender delivers anything due within its next one-minute run, so a push can land up to a minute early.
-const SEND_LEAD_MS = 60_000;
 // A computer that slept with the page open never reports it hidden, so a long-overdue flip is old news.
 const STALE_AFTER_MS = 5 * 60_000;
 
@@ -45,9 +43,13 @@ export function useReminderToasts() {
   }, []);
 
   const wasInFrontWhenSent = useCallback(
-    (reminder: Reminder) =>
-      visibleSinceRef.current <= reminder.scheduledFor - SEND_LEAD_MS &&
-      Date.now() - reminder.scheduledFor <= STALE_AFTER_MS,
+    (reminder: Reminder) => {
+      const sentAt = reminder.lastSentAt ?? reminder.scheduledFor;
+      return (
+        visibleSinceRef.current <= sentAt &&
+        Date.now() - sentAt <= STALE_AFTER_MS
+      );
+    },
     [],
   );
 
@@ -112,6 +114,7 @@ export function useReminderToasts() {
         link: '/waypoint',
         recurrence: 'none',
         inAppToast: null,
+        lastSentAt: null,
         createdBy: '',
         createdAt: Date.now(),
       },
