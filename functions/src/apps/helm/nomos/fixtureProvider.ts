@@ -572,7 +572,11 @@ function readPartAnswer(question: string, words: string[], message: string) {
   return toAnswer({
     scope: 'yourThings',
     question,
-    fromRecordsText: found.markdown.replace(/\s+/g, ' ').trim().slice(0, 1_100),
+    fromRecordsText: found.markdown
+      .replace(/[*_`#>]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1_100),
     sourceAliases: [found.sourceAliases[0]],
   });
 }
