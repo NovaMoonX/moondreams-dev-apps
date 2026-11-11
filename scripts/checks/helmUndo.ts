@@ -1165,6 +1165,42 @@ test('a milestone ticked or retitled since is kept, and the other one the turn a
   assert.deepEqual(alone.kept, ['Wedding']);
 });
 
+test('a project the turn made stays when the person ticked one of its milestones since', () => {
+  const made: { ref: EffectRef; effect: ExecutionEffect } = {
+    ref: { op: 'create', collection: 'projects', docId: 'p1' },
+    effect: {
+      written: {
+        'sealed.name': 'Wedding',
+        'sealed.emoji': '💍',
+        status: 'active',
+        whoRoles: {},
+        'sealed.roleNotes': {},
+      },
+      previous: null,
+    },
+  };
+  const result = plan(
+    execution([milestoneEffect('m1', 'Venue booked', 9), made]),
+    [
+      [
+        'p1',
+        {
+          docId: 'p1',
+          data: {
+            status: 'active',
+            whoRoles: {},
+            milestoneState: { m1: { date: 9, order: 0, doneAt: 5 } },
+            lastEditedAt: null,
+          },
+          opened: projectSealed({}, { m1: { title: 'Venue booked' } }),
+        },
+      ],
+    ],
+  );
+  assert.equal(result.kind, 'refused');
+  assert.deepEqual(result.kept, ['Wedding']);
+});
+
 const failures = tests.flatMap(([name, run]) => {
   try {
     run();

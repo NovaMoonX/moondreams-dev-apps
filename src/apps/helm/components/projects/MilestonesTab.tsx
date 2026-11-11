@@ -83,10 +83,17 @@ function MilestonesTab({ project, isReadOnly }: MilestonesTabProps) {
       action: {
         label: HELM_COPY.undo,
         onClick: () =>
-          void change.undo().catch((error: unknown) => {
-            console.error('Helm milestone was not put back', error);
-            addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
-          }),
+          void change
+            .undo()
+            .then((isUndone) => {
+              if (!isUndone) {
+                addToast({ title: HELM_COPY.undoChangedSince, type: 'info' });
+              }
+            })
+            .catch((error: unknown) => {
+              console.error('Helm milestone was not put back', error);
+              addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
+            }),
       },
     });
   };

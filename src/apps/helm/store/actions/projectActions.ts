@@ -499,7 +499,7 @@ export async function deleteProject(uid: string, projectId: string) {
 }
 
 export type MilestoneResult =
-  | { kind: 'saved'; id: string; undo: () => Promise<void> }
+  | { kind: 'saved'; id: string; undo: () => Promise<boolean> }
   | { kind: 'offline' | 'missing' | 'unreadable' | 'full' };
 
 type MilestoneState = Project['milestoneState'][string];
@@ -530,7 +530,7 @@ async function changeMilestones(
         fields: Record<string, unknown>;
         sealed: ProjectSealed | null;
         id: string;
-        undo: () => Promise<void>;
+        undo: () => Promise<boolean>;
       }
     | 'missing'
     | 'full'
@@ -587,15 +587,17 @@ const settleMilestone = (
   runTransaction(db, async (transaction) => {
     const ref = doc(projectsOf(uid), projectId);
     const snapshot = await transaction.get(ref);
-    if (!snapshot.exists()) return;
+    if (!snapshot.exists()) return false;
     const data = snapshot.data() as Project;
     const opened = await openJson<ProjectSealed>(
       data.sealed as Sealed,
       encryption,
     ).catch(() => null);
-    if (!opened) return;
+    if (!opened) return false;
     const milestones = opened.milestones ?? {};
-    if (!isNowAllowed(data.milestoneState?.[id], milestones[id]?.title)) return;
+    if (!isNowAllowed(data.milestoneState?.[id], milestones[id]?.title)) {
+      return false;
+    }
     const sealed = await sealJson<ProjectSealed>(
       {
         ...opened,
@@ -610,6 +612,7 @@ const settleMilestone = (
       sealed,
       lastEditedAt: Date.now(),
     });
+    return true;
   });
 
 /** Adds a milestone to a project in one transaction (both maps, one id); Undo removes it while it is unchanged. At most thirty a project. */
@@ -690,31 +693,37 @@ export function editMilestone(
             }
           : null,
         undo: async () => {
-          await changeMilestones(uid, encryption, projectId, async (live) => {
-            const liveState = live.data.milestoneState?.[id];
-            const liveTitle = live.opened.milestones?.[id]?.title;
-            const isAsLeft =
-              liveState?.date === input.date &&
-              liveTitle === title &&
-              liveState.doneAt === current.doneAt;
-            if (!isAsLeft) return 'missing';
-            return {
-              id,
-              fields: isDateChanged
-                ? { [`milestoneState.${id}.date`]: current.date }
-                : {},
-              sealed: isTitleChanged
-                ? {
-                    ...live.opened,
-                    milestones: {
-                      ...live.opened.milestones,
-                      [id]: { title: before.title },
-                    },
-                  }
-                : null,
-              undo: async () => undefined,
-            };
-          });
+          const undone = await changeMilestones(
+            uid,
+            encryption,
+            projectId,
+            async (live) => {
+              const liveState = live.data.milestoneState?.[id];
+              const liveTitle = live.opened.milestones?.[id]?.title;
+              const isAsLeft =
+                liveState?.date === input.date &&
+                liveTitle === title &&
+                liveState.doneAt === current.doneAt;
+              if (!isAsLeft) return 'missing';
+              return {
+                id,
+                fields: isDateChanged
+                  ? { [`milestoneState.${id}.date`]: current.date }
+                  : {},
+                sealed: isTitleChanged
+                  ? {
+                      ...live.opened,
+                      milestones: {
+                        ...live.opened.milestones,
+                        [id]: { title: before.title },
+                      },
+                    }
+                  : null,
+                undo: async () => false,
+              };
+            },
+          );
+          return undone.kind === 'saved';
         },
       };
     },
@@ -740,8 +749,9 @@ export function setMilestoneDone(
         const current = snapshot.exists()
           ? (snapshot.data() as Project).milestoneState?.[id]
           : undefined;
-        if (current?.doneAt !== doneAt) return;
+        if (current?.doneAt !== doneAt) return false;
         transaction.update(ref, { [field]: previousDoneAt });
+        return true;
       }),
   };
 }

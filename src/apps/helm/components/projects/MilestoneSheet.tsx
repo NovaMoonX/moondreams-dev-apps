@@ -84,10 +84,17 @@ function MilestoneForm({
       action: {
         label: HELM_COPY.undo,
         onClick: () =>
-          void result.undo().catch((error: unknown) => {
-            console.error('Helm milestone was not put back', error);
-            addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
-          }),
+          void result
+            .undo()
+            .then((isUndone) => {
+              if (!isUndone) {
+                addToast({ title: HELM_COPY.undoChangedSince, type: 'info' });
+              }
+            })
+            .catch((error: unknown) => {
+              console.error('Helm milestone was not put back', error);
+              addToast({ title: HELM_COPY.projectUndoFailed, type: 'error' });
+            }),
       },
     });
 

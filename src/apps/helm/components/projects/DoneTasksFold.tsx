@@ -12,7 +12,10 @@ import TaskRow from '@apps/helm/components/tasks/TaskRow';
 import TaskSheet from '@apps/helm/components/tasks/TaskSheet';
 import { HELM_COPY } from '@apps/helm/constants';
 import { clearDoneTasks } from '@apps/helm/store/actions/projectActions';
-import { reopenTask } from '@apps/helm/store/actions/taskActions';
+import {
+  markDoneAgain,
+  reopenTask,
+} from '@apps/helm/store/actions/taskActions';
 import type { OpenTask } from '@apps/helm/types';
 
 interface DoneTasksFoldProps {
@@ -35,12 +38,30 @@ function DoneTasksFold({ projectId, tasks }: DoneTasksFoldProps) {
 
   const reopen = (taskId: string) => {
     if (!user) return;
-    const title = tasks.find((task) => task.id === taskId)?.title ?? '';
-    reopenTask(user.uid, taskId).catch((error: unknown) => {
+    const uid = user.uid;
+    const task = tasks.find((entry) => entry.id === taskId);
+    reopenTask(uid, taskId).catch((error: unknown) => {
       console.error('Helm task was not reopened', error);
       addToast({ title: HELM_COPY.fieldSaveFailed, type: 'error' });
     });
-    addToast({ title: HELM_COPY.taskReopenedToast(title), type: 'info' });
+    addToast({
+      title: HELM_COPY.taskReopenedToast(task?.title ?? ''),
+      type: 'success',
+      action: {
+        label: HELM_COPY.undo,
+        onClick: () =>
+          void markDoneAgain(uid, taskId, task?.completedAt ?? null)
+            .then((isUndone) => {
+              if (!isUndone) {
+                addToast({ title: HELM_COPY.undoChangedSince, type: 'info' });
+              }
+            })
+            .catch((error: unknown) => {
+              console.error('Helm task was not put back', error);
+              addToast({ title: HELM_COPY.undoFailed, type: 'error' });
+            }),
+      },
+    });
     setOpenId(null);
   };
 

@@ -755,6 +755,7 @@ export const HELM_COPY = {
   rowDone: 'Done',
   rowDoneOn: (day: string) => `Done ${day}`,
   taskReopenedToast: (title: string) => `${title} is open again`,
+  undoChangedSince: 'That changed since, so it stays as it is.',
   deleteTaskTitle: 'Delete this task?',
   deleteTaskBody: (waiting: number) =>
     `Its notes and steps go with it.${waitingOnCount(waiting)}`,

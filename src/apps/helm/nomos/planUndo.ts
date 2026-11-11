@@ -368,6 +368,7 @@ const planRecord = (
     if (isUsed) return left;
   }
   if (create) {
+    if (updated.hasKeptEntry) return { kind: 'kept', title };
     // Its own later effects stamp the record with the execution's time, which is not an edit since.
     const isUntouched =
       target.data.lastEditedAt === null || target.data.lastEditedAt === madeAt;

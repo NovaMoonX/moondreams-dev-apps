@@ -169,6 +169,24 @@ export const reopenTask = (uid: string, taskId: string) =>
     lastEditedAt: Date.now(),
   });
 
+/** Puts a reopened task back as done on the day it was done, only while it is still open; answers whether it did. */
+export async function markDoneAgain(
+  uid: string,
+  taskId: string,
+  completedAt: number | null,
+) {
+  const ref = doc(tasksOf(uid), taskId);
+  const stored = (await getDoc(ref)).data();
+  if (stored?.status !== 'open') return false;
+  await updateDoc(ref, {
+    status: 'done',
+    completedAt: completedAt ?? Date.now(),
+    clearedAt: null,
+    lastEditedAt: Date.now(),
+  });
+  return true;
+}
+
 /** Marks a task done in one write handed back unawaited. `undo` reopens it only while it is still done from this tap; it answers whether it did. */
 export function completeTask(uid: string, taskId: string) {
   const ref = doc(tasksOf(uid), taskId);
