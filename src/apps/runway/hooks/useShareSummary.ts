@@ -33,14 +33,17 @@ const LIST_LIMIT = 20;
 const BILLS_WITHIN_DAYS = 30;
 const DAY_MS = 86_400_000;
 const WRITE_DELAY_MS = 2000;
-const FRESH_MS = 6 * 3_600_000;
+const HOUR_MS = 3_600_000;
+const FRESH_MS = 6 * HOUR_MS;
 const CLEARED = 'cleared';
 
 type SummaryFigures = Omit<ShareSummary, 'computedAt'>;
 
 /** Keeps the sealed totals-and-names summary a connected app reads current on the plan; the plan opens without it when this never runs. */
 export function useShareSummary(uid: string | null) {
-  const today = todayAsUtcDate(useNow(60_000));
+  const now = useNow(60_000);
+  const today = todayAsUtcDate(now);
+  const hour = Math.floor(now / HOUR_MS);
   const isReady = useAppSelector(selectIsAutoPayReady);
   const currency = useAppSelector(
     (state) => state.runway.plan?.currencyCode ?? null,
@@ -130,6 +133,7 @@ export function useShareSummary(uid: string | null) {
   );
   const key = readWriteKey(isUnknown, figures);
 
+  // The hour re-runs the freshness check, so a figure that stays the same is resealed every six hours.
   useEffect(() => {
     if (
       uid === null ||
@@ -147,7 +151,7 @@ export function useShareSummary(uid: string | null) {
         const planRef = doc(db, 'apps', 'runway', 'plans', uid);
         const stored: unknown = (await getDoc(planRef)).get('shareSummary');
         if (key === CLEARED) {
-          if (stored !== null && run.isCurrent) {
+          if (typeof stored === 'object' && stored !== null && run.isCurrent) {
             await updateDoc(planRef, { shareSummary: null });
           }
           if (run.isCurrent) lastWritten.current = key;
@@ -174,7 +178,7 @@ export function useShareSummary(uid: string | null) {
       run.isCurrent = false;
       clearTimeout(timer);
     };
-  }, [uid, key, isOffline, isScrambled]);
+  }, [uid, key, isOffline, isScrambled, hour]);
 }
 
 const readWriteKey = (isUnknown: boolean, figures: SummaryFigures | null) => {

@@ -300,7 +300,10 @@ export async function readContextSynced(
   ]);
   return [
     ...money,
-    ...[...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED - money.length),
+    ...[...events, ...tasks].slice(
+      0,
+      Math.max(0, MAX_CONTEXT_SYNCED - money.length),
+    ),
   ];
 }
 

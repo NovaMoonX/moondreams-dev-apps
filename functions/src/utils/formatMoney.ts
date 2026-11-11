@@ -1,13 +1,13 @@
-/** A minor-units amount in an ISO currency, written the way the person reads it in that currency's own fraction digits. */
-export const formatMoney = (minorUnits: number, currency: string) => {
+/** An amount kept in hundredths of an ISO currency's unit, written with that currency's symbol. Always two decimals, since that is how the amounts are kept. */
+export const formatMoney = (hundredths: number, currency: string) => {
   try {
-    const format = new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency,
-    });
-    const digits = format.resolvedOptions().maximumFractionDigits ?? 2;
-    return format.format(minorUnits / 10 ** digits);
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(hundredths / 100);
   } catch {
-    return `${(minorUnits / 100).toFixed(2)} ${currency}`;
+    return `${(hundredths / 100).toFixed(2)} ${currency}`;
   }
 };
