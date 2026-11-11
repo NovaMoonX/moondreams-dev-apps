@@ -11,6 +11,7 @@ import { Plus, Trash2 } from 'lucide-react';
 
 import ChecklistGroup, { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
 import LockedButton from '@/components/LockedButton';
+import RevealChip from '@/components/RevealChip';
 import TickMark from '@/components/TickMark';
 import { useAuth } from '@/hooks/useAuth';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -73,7 +74,7 @@ function RunScreen({
   const { addToast } = useToast();
   const { confirm } = useActionModal();
   const isOffline = useNetworkStatus() === 'offline';
-  const { run, isLoaded, hasFailed } = useRun(runId);
+  const { run, isLoaded, isMissing, hasFailed } = useRun(runId);
   const procedures = useAppSelector((state) => state.helm.procedures);
   const procedure = useAppSelector(selectProcedureById).get(
     run?.procedureId ?? '',
@@ -129,11 +130,9 @@ function RunScreen({
     run?.attachedLabel == null
       ? null
       : isLeftCalendar
-        ? HELM_COPY.runNoLongerOnCalendar(
+        ? HELM_COPY.runNoLongerThere(
             run.attachedLabel,
-            run.dueOn === null
-              ? formatDateShort(run.startedAt)
-              : formatDateShortUTC(run.dueOn),
+            run.dueOn === null ? null : formatDateShortUTC(run.dueOn),
           )
         : HELM_COPY.runFor(
             run.attachedLabel,
@@ -220,8 +219,26 @@ function RunScreen({
             : outcome === 'changed'
               ? HELM_COPY.procedureRaced
               : HELM_COPY.runAddToProcedureFailed,
-      type: outcome === 'saved' || outcome === 'offline' ? 'success' : 'error',
+      type:
+        outcome === 'saved'
+          ? 'success'
+          : outcome === 'offline'
+            ? 'info'
+            : 'error',
     });
+  };
+
+  const finish = async () => {
+    if (!user || !run) return;
+    if (done === 0 && total > 0) {
+      const isConfirmed = await confirm({
+        title: HELM_COPY.runFinishEmptyTitle,
+        message: HELM_COPY.runFinishEmptyMessage,
+        confirmText: HELM_COPY.runFinish,
+      });
+      if (!isConfirmed) return;
+    }
+    finishRun(user.uid, run.id).catch(reportFailure(HELM_COPY.editFailed));
   };
 
   const remove = async () => {
@@ -307,7 +324,7 @@ function RunScreen({
         )}
         {isLoaded && !run && !hasFailed && (
           <p className='helm-card text-muted-foreground p-4 text-[15px] text-pretty'>
-            {HELM_COPY.runGone}
+            {isMissing ? HELM_COPY.runGone : HELM_COPY.runUnreadable}
           </p>
         )}
         {run && (
@@ -339,7 +356,6 @@ function RunScreen({
                 <Button
                   type='button'
                   variant='secondary'
-                  size='sm'
                   onClick={() => {
                     if (user) {
                       reopenRun(user.uid, run.id).catch(
@@ -452,28 +468,24 @@ function RunScreen({
                   )}
                 </div>
               ) : (
-                <Button
-                  type='button'
-                  variant='tertiary'
-                  className='gap-2'
-                  onClick={() => setIsAddingExtra(true)}
-                >
-                  <Plus className='size-4' aria-hidden='true' />
-                  {HELM_COPY.runAddExtra}
-                </Button>
+                <div className='flex flex-wrap gap-2'>
+                  <RevealChip
+                    icon={<Plus className='size-4' aria-hidden='true' />}
+                    onClick={() => setIsAddingExtra(true)}
+                  >
+                    {HELM_COPY.runAddExtra}
+                  </RevealChip>
+                </div>
               ))}
             {!isFinished && (
               <div className='space-y-1.5 pt-2'>
                 <Button
                   type='button'
+                  variant={
+                    total > 0 && done === total ? 'primary' : 'secondary'
+                  }
                   className='w-full'
-                  onClick={() => {
-                    if (user) {
-                      finishRun(user.uid, run.id).catch(
-                        reportFailure(HELM_COPY.editFailed),
-                      );
-                    }
-                  }}
+                  onClick={() => void finish()}
                 >
                   {HELM_COPY.runFinish}
                 </Button>

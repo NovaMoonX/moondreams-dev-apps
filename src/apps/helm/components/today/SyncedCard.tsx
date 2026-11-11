@@ -70,7 +70,10 @@ export function SyncedCard({
   const { sourceNameOf } = useSourceAppName();
   const other = findOtherTime(record, alsoIn);
   const openRuns = useAppSelector(selectOpenRuns);
-  const runs = getRunsAttachedTo(openRuns, record.id);
+  const runs = getRunsAttachedTo(openRuns, [
+    record.id,
+    ...alsoIn.map((copy) => copy.id),
+  ]);
   const second = alsoIn[0] ?? null;
   const detail = [
     timeLine(record),

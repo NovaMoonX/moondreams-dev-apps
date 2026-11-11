@@ -2,17 +2,21 @@ import { useState } from 'react';
 
 import { Button, Checkbox } from '@moondreamsdev/dreamer-ui/components';
 import { join } from '@moondreamsdev/dreamer-ui/utils';
-import { ChevronRight, ListPlus } from 'lucide-react';
+import { ChevronRight, ListPlus, Plus } from 'lucide-react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
 import { TICK_HIT_CLASS } from '@/components/ChecklistGroup';
 import Drawer from '@/components/Drawer';
+import RevealChip from '@/components/RevealChip';
 import SectionHeader from '@/components/SectionHeader';
 import ShowMoreButton from '@/components/ShowMoreButton';
 import TickMark from '@/components/TickMark';
 import { formatDateShort } from '@/utils/formatUtils';
 import { HELM_COPY, RUNS_ALL_MAX, RUNS_LISTED } from '@apps/helm/constants';
+import StartRunSheet, {
+  type RunTarget,
+} from '@apps/helm/components/procedures/StartRunSheet';
 import { useRuns } from '@apps/helm/hooks/useRuns';
 import type { OpenRun } from '@apps/helm/types';
 import { getRunProgress, type RunStep } from '@apps/helm/utils/runSteps';
@@ -195,22 +199,43 @@ interface RunsSectionProps {
   id: string;
   variant: RunsListProps['variant'];
   onOpen: (runId: string) => void;
+  /** On a project or trip: always offers "Start a run" for it, even before it has one. */
+  start?: RunTarget;
 }
 
-/** A procedure's, a project's or a trip's runs, the newest few with the rest behind "Show all runs"; nothing at all when there are none. */
-export function RunsSection({ field, id, variant, onOpen }: RunsSectionProps) {
+/** A procedure's, a project's or a trip's runs, the newest few with the rest behind "Show all runs"; with no `start`, nothing at all when there are none. */
+export function RunsSection({
+  field,
+  id,
+  variant,
+  onOpen,
+  start,
+}: RunsSectionProps) {
   const [isAll, setIsAll] = useState(false);
-  const { runs } = useRuns(field, id, isAll ? RUNS_ALL_MAX : RUNS_LISTED + 1);
-  if (!runs || runs.length === 0) return null;
-  const hasMore = runs.length > RUNS_LISTED;
+  const [isStarting, setIsStarting] = useState(false);
+  const { runs, hasFailed } = useRuns(
+    field,
+    id,
+    isAll ? RUNS_ALL_MAX : RUNS_LISTED + 1,
+  );
+  const shown = runs ?? [];
+  if (!start && shown.length === 0 && !hasFailed) return null;
+  const hasMore = shown.length > RUNS_LISTED;
   return (
     <section className='space-y-2'>
       <SectionHeader title={HELM_COPY.runsHeading} />
-      <RunsList
-        runs={isAll ? runs : runs.slice(0, RUNS_LISTED)}
-        variant={variant}
-        onOpen={onOpen}
-      />
+      {hasFailed && (
+        <p className='text-muted-foreground text-[13px]'>
+          {HELM_COPY.runsFailedLine}
+        </p>
+      )}
+      {shown.length > 0 && (
+        <RunsList
+          runs={isAll ? shown : shown.slice(0, RUNS_LISTED)}
+          variant={variant}
+          onOpen={onOpen}
+        />
+      )}
       {(hasMore || isAll) && (
         <ShowMoreButton
           isOpen={isAll}
@@ -218,6 +243,24 @@ export function RunsSection({ field, id, variant, onOpen }: RunsSectionProps) {
         >
           {isAll ? HELM_COPY.runsShowFewer : HELM_COPY.runsShowAll}
         </ShowMoreButton>
+      )}
+      {start && (
+        <div className='flex flex-wrap gap-2'>
+          <RevealChip
+            icon={<Plus className='size-4' aria-hidden='true' />}
+            onClick={() => setIsStarting(true)}
+          >
+            {HELM_COPY.runStart}
+          </RevealChip>
+        </div>
+      )}
+      {start && (
+        <StartRunSheet
+          isOpen={isStarting}
+          target={start}
+          onClose={() => setIsStarting(false)}
+          onStarted={onOpen}
+        />
       )}
     </section>
   );

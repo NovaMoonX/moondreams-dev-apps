@@ -21,7 +21,7 @@ import {
   formatSlotRange,
   toDayKey,
 } from '@apps/helm/utils/planDays';
-import { isCalendarEvent } from '@apps/helm/utils/synced';
+import { isCalendarEvent, toFirstDay } from '@apps/helm/utils/synced';
 
 interface SyncedSheetProps {
   record: SyncedRecord | null;
@@ -150,6 +150,12 @@ function SyncedSheet({ record, alsoIn = [], now, onClose }: SyncedSheetProps) {
             onOpen={(runId) =>
               afterBackLayersClose(() => void showView('run', runId))
             }
+            start={{
+              attachment: { kind: 'synced', id: record.id },
+              label: record.sealed.title,
+              dueOn: toFirstDay(record, timeZone),
+              alsoIds: alsoIn.map((copy) => copy.id),
+            }}
           />
           <DiscrepancyBlock record={record} />
           {[record, ...alsoIn].map((copy) => (

@@ -1,13 +1,21 @@
 import { useState } from 'react';
 
 import { useToast } from '@moondreamsdev/dreamer-ui/hooks';
-import { CalendarDays, FolderOpen, Play, Plane } from 'lucide-react';
+import {
+  CalendarDays,
+  FolderOpen,
+  ListChecks,
+  Play,
+  Plane,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import ActionGroup from '@/components/ActionGroup';
 import ActionRow from '@/components/ActionRow';
-import Drawer from '@/components/Drawer';
+import DetailSheet from '@/components/DetailSheet';
+import LockedButton from '@/components/LockedButton';
 import SectionDivider from '@/components/SectionDivider';
+import ShowMoreButton from '@/components/ShowMoreButton';
 import { useAuth } from '@/hooks/useAuth';
 import { useNow } from '@/hooks/useNow';
 import { useAppSelector } from '@/store';
@@ -17,43 +25,59 @@ import {
   formatTime,
 } from '@/utils/formatUtils';
 import { getDeviceTimeZone } from '@/utils/timezoneUtils';
-import { DAY_MS, HELM_COPY, RUN_START_DAYS } from '@apps/helm/constants';
+import {
+  DAY_MS,
+  HELM_COPY,
+  RUN_START_DAYS,
+  RUN_START_LISTED,
+} from '@apps/helm/constants';
 import { getHelmEncryption } from '@apps/helm/queries/helmKeyQueries';
 import { startRun } from '@apps/helm/store/actions/runActions';
 import { selectActiveProjects } from '@apps/helm/store/selectors/projectSelectors';
+import { selectProcedures } from '@apps/helm/store/selectors/procedureSelectors';
+import {
+  findOpenRunFor,
+  selectOpenRuns,
+} from '@apps/helm/store/selectors/runSelectors';
 import type {
   OpenProcedure,
   RunAttachment,
   SyncedRecord,
 } from '@apps/helm/types';
-import { getDueDay } from '@apps/helm/utils/captureReading';
+import { getRunProgress } from '@apps/helm/utils/runSteps';
 import { mergeSameThings } from '@apps/helm/utils/sameThing';
+import { toFirstDay } from '@apps/helm/utils/synced';
+import { countSteps, groupSteps } from '@apps/helm/utils/stepGroups';
 
-const OFFERED_MAX = 12;
-
-interface Choice {
+interface Row {
   key: string;
   icon: ReactNode;
   label: string;
   subtitle?: string;
+  procedure: OpenProcedure;
   attachment: RunAttachment;
+  alsoIds: string[];
+  attachedLabel: string | null;
   dueOn: number | null;
+}
+
+/** A project, trip or event the sheet is opened from: the run is for it, so only the procedure is asked. */
+export interface RunTarget {
+  attachment: NonNullable<RunAttachment>;
+  label: string;
+  dueOn: number | null;
+  alsoIds: string[];
 }
 
 interface StartRunSheetProps {
   isOpen: boolean;
-  procedure: OpenProcedure;
+  /** Set when the sheet opens from a procedure: it asks what the run is for. */
+  procedure?: OpenProcedure;
+  /** Set when the sheet opens from a project or trip: it asks which procedure. */
+  target?: RunTarget;
   onClose: () => void;
   onStarted: (runId: string) => void;
 }
-
-/** A trip's or event's first day: an all-day one is already a UTC day, a timed one is read in the person's zone. */
-const toFirstDay = (record: SyncedRecord, timeZone: string) =>
-  record.startAt === null
-    ? null
-    : record.isAllDay
-      ? record.startAt
-      : getDueDay({ kind: 'moment', at: record.startAt }, timeZone);
 
 const toWhen = (record: SyncedRecord) =>
   record.startAt === null
@@ -62,12 +86,13 @@ const toWhen = (record: SyncedRecord) =>
       ? formatDateShortUTC(record.startAt)
       : `${formatDateShort(record.startAt)}, ${formatTime(record.startAt)}`;
 
-/** Trips and events from other apps that are on now or start within the window, each thing once: trips first, since a meal plan's events would crowd them out, then soonest first. */
+/** Trips and events from other apps that are on now or start within the window, each thing once: trips first, since a meal plan's events would crowd them out, then soonest first. A trip stands for its stays, rentals, flights and drives. */
 const getOffered = (records: SyncedRecord[], now: number) =>
   mergeSameThings(
     records.filter(
       (record) =>
         (record.kind === 'trip' || record.kind === 'event') &&
+        record.category !== 'itinerary' &&
         record.connectionEndedAt === null &&
         record.startAt !== null &&
         record.startAt <= now + RUN_START_DAYS * DAY_MS &&
@@ -75,17 +100,16 @@ const getOffered = (records: SyncedRecord[], now: number) =>
           ? (record.endAt ?? record.startAt) + DAY_MS
           : (record.endAt ?? record.startAt)) > now,
     ),
-  )
-    .map((entry) => entry.record)
-    .sort(
-      (left, right) =>
-        Number(right.kind === 'trip') - Number(left.kind === 'trip') ||
-        (left.startAt ?? 0) - (right.startAt ?? 0),
-    )
-    .slice(0, OFFERED_MAX);
+  ).sort(
+    (left, right) =>
+      Number(right.record.kind === 'trip') -
+        Number(left.record.kind === 'trip') ||
+      (left.record.startAt ?? 0) - (right.record.startAt ?? 0),
+  );
 
 function StartRunBody({
   procedure,
+  target,
   onClose,
   onStarted,
 }: Omit<StartRunSheetProps, 'isOpen'>) {
@@ -94,44 +118,92 @@ function StartRunBody({
   const now = useNow(60_000);
   const synced = useAppSelector((state) => state.helm.synced.items);
   const projects = useAppSelector(selectActiveProjects);
+  const procedures = useAppSelector(selectProcedures);
+  const openRuns = useAppSelector(selectOpenRuns);
   const profileZone = useAppSelector((state) => state.helm.profile?.timeZone);
   const timeZone = profileZone ?? getDeviceTimeZone() ?? 'UTC';
   const [isStarting, setIsStarting] = useState(false);
+  const [expanded, setExpanded] = useState<string[]>([]);
 
-  const coming: Choice[] = getOffered(synced, now).map((record) => ({
-    key: record.id,
-    icon:
-      record.kind === 'trip' ? (
-        <Plane aria-hidden='true' />
-      ) : (
-        <CalendarDays aria-hidden='true' />
-      ),
-    label: record.sealed.title,
-    subtitle: toWhen(record),
-    attachment: { kind: 'synced', id: record.id },
-    dueOn: toFirstDay(record, timeZone),
-  }));
-  const forProjects: Choice[] = projects
-    .slice(0, OFFERED_MAX)
-    .map((project) => ({
-      key: project.id,
-      icon: <FolderOpen aria-hidden='true' />,
-      label: project.name,
-      attachment: { kind: 'project', id: project.id },
-      dueOn: null,
-    }));
+  const stepsOf = (entry: OpenProcedure) => countSteps(groupSteps(entry));
+  const forProcedure = (
+    entry: OpenProcedure,
+    fields: Omit<Row, 'procedure'>,
+  ): Row => ({ ...fields, procedure: entry });
 
-  const start = async (
-    choice: Pick<Choice, 'attachment' | 'dueOn'> & { label: string | null },
-  ) => {
+  const coming: Row[] = procedure
+    ? getOffered(synced, now).map(({ record, alsoIn }) =>
+        forProcedure(procedure, {
+          key: record.id,
+          icon:
+            record.kind === 'trip' ? (
+              <Plane aria-hidden='true' />
+            ) : (
+              <CalendarDays aria-hidden='true' />
+            ),
+          label: record.sealed.title,
+          subtitle:
+            record.startAt !== null && record.startAt <= now
+              ? HELM_COPY.runStartNow
+              : toWhen(record),
+          attachment: { kind: 'synced', id: record.id },
+          alsoIds: alsoIn.map((copy) => copy.id),
+          attachedLabel: record.sealed.title,
+          dueOn: toFirstDay(record, timeZone),
+        }),
+      )
+    : [];
+  const forProjects: Row[] = procedure
+    ? projects.map((project) =>
+        forProcedure(procedure, {
+          key: project.id,
+          icon: <FolderOpen aria-hidden='true' />,
+          label: project.name,
+          attachment: { kind: 'project', id: project.id },
+          alsoIds: [],
+          attachedLabel: project.name,
+          dueOn: null,
+        }),
+      )
+    : [];
+  const justARun: Row[] = procedure
+    ? [
+        forProcedure(procedure, {
+          key: 'just-a-run',
+          icon: <Play aria-hidden='true' />,
+          label: HELM_COPY.runJustARun,
+          subtitle: HELM_COPY.runJustARunHint,
+          attachment: null,
+          alsoIds: [],
+          attachedLabel: null,
+          dueOn: null,
+        }),
+      ]
+    : [];
+  const pickable: Row[] = target
+    ? procedures.map((entry) =>
+        forProcedure(entry, {
+          key: entry.id,
+          icon: <ListChecks aria-hidden='true' />,
+          label: entry.title || HELM_COPY.procedureUntitled,
+          subtitle: stepsOf(entry) === 0 ? HELM_COPY.runNoStepsRow : undefined,
+          attachment: target.attachment,
+          alsoIds: target.alsoIds,
+          attachedLabel: target.label,
+          dueOn: target.dueOn,
+        }),
+      )
+    : [];
+
+  const start = async (row: Row) => {
     if (!user || isStarting) return;
     setIsStarting(true);
     try {
       const made = await startRun(user.uid, await getHelmEncryption(user.uid), {
-        procedure,
-        attachment: choice.attachment,
-        label: choice.label,
-        dueOn: choice.dueOn,
+        procedure: row.procedure,
+        attachment: row.attachment,
+        label: row.attachedLabel,
+        dueOn: row.dueOn,
       });
       made.written.catch((error: unknown) => {
         console.error('Helm run was not saved', error);
@@ -146,58 +218,112 @@ function StartRunBody({
     }
   };
 
-  const rows = (choices: Choice[]) => (
-    <ActionGroup>
-      {choices.map((choice) => (
-        <ActionRow
-          key={choice.key}
-          isGrouped
-          icon={choice.icon}
-          label={choice.label}
-          subtitle={choice.subtitle}
-          isDisabled={isStarting}
-          onClick={() => void start(choice)}
-        />
-      ))}
-    </ActionGroup>
-  );
+  const rows = (choices: Row[], section: string, isFolded: boolean) => {
+    const isAll = expanded.includes(section);
+    return (
+      <>
+        <ActionGroup>
+          {(isFolded && !isAll
+            ? choices.slice(0, RUN_START_LISTED)
+            : choices
+          ).map((row) => {
+            const existing = findOpenRunFor(
+              openRuns,
+              row.procedure.id,
+              row.attachment,
+              row.alsoIds,
+            );
+            const progress = existing ? getRunProgress(existing) : null;
+            return (
+              <ActionRow
+                key={row.key}
+                isGrouped
+                icon={row.icon}
+                label={row.label}
+                subtitle={
+                  progress
+                    ? HELM_COPY.runStartRunning(progress.done, progress.total)
+                    : row.subtitle
+                }
+                isDisabled={
+                  isStarting || (!existing && stepsOf(row.procedure) === 0)
+                }
+                onClick={() => {
+                  if (!existing) {
+                    void start(row);
+                    return;
+                  }
+                  onClose();
+                  onStarted(existing.id);
+                }}
+              />
+            );
+          })}
+        </ActionGroup>
+        {isFolded && choices.length > RUN_START_LISTED && (
+          <ShowMoreButton
+            isOpen={isAll}
+            onClick={() =>
+              setExpanded((open) =>
+                isAll
+                  ? open.filter((key) => key !== section)
+                  : [...open, section],
+              )
+            }
+          >
+            {isAll ? HELM_COPY.runStartShowFewer : HELM_COPY.runStartShowMore}
+          </ShowMoreButton>
+        )}
+      </>
+    );
+  };
+
+  const hasNoSteps = procedure !== undefined && stepsOf(procedure) === 0;
 
   return (
-    <Drawer isOpen onClose={onClose} title={HELM_COPY.runStartTitle}>
+    <DetailSheet
+      isOpen
+      onClose={onClose}
+      title={target ? HELM_COPY.runStartPickTitle : HELM_COPY.runStartTitle}
+    >
       <div className='space-y-4 pb-4'>
         <p className='text-muted-foreground text-[13px]'>
-          {HELM_COPY.runStartHint}
+          {target
+            ? `${HELM_COPY.runStartFor(target.label)}. ${HELM_COPY.runStartPickHint}`
+            : HELM_COPY.runStartHint}
         </p>
-        {coming.length > 0 && (
+        {hasNoSteps ? (
+          <LockedButton
+            label={HELM_COPY.runStart}
+            title={HELM_COPY.runNoStepsTitle}
+            className='w-full'
+          >
+            <p>{HELM_COPY.runNoStepsBody}</p>
+          </LockedButton>
+        ) : (
           <>
-            <SectionDivider label={HELM_COPY.runStartTrips} />
-            {rows(coming)}
+            {rows(justARun, 'just', false)}
+            {coming.length > 0 && (
+              <>
+                <SectionDivider label={HELM_COPY.runStartTrips} />
+                {rows(coming, 'coming', true)}
+              </>
+            )}
+            {forProjects.length > 0 && (
+              <>
+                <SectionDivider label={HELM_COPY.runStartProjects} />
+                {rows(forProjects, 'projects', true)}
+              </>
+            )}
+            {pickable.length > 0 && rows(pickable, 'procedures', true)}
           </>
         )}
-        {forProjects.length > 0 && (
-          <>
-            <SectionDivider label={HELM_COPY.runStartProjects} />
-            {rows(forProjects)}
-          </>
-        )}
-        <ActionGroup>
-          <ActionRow
-            isGrouped
-            icon={<Play aria-hidden='true' />}
-            label={HELM_COPY.runJustARun}
-            subtitle={HELM_COPY.runJustARunHint}
-            isDisabled={isStarting}
-            onClick={() =>
-              void start({ attachment: null, dueOn: null, label: null })
-            }
-          />
-        </ActionGroup>
       </div>
-    </Drawer>
+    </DetailSheet>
   );
 }
 
-/** Start a run: what is it for, a trip or event coming up, a project, or just a run. */
+/** Start a run: from a procedure, what it is for (just a run first, then a trip or event coming up, a project); from a project or trip, which procedure. */
 function StartRunSheet({ isOpen, ...rest }: StartRunSheetProps) {
   return isOpen ? <StartRunBody {...rest} /> : null;
 }

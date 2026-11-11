@@ -23,9 +23,9 @@ export function useRuns(
 ): Runs {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
-  const key = `${field}:${id ?? ''}:${max}`;
-  const [state, setState] = useState<Runs & { key: string }>({
-    key,
+  const scope = `${field}:${id ?? ''}`;
+  const [state, setState] = useState<Runs & { scope: string }>({
+    scope,
     runs: null,
     hasFailed: false,
   });
@@ -36,7 +36,7 @@ export function useRuns(
     const fail = (error: unknown) => {
       if (run.isStopped) return;
       console.error('Helm runs failed', error);
-      setState({ key, runs: null, hasFailed: true });
+      setState({ scope, runs: null, hasFailed: true });
     };
     getHelmEncryption(uid)
       .then((encryption) => {
@@ -46,7 +46,7 @@ export function useRuns(
           field,
           id,
           createSealedReader(encryption, openJson),
-          (runs) => setState({ key, runs, hasFailed: false }),
+          (runs) => setState({ scope, runs, hasFailed: false }),
           fail,
           max,
         );
@@ -56,7 +56,7 @@ export function useRuns(
       run.isStopped = true;
       run.stop?.();
     };
-  }, [uid, field, id, max, key]);
+  }, [uid, field, id, max, scope]);
 
-  return state.key === key ? state : { runs: null, hasFailed: false };
+  return state.scope === scope ? state : { runs: null, hasFailed: false };
 }

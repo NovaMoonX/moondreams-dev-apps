@@ -11,6 +11,7 @@ import {
 
 import { db } from '@lib/firebase/config';
 
+import { store } from '@/store';
 import {
   RUN_EXTRA_MAX,
   RUN_EXTRA_TEXT_CAP,
@@ -18,6 +19,7 @@ import {
 } from '@apps/helm/constants';
 import { openJson, sealJson } from '@apps/helm/security';
 import { isUnavailable } from '@apps/helm/store/actions/topicActions';
+import { findOpenRunFor } from '@apps/helm/store/selectors/runSelectors';
 import type {
   HelmEncryption,
   OpenProcedure,
@@ -43,12 +45,18 @@ export interface RunStart {
   dueOn: number | null;
 }
 
-/** Starts a run holding the procedure's steps as they are now. The write is handed back unawaited so it works offline. */
+/** Starts a run holding the procedure's steps as they are now, or hands back the open run of it for the same thing. The write is handed back unawaited so it works offline. */
 export async function startRun(
   uid: string,
   encryption: HelmEncryption,
   { procedure, attachment, label, dueOn }: RunStart,
 ) {
+  const existing = findOpenRunFor(
+    store.getState().helm.openRuns.items,
+    procedure.id,
+    attachment,
+  );
+  if (existing) return { id: existing.id, written: Promise.resolve() };
   const ref = doc(runsOf(uid));
   const now = Date.now();
   const stepState = Object.fromEntries(

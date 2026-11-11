@@ -312,6 +312,12 @@ function ProjectDetail({
               id={project.id}
               variant='thing'
               onOpen={onOpenRun}
+              start={{
+                attachment: { kind: 'project', id: project.id },
+                label: project.name,
+                dueOn: null,
+                alsoIds: [],
+              }}
             />
             <Tabs
               value={tab}

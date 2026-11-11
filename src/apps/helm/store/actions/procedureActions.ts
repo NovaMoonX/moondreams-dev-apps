@@ -5,7 +5,9 @@ import {
   getDoc,
   getDocFromCache,
   getDocsFromServer,
+  query,
   runTransaction,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 
@@ -347,14 +349,21 @@ export function restoreProcedureVersion(
 
 export type ProcedureRestore = 'restored' | 'exists' | 'offline';
 
-/** Deletes a procedure and its history. Undo sets every document back from what was read here, unless the procedure is back already. Needs a connection. */
+/** Deletes a procedure, its history and the runs that are for nothing (a run on a project or trip stays, reachable there). Undo sets every document back from what was read here, unless the procedure is back already. Needs a connection. */
 export async function deleteProcedure(uid: string, procedureId: string) {
   const ref = doc(proceduresOf(uid), procedureId);
   const raw = (await getDocFromCache(ref).catch(() => getDoc(ref))).data() as
     DocumentData | undefined;
   if (!raw) throw new Error('This is already gone.');
   const versions = await getDocsFromServer(collection(ref, 'versions'));
-  const snapshot = versions.docs.map((entry) => ({
+  const ownRuns = await getDocsFromServer(
+    query(
+      collection(doc(db, 'apps', 'helm', 'users', uid), 'procedureRuns'),
+      where('procedureId', '==', procedureId),
+      where('attachedTo', '==', null),
+    ),
+  );
+  const snapshot = [...versions.docs, ...ownRuns.docs].map((entry) => ({
     ref: entry.ref,
     data: entry.data(),
   }));
