@@ -1,5 +1,6 @@
 // Run against the Firestore emulator: `npm run check:adapters`.
 import assert from 'node:assert/strict';
+import { readdirSync, readFileSync } from 'node:fs';
 
 import { getApps, initializeApp } from 'firebase-admin/app';
 import {
@@ -14,6 +15,13 @@ import { gcmEncrypt } from '../../functions/src/appKeys/gcm.ts';
 import { createGoingOnceAdapter } from '../../functions/src/apps/going-once/share/adapter.ts';
 import { createNineLivesAdapter } from '../../functions/src/apps/nine-lives/share/adapter.ts';
 import { createPinchAdapter } from '../../functions/src/apps/pinch/share/adapter.ts';
+import { createRunwayAdapter } from '../../functions/src/apps/runway/share/adapter.ts';
+import {
+  DEV_KEYRING,
+  deriveSeedDataKey,
+  sealWithKey,
+  wrapDataKey,
+} from '../../functions/src/apps/runway/planKey.ts';
 import { createWaypointAdapter } from '../../functions/src/apps/waypoint/share/adapter.ts';
 import { createWorthTheWaitAdapter } from '../../functions/src/apps/worth-the-wait/share/adapter.ts';
 import {
@@ -2047,6 +2055,235 @@ await firestore
   .get();
 assert.equal(itemReads.length, 1, 'the spy sees an item query');
 unwatch.forEach((restore) => restore());
+
+// Runway: one sealed summary opened under the plan's key; only totals and names leave.
+const RUNWAY_FORBIDDEN = [
+  'SECRET ACCOUNT NAME',
+  'SECRET CARD',
+  'SECRET INCOME SOURCE',
+  'SECRET RECEIPT',
+  'SECRET TRANSACTION',
+  'SECRET NOTE LINE',
+];
+const runwayKey = deriveSeedDataKey(DEV_KEYRING, OWNER);
+const runwaySummary = {
+  computedAt: NOW - 60_000,
+  currency: 'USD',
+  freeToSpendCents: 123_456,
+  nextIncomeOn: '2026-11-15',
+  dueBeforeIncomeCents: 45_000,
+  bills: [
+    { name: 'Rent', amountCents: 150_000, dueOn: '2026-11-14' },
+    { name: 'Phone', amountCents: 6_000, dueOn: '2026-11-20' },
+    { name: 'Broken date', amountCents: 100, dueOn: '2026-02-31' },
+    { name: '', amountCents: 100, dueOn: '2026-11-20' },
+    { name: 'Fractional', amountCents: 1.5, dueOn: '2026-11-20' },
+  ],
+  horizon: [
+    {
+      name: 'Lisbon',
+      targetCents: 300_000,
+      setAsideCents: 80_000,
+      targetOn: '2027-03-01',
+    },
+    {
+      name: 'Someday',
+      targetCents: 50_000,
+      setAsideCents: 0,
+      targetOn: null,
+    },
+    { name: 'No target', setAsideCents: 0 },
+  ],
+  accountName: RUNWAY_FORBIDDEN[0],
+  accounts: [{ name: RUNWAY_FORBIDDEN[0], balanceCents: 987_654 }],
+  card: { name: RUNWAY_FORBIDDEN[1], owedCents: 555 },
+  incomeSource: RUNWAY_FORBIDDEN[2],
+  receipt: { url: RUNWAY_FORBIDDEN[3] },
+  transactions: [{ merchant: RUNWAY_FORBIDDEN[4], cents: 777 }],
+  note: RUNWAY_FORBIDDEN[5],
+};
+const runwayPlans = firestore.collection('apps/runway/plans');
+const runwayWrapped = (uid: string) =>
+  firestore.doc(`apps/runway/server/${uid}/keys/data`);
+const WRONG_RUNWAY_UID = 'runway-wrong-key';
+await Promise.all([
+  runwayWrapped(OWNER).set(wrapDataKey(DEV_KEYRING, OWNER, runwayKey, NOW)),
+  runwayPlans.doc(OWNER).set({
+    uid: OWNER,
+    notify: { needsHome: false },
+    sealed: { value: 'x', nonce: 'y' },
+    shareSummary: sealWithKey(
+      { ...runwayKey, keyVersion: 1 },
+      runwaySummary,
+      1,
+    ),
+  }),
+  runwayPlans.doc(WRONG_RUNWAY_UID).set({
+    uid: WRONG_RUNWAY_UID,
+    shareSummary: sealWithKey(
+      { ...runwayKey, keyVersion: 1 },
+      runwaySummary,
+      1,
+    ),
+  }),
+  runwayWrapped(WRONG_RUNWAY_UID).set(
+    wrapDataKey(
+      DEV_KEYRING,
+      WRONG_RUNWAY_UID,
+      deriveSeedDataKey(DEV_KEYRING, 'someone-else'),
+      NOW,
+    ),
+  ),
+  runwayPlans.doc('runway-legacy').set({ uid: 'runway-legacy' }),
+]);
+
+const runwayAdapter = createRunwayAdapter({
+  firestore: () => firestore,
+  canOpen: async (uid) => uid === OWNER,
+  keyring: () => DEV_KEYRING,
+});
+assert.deepEqual(
+  runwayAdapter.manifest.categories.map((category) => [
+    category.id,
+    category.isOnAtConnect,
+  ]),
+  [
+    ['moneySummary', true],
+    ['upcomingBills', false],
+    ['horizon', false],
+  ],
+);
+const runwayCtx = (uid: string) => ({
+  uid,
+  accountId: 'site',
+  grant: buildNewGrant(
+    {
+      readerAppId: 'helm',
+      connectorId: 'app:runway',
+      accountId: 'site',
+      categoryIds: ['moneySummary'],
+      options: null,
+    },
+    runwayAdapter.manifest,
+    NOW,
+  ),
+});
+const readRunway = (uid: string, category: string) =>
+  runwayAdapter.syncPage(runwayCtx(uid), {
+    category,
+    cursor: null,
+    resumeState: null,
+    windowStart: WINDOW_START,
+  });
+const runRunway = async (uid: string, category: string) => {
+  const page = await readRunway(uid, category);
+  assert.equal(page.isFull, true);
+  assert.equal(page.isDone, true);
+  return page.records;
+};
+
+const runwayMoney = await runRunway(OWNER, 'moneySummary');
+const runwayBills = await runRunway(OWNER, 'upcomingBills');
+const runwayHorizon = await runRunway(OWNER, 'horizon');
+[...runwayMoney, ...runwayBills, ...runwayHorizon].forEach((record) =>
+  assertShape([record]),
+);
+assert.equal(runwayMoney.length, 1);
+const [summaryRecord] = runwayMoney;
+assert.ok(summaryRecord);
+assert.equal(summaryRecord.sourceRef, 'plan/summary');
+assert.equal(summaryRecord.kind, 'moneySummary');
+assert.equal(summaryRecord.title, 'Free to Spend');
+assert.equal(summaryRecord.amountCents, 123_456);
+assert.equal(summaryRecord.currency, 'USD');
+assert.equal(summaryRecord.sourceUpdatedAt, NOW - 60_000);
+assert.deepEqual(summaryRecord.extra, {
+  nextIncomeAt: Date.UTC(2026, 10, 15),
+  dueBeforeIncomeCents: 45_000,
+});
+assert.match(summaryRecord.detail ?? '', /450\.00 USD.*2026-11-15/);
+assert.deepEqual(titles(runwayBills), ['Phone', 'Rent']);
+runwayBills.forEach((record) => {
+  assert.equal(record.kind, 'task');
+  assert.equal(record.isAllDay, true);
+  assert.match(record.sourceRef, /^bills\/[0-9a-f]{16}$/);
+});
+assert.equal(
+  runwayBills.find((record) => record.title === 'Rent')?.dueAt,
+  Date.UTC(2026, 10, 14),
+);
+assert.equal(
+  new Set(refs(runwayBills)).size,
+  runwayBills.length,
+  'each bill has its own stable ref',
+);
+assert.deepEqual(titles(runwayHorizon), ['Lisbon', 'Someday']);
+const lisbon = runwayHorizon.find((record) => record.title === 'Lisbon');
+assert.equal(lisbon?.kind, 'project');
+assert.equal(lisbon?.amountCents, 300_000);
+assert.equal(lisbon?.dueAt, Date.UTC(2027, 2, 1));
+assert.match(lisbon?.detail ?? '', /800\.00 USD set aside of 3000\.00 USD/);
+assert.equal(
+  runwayHorizon.find((record) => record.title === 'Someday')?.dueAt,
+  null,
+);
+
+const runwayOutput = JSON.stringify([
+  ...runwayMoney,
+  ...runwayBills,
+  ...runwayHorizon,
+]);
+[...RUNWAY_FORBIDDEN, runwayKey.key.toString('hex'), '987654', '555'].forEach(
+  (secret) =>
+    assert.ok(!runwayOutput.includes(secret), `Runway output has ${secret}`),
+);
+
+// No summary, a legacy plan or a key that will not open is unknown, so older copies stay.
+await Promise.all(
+  [OTHER, 'runway-legacy', WRONG_RUNWAY_UID].map(async (uid) => {
+    const page = await readRunway(uid, 'moneySummary');
+    assert.deepEqual(page.records, [], uid);
+    assert.equal(page.isFull, false, uid);
+  }),
+);
+await assert.rejects(() => readRunway(OWNER, 'nothing'), /Unknown category/);
+assert.equal(await runwayAdapter.status(runwayCtx(OWNER)), 'ok');
+assert.equal(await runwayAdapter.status(runwayCtx(OTHER)), 'noAccess');
+assert.equal(
+  runwayAdapter.deepLink('plan/summary', runwayCtx(OWNER)),
+  '/runway',
+);
+
+// Runway's key reaches the adapter only through the plan-key file's unwrap.
+const runwayShareDir = new URL(
+  '../../functions/src/apps/runway/share/',
+  import.meta.url,
+);
+readdirSync(runwayShareDir)
+  .filter((file) => file.endsWith('.ts'))
+  .forEach((file) => {
+    const source = readFileSync(new URL(file, runwayShareDir), 'utf8');
+    assert.ok(!/appKeys\/wrap/.test(source), `${file} imports the key wrap`);
+    assert.ok(
+      !/unwrapDataKey|unwrapStoredKey|wrapDataKey/.test(source),
+      `${file} unwraps a key itself`,
+    );
+    [
+      ...source.matchAll(
+        /import\s*\{([^}]*)\}\s*from\s*'([^']*getRunwayKey[^']*)'/g,
+      ),
+    ].forEach(([, names]) =>
+      assert.deepEqual(
+        (names ?? '')
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .sort(),
+        ['RUNWAY_MASTER_KEYS', 'loadKeyring'],
+        `${file} takes only the keyring from the key file`,
+      ),
+    );
+  });
 
 // Google Contacts: a live, pick-only source that copies nothing on its own.
 process.env.FUNCTIONS_EMULATOR = 'true';

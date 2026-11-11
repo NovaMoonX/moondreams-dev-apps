@@ -16,6 +16,11 @@ export interface SyncedCopy {
   dueAt: number | null;
   isAllDay: boolean;
   isEnded: boolean;
+  detail: string | null;
+  amountCents: number | null;
+  currency: string | null;
+  /** When the source last worked the copy out; null when it did not say. */
+  asOf: number | null;
 }
 
 export const MAX_CONTEXT_SYNCED = 40;
@@ -32,12 +37,14 @@ const TRIP_AHEAD_DAYS = 90;
 const TRIP_LOOKBACK_DAYS = 60;
 const MAX_SCANNED_TRIPS = 40;
 const SUBTITLE_CHARS = 120;
+const MAX_SCANNED_MONEY = 10;
 
 const CONNECTOR_LABELS: Record<string, string> = {
   'app:pinch': 'Pinch',
   'app:a-list': 'A-List',
   'app:going-once': 'Going Once',
   'app:nine-lives': 'Nine Lives',
+  'app:runway': 'Runway',
   'app:waypoint': 'Waypoint',
   'app:worth-the-wait': 'Worth the Wait',
   'google:calendar': 'Google Calendar',
@@ -119,6 +126,13 @@ export function openSyncedCopy(
       dueAt: toNumber(data.dueAt),
       isAllDay: data.isAllDay === true,
       isEnded: (data.connectionEndedAt ?? null) !== null,
+      detail:
+        typeof opened.detail === 'string' && opened.detail
+          ? opened.detail.slice(0, SUBTITLE_CHARS)
+          : null,
+      amountCents: toNumber(opened.amountCents),
+      currency: typeof opened.currency === 'string' ? opened.currency : null,
+      asOf: toNumber(data.sourceUpdatedAt),
     };
   } catch {
     return null;
@@ -138,6 +152,16 @@ export function toSyncedView(copy: SyncedCopy, timeZone: string) {
     kind: copy.kind,
     source: connectorLabel(copy.connectorId),
     ...(copy.kind === 'event' ? {} : { subtitle: copy.subtitle }),
+    ...(copy.kind === 'moneySummary'
+      ? {
+          detail: copy.detail,
+          amount:
+            copy.amountCents === null
+              ? null
+              : `${(copy.amountCents / 100).toFixed(2)} ${copy.currency ?? ''}`.trim(),
+          asOf: copy.asOf === null ? null : toLocalText(copy.asOf, timeZone),
+        }
+      : {}),
     start: toWhen(copy.startAt),
     end: toWhen(copy.endAt),
     due: copy.dueAt === null ? null : toDayText(copy.dueAt),
@@ -224,7 +248,21 @@ export async function readSyncedTasks(
     .slice(0, input.limit);
 }
 
-/** Today's and tomorrow's events and the week's tasks the context offers, events first. */
+/** The money summaries other apps share, still connected: one line each, so no date window applies. */
+export async function readSyncedMoney(
+  firestore: Firestore,
+  uid: string,
+  key: HelmKey,
+) {
+  const snapshot = await firestore
+    .collection(syncedPath(uid))
+    .where('kind', '==', 'moneySummary')
+    .limit(MAX_SCANNED_MONEY)
+    .get();
+  return openAll(key, snapshot.docs).filter((copy) => !copy.isEnded);
+}
+
+/** The shared money summaries, then today's and tomorrow's events and the week's tasks the context offers; a summary is one line, so it goes first. */
 export async function readContextSynced(
   firestore: Firestore,
   uid: string,
@@ -233,7 +271,7 @@ export async function readContextSynced(
   timeZone: string,
 ) {
   const firstDay = getLocalDay(at, timeZone);
-  const [events, tasks] = await Promise.all([
+  const [events, tasks, money] = await Promise.all([
     readSyncedEvents(firestore, uid, key, {
       firstDay,
       days: CONTEXT_EVENT_DAYS,
@@ -245,8 +283,9 @@ export async function readContextSynced(
       days: CONTEXT_TASK_DAYS,
       limit: MAX_CONTEXT_SYNCED,
     }),
+    readSyncedMoney(firestore, uid, key),
   ]);
-  return [...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED);
+  return [...money, ...events, ...tasks].slice(0, MAX_CONTEXT_SYNCED);
 }
 
 /** Trips still ahead or under way, starting within 90 days, soonest first; still connected. A trip is a synced copy of kind `trip`. */

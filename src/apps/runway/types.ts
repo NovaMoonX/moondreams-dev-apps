@@ -86,6 +86,25 @@ export interface PlanDoc {
   notify: PlanNotify | null;
   keyId: string | null;
   sealed: Sealed | null;
+  /** The totals-and-names summary a connected app reads (`ShareSummary`), sealed under the plan's key; null until one is written and on a plan made before it existed. */
+  shareSummary: Sealed | null;
+}
+
+/** What Runway shares through a connection: totals and names only, never an account, balance per account, card, income source, note, receipt, link or purchase. */
+export interface ShareSummary {
+  computedAt: number;
+  currency: string;
+  freeToSpendCents: Cents;
+  /** 'YYYY-MM-DD' of the next income day; null when none is coming. */
+  nextIncomeOn: string | null;
+  dueBeforeIncomeCents: Cents;
+  bills: { name: string; amountCents: Cents; dueOn: string }[];
+  horizon: {
+    name: string;
+    targetCents: Cents;
+    setAsideCents: Cents;
+    targetOn: string | null;
+  }[];
 }
 
 export interface OpenPlan extends PlanSealedFields {

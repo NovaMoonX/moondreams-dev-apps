@@ -74,6 +74,10 @@ const COPY: SyncedCopy = {
   dueAt: null,
   isAllDay: false,
   isEnded: false,
+  detail: null,
+  amountCents: null,
+  currency: null,
+  asOf: null,
 };
 
 const GRANT = {

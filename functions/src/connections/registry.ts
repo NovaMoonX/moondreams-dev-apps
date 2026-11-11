@@ -12,6 +12,7 @@ import { createAListAdapter } from '../apps/a-list/share/adapter.js';
 import { createGoingOnceAdapter } from '../apps/going-once/share/adapter.js';
 import { createNineLivesAdapter } from '../apps/nine-lives/share/adapter.js';
 import { createPinchAdapter } from '../apps/pinch/share/adapter.js';
+import { createRunwayAdapter } from '../apps/runway/share/adapter.js';
 import { createWaypointAdapter } from '../apps/waypoint/share/adapter.js';
 import { createWorthTheWaitAdapter } from '../apps/worth-the-wait/share/adapter.js';
 import { createGoogleCalendarAdapter } from './google/calendar.js';
@@ -67,6 +68,7 @@ export const SOURCE_ADAPTERS: Record<string, SourceAdapter> = {
   'app:a-list': createAListAdapter(),
   'app:going-once': createGoingOnceAdapter(),
   'app:nine-lives': createNineLivesAdapter(),
+  'app:runway': createRunwayAdapter(),
   'app:waypoint': createWaypointAdapter(),
   'app:worth-the-wait': createWorthTheWaitAdapter(),
   'google:calendar': createGoogleCalendarAdapter(),

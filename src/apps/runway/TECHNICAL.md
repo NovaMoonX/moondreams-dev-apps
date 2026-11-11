@@ -386,6 +386,7 @@ interface PlanDoc {
   planTogetherDays: number | null;          // plan together income days within N days of each other
   notify: { needsHome: boolean } | null;    // readable: the sending Function reads it; false until turned on in Settings → Notifications, null on a plan made before
   keyId: string | null;                     // which data key sealed this plan
+  shareSummary: Sealed | null;              // sealed totals and names a connected app reads (`ShareSummary`); null until written and on a plan made before it existed
   sealed: Sealed | null;                    // { currencyCode, displayPrefs, notifyHour: number | null (0-23, local; null reads as 19), notifyTimeZone: string | null (IANA); a blob sealed before them lacks both and reads null }
 }
 ```
@@ -1220,6 +1221,7 @@ Side effects that talk to a function (attach an account, unlink, delete the plan
 - `getRunwayKey` (callable, `request.auth` required): in one transaction reads `server/{uid}/keys/data`; if the document does not exist creates a random 256-bit key, wraps it with the current master key from the keyring (`RUNWAY_MASTER_KEYS`, AES-256-GCM, a fresh nonce) and stores it with that key's `masterKeyId`; if the document exists it unwraps it with the key its `masterKeyId` names, and if unwrapping fails it returns an error and raises an alert, never a new key; returns `{ appId: 'runway', keyId, keyVersion, key }` over TLS. The raw key is never stored and never logged.
 - The Admin SDK reads the wrapped key; rules deny every client path to it.
 - Function-side helpers `unwrapPlanKey(uid)` and `sealForPlan(uid, obj)` are the only code that handles the raw key on the server, in `functions/src/apps/runway/planKey.ts`.
+- **`shareSummary`** (issue 25 of Helm): `useShareSummary`, mounted in `RunwayPage` beside `useAutoPay`, seals Free to Spend now, the next income day, what is due before it, bills due in the next 30 days (≤20) and open Horizon events (≤20) with `sealJson` and writes it to the plan document's `shareSummary` with a field-scoped `updateDoc`, about two seconds after the figures settle and only when they differ from the last write (`computedAt` aside). It never writes offline, before the plan has loaded or while amounts are made up. The server adapter `functions/src/apps/runway/share/adapter.ts` opens it only through `unwrapPlanKey` and `openWithKey` and returns totals and names; the summary holds no account, balance per account, card, income source, note, receipt, link or purchase, and `check:adapters` fails if one reaches the output.
 - Rotation is not in the MVP. `keyVersion` and `keyId` are on every payload so a later rotation can re-seal lazily.
 - Emulator and seeds: the emulator reads `RUNWAY_MASTER_KEYS` from `functions/.secret.local` or falls back to a fixed development keyring only when `FUNCTIONS_EMULATOR` is set, never in production. Seeds seal fixtures with `createSeedAppEncryptionKey('runway')` and write the matching wrapped key under the same development master key.
 

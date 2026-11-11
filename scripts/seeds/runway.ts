@@ -73,6 +73,7 @@ import type {
   RuleSealed,
   ExpenseSealed,
   ChangeDoc,
+  ShareSummary,
   ChangeSealed,
   ClosingDoc,
   BillPaidSealed,
@@ -177,6 +178,40 @@ export const change = (
   sealed,
 });
 
+/** The totals-and-names summary Alex's device would write, consistent with the seeded income, rent and Moving; Helm's seeded copy of it uses the same figures. */
+export function buildSeedShareSummary(now: number): ShareSummary {
+  const today = startOfUtcDay(now);
+  const day = (at: number) => new Date(at).toISOString().slice(0, 10);
+  const nextIncome = today + 3 * DAY_MS;
+  const firstOfNextMonth = Date.UTC(
+    new Date(today).getUTCFullYear(),
+    new Date(today).getUTCMonth() + 1,
+    1,
+  );
+  const rent = {
+    name: 'Rent',
+    amountCents: 125_000,
+    dueOn: day(firstOfNextMonth),
+  };
+  const isRentSoon = firstOfNextMonth - today <= 30 * DAY_MS;
+  return {
+    computedAt: now - 10 * 60_000,
+    currency: DEFAULT_CURRENCY_CODE,
+    freeToSpendCents: 84_250,
+    nextIncomeOn: day(nextIncome),
+    dueBeforeIncomeCents: firstOfNextMonth < nextIncome ? rent.amountCents : 0,
+    bills: isRentSoon ? [rent] : [],
+    horizon: [
+      {
+        name: 'Moving',
+        targetCents: 90_000,
+        setAsideCents: 80_000,
+        targetOn: day(nextCalendarDay(today, 0, 15)),
+      },
+    ],
+  };
+}
+
 /** Alex has a plan that opens like a real one; every other account has none, so its first open creates one. */
 export async function seedRunway(context: SeedContext): Promise<SeedResult> {
   const keyring = readEmulatorKeyring();
@@ -211,6 +246,10 @@ export async function seedRunway(context: SeedContext): Promise<SeedResult> {
     notify: { needsHome: false },
     keyId: data.keyId,
     sealed,
+    shareSummary: await sealJson(
+      buildSeedShareSummary(context.now),
+      encryption,
+    ),
   });
   const incomeDocuments = await writeSeedIncome(context, owner.uid, encryption);
   const envelopeDocuments = await writeSeedEnvelopes(
